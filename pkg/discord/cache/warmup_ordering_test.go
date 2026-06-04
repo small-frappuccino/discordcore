@@ -9,65 +9,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-type recordingWarmupSession struct {
-	mu          sync.Mutex
-	calls       []string
-	stateCalls  int
-	guilds      map[string]*discordgo.Guild
-	roles       map[string][]*discordgo.Role
-	channels    map[string][]*discordgo.Channel
-	members     map[string][]*discordgo.Member
-	stateGuilds []*discordgo.Guild
-}
-
-func (s *recordingWarmupSession) record(call string) {
-	s.mu.Lock()
-	s.calls = append(s.calls, call)
-	s.mu.Unlock()
-}
-
-func (s *recordingWarmupSession) StateGuilds() []*discordgo.Guild {
-	s.mu.Lock()
-	s.stateCalls++
-	s.mu.Unlock()
-	return s.stateGuilds
-}
-
-func (s *recordingWarmupSession) Guild(id string) (*discordgo.Guild, error) {
-	s.record("guild:" + id)
-	guild := s.guilds[id]
-	if guild == nil {
-		return nil, fmt.Errorf("missing guild %s", id)
-	}
-	return guild, nil
-}
-
-func (s *recordingWarmupSession) GuildRoles(id string) ([]*discordgo.Role, error) {
-	s.record("roles:" + id)
-	roles, ok := s.roles[id]
-	if !ok {
-		return nil, fmt.Errorf("missing roles %s", id)
-	}
-	return roles, nil
-}
-
-func (s *recordingWarmupSession) GuildChannels(id string) ([]*discordgo.Channel, error) {
-	s.record("channels:" + id)
-	channels, ok := s.channels[id]
-	if !ok {
-		return nil, fmt.Errorf("missing channels %s", id)
-	}
-	return channels, nil
-}
-
-func (s *recordingWarmupSession) GuildMembers(guildID, after string, limit int, options ...discordgo.RequestOption) ([]*discordgo.Member, error) {
-	s.record("members:" + guildID)
-	members, ok := s.members[guildID]
-	if !ok {
-		return nil, fmt.Errorf("missing members %s", guildID)
-	}
-	return members, nil
-}
+// recordingWarmupSession replaced with inline closures
 
 func TestIntelligentWarmupOrdering(t *testing.T) {
 	g1 := &discordgo.Guild{ID: "g1", Name: "Guild One"}
@@ -76,22 +18,43 @@ func TestIntelligentWarmupOrdering(t *testing.T) {
 	c1 := &discordgo.Channel{ID: "c1", GuildID: "g1", Name: "chan"}
 	m1 := &discordgo.Member{User: &discordgo.User{ID: "u1"}, JoinedAt: time.Now().UTC()}
 
-	session := &recordingWarmupSession{
-		guilds: map[string]*discordgo.Guild{
-			"g1": g1,
-			"g2": g2,
+	var mu sync.Mutex
+	var calls []string
+	var stateCalls int
+
+	record := func(call string) {
+		mu.Lock()
+		calls = append(calls, call)
+		mu.Unlock()
+	}
+
+	session := warmupSession{
+		StateGuilds: func() []*discordgo.Guild {
+			mu.Lock()
+			stateCalls++
+			mu.Unlock()
+			return nil
 		},
-		roles: map[string][]*discordgo.Role{
-			"g1": {r1},
-			"g2": {r1},
+		Guild: func(id string, options ...discordgo.RequestOption) (*discordgo.Guild, error) {
+			record("guild:" + id)
+			if id == "g1" { return g1, nil }
+			if id == "g2" { return g2, nil }
+			return nil, fmt.Errorf("missing guild %s", id)
 		},
-		channels: map[string][]*discordgo.Channel{
-			"g1": {c1},
-			"g2": {c1},
+		GuildRoles: func(id string, options ...discordgo.RequestOption) ([]*discordgo.Role, error) {
+			record("roles:" + id)
+			if id == "g1" || id == "g2" { return []*discordgo.Role{r1}, nil }
+			return nil, fmt.Errorf("missing roles %s", id)
 		},
-		members: map[string][]*discordgo.Member{
-			"g1": {m1},
-			"g2": {m1},
+		GuildChannels: func(id string, options ...discordgo.RequestOption) ([]*discordgo.Channel, error) {
+			record("channels:" + id)
+			if id == "g1" || id == "g2" { return []*discordgo.Channel{c1}, nil }
+			return nil, fmt.Errorf("missing channels %s", id)
+		},
+		GuildMembers: func(guildID, after string, limit int, options ...discordgo.RequestOption) ([]*discordgo.Member, error) {
+			record("members:" + guildID)
+			if guildID == "g1" || guildID == "g2" { return []*discordgo.Member{m1}, nil }
+			return nil, fmt.Errorf("missing members %s", guildID)
 		},
 	}
 
@@ -124,13 +87,13 @@ func TestIntelligentWarmupOrdering(t *testing.T) {
 		"members:g2",
 	}
 
-	session.mu.Lock()
-	got := append([]string(nil), session.calls...)
-	stateCalls := session.stateCalls
-	session.mu.Unlock()
+	mu.Lock()
+	got := append([]string(nil), calls...)
+	sCalls := stateCalls
+	mu.Unlock()
 
-	if stateCalls != 0 {
-		t.Fatalf("expected StateGuilds not to be called, got %d", stateCalls)
+	if sCalls != 0 {
+		t.Fatalf("expected StateGuilds not to be called, got %d", sCalls)
 	}
 	if len(got) != len(expected) {
 		t.Fatalf("unexpected call count: got %d want %d (%v)", len(got), len(expected), got)

@@ -1109,12 +1109,12 @@ func translatePublishNowError(err error) error {
 	return err
 }
 
-var _ core.SubCommand = (*questionsAddCommand)(nil)
-var _ core.SubCommand = (*questionsListCommand)(nil)
-var _ core.SubCommand = (*questionsQueueCommand)(nil)
-var _ core.SubCommand = (*questionsMarkPublishedCommand)(nil)
-var _ core.SubCommand = (*questionsRecoverCommand)(nil)
-var _ core.SubCommand = (*questionsRemoveCommand)(nil)
-var _ core.SubCommand = (*qotdPublishCommand)(nil)
+var _ core.Command = (*questionsAddCommand)(nil)
+var _ core.Command = (*questionsListCommand)(nil)
+var _ core.Command = (*questionsQueueCommand)(nil)
+var _ core.Command = (*questionsMarkPublishedCommand)(nil)
+var _ core.Command = (*questionsRecoverCommand)(nil)
+var _ core.Command = (*questionsRemoveCommand)(nil)
+var _ core.Command = (*qotdPublishCommand)(nil)
 
 var _ QuestionCatalogService = (*applicationqotd.Service)(nil)

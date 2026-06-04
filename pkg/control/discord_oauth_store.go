@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-func newDiscordOAuthSessionStore(path string) (discordOAuthSessionStore, error) {
+func newDiscordOAuthSessionStore(path string) (*discordOAuthSessionDiskStore, error) {
 	storePath := strings.TrimSpace(path)
 	if storePath == "" {
 		return nil, fmt.Errorf("oauth session store path is required")

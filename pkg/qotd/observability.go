@@ -23,7 +23,8 @@ import (
 // drift at compile time. Adding a new event is one method on this
 // interface plus the corresponding line in the snapshot; ad-hoc string
 // keys are not supported on purpose.
-type Metrics interface {
+// PublishMetrics tracks the lifecycle of a publish operation.
+type PublishMetrics interface {
 	// RecordPublishAttempt is called once per publish path entry, before
 	// success/failure is known. Useful when the operator wants to see
 	// "in flight" rate vs. completed rate.
@@ -39,12 +40,22 @@ type Metrics interface {
 	// classifier (classifyPublishFailure) maps from the underlying error
 	// — operators read this as "why did publishes fail this hour".
 	RecordPublishFailure(mode PublishMode, cause string, duration time.Duration)
+}
 
+// ReconcileMetrics tracks the background reconcile loop's behavior.
+type ReconcileMetrics interface {
 	// RecordReconcileCycle is called once per reconcile cycle that ran
 	// to completion (successfully or not). err == nil distinguishes
 	// success from failure inside the summary.
 	RecordReconcileCycle(duration time.Duration, err error)
 
+	// RecordOrphanReclaim records how many orphaned reservations the
+	// reconcile loop returned to ready in one cycle.
+	RecordOrphanReclaim(count int)
+}
+
+// StateMetrics tracks unusual side events and divergence.
+type StateMetrics interface {
 	// RecordOfficialPostAbandoned is called when a publish attempt is
 	// marked terminally abandoned (channel deleted, bot kicked, missing
 	// permission). Operators read this as "manual intervention queue
@@ -63,13 +74,16 @@ type Metrics interface {
 	// distinct rejections, not the per-cycle retries.
 	RecordUnmanageableThread()
 
-	// RecordOrphanReclaim records how many orphaned reservations the
-	// reconcile loop returned to ready in one cycle.
-	RecordOrphanReclaim(count int)
-
 	// RecordSuppressionCleared is called each time an expired suppression
 	// entry is purged from a guild's config.
 	RecordSuppressionCleared()
+}
+
+// Metrics is the union of all observability seams the QOTD service writes through.
+type Metrics interface {
+	PublishMetrics
+	ReconcileMetrics
+	StateMetrics
 }
 
 // SnapshotProvider is the optional capability the /v1/health/qotd handler

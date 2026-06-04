@@ -4,12 +4,11 @@ type SettingsRowProps = {
   title: string;
   description?: string;
   control?: React.ReactNode;
-  isLast?: boolean;
 };
 
-export function SettingsRow({ title, description, control, isLast }: SettingsRowProps) {
+export function SettingsRow({ title, description, control }: SettingsRowProps) {
   return (
-    <div className={`settings-row ${isLast ? "is-last" : ""}`}>
+    <div className="settings-row">
       <div className="settings-row-info">
         <div className="settings-row-title">{title}</div>
         {description && <div className="settings-row-desc">{description}</div>}

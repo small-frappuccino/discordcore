@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -13,12 +14,35 @@ func TestIntelligentWarmupIdempotent(t *testing.T) {
 	channel := &discordgo.Channel{ID: "c1", GuildID: "g1", Name: "general"}
 	member := &discordgo.Member{User: &discordgo.User{ID: "u1"}, JoinedAt: time.Now().UTC()}
 
-	session := &staticWarmupSession{
-		stateGuilds: []*discordgo.Guild{guild},
-		guilds:      map[string]*discordgo.Guild{"g1": guild},
-		roles:       map[string][]*discordgo.Role{"g1": {role}},
-		channels:    map[string][]*discordgo.Channel{"g1": {channel}},
-		memberPages: map[string][][]*discordgo.Member{"g1": {{member}}},
+	var memberCalls int
+	session := warmupSession{
+		StateGuilds: func() []*discordgo.Guild { return []*discordgo.Guild{guild} },
+		Guild: func(id string, options ...discordgo.RequestOption) (*discordgo.Guild, error) {
+			if id == "g1" {
+				return guild, nil
+			}
+			return nil, fmt.Errorf("missing guild %s", id)
+		},
+		GuildRoles: func(id string, options ...discordgo.RequestOption) ([]*discordgo.Role, error) {
+			if id == "g1" {
+				return []*discordgo.Role{role}, nil
+			}
+			return nil, fmt.Errorf("missing roles %s", id)
+		},
+		GuildChannels: func(id string, options ...discordgo.RequestOption) ([]*discordgo.Channel, error) {
+			if id == "g1" {
+				return []*discordgo.Channel{channel}, nil
+			}
+			return nil, fmt.Errorf("missing channels %s", id)
+		},
+		GuildMembers: func(guildID, after string, limit int, options ...discordgo.RequestOption) ([]*discordgo.Member, error) {
+			idx := memberCalls
+			memberCalls++
+			if idx == 0 {
+				return []*discordgo.Member{member}, nil
+			}
+			return nil, nil
+		},
 	}
 
 	old := newWarmupSession
@@ -42,7 +66,7 @@ func TestIntelligentWarmupIdempotent(t *testing.T) {
 	firstRoles := cache.RolesCount()
 	firstChannels := cache.ChannelCount()
 
-	session.memberCalls = make(map[string]int)
+	memberCalls = 0
 	if err := IntelligentWarmup(&discordgo.Session{}, cache, nil, cfg); err != nil {
 		t.Fatalf("second warmup error: %v", err)
 	}

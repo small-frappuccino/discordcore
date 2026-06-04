@@ -68,7 +68,7 @@ type discordOAuthProvider struct {
 	stateTTL          time.Duration
 	sessionTTL        time.Duration
 	httpClient        *http.Client
-	sessions          discordOAuthSessionStore
+	sessions          *discordOAuthSessionDiskStore
 	tokenRefreshMu    sync.Mutex
 }
 
@@ -106,12 +106,7 @@ type discordOAuthSessionCreateParams struct {
 	TTL          time.Duration
 }
 
-type discordOAuthSessionStore interface {
-	Create(params discordOAuthSessionCreateParams) (discordOAuthSession, error)
-	Get(sessionID string, now time.Time) (discordOAuthSession, bool, error)
-	Save(session discordOAuthSession) error
-	Delete(sessionID string) error
-}
+// The session store interface was removed to align with "no interfaces for single implementations" rule.
 
 type discordOAuthSessionStoreFilePayload struct {
 	Sessions []discordOAuthSession `json:"sessions"`

@@ -1,5 +1,5 @@
 
-import { PageHeader, SurfaceCard, SettingsGroup, SettingsRow, Badge, PageContainer, Skeleton } from "../components/ui";
+import { PageHeader, SurfaceCard, SettingsGroup, SettingsRow, Badge, PageContainer, SettingsGroupSkeleton } from "../components/ui";
 import { useCorePageLogic } from "./hooks/useCorePageLogic";
 
 export function CorePage() {
@@ -13,7 +13,9 @@ export function CorePage() {
       />
 
       {isLoading ? (
-        <Skeleton className="h-48 w-full mt-8" />
+        <div className="mt-8">
+          <SettingsGroupSkeleton rows={2} />
+        </div>
       ) : (
         <SurfaceCard className="mt-8">
         <h3 className="mb-4 text-lg">Domain Routing</h3>
@@ -27,7 +29,7 @@ export function CorePage() {
               <span className="text-muted">{settings?.workspace?.sections?.bot_routing?.bot_instance_id || "Main Worker"}</span>
             </SettingsRow.Control>
           </SettingsRow>
-          <SettingsRow isLast>
+          <SettingsRow>
             <SettingsRow.Info>
               <SettingsRow.Title>QOTD Domain Override</SettingsRow.Title>
               <SettingsRow.Description>Specific worker assigned to QOTD processing.</SettingsRow.Description>

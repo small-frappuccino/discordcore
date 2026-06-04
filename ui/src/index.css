@@ -233,7 +233,7 @@ select[multiple].form-select {
   @apply p-4;
   border-bottom: 1px solid var(--border-subtle);
 }
-.settings-row.is-last {
+.settings-row:last-child {
   border-bottom: none;
 }
 

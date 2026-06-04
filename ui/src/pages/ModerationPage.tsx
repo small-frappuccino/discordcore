@@ -6,7 +6,7 @@ import {
   Button,
   Badge,
   PageContainer,
-  Skeleton,
+  SettingsGroupSkeleton,
 } from "../components/ui";
 import { useModerationPageLogic } from "./hooks/useModerationPageLogic";
 
@@ -36,7 +36,11 @@ export function ModerationPage() {
       />
 
       {isLoading ? (
-        <Skeleton className="h-96 w-full mt-8" />
+        <div className="mt-8">
+          <SettingsGroupSkeleton rows={2} />
+          <h3 className="mb-4 mt-8 text-lg">Roles Config</h3>
+          <SettingsGroupSkeleton rows={1} />
+        </div>
       ) : (
         <SurfaceCard className="mt-8">
           <SettingsGroup>
@@ -73,7 +77,7 @@ export function ModerationPage() {
           <form onSubmit={onSubmit} className="mt-8">
             <h3 className="mb-4 text-lg">Roles Config</h3>
             <SettingsGroup>
-              <SettingsRow isLast>
+              <SettingsRow>
                 <SettingsRow.Info>
                   <SettingsRow.Title>Mute Role</SettingsRow.Title>
                   <SettingsRow.Description>Role assigned when a user is muted.</SettingsRow.Description>

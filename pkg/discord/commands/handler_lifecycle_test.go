@@ -202,55 +202,7 @@ func TestCommandHandlerSkipsGuildWithoutCommandsFeature(t *testing.T) {
 	}
 }
 
-func TestCommandHandlerAllowsDormantGuildBootstrapRoutes(t *testing.T) {
-	boolPtr := func(v bool) *bool { return &v }
-	cfgMgr := files.NewMemoryConfigManager()
-	if _, err := cfgMgr.UpdateConfig(func(cfg *files.BotConfig) error {
-		cfg.Guilds = []files.GuildConfig{{
-			GuildID:       "guild-1",
-			BotInstanceID: "main",
-			DomainBotInstanceIDs: map[string]string{
-				files.BotDomainQOTD: "companion",
-			},
-			Features: files.FeatureToggles{
-				Services: files.FeatureServiceToggles{
-					Commands: boolPtr(false),
-				},
-			},
-		}}
-		return nil
-	}); err != nil {
-		t.Fatalf("seed config: %v", err)
-	}
 
-	handler := NewCommandHandlerForBot(nil, cfgMgr, "main", "main")
-	if !handler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "config commands_enabled"}) {
-		t.Fatal("expected dormant guild bootstrap command route to remain enabled")
-	}
-	if !handler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "config smoke_test"}) {
-		t.Fatal("expected dormant guild smoke test route to remain enabled")
-	}
-	if handler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "config qotd_schedule"}) {
-		t.Fatal("expected dormant guild qotd bootstrap route to move to the qotd bot instance")
-	}
-	if handler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "config qotd_get"}) {
-		t.Fatal("expected dormant guild qotd get route to move to the qotd bot instance")
-	}
-	if handler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "partner list"}) {
-		t.Fatal("expected non-bootstrap route to remain disabled for dormant guild")
-	}
-
-	companionHandler := NewCommandHandlerForBot(nil, cfgMgr, "companion", "main")
-	if !companionHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "config qotd_schedule"}) {
-		t.Fatal("expected dormant guild qotd bootstrap route to remain enabled on the qotd bot instance")
-	}
-	if !companionHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "config qotd_get"}) {
-		t.Fatal("expected dormant guild qotd get route to remain enabled on the qotd bot instance")
-	}
-	if companionHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "config commands_enabled"}) {
-		t.Fatal("expected base bootstrap route to stay off the qotd bot instance")
-	}
-}
 
 func TestCommandHandlerFiltersRoutesByDomainBinding(t *testing.T) {
 	t.Parallel()
@@ -295,9 +247,6 @@ func TestCommandHandlerFiltersRoutesByDomainBinding(t *testing.T) {
 	if mainHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "qotd publish"}) {
 		t.Fatal("expected qotd slash route to move off main")
 	}
-	if mainHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindAutocomplete, Path: "config qotd_channel"}) {
-		t.Fatal("expected qotd autocomplete route to move off main")
-	}
 	if mainHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindComponent, Path: "qotd:questions:list:next"}) {
 		t.Fatal("expected qotd component route to move off main")
 	}
@@ -307,9 +256,6 @@ func TestCommandHandlerFiltersRoutesByDomainBinding(t *testing.T) {
 	}
 	if !companionHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "qotd publish"}) {
 		t.Fatal("expected qotd slash route to move to companion")
-	}
-	if !companionHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindAutocomplete, Path: "config qotd_channel"}) {
-		t.Fatal("expected qotd autocomplete route to move to companion")
 	}
 	if !companionHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindComponent, Path: "qotd:questions:list:next"}) {
 		t.Fatal("expected qotd component route to move to companion")
@@ -330,25 +276,23 @@ func TestCommandHandlerRegistersOnlySupportedDomains(t *testing.T) {
 	}
 
 	router := handler.commandManager.GetRouter()
-	configCommand, ok := router.GetRegistry().GetCommand("config")
-	if !ok {
-		t.Fatal("expected /config to be registered for qotd domain")
+	if _, ok := router.GetRegistry().GetCommand("config"); ok {
+		t.Fatal("expected /config to not be registered for qotd domain")
 	}
-	options := configCommand.Options()
+	qotdCommand, ok := router.GetRegistry().GetCommand("qotd")
+	if !ok {
+		t.Fatal("expected /qotd to be registered for qotd domain")
+	}
+	options := qotdCommand.Options()
 	got := make(map[string]struct{}, len(options))
 	for _, option := range options {
 		if option != nil {
 			got[option.Name] = struct{}{}
 		}
 	}
-	for _, name := range []string{"qotd_enabled", "qotd_channel", "qotd_schedule"} {
+	for _, name := range []string{"publish", "skip", "questions"} {
 		if _, ok := got[name]; !ok {
-			t.Fatalf("expected qotd-only config fragment to include %q, got %#v", name, got)
-		}
-	}
-	for _, name := range []string{"commands_enabled", "command_channel", "allowed_role_add"} {
-		if _, ok := got[name]; ok {
-			t.Fatalf("expected qotd-only config fragment to omit %q, got %#v", name, got)
+			t.Fatalf("expected qotd catalog to include %q, got %#v", name, got)
 		}
 	}
 	if _, ok := router.GetRegistry().GetCommand("ping"); ok {
@@ -356,12 +300,6 @@ func TestCommandHandlerRegistersOnlySupportedDomains(t *testing.T) {
 	}
 	if _, ok := router.GetRegistry().GetCommand("partner"); ok {
 		t.Fatal("expected qotd-only catalog to omit /partner")
-	}
-	if _, ok := router.GetRegistry().GetCommand("qotd"); !ok {
-		t.Fatal("expected qotd-only catalog to include /qotd")
-	}
-	if got := router.InteractionRouteDomain(core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "config qotd_channel"}); got != files.BotDomainQOTD {
-		t.Fatalf("expected qotd config route domain, got %q", got)
 	}
 	if got := router.InteractionRouteDomain(core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "qotd publish"}); got != files.BotDomainQOTD {
 		t.Fatalf("expected qotd publish route domain, got %q", got)

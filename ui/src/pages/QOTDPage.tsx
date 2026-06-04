@@ -1,4 +1,4 @@
-import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, PageContainer, Skeleton } from "../components/ui";
+import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, PageContainer, SettingsGroupSkeleton } from "../components/ui";
 import { useQOTDPageLogic } from "./hooks/useQOTDPageLogic";
 
 export function QOTDPage() {
@@ -22,7 +22,11 @@ export function QOTDPage() {
 
       <div className="mt-8">
         {isLoading ? (
-          <Skeleton className="h-[400px] w-full" />
+          <div className="mt-8">
+            <SettingsGroupSkeleton rows={3} />
+            <h2 className="text-lg mb-4 mt-8">Publish Schedule (UTC)</h2>
+            <SettingsGroupSkeleton rows={2} />
+          </div>
         ) : config ? (
           <div>
             <h2 className="text-lg mb-4">Core Settings</h2>
@@ -45,7 +49,7 @@ export function QOTDPage() {
                   </select>
                 </SettingsRow.Control>
               </SettingsRow>
-              <SettingsRow isLast>
+              <SettingsRow>
                 <SettingsRow.Info>
                   <SettingsRow.Title>Verified Role (Optional)</SettingsRow.Title>
                   <SettingsRow.Description>If set, only users with this role can answer the QOTD.</SettingsRow.Description>
@@ -63,7 +67,7 @@ export function QOTDPage() {
 
             <h2 className="text-lg mb-4">Publish Schedule (UTC)</h2>
             <SettingsGroup className="mb-8">
-              <SettingsRow isLast>
+              <SettingsRow>
                 <SettingsRow.Info>
                   <SettingsRow.Title>Hour & Minute</SettingsRow.Title>
                   <SettingsRow.Description>The exact UTC time when the question should be posted.</SettingsRow.Description>

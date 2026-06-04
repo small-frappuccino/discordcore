@@ -43,7 +43,7 @@ func NewCommandRouter(
 ) *CommandRouter {
 	registry := &CommandRegistry{
 		commands:    make(map[string]Command),
-		subcommands: make(map[string]map[string]SubCommand),
+		subcommands: make(map[string]map[string]Command),
 	}
 
 	permChecker := NewPermissionChecker(session, configManager)
@@ -83,13 +83,13 @@ func (cr *CommandRouter) RegisterCommand(cmd Command) {
 
 // RegisterSlashSubCommand registers a slash subcommand in both the sync registry
 // and the slash route registry.
-func (cr *CommandRouter) RegisterSlashSubCommand(parentName string, subcmd SubCommand) {
+func (cr *CommandRouter) RegisterSlashSubCommand(parentName string, subcmd Command) {
 	cr.RegisterSlashSubCommandForDomain("", parentName, subcmd)
 }
 
 // RegisterSlashSubCommandForDomain registers a slash subcommand in both the
 // sync registry and the slash route registry under the requested domain.
-func (cr *CommandRouter) RegisterSlashSubCommandForDomain(domain, parentName string, subcmd SubCommand) {
+func (cr *CommandRouter) RegisterSlashSubCommandForDomain(domain, parentName string, subcmd Command) {
 	if cr == nil || subcmd == nil {
 		return
 	}
@@ -98,7 +98,7 @@ func (cr *CommandRouter) RegisterSlashSubCommandForDomain(domain, parentName str
 }
 
 // RegisterSubCommand is the compatibility API; prefer RegisterSlashSubCommand for new slash trees.
-func (cr *CommandRouter) RegisterSubCommand(parentName string, subcmd SubCommand) {
+func (cr *CommandRouter) RegisterSubCommand(parentName string, subcmd Command) {
 	cr.RegisterSlashSubCommand(parentName, subcmd)
 }
 
@@ -372,7 +372,7 @@ func (cm *CommandManager) buildGuildGroupOptions(guildID, parentPath string, gro
 	return options
 }
 
-func (cm *CommandManager) buildGuildSubCommandOption(guildID, routePath string, subcmd SubCommand) (*discordgo.ApplicationCommandOption, bool) {
+func (cm *CommandManager) buildGuildSubCommandOption(guildID, routePath string, subcmd Command) (*discordgo.ApplicationCommandOption, bool) {
 	if cm == nil || subcmd == nil {
 		return nil, false
 	}
@@ -570,7 +570,7 @@ func sortedDesiredCommandNames(commands map[string]*discordgo.ApplicationCommand
 	return names
 }
 
-func sortedSubCommandNames(subcommands map[string]SubCommand) []string {
+func sortedSubCommandNames(subcommands map[string]Command) []string {
 	names := make([]string, 0, len(subcommands))
 	for name := range subcommands {
 		names = append(names, name)
@@ -583,7 +583,7 @@ func sortedSubCommandNames(subcommands map[string]SubCommand) []string {
 type GroupCommand struct {
 	name        string
 	description string
-	subcommands map[string]SubCommand
+	subcommands map[string]Command
 	checker     *PermissionChecker
 }
 
@@ -592,13 +592,13 @@ func NewGroupCommand(name, description string, checker *PermissionChecker) *Grou
 	return &GroupCommand{
 		name:        name,
 		description: description,
-		subcommands: make(map[string]SubCommand),
+		subcommands: make(map[string]Command),
 		checker:     checker,
 	}
 }
 
 // AddSubCommand adds a subcommand to the group
-func (gc *GroupCommand) AddSubCommand(subcmd SubCommand) {
+func (gc *GroupCommand) AddSubCommand(subcmd Command) {
 	gc.subcommands[subcmd.Name()] = subcmd
 }
 

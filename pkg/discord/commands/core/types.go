@@ -84,15 +84,7 @@ type Command interface {
 	RequiresPermissions() bool
 }
 
-// SubCommand represents a subcommand within a larger command
-type SubCommand interface {
-	Name() string
-	Description() string
-	Options() []*discordgo.ApplicationCommandOption
-	Handle(ctx *Context) error
-	RequiresGuild() bool
-	RequiresPermissions() bool
-}
+// SubCommand type removed; use Command directly
 
 // DefaultMemberPermissionsProvider is an optional opt-in for top-level
 // commands that want Discord to enforce a permission floor before the
@@ -176,7 +168,7 @@ func (bh *BaseHandler) GetConfigManager() *files.ConfigManager {
 // CommandRegistry manages command registration and execution
 type CommandRegistry struct {
 	commands    map[string]Command
-	subcommands map[string]map[string]SubCommand // [commandName][subcommandName]
+	subcommands map[string]map[string]Command // [commandName][subcommandName]
 }
 
 // Register registers a command in the registry
@@ -185,9 +177,9 @@ func (r *CommandRegistry) Register(cmd Command) {
 }
 
 // RegisterSubCommand registers a subcommand in the registry
-func (r *CommandRegistry) RegisterSubCommand(parentName string, subcmd SubCommand) {
+func (r *CommandRegistry) RegisterSubCommand(parentName string, subcmd Command) {
 	if r.subcommands[parentName] == nil {
-		r.subcommands[parentName] = make(map[string]SubCommand)
+		r.subcommands[parentName] = make(map[string]Command)
 	}
 	r.subcommands[parentName][subcmd.Name()] = subcmd
 }
@@ -199,7 +191,7 @@ func (r *CommandRegistry) GetCommand(name string) (Command, bool) {
 }
 
 // GetSubCommand returns a subcommand by its parent command and subcommand name
-func (r *CommandRegistry) GetSubCommand(parentName, subName string) (SubCommand, bool) {
+func (r *CommandRegistry) GetSubCommand(parentName, subName string) (Command, bool) {
 	if subs, exists := r.subcommands[parentName]; exists {
 		if sub, exists := subs[subName]; exists {
 			return sub, true
@@ -214,11 +206,11 @@ func (r *CommandRegistry) GetAllCommands() map[string]Command {
 }
 
 // GetAllSubCommands returns all subcommands for a given command
-func (r *CommandRegistry) GetAllSubCommands(parentName string) map[string]SubCommand {
+func (r *CommandRegistry) GetAllSubCommands(parentName string) map[string]Command {
 	if subs, exists := r.subcommands[parentName]; exists {
 		return subs
 	}
-	return make(map[string]SubCommand)
+	return make(map[string]Command)
 }
 
 // CommandMeta defines metadata for building commands
@@ -228,12 +220,7 @@ type CommandMeta struct {
 	Options     []*discordgo.ApplicationCommandOption
 }
 
-// SubCommandMeta defines metadata for building subcommands
-type SubCommandMeta struct {
-	Name        string
-	Description string
-	Options     []*discordgo.ApplicationCommandOption
-}
+// CommandMeta removed; use CommandMeta directly
 
 // AutocompleteHandler defines a handler for autocomplete
 type AutocompleteHandler interface {

@@ -1,13 +1,9 @@
 import * as React from "react";
 import { cn } from "../../../lib/utils";
 
-type SettingsRowProps = React.HTMLAttributes<HTMLDivElement> & {
-  isLast?: boolean;
-};
-
-function SettingsRowRoot({ className, isLast, children, ...props }: SettingsRowProps) {
+function SettingsRowRoot({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn("settings-row", isLast && "is-last", className)} {...props}>
+    <div className={cn("settings-row", className)} {...props}>
       {children}
     </div>
   );

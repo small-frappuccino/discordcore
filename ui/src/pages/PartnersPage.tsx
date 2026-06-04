@@ -1,4 +1,4 @@
-import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, PageContainer, Skeleton } from "../components/ui";
+import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, PageContainer, SettingsGroupSkeleton } from "../components/ui";
 import { usePartnersPageLogic } from "./hooks/usePartnersPageLogic";
 import type { Path } from "react-hook-form";
 import type { PartnersFormData } from "./schemas/partners";
@@ -71,7 +71,9 @@ export function PartnersPage() {
       />
 
       {isLoading ? (
-        <Skeleton className="h-96 w-full mt-8" />
+        <div className="mt-8">
+          <SettingsGroupSkeleton rows={12} />
+        </div>
       ) : (
         <div className="mt-8">
           <SettingsGroup>

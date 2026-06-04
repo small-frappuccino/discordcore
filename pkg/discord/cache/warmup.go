@@ -10,44 +10,28 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
-// warmupSession defines the subset of discordgo.Session used during warmup.
-type warmupSession interface {
-	StateGuilds() []*discordgo.Guild
-	Guild(id string) (*discordgo.Guild, error)
-	GuildRoles(id string) ([]*discordgo.Role, error)
-	GuildChannels(id string) ([]*discordgo.Channel, error)
-	GuildMembers(guildID, after string, limit int, options ...discordgo.RequestOption) ([]*discordgo.Member, error)
+// warmupSession holds function closures to interact with Discord API, enabling easy mocking without interface bloat.
+type warmupSession struct {
+	StateGuilds   func() []*discordgo.Guild
+	Guild         func(id string, options ...discordgo.RequestOption) (*discordgo.Guild, error)
+	GuildRoles    func(id string, options ...discordgo.RequestOption) ([]*discordgo.Role, error)
+	GuildChannels func(id string, options ...discordgo.RequestOption) ([]*discordgo.Channel, error)
+	GuildMembers  func(guildID, after string, limit int, options ...discordgo.RequestOption) ([]*discordgo.Member, error)
 }
 
 var newWarmupSession = func(s *discordgo.Session) warmupSession {
-	return discordSessionAdapter{session: s}
-}
-
-type discordSessionAdapter struct {
-	session *discordgo.Session
-}
-
-func (d discordSessionAdapter) StateGuilds() []*discordgo.Guild {
-	if d.session == nil || d.session.State == nil {
-		return nil
+	return warmupSession{
+		StateGuilds: func() []*discordgo.Guild {
+			if s == nil || s.State == nil {
+				return nil
+			}
+			return s.State.Guilds
+		},
+		Guild:         s.Guild,
+		GuildRoles:    s.GuildRoles,
+		GuildChannels: s.GuildChannels,
+		GuildMembers:  s.GuildMembers,
 	}
-	return d.session.State.Guilds
-}
-
-func (d discordSessionAdapter) Guild(id string) (*discordgo.Guild, error) {
-	return d.session.Guild(id)
-}
-
-func (d discordSessionAdapter) GuildRoles(id string) ([]*discordgo.Role, error) {
-	return d.session.GuildRoles(id)
-}
-
-func (d discordSessionAdapter) GuildChannels(id string) ([]*discordgo.Channel, error) {
-	return d.session.GuildChannels(id)
-}
-
-func (d discordSessionAdapter) GuildMembers(guildID, after string, limit int, options ...discordgo.RequestOption) ([]*discordgo.Member, error) {
-	return d.session.GuildMembers(guildID, after, limit, options...)
 }
 
 // WarmupConfig configures the intelligent warmup behavior

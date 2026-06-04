@@ -37,7 +37,7 @@ func RegisterAnalyticsCommands(router *core.CommandRouter) {
 
 // -------- Activity Command (messages + reactions) --------
 
-func newActivityCommand() core.SubCommand {
+func newActivityCommand() core.Command {
 	opts := []*discordgo.ApplicationCommandOption{
 		{
 			Type:        discordgo.ApplicationCommandOptionString,
@@ -243,7 +243,7 @@ func handleActivity(ctx *core.Context) error {
 
 // -------- Members Command (weekly/monthly enter/leave/net) --------
 
-func newServerStatsHealthCommand() core.SubCommand {
+func newServerStatsHealthCommand() core.Command {
 	return core.NewSimpleCommand(
 		"health",
 		"Checks server health and absolute member statistics.",
@@ -254,7 +254,7 @@ func newServerStatsHealthCommand() core.SubCommand {
 	)
 }
 
-func newServerStatsPeriodicCommand(name, desc, rangeVal string) core.SubCommand {
+func newServerStatsPeriodicCommand(name, desc, rangeVal string) core.Command {
 	return core.NewSimpleCommand(
 		name,
 		desc,
@@ -576,7 +576,7 @@ func formatMaybeNet(enters int64, hasEnters bool, leaves int64, hasLeaves bool) 
 	return fmt.Sprintf("%+d", enters-leaves)
 }
 
-func newBackfillRunCommand() core.SubCommand {
+func newBackfillRunCommand() core.Command {
 	return core.NewSimpleCommand(
 		"backfill-run",
 		"Manually triggers a backfill for entry/exit logs.",

@@ -13,35 +13,7 @@ type memberCall struct {
 	limit int
 }
 
-type pagingWarmupSession struct {
-	mu     sync.Mutex
-	calls  []memberCall
-	pages  [][]*discordgo.Member
-	labels []string
-}
-
-func (s *pagingWarmupSession) StateGuilds() []*discordgo.Guild { return nil }
-func (s *pagingWarmupSession) Guild(id string) (*discordgo.Guild, error) {
-	return nil, fmt.Errorf("unexpected Guild(%s)", id)
-}
-func (s *pagingWarmupSession) GuildRoles(id string) ([]*discordgo.Role, error) {
-	return nil, fmt.Errorf("unexpected GuildRoles(%s)", id)
-}
-func (s *pagingWarmupSession) GuildChannels(id string) ([]*discordgo.Channel, error) {
-	return nil, fmt.Errorf("unexpected GuildChannels(%s)", id)
-}
-
-func (s *pagingWarmupSession) GuildMembers(guildID, after string, limit int, options ...discordgo.RequestOption) ([]*discordgo.Member, error) {
-	s.mu.Lock()
-	idx := len(s.calls)
-	s.calls = append(s.calls, memberCall{after: after, limit: limit})
-	s.mu.Unlock()
-
-	if idx >= len(s.pages) {
-		return nil, nil
-	}
-	return s.pages[idx], nil
-}
+// pagingWarmupSession replaced with inline closures
 
 func TestWarmupGuildMembersPagingUsesAfterID(t *testing.T) {
 	firstPage := make([]*discordgo.Member, 1000)
@@ -52,10 +24,24 @@ func TestWarmupGuildMembersPagingUsesAfterID(t *testing.T) {
 		{User: &discordgo.User{ID: "u1001"}},
 	}
 
-	session := &pagingWarmupSession{
-		pages: [][]*discordgo.Member{
-			firstPage,
-			secondPage,
+	var mu sync.Mutex
+	var calls []memberCall
+	pages := [][]*discordgo.Member{
+		firstPage,
+		secondPage,
+	}
+
+	session := warmupSession{
+		GuildMembers: func(guildID, after string, limit int, options ...discordgo.RequestOption) ([]*discordgo.Member, error) {
+			mu.Lock()
+			idx := len(calls)
+			calls = append(calls, memberCall{after: after, limit: limit})
+			mu.Unlock()
+
+			if idx >= len(pages) {
+				return nil, nil
+			}
+			return pages[idx], nil
 		},
 	}
 	cache := newTestCache(t)
@@ -77,17 +63,17 @@ func TestWarmupGuildMembersPagingUsesAfterID(t *testing.T) {
 		t.Fatalf("expected u1001 cached")
 	}
 
-	session.mu.Lock()
-	calls := append([]memberCall(nil), session.calls...)
-	session.mu.Unlock()
+	mu.Lock()
+	gotCalls := append([]memberCall(nil), calls...)
+	mu.Unlock()
 
-	if len(calls) != 2 {
-		t.Fatalf("expected 2 paging calls, got %d", len(calls))
+	if len(gotCalls) != 2 {
+		t.Fatalf("expected 2 paging calls, got %d", len(gotCalls))
 	}
-	if calls[0].after != "" || calls[0].limit != 1000 {
-		t.Fatalf("unexpected first call: %+v", calls[0])
+	if gotCalls[0].after != "" || gotCalls[0].limit != 1000 {
+		t.Fatalf("unexpected first call: %+v", gotCalls[0])
 	}
-	if calls[1].after != "u1000" || calls[1].limit != 1000 {
-		t.Fatalf("unexpected second call: %+v", calls[1])
+	if gotCalls[1].after != "u1000" || gotCalls[1].limit != 1000 {
+		t.Fatalf("unexpected second call: %+v", gotCalls[1])
 	}
 }

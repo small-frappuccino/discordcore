@@ -53,35 +53,35 @@ func (ac *AdminCommands) RegisterCommands(router *core.CommandRouter) {
 }
 
 // createServiceStatusCommand creates the service status subcommand
-func (ac *AdminCommands) createServiceStatusCommand() core.SubCommand {
+func (ac *AdminCommands) createServiceStatusCommand() core.Command {
 	return &ServiceStatusCommand{
 		adminCommands: ac,
 	}
 }
 
 // createServiceListCommand creates the service list subcommand
-func (ac *AdminCommands) createServiceListCommand() core.SubCommand {
+func (ac *AdminCommands) createServiceListCommand() core.Command {
 	return &ServiceListCommand{
 		adminCommands: ac,
 	}
 }
 
 // createServiceRestartCommand creates the service restart subcommand
-func (ac *AdminCommands) createServiceRestartCommand() core.SubCommand {
+func (ac *AdminCommands) createServiceRestartCommand() core.Command {
 	return &ServiceRestartCommand{
 		adminCommands: ac,
 	}
 }
 
 // createHealthCheckCommand creates the health check subcommand
-func (ac *AdminCommands) createHealthCheckCommand() core.SubCommand {
+func (ac *AdminCommands) createHealthCheckCommand() core.Command {
 	return &HealthCheckCommand{
 		adminCommands: ac,
 	}
 }
 
 // createSystemInfoCommand creates the system info subcommand
-func (ac *AdminCommands) createSystemInfoCommand() core.SubCommand {
+func (ac *AdminCommands) createSystemInfoCommand() core.Command {
 	return &SystemInfoCommand{
 		adminCommands: ac,
 	}

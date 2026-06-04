@@ -181,8 +181,8 @@ func TestWarmupGuildMembersPreservesHistoricalJoin(t *testing.T) {
 		t.Fatalf("seed historical join: %v", err)
 	}
 
-	session := &funcWarmupSession{
-		membersFunc: func(string, string, int, ...discordgo.RequestOption) ([]*discordgo.Member, error) {
+	session := warmupSession{
+		GuildMembers: func(guildID, after string, limit int, options ...discordgo.RequestOption) ([]*discordgo.Member, error) {
 			return []*discordgo.Member{
 				{
 					User:     &discordgo.User{ID: "u1"},

@@ -49,7 +49,7 @@ export function EmbedEditorForm({
             />
           </SettingsRow.Control>
         </SettingsRow>
-        <SettingsRow isLast>
+        <SettingsRow>
           <SettingsRow.Info>
             <SettingsRow.Title>Color</SettingsRow.Title>
             <SettingsRow.Description>Hex color code (as an integer number).</SettingsRow.Description>
@@ -73,7 +73,7 @@ export function EmbedEditorForm({
             <input type="text" {...form.register("title")} className="form-input w-full max-w-xs" />
           </SettingsRow.Control>
         </SettingsRow>
-        <SettingsRow isLast>
+        <SettingsRow>
           <SettingsRow.Info>
             <SettingsRow.Title>Description</SettingsRow.Title>
           </SettingsRow.Info>
@@ -108,7 +108,7 @@ export function EmbedEditorForm({
             <input type="text" {...form.register("footer_text")} className="form-input w-full max-w-xs" />
           </SettingsRow.Control>
         </SettingsRow>
-        <SettingsRow isLast>
+        <SettingsRow>
           <SettingsRow.Info>
             <SettingsRow.Title>Footer Icon URL</SettingsRow.Title>
           </SettingsRow.Info>
@@ -127,7 +127,7 @@ export function EmbedEditorForm({
             <input type="text" {...form.register("image_url")} className="form-input w-full max-w-xs" />
           </SettingsRow.Control>
         </SettingsRow>
-        <SettingsRow isLast>
+        <SettingsRow>
           <SettingsRow.Info>
             <SettingsRow.Title>Thumbnail URL</SettingsRow.Title>
           </SettingsRow.Info>

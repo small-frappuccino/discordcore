@@ -197,11 +197,11 @@ func (cr *CommandRouter) registerSlashCommandRoutesForDomain(domain string, cmd 
 	cr.registerDerivedInteractionRouteTree(strings.TrimSpace(cmd.Name()), files.NormalizeBotDomain(domain), cmd)
 }
 
-func (cr *CommandRouter) registerSlashSubCommandRoutes(parentName string, subcmd SubCommand) {
+func (cr *CommandRouter) registerSlashSubCommandRoutes(parentName string, subcmd Command) {
 	cr.registerSlashSubCommandRoutesForDomain("", parentName, subcmd)
 }
 
-func (cr *CommandRouter) registerSlashSubCommandRoutesForDomain(domain, parentName string, subcmd SubCommand) {
+func (cr *CommandRouter) registerSlashSubCommandRoutesForDomain(domain, parentName string, subcmd Command) {
 	if cr == nil || cr.routeRegistry == nil || subcmd == nil {
 		return
 	}
