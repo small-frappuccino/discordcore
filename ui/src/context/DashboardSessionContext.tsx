@@ -9,11 +9,10 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import {
-  ControlApiClient,
-  type AccessibleGuild,
-  type AuthSessionResponse,
-} from "../api/control";
+import { ControlApiClient } from "../api/client";
+import type { AccessibleGuild } from "../api/domains/guilds";
+import type { AuthSessionResponse } from "../api/domains/auth";
+import { listAccessibleGuilds, listManageableGuilds } from "../api/domains/guilds";
 import { appRoutes } from "../app/routes";
 import type { DashboardAuthState, Notice } from "../app/types";
 import {
@@ -124,10 +123,10 @@ export function DashboardSessionProvider({
           return;
         }
 
-        const guildsResponse = await activeClient.listAccessibleGuilds({
+        const guildsResponse = await listAccessibleGuilds(activeClient, {
           fresh: freshGuilds,
         });
-        const manageableGuildsResponse = await activeClient.listManageableGuilds();
+        const manageableGuildsResponse = await listManageableGuilds(activeClient);
         setAuthState("signed_in");
         setSession(probe.session);
         setAccessibleGuilds(guildsResponse.guilds);

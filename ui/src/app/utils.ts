@@ -1,8 +1,5 @@
-import type {
-  AccessibleGuild,
-  AuthSessionResponse,
-  DiscordOAuthUser,
-} from "../api/control";
+import type { AccessibleGuild } from "../api/domains/guilds";
+import type { AuthSessionResponse, DiscordOAuthUser } from "../api/domains/auth";
 import type { DashboardAuthState } from "./types";
 
 export function formatError(error: unknown): string {

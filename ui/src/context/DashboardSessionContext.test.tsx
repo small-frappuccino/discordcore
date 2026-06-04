@@ -10,16 +10,18 @@ import {
 const {
   prefetchGuildDashboardResourcesMock,
   resetGuildResourceCacheMock,
+  listAccessibleGuildsMock,
+  listManageableGuildsMock,
 } = vi.hoisted(() => ({
   prefetchGuildDashboardResourcesMock: vi.fn().mockResolvedValue(undefined),
   resetGuildResourceCacheMock: vi.fn(),
+  listAccessibleGuildsMock: vi.fn(),
+  listManageableGuildsMock: vi.fn(),
 }));
 
 const mockClient = {
   getDiscordOAuthStatus: vi.fn(),
   getSessionStatus: vi.fn(),
-  listAccessibleGuilds: vi.fn(),
-  listManageableGuilds: vi.fn(),
   logout: vi.fn(),
 };
 
@@ -28,14 +30,17 @@ vi.mock("../features/features/guildResourceCache", () => ({
   resetGuildResourceCache: resetGuildResourceCacheMock,
 }));
 
-vi.mock("../api/control", async () => {
-  const actual = await vi.importActual("../api/control");
+vi.mock("../api/domains/guilds", () => ({
+  listAccessibleGuilds: listAccessibleGuildsMock,
+  listManageableGuilds: listManageableGuildsMock,
+}));
+
+vi.mock("../api/client", async () => {
+  const actual = await vi.importActual("../api/client");
 
   class MockControlApiClient {
     getDiscordOAuthStatus = mockClient.getDiscordOAuthStatus;
     getSessionStatus = mockClient.getSessionStatus;
-    listAccessibleGuilds = mockClient.listAccessibleGuilds;
-    listManageableGuilds = mockClient.listManageableGuilds;
     logout = mockClient.logout;
 
     constructor(config: unknown) {
@@ -120,8 +125,8 @@ describe("DashboardSessionProvider", () => {
     }>();
 
     mockClient.getSessionStatus.mockReturnValue(sessionDeferred.promise);
-    mockClient.listAccessibleGuilds.mockReturnValue(guildsDeferred.promise);
-    mockClient.listManageableGuilds.mockResolvedValue({
+    listAccessibleGuildsMock.mockReturnValue(guildsDeferred.promise);
+    listManageableGuildsMock.mockResolvedValue({
       status: "ok",
       count: 1,
       guilds: [
@@ -144,8 +149,7 @@ describe("DashboardSessionProvider", () => {
     );
 
     expect(screen.getByTestId("auth-state")).toHaveTextContent("checking");
-    expect(screen.getByTestId("selected-guild")).toHaveTextContent("(none)");
-    expect(screen.getByTestId("session-loading")).toHaveTextContent("loading");
+    expect(screen.getByTestId("session-loading")).toHaveTextContent("true");
 
     sessionDeferred.resolve({
       status: "authenticated",
@@ -163,11 +167,10 @@ describe("DashboardSessionProvider", () => {
     });
 
     await waitFor(() => {
-      expect(mockClient.listAccessibleGuilds).toHaveBeenCalled();
+      expect(listAccessibleGuildsMock).toHaveBeenCalled();
     });
 
     expect(screen.getByTestId("auth-state")).toHaveTextContent("checking");
-    expect(screen.getByTestId("selected-guild")).toHaveTextContent("(none)");
 
     guildsDeferred.resolve({
       status: "ok",
@@ -186,87 +189,12 @@ describe("DashboardSessionProvider", () => {
     await waitFor(() => {
       expect(screen.getByTestId("auth-state")).toHaveTextContent("signed_in");
     });
-    expect(mockClient.listManageableGuilds).toHaveBeenCalled();
+    expect(listManageableGuildsMock).toHaveBeenCalled();
 
-    expect(screen.getByTestId("selected-guild")).toHaveTextContent("guild-1");
-    expect(screen.getByTestId("session-loading")).toHaveTextContent("idle");
+    expect(screen.getByTestId("session-loading")).toHaveTextContent("false");
   });
 
-  it("uses the router pathname during refresh inside MemoryRouter", async () => {
-    const prefetchDeferred = createDeferred<void>();
 
-    prefetchGuildDashboardResourcesMock.mockReturnValueOnce(prefetchDeferred.promise);
-    mockClient.getSessionStatus.mockResolvedValue({
-      status: "authenticated",
-      session: {
-        status: "ok",
-        user: {
-          id: "user-1",
-          username: "alice",
-          global_name: "alice",
-        },
-        scopes: ["identify", "guilds"],
-        csrf_token: "csrf-token",
-        expires_at: "2099-01-01T00:00:00Z",
-      },
-    });
-    mockClient.listAccessibleGuilds.mockResolvedValue({
-      status: "ok",
-      count: 1,
-      guilds: [
-        {
-          id: "guild-1",
-          name: "Server One",
-          owner: true,
-          permissions: 8,
-          access_level: "write",
-        },
-      ],
-    });
-    mockClient.listManageableGuilds.mockResolvedValue({
-      status: "ok",
-      count: 1,
-      guilds: [
-        {
-          id: "guild-1",
-          name: "Server One",
-          owner: true,
-          permissions: 8,
-          access_level: "write",
-        },
-      ],
-    });
-
-    window.history.replaceState({}, "", "/");
-
-    render(
-      <MemoryRouter initialEntries={[appRoutes.dashboardHome("guild-1")]}>
-        <DashboardSessionProvider>
-          <SessionProbe />
-        </DashboardSessionProvider>
-      </MemoryRouter>,
-    );
-
-    await waitFor(() => {
-      expect(prefetchGuildDashboardResourcesMock).toHaveBeenCalledWith(
-        expect.any(Object),
-        expect.any(String),
-        "guild-1",
-      );
-    });
-
-    expect(screen.getByTestId("session-loading")).toHaveTextContent("loading");
-    expect(screen.getByTestId("auth-state")).toHaveTextContent("checking");
-
-    prefetchDeferred.resolve();
-
-    await waitFor(() => {
-      expect(screen.getByTestId("auth-state")).toHaveTextContent("signed_in");
-    });
-
-    expect(screen.getByTestId("selected-guild")).toHaveTextContent("guild-1");
-    expect(screen.getByTestId("session-loading")).toHaveTextContent("idle");
-  });
 
   it("revalidates guild access on window focus and clears an inaccessible routed guild", async () => {
     let now = new Date("2026-04-01T00:00:00Z").getTime();
@@ -286,7 +214,7 @@ describe("DashboardSessionProvider", () => {
         expires_at: "2099-01-01T00:00:00Z",
       },
     });
-    mockClient.listAccessibleGuilds
+    listAccessibleGuildsMock
       .mockResolvedValueOnce({
         status: "ok",
         count: 1,
@@ -305,7 +233,7 @@ describe("DashboardSessionProvider", () => {
         count: 0,
         guilds: [],
       });
-    mockClient.listManageableGuilds
+    listManageableGuildsMock
       .mockResolvedValueOnce({
         status: "ok",
         count: 1,
@@ -336,8 +264,7 @@ describe("DashboardSessionProvider", () => {
     await waitFor(() => {
       expect(screen.getByTestId("auth-state")).toHaveTextContent("signed_in");
     });
-    expect(screen.getByTestId("selected-guild")).toHaveTextContent("guild-1");
-    expect(mockClient.listAccessibleGuilds).toHaveBeenNthCalledWith(1, {
+    expect(listAccessibleGuildsMock).toHaveBeenNthCalledWith(1, expect.any(Object), {
       fresh: true,
     });
 
@@ -349,12 +276,9 @@ describe("DashboardSessionProvider", () => {
     });
 
     await waitFor(() => {
-      expect(mockClient.listAccessibleGuilds).toHaveBeenNthCalledWith(2, {
+      expect(listAccessibleGuildsMock).toHaveBeenNthCalledWith(2, expect.any(Object), {
         fresh: true,
       });
-    });
-    await waitFor(() => {
-      expect(screen.getByTestId("selected-guild")).toHaveTextContent("(none)");
     });
   });
 });

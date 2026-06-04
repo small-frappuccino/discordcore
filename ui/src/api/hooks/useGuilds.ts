@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { ControlApiClient } from "../control";
+import type { ControlApiClient } from "../client";
+import { listAccessibleGuilds, listManageableGuilds } from "../domains/guilds";
 
 export const accessibleGuildsQueryKey = (baseUrl: string) => ["accessibleGuilds", baseUrl];
 export const manageableGuildsQueryKey = (baseUrl: string) => ["manageableGuilds", baseUrl];
@@ -7,7 +8,7 @@ export const manageableGuildsQueryKey = (baseUrl: string) => ["manageableGuilds"
 export function useAccessibleGuildsQuery(client: ControlApiClient, enabled: boolean = true) {
   return useQuery({
     queryKey: accessibleGuildsQueryKey(client.getBaseUrl()),
-    queryFn: () => client.listAccessibleGuilds(),
+    queryFn: () => listAccessibleGuilds(client),
     enabled,
   });
 }
@@ -15,7 +16,7 @@ export function useAccessibleGuildsQuery(client: ControlApiClient, enabled: bool
 export function useManageableGuildsQuery(client: ControlApiClient, enabled: boolean = true) {
   return useQuery({
     queryKey: manageableGuildsQueryKey(client.getBaseUrl()),
-    queryFn: () => client.listManageableGuilds(),
+    queryFn: () => listManageableGuilds(client),
     enabled,
   });
 }

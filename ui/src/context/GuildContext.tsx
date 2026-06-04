@@ -2,7 +2,7 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { useDashboardSession } from "./DashboardSessionContext";
-import type { AccessibleGuild, DashboardGuildAccessLevel } from "../api/control";
+import type { AccessibleGuild, DashboardGuildAccessLevel } from "../api/domains/guilds";
 
 interface GuildContextValue {
   guildId: string;

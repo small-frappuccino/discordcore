@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { ControlApiClient, type ControlAuthProbe } from "../control";
+import type { ControlApiClient } from "../client";
+import type { ControlAuthProbe } from "../domains/auth";
 
 export const sessionQueryKey = (baseUrl: string) => ["session", baseUrl];
 
