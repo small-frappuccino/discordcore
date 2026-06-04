@@ -1,4 +1,4 @@
-import { PageHeader, SettingsGroup, SettingsRow, Button, Badge } from "../components/ui";
+import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, PageContainer } from "../components/ui";
 import { useRolesPageLogic } from "./hooks/useRolesPageLogic";
 import type { Path } from "react-hook-form";
 import type { RolesFormData } from "./schemas/roles";
@@ -26,7 +26,7 @@ export function RolesPage() {
   const renderMultiSelect = (name: Path<RolesFormData>) => (
     <select
       multiple
-      className="form-select min-w-[200px]"
+      className="form-select w-full max-w-xs"
       {...form.register(name)}
     >
       {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
@@ -35,7 +35,7 @@ export function RolesPage() {
 
   const renderSelect = (name: Path<RolesFormData>) => (
     <select
-      className="form-select min-w-[200px]"
+      className="form-select w-full max-w-xs"
       {...form.register(name)}
     >
       <option value="">-- None --</option>
@@ -44,7 +44,8 @@ export function RolesPage() {
   );
 
   return (
-    <form className="flex flex-col" onSubmit={onSubmit}>
+    <PageContainer>
+      <form className="flex flex-col" onSubmit={onSubmit}>
       <PageHeader 
         title="Roles Configuration" 
         description="Manage which roles grant dashboard access, and configure server-wide specific roles like AutoAssignment, Mute, and Booster."
@@ -112,11 +113,12 @@ export function RolesPage() {
         </SettingsGroup>
       </div>
 
-      <div className="mt-8 flex-row">
+      <div className="mt-8 flex items-center gap-2">
         <Button variant="primary" type="submit" disabled={isSaving}>
           {isSaving ? "Saving..." : "Save Changes"}
         </Button>
       </div>
-    </form>
+      </form>
+    </PageContainer>
   );
 }

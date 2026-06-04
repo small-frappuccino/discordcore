@@ -1,4 +1,4 @@
-import { PageHeader, SettingsGroup, SettingsRow, Button, Badge } from "../components/ui";
+import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, PageContainer } from "../components/ui";
 import { useQOTDPageLogic } from "./hooks/useQOTDPageLogic";
 
 export function QOTDPage() {
@@ -12,7 +12,8 @@ export function QOTDPage() {
   } = useQOTDPageLogic();
 
   return (
-    <form onSubmit={onSubmit}>
+    <PageContainer>
+      <form onSubmit={onSubmit}>
       <PageHeader 
         title="Question of the Day" 
         description="Configure the automated QOTD system. When enabled, the bot will pick a question from the active deck and publish it daily."
@@ -33,7 +34,7 @@ export function QOTDPage() {
                 control={
                   <select 
                     {...form.register("active_deck_id")}
-                    className="form-select min-w-[200px]"
+                    className="form-select w-full max-w-xs"
                   >
                     <option value="">-- No Active Deck --</option>
                     {config.decks?.map(d => (
@@ -51,7 +52,7 @@ export function QOTDPage() {
                     type="text"
                     placeholder="Role ID..."
                     {...form.register("verified_role_id")}
-                    className="form-input w-[200px]"
+                    className="form-input w-full max-w-xs"
                   />
                 }
               />
@@ -70,7 +71,7 @@ export function QOTDPage() {
                       min="0"
                       max="23"
                       {...form.register("schedule.hour_utc", { valueAsNumber: true })}
-                      className="form-input w-[60px]"
+                      className="form-input w-16"
                     />
                     <span className="text-muted">:</span>
                     <input
@@ -78,7 +79,7 @@ export function QOTDPage() {
                       min="0"
                       max="59"
                       {...form.register("schedule.minute_utc", { valueAsNumber: true })}
-                      className="form-input w-[60px]"
+                      className="form-input w-16"
                     />
                   </div>
                 }
@@ -95,6 +96,7 @@ export function QOTDPage() {
           <p className="text-muted">Failed to load QOTD settings.</p>
         )}
       </div>
-    </form>
+      </form>
+    </PageContainer>
   );
 }

@@ -8,7 +8,7 @@ export function EmbedPreview({ embed }: EmbedPreviewProps) {
   const colorHex = embed.color ? `#${embed.color.toString(16).padStart(6, '0')}` : '#202225';
   
   return (
-    <div className="bg-[#36393f] text-[#dcddde] p-4 rounded-md font-sans w-full max-w-[520px] flex">
+    <div className="bg-[#36393f] text-[#dcddde] p-4 rounded-md font-sans w-full max-w-lg flex">
       {/* Left colored pill */}
       <div 
         className="w-1 rounded-l-md shrink-0" 
@@ -62,7 +62,7 @@ export function EmbedPreview({ embed }: EmbedPreviewProps) {
 
         {/* Main Image */}
         {embed.image_url && (
-          <div className="mt-2 rounded overflow-hidden max-w-[400px]">
+          <div className="mt-2 rounded overflow-hidden max-w-md">
             <img src={embed.image_url} alt="embed image" className="w-full h-auto object-cover" />
           </div>
         )}

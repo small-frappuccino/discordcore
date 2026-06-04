@@ -1,4 +1,4 @@
-import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, EmbedPreview } from "../components/ui";
+import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, EmbedPreview, PageContainer } from "../components/ui";
 import { useEmbedsPageLogic } from "./hooks/useEmbedsPageLogic";
 
 export function EmbedsPage() {
@@ -21,14 +21,14 @@ export function EmbedsPage() {
   const activeEmbedData = form.watch();
 
   return (
-    <div className="flex flex-col h-full">
+    <PageContainer>
       <PageHeader 
         title="Custom Embeds" 
         description="Design and manage custom embeds for your server."
         badge={<Badge variant="success">Active</Badge>}
       />
 
-      <div className="mt-8 flex gap-8 h-full min-h-[600px] items-start">
+      <div className="mt-8 flex gap-8 h-full items-start">
         {/* Left Pane: List & Editor */}
         <div className="flex-1 flex flex-col gap-6">
           <div className="flex flex-col gap-2">
@@ -73,7 +73,7 @@ export function EmbedsPage() {
                     <input
                       type="text"
                       {...form.register("key")}
-                      className="form-input w-[250px]"
+                      className="form-input w-full max-w-xs"
                       disabled={!!selectedEmbedKey} // Cannot edit key after creation
                     />
                   }
@@ -86,7 +86,7 @@ export function EmbedsPage() {
                     <input
                       type="number"
                       {...form.register("color", { valueAsNumber: true })}
-                      className="form-input w-[150px]"
+                      className="form-input w-40"
                     />
                   }
                 />
@@ -182,13 +182,13 @@ export function EmbedsPage() {
         </div>
 
         {/* Right Pane: Live Preview */}
-        <div className="w-[520px] shrink-0 sticky top-8">
+        <div className="w-full max-w-lg shrink-0 sticky top-8">
           <h2 className="text-lg font-semibold text-white mb-4">Live Preview</h2>
           <div className="p-4 bg-[#36393f] rounded-lg border border-black/20 shadow-xl overflow-hidden">
             <EmbedPreview embed={activeEmbedData} />
           </div>
         </div>
       </div>
-    </div>
+    </PageContainer>
   );
 }

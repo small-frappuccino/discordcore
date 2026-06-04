@@ -1,5 +1,5 @@
 
-import { PageHeader, SurfaceCard, SettingsGroup, SettingsRow, Badge } from "../components/ui";
+import { PageHeader, SurfaceCard, SettingsGroup, SettingsRow, Badge, PageContainer } from "../components/ui";
 import { useCorePageLogic } from "./hooks/useCorePageLogic";
 
 export function CorePage() {
@@ -8,7 +8,7 @@ export function CorePage() {
   if (isLoading) return null;
 
   return (
-    <div>
+    <PageContainer>
       <PageHeader
         title="Core Settings"
         description="Global operational parameters and domain routing overrides."
@@ -31,6 +31,6 @@ export function CorePage() {
           />
         </SettingsGroup>
       </SurfaceCard>
-    </div>
+    </PageContainer>
   );
 }

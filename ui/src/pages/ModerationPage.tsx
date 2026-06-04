@@ -5,6 +5,7 @@ import {
   SettingsRow,
   Button,
   Badge,
+  PageContainer,
 } from "../components/ui";
 import { useModerationPageLogic } from "./hooks/useModerationPageLogic";
 
@@ -26,7 +27,7 @@ export function ModerationPage() {
   }
 
   return (
-    <div>
+    <PageContainer>
       <PageHeader
         title="Moderation"
         description="Configure AutoMod, Logging, and specific moderation roles."
@@ -75,7 +76,7 @@ export function ModerationPage() {
                     type="text"
                     {...form.register("mute_role")}
                     placeholder="Role ID..."
-                    className="form-input w-[200px]"
+                    className="form-input w-full max-w-xs"
                   />
                 }
                 isLast
@@ -89,6 +90,6 @@ export function ModerationPage() {
           </form>
         </SurfaceCard>
       )}
-    </div>
+    </PageContainer>
   );
 }

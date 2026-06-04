@@ -5,7 +5,7 @@ export function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
   return (
     <div
       role="alert"
-      className="flex flex-col items-center justify-center min-h-[400px] p-6 text-center"
+      className="flex flex-col items-center justify-center min-h-96 p-6 text-center"
     >
       <div className="bg-destructive/10 text-destructive p-4 rounded-full mb-4">
         <svg

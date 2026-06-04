@@ -1,6 +1,10 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
+@theme {
+  --color-muted: var(--text-muted);
+}
+
 :root {
   /* Discord / macOS Dark Theme Color Palette */
   --bg-base: #0e0e11;       /* App background */
@@ -248,13 +252,4 @@ select[multiple].form-select {
   color: var(--text-secondary);
 }
 
-
-/* Layout Utilities */
-.mt-4 { margin-top: 16px; }
-.mt-8 { margin-top: 32px; }
-.mb-2 { margin-bottom: 8px; }
-.mb-4 { margin-bottom: 16px; }
-.text-lg { font-size: 1.125rem; font-weight: 600; }
-.text-muted { color: var(--text-muted); }
-.flex-row { display: flex; align-items: center; gap: 8px; }
 

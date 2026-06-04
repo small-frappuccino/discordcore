@@ -1,4 +1,4 @@
-import { PageHeader, SettingsGroup, SettingsRow, Button, Badge } from "../components/ui";
+import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, PageContainer } from "../components/ui";
 import { usePartnersPageLogic } from "./hooks/usePartnersPageLogic";
 import type { Path } from "react-hook-form";
 import type { PartnersFormData } from "./schemas/partners";
@@ -38,7 +38,7 @@ export function PartnersPage() {
       control={
         <textarea
           {...form.register(name)}
-          className="form-input w-full min-h-[60px]"
+          className="form-input w-full min-h-16"
         />
       }
     />
@@ -59,7 +59,8 @@ export function PartnersPage() {
   );
 
   return (
-    <form onSubmit={onSubmit}>
+    <PageContainer>
+      <form onSubmit={onSubmit}>
       <PageHeader
         title="Partner Board"
         description="Design how your automated partner board renders."
@@ -88,7 +89,7 @@ export function PartnersPage() {
                 <input
                   type="number"
                   {...form.register("color", { valueAsNumber: true })}
-                  className="form-input w-[150px]"
+                  className="form-input w-40"
                 />
               }
             />
@@ -103,6 +104,7 @@ export function PartnersPage() {
           </div>
         </div>
       )}
-    </form>
+      </form>
+    </PageContainer>
   );
 }
