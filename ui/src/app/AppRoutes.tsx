@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
+import { Route, Routes, Navigate } from "react-router-dom";
 import { DashboardLayout } from "../pages/DashboardLayout";
 import { CorePage } from "../pages/CorePage";
 import { QOTDPage } from "../pages/QOTDPage";
@@ -9,8 +9,7 @@ import { EmbedsPage } from "../pages/EmbedsPage";
 
 export function AppRoutes() {
   return (
-    <BrowserRouter>
-      <Routes>
+    <Routes>
         <Route path="/manage" element={<DashboardLayout />}>
           <Route index element={<Navigate to="/manage/core" replace />} />
           <Route path="core" element={<CorePage />} />
@@ -21,7 +20,6 @@ export function AppRoutes() {
           <Route path="embeds" element={<EmbedsPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/manage" replace />} />
-      </Routes>
-    </BrowserRouter>
+    </Routes>
   );
 }
