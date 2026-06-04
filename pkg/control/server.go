@@ -509,9 +509,9 @@ func (s *Server) handleRuntimeConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(map[string]any{
-		"status":         "ok",
-		"runtime_config": updated,
+	if err := json.NewEncoder(w).Encode(RuntimeConfigResponse{
+		Status:        "ok",
+		RuntimeConfig: updated,
 	}); err != nil {
 		log.ApplicationLogger().Error("Failed to encode runtime config response", "err", err)
 	}

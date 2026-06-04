@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useCallback,
   type ReactNode,
 } from "react";
 import { ControlApiClient } from "../api/client";
@@ -239,13 +240,13 @@ export function DashboardSessionProvider({
 
   // Removed selected guild sync effects
 
-  async function refreshSession() {
+  const refreshSession = useCallback(async () => {
     await startSessionRefresh(client, {
       freshGuilds: true,
     });
-  }
+  }, [startSessionRefresh, client]);
 
-  async function beginLogin(nextPath: string = `${appRoutes.manage}/`) {
+  const beginLogin = useCallback(async (nextPath: string = `${appRoutes.manage}/`) => {
     try {
       const oauthStatus = await client.getDiscordOAuthStatus(nextPath);
       const loginURL = oauthStatus.login_url?.trim() ?? "";
@@ -263,9 +264,9 @@ export function DashboardSessionProvider({
         message: formatError(error),
       });
     }
-  }
+  }, [client]);
 
-  async function logout() {
+  const logout = useCallback(async () => {
     setSessionLoading(true);
     setBusyLabel("Signing out");
 
@@ -286,9 +287,9 @@ export function DashboardSessionProvider({
       setSessionLoading(false);
       setBusyLabel("");
     }
-  }
+  }, [client]);
 
-  function applyBaseUrl() {
+  const applyBaseUrl = useCallback(() => {
     const normalized = normalizeBaseUrlInput(baseUrlDraft);
     if (!isValidBaseUrl(normalized)) {
       setNotice({
@@ -308,32 +309,57 @@ export function DashboardSessionProvider({
           ? "Using the current origin for dashboard requests."
           : `Using ${normalized} for dashboard requests.`,
     });
-  }
+  }, [baseUrlDraft]);
+
+  const clearNotice = useCallback(() => setNotice(null), []);
+
+  const contextValue = useMemo(
+    () => ({
+      authState,
+      baseUrl,
+      baseUrlDraft,
+      baseUrlDirty,
+      accessibleGuilds,
+      busyLabel,
+      client,
+      currentOriginLabel,
+      manageableGuilds,
+      notice,
+      session,
+      sessionAvatarURL,
+      sessionLoading,
+      applyBaseUrl,
+      beginLogin,
+      clearNotice,
+      logout,
+      refreshSession,
+      setBaseUrlDraft,
+    }),
+    [
+      authState,
+      baseUrl,
+      baseUrlDraft,
+      baseUrlDirty,
+      accessibleGuilds,
+      busyLabel,
+      client,
+      currentOriginLabel,
+      manageableGuilds,
+      notice,
+      session,
+      sessionAvatarURL,
+      sessionLoading,
+      applyBaseUrl,
+      beginLogin,
+      clearNotice,
+      logout,
+      refreshSession,
+      setBaseUrlDraft,
+    ]
+  );
 
   return (
-    <DashboardSessionContext.Provider
-      value={{
-        authState,
-        baseUrl,
-        baseUrlDraft,
-        baseUrlDirty,
-        accessibleGuilds,
-        busyLabel,
-        client,
-        currentOriginLabel,
-        manageableGuilds,
-        notice,
-        session,
-        sessionAvatarURL,
-        sessionLoading,
-        applyBaseUrl,
-        beginLogin,
-        clearNotice: () => setNotice(null),
-        logout,
-        refreshSession,
-        setBaseUrlDraft,
-      }}
-    >
+    <DashboardSessionContext.Provider value={contextValue}>
       {children}
     </DashboardSessionContext.Provider>
   );

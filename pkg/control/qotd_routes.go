@@ -104,10 +104,10 @@ func (s *Server) handleQOTDSummaryGet(w http.ResponseWriter, r *http.Request, gu
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":   "ok",
-		"guild_id": guildID,
-		"summary":  buildQOTDSummaryResponse(guildID, summary),
+	writeJSON(w, http.StatusOK, QOTDSummaryResponse{
+		Status:  "ok",
+		GuildID: guildID,
+		Summary: buildQOTDSummaryResponse(guildID, summary),
 	})
 }
 
@@ -119,10 +119,10 @@ func (s *Server) handleQOTDSettingsGet(w http.ResponseWriter, _ *http.Request, g
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":   "ok",
-		"guild_id": guildID,
-		"settings": settings,
+	writeJSON(w, http.StatusOK, QOTDSettingsResponse{
+		Status:   "ok",
+		GuildID:  guildID,
+		Settings: settings,
 	})
 }
 
@@ -139,10 +139,10 @@ func (s *Server) handleQOTDSettingsPut(w http.ResponseWriter, r *http.Request, g
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":   "ok",
-		"guild_id": guildID,
-		"settings": settings,
+	writeJSON(w, http.StatusOK, QOTDSettingsResponse{
+		Status:   "ok",
+		GuildID:  guildID,
+		Settings: settings,
 	})
 }
 
@@ -154,10 +154,10 @@ func (s *Server) handleQOTDQuestionsGet(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":    "ok",
-		"guild_id":  guildID,
-		"questions": buildQOTDQuestionsResponse(questions),
+	writeJSON(w, http.StatusOK, QOTDQuestionsResponse{
+		Status:    "ok",
+		GuildID:   guildID,
+		Questions: buildQOTDQuestionsResponse(questions),
 	})
 }
 
@@ -182,10 +182,10 @@ func (s *Server) handleQOTDQuestionsCreate(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, map[string]any{
-		"status":   "ok",
-		"guild_id": guildID,
-		"question": buildQOTDQuestionsResponse([]qotd.QuestionRecord{*question})[0],
+	writeJSON(w, http.StatusCreated, QOTDQuestionResponse{
+		Status:   "ok",
+		GuildID:  guildID,
+		Question: buildQOTDQuestionsResponse([]qotd.QuestionRecord{*question})[0],
 	})
 }
 
@@ -219,15 +219,15 @@ func (s *Server) handleQOTDQuestionsCreateBatch(w http.ResponseWriter, r *http.R
 		errMessage = err.Error()
 	}
 
-	response := map[string]any{
-		"status":    "ok",
-		"guild_id":  guildID,
-		"questions": buildQOTDQuestionsResponse(createdRecords),
+	response := QOTDQuestionsBatchResponse{
+		Status:    "ok",
+		GuildID:   guildID,
+		Questions: buildQOTDQuestionsResponse(createdRecords),
 	}
 
 	if err != nil {
-		response["status"] = "error"
-		response["error"] = errMessage
+		response.Status = "error"
+		response.Error = errMessage
 		// If at least one was created, we can return 207 Multi-Status, but let's just stick to what the UI expects for now or return a 400 with the questions.
 		// Sending 207 is safer. Wait, qotdErrorStatus will return 400 or 500. We can just send that status, but still include the "questions".
 	}
@@ -256,10 +256,10 @@ func (s *Server) handleQOTDQuestionsUpdate(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":   "ok",
-		"guild_id": guildID,
-		"question": buildQOTDQuestionsResponse([]qotd.QuestionRecord{*question})[0],
+	writeJSON(w, http.StatusOK, QOTDQuestionResponse{
+		Status:   "ok",
+		GuildID:  guildID,
+		Question: buildQOTDQuestionsResponse([]qotd.QuestionRecord{*question})[0],
 	})
 }
 
@@ -270,10 +270,10 @@ func (s *Server) handleQOTDQuestionsDelete(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":     "ok",
-		"guild_id":   guildID,
-		"deleted_id": questionID,
+	writeJSON(w, http.StatusOK, QOTDDeleteQuestionResponse{
+		Status:    "ok",
+		GuildID:   guildID,
+		DeletedID: questionID,
 	})
 }
 
@@ -293,10 +293,10 @@ func (s *Server) handleQOTDQuestionsReorder(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":    "ok",
-		"guild_id":  guildID,
-		"questions": buildQOTDQuestionsResponse(questions),
+	writeJSON(w, http.StatusOK, QOTDQuestionsResponse{
+		Status:    "ok",
+		GuildID:   guildID,
+		Questions: buildQOTDQuestionsResponse(questions),
 	})
 }
 
@@ -337,13 +337,13 @@ func (s *Server) handleQOTDPublishNowPost(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":   "ok",
-		"guild_id": guildID,
-		"result": map[string]any{
-			"post_url":      result.PostURL,
-			"question":      buildQOTDQuestionsResponse([]qotd.QuestionRecord{result.Question})[0],
-			"official_post": buildQOTDOfficialPostResponse(guildID, &result.OfficialPost),
+	writeJSON(w, http.StatusOK, QOTDPublishNowResponse{
+		Status:  "ok",
+		GuildID: guildID,
+		Result: QOTDPublishResult{
+			PostURL:      result.PostURL,
+			Question:     buildQOTDQuestionsResponse([]qotd.QuestionRecord{result.Question})[0],
+			OfficialPost: buildQOTDOfficialPostResponse(guildID, &result.OfficialPost),
 		},
 	})
 }
@@ -375,10 +375,10 @@ func (s *Server) handleQOTDReconcilePost(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":   "ok",
-		"guild_id": guildID,
-		"summary":  buildQOTDSummaryResponse(guildID, summary),
+	writeJSON(w, http.StatusOK, QOTDSummaryResponse{
+		Status:  "ok",
+		GuildID: guildID,
+		Summary: buildQOTDSummaryResponse(guildID, summary),
 	})
 }
 

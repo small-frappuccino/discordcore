@@ -45,10 +45,10 @@ func (s *Server) handleGuildMemberOptionsGet(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":   "ok",
-		"guild_id": guildID,
-		"members":  options,
+	writeJSON(w, http.StatusOK, GuildMembersResponse{
+		Status:  "ok",
+		GuildID: guildID,
+		Members: options,
 	})
 }
 

@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { useDashboardSession } from "./DashboardSessionContext";
 import type { AccessibleGuild, DashboardGuildAccessLevel } from "../api/domains/guilds";
@@ -29,16 +29,19 @@ export function GuildProvider({ children }: { children: ReactNode }) {
   const canRead = authState === "signed_in" && currentGuild !== null;
   const canWrite = authState === "signed_in" && accessLevel === "write";
 
+  const value = useMemo(
+    () => ({
+      guildId: id,
+      currentGuild,
+      accessLevel,
+      canRead,
+      canWrite,
+    }),
+    [id, currentGuild, accessLevel, canRead, canWrite]
+  );
+
   return (
-    <GuildContext.Provider
-      value={{
-        guildId: id,
-        currentGuild,
-        accessLevel,
-        canRead,
-        canWrite,
-      }}
-    >
+    <GuildContext.Provider value={value}>
       {children}
     </GuildContext.Provider>
   );

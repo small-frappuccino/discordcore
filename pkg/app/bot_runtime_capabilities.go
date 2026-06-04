@@ -24,7 +24,7 @@ func (s commandDomainSet) has(domain string) bool {
 	return ok
 }
 
-func (s commandDomainSet) any() bool { return len(s) > 0 }
+func (s commandDomainSet) isNotEmpty() bool { return len(s) > 0 }
 
 // sorted returns the contained domains in stable order so that callers and
 // tests get deterministic output.
@@ -52,7 +52,7 @@ type botRuntimeCapabilities struct {
 }
 
 // hasCommands reports whether any command catalog should be installed.
-func (c botRuntimeCapabilities) hasCommands() bool { return c.commandDomains.any() }
+func (c botRuntimeCapabilities) hasCommands() bool { return c.commandDomains.isNotEmpty() }
 
 // hasCommandDomain reports whether the runtime serves the given domain.
 func (c botRuntimeCapabilities) hasCommandDomain(domain string) bool {
