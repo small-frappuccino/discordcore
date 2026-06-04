@@ -25,10 +25,6 @@ import {
   isValidBaseUrl,
   normalizeBaseUrlInput,
 } from "../app/utils";
-import {
-  prefetchGuildDashboardResources,
-  resetGuildResourceCache,
-} from "../features/features/guildResourceCache";
 
 const defaultBaseUrl =
   import.meta.env.VITE_CONTROL_API_BASE_URL ?? window.location.origin;
@@ -119,7 +115,6 @@ export function DashboardSessionProvider({
     setAccessibleGuilds([]);
     setManageableGuilds([]);
     setSelectedGuildID("");
-    resetGuildResourceCache();
   }
 
   const performSessionRefresh = useEffectEvent(
@@ -172,13 +167,7 @@ export function DashboardSessionProvider({
           preferredGuildID !== "" && availableGuildIDs.has(preferredGuildID)
             ? preferredGuildID
             : "";
-        if (nextGuildID !== "") {
-          await prefetchGuildDashboardResources(
-            activeClient,
-            baseUrl,
-            nextGuildID,
-          );
-        }
+
         setAuthState("signed_in");
         setSession(probe.session);
         setAccessibleGuilds(guildsResponse.guilds);
@@ -294,11 +283,7 @@ export function DashboardSessionProvider({
     if (authState !== "signed_in" || selectedGuildID.trim() === "") {
       return;
     }
-    void prefetchGuildDashboardResources(
-      client,
-      baseUrl,
-      selectedGuildID.trim(),
-    ).catch(() => {});
+    // Prefetch logic removed.
   }, [authState, baseUrl, client, selectedGuildID]);
 
   useEffect(() => {

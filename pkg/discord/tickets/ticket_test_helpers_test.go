@@ -20,12 +20,12 @@ import (
 )
 
 type ticketInteractionRecorder struct {
-	mu             sync.Mutex
-	responses      []discordgo.InteractionResponse
-	channelCreates []discordgo.GuildChannelCreateData
-	channelEdits   []discordgo.ChannelEdit
-	messageSends   []*discordgo.MessageSend
-	multipartFiles map[string][]byte
+	mu               sync.Mutex
+	responses        []discordgo.InteractionResponse
+	channelCreates   []discordgo.GuildChannelCreateData
+	channelEdits     []discordgo.ChannelEdit
+	messageSends     []*discordgo.MessageSend
+	multipartFiles   map[string][]byte
 	mockChannelCount int
 }
 

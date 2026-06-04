@@ -360,10 +360,19 @@ export interface GuildMemberOptionsResponse {
   members: GuildMemberOption[];
 }
 
+export interface AutoAssignmentConfig {
+  enabled?: boolean;
+  target_role?: string;
+  required_roles?: string[];
+}
+
 export interface GuildRolesSettingsSection {
   allowed?: string[];
   dashboard_read?: string[];
   dashboard_write?: string[];
+  auto_assignment?: AutoAssignmentConfig;
+  booster_role?: string;
+  mute_role?: string;
 }
 
 export interface GuildBotRoutingSettingsSection {

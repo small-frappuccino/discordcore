@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	qotdcmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/qotd"
@@ -245,7 +244,7 @@ func (ch *CommandHandler) handlesGuildRoute(guildID string, routeKey core.Intera
 	if cfg.ResolveFeatures(strings.TrimSpace(guildID)).Services.Commands {
 		return true
 	}
-	return config.AllowsDormantGuildBootstrapRouteForDomain(domain, routeKey)
+	return false
 }
 
 func (ch *CommandHandler) matchesGuildBotInstance(guildID string) bool {
@@ -282,8 +281,5 @@ func (ch *CommandHandler) routeDomain(routeKey core.InteractionRouteKey) string 
 		}
 	}
 
-	if domain, ok := config.DormantGuildBootstrapRouteDomain(routeKey); ok {
-		return domain
-	}
 	return ""
 }

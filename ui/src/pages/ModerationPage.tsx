@@ -1,786 +1,136 @@
-import { useEffect, useId, useMemo, useState } from "react";
-import { useLocation } from "react-router-dom";
-import type { FeatureRecord } from "../api/control";
-import {
-  EmptyState,
-  FlatPageLayout,
-  GroupedSettingsCopy,
-  GroupedSettingsGroup,
-  GroupedSettingsHeading,
-  GroupedSettingsInlineMessage,
-  GroupedSettingsItem,
-  GroupedSettingsMainRow,
-  GroupedSettingsSection,
-  GroupedSettingsStack,
-  GroupedSettingsSubrow,
-  GroupedSettingsSwitch,
-  SettingsSelectField,
-  UnsavedChangesBar,
-} from "../components/ui";
+import { useEffect, useState } from "react";
 import { useDashboardSession } from "../context/DashboardSessionContext";
-import { buildMessageRouteChannelPickerOptions } from "../features/features/discordEntities";
 import {
-  getFeatureAreaDefinition,
-  getFeatureAreaRecords,
-} from "../features/features/areas";
-import {
-  featureTags,
-  findFeatureByTag,
-} from "../features/features/featureContract";
-import {
-  getLoggingFeatureDetails,
-  summarizeLoggingGuidance,
-} from "../features/features/logging";
-import {
-  getActionableFeatureBlocker,
-  getActionableMuteRoleBlocker,
-  getModerationCommandFeatures,
-  getModerationLogFeatures,
-  getMuteRoleFeatureDetails,
-} from "../features/features/moderation";
-import { featureSupportsField } from "../features/features/model";
-import { formatRoleOptionLabel } from "../features/features/roles";
-import {
-  formatWorkspaceStateDescription,
-  formatWorkspaceStateTitle,
-} from "../features/features/presentation";
-import { useFeatureMutation } from "../features/features/useFeatureMutation";
-import { useFeatureWorkspace } from "../features/features/useFeatureWorkspace";
-import { useGuildChannelOptions } from "../features/features/useGuildChannelOptions";
-import { useGuildRoleOptions } from "../features/features/useGuildRoleOptions";
+  PageHeader,
+  SurfaceCard,
+  SettingsGroup,
+  SettingsRow,
+  Button,
+  Badge,
+} from "../components/ui";
 
 export function ModerationPage() {
-  const definition = getFeatureAreaDefinition("moderation");
-  const location = useLocation();
-  const { authState, beginLogin, canEditSelectedGuild } = useDashboardSession();
-  const workspace = useFeatureWorkspace({
-    scope: "guild",
-  });
-  const mutation = useFeatureMutation({
-    scope: "guild",
-  });
-  const channelOptions = useGuildChannelOptions();
-  const roleOptions = useGuildRoleOptions();
-  const [pendingFeatureId, setPendingFeatureId] = useState("");
+  const { client, selectedGuildID } = useDashboardSession();
+  const [automodEnabled, setAutomodEnabled] = useState(false);
+  const [loggingEnabled, setLoggingEnabled] = useState(false);
+  const [muteRole, setMuteRole] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  const nextPath = `${location.pathname}${location.search}${location.hash}`;
-  const areaFeatures = getFeatureAreaRecords(workspace.features, "moderation");
-  const workspaceNotice = mutation.notice ?? workspace.notice;
-  const automodFeature = findFeatureByTag(
-    areaFeatures,
-    featureTags.moderationAutomod,
-  );
-  const muteRoleFeature = findFeatureByTag(
-    areaFeatures,
-    featureTags.moderationMuteRole,
-  );
-  const moderationCommandFeatures = getModerationCommandFeatures(areaFeatures);
-  const moderationRouteFeatures = getModerationLogFeatures(areaFeatures);
-  const messageRouteChannelOptions = useMemo(
-    () => buildMessageRouteChannelPickerOptions(channelOptions.channels),
-    [channelOptions.channels],
-  );
-  const muteRoleOptions = useMemo(
-    () =>
-      roleOptions.roles.map((role) => ({
-        value: role.id,
-        label: formatRoleOptionLabel(role),
-        disabled: role.is_default || role.managed,
-      })),
-    [roleOptions.roles],
-  );
-  if (definition === null) {
-    return null;
-  }
-
-  const areaLabel = definition.label;
-
-  async function handleRefreshModeration() {
-    await Promise.all([
-      workspace.refresh(),
-      channelOptions.refresh(),
-      roleOptions.refresh(),
-    ]);
-  }
-
-  async function handleSetFeatureEnabled(
-    feature: FeatureRecord,
-    enabled: boolean,
-  ) {
-    setPendingFeatureId(feature.id);
-    const previous = workspace.features.find(f => f.id === feature.id);
-    workspace.updateFeature({ ...feature, effective_enabled: enabled });
-
-    try {
-      const updated = await mutation.patchFeature(feature.id, {
-        enabled,
-      });
-      if (updated !== null) {
-        workspace.updateFeature(updated);
-      } else if (previous !== undefined) {
-        workspace.updateFeature(previous);
+  useEffect(() => {
+    if (!selectedGuildID) return;
+    setLoading(true);
+    Promise.all([
+      client.getGuildFeature(selectedGuildID, "automod").catch(() => null),
+      client.getGuildFeature(selectedGuildID, "logging").catch(() => null),
+      client.getGuildSettings(selectedGuildID).catch(() => null),
+    ]).then(([automodRes, loggingRes, settingsRes]) => {
+      if (automodRes?.feature) {
+        setAutomodEnabled(automodRes.feature.effective_enabled);
       }
-    } finally {
-      setPendingFeatureId("");
-    }
-  }
-
-  async function handleSaveMuteRole(feature: FeatureRecord, roleId: string) {
-    setPendingFeatureId(feature.id);
-
-    try {
-      const updated = await mutation.patchFeature(feature.id, {
-        role_id: roleId.trim(),
-      });
-      if (updated !== null) {
-        workspace.updateFeature(updated);
+      if (loggingRes?.feature) {
+        setLoggingEnabled(loggingRes.feature.effective_enabled);
       }
-    } finally {
-      setPendingFeatureId("");
-    }
-  }
-
-  async function handleSaveMuteRoleState(
-    feature: FeatureRecord,
-    roleId: string,
-    enabled: boolean,
-  ) {
-    setPendingFeatureId(feature.id);
-
-    try {
-      const updated = await mutation.patchFeature(feature.id, {
-        role_id: roleId.trim(),
-        enabled,
-      });
-      if (updated !== null) {
-        workspace.updateFeature(updated);
+      if (settingsRes?.workspace?.sections?.roles) {
+        setMuteRole(settingsRes.workspace.sections.roles.mute_role || "");
       }
-    } finally {
-      setPendingFeatureId("");
-    }
+      setLoading(false);
+    });
+  }, [client, selectedGuildID]);
+
+  const handleToggleAutomod = async () => {
+    if (!selectedGuildID) return;
+    const newVal = !automodEnabled;
+    setAutomodEnabled(newVal);
+    await client.patchGuildFeature(selectedGuildID, "automod", { enabled: newVal });
+  };
+
+  const handleToggleLogging = async () => {
+    if (!selectedGuildID) return;
+    const newVal = !loggingEnabled;
+    setLoggingEnabled(newVal);
+    await client.patchGuildFeature(selectedGuildID, "logging", { enabled: newVal });
+  };
+
+  const handleSaveMuteRole = async () => {
+    if (!selectedGuildID) return;
+    await client.updateGuildSettings(selectedGuildID, {
+      roles: {
+        mute_role: muteRole,
+      },
+    });
+    alert("Mute role saved");
+  };
+
+  if (!selectedGuildID) {
+    return <div>Select a server to manage moderation.</div>;
   }
 
-  async function handleSaveDestination(
-    feature: FeatureRecord,
-    channelId: string,
-  ) {
-    setPendingFeatureId(feature.id);
-
-    try {
-      const updated = await mutation.patchFeature(feature.id, {
-        channel_id: channelId.trim(),
-      });
-      if (updated !== null) {
-        workspace.updateFeature(updated);
-      }
-    } finally {
-      setPendingFeatureId("");
-    }
-  }
-
-  function renderWorkspaceContent() {
-    if (workspace.workspaceState !== "ready") {
-      return (
-        <EmptyState
-          title={formatWorkspaceStateTitle(areaLabel, workspace.workspaceState)}
-          description={formatWorkspaceStateDescription(
-            areaLabel,
-            workspace.workspaceState,
-          )}
-          action={
-            authState !== "signed_in" ? (
-              <button
-                className="button-primary"
-                type="button"
-                onClick={() => void beginLogin(nextPath)}
-              >
-                Sign in with Discord
-              </button>
-            ) : workspace.workspaceState === "unavailable" ? (
-              <button
-                className="button-secondary"
-                type="button"
-                onClick={() => void handleRefreshModeration()}
-              >
-                Retry loading
-              </button>
-            ) : undefined
-          }
-        />
-      );
-    }
-
-    if (
-      automodFeature === null &&
-      muteRoleFeature === null &&
-      moderationCommandFeatures.length === 0 &&
-      moderationRouteFeatures.length === 0
-    ) {
-      return (
-        <div className="table-empty-state table-empty-state-compact">
-          <div className="card-copy">
-            <p className="section-label">Workspace</p>
-            <h2>No moderation controls yet</h2>
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <ModerationWorkspacePanels
-        automodFeature={automodFeature}
-        moderationCommandFeatures={moderationCommandFeatures}
-        muteRoleFeature={muteRoleFeature}
-        moderationRouteFeatures={moderationRouteFeatures}
-        canEditSelectedGuild={canEditSelectedGuild}
-        channelOptions={channelOptions}
-        roleOptions={roleOptions}
-        messageRouteChannelOptions={messageRouteChannelOptions}
-        muteRoleOptions={muteRoleOptions}
-        mutation={mutation}
-        pendingFeatureId={pendingFeatureId}
-        onSaveMuteRole={handleSaveMuteRole}
-        onSaveMuteRoleState={handleSaveMuteRoleState}
-        onSaveDestination={handleSaveDestination}
-        onSetFeatureEnabled={handleSetFeatureEnabled}
+  return (
+    <div className="moderation-page">
+      <PageHeader
+        title="Moderation"
+        description="Configure automod rules, logging, and mute settings."
+        badge={<Badge variant="success">Active</Badge>}
       />
-    );
-  }
 
-  return (
-    <section className="page-shell moderation-page">
-      <FlatPageLayout
-        notice={workspaceNotice}
-        workspaceEyebrow={null}
-        workspaceTitle={null}
-        workspaceDescription={null}
-      >
-        <div className="moderation-page-intro">
-          <div className="card-copy">
-            <div className="moderation-page-title-row">
-              <h1>{areaLabel}</h1>
-            </div>
-          </div>
-        </div>
-
-        {renderWorkspaceContent()}
-      </FlatPageLayout>
-    </section>
-  );
-}
-
-interface ModerationWorkspacePanelsProps {
-  automodFeature: FeatureRecord | null;
-  moderationCommandFeatures: FeatureRecord[];
-  muteRoleFeature: FeatureRecord | null;
-  moderationRouteFeatures: FeatureRecord[];
-  canEditSelectedGuild: boolean;
-  channelOptions: ReturnType<typeof useGuildChannelOptions>;
-  roleOptions: ReturnType<typeof useGuildRoleOptions>;
-  messageRouteChannelOptions: Array<{
-    value: string;
-    label: string;
-    description?: string;
-  }>;
-  muteRoleOptions: Array<{
-    value: string;
-    label: string;
-    disabled?: boolean;
-  }>;
-  mutation: ReturnType<typeof useFeatureMutation>;
-  pendingFeatureId: string;
-  onSaveMuteRole: (feature: FeatureRecord, roleId: string) => Promise<void>;
-  onSaveMuteRoleState: (
-    feature: FeatureRecord,
-    roleId: string,
-    enabled: boolean,
-  ) => Promise<void>;
-  onSaveDestination: (
-    feature: FeatureRecord,
-    channelId: string,
-  ) => Promise<void>;
-  onSetFeatureEnabled: (
-    feature: FeatureRecord,
-    enabled: boolean,
-  ) => Promise<void>;
-}
-
-function ModerationWorkspacePanels({
-  automodFeature,
-  moderationCommandFeatures,
-  muteRoleFeature,
-  moderationRouteFeatures,
-  canEditSelectedGuild,
-  channelOptions,
-  roleOptions,
-  messageRouteChannelOptions,
-  muteRoleOptions,
-  mutation,
-  pendingFeatureId,
-  onSaveMuteRole,
-  onSaveMuteRoleState,
-  onSaveDestination,
-  onSetFeatureEnabled,
-}: ModerationWorkspacePanelsProps) {
-  const automodHeadingId = useId();
-  const automodBlockerMessage =
-    automodFeature === null
-      ? null
-      : getActionableFeatureBlocker(automodFeature);
-
-  return (
-    <GroupedSettingsStack className="flat-config-stack">
-      {automodFeature !== null || muteRoleFeature !== null ? (
-        <GroupedSettingsSection>
-          <GroupedSettingsGroup>
-            {automodFeature !== null ? (
-              <GroupedSettingsItem
-                stacked
-                role="group"
-                aria-labelledby={automodHeadingId}
-              >
-                <GroupedSettingsSubrow>
-                  <GroupedSettingsMainRow>
-                    <GroupedSettingsCopy>
-                      <GroupedSettingsHeading id={automodHeadingId}>
-                        Automod service
-                      </GroupedSettingsHeading>
-                    </GroupedSettingsCopy>
-                    <GroupedSettingsSwitch
-                      label="Automod service"
-                      checked={automodFeature.effective_enabled}
-                      disabled={mutation.saving || !canEditSelectedGuild}
-                      onChange={(enabled) =>
-                        void onSetFeatureEnabled(automodFeature, enabled)
-                      }
-                    />
-                  </GroupedSettingsMainRow>
-                </GroupedSettingsSubrow>
-                {automodBlockerMessage ? (
-                  <GroupedSettingsSubrow>
-                    <GroupedSettingsInlineMessage
-                      message={automodBlockerMessage}
-                      tone="info"
-                    />
-                  </GroupedSettingsSubrow>
-                ) : null}
-              </GroupedSettingsItem>
-            ) : null}
-
-            {muteRoleFeature !== null ? (
-              <MuteRoleSection
-                feature={muteRoleFeature}
-                canEditSelectedGuild={canEditSelectedGuild}
-                mutationSaving={mutation.saving}
-                pendingFeatureId={pendingFeatureId}
-                roleOptions={roleOptions}
-                muteRoleOptions={muteRoleOptions}
-                onClearNotice={mutation.clearNotice}
-                onSave={onSaveMuteRole}
-                onSaveState={onSaveMuteRoleState}
-                onSetFeatureEnabled={onSetFeatureEnabled}
-              />
-            ) : null}
-          </GroupedSettingsGroup>
-        </GroupedSettingsSection>
-      ) : null}
-
-      {moderationCommandFeatures.length > 0 ? (
-        <GroupedSettingsSection>
-          <GroupedSettingsCopy>
-            <GroupedSettingsHeading variant="section">
-              Moderation commands
-            </GroupedSettingsHeading>
-          </GroupedSettingsCopy>
-
-          <GroupedSettingsGroup>
-            {moderationCommandFeatures.map((feature) => (
-              <ModerationCommandSection
-                key={feature.id}
-                feature={feature}
-                canEditSelectedGuild={canEditSelectedGuild}
-                mutationSaving={mutation.saving}
-                onSetFeatureEnabled={onSetFeatureEnabled}
-              />
-            ))}
-          </GroupedSettingsGroup>
-        </GroupedSettingsSection>
-      ) : null}
-
-      <GroupedSettingsSection>
-        <GroupedSettingsCopy>
-          <GroupedSettingsHeading variant="section">
-            Moderation routes
-          </GroupedSettingsHeading>
-        </GroupedSettingsCopy>
-
-        {channelOptions.notice ? (
-          <GroupedSettingsInlineMessage
-            message={channelOptions.notice.message}
-            tone="error"
-            action={
-              <button
-                className="button-secondary"
-                type="button"
-                disabled={channelOptions.loading}
-                onClick={() => void channelOptions.refresh()}
-              >
-                Retry channel lookup
-              </button>
-            }
-          />
-        ) : null}
-
-        {moderationRouteFeatures.length === 0 ? (
-          <div className="table-empty-state table-empty-state-compact">
-            <div className="card-copy">
-              <h2>No moderation routes</h2>
-            </div>
-          </div>
-        ) : (
-          <GroupedSettingsGroup>
-            {moderationRouteFeatures.map((feature) => (
-              <ModerationRouteSection
-                key={feature.id}
-                feature={feature}
-                canEditSelectedGuild={canEditSelectedGuild}
-                channelOptions={channelOptions}
-                messageRouteChannelOptions={messageRouteChannelOptions}
-                mutationSaving={mutation.saving}
-                pendingFeatureId={pendingFeatureId}
-                onClearNotice={mutation.clearNotice}
-                onSave={onSaveDestination}
-                onSetFeatureEnabled={onSetFeatureEnabled}
-              />
-            ))}
-          </GroupedSettingsGroup>
-        )}
-      </GroupedSettingsSection>
-    </GroupedSettingsStack>
-  );
-}
-
-interface ModerationCommandSectionProps {
-  feature: FeatureRecord;
-  canEditSelectedGuild: boolean;
-  mutationSaving: boolean;
-  onSetFeatureEnabled: (
-    feature: FeatureRecord,
-    enabled: boolean,
-  ) => Promise<void>;
-}
-
-function ModerationCommandSection({
-  feature,
-  canEditSelectedGuild,
-  mutationSaving,
-  onSetFeatureEnabled,
-}: ModerationCommandSectionProps) {
-  const headingId = useId();
-  const commandBlockerMessage = getActionableFeatureBlocker(feature);
-
-  return (
-    <GroupedSettingsItem stacked role="group" aria-labelledby={headingId}>
-      <GroupedSettingsSubrow>
-        <GroupedSettingsMainRow>
-          <GroupedSettingsCopy>
-            <GroupedSettingsHeading id={headingId}>
-              {feature.label}
-            </GroupedSettingsHeading>
-          </GroupedSettingsCopy>
-          <GroupedSettingsSwitch
-            label={feature.label}
-            checked={feature.effective_enabled}
-            disabled={mutationSaving || !canEditSelectedGuild}
-            onChange={(enabled) => void onSetFeatureEnabled(feature, enabled)}
-          />
-        </GroupedSettingsMainRow>
-      </GroupedSettingsSubrow>
-      {commandBlockerMessage ? (
-        <GroupedSettingsSubrow>
-          <GroupedSettingsInlineMessage
-            message={commandBlockerMessage}
-            tone="info"
-          />
-        </GroupedSettingsSubrow>
-      ) : null}
-    </GroupedSettingsItem>
-  );
-}
-
-interface MuteRoleSectionProps {
-  feature: FeatureRecord;
-  canEditSelectedGuild: boolean;
-  mutationSaving: boolean;
-  pendingFeatureId: string;
-  roleOptions: ReturnType<typeof useGuildRoleOptions>;
-  muteRoleOptions: Array<{
-    value: string;
-    label: string;
-    disabled?: boolean;
-  }>;
-  onClearNotice: () => void;
-  onSave: (feature: FeatureRecord, roleId: string) => Promise<void>;
-  onSaveState: (
-    feature: FeatureRecord,
-    roleId: string,
-    enabled: boolean,
-  ) => Promise<void>;
-  onSetFeatureEnabled: (
-    feature: FeatureRecord,
-    enabled: boolean,
-  ) => Promise<void>;
-}
-
-function MuteRoleSection({
-  feature,
-  canEditSelectedGuild,
-  mutationSaving,
-  pendingFeatureId,
-  roleOptions,
-  muteRoleOptions,
-  onClearNotice,
-  onSave,
-  onSaveState,
-  onSetFeatureEnabled,
-}: MuteRoleSectionProps) {
-  const currentRoleId = getMuteRoleFeatureDetails(feature).roleId;
-  const headingId = useId();
-  const [roleDraft, setRoleDraft] = useState(currentRoleId);
-  const [muteEnabledDraft, setMuteEnabledDraft] = useState(
-    feature.effective_enabled,
-  );
-  const canEditRole =
-    canEditSelectedGuild && featureSupportsField(feature, "role_id");
-  const isMuteTogglePending = mutationSaving && pendingFeatureId === feature.id;
-  const muteEnabled = isMuteTogglePending
-    ? muteEnabledDraft
-    : feature.effective_enabled;
-  const selectedRoleId = roleDraft.trim();
-  const hasUnsavedChanges = currentRoleId !== selectedRoleId;
-  const muteRoleBlockerMessage = getActionableMuteRoleBlocker(feature);
-  const canEnableMuteRole = currentRoleId !== "" || selectedRoleId !== "";
-
-  useEffect(() => {
-    setRoleDraft(currentRoleId);
-  }, [currentRoleId]);
-
-  useEffect(() => {
-    setMuteEnabledDraft(feature.effective_enabled);
-  }, [feature.effective_enabled]);
-
-  function handleReset() {
-    onClearNotice();
-    setRoleDraft(currentRoleId);
-  }
-
-  async function handleMuteToggle(enabled: boolean) {
-    setMuteEnabledDraft(enabled);
-
-    if (enabled && selectedRoleId !== "" && selectedRoleId !== currentRoleId) {
-      await onSaveState(feature, selectedRoleId, enabled);
-      return;
-    }
-
-    void onSetFeatureEnabled(feature, enabled);
-  }
-
-  return (
-    <GroupedSettingsItem stacked role="group" aria-labelledby={headingId}>
-      <GroupedSettingsSubrow>
-        <GroupedSettingsMainRow>
-          <GroupedSettingsCopy>
-            <GroupedSettingsHeading id={headingId}>
-              {feature.label}
-            </GroupedSettingsHeading>
-          </GroupedSettingsCopy>
-          <GroupedSettingsSwitch
-            label={feature.label}
-            checked={muteEnabled}
-            disabled={
-              mutationSaving ||
-              !canEditSelectedGuild ||
-              (!muteEnabled && !canEnableMuteRole)
-            }
-            onChange={(enabled) => void handleMuteToggle(enabled)}
-          />
-        </GroupedSettingsMainRow>
-      </GroupedSettingsSubrow>
-
-      <GroupedSettingsSubrow>
-        <SettingsSelectField
-          label="Role"
-          labelClassName="grouped-settings-label"
-          value={roleDraft}
-          disabled={!canEditRole || roleOptions.loading}
-          onChange={setRoleDraft}
-          options={muteRoleOptions}
-          placeholder={
-            roleOptions.loading
-              ? "Loading roles..."
-              : muteRoleOptions.length === 0
-                ? "No roles available"
-                : "No mute role"
-          }
-        />
-      </GroupedSettingsSubrow>
-
-      {roleOptions.notice ? (
-        <GroupedSettingsSubrow>
-          <GroupedSettingsInlineMessage
-            message={roleOptions.notice.message}
-            tone="error"
-            action={
-              <button
-                className="button-secondary"
-                type="button"
-                disabled={roleOptions.loading}
-                onClick={() => void roleOptions.refresh()}
-              >
-                Retry role lookup
-              </button>
-            }
-          />
-        </GroupedSettingsSubrow>
-      ) : muteRoleBlockerMessage ? (
-        <GroupedSettingsSubrow>
-          <GroupedSettingsInlineMessage
-            message={muteRoleBlockerMessage}
-            tone="info"
-          />
-        </GroupedSettingsSubrow>
-      ) : null}
-
-      {hasUnsavedChanges ? (
-        <GroupedSettingsSubrow>
-          <UnsavedChangesBar
-            className="grouped-settings-unsaved-bar"
-            hasUnsavedChanges={hasUnsavedChanges}
-            saveLabel={
-              mutationSaving && pendingFeatureId === feature.id
-                ? "Saving..."
-                : "Save changes"
-            }
-            saving={mutationSaving && pendingFeatureId === feature.id}
-            disabled={!canEditRole || roleOptions.loading}
-            onReset={handleReset}
-            onSave={() => onSave(feature, selectedRoleId)}
-          />
-        </GroupedSettingsSubrow>
-      ) : null}
-    </GroupedSettingsItem>
-  );
-}
-
-interface ModerationRouteSectionProps {
-  feature: FeatureRecord;
-  canEditSelectedGuild: boolean;
-  channelOptions: ReturnType<typeof useGuildChannelOptions>;
-  messageRouteChannelOptions: Array<{
-    value: string;
-    label: string;
-    description?: string;
-  }>;
-  mutationSaving: boolean;
-  pendingFeatureId: string;
-  onClearNotice: () => void;
-  onSave: (feature: FeatureRecord, channelId: string) => Promise<void>;
-  onSetFeatureEnabled: (
-    feature: FeatureRecord,
-    enabled: boolean,
-  ) => Promise<void>;
-}
-
-function ModerationRouteSection({
-  feature,
-  canEditSelectedGuild,
-  channelOptions,
-  messageRouteChannelOptions,
-  mutationSaving,
-  pendingFeatureId,
-  onClearNotice,
-  onSave,
-  onSetFeatureEnabled,
-}: ModerationRouteSectionProps) {
-  const currentChannelId = getLoggingFeatureDetails(feature).channelId;
-  const headingId = useId();
-  const [channelDraft, setChannelDraft] = useState(currentChannelId);
-  const canEditDestination =
-    canEditSelectedGuild && featureSupportsField(feature, "channel_id");
-  const hasUnsavedChanges = currentChannelId !== channelDraft.trim();
-  const routeMessage =
-    feature.effective_enabled && feature.readiness === "blocked"
-      ? summarizeLoggingGuidance(feature)
-      : null;
-
-  useEffect(() => {
-    setChannelDraft(currentChannelId);
-  }, [currentChannelId]);
-
-  function handleReset() {
-    onClearNotice();
-    setChannelDraft(currentChannelId);
-  }
-
-  return (
-    <GroupedSettingsItem stacked role="group" aria-labelledby={headingId}>
-      <GroupedSettingsSubrow>
-        <GroupedSettingsMainRow>
-          <GroupedSettingsCopy>
-            <GroupedSettingsHeading id={headingId}>
-              {feature.label}
-            </GroupedSettingsHeading>
-          </GroupedSettingsCopy>
-          <GroupedSettingsSwitch
-            label={feature.label}
-            checked={feature.effective_enabled}
-            disabled={mutationSaving || !canEditSelectedGuild}
-            onChange={(enabled) => void onSetFeatureEnabled(feature, enabled)}
-          />
-        </GroupedSettingsMainRow>
-      </GroupedSettingsSubrow>
-
-      <GroupedSettingsSubrow>
-        <SettingsSelectField
-          label="Channel"
-          labelClassName="grouped-settings-label"
-          value={channelDraft}
-          disabled={!canEditDestination || channelOptions.loading}
-          onChange={setChannelDraft}
-          options={messageRouteChannelOptions}
-          placeholder={
-            channelOptions.loading
-              ? "Loading channels..."
-              : messageRouteChannelOptions.length === 0
-                ? "No channels available"
-                : "No channel"
-          }
-        />
-      </GroupedSettingsSubrow>
-
-      {routeMessage ? (
-        <GroupedSettingsSubrow>
-          <GroupedSettingsInlineMessage message={routeMessage} tone="error" />
-        </GroupedSettingsSubrow>
-      ) : null}
-
-      {hasUnsavedChanges ? (
-        <GroupedSettingsSubrow>
-          <UnsavedChangesBar
-            className="grouped-settings-unsaved-bar"
-            hasUnsavedChanges={hasUnsavedChanges}
-            saveLabel={
-              mutationSaving && pendingFeatureId === feature.id
-                ? "Saving..."
-                : "Save changes"
-            }
-            saving={mutationSaving && pendingFeatureId === feature.id}
-            disabled={!canEditDestination || channelOptions.loading}
-            onReset={handleReset}
-            onSave={() => onSave(feature, channelDraft)}
-          />
-        </GroupedSettingsSubrow>
-      ) : null}
-    </GroupedSettingsItem>
+      {loading ? (
+        <div className="mt-8 text-muted">Loading settings...</div>
+      ) : (
+        <SurfaceCard className="mt-8">
+          <SettingsGroup>
+            <SettingsRow
+              title="Auto-Moderation"
+              description="Automatically filter and restrict malicious behavior based on custom rules."
+              control={
+                <Button
+                  variant={automodEnabled ? "primary" : "secondary"}
+                  onClick={handleToggleAutomod}
+                >
+                  {automodEnabled ? "Enabled" : "Disabled"}
+                </Button>
+              }
+            />
+            <SettingsRow
+              title="Moderation Logging"
+              description="Keep a record of kicks, bans, and automod actions."
+              control={
+                <Button
+                  variant={loggingEnabled ? "primary" : "secondary"}
+                  onClick={handleToggleLogging}
+                >
+                  {loggingEnabled ? "Enabled" : "Disabled"}
+                </Button>
+              }
+            />
+            <SettingsRow
+              title="Mute Role"
+              description="The role assigned to muted users."
+              isLast={true}
+              control={
+                <div className="flex-row">
+                  <input
+                    type="text"
+                    value={muteRole}
+                    onChange={(e) => setMuteRole(e.target.value)}
+                    placeholder="Role ID"
+                    style={{
+                      padding: "8px",
+                      borderRadius: "4px",
+                      border: "1px solid var(--border-subtle)",
+                      background: "var(--bg-base)",
+                      color: "var(--text-primary)",
+                      width: "150px"
+                    }}
+                  />
+                  <Button variant="primary" onClick={handleSaveMuteRole}>
+                    Save
+                  </Button>
+                </div>
+              }
+            />
+          </SettingsGroup>
+        </SurfaceCard>
+      )}
+    </div>
   );
 }

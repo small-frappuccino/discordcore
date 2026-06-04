@@ -3,7 +3,6 @@ package commands
 import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/admin"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/analytics"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/embeds"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
@@ -43,8 +42,6 @@ func BaseCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
 		Domain: "",
 		Register: func(ch *CommandHandler, router *core.CommandRouter) {
-			configCommands := config.NewConfigCommands(ch.configManager)
-			configCommands.RegisterBaseCommands(router)
 			runtime.NewRuntimeConfigCommands(ch.configManager).RegisterCommands(router)
 			analytics.RegisterAnalyticsCommands(router)
 			partner.NewPartnerCommands(ch.configManager).RegisterCommands(router)
@@ -60,8 +57,6 @@ func QOTDCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
 		Domain: files.BotDomainQOTD,
 		Register: func(ch *CommandHandler, router *core.CommandRouter) {
-			configCommands := config.NewConfigCommands(ch.configManager)
-			configCommands.RegisterQOTDCommands(router)
 			qotdcmd.NewCommands(ch.qotdService).RegisterCommands(router)
 		},
 	}
