@@ -115,8 +115,11 @@ export function DashboardLayout() {
                 <span className="shell-trigger-chevron">v</span>
               </button>
 
-              {isServerMenuOpen && (
-                <div className="shell-dropdown">
+              <div 
+                className={`shell-dropdown transition-all duration-200 ease-out origin-top-right ${
+                  isServerMenuOpen ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 pointer-events-none'
+                }`}
+              >
                   {uniqueGuilds.length === 0 ? (
                     <div className="p-2 text-sm text-muted">No servers found</div>
                   ) : (
@@ -141,7 +144,6 @@ export function DashboardLayout() {
                     ))
                   )}
                 </div>
-              )}
             </div>
 
             {/* Account Selector */}
@@ -159,8 +161,11 @@ export function DashboardLayout() {
                 <span className="shell-trigger-chevron">v</span>
               </button>
 
-              {isAccountMenuOpen && (
-                <div className="shell-dropdown">
+              <div 
+                className={`shell-dropdown transition-all duration-200 ease-out origin-top-right ${
+                  isAccountMenuOpen ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 pointer-events-none'
+                }`}
+              >
                   <div className="px-3 py-2 border-b border-subtle mb-1">
                     <div className="text-sm font-semibold">{accountTitle}</div>
                     <div className="text-xs text-muted">{session?.user?.id}</div>
@@ -175,7 +180,6 @@ export function DashboardLayout() {
                     Log Out
                   </button>
                 </div>
-              )}
             </div>
           </div>
         </header>

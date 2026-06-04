@@ -1,4 +1,4 @@
-import { Button } from "../../components/ui";
+import { Button, Skeleton } from "../../components/ui";
 
 type EmbedSidebarListProps = {
   isLoading: boolean;
@@ -25,7 +25,11 @@ export function EmbedSidebarList({
       </div>
 
       {isLoading ? (
-        <p className="text-muted">Loading Embeds...</p>
+        <div className="flex flex-wrap gap-2">
+          <Skeleton className="h-9 w-24" />
+          <Skeleton className="h-9 w-32" />
+          <Skeleton className="h-9 w-20" />
+        </div>
       ) : embeds.length === 0 ? (
         <div className="text-muted text-sm italic py-4">No custom embeds found. Create one above!</div>
       ) : (

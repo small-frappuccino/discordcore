@@ -1,4 +1,4 @@
-import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, PageContainer } from "../components/ui";
+import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, PageContainer, Skeleton } from "../components/ui";
 import { useQOTDPageLogic } from "./hooks/useQOTDPageLogic";
 
 export function QOTDPage() {
@@ -22,7 +22,7 @@ export function QOTDPage() {
 
       <div className="mt-8">
         {isLoading ? (
-          <p className="text-muted">Loading QOTD settings...</p>
+          <Skeleton className="h-[400px] w-full" />
         ) : config ? (
           <div>
             <h2 className="text-lg mb-4">Core Settings</h2>

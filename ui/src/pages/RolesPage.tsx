@@ -1,4 +1,4 @@
-import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, PageContainer } from "../components/ui";
+import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, PageContainer, Skeleton } from "../components/ui";
 import { useRolesPageLogic } from "./hooks/useRolesPageLogic";
 import type { Path } from "react-hook-form";
 import type { RolesFormData } from "./schemas/roles";
@@ -18,7 +18,16 @@ export function RolesPage() {
   }
 
   if (isLoading) {
-    return <div>Loading roles settings...</div>;
+    return (
+      <PageContainer>
+        <PageHeader 
+          title="Roles Configuration" 
+          description="Manage which roles grant dashboard access, and configure server-wide specific roles like AutoAssignment, Mute, and Booster."
+          badge={<Badge variant="success">Active</Badge>}
+        />
+        <Skeleton className="h-[600px] w-full mt-8" />
+      </PageContainer>
+    );
   }
 
 

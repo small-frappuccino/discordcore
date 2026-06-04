@@ -87,40 +87,13 @@ type RuntimeConfig struct {
 // The legacy keys never round-trip into the public type; the marshalled form
 // only emits the canonical fields.
 func (rc *RuntimeConfig) UnmarshalJSON(data []byte) error {
+	type alias RuntimeConfig
 	type rawRuntimeConfig struct {
-		Database             DatabaseRuntimeConfig `json:"database,omitempty"`
-		BotTheme             string                `json:"bot_theme,omitempty"`
-		DisableDBCleanup     bool                  `json:"disable_db_cleanup,omitempty"`
-		DisableAutomodLogs   bool                  `json:"disable_automod_logs,omitempty"`
-		DisableMessageLogs   bool                  `json:"disable_message_logs,omitempty"`
-		DisableEntryExitLogs bool                  `json:"disable_entry_exit_logs,omitempty"`
-		DisableReactionLogs  bool                  `json:"disable_reaction_logs,omitempty"`
-		DisableUserLogs      bool                  `json:"disable_user_logs,omitempty"`
-		DisableCleanLog      bool                  `json:"disable_clean_log,omitempty"`
-		ModerationLogging    *bool                 `json:"moderation_logging,omitempty"`
+		alias
 		// Deprecated: migrated to ModerationLogging
-		ModerationLogMode            string                     `json:"moderation_log_mode,omitempty"`
-		PresenceWatchUserID          string                     `json:"presence_watch_user_id,omitempty"`
-		PresenceWatchBot             bool                       `json:"presence_watch_bot,omitempty"`
-		MessageCacheTTLHours         int                        `json:"message_cache_ttl_hours,omitempty"`
-		MessageDeleteOnLog           bool                       `json:"message_delete_on_log,omitempty"`
-		MessageCacheCleanup          bool                       `json:"message_cache_cleanup,omitempty"`
-		GlobalMaxWorkers             int                        `json:"global_max_workers,omitempty"`
-		BackfillChannelID            string                     `json:"backfill_channel_id,omitempty"`
-		BackfillStartDay             string                     `json:"backfill_start_day,omitempty"`
-		BackfillInitialDate          string                     `json:"backfill_initial_date,omitempty"`
-		MimuWelcomeString            string                     `json:"mimu_welcome_string,omitempty"`
-		MimuGoodbyeString            string                     `json:"mimu_goodbye_string,omitempty"`
-		DisableBotRolePermMirror     bool                       `json:"disable_bot_role_perm_mirror,omitempty"`
-		BotRolePermMirrorActorRoleID string                     `json:"bot_role_perm_mirror_actor_role_id,omitempty"`
-		WebhookEmbedUpdates          []WebhookEmbedUpdateConfig `json:"webhook_embed_updates,omitempty"`
+		ModerationLogMode string `json:"moderation_log_mode,omitempty"`
 		// Deprecated: migrated to WebhookEmbedUpdates
-		WebhookEmbedUpdate          WebhookEmbedUpdateConfig     `json:"webhook_embed_update,omitempty"`
-		WebhookEmbedValidation      WebhookEmbedValidationConfig `json:"webhook_embed_validation,omitempty"`
-		DisableInteractiveEphemeral bool                         `json:"disable_interactive_ephemeral,omitempty"`
-		PastebinDevKey              EncryptedString              `json:"pastebin_dev_key,omitempty"`
-		PastebinUserName            EncryptedString              `json:"pastebin_user_name,omitempty"`
-		PastebinUserPassword        EncryptedString              `json:"pastebin_user_password,omitempty"`
+		WebhookEmbedUpdate WebhookEmbedUpdateConfig `json:"webhook_embed_update,omitempty"`
 	}
 
 	var raw rawRuntimeConfig
@@ -128,37 +101,7 @@ func (rc *RuntimeConfig) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("RuntimeConfig.UnmarshalJSON: %w", err)
 	}
 
-	*rc = RuntimeConfig{
-		Database:                     raw.Database,
-		BotTheme:                     raw.BotTheme,
-		DisableDBCleanup:             raw.DisableDBCleanup,
-		DisableAutomodLogs:           raw.DisableAutomodLogs,
-		DisableMessageLogs:           raw.DisableMessageLogs,
-		DisableEntryExitLogs:         raw.DisableEntryExitLogs,
-		DisableReactionLogs:          raw.DisableReactionLogs,
-		DisableUserLogs:              raw.DisableUserLogs,
-		DisableCleanLog:              raw.DisableCleanLog,
-		ModerationLogging:            raw.ModerationLogging,
-		PresenceWatchUserID:          raw.PresenceWatchUserID,
-		PresenceWatchBot:             raw.PresenceWatchBot,
-		MessageCacheTTLHours:         raw.MessageCacheTTLHours,
-		MessageDeleteOnLog:           raw.MessageDeleteOnLog,
-		MessageCacheCleanup:          raw.MessageCacheCleanup,
-		GlobalMaxWorkers:             raw.GlobalMaxWorkers,
-		BackfillChannelID:            raw.BackfillChannelID,
-		BackfillStartDay:             raw.BackfillStartDay,
-		BackfillInitialDate:          raw.BackfillInitialDate,
-		MimuWelcomeString:            raw.MimuWelcomeString,
-		MimuGoodbyeString:            raw.MimuGoodbyeString,
-		DisableBotRolePermMirror:     raw.DisableBotRolePermMirror,
-		BotRolePermMirrorActorRoleID: raw.BotRolePermMirrorActorRoleID,
-		WebhookEmbedUpdates:          raw.WebhookEmbedUpdates,
-		WebhookEmbedValidation:       raw.WebhookEmbedValidation,
-		DisableInteractiveEphemeral:  raw.DisableInteractiveEphemeral,
-		PastebinDevKey:               raw.PastebinDevKey,
-		PastebinUserName:             raw.PastebinUserName,
-		PastebinUserPassword:         raw.PastebinUserPassword,
-	}
+	*rc = RuntimeConfig(raw.alias)
 
 	if rc.ModerationLogging == nil && strings.TrimSpace(raw.ModerationLogMode) != "" {
 		rc.ModerationLogging = boolPtr(strings.ToLower(strings.TrimSpace(raw.ModerationLogMode)) != "off")

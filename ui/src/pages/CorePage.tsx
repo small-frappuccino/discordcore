@@ -1,12 +1,9 @@
 
-import { PageHeader, SurfaceCard, SettingsGroup, SettingsRow, Badge, PageContainer } from "../components/ui";
+import { PageHeader, SurfaceCard, SettingsGroup, SettingsRow, Badge, PageContainer, Skeleton } from "../components/ui";
 import { useCorePageLogic } from "./hooks/useCorePageLogic";
 
 export function CorePage() {
   const { settings, isLoading } = useCorePageLogic();
-
-  if (isLoading) return null;
-
   return (
     <PageContainer>
       <PageHeader
@@ -15,7 +12,10 @@ export function CorePage() {
         badge={<Badge variant="success">Online</Badge>}
       />
 
-      <SurfaceCard className="mt-8">
+      {isLoading ? (
+        <Skeleton className="h-48 w-full mt-8" />
+      ) : (
+        <SurfaceCard className="mt-8">
         <h3 className="mb-4 text-lg">Domain Routing</h3>
         <SettingsGroup>
           <SettingsRow>
@@ -37,7 +37,8 @@ export function CorePage() {
             </SettingsRow.Control>
           </SettingsRow>
         </SettingsGroup>
-      </SurfaceCard>
+        </SurfaceCard>
+      )}
     </PageContainer>
   );
 }

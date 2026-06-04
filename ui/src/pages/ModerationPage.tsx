@@ -6,6 +6,7 @@ import {
   Button,
   Badge,
   PageContainer,
+  Skeleton,
 } from "../components/ui";
 import { useModerationPageLogic } from "./hooks/useModerationPageLogic";
 
@@ -35,7 +36,7 @@ export function ModerationPage() {
       />
 
       {isLoading ? (
-        <div className="mt-8 text-muted">Loading settings...</div>
+        <Skeleton className="h-96 w-full mt-8" />
       ) : (
         <SurfaceCard className="mt-8">
           <SettingsGroup>

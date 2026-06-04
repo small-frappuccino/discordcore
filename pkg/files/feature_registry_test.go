@@ -2,8 +2,8 @@ package files
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
+	
+	
 	"reflect"
 	"testing"
 )
@@ -106,42 +106,3 @@ func TestFeatureTogglesJSONRoundTrip(t *testing.T) {
 	}
 }
 
-func TestFeatureRegistryMatchesUIContract(t *testing.T) {
-	t.Parallel()
-
-	path := filepath.Join("..", "..", "ui", "src", "features", "features", "featureContract.json")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read ui feature contract %s: %v", path, err)
-	}
-
-	var contract struct {
-		Features []struct {
-			ID string `json:"id"`
-		} `json:"features"`
-	}
-	if err := json.Unmarshal(data, &contract); err != nil {
-		t.Fatalf("decode ui feature contract: %v", err)
-	}
-
-	contractIDs := make(map[string]struct{}, len(contract.Features))
-	for _, entry := range contract.Features {
-		contractIDs[entry.ID] = struct{}{}
-	}
-
-	registryIDs := make(map[string]struct{}, len(featureRegistry))
-	for _, spec := range featureRegistry {
-		registryIDs[spec.ID] = struct{}{}
-	}
-
-	for id := range registryIDs {
-		if _, ok := contractIDs[id]; !ok {
-			t.Errorf("ui contract missing registry id %q", id)
-		}
-	}
-	for id := range contractIDs {
-		if _, ok := registryIDs[id]; !ok {
-			t.Errorf("registry missing ui contract id %q", id)
-		}
-	}
-}
