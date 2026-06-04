@@ -80,6 +80,9 @@ func (s *Server) handleGuildConfigRoutes(w http.ResponseWriter, r *http.Request)
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 		return
+	case len(tail) >= 1 && tail[0] == "embeds":
+		s.handleGuildEmbedsRoutes(w, r, guildID, tail, auth)
+		return
 	case len(tail) >= 1 && tail[0] == "qotd":
 		s.handleGuildQOTDRoutes(w, r, guildID, tail, auth)
 		return

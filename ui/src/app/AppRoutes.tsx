@@ -18,7 +18,11 @@ function ManageIndexRedirect() {
   if (firstGuild) {
     return <Navigate to={`/manage/${firstGuild.id}/core`} replace />;
   }
-  return <div className="p-4 text-center">No available servers found. Please invite the bot first.</div>;
+  return (
+    <div className="p-4 text-center">
+      No available servers found. Please ensure you are a server administrator and the bot is invited.
+    </div>
+  );
 }
 
 export function AppRoutes() {
