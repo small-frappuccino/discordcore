@@ -1,7 +1,7 @@
 import * as React from "react";
 import { motion } from "framer-motion";
 
-export function SettingsGroup({
+export const SettingsGroup = React.memo(function SettingsGroup({
   className = "",
   children,
   ...props
@@ -11,4 +11,4 @@ export function SettingsGroup({
       {children}
     </motion.div>
   );
-}
+});

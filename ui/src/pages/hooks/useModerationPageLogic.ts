@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import toast from "react-hot-toast";
@@ -41,21 +41,21 @@ export function useModerationPageLogic() {
   const automodEnabled = automodRes?.feature?.effective_enabled || false;
   const loggingEnabled = loggingRes?.feature?.effective_enabled || false;
 
-  const handleToggleAutomod = () => {
+  const handleToggleAutomod = useCallback(() => {
     if (!selectedGuildID) return;
     automodMutation.mutate({ enabled: !automodEnabled }, {
       onSuccess: () => toast.success("Automod settings updated"),
       onError: (e) => toast.error(`Failed to update automod: ${formatError(e)}`)
     });
-  };
+  }, [selectedGuildID, automodEnabled, automodMutation]);
 
-  const handleToggleLogging = () => {
+  const handleToggleLogging = useCallback(() => {
     if (!selectedGuildID) return;
     loggingMutation.mutate({ enabled: !loggingEnabled }, {
       onSuccess: () => toast.success("Logging settings updated"),
       onError: (e) => toast.error(`Failed to update logging: ${formatError(e)}`)
     });
-  };
+  }, [selectedGuildID, loggingEnabled, loggingMutation]);
 
   const onSubmit = form.handleSubmit((data) => {
     if (!selectedGuildID) return;

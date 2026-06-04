@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, PageContainer, Skeleton, Select, SettingsGroupSkeleton } from "../components/ui";
 import { useRolesPageLogic } from "./hooks/useRolesPageLogic";
 
@@ -11,6 +12,10 @@ export function RolesPage() {
     form,
     onSubmit,
   } = useRolesPageLogic();
+
+  const roleOptions = useMemo(() => {
+    return roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>);
+  }, [roles]);
 
   if (!selectedGuildID) {
     return <div>Select a guild</div>;
@@ -42,8 +47,6 @@ export function RolesPage() {
 
 
 
-
-
   return (
     <PageContainer>
       <form className="flex flex-col" onSubmit={onSubmit}>
@@ -63,7 +66,7 @@ export function RolesPage() {
             </SettingsRow.Info>
             <SettingsRow.Control>
               <Select multiple className="w-full max-w-xs" {...form.register("dashboard_read")}>
-                {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                {roleOptions}
               </Select>
             </SettingsRow.Control>
           </SettingsRow>
@@ -74,7 +77,7 @@ export function RolesPage() {
             </SettingsRow.Info>
             <SettingsRow.Control>
               <Select multiple className="w-full max-w-xs" {...form.register("dashboard_write")}>
-                {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                {roleOptions}
               </Select>
             </SettingsRow.Control>
           </SettingsRow>
@@ -104,7 +107,7 @@ export function RolesPage() {
             <SettingsRow.Control>
               <Select className="w-full max-w-xs" {...form.register("auto_assignment.target_role")}>
                 <option value="">-- None --</option>
-                {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                {roleOptions}
               </Select>
             </SettingsRow.Control>
           </SettingsRow>
@@ -115,7 +118,7 @@ export function RolesPage() {
             </SettingsRow.Info>
             <SettingsRow.Control>
               <Select multiple className="w-full max-w-xs" {...form.register("auto_assignment.required_roles")}>
-                {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                {roleOptions}
               </Select>
             </SettingsRow.Control>
           </SettingsRow>
@@ -133,7 +136,7 @@ export function RolesPage() {
             <SettingsRow.Control>
               <Select className="w-full max-w-xs" {...form.register("mute_role")}>
                 <option value="">-- None --</option>
-                {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                {roleOptions}
               </Select>
             </SettingsRow.Control>
           </SettingsRow>
@@ -145,7 +148,7 @@ export function RolesPage() {
             <SettingsRow.Control>
               <Select className="w-full max-w-xs" {...form.register("booster_role")}>
                 <option value="">-- None --</option>
-                {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                {roleOptions}
               </Select>
             </SettingsRow.Control>
           </SettingsRow>
