@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useDashboardSession } from "../context/DashboardSessionContext";
-import { PageHeader, SettingsGroup, SettingsRow, Button, Badge } from "../components/ui";
+import { PageHeader, SettingsGroup, SettingsRow, Button, Badge } from "../components";
 import type { QOTDConfig } from "../api/control";
 
 export function QOTDPage() {

@@ -1,88 +1,11 @@
-import { useEffect, useState } from "react";
 import { useDashboardSession } from "../context/DashboardSessionContext";
-import { PageHeader, SettingsGroup, SettingsRow, Button, Badge } from "../components/ui";
-import type { GuildRoleOption } from "../api/control";
+import { PageHeader, SettingsGroup, SettingsRow, Button, Badge } from "../components";
+import { useRolesPage } from "./hooks/useRolesPage";
 
 export function RolesPage() {
-  const { client, selectedGuildID } = useDashboardSession();
-  
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [roles, setRoles] = useState<GuildRoleOption[]>([]);
+  const { selectedGuildID } = useDashboardSession();
 
-
-  // Local form state
-  const [dashboardRead, setDashboardRead] = useState<string[]>([]);
-  const [dashboardWrite, setDashboardWrite] = useState<string[]>([]);
-  const [boosterRole, setBoosterRole] = useState<string>("");
-  const [muteRole, setMuteRole] = useState<string>("");
-  
-  const [autoAssignEnabled, setAutoAssignEnabled] = useState(false);
-  const [autoAssignTarget, setAutoAssignTarget] = useState<string>("");
-  const [autoAssignRequired, setAutoAssignRequired] = useState<string[]>([]);
-
-  useEffect(() => {
-    if (!selectedGuildID) return;
-    
-    let active = true;
-    
-    async function load() {
-      setLoading(true);
-      try {
-        const [optsRes, setRes] = await Promise.all([
-          client.listGuildRoleOptions(selectedGuildID!),
-          client.getGuildSettings(selectedGuildID!)
-        ]);
-        if (!active) return;
-        
-        setRoles(optsRes.roles || []);
-        
-        const rs = setRes.workspace.sections.roles || {};
-        setDashboardRead(rs.dashboard_read || []);
-        setDashboardWrite(rs.dashboard_write || []);
-        setBoosterRole(rs.booster_role || "");
-        setMuteRole(rs.mute_role || "");
-        
-        const aa = rs.auto_assignment || {};
-        setAutoAssignEnabled(aa.enabled || false);
-        setAutoAssignTarget(aa.target_role || "");
-        setAutoAssignRequired(aa.required_roles || []);
-      } catch (e) {
-        console.error("Failed to load roles", e);
-      } finally {
-        if (active) setLoading(false);
-      }
-    }
-    
-    load();
-    return () => { active = false; };
-  }, [client, selectedGuildID]);
-
-  async function handleSave() {
-    if (!selectedGuildID) return;
-    setSaving(true);
-    try {
-      await client.updateGuildSettings(selectedGuildID, {
-        roles: {
-          dashboard_read: dashboardRead,
-          dashboard_write: dashboardWrite,
-          booster_role: boosterRole,
-          mute_role: muteRole,
-          auto_assignment: {
-            enabled: autoAssignEnabled,
-            target_role: autoAssignTarget,
-            required_roles: autoAssignRequired
-          }
-        }
-      });
-      alert("Settings saved!");
-    } catch (e) {
-      console.error(e);
-      alert("Failed to save settings");
-    } finally {
-      setSaving(false);
-    }
-  }
+  const { roles, loading, saving, formControls, handleSave } = useRolesPage(selectedGuildID);
 
   if (!selectedGuildID) {
     return <div>Select a guild</div>;
@@ -92,21 +15,22 @@ export function RolesPage() {
     return <div>Loading roles settings...</div>;
   }
 
-  const selectStyle: React.CSSProperties = {
-    backgroundColor: "var(--bg-base)",
-    color: "var(--text-primary)",
-    border: "1px solid var(--border-subtle)",
-    borderRadius: "var(--radius-sm)",
-    padding: "6px 8px",
-    outline: "none",
-    minWidth: "200px",
-    fontFamily: "inherit"
-  };
+  const {
+    dashboardRead, setDashboardRead,
+    dashboardWrite, setDashboardWrite,
+    boosterRole, setBoosterRole,
+    muteRole, setMuteRole,
+    autoAssignEnabled, setAutoAssignEnabled,
+    autoAssignTarget, setAutoAssignTarget,
+    autoAssignRequired, setAutoAssignRequired,
+  } = formControls;
+
+  const selectClass = "bg-[#18181b] text-[#f4f4f5] border border-white/10 rounded-md px-3 py-2 outline-none min-w-[200px] focus:border-[#5865F2] transition-colors";
 
   const renderMultiSelect = (val: string[], setVal: (v: string[]) => void) => (
     <select
       multiple
-      style={{...selectStyle, height: "100px"}}
+      className={`${selectClass} h-24`}
       value={val}
       onChange={e => setVal(Array.from(e.target.selectedOptions, o => o.value))}
     >
@@ -116,7 +40,7 @@ export function RolesPage() {
 
   const renderSelect = (val: string, setVal: (v: string) => void) => (
     <select
-      style={selectStyle}
+      className={selectClass}
       value={val}
       onChange={e => setVal(e.target.value)}
     >
@@ -126,7 +50,7 @@ export function RolesPage() {
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column" }}>
+    <div className="flex flex-col">
       <PageHeader 
         title="Roles Configuration" 
         description="Manage which roles grant dashboard access, and configure server-wide specific roles like AutoAssignment, Mute, and Booster."
@@ -134,7 +58,7 @@ export function RolesPage() {
       />
 
       <div className="mt-8 mb-4">
-        <h2 className="text-lg mb-2">Dashboard Access</h2>
+        <h2 className="text-lg font-semibold mb-2 text-[#f4f4f5]">Dashboard Access</h2>
         <SettingsGroup>
           <SettingsRow 
             title="Read Access Roles"
@@ -151,7 +75,7 @@ export function RolesPage() {
       </div>
 
       <div className="mb-4">
-        <h2 className="text-lg mb-2">Auto Assignment</h2>
+        <h2 className="text-lg font-semibold mb-2 text-[#f4f4f5]">Auto Assignment</h2>
         <SettingsGroup>
           <SettingsRow 
             title="Enable Auto Assignment"
@@ -159,6 +83,7 @@ export function RolesPage() {
             control={
               <input 
                 type="checkbox" 
+                className="w-4 h-4 rounded border-gray-300 text-[#5865F2] focus:ring-[#5865F2]"
                 checked={autoAssignEnabled} 
                 onChange={e => setAutoAssignEnabled(e.target.checked)} 
               />
@@ -179,7 +104,7 @@ export function RolesPage() {
       </div>
 
       <div className="mb-4">
-        <h2 className="text-lg mb-2">Special Roles</h2>
+        <h2 className="text-lg font-semibold mb-2 text-[#f4f4f5]">Special Roles</h2>
         <SettingsGroup>
           <SettingsRow 
             title="Mute Role"
@@ -195,7 +120,7 @@ export function RolesPage() {
         </SettingsGroup>
       </div>
 
-      <div className="mt-8 flex-row">
+      <div className="mt-8 flex items-center gap-2">
         <Button variant="primary" onClick={handleSave} disabled={saving}>
           {saving ? "Saving..." : "Save Changes"}
         </Button>

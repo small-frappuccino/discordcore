@@ -8,7 +8,7 @@ import {
   SettingsRow,
   Button,
   Badge,
-} from "../components/ui";
+} from "../components";
 
 export function PartnersPage() {
   const { client, selectedGuildID } = useDashboardSession();

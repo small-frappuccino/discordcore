@@ -7,7 +7,7 @@ import {
   SettingsRow,
   Button,
   Badge,
-} from "../components/ui";
+} from "../components";
 
 export function ModerationPage() {
   const { client, selectedGuildID } = useDashboardSession();

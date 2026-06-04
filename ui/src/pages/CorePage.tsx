@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useDashboardSession } from "../context/DashboardSessionContext";
-import { PageHeader, SurfaceCard, SettingsGroup, SettingsRow, Badge } from "../components/ui";
+import { PageHeader, SurfaceCard, SettingsGroup, SettingsRow, Badge } from "../components";
 import type { GuildSettingsWorkspaceResponse } from "../api/control";
 
 export function CorePage() {

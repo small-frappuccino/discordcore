@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { PageHeader, SettingsGroup, SettingsRow, Button, Badge } from "../components/ui";
+import { PageHeader, SettingsGroup, SettingsRow, Button, Badge } from "../components";
 
 interface EmbedsConfig {
   webhook_url: string;
