@@ -1,36 +1,16 @@
-import { useEffect, useState } from "react";
-import { useDashboardSession } from "../context/DashboardSessionContext";
-import { PageHeader, SettingsGroup, SettingsRow, Button, Badge } from "../components";
-import type { QOTDConfig } from "../api/control";
+
+import { PageHeader, SettingsGroup, SettingsRow, Button, Badge } from "../components/ui";
+import { useQOTDPageLogic } from "./hooks/useQOTDPageLogic";
 
 export function QOTDPage() {
-  const { client, selectedGuildID } = useDashboardSession();
-  const [config, setConfig] = useState<QOTDConfig | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (!selectedGuildID) return;
-    setLoading(true);
-    client.getQOTDSettings(selectedGuildID)
-      .then(res => setConfig(res.settings))
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [client, selectedGuildID]);
-
-  const handleSave = async () => {
-    if (!selectedGuildID || !config) return;
-    setSaving(true);
-    try {
-      await client.updateQOTDSettings(selectedGuildID, config);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const activeDeck = config?.decks?.find(d => d.id === config.active_deck_id);
+  const {
+    config,
+    setConfig,
+    activeDeck,
+    isLoading,
+    isSaving,
+    handleSave,
+  } = useQOTDPageLogic();
 
   return (
     <div>
@@ -41,7 +21,7 @@ export function QOTDPage() {
       />
 
       <div className="mt-8">
-        {loading ? (
+        {isLoading ? (
           <p className="text-muted">Loading QOTD settings...</p>
         ) : config ? (
           <div>
@@ -119,8 +99,8 @@ export function QOTDPage() {
             </SettingsGroup>
 
             <div className="mt-4">
-              <Button variant="primary" onClick={handleSave} disabled={saving}>
-                {saving ? "Saving..." : "Save Changes"}
+              <Button variant="primary" onClick={handleSave} disabled={isSaving}>
+                {isSaving ? "Saving..." : "Save Changes"}
               </Button>
             </div>
           </div>

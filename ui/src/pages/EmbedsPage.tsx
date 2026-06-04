@@ -1,36 +1,15 @@
-import { useEffect, useState } from "react";
-import { PageHeader, SettingsGroup, SettingsRow, Button, Badge } from "../components";
 
-interface EmbedsConfig {
-  webhook_url: string;
-  enabled: boolean;
-}
+import { PageHeader, SettingsGroup, SettingsRow, Button, Badge } from "../components/ui";
+import { useEmbedsPageLogic } from "./hooks/useEmbedsPageLogic";
 
 export function EmbedsPage() {
-  const [config, setConfig] = useState<EmbedsConfig | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    // Mocking the fetch call
-    const timer = setTimeout(() => {
-      setConfig({
-        webhook_url: "https://discord.com/api/webhooks/...",
-        enabled: true,
-      });
-      setLoading(false);
-    }, 500);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const handleSave = () => {
-    if (!config) return;
-    setSaving(true);
-    // Mocking the save call
-    setTimeout(() => {
-      setSaving(false);
-    }, 500);
-  };
+  const {
+    config,
+    setConfig,
+    isLoading,
+    isSaving,
+    handleSave,
+  } = useEmbedsPageLogic();
 
   return (
     <div>
@@ -41,7 +20,7 @@ export function EmbedsPage() {
       />
 
       <div className="mt-8">
-        {loading ? (
+        {isLoading ? (
           <p className="text-muted">Loading Embed settings...</p>
         ) : config ? (
           <div>
@@ -77,8 +56,8 @@ export function EmbedsPage() {
             </SettingsGroup>
 
             <div className="mt-4">
-              <Button variant="primary" onClick={handleSave} disabled={saving}>
-                {saving ? "Saving..." : "Save Changes"}
+              <Button variant="primary" onClick={handleSave} disabled={isSaving}>
+                {isSaving ? "Saving..." : "Save Changes"}
               </Button>
             </div>
           </div>

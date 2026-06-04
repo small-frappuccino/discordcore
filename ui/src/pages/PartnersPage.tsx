@@ -1,6 +1,4 @@
-import { useEffect, useState } from "react";
-import { useDashboardSession } from "../context/DashboardSessionContext";
-import type { PartnerBoardTemplateConfig } from "../api/control";
+
 import {
   PageHeader,
   SurfaceCard,
@@ -8,41 +6,17 @@ import {
   SettingsRow,
   Button,
   Badge,
-} from "../components";
+} from "../components/ui";
+import { usePartnersPageLogic } from "./hooks/usePartnersPageLogic";
 
 export function PartnersPage() {
-  const { client, selectedGuildID } = useDashboardSession();
-  const [template, setTemplate] = useState<PartnerBoardTemplateConfig>({});
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!selectedGuildID) return;
-    setLoading(true);
-    client
-      .getPartnerBoard(selectedGuildID)
-      .then((res) => {
-        if (res.partner_board?.template) {
-          setTemplate(res.partner_board.template);
-        }
-      })
-      .catch((e) => console.error("Failed to load partner board template:", e))
-      .finally(() => setLoading(false));
-  }, [client, selectedGuildID]);
-
-  const handleSave = async () => {
-    if (!selectedGuildID) return;
-    try {
-      await client.setPartnerBoardTemplate(selectedGuildID, template);
-      alert("Template saved successfully.");
-    } catch (e) {
-      console.error("Failed to save template:", e);
-      alert("Failed to save template.");
-    }
-  };
-
-  const updateField = (field: keyof PartnerBoardTemplateConfig, value: string) => {
-    setTemplate((prev) => ({ ...prev, [field]: value }));
-  };
+  const {
+    selectedGuildID,
+    isLoading,
+    template,
+    updateField,
+    handleSave,
+  } = usePartnersPageLogic();
 
   const inputStyle = {
     padding: "8px",
@@ -65,7 +39,7 @@ export function PartnersPage() {
         badge={<Badge variant="neutral">Config</Badge>}
       />
 
-      {loading ? (
+      {isLoading ? (
         <div className="mt-8 text-muted">Loading settings...</div>
       ) : (
         <>

@@ -1,21 +1,13 @@
-import { useDashboardSession } from "../context/DashboardSessionContext";
-import { PageHeader, SettingsGroup, SettingsRow, Button, Badge } from "../components";
-import { useRolesPage } from "./hooks/useRolesPage";
+
+import { PageHeader, SettingsGroup, SettingsRow, Button, Badge } from "../components/ui";
+import { useRolesPageLogic } from "./hooks/useRolesPageLogic";
 
 export function RolesPage() {
-  const { selectedGuildID } = useDashboardSession();
-
-  const { roles, loading, saving, formControls, handleSave } = useRolesPage(selectedGuildID);
-
-  if (!selectedGuildID) {
-    return <div>Select a guild</div>;
-  }
-
-  if (loading) {
-    return <div>Loading roles settings...</div>;
-  }
-
   const {
+    selectedGuildID,
+    isLoading,
+    isSaving,
+    roles,
     dashboardRead, setDashboardRead,
     dashboardWrite, setDashboardWrite,
     boosterRole, setBoosterRole,
@@ -23,14 +15,32 @@ export function RolesPage() {
     autoAssignEnabled, setAutoAssignEnabled,
     autoAssignTarget, setAutoAssignTarget,
     autoAssignRequired, setAutoAssignRequired,
-  } = formControls;
+    handleSave,
+  } = useRolesPageLogic();
 
-  const selectClass = "bg-[#18181b] text-[#f4f4f5] border border-white/10 rounded-md px-3 py-2 outline-none min-w-[200px] focus:border-[#5865F2] transition-colors";
+  if (!selectedGuildID) {
+    return <div>Select a guild</div>;
+  }
+
+  if (isLoading) {
+    return <div>Loading roles settings...</div>;
+  }
+
+  const selectStyle: React.CSSProperties = {
+    backgroundColor: "var(--bg-base)",
+    color: "var(--text-primary)",
+    border: "1px solid var(--border-subtle)",
+    borderRadius: "var(--radius-sm)",
+    padding: "6px 8px",
+    outline: "none",
+    minWidth: "200px",
+    fontFamily: "inherit"
+  };
 
   const renderMultiSelect = (val: string[], setVal: (v: string[]) => void) => (
     <select
       multiple
-      className={`${selectClass} h-24`}
+      style={{...selectStyle, height: "100px"}}
       value={val}
       onChange={e => setVal(Array.from(e.target.selectedOptions, o => o.value))}
     >
@@ -40,7 +50,7 @@ export function RolesPage() {
 
   const renderSelect = (val: string, setVal: (v: string) => void) => (
     <select
-      className={selectClass}
+      style={selectStyle}
       value={val}
       onChange={e => setVal(e.target.value)}
     >
@@ -50,7 +60,7 @@ export function RolesPage() {
   );
 
   return (
-    <div className="flex flex-col">
+    <div style={{ display: "flex", flexDirection: "column" }}>
       <PageHeader 
         title="Roles Configuration" 
         description="Manage which roles grant dashboard access, and configure server-wide specific roles like AutoAssignment, Mute, and Booster."
@@ -58,7 +68,7 @@ export function RolesPage() {
       />
 
       <div className="mt-8 mb-4">
-        <h2 className="text-lg font-semibold mb-2 text-[#f4f4f5]">Dashboard Access</h2>
+        <h2 className="text-lg mb-2">Dashboard Access</h2>
         <SettingsGroup>
           <SettingsRow 
             title="Read Access Roles"
@@ -75,7 +85,7 @@ export function RolesPage() {
       </div>
 
       <div className="mb-4">
-        <h2 className="text-lg font-semibold mb-2 text-[#f4f4f5]">Auto Assignment</h2>
+        <h2 className="text-lg mb-2">Auto Assignment</h2>
         <SettingsGroup>
           <SettingsRow 
             title="Enable Auto Assignment"
@@ -83,7 +93,6 @@ export function RolesPage() {
             control={
               <input 
                 type="checkbox" 
-                className="w-4 h-4 rounded border-gray-300 text-[#5865F2] focus:ring-[#5865F2]"
                 checked={autoAssignEnabled} 
                 onChange={e => setAutoAssignEnabled(e.target.checked)} 
               />
@@ -104,7 +113,7 @@ export function RolesPage() {
       </div>
 
       <div className="mb-4">
-        <h2 className="text-lg font-semibold mb-2 text-[#f4f4f5]">Special Roles</h2>
+        <h2 className="text-lg mb-2">Special Roles</h2>
         <SettingsGroup>
           <SettingsRow 
             title="Mute Role"
@@ -120,9 +129,9 @@ export function RolesPage() {
         </SettingsGroup>
       </div>
 
-      <div className="mt-8 flex items-center gap-2">
-        <Button variant="primary" onClick={handleSave} disabled={saving}>
-          {saving ? "Saving..." : "Save Changes"}
+      <div className="mt-8 flex-row">
+        <Button variant="primary" onClick={handleSave} disabled={isSaving}>
+          {isSaving ? "Saving..." : "Save Changes"}
         </Button>
       </div>
     </div>

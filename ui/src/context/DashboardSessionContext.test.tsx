@@ -64,23 +64,17 @@ function createDeferred<T>() {
 }
 
 function SessionProbe() {
-  const { authState, selectedGuildID, sessionLoading } = useDashboardSession();
+  const { authState, sessionLoading } = useDashboardSession();
 
   return (
-    <dl>
-      <div>
-        <dt>auth</dt>
+    <div>
+      <dl>
+        <dt>Auth State</dt>
         <dd data-testid="auth-state">{authState}</dd>
-      </div>
-      <div>
-        <dt>guild</dt>
-        <dd data-testid="selected-guild">{selectedGuildID || "(none)"}</dd>
-      </div>
-      <div>
-        <dt>loading</dt>
-        <dd data-testid="session-loading">{sessionLoading ? "loading" : "idle"}</dd>
-      </div>
-    </dl>
+        <dt>Session Loading</dt>
+        <dd data-testid="session-loading">{String(sessionLoading)}</dd>
+      </dl>
+    </div>
   );
 }
 

@@ -9,17 +9,14 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useLocation } from "react-router-dom";
 import {
   ControlApiClient,
   type AccessibleGuild,
   type AuthSessionResponse,
-  type DashboardGuildAccessLevel,
 } from "../api/control";
 import { appRoutes } from "../app/routes";
 import type { DashboardAuthState, Notice } from "../app/types";
 import {
-  buildGuildIconURL,
   buildUserAvatarURL,
   formatError,
   isValidBaseUrl,
@@ -37,16 +34,10 @@ interface DashboardSessionContextValue {
   baseUrlDirty: boolean;
   busyLabel: string;
   accessibleGuilds: AccessibleGuild[];
-  canEditSelectedGuild: boolean;
-  canReadSelectedGuild: boolean;
   client: ControlApiClient;
   currentOriginLabel: string;
   manageableGuilds: AccessibleGuild[];
   notice: Notice | null;
-  selectedGuild: AccessibleGuild | null;
-  selectedGuildAccessLevel: DashboardGuildAccessLevel | null;
-  selectedGuildIconURL: string | null;
-  selectedGuildID: string;
   session: AuthSessionResponse | null;
   sessionAvatarURL: string | null;
   sessionLoading: boolean;
@@ -56,7 +47,6 @@ interface DashboardSessionContextValue {
   logout: () => Promise<void>;
   refreshSession: () => Promise<void>;
   setBaseUrlDraft: (value: string) => void;
-  setSelectedGuildID: (value: string) => void;
 }
 
 const DashboardSessionContext =
@@ -67,7 +57,6 @@ export function DashboardSessionProvider({
 }: {
   children: ReactNode;
 }) {
-  const location = useLocation();
   const [baseUrl, setBaseUrl] = useState(defaultBaseUrl);
   const [baseUrlDraft, setBaseUrlDraft] = useState(defaultBaseUrl);
   const [authState, setAuthState] = useState<DashboardAuthState>("checking");
@@ -78,7 +67,6 @@ export function DashboardSessionProvider({
   const [manageableGuilds, setManageableGuilds] = useState<AccessibleGuild[]>(
     [],
   );
-  const [selectedGuildID, setSelectedGuildID] = useState("");
   const [notice, setNotice] = useState<Notice | null>(null);
   const [sessionLoading, setSessionLoading] = useState(false);
   const [busyLabel, setBusyLabel] = useState("");
@@ -93,28 +81,15 @@ export function DashboardSessionProvider({
     [baseUrl],
   );
 
-  const selectedGuild =
-    accessibleGuilds.find((guild) => guild.id === selectedGuildID) ??
-    manageableGuilds.find((guild) => guild.id === selectedGuildID) ??
-    null;
-  const selectedGuildAccessLevel = selectedGuild?.access_level ?? null;
   const currentOriginLabel = baseUrl.trim() === "" ? "Same origin" : baseUrl;
   const baseUrlDirty =
     normalizeBaseUrlInput(baseUrlDraft) !== normalizeBaseUrlInput(baseUrl);
-  const canReadSelectedGuild =
-    authState === "signed_in" && selectedGuild !== null;
-  const canEditSelectedGuild =
-    authState === "signed_in" && selectedGuildAccessLevel === "write";
   const sessionAvatarURL = session ? buildUserAvatarURL(session.user) : null;
-  const selectedGuildIconURL = selectedGuild
-    ? buildGuildIconURL(selectedGuild)
-    : null;
 
   function clearSessionState() {
     setSession(null);
     setAccessibleGuilds([]);
     setManageableGuilds([]);
-    setSelectedGuildID("");
   }
 
   const performSessionRefresh = useEffectEvent(
@@ -152,27 +127,11 @@ export function DashboardSessionProvider({
         const guildsResponse = await activeClient.listAccessibleGuilds({
           fresh: freshGuilds,
         });
-        const manageableGuildsResponse =
-          await activeClient.listManageableGuilds();
-        const availableGuildIDs = new Set([
-          ...guildsResponse.guilds.map((guild) => guild.id),
-          ...manageableGuildsResponse.guilds.map((guild) => guild.id),
-        ]);
-        const routedGuildID = getRoutedGuildID(location.pathname);
-        const preferredGuildID =
-          selectedGuildID.trim() !== ""
-            ? selectedGuildID.trim()
-            : routedGuildID;
-        const nextGuildID =
-          preferredGuildID !== "" && availableGuildIDs.has(preferredGuildID)
-            ? preferredGuildID
-            : "";
-
+        const manageableGuildsResponse = await activeClient.listManageableGuilds();
         setAuthState("signed_in");
         setSession(probe.session);
         setAccessibleGuilds(guildsResponse.guilds);
         setManageableGuilds(manageableGuildsResponse.guilds);
-        setSelectedGuildID(nextGuildID);
         setNotice(null);
       } catch (error) {
         setAuthState("signed_out");
@@ -279,39 +238,7 @@ export function DashboardSessionProvider({
     };
   }, []);
 
-  useEffect(() => {
-    if (authState !== "signed_in" || selectedGuildID.trim() === "") {
-      return;
-    }
-    // Prefetch logic removed.
-  }, [authState, baseUrl, client, selectedGuildID]);
-
-  useEffect(() => {
-    if (authState !== "signed_in") {
-      return;
-    }
-
-    const routedGuildID = getRoutedGuildID(location.pathname);
-    if (routedGuildID === "" || routedGuildID === selectedGuildID.trim()) {
-      return;
-    }
-
-    const availableGuildIDs = new Set([
-      ...accessibleGuilds.map((guild) => guild.id),
-      ...manageableGuilds.map((guild) => guild.id),
-    ]);
-    if (!availableGuildIDs.has(routedGuildID)) {
-      return;
-    }
-
-    setSelectedGuildID(routedGuildID);
-  }, [
-    accessibleGuilds,
-    authState,
-    location.pathname,
-    manageableGuilds,
-    selectedGuildID,
-  ]);
+  // Removed selected guild sync effects
 
   async function refreshSession() {
     await startSessionRefresh(client, {
@@ -393,16 +320,10 @@ export function DashboardSessionProvider({
         baseUrlDirty,
         accessibleGuilds,
         busyLabel,
-        canEditSelectedGuild,
-        canReadSelectedGuild,
         client,
         currentOriginLabel,
         manageableGuilds,
         notice,
-        selectedGuild,
-        selectedGuildAccessLevel,
-        selectedGuildIconURL,
-        selectedGuildID,
         session,
         sessionAvatarURL,
         sessionLoading,
@@ -412,7 +333,6 @@ export function DashboardSessionProvider({
         logout,
         refreshSession,
         setBaseUrlDraft,
-        setSelectedGuildID,
       }}
     >
       {children}
@@ -428,9 +348,4 @@ export function useDashboardSession() {
     );
   }
   return context;
-}
-
-function getRoutedGuildID(pathname: string) {
-  const match = pathname.match(/^\/manage\/([^/]+)/);
-  return decodeURIComponent(match?.[1] ?? "").trim();
 }

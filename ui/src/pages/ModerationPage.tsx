@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react";
-import { useDashboardSession } from "../context/DashboardSessionContext";
+
 import {
   PageHeader,
   SurfaceCard,
@@ -7,59 +6,21 @@ import {
   SettingsRow,
   Button,
   Badge,
-} from "../components";
+} from "../components/ui";
+import { useModerationPageLogic } from "./hooks/useModerationPageLogic";
 
 export function ModerationPage() {
-  const { client, selectedGuildID } = useDashboardSession();
-  const [automodEnabled, setAutomodEnabled] = useState(false);
-  const [loggingEnabled, setLoggingEnabled] = useState(false);
-  const [muteRole, setMuteRole] = useState("");
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!selectedGuildID) return;
-    setLoading(true);
-    Promise.all([
-      client.getGuildFeature(selectedGuildID, "automod").catch(() => null),
-      client.getGuildFeature(selectedGuildID, "logging").catch(() => null),
-      client.getGuildSettings(selectedGuildID).catch(() => null),
-    ]).then(([automodRes, loggingRes, settingsRes]) => {
-      if (automodRes?.feature) {
-        setAutomodEnabled(automodRes.feature.effective_enabled);
-      }
-      if (loggingRes?.feature) {
-        setLoggingEnabled(loggingRes.feature.effective_enabled);
-      }
-      if (settingsRes?.workspace?.sections?.roles) {
-        setMuteRole(settingsRes.workspace.sections.roles.mute_role || "");
-      }
-      setLoading(false);
-    });
-  }, [client, selectedGuildID]);
-
-  const handleToggleAutomod = async () => {
-    if (!selectedGuildID) return;
-    const newVal = !automodEnabled;
-    setAutomodEnabled(newVal);
-    await client.patchGuildFeature(selectedGuildID, "automod", { enabled: newVal });
-  };
-
-  const handleToggleLogging = async () => {
-    if (!selectedGuildID) return;
-    const newVal = !loggingEnabled;
-    setLoggingEnabled(newVal);
-    await client.patchGuildFeature(selectedGuildID, "logging", { enabled: newVal });
-  };
-
-  const handleSaveMuteRole = async () => {
-    if (!selectedGuildID) return;
-    await client.updateGuildSettings(selectedGuildID, {
-      roles: {
-        mute_role: muteRole,
-      },
-    });
-    alert("Mute role saved");
-  };
+  const {
+    selectedGuildID,
+    isLoading,
+    automodEnabled,
+    loggingEnabled,
+    muteRole,
+    setMuteRole,
+    handleToggleAutomod,
+    handleToggleLogging,
+    handleSaveMuteRole,
+  } = useModerationPageLogic();
 
   if (!selectedGuildID) {
     return <div>Select a server to manage moderation.</div>;
@@ -73,7 +34,7 @@ export function ModerationPage() {
         badge={<Badge variant="success">Active</Badge>}
       />
 
-      {loading ? (
+      {isLoading ? (
         <div className="mt-8 text-muted">Loading settings...</div>
       ) : (
         <SurfaceCard className="mt-8">

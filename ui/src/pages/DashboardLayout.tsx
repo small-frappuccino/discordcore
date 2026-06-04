@@ -1,5 +1,5 @@
-
-import { Link, Outlet, useLocation } from "react-router-dom";
+import { Link, Outlet, useLocation, useParams } from "react-router-dom";
+import { GuildProvider } from "../context/GuildContext";
 
 // Placeholder Contexts/Imports
 // We will build real contexts for Auth/Guild in the next steps.
@@ -12,20 +12,21 @@ type NavItem = {
 };
 
 const navigation: NavItem[] = [
-  { id: "core", label: "Core Settings", to: "/manage/core" },
-  { id: "qotd", label: "QOTD", to: "/manage/qotd" },
-  { id: "moderation", label: "Moderation", to: "/manage/moderation" },
-  { id: "roles", label: "Roles", to: "/manage/roles" },
-  { id: "partners", label: "Partners", to: "/manage/partners" },
-  { id: "embeds", label: "Embeds", to: "/manage/embeds" },
+  { id: "core", label: "Core Settings", to: "/core" },
+  { id: "qotd", label: "QOTD", to: "/qotd" },
+  { id: "moderation", label: "Moderation", to: "/moderation" },
+  { id: "roles", label: "Roles", to: "/roles" },
+  { id: "partners", label: "Partners", to: "/partners" },
+  { id: "embeds", label: "Embeds", to: "/embeds" },
 ];
 
 export function DashboardLayout() {
   const location = useLocation();
+  const { guildId } = useParams<{ guildId: string }>();
 
   // Temporary mock states
   const accountTitle = "alice";
-  const serverTitle = "Select server";
+  const serverTitle = guildId ? `Server ${guildId}` : "Select server";
   const serverSubtitle = "Choose workspace";
 
   return (
@@ -42,11 +43,12 @@ export function DashboardLayout() {
         <nav className="shell-nav">
           <div className="shell-nav-section-title">Features</div>
           {navigation.map((item) => {
-            const isActive = location.pathname.startsWith(item.to);
+            const fullPath = `/manage/${guildId}${item.to}`;
+            const isActive = location.pathname.startsWith(fullPath);
             return (
               <Link
                 key={item.id}
-                to={item.to}
+                to={fullPath}
                 className={`shell-nav-link ${isActive ? "is-active" : ""}`}
               >
                 {item.label}
@@ -88,7 +90,9 @@ export function DashboardLayout() {
 
         {/* Page Content */}
         <div className="shell-content">
-          <Outlet />
+          <GuildProvider>
+            <Outlet />
+          </GuildProvider>
         </div>
       </main>
     </div>

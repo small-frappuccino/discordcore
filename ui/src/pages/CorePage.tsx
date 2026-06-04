@@ -1,22 +1,11 @@
-import { useState, useEffect } from "react";
-import { useDashboardSession } from "../context/DashboardSessionContext";
-import { PageHeader, SurfaceCard, SettingsGroup, SettingsRow, Badge } from "../components";
-import type { GuildSettingsWorkspaceResponse } from "../api/control";
+
+import { PageHeader, SurfaceCard, SettingsGroup, SettingsRow, Badge } from "../components/ui";
+import { useCorePageLogic } from "./hooks/useCorePageLogic";
 
 export function CorePage() {
-  const { client, selectedGuildID } = useDashboardSession();
-  const [loading, setLoading] = useState(true);
-  const [settings, setSettings] = useState<GuildSettingsWorkspaceResponse | null>(null);
+  const { settings, isLoading } = useCorePageLogic();
 
-  useEffect(() => {
-    if (!selectedGuildID) return;
-    client.getGuildSettings(selectedGuildID).then((res) => {
-      setSettings(res);
-      setLoading(false);
-    });
-  }, [client, selectedGuildID]);
-
-  if (loading) return null;
+  if (isLoading) return null;
 
   return (
     <div>
