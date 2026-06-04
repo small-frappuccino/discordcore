@@ -20,6 +20,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/persistence"
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
+	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
@@ -202,7 +203,23 @@ func runWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	// production startup always uses the in-memory implementation.
 	moderationMetrics := &moderation.InMemoryMetrics{}
 
-	if err := initializeBotRuntimes(runtimeOrder, botRuntimeOptions{
+	appServiceManager := service.NewServiceManager()
+
+	storeService := service.NewServiceWrapper(service.ServiceWrapperSpec{
+		Name:         "postgres-store",
+		Type:         service.TypeCache,
+		Priority:     service.PriorityHigh,
+		Start:        func(context.Context) error { return nil },
+		Stop: func(context.Context) error {
+			shutdownDelay(100 * time.Millisecond)
+			return closeStore(store)
+		},
+	})
+	if err := appServiceManager.Register(storeService); err != nil {
+		return fmt.Errorf("register store service: %w", err)
+	}
+
+	botOpts := botRuntimeOptions{
 		defaultBotInstanceID:     defaultBotInstanceID,
 		runtimeCount:             len(runtimeOrder),
 		supportedDomains:         opts.SupportedDomains,
@@ -214,7 +231,37 @@ func runWithOptions(appName, tokenEnv string, opts RunOptions) error {
 		qotdLifecycleService:     qotdService,
 		moderationMetrics:        moderationMetrics,
 		startupTasks:             startupTasks,
-	}); err != nil {
+	}
+
+	for _, rt := range runtimeOrder {
+		runtime := rt
+		runtimeService := service.NewServiceWrapper(service.ServiceWrapperSpec{
+			Name:         "bot-runtime-" + runtime.instanceID,
+			Type:         service.TypeMonitoring,
+			Priority:     service.PriorityNormal,
+			Dependencies: []string{"postgres-store"},
+			Start: func(context.Context) error {
+				return initializeBotRuntime(runtime, botOpts)
+			},
+			Stop: func(ctx context.Context) error {
+				errs := shutdownBotRuntimeFn(runtime, ctx)
+				if runtime.session != nil {
+					if err := closeDiscordSession(runtime.session); err != nil {
+						errs = append(errs, fmt.Errorf("close discord session for %s: %w", runtime.instanceID, err))
+					}
+				}
+				if len(errs) > 0 {
+					return stdErrors.Join(errs...)
+				}
+				return nil
+			},
+		})
+		if err := appServiceManager.Register(runtimeService); err != nil {
+			return fmt.Errorf("register runtime service %s: %w", runtime.instanceID, err)
+		}
+	}
+
+	if err := appServiceManager.StartAll(); err != nil {
 		return err
 	}
 
@@ -249,8 +296,8 @@ func runWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	cleanupRuntimesOnReturn = false
 	closeStoreOnReturn = false
 	closeDiscordSessionsOnReturn = false
-	if errs := gracefulShutdown(runtimeOrder, store); len(errs) > 0 {
-		return fmt.Errorf("shutdown: %w", stdErrors.Join(errs...))
+	if err := appServiceManager.StopAll(); err != nil {
+		return fmt.Errorf("shutdown: %w", err)
 	}
 	return nil
 }
@@ -369,45 +416,7 @@ func shutdownStartupServices(startupTasks *startupTaskOrchestrator, controlServe
 	}
 }
 
-// gracefulShutdown shuts down each bot runtime (reverse order), closes the store, and
-// closes the Discord sessions, collecting any errors. The caller must disable the
-// rollback defers before calling so resources are not closed twice.
-func gracefulShutdown(runtimeOrder []*botRuntime, store *storage.Store) []error {
-	shutdownCtx, shutdownCancel := context.WithTimeoutCause(context.Background(), 30*time.Second, fmt.Errorf("application shutdown"))
-	defer shutdownCancel()
-	var shutdownErrs []error
 
-	for i := len(runtimeOrder) - 1; i >= 0; i-- {
-		runtime := runtimeOrder[i]
-		for _, err := range shutdownBotRuntimeFn(runtime, shutdownCtx) {
-			log.ErrorLoggerRaw().Error("Bot runtime shutdown failed", "botInstanceID", runtime.instanceID, "err", err)
-			shutdownErrs = append(shutdownErrs, err)
-		}
-	}
-
-	// Allow services to finish final writes before closing store
-	shutdownDelay(100 * time.Millisecond)
-
-	if store != nil {
-		if err := closeStore(store); err != nil {
-			log.ErrorLoggerRaw().Error("Store close failed during shutdown", "err", err)
-			shutdownErrs = append(shutdownErrs, fmt.Errorf("close store: %w", err))
-		}
-	}
-
-	for i := len(runtimeOrder) - 1; i >= 0; i-- {
-		runtime := runtimeOrder[i]
-		if runtime == nil || runtime.session == nil {
-			continue
-		}
-		if err := closeDiscordSession(runtime.session); err != nil {
-			log.ErrorLoggerRaw().Error("Discord session close failed during shutdown", "botInstanceID", runtime.instanceID, "err", err)
-			shutdownErrs = append(shutdownErrs, fmt.Errorf("close discord session for %s: %w", runtime.instanceID, err))
-		}
-	}
-
-	return shutdownErrs
-}
 
 func loadControlDiscordOAuthConfigFromEnv(publicOrigin string) (*control.DiscordOAuthConfig, error) {
 	clientID := strings.TrimSpace(files.EnvString(controlDiscordOAuthClientIDEnv, defaultControlDiscordOAuthClientID))

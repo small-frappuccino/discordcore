@@ -109,13 +109,16 @@ func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
 		return err
 	}
 
+	commandWrapper := setupRuntimeCommandHandler(runtime, opts, cfg, monitoringService)
+	if commandWrapper != nil {
+		if err := runtime.serviceManager.Register(commandWrapper); err != nil {
+			return fmt.Errorf("register command handler service for %s: %w", runtime.instanceID, err)
+		}
+	}
+
 	log.ApplicationLogger().Info("Starting runtime services", "botInstanceID", runtime.instanceID)
 	if err := runtime.serviceManager.StartAll(); err != nil {
 		return fmt.Errorf("start services for %s: %w", runtime.instanceID, err)
-	}
-
-	if err := setupRuntimeCommandHandler(runtime, opts, cfg, monitoringService); err != nil {
-		return err
 	}
 
 	scheduleRuntimeConfiguredGuildLogging(runtime, opts.configManager, opts.defaultBotInstanceID, opts.supportedDomains, opts.startupTasks)
@@ -150,9 +153,6 @@ func setupMonitoringService(runtime *botRuntime, opts botRuntimeOptions, routerC
 	}
 	monitoringService.SetTaskRouterConfig(routerConfig)
 	runtime.monitoringService = monitoringService
-	if unifiedCache := monitoringService.GetUnifiedCache(); unifiedCache != nil {
-		runtime.persistStop = unifiedCache.SetPersistInterval(time.Hour)
-	}
 	return monitoringService, nil
 }
 
@@ -251,7 +251,7 @@ func registerQOTDRuntimeService(runtime *botRuntime, opts botRuntimeOptions) err
 
 // setupRuntimeCommandHandler builds and registers the slash-command handler for runtimes
 // that expose commands; otherwise it logs why commands were skipped.
-func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg *files.BotConfig, monitoringService *logging.MonitoringService) error {
+func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg *files.BotConfig, monitoringService *logging.MonitoringService) *service.ServiceWrapper {
 	if !runtime.capabilities.hasCommands() {
 		logRuntimeCommandsSkipped(runtime, opts, cfg)
 		return nil
@@ -268,9 +268,7 @@ func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg
 	// Cache observability flows through /v1/health/cache via the control server's
 	// runtime resolver, not the admin command catalog.
 	commandHandler.SetAdminCommandServices(runtime.serviceManager)
-	if err := setupCommandHandler(commandHandler); err != nil {
-		return fmt.Errorf("configure slash commands for %s: %w", runtime.instanceID, err)
-	}
+
 	if cm := commandHandler.GetCommandManager(); cm != nil {
 		if router := cm.GetRouter(); router != nil {
 			router.SetStore(opts.store)
@@ -282,7 +280,21 @@ func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg
 		}
 	}
 	runtime.commandHandler = commandHandler
-	return nil
+
+	deps := []string{}
+	if monitoringService != nil {
+		deps = append(deps, "monitoring")
+	}
+
+	return service.NewServiceWrapper(service.ServiceWrapperSpec{
+		Name:         "command-handler",
+		Type:         service.TypeCommands,
+		Priority:     service.PriorityNormal,
+		Dependencies: deps,
+		Start:        func(context.Context) error { return setupCommandHandler(commandHandler) },
+		Stop:         func(context.Context) error { return shutdownCommandHandler(commandHandler) },
+		Check:        func() bool { return true },
+	})
 }
 
 // logRuntimeCommandsSkipped explains why a runtime exposes no slash commands,
@@ -410,15 +422,6 @@ func shutdownBotRuntime(runtime *botRuntime, ctx context.Context) []error {
 		if err := runtime.serviceManager.StopAll(); err != nil {
 			errs = append(errs, fmt.Errorf("stop services for %s: %w", runtime.instanceID, err))
 		}
-	}
-	if runtime.commandHandler != nil {
-		if err := shutdownCommandHandler(runtime.commandHandler); err != nil {
-			errs = append(errs, fmt.Errorf("shutdown command handler for %s: %w", runtime.instanceID, err))
-		}
-	}
-	if runtime.persistStop != nil {
-		close(runtime.persistStop)
-		runtime.persistStop = nil
 	}
 	return errs
 }

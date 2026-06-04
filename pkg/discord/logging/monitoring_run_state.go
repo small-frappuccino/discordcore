@@ -34,4 +34,5 @@ type monitoringRunState struct {
 	cronCancel             func()
 	statsCronCancel        func()
 	rolesRefreshCronCancel func()
+	persistStop            chan struct{}
 }

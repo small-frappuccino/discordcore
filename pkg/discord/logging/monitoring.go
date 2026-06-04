@@ -600,6 +600,10 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 	ms.run.startTime = &now
 	ms.run.stopTime = nil
 
+	if ms.unifiedCache != nil {
+		ms.run.persistStop = ms.unifiedCache.SetPersistInterval(time.Hour)
+	}
+
 	ms.scheduleEnsureGuildsListed(serviceCtx)
 	log.ApplicationLogger().Info("All monitoring services started successfully")
 	return nil
@@ -717,6 +721,8 @@ func (ms *MonitoringService) Stop(ctx context.Context) error {
 	ms.run.statsCronCancel = nil
 	rolesRefreshCronCancel := ms.run.rolesRefreshCronCancel
 	ms.run.rolesRefreshCronCancel = nil
+	persistStop := ms.run.persistStop
+	ms.run.persistStop = nil
 	router := ms.router
 	ms.router = nil
 	ms.adapters = nil
@@ -754,6 +760,9 @@ func (ms *MonitoringService) Stop(ctx context.Context) error {
 	}
 	if rolesRefreshCronCancel != nil {
 		rolesRefreshCronCancel()
+	}
+	if persistStop != nil {
+		close(persistStop)
 	}
 
 	ms.removeEventHandlers()

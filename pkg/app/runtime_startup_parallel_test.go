@@ -153,50 +153,7 @@ func TestOpenBotRuntimesAppliesParallelLimit(t *testing.T) {
 	}
 }
 
-func TestInitializeBotRuntimesAppliesParallelLimit(t *testing.T) {
-	origInitializeBotRuntime := initializeBotRuntimeFn
-	t.Cleanup(func() {
-		initializeBotRuntimeFn = origInitializeBotRuntime
-	})
 
-	release := make(chan struct{})
-	var closeRelease sync.Once
-	t.Cleanup(func() {
-		closeRelease.Do(func() { close(release) })
-	})
-
-	var current int32
-	var maxConcurrent int32
-	initializeBotRuntimeFn = func(runtime *botRuntime, opts botRuntimeOptions) error {
-		n := atomic.AddInt32(&current, 1)
-		updateMaxConcurrent(&maxConcurrent, n)
-		<-release
-		atomic.AddInt32(&current, -1)
-		return nil
-	}
-
-	runtimeOrder := []*botRuntime{
-		{instanceID: "bot-1"},
-		{instanceID: "bot-2"},
-		{instanceID: "bot-3"},
-		{instanceID: "bot-4"},
-	}
-
-	done := make(chan error, 1)
-	go func() {
-		done <- initializeBotRuntimes(runtimeOrder, botRuntimeOptions{})
-	}()
-
-	waitForAtomicAtLeast(t, &maxConcurrent, 3, time.Second, "runtime initialization to reach the configured limit")
-	closeRelease.Do(func() { close(release) })
-
-	if err := <-done; err != nil {
-		t.Fatalf("initializeBotRuntimes returned error: %v", err)
-	}
-	if got := atomic.LoadInt32(&maxConcurrent); got != 3 {
-		t.Fatalf("expected initialize phase to cap at 3 concurrent runtimes, got %d", got)
-	}
-}
 
 func TestRuntimeStartupBackgroundWorkerAppliesParallelLimit(t *testing.T) {
 	worker := newRuntimeStartupBackgroundWorker(4)

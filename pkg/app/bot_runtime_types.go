@@ -43,7 +43,6 @@ type botRuntime struct {
 	serviceManager    *service.ServiceManager
 	monitoringService *logging.MonitoringService
 	commandHandler    *commands.CommandHandler
-	persistStop       chan struct{}
 }
 
 type botRuntimeResolver struct {

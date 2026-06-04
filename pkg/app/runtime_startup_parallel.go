@@ -94,19 +94,7 @@ func openBotRuntimes(botInstances []resolvedBotInstance, runtimeCapabilities map
 	return runtimes, runtimeOrder, err
 }
 
-func initializeBotRuntimes(runtimeOrder []*botRuntime, opts botRuntimeOptions) error {
-	var group errgroup.Group
-	group.SetLimit(resolveRuntimeStartupParallelism(len(runtimeOrder)))
 
-	for _, runtime := range runtimeOrder {
-		runtime := runtime
-		group.Go(func() error {
-			return initializeBotRuntimeFn(runtime, opts)
-		})
-	}
-
-	return group.Wait()
-}
 
 type runtimeStartupBackgroundWorker struct {
 	ctx          context.Context
