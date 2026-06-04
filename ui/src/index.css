@@ -130,6 +130,14 @@ ul, ol {
   transition: all var(--transition-fast);
 }
 
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn:focus-visible {
+  @apply outline-none ring-2 ring-[var(--accent-primary)] ring-offset-2 ring-offset-[var(--bg-base)];
+}
+
 .btn-sm { @apply px-2.5 py-1 text-xs; }
 .btn-md { @apply px-4 py-2 text-sm; }
 .btn-lg { @apply px-6 py-3 text-base; }
@@ -188,6 +196,7 @@ ul, ol {
 }
 .form-input:focus, .form-select:focus {
   border-color: var(--accent-primary);
+  @apply outline-none ring-2 ring-[var(--accent-primary)] ring-offset-2 ring-offset-[var(--bg-base)];
 }
 select[multiple].form-select {
   @apply h-24;

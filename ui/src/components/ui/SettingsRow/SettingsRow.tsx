@@ -1,11 +1,17 @@
 import * as React from "react";
 import { cn } from "../../../lib/utils";
+import { motion } from "framer-motion";
 
-function SettingsRowRoot({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+function SettingsRowRoot({ className, children, ...props }: React.ComponentProps<typeof motion.div>) {
   return (
-    <div className={cn("settings-row", className)} {...props}>
+    <motion.div 
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={cn("settings-row", className)} 
+      {...props}
+    >
       {children}
-    </div>
+    </motion.div>
   );
 }
 

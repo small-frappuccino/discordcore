@@ -1,8 +1,14 @@
 import * as React from "react";
+import { motion } from "framer-motion";
 
 export function SettingsGroup({
   className = "",
   children,
-}: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={`settings-group ${className}`}>{children}</div>;
+  ...props
+}: React.ComponentProps<typeof motion.div>) {
+  return (
+    <motion.div layout className={`settings-group ${className}`} {...props}>
+      {children}
+    </motion.div>
+  );
 }
