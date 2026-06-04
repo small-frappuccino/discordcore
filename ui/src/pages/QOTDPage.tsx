@@ -1,23 +1,22 @@
-
 import { PageHeader, SettingsGroup, SettingsRow, Button, Badge } from "../components/ui";
 import { useQOTDPageLogic } from "./hooks/useQOTDPageLogic";
 
 export function QOTDPage() {
   const {
     config,
-    setConfig,
+    form,
     activeDeck,
     isLoading,
     isSaving,
-    handleSave,
+    onSubmit,
   } = useQOTDPageLogic();
 
   return (
-    <div>
+    <form onSubmit={onSubmit}>
       <PageHeader 
         title="Question of the Day" 
-        description="Configure the QOTD decks, schedule, and channels."
-        badge={config ? <Badge variant="success">Active</Badge> : <Badge variant="neutral">Loading</Badge>}
+        description="Configure the automated QOTD system. When enabled, the bot will pick a question from the active deck and publish it daily."
+        badge={<Badge variant={config ? "success" : "neutral"}>{config ? "Active" : "Disabled"}</Badge>}
       />
 
       <div className="mt-8">
@@ -25,72 +24,60 @@ export function QOTDPage() {
           <p className="text-muted">Loading QOTD settings...</p>
         ) : config ? (
           <div>
-            <h2 className="text-lg mb-4">General Settings</h2>
+            <h2 className="text-lg mb-4">Core Settings</h2>
             
             <SettingsGroup className="mb-8">
               <SettingsRow 
                 title="Active Deck"
-                description="Select which deck is currently being used for questions."
+                description={`Currently active deck for drawing questions. ${activeDeck ? `Remaining cards: ${activeDeck.name}` : ""}`}
                 control={
                   <select 
-                    value={config.active_deck_id || ""}
-                    onChange={e => setConfig({ ...config, active_deck_id: e.target.value })}
-                    style={{ padding: "8px", borderRadius: "6px", background: "var(--bg-surface-hover)", border: "1px solid var(--border-subtle)", color: "var(--text-primary)", outline: "none", cursor: "pointer" }}
+                    {...form.register("active_deck_id")}
+                    style={{ padding: "8px", borderRadius: "6px", background: "var(--bg-surface-hover)", border: "1px solid var(--border-subtle)", color: "var(--text-primary)", outline: "none", minWidth: "200px" }}
                   >
-                    <option value="">None</option>
-                    {config.decks?.map(deck => (
-                      <option key={deck.id} value={deck.id}>{deck.name}</option>
+                    <option value="">-- No Active Deck --</option>
+                    {config.decks?.map(d => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
                     ))}
                   </select>
                 }
               />
               <SettingsRow 
-                title="Publish Channel"
-                description="The channel where questions will be posted for the active deck."
+                title="Verified Role (Optional)"
+                description="If set, only users with this role can answer the QOTD."
+                isLast
                 control={
                   <input
                     type="text"
-                    placeholder="Channel ID"
-                    value={activeDeck?.channel_id || ""}
-                    onChange={e => {
-                      const newDecks = config.decks?.map(d => 
-                        d.id === activeDeck?.id ? { ...d, channel_id: e.target.value } : d
-                      );
-                      setConfig({ ...config, decks: newDecks });
-                    }}
-                    style={{ padding: "8px", borderRadius: "6px", background: "var(--bg-surface-hover)", border: "1px solid var(--border-subtle)", color: "var(--text-primary)", outline: "none" }}
+                    placeholder="Role ID..."
+                    {...form.register("verified_role_id")}
+                    style={{ width: "200px", padding: "8px", borderRadius: "6px", background: "var(--bg-surface-hover)", border: "1px solid var(--border-subtle)", color: "var(--text-primary)", outline: "none" }}
                   />
                 }
               />
+            </SettingsGroup>
+
+            <h2 className="text-lg mb-4">Publish Schedule (UTC)</h2>
+            <SettingsGroup className="mb-8">
               <SettingsRow 
-                title="Publish Time (UTC)"
-                description="The hour and minute (UTC) when the question is posted."
+                title="Hour & Minute"
+                description="The exact UTC time when the question should be posted."
                 isLast
                 control={
-                  <div className="flex-row">
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                     <input
                       type="number"
                       min="0"
                       max="23"
-                      placeholder="HH"
-                      value={config.schedule?.hour_utc ?? 0}
-                      onChange={e => setConfig({ 
-                        ...config, 
-                        schedule: { ...config.schedule, hour_utc: parseInt(e.target.value) || 0 } 
-                      })}
+                      {...form.register("schedule.hour_utc", { valueAsNumber: true })}
                       style={{ width: "60px", padding: "8px", borderRadius: "6px", background: "var(--bg-surface-hover)", border: "1px solid var(--border-subtle)", color: "var(--text-primary)", outline: "none" }}
                     />
-                    <span>:</span>
+                    <span className="text-muted">:</span>
                     <input
                       type="number"
                       min="0"
                       max="59"
-                      placeholder="MM"
-                      value={config.schedule?.minute_utc ?? 0}
-                      onChange={e => setConfig({ 
-                        ...config, 
-                        schedule: { ...config.schedule, minute_utc: parseInt(e.target.value) || 0 } 
-                      })}
+                      {...form.register("schedule.minute_utc", { valueAsNumber: true })}
                       style={{ width: "60px", padding: "8px", borderRadius: "6px", background: "var(--bg-surface-hover)", border: "1px solid var(--border-subtle)", color: "var(--text-primary)", outline: "none" }}
                     />
                   </div>
@@ -99,7 +86,7 @@ export function QOTDPage() {
             </SettingsGroup>
 
             <div className="mt-4">
-              <Button variant="primary" onClick={handleSave} disabled={isSaving}>
+              <Button variant="primary" type="submit" disabled={isSaving}>
                 {isSaving ? "Saving..." : "Save Changes"}
               </Button>
             </div>
@@ -108,6 +95,6 @@ export function QOTDPage() {
           <p className="text-muted">Failed to load QOTD settings.</p>
         )}
       </div>
-    </div>
+    </form>
   );
 }

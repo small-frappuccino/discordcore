@@ -1,4 +1,3 @@
-
 import {
   PageHeader,
   SurfaceCard,
@@ -13,13 +12,13 @@ export function ModerationPage() {
   const {
     selectedGuildID,
     isLoading,
+    isSaving,
     automodEnabled,
     loggingEnabled,
-    muteRole,
-    setMuteRole,
+    form,
+    onSubmit,
     handleToggleAutomod,
     handleToggleLogging,
-    handleSaveMuteRole,
   } = useModerationPageLogic();
 
   if (!selectedGuildID) {
@@ -27,10 +26,10 @@ export function ModerationPage() {
   }
 
   return (
-    <div className="moderation-page">
+    <div>
       <PageHeader
         title="Moderation"
-        description="Configure automod rules, logging, and mute settings."
+        description="Configure AutoMod, Logging, and specific moderation roles."
         badge={<Badge variant="success">Active</Badge>}
       />
 
@@ -40,56 +39,54 @@ export function ModerationPage() {
         <SurfaceCard className="mt-8">
           <SettingsGroup>
             <SettingsRow
-              title="Auto-Moderation"
-              description="Automatically filter and restrict malicious behavior based on custom rules."
+              title="AutoMod Engine"
+              description="Automatically detect and block forbidden content."
               control={
                 <Button
-                  variant={automodEnabled ? "primary" : "secondary"}
+                  variant={automodEnabled ? "danger" : "primary"}
                   onClick={handleToggleAutomod}
                 >
-                  {automodEnabled ? "Enabled" : "Disabled"}
+                  {automodEnabled ? "Disable" : "Enable"}
                 </Button>
               }
             />
             <SettingsRow
-              title="Moderation Logging"
-              description="Keep a record of kicks, bans, and automod actions."
+              title="Audit Logging"
+              description="Log moderation actions and deleted messages to a dedicated channel."
               control={
                 <Button
-                  variant={loggingEnabled ? "primary" : "secondary"}
+                  variant={loggingEnabled ? "danger" : "primary"}
                   onClick={handleToggleLogging}
                 >
-                  {loggingEnabled ? "Enabled" : "Disabled"}
+                  {loggingEnabled ? "Disable" : "Enable"}
                 </Button>
-              }
-            />
-            <SettingsRow
-              title="Mute Role"
-              description="The role assigned to muted users."
-              isLast={true}
-              control={
-                <div className="flex-row">
-                  <input
-                    type="text"
-                    value={muteRole}
-                    onChange={(e) => setMuteRole(e.target.value)}
-                    placeholder="Role ID"
-                    style={{
-                      padding: "8px",
-                      borderRadius: "4px",
-                      border: "1px solid var(--border-subtle)",
-                      background: "var(--bg-base)",
-                      color: "var(--text-primary)",
-                      width: "150px"
-                    }}
-                  />
-                  <Button variant="primary" onClick={handleSaveMuteRole}>
-                    Save
-                  </Button>
-                </div>
               }
             />
           </SettingsGroup>
+          
+          <form onSubmit={onSubmit} className="mt-8">
+            <h3 className="mb-4 text-lg">Roles Config</h3>
+            <SettingsGroup>
+              <SettingsRow
+                title="Mute Role"
+                description="Role assigned when a user is muted."
+                control={
+                  <input
+                    type="text"
+                    {...form.register("mute_role")}
+                    placeholder="Role ID..."
+                    style={{ padding: "8px", borderRadius: "4px", border: "1px solid var(--border-subtle)", background: "var(--bg-base)", color: "var(--text-primary)" }}
+                  />
+                }
+                isLast
+              />
+            </SettingsGroup>
+            <div className="mt-4">
+              <Button variant="primary" type="submit" disabled={isSaving}>
+                {isSaving ? "Saving..." : "Save Mute Role"}
+              </Button>
+            </div>
+          </form>
         </SurfaceCard>
       )}
     </div>

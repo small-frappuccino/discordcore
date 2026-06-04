@@ -1,8 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useDashboardSession } from "../../context/DashboardSessionContext";
 import { useCurrentGuild } from "../../context/GuildContext";
 import { useGuildFeatureQuery, usePatchGuildFeatureMutation } from "../../api/hooks/useGuildFeatures";
 import { useGuildSettingsQuery, useUpdateGuildSettingsMutation } from "../../api/hooks/useGuildSettings";
+import { ModerationSchema, type ModerationFormData } from "../schemas/moderation";
 
 export function useModerationPageLogic() {
   const { client } = useDashboardSession();
@@ -16,15 +19,23 @@ export function useModerationPageLogic() {
   const loggingMutation = usePatchGuildFeatureMutation(client, selectedGuildID, "logging");
   const settingsMutation = useUpdateGuildSettingsMutation(client, selectedGuildID);
 
-  const [muteRole, setMuteRole] = useState("");
+  const form = useForm<ModerationFormData>({
+    resolver: zodResolver(ModerationSchema),
+    defaultValues: {
+      mute_role: ""
+    }
+  });
 
   useEffect(() => {
     if (settingsRes?.workspace?.sections?.roles) {
-      setMuteRole(settingsRes.workspace.sections.roles.mute_role || "");
+      form.reset({
+        mute_role: settingsRes.workspace.sections.roles.mute_role || ""
+      });
     }
-  }, [settingsRes]);
+  }, [settingsRes, form]);
 
   const isLoading = automodLoading || loggingLoading || settingsLoading;
+  const isSaving = settingsMutation.isPending;
   const automodEnabled = automodRes?.feature?.effective_enabled || false;
   const loggingEnabled = loggingRes?.feature?.effective_enabled || false;
 
@@ -38,26 +49,26 @@ export function useModerationPageLogic() {
     loggingMutation.mutate({ enabled: !loggingEnabled });
   };
 
-  const handleSaveMuteRole = () => {
+  const onSubmit = form.handleSubmit((data) => {
     if (!selectedGuildID) return;
     settingsMutation.mutate({
       roles: {
-        mute_role: muteRole,
+        mute_role: data.mute_role,
       },
     }, {
       onSuccess: () => alert("Mute role saved")
     });
-  };
+  });
 
   return {
     selectedGuildID,
     isLoading,
+    isSaving,
     automodEnabled,
     loggingEnabled,
-    muteRole,
-    setMuteRole,
+    form,
+    onSubmit,
     handleToggleAutomod,
     handleToggleLogging,
-    handleSaveMuteRole,
   };
 }

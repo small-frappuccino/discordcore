@@ -1,8 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useDashboardSession } from "../../context/DashboardSessionContext";
 import { useCurrentGuild } from "../../context/GuildContext";
 import { useGuildRoleOptionsQuery } from "../../api/hooks/useRoles";
 import { useGuildSettingsQuery, useUpdateGuildSettingsMutation } from "../../api/hooks/useGuildSettings";
+import { RolesSchema, type RolesFormData } from "../schemas/roles";
 
 export function useRolesPageLogic() {
   const { client } = useDashboardSession();
@@ -14,47 +17,45 @@ export function useRolesPageLogic() {
 
   const roles = optsRes?.roles || [];
 
-  // Local form state
-  const [dashboardRead, setDashboardRead] = useState<string[]>([]);
-  const [dashboardWrite, setDashboardWrite] = useState<string[]>([]);
-  const [boosterRole, setBoosterRole] = useState<string>("");
-  const [muteRole, setMuteRole] = useState<string>("");
-  
-  const [autoAssignEnabled, setAutoAssignEnabled] = useState(false);
-  const [autoAssignTarget, setAutoAssignTarget] = useState<string>("");
-  const [autoAssignRequired, setAutoAssignRequired] = useState<string[]>([]);
+  const form = useForm<RolesFormData>({
+    resolver: zodResolver(RolesSchema),
+    defaultValues: {
+      dashboard_read: [],
+      dashboard_write: [],
+      booster_role: "",
+      mute_role: "",
+      auto_assignment: {
+        enabled: false,
+        target_role: "",
+        required_roles: [],
+      }
+    }
+  });
 
   useEffect(() => {
     if (setRes) {
       const rs = setRes.workspace.sections.roles || {};
-      setDashboardRead(rs.dashboard_read || []);
-      setDashboardWrite(rs.dashboard_write || []);
-      setBoosterRole(rs.booster_role || "");
-      setMuteRole(rs.mute_role || "");
-      
       const aa = rs.auto_assignment || {};
-      setAutoAssignEnabled(aa.enabled || false);
-      setAutoAssignTarget(aa.target_role || "");
-      setAutoAssignRequired(aa.required_roles || []);
+      form.reset({
+        dashboard_read: rs.dashboard_read || [],
+        dashboard_write: rs.dashboard_write || [],
+        booster_role: rs.booster_role || "",
+        mute_role: rs.mute_role || "",
+        auto_assignment: {
+          enabled: aa.enabled || false,
+          target_role: aa.target_role || "",
+          required_roles: aa.required_roles || [],
+        }
+      });
     }
-  }, [setRes]);
+  }, [setRes, form]);
 
-  async function handleSave() {
+  const onSubmit = form.handleSubmit((data) => {
     if (!selectedGuildID) return;
     
     updateMutation.mutate(
       {
-        roles: {
-          dashboard_read: dashboardRead,
-          dashboard_write: dashboardWrite,
-          booster_role: boosterRole,
-          mute_role: muteRole,
-          auto_assignment: {
-            enabled: autoAssignEnabled,
-            target_role: autoAssignTarget,
-            required_roles: autoAssignRequired
-          }
-        }
+        roles: data
       },
       {
         onSuccess: () => alert("Settings saved!"),
@@ -64,7 +65,7 @@ export function useRolesPageLogic() {
         }
       }
     );
-  }
+  });
 
   const isLoading = rolesLoading || settingsLoading;
   const isSaving = updateMutation.isPending;
@@ -74,13 +75,7 @@ export function useRolesPageLogic() {
     isLoading,
     isSaving,
     roles,
-    dashboardRead, setDashboardRead,
-    dashboardWrite, setDashboardWrite,
-    boosterRole, setBoosterRole,
-    muteRole, setMuteRole,
-    autoAssignEnabled, setAutoAssignEnabled,
-    autoAssignTarget, setAutoAssignTarget,
-    autoAssignRequired, setAutoAssignRequired,
-    handleSave,
+    form,
+    onSubmit,
   };
 }

@@ -1,41 +1,45 @@
 import { useEffect, useState } from "react";
-
-export interface EmbedsConfig {
-  webhook_url: string;
-  enabled: boolean;
-}
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { EmbedsSchema, type EmbedsFormData } from "../schemas/embeds";
 
 export function useEmbedsPageLogic() {
-  const [config, setConfig] = useState<EmbedsConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+
+  const form = useForm<EmbedsFormData>({
+    resolver: zodResolver(EmbedsSchema),
+    defaultValues: {
+      webhook_url: "",
+      enabled: false,
+    }
+  });
 
   useEffect(() => {
     // Mocking the fetch call
     const timer = setTimeout(() => {
-      setConfig({
+      form.reset({
         webhook_url: "https://discord.com/api/webhooks/...",
         enabled: true,
       });
       setIsLoading(false);
     }, 500);
     return () => clearTimeout(timer);
-  }, []);
+  }, [form]);
 
-  const handleSave = () => {
-    if (!config) return;
+  const onSubmit = form.handleSubmit(() => {
     setIsSaving(true);
     // Mocking the save call
     setTimeout(() => {
       setIsSaving(false);
+      alert("Embeds Settings saved!");
     }, 500);
-  };
+  });
 
   return {
-    config,
-    setConfig,
+    form,
+    onSubmit,
     isLoading,
     isSaving,
-    handleSave,
   };
 }

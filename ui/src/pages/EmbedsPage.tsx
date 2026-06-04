@@ -1,28 +1,26 @@
-
 import { PageHeader, SettingsGroup, SettingsRow, Button, Badge } from "../components/ui";
 import { useEmbedsPageLogic } from "./hooks/useEmbedsPageLogic";
 
 export function EmbedsPage() {
   const {
-    config,
-    setConfig,
+    form,
+    onSubmit,
     isLoading,
     isSaving,
-    handleSave,
   } = useEmbedsPageLogic();
 
   return (
-    <div>
+    <form onSubmit={onSubmit}>
       <PageHeader 
         title="Custom Embeds" 
         description="Configure webhooks to send rich embeds into your server."
-        badge={<Badge variant={config?.enabled ? "success" : "neutral"}>{config?.enabled ? "Active" : "Disabled"}</Badge>}
+        badge={<Badge variant="success">Active</Badge>}
       />
 
       <div className="mt-8">
         {isLoading ? (
           <p className="text-muted">Loading Embed settings...</p>
-        ) : config ? (
+        ) : (
           <div>
             <h2 className="text-lg mb-4">Webhook Settings</h2>
             
@@ -33,8 +31,7 @@ export function EmbedsPage() {
                 control={
                   <input
                     type="checkbox"
-                    checked={config.enabled}
-                    onChange={e => setConfig({ ...config, enabled: e.target.checked })}
+                    {...form.register("enabled")}
                     style={{ width: "20px", height: "20px", accentColor: "var(--accent-primary)", cursor: "pointer" }}
                   />
                 }
@@ -47,8 +44,7 @@ export function EmbedsPage() {
                   <input
                     type="text"
                     placeholder="https://discord.com/api/webhooks/..."
-                    value={config.webhook_url}
-                    onChange={e => setConfig({ ...config, webhook_url: e.target.value })}
+                    {...form.register("webhook_url")}
                     style={{ width: "300px", padding: "8px", borderRadius: "6px", background: "var(--bg-surface-hover)", border: "1px solid var(--border-subtle)", color: "var(--text-primary)", outline: "none" }}
                   />
                 }
@@ -56,15 +52,13 @@ export function EmbedsPage() {
             </SettingsGroup>
 
             <div className="mt-4">
-              <Button variant="primary" onClick={handleSave} disabled={isSaving}>
+              <Button variant="primary" type="submit" disabled={isSaving}>
                 {isSaving ? "Saving..." : "Save Changes"}
               </Button>
             </div>
           </div>
-        ) : (
-          <p className="text-muted">Failed to load Embed settings.</p>
         )}
       </div>
-    </div>
+    </form>
   );
 }

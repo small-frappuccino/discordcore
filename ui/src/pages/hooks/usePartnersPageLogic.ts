@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useDashboardSession } from "../../context/DashboardSessionContext";
 import { useCurrentGuild } from "../../context/GuildContext";
-import type { PartnerBoardTemplateConfig } from "../../api/control";
 import { usePartnerBoardQuery, useSetPartnerBoardTemplateMutation } from "../../api/hooks/usePartners";
+import { PartnersSchema, type PartnersFormData } from "../schemas/partners";
 
 export function usePartnersPageLogic() {
   const { client } = useDashboardSession();
@@ -11,31 +13,46 @@ export function usePartnersPageLogic() {
   const { data: boardRes, isLoading } = usePartnerBoardQuery(client, selectedGuildID);
   const updateMutation = useSetPartnerBoardTemplateMutation(client, selectedGuildID);
 
-  const [template, setTemplate] = useState<PartnerBoardTemplateConfig>({});
+  const form = useForm<PartnersFormData>({
+    resolver: zodResolver(PartnersSchema),
+    defaultValues: {
+      title: "",
+      continuation_title: "",
+      intro: "",
+      section_header_template: "",
+      section_continuation_suffix: "",
+      section_continuation_template: "",
+      line_template: "",
+      empty_state_text: "",
+      footer_template: "",
+      other_fandom_label: "",
+      color: 0,
+      disable_fandom_sorting: false,
+      disable_partner_sorting: false,
+    }
+  });
 
   useEffect(() => {
     if (boardRes?.partner_board?.template) {
-      setTemplate(boardRes.partner_board.template);
+      form.reset(boardRes.partner_board.template);
     }
-  }, [boardRes]);
+  }, [boardRes, form]);
 
-  const handleSave = () => {
+  const onSubmit = form.handleSubmit((data) => {
     if (!selectedGuildID) return;
-    updateMutation.mutate(template, {
+    updateMutation.mutate(data, {
       onSuccess: () => alert("Template saved successfully."),
       onError: () => alert("Failed to save template.")
     });
-  };
+  });
 
-  const updateField = (field: keyof PartnerBoardTemplateConfig, value: string) => {
-    setTemplate((prev) => ({ ...prev, [field]: value }));
-  };
+  const isSaving = updateMutation.isPending;
 
   return {
     selectedGuildID,
     isLoading,
-    template,
-    updateField,
-    handleSave,
+    isSaving,
+    form,
+    onSubmit,
   };
 }

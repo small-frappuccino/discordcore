@@ -1,6 +1,7 @@
-
 import { PageHeader, SettingsGroup, SettingsRow, Button, Badge } from "../components/ui";
 import { useRolesPageLogic } from "./hooks/useRolesPageLogic";
+import type { Path } from "react-hook-form";
+import type { RolesFormData } from "./schemas/roles";
 
 export function RolesPage() {
   const {
@@ -8,14 +9,8 @@ export function RolesPage() {
     isLoading,
     isSaving,
     roles,
-    dashboardRead, setDashboardRead,
-    dashboardWrite, setDashboardWrite,
-    boosterRole, setBoosterRole,
-    muteRole, setMuteRole,
-    autoAssignEnabled, setAutoAssignEnabled,
-    autoAssignTarget, setAutoAssignTarget,
-    autoAssignRequired, setAutoAssignRequired,
-    handleSave,
+    form,
+    onSubmit,
   } = useRolesPageLogic();
 
   if (!selectedGuildID) {
@@ -37,22 +32,20 @@ export function RolesPage() {
     fontFamily: "inherit"
   };
 
-  const renderMultiSelect = (val: string[], setVal: (v: string[]) => void) => (
+  const renderMultiSelect = (name: Path<RolesFormData>) => (
     <select
       multiple
       style={{...selectStyle, height: "100px"}}
-      value={val}
-      onChange={e => setVal(Array.from(e.target.selectedOptions, o => o.value))}
+      {...form.register(name)}
     >
       {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
     </select>
   );
 
-  const renderSelect = (val: string, setVal: (v: string) => void) => (
+  const renderSelect = (name: Path<RolesFormData>) => (
     <select
       style={selectStyle}
-      value={val}
-      onChange={e => setVal(e.target.value)}
+      {...form.register(name)}
     >
       <option value="">-- None --</option>
       {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
@@ -60,7 +53,7 @@ export function RolesPage() {
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column" }}>
+    <form style={{ display: "flex", flexDirection: "column" }} onSubmit={onSubmit}>
       <PageHeader 
         title="Roles Configuration" 
         description="Manage which roles grant dashboard access, and configure server-wide specific roles like AutoAssignment, Mute, and Booster."
@@ -73,12 +66,12 @@ export function RolesPage() {
           <SettingsRow 
             title="Read Access Roles"
             description="Roles allowed to view dashboard settings"
-            control={renderMultiSelect(dashboardRead, setDashboardRead)}
+            control={renderMultiSelect("dashboard_read")}
           />
           <SettingsRow 
             title="Write Access Roles"
             description="Roles allowed to view and edit dashboard settings"
-            control={renderMultiSelect(dashboardWrite, setDashboardWrite)}
+            control={renderMultiSelect("dashboard_write")}
             isLast
           />
         </SettingsGroup>
@@ -93,20 +86,19 @@ export function RolesPage() {
             control={
               <input 
                 type="checkbox" 
-                checked={autoAssignEnabled} 
-                onChange={e => setAutoAssignEnabled(e.target.checked)} 
+                {...form.register("auto_assignment.enabled")}
               />
             }
           />
           <SettingsRow 
             title="Target Role"
             description="The role to assign automatically"
-            control={renderSelect(autoAssignTarget, setAutoAssignTarget)}
+            control={renderSelect("auto_assignment.target_role")}
           />
           <SettingsRow 
             title="Required Roles"
             description="Users must have all these roles to get the target role"
-            control={renderMultiSelect(autoAssignRequired, setAutoAssignRequired)}
+            control={renderMultiSelect("auto_assignment.required_roles")}
             isLast
           />
         </SettingsGroup>
@@ -118,22 +110,22 @@ export function RolesPage() {
           <SettingsRow 
             title="Mute Role"
             description="Role applied to muted users"
-            control={renderSelect(muteRole, setMuteRole)}
+            control={renderSelect("mute_role")}
           />
           <SettingsRow 
             title="Booster Role"
             description="Role representing Nitro Boosters"
-            control={renderSelect(boosterRole, setBoosterRole)}
+            control={renderSelect("booster_role")}
             isLast
           />
         </SettingsGroup>
       </div>
 
       <div className="mt-8 flex-row">
-        <Button variant="primary" onClick={handleSave} disabled={isSaving}>
+        <Button variant="primary" type="submit" disabled={isSaving}>
           {isSaving ? "Saving..." : "Save Changes"}
         </Button>
       </div>
-    </div>
+    </form>
   );
 }
