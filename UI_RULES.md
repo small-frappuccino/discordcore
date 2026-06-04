@@ -1,482 +1,63 @@
-# UI_RULES.md
+# UI_RULES.md: Architecture and Interface Engineering Guidelines
 
-## Purpose
+This document defines the architectural standards, implementation rules, and absolute constraints for User Interface (UI) development in this repository. The primary objective is to eliminate chronic anti-patterns, guarantee rigorous typing, ensure predictable performance, and enforce strict domain isolation.
 
-This file defines the current UI direction for the Discordcore dashboard as a complementary surface to the bot's slash-command UX.
-It exists for coding agents and engineers making frontend changes.
+## 1. Reference Technology Stack
 
-These rules are meant to reduce drift, generic admin-template output, and UI that depends on explanatory text to function.
+The use of the following technologies is **mandatory** for their respective purposes. Introducing alternative libraries for these exact purposes requires formal approval.
 
-If the source code and this file disagree, trust the current source code first and update this file.
-If a direct product-owner instruction conflicts with this file, follow the product-owner instruction and then update this file later if the new direction should persist.
+*   **Styling and Design System:** Tailwind CSS.
+*   **Accessibility Primitives:** Radix UI.
+*   **Asynchronous State Management and Caching:** React Query (TanStack Query).
+*   **Form Management:** React Hook Form.
+*   **Data Validation and Parsing:** Zod.
+*   **Code Formatting and Quality:** ESLint (strict mode) + Prettier.
 
----
+## 2. Anti-Pattern Resolution and Structural Rules
 
-## 0. Product direction
+### 2.1. End of Primitive Data Fetching
+It is **strictly prohibited** to perform network requests (data fetching) and manually manage derived states (e.g., `loading`, `error`, `data`, `saving`) inside `useEffect` or `useState` blocks.
+*   **Required Standard:** Use **React Query / TanStack Query** for all API interactions. Delegate cache management, request deduplication, retries, and background revalidation entirely to it.
 
-Discordcore is now slash-commands-first.
+### 2.2. End of "God Components" (Separation of Concerns)
+Massive components that conflate business logic, complex data mutations, and UI rendering are unacceptable.
+*   **Required Standard:** Adopt strict separation of concerns. Extract complex logic and API calls into **Custom Hooks**. For larger components, use the *Container/Presenter* pattern, keeping the JSX (the View) focused purely on visual representation and devoid of heavy business logic.
 
-The dashboard is a complement, not the primary product surface.
+### 2.3. Form Control (End of State Chaos)
+Scattering form state across multiple `useState` hooks tied to manually controlled inputs (e.g., `value={state} onChange={e => setState(e.target.value)}`) is prohibited.
+*   **Required Standard:** Use *uncontrolled* state-based forms with **React Hook Form**. The form library must operate **inseparably linked to Zod** via resolvers, guaranteeing structural validation before any submission attempt.
 
-Default split:
+### 2.4. Monolith Modularization
+Artifacts that centralize distinct domains are prohibited (Single Responsibility Principle).
+*   **APIs and Clients:** Gigantic network clients (e.g., `api/control.ts`) must be fragmented and organized by domain or feature.
+*   **Global Contexts:** The use of "God Contexts" that mix authentication, routing, network calls, and UI preferences is banned. Segregate and distribute these responsibilities into smaller, highly focused, specific contexts.
 
-- slash commands handle routine actions, conversational flows, quick confirmations, and work that benefits from staying inside Discord
-- the dashboard handles setup, review, bulk changes, multi-setting visibility, diagnostics, and recovery flows that are awkward in chat
-- do not build a page just because the data exists; build it only when a browser surface materially reduces friction compared with a slash command
-- do not mirror every command as a page, and do not turn the dashboard into a second primary app for routine bot usage
+### 2.5. Modern Error Handling
+The use of blocking native methods (such as `alert()`, `prompt()`, `confirm()`) or simply dumping unhandled errors into the console is **prohibited**.
+*   **Required Standard:** Implement React *Error Boundaries* to catch and contain rendering failures either globally or by route. Use non-obtrusive *Toast Notification* components (e.g., Sonner, react-hot-toast) to provide feedback on network mutation success or failure.
 
-Every standard page should justify why it exists instead of being a slash command, command response, or diagnostic-only surface.
+### 2.6. Strict Styling
+The chaotic mixture of inline styles (`style={{ margin: 10 }}`) and loose CSS classes is **immediately banned**.
+*   **Required Standard:** The standard is now the exclusive use of **Tailwind CSS**. The application must consume the strict *Design Tokens* configured in Tailwind for spacing, colors, typography, and borders, ensuring total adherence to the Design System.
 
----
+## 3. Architecture Guidelines: UI/UX and TypeScript
 
-## 1. Current reference point
+Interface development must adhere to fundamental pillars to achieve robustness and technical excellence.
 
-The current `Home` page is the best available reference in this repository for:
+### 3.1. Typing and Data Architecture
 
-- overall scan path
-- section grouping
-- card rhythm
-- compact operational summaries
-- semantic status treatment
-- shell integration
+*   **Parse, Don't Validate:** Any data received from APIs or user inputs must be processed at the application's edge (network boundary). Use **Zod** to "parse" and transform unknown data into concrete, guaranteed domain types before they ever reach the UI layer.
+*   **Single Source of Truth:** State must exist in only one place. Avoid mirroring or duplicating state. Derived data from existing states must be calculated synchronously during the View's rendering (or via memoized *selectors*). This prevents state desynchronization (*zombie data*).
+*   **Composition over Inheritance:** Favor composing simple components into complex interfaces, utilizing dependency injection via *props* (`children`, *render props*) and specialized *hooks*. Avoid creating monolithic components with deep prop drilling or excessive props ("boolean traps").
 
-Use `Home` as a quality bar for structure and clarity, not as a frozen template.
+### 3.2. UI Quality and Accessibility (a11y)
 
-Do not blindly clone the Home layout into every new page.
-Different workflows may need different structures.
-Reuse the discipline, not the exact shape.
+*   **Accessibility by Default:** Accessibility is not an optional requirement. The adoption of natively accessible UI primitives via **Radix UI** is imperative for modals, dropdowns, popovers, accordions, etc. Expected behaviors such as natural keyboard navigation and focus management, alongside correct ARIA tags and properties, must be intrinsic to all interactive components.
+*   **Design Tokens and Tailwind:** Strictly consume the Tailwind CSS design tokens defined in the configuration. Hardcoded hexadecimal colors and ad-hoc margins/paddings (outside the scale) will be rejected.
+*   **Latency Feedback (UX):** Primary interactions must respond in under **100ms** (Interaction to Next Paint - INP). Asynchronous operations require immediate feedback: implement *Optimistic UI* when safe, displaying coherent loading *skeletons* or *spinners* without delaying action feedback.
 
-Also note:
+### 3.3. Code Standards and DX (Developer Experience)
 
-- `Home` is currently stronger than the other dashboard pages and should guide future cleanup
-- `Home` is still not final; palette and visual identity may continue to evolve
-
-### 1.1 Home constraints
-
-`Home` may evolve, but only inside these constraints:
-
-- do not introduce new UI components as part of page cleanup or redesign work
-- reuse existing layout primitives, cards, fields, rows, and shell patterns first
-- do not add extra explanatory text by default
-- do not compensate for weak hierarchy by adding more copy
-
-Allowed evolution:
-
-- spacing refinement
-- grouping refinement
-- density tuning
-- hierarchy improvements using existing primitives
-- stronger visual polish that preserves the current dashboard discipline
-
-`Home` must continue to preserve:
-
-- compact scan path
-- low copy density
-- direct action visibility
-- stable shared navigation structure
-- operational clarity over visual flourish
-
-If a `Home` change materially alters these constraints, update this file in the same change.
-
----
-
-## 2. Primary UI rule
-
-The interface must guide users visually first, but only for work that belongs in the dashboard.
-
-Users should understand:
-
-- what part of the slash-command workflow this page supports
-- where they are
-- what matters most on the screen
-- what can be acted on next
-- what state the system is in
-
-This guidance should come primarily from:
-
-- layout
-- hierarchy
-- spacing
-- grouping
-- contrast
-- alignment
-- scale
-- affordances
-- interaction design
-
-Do not rely on paragraphs of instructional copy to explain basic orientation.
-
----
-
-## 3. Copy policy
-
-Explanatory copy is optional.
-
-Only add it when:
-
-- the product owner explicitly wants it
-- the interface genuinely needs it to avoid ambiguity
-- the message is carrying real content, not compensating for weak layout
-
-Rules:
-
-- Prefer short, direct, scannable labels
-- Use sentence case
-- Keep titles compact
-- Avoid repeating the same context in headings, helper text, and buttons
-- Avoid filler, hype, apology, or decorative tone
-- Avoid jargon unless the page is explicitly diagnostic
-- Write messages so they still make sense out of context
-
-Examples of bad copy:
-
-- `Refreshing session`
-- `An error occurred`
-- `Blocked`
-- `This field is invalid`
-
-Better patterns:
-
-- keep routine background refresh silent
-- state what happened only when the user needs to know
-- say what needs to be fixed when the user needs to act
-
-### 3.1 Rare helper text exception
-
-Small subdued helper text is allowed only in rare cases where a setting would otherwise be ambiguous.
-
-Allowed cases:
-
-- the setting has a non-obvious side effect
-- the label alone does not explain when the behavior applies
-- the setting controls edge-case or conditional behavior
-- the user could plausibly misconfigure the setting without that context
-
-Rules:
-
-- use one short line only
-- place it directly under the relevant control
-- style it as secondary text
-- attach it to the specific control, not the whole section
-- do not repeat the label in different words
-- do not use helper text for obvious settings
-
-If multiple controls in the same section need helper text, the layout, grouping, or labeling is probably wrong and should be redesigned instead.
-
----
-
-### 3.2 Standard dashboard blacklist
-
-The standard dashboard UI is not a diagnostics surface.
-
-By default, end-user-visible dashboard pages must show only:
-
-- the primary control
-- essential state
-- the current value
-- actionable errors or blockers
-
-Do not show these in the standard UI:
-
-- shell-level context already visible globally, such as the selected server or active account
-- environment, base URL, origin, or hostname values
-- effective source, applied from, inherited source, override state, or similar configuration provenance labels
-- copy such as `Configured here`, `Using default`, or `Enabled for this server`
-- aggregate counts that do not change the next action when the section already shows the underlying detail
-- raw Discord IDs or fallback-by-ID editors
-- long helper text that only narrates the visible toggle, picker, or select
-- repeated badges or repeated state text at multiple levels of the same screen
-- routine action controls that would be faster and clearer as slash commands
-- command reference walls or embedded instructions for normal in-Discord usage
-
-Internal or low-level metadata is allowed only in an explicit diagnostic mode.
-When diagnostic-only UI is needed, gate it behind the `?diagnostics=1` query parameter instead of exposing it in the default page flow.
-
-When in doubt, prefer omission over explanation.
-
-### 3.3 Direct settings pattern
-
-For settings-style pages, the default composition should feel closer to app settings than to an operator console or command-replacement surface.
-
-Preferred patterns:
-
-- binary settings: `short title + visible switch`
-- single-value settings: `short title + direct select or picker`
-- setting groups: `group title + compact rows`, not nested explanatory slabs
-
-Rules:
-
-- if the control already shows the current state, do not repeat that state in badges, status rows, or helper paragraphs
-- do not render `Current signal`, `Current value`, or provenance rows beside an already-visible switch, select, or picker in the default UI
-- use helper text only when the setting would otherwise be ambiguous, and keep it to one short secondary line directly under the control
-- only show warning or error text when the user has something real to fix, such as a missing channel, invalid role, runtime kill switch, or failed lookup
-- prefer one shared lookup failure message for a whole control group when the same dependency failure affects every row in that group
-- if the main point of a control is to trigger a routine bot action, prefer a slash command instead of adding it to the standard page
-- reserve standard page controls for configuration, review, bulk edits, or exceptional recovery
-
-Examples:
-
-- good: `Automod service` + switch
-- good: `Mute role` + switch + role select
-- good: `Moderation case logging` + switch + channel select + short blocker text only when needed
-- good: compact review and repair UI for settings that are hard to reason about from chat alone
-- bad: `Mute role` + badge + `Current signal` + `Applied from` + long section description + extra reset-to-default metadata
-- bad: `Route destination` + select + paragraph explaining that the visible select controls the destination
-- bad: a page full of routine action buttons that should be slash commands
-
-### 3.4 Grouped settings surfaces
-
-When multiple adjacent settings belong to the same workflow, render them inside one subtle grouped surface instead of leaving them as unrelated flat rows.
-
-Preferred grouping:
-
-- one grouped surface per cohesive settings cluster
-- internal dividers between direct settings rows inside that group
-- whitespace between separate groups, not a full-width divider line between them
-- expanded child controls stay inside the same parent setting block
-
-Rules:
-
-- group settings when they share one user task, one feature family, or one immediate decision path
-- use a grouped surface when two or more settings should be scanned together before the user acts
-- keep group rows compact: `label -> value/control`
-- if a setting expands, the expanded row stays inside the same grouped item and inherits the same divider rhythm
-- do not wrap every single isolated control in its own decorative box if the surrounding surface already provides enough boundary
-
-Exceptions:
-
-- a single standalone control may stay ungrouped when it has no natural sibling settings nearby
-- empty states, lookup failures affecting the entire section, and diagnostic affordances may sit outside the grouped surface when they are not themselves a setting row
-- drawers, modal pickers, and other bounded selector panels can create their own surface because they are separate workflows
-
----
-
-## 4. Source of truth and reuse
-
-Use the current implementation as the main reference:
-
-- `ui/src/index.css`
-- `ui/src/shell.css`
-- `ui/src/components/ui.tsx`
-- `ui/src/pages/HomePage.tsx`
-
-Rules:
-
-- Reuse existing components, tokens, and patterns before inventing new ones
-- Do not add new components for routine page polish, layout cleanup, or visual alignment work
-- Do not hardcode fresh visual systems inside page files
-- Do not document raw token values in this file; token roles matter more than frozen hex values
-- If a new token is needed, add it centrally instead of scattering raw values across components
-
----
-
-## 5. Layout and flow
-
-Every page must have one primary job.
-
-That job should usually be setup, review, bulk change, diagnostics, or exception handling, not replacing routine in-Discord usage.
-
-Build the visual scan path in this order:
-
-1. page context
-2. section
-3. active surface
-4. status or controls
-5. action
-
-Rules:
-
-- Use spacing and grouping before using color
-- Keep related controls and status in the same visual block
-- Put tertiary content behind the primary workflow visually
-- Avoid abrupt density changes between adjacent sections
-- Preserve clear left and right edges in grids and sections
-- Keep partial rows left-aligned
-
-For overview pages, the default structure should usually be:
-
-`section -> card grid -> title -> compact facts -> action`
-
-Do not stretch cards vertically to fake symmetry.
-If cards have different content lengths, preserve their natural height and align the grid cleanly.
-
-If a page should feel like part of the dashboard canvas, do not wrap it in an unnecessary floating slab or inset surface.
-
-### 5.1 Flat composition default
-
-The default page composition should be flat and continuous, closer to `Home` than to card-inside-card stacks.
-
-Rules:
-
-- Prefer one main surface per workflow block instead of nested inner slabs
-- Do not create a second or third visual layer unless there is a real boundary such as a drawer, modal, bounded selector panel, or clearly separate diagnostic area
-- If content belongs to the same workflow, keep it attached to the surrounding surface instead of making it float inside an extra inset container
-- Prefer `title -> rows -> actions` inside the current flat content before introducing another wrapper component or inner card
-- Do not add an extra component only to display a local heading if that heading can live naturally inside the existing flat section
-- If a section can be expressed as a title and content within the current surface, do that instead of creating a decorative nested layer
-
-Nested layering is not a neutral stylistic choice here.
-It makes the dashboard feel heavier, more template-like, and less direct than the current `Home` reference.
-
----
-
-## 6. Surfaces, color, and emphasis
-
-The dashboard currently favors flat solid surfaces over gradient-heavy treatment.
-
-Rules:
-
-- Prefer flat solid surfaces
-- Use neutrals for canvas and surfaces
-- Use semantic colors for meaning, not decoration
-- Create emphasis with contrast, borders, rails, chips, focus states, and placement
-- Keep the number of competing accents low on a single page
-
-Do not use gradients as the default emphasis model.
-
-If a gradient is introduced, it must have a clear product reason and survive review.
-If the same result can be achieved with solid surfaces, borders, spacing, and hierarchy, prefer that.
-
-Avoid nested-surface or double-elevation UI unless there is a real layer boundary.
-
-If a softer background weakens contrast:
-
-- strengthen the border
-- increase text contrast
-- improve spacing and grouping
-
-Do not solve it with decorative glow or ornamental effects.
-
-Do not use success green, warning amber, or danger red merely to make a page feel less empty.
-
----
-
-## 7. State and feedback
-
-Background work should stay visually quiet unless the user must wait, decide, retry, or recover.
-
-Rules:
-
-- Silent background refresh should usually remain silent
-- Do not expose manual `Refresh` buttons for normal page loading, workspace revalidation, or routine data sync
-- Manual refresh controls imply unstable or stale software and should be treated as a UX smell in normal dashboard flows
-- Only use a manual refresh or retry control when the user is explicitly recovering from a failed load, a degraded dependency, or a diagnostic workflow
-- Do not mount empty notice wrappers that create layout shift
-- Avoid page jumps caused by transient banners or refresh chrome
-- Loading states should preserve the final layout footprint where possible
-- Skeletons and placeholders should match the final structure
-- Status styling must stay semantically consistent across pages
-
-Routine revalidation must not create the impression that the page is unstable.
-
-That means:
-
-- no transient `Refreshing session` style copy for normal silent work
-- no wrapper elements that appear briefly and push the layout down
-- no full-page reflow when only local content is refreshing
-
----
-
-## 8. Controls and affordances
-
-Controls should look actionable without needing explanatory text.
-
-Rules:
-
-- Primary actions should stand out by placement, contrast, and grouping
-- Secondary actions should remain quieter
-- In cards and single-page sections, action alignment should be consistent
-- Do not introduce tags as a dashboard pattern unless the user explicitly requests them
-- Treat decorative, categorical, or metadata tags as prohibited by default
-- Do not make non-interactive tags or status pills look clickable
-- Use color to support affordance, not replace it
-- For selectable item lists, default to a compact collapsed picker or disclosure that opens only on user intent
-- Do not render large checkbox lists fully expanded by default when they can grow the page or distort the layout
-- Expanded selectable lists must use a bounded panel with its own vertical scroll
-- The opened selector must be capped to the viewport instead of stretching the parent card, section, or page
-- Prefer the same structural model as the current compact server-picker style: collapsed trigger, bounded list panel, internal scroll
-- The closed state of a multi-select should summarize the current selection compactly instead of exposing the whole option set
-
-If a control needs a paragraph to explain what it is, the control, grouping, or labeling is probably wrong.
-
-Status indicators that already represent real system state are separate from decorative tags.
-Do not replace meaningful status treatment with generic tag-like pills.
-
-Do not use a page-level `Refresh` button as a default affordance for keeping data current.
-If the product depends on frequent manual refresh to feel correct, fix the data flow or state model instead.
-
----
-
-## 9. Typography and rhythm
-
-Typography should support scanning and operational clarity.
-
-Rules:
-
-- Start from the existing type scale before creating exceptions
-- Bigger type is for hierarchy, not decoration
-- Supporting text should be smaller and dimmer than operational data
-- Repeated spacing increments should create a stable vertical rhythm
-- Use readable line heights and avoid crowded stacks
-- Do not introduce one-off text sizes unless there is a clear reason
-
-Dense pages should still feel breathable.
-Breathing room should come from rhythm and grouping, not giant empty gaps.
-
----
-
-## 10. Required anti-patterns to avoid
-
-Do not introduce:
-
-- generic hero sections or marketing-style dashboard headers
-- text-heavy UI that teaches the user where to look
-- standard pages whose main purpose is to duplicate routine slash command actions
-- command-manual pages that mirror normal command usage instead of supporting setup or diagnostics
-- floating inner canvases when the page should feel continuous
-- nested slabs, card-inside-card stacks, or inset panels without a real interaction boundary
-- extra wrapper components whose only job is to create another visual layer around content that could stay flat
-- separate sub-cards used only to hold a local title that could live inside the surrounding content block
-- default gradient chrome or gradient cards
-- equal-height card stretching that distorts proportions
-- routine page-level `Refresh` buttons for normal data loading or revalidation
-- transient refresh text for routine background work
-- always-expanded multi-select or checkbox lists that can make a page suddenly grow in height
-- selectable lists that expand the surrounding card, drawer, or page instead of using a bounded scroll panel
-- duplicated context across section title, card title, and button label
-- decorative, categorical, or metadata tags unless the user explicitly asked for them
-- decorative use of semantic colors
-- non-semantic shadows or elevation used as a crutch
-- whole-page jumps caused by notice mounts or refresh wrappers
-- pages that copy Home literally even when the workflow is different
-
----
-
-## 11. Agent implementation checklist
-
-Before finalizing a page, check:
-
-1. Why does this page exist instead of a slash command, command response, or diagnostic-only surface?
-2. What is the single primary job of this page?
-3. What must the user understand before reading any paragraph?
-4. Does the layout answer that visually?
-5. Are existing shell/components/tokens being reused?
-6. Are semantic colors being used only where meaning exists?
-7. Is the page stable during loading, refresh, empty, and error states?
-8. Are card proportions and grid alignment still intact?
-9. Is this page supporting setup, review, bulk change, diagnostics, or recovery instead of replacing routine in-Discord usage?
-10. Did extra copy get added because the layout was weak?
-
-If the answer to step 10 is yes, fix the layout first.
-
----
-
-## 12. External influences
-
-These sources informed the mindset in this file.
-They are influences, not the repository source of truth.
-
-- Primer, [Color usage](https://primer.style/product/getting-started/foundations/color-usage/): semantic color roles, token discipline, and restoring contrast with borders when using softer surfaces
-- Fluent 2, [Design tokens](https://fluent2.microsoft.design/design-tokens): global vs alias tokens, semantic naming, theming, and accessibility-minded token structure
-- Atlassian Design, [Content](https://atlassian.design/foundations/content/) and [Success messages](https://atlassian.design/foundations/content/designing-messages/success-messages/): concise, scannable UI writing where every word must earn its place
-- GOV.UK Design System, [Error message](https://design-system.service.gov.uk/components/error-message/) and [Type scale](https://design-system.service.gov.uk/styles/type-scale/): specific repair-oriented messaging and consistent readable rhythm
+*   **Supreme Strict Mode:** The TypeScript compiler will operate with the `"strict": true` directive across the entire project scope. The use of the escape-hatch `any` type, undocumented `@ts-ignore` annotations, and implicit return types is **expressly prohibited** and will block Code Review approvals.
+*   **Idempotency and Pure Functions:** State logic, data transformers, and utility functions must be pure and deterministic. They must consistently produce the same output for the same input, strictly isolating any unwanted _side-effects_.
+*   **Sensible Performance and Optimization:** *Code Splitting* is mandatory at major route boundaries (using `React.lazy` and Suspense). Preemptive optimizations via `React.memo`, `useMemo`, or `useCallback` should not be adopted blindly. Use them surgically **only** when observation and profiling indicate actual re-rendering bottlenecks.

@@ -570,6 +570,10 @@ export class ControlApiClient {
     this.baseUrl = normalizeBaseUrl(config.baseUrl);
   }
 
+  getBaseUrl(): string {
+    return this.baseUrl;
+  }
+
   async getPartnerBoard(guildId: string): Promise<PartnerBoardResponse> {
     return this.request<PartnerBoardResponse>(
       "GET",
