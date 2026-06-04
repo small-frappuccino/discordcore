@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import toast from "react-hot-toast";
+import { formatError } from "../../app/utils";
 import { useDashboardSession } from "../../context/DashboardSessionContext";
 import { useCurrentGuild } from "../../context/GuildContext";
 import { useGuildFeatureQuery, usePatchGuildFeatureMutation } from "../../api/hooks/useGuildFeatures";
@@ -41,12 +43,18 @@ export function useModerationPageLogic() {
 
   const handleToggleAutomod = () => {
     if (!selectedGuildID) return;
-    automodMutation.mutate({ enabled: !automodEnabled });
+    automodMutation.mutate({ enabled: !automodEnabled }, {
+      onSuccess: () => toast.success("Automod settings updated"),
+      onError: (e) => toast.error(`Failed to update automod: ${formatError(e)}`)
+    });
   };
 
   const handleToggleLogging = () => {
     if (!selectedGuildID) return;
-    loggingMutation.mutate({ enabled: !loggingEnabled });
+    loggingMutation.mutate({ enabled: !loggingEnabled }, {
+      onSuccess: () => toast.success("Logging settings updated"),
+      onError: (e) => toast.error(`Failed to update logging: ${formatError(e)}`)
+    });
   };
 
   const onSubmit = form.handleSubmit((data) => {
@@ -56,7 +64,8 @@ export function useModerationPageLogic() {
         mute_role: data.mute_role,
       },
     }, {
-      onSuccess: () => alert("Mute role saved")
+      onSuccess: () => toast.success("Mute role saved"),
+      onError: (e) => toast.error(`Failed to save mute role: ${formatError(e)}`)
     });
   });
 

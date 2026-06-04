@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import toast from "react-hot-toast";
+import { formatError } from "../../app/utils";
 import { useDashboardSession } from "../../context/DashboardSessionContext";
 import { useCurrentGuild } from "../../context/GuildContext";
 import { useGuildRoleOptionsQuery } from "../../api/hooks/useRoles";
@@ -58,11 +60,8 @@ export function useRolesPageLogic() {
         roles: data
       },
       {
-        onSuccess: () => alert("Settings saved!"),
-        onError: (e) => {
-          console.error(e);
-          alert("Failed to save settings");
-        }
+        onSuccess: () => toast.success("Settings saved!"),
+        onError: (e) => toast.error(`Failed to save settings: ${formatError(e)}`)
       }
     );
   });

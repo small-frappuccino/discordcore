@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import toast from "react-hot-toast";
+import { formatError } from "../../app/utils";
 import { useDashboardSession } from "../../context/DashboardSessionContext";
 import { useCurrentGuild } from "../../context/GuildContext";
 import { usePartnerBoardQuery, useSetPartnerBoardTemplateMutation } from "../../api/hooks/usePartners";
@@ -41,8 +43,8 @@ export function usePartnersPageLogic() {
   const onSubmit = form.handleSubmit((data) => {
     if (!selectedGuildID) return;
     updateMutation.mutate(data, {
-      onSuccess: () => alert("Template saved successfully."),
-      onError: () => alert("Failed to save template.")
+      onSuccess: () => toast.success("Template saved successfully."),
+      onError: (e) => toast.error(`Failed to save template: ${formatError(e)}`)
     });
   });
 

@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import toast from "react-hot-toast";
+import { formatError } from "../../app/utils";
 import { useDashboardSession } from "../../context/DashboardSessionContext";
 import { useCurrentGuild } from "../../context/GuildContext";
 import { useQOTDSettingsQuery, useUpdateQOTDSettingsMutation } from "../../api/hooks/useQOTD";
@@ -43,11 +45,8 @@ export function useQOTDPageLogic() {
     if (!selectedGuildID) return;
     
     updateMutation.mutate(data, {
-      onSuccess: () => alert("QOTD Settings saved!"),
-      onError: (e) => {
-        console.error(e);
-        alert("Failed to save QOTD Settings");
-      }
+      onSuccess: () => toast.success("QOTD Settings saved!"),
+      onError: (e) => toast.error(`Failed to save QOTD Settings: ${formatError(e)}`)
     });
   });
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import toast from "react-hot-toast";
 import { EmbedsSchema, type EmbedsFormData } from "../schemas/embeds";
 
 export function useEmbedsPageLogic() {
@@ -32,7 +33,7 @@ export function useEmbedsPageLogic() {
     // Mocking the save call
     setTimeout(() => {
       setIsSaving(false);
-      alert("Embeds Settings saved!");
+      toast.success("Embeds Settings saved!");
     }, 500);
   });
 
