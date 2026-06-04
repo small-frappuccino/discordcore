@@ -726,16 +726,29 @@ func (sc *SimpleCommand) WithAutocomplete(handler AutocompleteHandler) *SimpleCo
 	return sc
 }
 
-func (sc *SimpleCommand) Name() string        { return sc.name }
+// Name names.
+func (sc *SimpleCommand) Name() string { return sc.name }
+
+// Description descriptions.
 func (sc *SimpleCommand) Description() string { return sc.description }
+
+// Options options.
 func (sc *SimpleCommand) Options() []*discordgo.ApplicationCommandOption {
 	return sc.options
 }
+
+// Handle handles.
 func (sc *SimpleCommand) Handle(ctx *Context) error { return sc.handler(ctx) }
+
+// AutocompleteRouteHandler autocompletes route handler.
 func (sc *SimpleCommand) AutocompleteRouteHandler() AutocompleteHandler {
 	return sc.autocompleteHandler
 }
-func (sc *SimpleCommand) RequiresGuild() bool       { return sc.requiresGuild }
+
+// RequiresGuild requires guild.
+func (sc *SimpleCommand) RequiresGuild() bool { return sc.requiresGuild }
+
+// RequiresPermissions requires permissions.
 func (sc *SimpleCommand) RequiresPermissions() bool { return sc.requiresPermissions }
 
 // GetSession returns the Discord session from the context builder

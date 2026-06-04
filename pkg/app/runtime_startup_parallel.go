@@ -151,10 +151,12 @@ func newStartupTaskOrchestrator(runtimeCount int) *startupTaskOrchestrator {
 	}
 }
 
+// GoLight gos light.
 func (o *startupTaskOrchestrator) GoLight(name string, fn func(context.Context) error) {
 	o.goTask(o.light, name, "light", fn)
 }
 
+// GoHeavy gos heavy.
 func (o *startupTaskOrchestrator) GoHeavy(name string, fn func(context.Context) error) {
 	o.goTask(o.heavy, name, "heavy", fn)
 }
@@ -180,6 +182,7 @@ func (o *startupTaskOrchestrator) goTask(worker *runtimeStartupBackgroundWorker,
 	})
 }
 
+// Shutdown shutdowns.
 func (o *startupTaskOrchestrator) Shutdown(ctx context.Context) error {
 	if o == nil {
 		return nil
@@ -199,6 +202,7 @@ func (o *startupTaskOrchestrator) Shutdown(ctx context.Context) error {
 	return stdErrors.Join(errs...)
 }
 
+// Go gos.
 func (w *runtimeStartupBackgroundWorker) Go(fn func(context.Context) error) {
 	if w == nil || fn == nil {
 		return
@@ -210,6 +214,7 @@ func (w *runtimeStartupBackgroundWorker) Go(fn func(context.Context) error) {
 	}
 }
 
+// Shutdown shutdowns.
 func (w *runtimeStartupBackgroundWorker) Shutdown(ctx context.Context) error {
 	if w == nil {
 		return nil

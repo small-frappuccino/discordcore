@@ -219,25 +219,68 @@ func Default() *Theme {
 // Helper getters to use directly in code (avoid exposing globals).
 // These read from the current theme and simplify adoption throughout the codebase.
 
-func Primary() Color          { return Current().Primary }
-func Accent() Color           { return Current().Accent }
-func Info() Color             { return Current().Info }
-func Success() Color          { return Current().Success }
-func Warning() Color          { return Current().Warning }
-func Error() Color            { return Current().Error }
-func Danger() Color           { return Current().Danger }
-func Muted() Color            { return Current().Muted }
-func ServiceList() Color      { return Current().ServiceList }
-func SystemInfo() Color       { return Current().SystemInfo }
-func StatusOK() Color         { return Current().StatusOK }
-func StatusDegraded() Color   { return Current().StatusDegraded }
-func StatusError() Color      { return Current().StatusError }
-func StatusDefault() Color    { return Current().StatusDefault }
-func AvatarChange() Color     { return Current().AvatarChange }
-func MemberJoin() Color       { return Current().MemberJoin }
-func MemberLeave() Color      { return Current().MemberLeave }
-func MessageEdit() Color      { return Current().MessageEdit }
-func MessageDelete() Color    { return Current().MessageDelete }
-func AutomodAction() Color    { return Current().AutomodAction }
+// Primary primarys.
+func Primary() Color { return Current().Primary }
+
+// Accent accents.
+func Accent() Color { return Current().Accent }
+
+// Info infos.
+func Info() Color { return Current().Info }
+
+// Success success.
+func Success() Color { return Current().Success }
+
+// Warning warnings.
+func Warning() Color { return Current().Warning }
+
+// Error errors.
+func Error() Color { return Current().Error }
+
+// Danger dangers.
+func Danger() Color { return Current().Danger }
+
+// Muted muteds.
+func Muted() Color { return Current().Muted }
+
+// ServiceList services list.
+func ServiceList() Color { return Current().ServiceList }
+
+// SystemInfo systems info.
+func SystemInfo() Color { return Current().SystemInfo }
+
+// StatusOK status ok.
+func StatusOK() Color { return Current().StatusOK }
+
+// StatusDegraded status degraded.
+func StatusDegraded() Color { return Current().StatusDegraded }
+
+// StatusError status error.
+func StatusError() Color { return Current().StatusError }
+
+// StatusDefault status default.
+func StatusDefault() Color { return Current().StatusDefault }
+
+// AvatarChange avatars change.
+func AvatarChange() Color { return Current().AvatarChange }
+
+// MemberJoin members join.
+func MemberJoin() Color { return Current().MemberJoin }
+
+// MemberLeave members leave.
+func MemberLeave() Color { return Current().MemberLeave }
+
+// MessageEdit messages edit.
+func MessageEdit() Color { return Current().MessageEdit }
+
+// MessageDelete messages delete.
+func MessageDelete() Color { return Current().MessageDelete }
+
+// AutomodAction automods action.
+func AutomodAction() Color { return Current().AutomodAction }
+
+// MemberRoleUpdate members role update.
 func MemberRoleUpdate() Color { return Current().MemberRoleUpdate }
-func Loading() Color          { return Current().Loading }
+
+// Loading loadings.
+func Loading() Color { return Current().Loading }

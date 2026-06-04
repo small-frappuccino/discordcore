@@ -89,6 +89,7 @@ func NewMemberEventServiceForBot(deps eventServiceDeps) *MemberEventService {
 	}
 }
 
+// SetAdapters sets adapters.
 func (mes *MemberEventService) SetAdapters(adapters *task.NotificationAdapters) {
 	mes.adapters = adapters
 }

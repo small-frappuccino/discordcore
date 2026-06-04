@@ -161,11 +161,20 @@ func FailureClassToken(class cleanup.FailureClass) string {
 // this lets command code call m.RecordX(...) without nil checks.
 type NopMetrics struct{}
 
-func (NopMetrics) RecordCleanAttempt()                           {}
-func (NopMetrics) RecordCleanSuccess(time.Duration, int)         {}
-func (NopMetrics) RecordCleanFailure(string, time.Duration)      {}
+// RecordCleanAttempt records clean attempt.
+func (NopMetrics) RecordCleanAttempt() {}
+
+// RecordCleanSuccess records clean success.
+func (NopMetrics) RecordCleanSuccess(time.Duration, int) {}
+
+// RecordCleanFailure records clean failure.
+func (NopMetrics) RecordCleanFailure(string, time.Duration) {}
+
+// RecordCleanDeleteFailure records clean delete failure.
 func (NopMetrics) RecordCleanDeleteFailure(cleanup.FailureClass) {}
-func (NopMetrics) RecordCleanAuditLogFailure()                   {}
+
+// RecordCleanAuditLogFailure records clean audit log failure.
+func (NopMetrics) RecordCleanAuditLogFailure() {}
 
 // InMemoryMetrics is the lightweight implementation backing
 // /v1/health/moderation. Atomic int64 counters; the labeled maps
@@ -191,10 +200,12 @@ type InMemoryMetrics struct {
 	duration        observability.Summary
 }
 
+// RecordCleanAttempt records clean attempt.
 func (m *InMemoryMetrics) RecordCleanAttempt() {
 	m.attempts.Add(1)
 }
 
+// RecordCleanSuccess records clean success.
 func (m *InMemoryMetrics) RecordCleanSuccess(duration time.Duration, deletedMessages int) {
 	m.success.Add(1)
 	if deletedMessages > 0 {
@@ -203,16 +214,19 @@ func (m *InMemoryMetrics) RecordCleanSuccess(duration time.Duration, deletedMess
 	m.duration.Observe(duration)
 }
 
+// RecordCleanFailure records clean failure.
 func (m *InMemoryMetrics) RecordCleanFailure(cause string, duration time.Duration) {
 	m.failure.Add(1)
 	m.causeCounter(cause).Add(1)
 	m.duration.Observe(duration)
 }
 
+// RecordCleanDeleteFailure records clean delete failure.
 func (m *InMemoryMetrics) RecordCleanDeleteFailure(class cleanup.FailureClass) {
 	m.classCounter(FailureClassToken(class)).Add(1)
 }
 
+// RecordCleanAuditLogFailure records clean audit log failure.
 func (m *InMemoryMetrics) RecordCleanAuditLogFailure() {
 	m.auditLogFailure.Add(1)
 }

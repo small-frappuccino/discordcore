@@ -14,6 +14,8 @@ var (
 	ErrInvalidQOTDInput = errors.New("invalid qotd input")
 )
 
+// LegacyQOTDDefaultDeckName defines legacy qotddefault deck name.
+// LegacyQOTDDefaultDeckID defines legacy qotddefault deck id.
 const (
 	LegacyQOTDDefaultDeckID   = "default"
 	LegacyQOTDDefaultDeckName = "Default"
@@ -25,6 +27,8 @@ const (
 // and mirror the QOTDQuestionSelector vocabulary used by the storage layer.
 type QOTDSelectionStrategy string
 
+// QOTDSelectionStrategyRandom defines qotdselection strategy random.
+// QOTDSelectionStrategyQueue defines qotdselection strategy queue.
 const (
 	QOTDSelectionStrategyQueue  QOTDSelectionStrategy = "queue"
 	QOTDSelectionStrategyRandom QOTDSelectionStrategy = "random"
@@ -247,6 +251,7 @@ func isImplicitDefaultQOTDDeck(deck QOTDDeckConfig, activeDeckID string) bool {
 		(activeDeckID == "" || activeDeckID == LegacyQOTDDefaultDeckID)
 }
 
+// UnmarshalJSON unmarshals json.
 func (cfg *QOTDDeckConfig) UnmarshalJSON(data []byte) error {
 	type rawQOTDDeckConfig struct {
 		ID        string `json:"id,omitempty"`
@@ -288,6 +293,7 @@ func (cfg *QOTDDeckConfig) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// UnmarshalJSON unmarshals json.
 func (cfg *QOTDConfig) UnmarshalJSON(data []byte) error {
 	type rawQOTDPublishScheduleConfig struct {
 		HourUTC   *int `json:"hour_utc,omitempty"`

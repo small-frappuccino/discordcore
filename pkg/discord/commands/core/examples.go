@@ -19,26 +19,32 @@ import (
 // PingCommand is a simple command example
 type PingCommand struct{}
 
+// Name names.
 func (c *PingCommand) Name() string {
 	return "ping"
 }
 
+// Description descriptions.
 func (c *PingCommand) Description() string {
 	return "Check if the bot is responding"
 }
 
+// Options options.
 func (c *PingCommand) Options() []*discordgo.ApplicationCommandOption {
 	return nil // Simple command without options
 }
 
+// RequiresGuild requires guild.
 func (c *PingCommand) RequiresGuild() bool {
 	return false // Can be used in DM
 }
 
+// RequiresPermissions requires permissions.
 func (c *PingCommand) RequiresPermissions() bool {
 	return false // Everyone can use
 }
 
+// Handle handles.
 func (c *PingCommand) Handle(ctx *Context) error {
 	return NewResponseBuilder(ctx.Session).Success(ctx.Interaction, "🏓 Pong!")
 }
@@ -50,14 +56,17 @@ func (c *PingCommand) Handle(ctx *Context) error {
 // EchoCommand demonstrates how to use options and data extraction
 type EchoCommand struct{}
 
+// Name names.
 func (c *EchoCommand) Name() string {
 	return "echo"
 }
 
+// Description descriptions.
 func (c *EchoCommand) Description() string {
 	return "Echo back a message"
 }
 
+// Options options.
 func (c *EchoCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{
@@ -75,14 +84,17 @@ func (c *EchoCommand) Options() []*discordgo.ApplicationCommandOption {
 	}
 }
 
+// RequiresGuild requires guild.
 func (c *EchoCommand) RequiresGuild() bool {
 	return false
 }
 
+// RequiresPermissions requires permissions.
 func (c *EchoCommand) RequiresPermissions() bool {
 	return false
 }
 
+// Handle handles.
 func (c *EchoCommand) Handle(ctx *Context) error {
 	// Extract command options
 	extractor := OptionList(ctx.Interaction.ApplicationCommandData().Options)
@@ -110,14 +122,17 @@ func (c *EchoCommand) Handle(ctx *Context) error {
 // UserInfoSubCommand demonstrates a subcommand implementation
 type UserInfoSubCommand struct{}
 
+// Name names.
 func (c *UserInfoSubCommand) Name() string {
 	return "info"
 }
 
+// Description descriptions.
 func (c *UserInfoSubCommand) Description() string {
 	return "Get information about a user"
 }
 
+// Options options.
 func (c *UserInfoSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{
@@ -129,14 +144,17 @@ func (c *UserInfoSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	}
 }
 
+// RequiresGuild requires guild.
 func (c *UserInfoSubCommand) RequiresGuild() bool {
 	return true // Requires a server to access member information
 }
 
+// RequiresPermissions requires permissions.
 func (c *UserInfoSubCommand) RequiresPermissions() bool {
 	return false
 }
 
+// Handle handles.
 func (c *UserInfoSubCommand) Handle(ctx *Context) error {
 	extractor := OptionList(GetSubCommandOptions(ctx.Interaction))
 
@@ -169,6 +187,7 @@ type ConfigGroupCommand struct {
 	*GroupCommand
 }
 
+// NewConfigGroupCommand news config group command.
 func NewConfigGroupCommand(session *discordgo.Session, configManager *files.ConfigManager) *ConfigGroupCommand {
 	checker := NewPermissionChecker(session, configManager)
 
@@ -187,14 +206,17 @@ type ConfigSetSubCommand struct {
 	configManager *files.ConfigManager
 }
 
+// Name names.
 func (c *ConfigSetSubCommand) Name() string {
 	return "set"
 }
 
+// Description descriptions.
 func (c *ConfigSetSubCommand) Description() string {
 	return "Set a configuration value"
 }
 
+// Options options.
 func (c *ConfigSetSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{
@@ -217,14 +239,17 @@ func (c *ConfigSetSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	}
 }
 
+// RequiresGuild requires guild.
 func (c *ConfigSetSubCommand) RequiresGuild() bool {
 	return true
 }
 
+// RequiresPermissions requires permissions.
 func (c *ConfigSetSubCommand) RequiresPermissions() bool {
 	return true // Only users with permission can change configuration
 }
 
+// Handle handles.
 func (c *ConfigSetSubCommand) Handle(ctx *Context) error {
 	extractor := OptionList(GetSubCommandOptions(ctx.Interaction))
 
@@ -271,26 +296,32 @@ type ConfigGetSubCommand struct {
 	configManager *files.ConfigManager
 }
 
+// Name names.
 func (c *ConfigGetSubCommand) Name() string {
 	return "get"
 }
 
+// Description descriptions.
 func (c *ConfigGetSubCommand) Description() string {
 	return "Get current configuration values"
 }
 
+// Options options.
 func (c *ConfigGetSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	return nil
 }
 
+// RequiresGuild requires guild.
 func (c *ConfigGetSubCommand) RequiresGuild() bool {
 	return true
 }
 
+// RequiresPermissions requires permissions.
 func (c *ConfigGetSubCommand) RequiresPermissions() bool {
 	return true
 }
 
+// Handle handles.
 func (c *ConfigGetSubCommand) Handle(ctx *Context) error {
 	if err := RequiresGuildConfig(ctx); err != nil {
 		return fmt.Errorf("ConfigGetSubCommand.Handle: %w", err)
@@ -316,26 +347,32 @@ type ConfigListSubCommand struct {
 	configManager *files.ConfigManager
 }
 
+// Name names.
 func (c *ConfigListSubCommand) Name() string {
 	return "list"
 }
 
+// Description descriptions.
 func (c *ConfigListSubCommand) Description() string {
 	return "List all available configuration options"
 }
 
+// Options options.
 func (c *ConfigListSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	return nil
 }
 
+// RequiresGuild requires guild.
 func (c *ConfigListSubCommand) RequiresGuild() bool {
 	return true
 }
 
+// RequiresPermissions requires permissions.
 func (c *ConfigListSubCommand) RequiresPermissions() bool {
 	return true
 }
 
+// Handle handles.
 func (c *ConfigListSubCommand) Handle(ctx *Context) error {
 	options := []string{
 		"**Available Configuration Options:**",
@@ -363,6 +400,7 @@ type ConfigAutocompleteHandler struct {
 	configManager *files.ConfigManager
 }
 
+// HandleAutocomplete handles autocomplete.
 func (h *ConfigAutocompleteHandler) HandleAutocomplete(ctx *Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	switch focusedOption {
 	case "key":
@@ -438,14 +476,17 @@ func ExampleCommandSetup(
 // AdvancedCommand demonstrates robust error handling
 type AdvancedCommand struct{}
 
+// Name names.
 func (c *AdvancedCommand) Name() string {
 	return "advanced"
 }
 
+// Description descriptions.
 func (c *AdvancedCommand) Description() string {
 	return "Demonstrates advanced error handling"
 }
 
+// Options options.
 func (c *AdvancedCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{
@@ -457,14 +498,17 @@ func (c *AdvancedCommand) Options() []*discordgo.ApplicationCommandOption {
 	}
 }
 
+// RequiresGuild requires guild.
 func (c *AdvancedCommand) RequiresGuild() bool {
 	return true
 }
 
+// RequiresPermissions requires permissions.
 func (c *AdvancedCommand) RequiresPermissions() bool {
 	return false
 }
 
+// Handle handles.
 func (c *AdvancedCommand) Handle(ctx *Context) error {
 	extractor := OptionList(ctx.Interaction.ApplicationCommandData().Options)
 

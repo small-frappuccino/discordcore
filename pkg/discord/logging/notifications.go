@@ -13,6 +13,9 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
 
+// ErrSuccessTitle defines err success title.
+// ErrErrorTitle defines err error title.
+// ErrSendMessage defines err send message.
 const (
 	ErrSendMessage  = "error sending message: %w"
 	ErrErrorTitle   = "Error"
@@ -26,6 +29,7 @@ type NotificationSender struct {
 	logger  *slog.Logger
 }
 
+// NewNotificationSender news notification sender.
 func NewNotificationSender(session *discordgo.Session, logger *slog.Logger) *NotificationSender {
 	return &NotificationSender{
 		session: session,
@@ -72,6 +76,7 @@ func formatRoleLabel(roleID, roleName string) string {
 	return "Unknown"
 }
 
+// SendAvatarChangeNotification sends avatar change notification.
 func (ns *NotificationSender) SendAvatarChangeNotification(channelID string, change files.AvatarChange) error {
 	// Check if username is empty, ignore if so
 	if change.Username == "" {
@@ -534,6 +539,7 @@ func truncateString(s string, maxLen int) string {
 	return s[:maxLen-3] + "..."
 }
 
+// SendInfoMessage sends info message.
 func (ns *NotificationSender) SendInfoMessage(channelID, message string) error {
 	embed := &discordgo.MessageEmbed{
 		Title:       "Info",
@@ -602,6 +608,7 @@ func (ns *NotificationSender) SendMemberRoleUpdateNotification(notice memberRole
 	return err
 }
 
+// SendErrorMessage sends error message.
 func (ns *NotificationSender) SendErrorMessage(channelID, message string) error {
 	embed := &discordgo.MessageEmbed{
 		Title:       ErrErrorTitle,
@@ -614,6 +621,7 @@ func (ns *NotificationSender) SendErrorMessage(channelID, message string) error 
 	return err
 }
 
+// SendSuccessMessage sends success message.
 func (ns *NotificationSender) SendSuccessMessage(channelID, message string) error {
 	embed := &discordgo.MessageEmbed{
 		Title:       ErrSuccessTitle,
@@ -626,6 +634,7 @@ func (ns *NotificationSender) SendSuccessMessage(channelID, message string) erro
 	return err
 }
 
+// SendAutomodActionNotification sends automod action notification.
 func (ns *NotificationSender) SendAutomodActionNotification(channelID string, e *discordgo.AutoModerationActionExecution) error {
 	if e == nil || channelID == "" {
 		return nil

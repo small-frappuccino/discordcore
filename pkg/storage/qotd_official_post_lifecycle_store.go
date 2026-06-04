@@ -6,6 +6,7 @@ import (
 	"strings"
 )
 
+// UpdateQOTDOfficialPostProgress updates qotdofficial post progress.
 func (s *Store) UpdateQOTDOfficialPostProgress(ctx context.Context, id int64, progress QOTDOfficialPostRecord) (*QOTDOfficialPostRecord, error) {
 	if id <= 0 {
 		return nil, fmt.Errorf("update qotd official post progress: id is required")
@@ -70,6 +71,7 @@ func (s *Store) UpdateQOTDOfficialPostProgress(ctx context.Context, id int64, pr
 	return record, nil
 }
 
+// ListQOTDOfficialPostsPendingRecovery lists qotdofficial posts pending recovery.
 func (s *Store) ListQOTDOfficialPostsPendingRecovery(ctx context.Context, guildID string) (_ []QOTDOfficialPostRecord, err error) {
 	defer func() {
 		if err != nil {

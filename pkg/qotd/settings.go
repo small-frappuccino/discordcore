@@ -8,6 +8,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
+// PrepareSettingsUpdate prepares settings update.
 func PrepareSettingsUpdate(current, next files.QOTDConfig, now time.Time) (files.QOTDConfig, error) {
 	normalized, err := files.NormalizeQOTDConfig(next)
 	if err != nil {

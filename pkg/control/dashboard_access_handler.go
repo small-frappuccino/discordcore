@@ -19,6 +19,7 @@ func newProtectedEmbeddedDashboardHandler(server *Server) http.Handler {
 	}
 }
 
+// ServeHTTP serves http.
 func (h *dashboardAccessHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.isPublicDashboardAsset(r) || (h.server != nil && h.server.hasAuthenticatedDashboardSession(r)) {
 		h.next.ServeHTTP(w, r)

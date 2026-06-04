@@ -29,6 +29,7 @@ func newAccessibleGuildResolver(
 	}
 }
 
+// ResolveAccessibleGuilds resolves accessible guilds.
 func (resolver *accessibleGuildResolver) ResolveAccessibleGuilds(
 	ctx context.Context,
 	session discordOAuthSession,
@@ -36,6 +37,7 @@ func (resolver *accessibleGuildResolver) ResolveAccessibleGuilds(
 	return resolver.resolveWithOptions(ctx, session, true, true)
 }
 
+// ResolveAccessibleGuildsFresh resolves accessible guilds fresh.
 func (resolver *accessibleGuildResolver) ResolveAccessibleGuildsFresh(
 	ctx context.Context,
 	session discordOAuthSession,
@@ -43,6 +45,7 @@ func (resolver *accessibleGuildResolver) ResolveAccessibleGuildsFresh(
 	return resolver.resolveWithOptions(ctx, session, false, false)
 }
 
+// ResolveAccessibleGuildsRefreshed resolves accessible guilds refreshed.
 func (resolver *accessibleGuildResolver) ResolveAccessibleGuildsRefreshed(
 	ctx context.Context,
 	session discordOAuthSession,
@@ -50,6 +53,7 @@ func (resolver *accessibleGuildResolver) ResolveAccessibleGuildsRefreshed(
 	return resolver.resolveWithOptions(ctx, session, false, true)
 }
 
+// ResolveManageableGuilds resolves manageable guilds.
 func (resolver *accessibleGuildResolver) ResolveManageableGuilds(
 	ctx context.Context,
 	session discordOAuthSession,
@@ -61,6 +65,7 @@ func (resolver *accessibleGuildResolver) ResolveManageableGuilds(
 	return filterAccessibleGuildsByLevel(accessible, guildAccessLevelWrite), nil
 }
 
+// InvalidateCache invalidates cache.
 func (resolver *accessibleGuildResolver) InvalidateCache() {
 	if resolver == nil || resolver.cache == nil {
 		return

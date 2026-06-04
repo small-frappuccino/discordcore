@@ -73,6 +73,7 @@ type Config struct {
 	CertRotateAfter time.Duration
 }
 
+// EnsureReady ensures ready.
 func EnsureReady(ctx context.Context, cfg Config) (ReadyResult, error) {
 	now := cfg.now()
 	if err := cfg.validate(); err != nil {
@@ -126,10 +127,12 @@ type invalidMaterialError struct {
 	err error
 }
 
+// Error errors.
 func (e invalidMaterialError) Error() string {
 	return e.err.Error()
 }
 
+// Unwrap unwraps.
 func (e invalidMaterialError) Unwrap() error {
 	return e.err
 }

@@ -17,6 +17,7 @@ type Config struct {
 	PingTimeoutMS       int
 }
 
+// Normalized normalizeds.
 func (c Config) Normalized() Config {
 	out := c
 	out.Driver = strings.ToLower(strings.TrimSpace(out.Driver))
@@ -39,6 +40,7 @@ func (c Config) Normalized() Config {
 	return out
 }
 
+// Validate validates.
 func (c Config) Validate() error {
 	n := c.Normalized()
 	if n.Driver == "" {

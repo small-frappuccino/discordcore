@@ -7,6 +7,7 @@ import (
 	"time"
 )
 
+// GetCurrentAndPreviousQOTDPosts gets current and previous qotdposts.
 func (s *Store) GetCurrentAndPreviousQOTDPosts(ctx context.Context, guildID string, now time.Time) (_ []QOTDOfficialPostRecord, err error) {
 	defer func() {
 		if err != nil {
@@ -80,6 +81,7 @@ func (s *Store) GetCurrentAndPreviousQOTDPosts(ctx context.Context, guildID stri
 	return records, nil
 }
 
+// ListQOTDOfficialPostsNeedingArchive lists qotdofficial posts needing archive.
 func (s *Store) ListQOTDOfficialPostsNeedingArchive(ctx context.Context, now time.Time) (_ []QOTDOfficialPostRecord, err error) {
 	defer func() {
 		if err != nil {
@@ -146,6 +148,7 @@ func (s *Store) ListQOTDOfficialPostsNeedingArchive(ctx context.Context, now tim
 	return records, nil
 }
 
+// UpdateQOTDOfficialPostState updates qotdofficial post state.
 func (s *Store) UpdateQOTDOfficialPostState(ctx context.Context, id int64, state string, closedAt, archivedAt *time.Time) (_ *QOTDOfficialPostRecord, err error) {
 	defer func() {
 		if err != nil {

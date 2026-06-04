@@ -16,6 +16,16 @@ var (
 	ErrInvalidCustomEmbedInput = errors.New("invalid custom embed input")
 )
 
+// CustomEmbedTitleMaxLen defines custom embed title max len.
+// CustomEmbedDescriptionMaxLen defines custom embed description max len.
+// CustomEmbedColorMax defines custom embed color max.
+// CustomEmbedAuthorMaxLen defines custom embed author max len.
+// CustomEmbedFooterMaxLen defines custom embed footer max len.
+// CustomEmbedFieldNameMaxLen defines custom embed field name max len.
+// CustomEmbedFieldValueMaxLen defines custom embed field value max len.
+// CustomEmbedMaxFields defines custom embed max fields.
+// CustomEmbedMaxTotalLen defines custom embed max total len.
+// CustomEmbedKeyMaxLen defines custom embed key max len.
 const (
 	CustomEmbedKeyMaxLen         = 32
 	CustomEmbedTitleMaxLen       = 256
@@ -44,6 +54,7 @@ type CustomEmbedPostingConfig struct {
 	WebhookToken string `json:"webhook_token,omitempty"`
 }
 
+// IsZero is zero.
 func (p CustomEmbedPostingConfig) IsZero() bool {
 	return strings.TrimSpace(p.ChannelID) == "" &&
 		strings.TrimSpace(p.MessageID) == "" &&
@@ -88,6 +99,7 @@ func invalidCustomEmbedInput(format string, args ...any) error {
 	return fmt.Errorf("%w: %s", ErrInvalidCustomEmbedInput, msg)
 }
 
+// NormalizeCustomEmbedKey normalizes custom embed key.
 func NormalizeCustomEmbedKey(raw string) string {
 	out := strings.TrimSpace(raw)
 	out = strings.ToLower(out)
@@ -258,6 +270,7 @@ func findCustomEmbedIndex(embeds []CustomEmbedConfig, key string) int {
 	return -1
 }
 
+// CustomEmbeds customs embeds.
 func (mgr *ConfigManager) CustomEmbeds(guildID string) ([]CustomEmbedConfig, error) {
 	if guildID == "" {
 		return nil, invalidCustomEmbedInput("guild_id is required")
@@ -279,6 +292,7 @@ func (mgr *ConfigManager) CustomEmbeds(guildID string) ([]CustomEmbedConfig, err
 	return out, nil
 }
 
+// CustomEmbed customs embed.
 func (mgr *ConfigManager) CustomEmbed(guildID, key string) (CustomEmbedConfig, error) {
 	if guildID == "" {
 		return CustomEmbedConfig{}, invalidCustomEmbedInput("guild_id is required")
@@ -301,6 +315,7 @@ func (mgr *ConfigManager) CustomEmbed(guildID, key string) (CustomEmbedConfig, e
 	return cloneCustomEmbed(gcfg.CustomEmbeds[idx]), nil
 }
 
+// SetCustomEmbedProperties sets custom embed properties.
 func (mgr *ConfigManager) SetCustomEmbedProperties(guildID, key string, embed CustomEmbedConfig) error {
 	if guildID == "" {
 		return invalidCustomEmbedInput("guild_id is required")
@@ -361,6 +376,7 @@ func (mgr *ConfigManager) SetCustomEmbedProperties(guildID, key string, embed Cu
 	return err
 }
 
+// DeleteCustomEmbed deletes custom embed.
 func (mgr *ConfigManager) DeleteCustomEmbed(guildID, key string) (CustomEmbedConfig, error) {
 	if guildID == "" {
 		return CustomEmbedConfig{}, invalidCustomEmbedInput("guild_id is required")
@@ -389,6 +405,7 @@ func (mgr *ConfigManager) DeleteCustomEmbed(guildID, key string) (CustomEmbedCon
 	return deleted, err
 }
 
+// AddCustomEmbedPosting adds custom embed posting.
 func (mgr *ConfigManager) AddCustomEmbedPosting(guildID, key string, posting CustomEmbedPostingConfig) error {
 	if guildID == "" {
 		return invalidCustomEmbedInput("guild_id is required")
@@ -433,6 +450,7 @@ func (mgr *ConfigManager) AddCustomEmbedPosting(guildID, key string, posting Cus
 	return err
 }
 
+// RemoveCustomEmbedPosting removes custom embed posting.
 func (mgr *ConfigManager) RemoveCustomEmbedPosting(guildID, key, messageID string) error {
 	if guildID == "" {
 		return invalidCustomEmbedInput("guild_id is required")
@@ -469,6 +487,7 @@ func (mgr *ConfigManager) RemoveCustomEmbedPosting(guildID, key, messageID strin
 	return err
 }
 
+// RemoveCustomEmbedPostings removes custom embed postings.
 func (mgr *ConfigManager) RemoveCustomEmbedPostings(guildID, key string, messageIDs []string) error {
 	if len(messageIDs) == 0 {
 		return nil
@@ -516,6 +535,7 @@ func (mgr *ConfigManager) RemoveCustomEmbedPostings(guildID, key string, message
 	return err
 }
 
+// SetCustomEmbedFields sets custom embed fields.
 func (mgr *ConfigManager) SetCustomEmbedFields(guildID, key string, fields []CustomEmbedFieldConfig) error {
 	if guildID == "" {
 		return invalidCustomEmbedInput("guild_id is required")

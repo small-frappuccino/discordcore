@@ -24,6 +24,7 @@ type PartnerCommands struct {
 	syncer        *partnerPostingSyncer
 }
 
+// NewPartnerCommands news partner commands.
 func NewPartnerCommands(configManager *files.ConfigManager) *PartnerCommands {
 	return &PartnerCommands{
 		configManager: configManager,
@@ -31,6 +32,7 @@ func NewPartnerCommands(configManager *files.ConfigManager) *PartnerCommands {
 	}
 }
 
+// RegisterCommands registers commands.
 func (pc *PartnerCommands) RegisterCommands(router *core.CommandRouter) {
 	if router == nil || pc == nil || pc.configManager == nil {
 		return

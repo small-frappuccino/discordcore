@@ -158,13 +158,28 @@ type MessageWriterSummarySnapshot struct {
 // checks.
 type NopMessageWriterMetrics struct{}
 
-func (NopMessageWriterMetrics) RecordEnqueueUpsert(bool, bool)  {}
-func (NopMessageWriterMetrics) RecordEnqueueDelete(bool)        {}
-func (NopMessageWriterMetrics) RecordEnqueueVersion()           {}
-func (NopMessageWriterMetrics) RecordEnqueueFailure(string)     {}
-func (NopMessageWriterMetrics) ObserveQueueDepth(int)           {}
-func (NopMessageWriterMetrics) RecordFlush(int, time.Duration)  {}
-func (NopMessageWriterMetrics) RecordFlushSuccess(string, int)  {}
+// RecordEnqueueUpsert records enqueue upsert.
+func (NopMessageWriterMetrics) RecordEnqueueUpsert(bool, bool) {}
+
+// RecordEnqueueDelete records enqueue delete.
+func (NopMessageWriterMetrics) RecordEnqueueDelete(bool) {}
+
+// RecordEnqueueVersion records enqueue version.
+func (NopMessageWriterMetrics) RecordEnqueueVersion() {}
+
+// RecordEnqueueFailure records enqueue failure.
+func (NopMessageWriterMetrics) RecordEnqueueFailure(string) {}
+
+// ObserveQueueDepth observes queue depth.
+func (NopMessageWriterMetrics) ObserveQueueDepth(int) {}
+
+// RecordFlush records flush.
+func (NopMessageWriterMetrics) RecordFlush(int, time.Duration) {}
+
+// RecordFlushSuccess records flush success.
+func (NopMessageWriterMetrics) RecordFlushSuccess(string, int) {}
+
+// RecordFlushFallback records flush fallback.
 func (NopMessageWriterMetrics) RecordFlushFallback(string, int) {}
 
 // InMemoryMessageWriterMetrics is the lightweight implementation backing
@@ -207,6 +222,7 @@ func NewInMemoryMessageWriterMetrics() *InMemoryMessageWriterMetrics {
 	}
 }
 
+// RecordEnqueueUpsert records enqueue upsert.
 func (m *InMemoryMessageWriterMetrics) RecordEnqueueUpsert(version bool, metric bool) {
 	m.enqueueUpserts.Add(1)
 	if version {
@@ -217,6 +233,7 @@ func (m *InMemoryMessageWriterMetrics) RecordEnqueueUpsert(version bool, metric 
 	}
 }
 
+// RecordEnqueueDelete records enqueue delete.
 func (m *InMemoryMessageWriterMetrics) RecordEnqueueDelete(version bool) {
 	m.enqueueDeletes.Add(1)
 	if version {
@@ -224,14 +241,17 @@ func (m *InMemoryMessageWriterMetrics) RecordEnqueueDelete(version bool) {
 	}
 }
 
+// RecordEnqueueVersion records enqueue version.
 func (m *InMemoryMessageWriterMetrics) RecordEnqueueVersion() {
 	m.enqueueVersions.Add(1)
 }
 
+// RecordEnqueueFailure records enqueue failure.
 func (m *InMemoryMessageWriterMetrics) RecordEnqueueFailure(cause string) {
 	getOrCreateMessageWriterLabeledCounter(&m.mu, m.enqueueFailures, cause).Add(1)
 }
 
+// ObserveQueueDepth observes queue depth.
 func (m *InMemoryMessageWriterMetrics) ObserveQueueDepth(depth int) {
 	if depth <= 0 {
 		return
@@ -248,6 +268,7 @@ func (m *InMemoryMessageWriterMetrics) ObserveQueueDepth(depth int) {
 	}
 }
 
+// RecordFlush records flush.
 func (m *InMemoryMessageWriterMetrics) RecordFlush(batchSize int, duration time.Duration) {
 	m.flushCycles.Add(1)
 	if batchSize > 0 {
@@ -257,6 +278,7 @@ func (m *InMemoryMessageWriterMetrics) RecordFlush(batchSize int, duration time.
 	m.flushDuration.observe(duration)
 }
 
+// RecordFlushSuccess records flush success.
 func (m *InMemoryMessageWriterMetrics) RecordFlushSuccess(op string, count int) {
 	if count <= 0 {
 		return
@@ -264,6 +286,7 @@ func (m *InMemoryMessageWriterMetrics) RecordFlushSuccess(op string, count int) 
 	getOrCreateMessageWriterLabeledCounter(&m.mu, m.flushedByOp, op).Add(int64(count))
 }
 
+// RecordFlushFallback records flush fallback.
 func (m *InMemoryMessageWriterMetrics) RecordFlushFallback(op string, count int) {
 	if count <= 0 {
 		return

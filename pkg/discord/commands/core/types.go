@@ -9,6 +9,11 @@ import (
 // InteractionKind identifies the normalized interaction surface being routed.
 type InteractionKind int
 
+// InteractionKindSlash defines interaction kind slash.
+// InteractionKindAutocomplete defines interaction kind autocomplete.
+// InteractionKindComponent defines interaction kind component.
+// InteractionKindModal defines interaction kind modal.
+// InteractionKindUnknown defines interaction kind unknown.
 const (
 	InteractionKindUnknown InteractionKind = iota
 	InteractionKindSlash
@@ -17,6 +22,7 @@ const (
 	InteractionKindModal
 )
 
+// String strings.
 func (kind InteractionKind) String() string {
 	switch kind {
 	case InteractionKindSlash:
@@ -51,6 +57,8 @@ type InteractionRouteKey struct {
 // before handing execution to the route handler.
 type InteractionAckMode int
 
+// InteractionAckModeNone defines interaction ack mode none.
+// InteractionAckModeDefer defines interaction ack mode defer.
 const (
 	InteractionAckModeNone InteractionAckMode = iota
 	InteractionAckModeDefer
@@ -143,6 +151,7 @@ type BaseHandler struct {
 	configManager *files.ConfigManager
 }
 
+// NewBaseHandler news base handler.
 func NewBaseHandler(
 	session *discordgo.Session,
 	configManager *files.ConfigManager,
@@ -242,6 +251,7 @@ type InteractionAckPolicyProvider interface {
 // AutocompleteHandlerFunc adapts a function into an AutocompleteHandler.
 type AutocompleteHandlerFunc func(ctx *Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error)
 
+// HandleAutocomplete handles autocomplete.
 func (fn AutocompleteHandlerFunc) HandleAutocomplete(ctx *Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	return fn(ctx, focusedOption)
 }
@@ -261,6 +271,7 @@ type ComponentHandler interface {
 // ComponentHandlerFunc adapts a function into a ComponentHandler.
 type ComponentHandlerFunc func(ctx *Context) error
 
+// HandleComponent handles component.
 func (fn ComponentHandlerFunc) HandleComponent(ctx *Context) error {
 	return fn(ctx)
 }
@@ -273,6 +284,7 @@ type ModalHandler interface {
 // ModalHandlerFunc adapts a function into a ModalHandler.
 type ModalHandlerFunc func(ctx *Context) error
 
+// HandleModal handles modal.
 func (fn ModalHandlerFunc) HandleModal(ctx *Context) error {
 	return fn(ctx)
 }
@@ -296,6 +308,11 @@ func (binding InteractionRouteBinding) hasHandlers() bool {
 // PermissionLevel defines permission levels for commands
 type PermissionLevel int
 
+// PermissionNone defines permission none.
+// PermissionUser defines permission user.
+// PermissionModerator defines permission moderator.
+// PermissionAdmin defines permission admin.
+// PermissionOwner defines permission owner.
 const (
 	PermissionNone PermissionLevel = iota
 	PermissionUser
@@ -311,6 +328,7 @@ type CommandError struct {
 	Code      string
 }
 
+// CommandErrorCode commands error code.
 func (e *CommandError) CommandErrorCode() string {
 	if e == nil {
 		return ""
@@ -318,6 +336,7 @@ func (e *CommandError) CommandErrorCode() string {
 	return e.Code
 }
 
+// Error errors.
 func (e *CommandError) Error() string {
 	return e.Message
 }
@@ -336,6 +355,7 @@ type ValidationError struct {
 	Message string
 }
 
+// ValidationField validations field.
 func (e *ValidationError) ValidationField() string {
 	if e == nil {
 		return ""
@@ -343,6 +363,7 @@ func (e *ValidationError) ValidationField() string {
 	return e.Field
 }
 
+// Error errors.
 func (e *ValidationError) Error() string {
 	return e.Message
 }

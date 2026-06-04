@@ -11,10 +11,13 @@ type kickCommand struct{}
 
 func newKickCommand() *kickCommand { return &kickCommand{} }
 
+// Name names.
 func (c *kickCommand) Name() string { return "kick" }
 
+// Description descriptions.
 func (c *kickCommand) Description() string { return "Kick a member by ID or mention" }
 
+// Options options.
 func (c *kickCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{
@@ -32,12 +35,16 @@ func (c *kickCommand) Options() []*discordgo.ApplicationCommandOption {
 	}
 }
 
+// RequiresGuild requires guild.
 func (c *kickCommand) RequiresGuild() bool { return true }
 
+// RequiresPermissions requires permissions.
 func (c *kickCommand) RequiresPermissions() bool { return true }
 
+// DefaultMemberPermissions defaults member permissions.
 func (c *kickCommand) DefaultMemberPermissions() int64 { return discordgo.PermissionKickMembers }
 
+// Handle handles.
 func (c *kickCommand) Handle(ctx *core.Context) error {
 	if enabled, _ := ctx.Config.Config().ResolveFeatures(ctx.GuildID).Lookup("moderation.kick"); !enabled {
 		return core.NewCommandError("Kick command is disabled for this server.", true)

@@ -9,6 +9,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
+// ReplaceCurrentPublish replaces current publish.
 func (s *Service) ReplaceCurrentPublish(ctx context.Context, guildID string, session *discordgo.Session) (*PublishResult, error) {
 	if err := s.validate(); err != nil {
 		return nil, fmt.Errorf("Service.ReplaceCurrentPublish: %w", err)

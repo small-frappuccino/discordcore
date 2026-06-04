@@ -77,10 +77,13 @@ func newCleanCommand(metrics Metrics) *cleanCommand {
 	return &cleanCommand{metrics: metrics, now: time.Now}
 }
 
+// Name names.
 func (c *cleanCommand) Name() string { return cleanCommandName }
 
+// Description descriptions.
 func (c *cleanCommand) Description() string { return "Delete recent messages in this channel" }
 
+// Options options.
 func (c *cleanCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{
@@ -118,18 +121,23 @@ func (c *cleanCommand) Options() []*discordgo.ApplicationCommandOption {
 	}
 }
 
+// RequiresGuild requires guild.
 func (c *cleanCommand) RequiresGuild() bool { return true }
 
+// DefaultMemberPermissions defaults member permissions.
 func (c *cleanCommand) DefaultMemberPermissions() int64 {
 	return discordgo.PermissionManageMessages
 }
 
+// RequiresPermissions requires permissions.
 func (c *cleanCommand) RequiresPermissions() bool { return true }
 
+// InteractionAckPolicy interactions ack policy.
 func (c *cleanCommand) InteractionAckPolicy() core.InteractionAckPolicy {
 	return core.InteractionAckPolicy{Mode: core.InteractionAckModeDefer, Ephemeral: true}
 }
 
+// Handle handles.
 func (c *cleanCommand) Handle(ctx *core.Context) error {
 	start := c.now()
 	c.metrics.RecordCleanAttempt()

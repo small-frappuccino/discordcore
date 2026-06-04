@@ -8,6 +8,7 @@ import (
 	"time"
 )
 
+// GetQOTDSurfaceByDeck gets qotdsurface by deck.
 func (s *Store) GetQOTDSurfaceByDeck(ctx context.Context, guildID, deckID string) (res *QOTDSurfaceRecord, err error) {
 	defer func() {
 		if err != nil {
@@ -44,6 +45,7 @@ func (s *Store) GetQOTDSurfaceByDeck(ctx context.Context, guildID, deckID string
 	return record, nil
 }
 
+// UpsertQOTDSurface upserts qotdsurface.
 func (s *Store) UpsertQOTDSurface(ctx context.Context, rec QOTDSurfaceRecord) (res *QOTDSurfaceRecord, err error) {
 	defer func() {
 		if err != nil {
@@ -88,6 +90,7 @@ func (s *Store) UpsertQOTDSurface(ctx context.Context, rec QOTDSurfaceRecord) (r
 	return updated, nil
 }
 
+// DeleteQOTDSurfaceByDeck deletes qotdsurface by deck.
 func (s *Store) DeleteQOTDSurfaceByDeck(ctx context.Context, guildID, deckID string) (err error) {
 	defer func() {
 		if err != nil {
@@ -110,6 +113,7 @@ func (s *Store) DeleteQOTDSurfaceByDeck(ctx context.Context, guildID, deckID str
 	return nil
 }
 
+// CreateQOTDAnswerMessage creates qotdanswer message.
 func (s *Store) CreateQOTDAnswerMessage(ctx context.Context, rec QOTDAnswerMessageRecord) (res *QOTDAnswerMessageRecord, err error) {
 	defer func() {
 		if err != nil {
@@ -164,6 +168,7 @@ func (s *Store) CreateQOTDAnswerMessage(ctx context.Context, rec QOTDAnswerMessa
 	return created, nil
 }
 
+// FinalizeQOTDAnswerMessage finalizes qotdanswer message.
 func (s *Store) FinalizeQOTDAnswerMessage(ctx context.Context, id int64, discordMessageID string) (_ *QOTDAnswerMessageRecord, err error) {
 	defer func() {
 		if err != nil {
@@ -207,6 +212,7 @@ func (s *Store) FinalizeQOTDAnswerMessage(ctx context.Context, id int64, discord
 	return record, nil
 }
 
+// GetQOTDAnswerMessageByOfficialPostAndUser gets qotdanswer message by official post and user.
 func (s *Store) GetQOTDAnswerMessageByOfficialPostAndUser(ctx context.Context, officialPostID int64, userID string) (res *QOTDAnswerMessageRecord, err error) {
 	defer func() {
 		if err != nil {
@@ -247,6 +253,7 @@ func (s *Store) GetQOTDAnswerMessageByOfficialPostAndUser(ctx context.Context, o
 	return record, nil
 }
 
+// ListQOTDAnswerMessagesByOfficialPost lists qotdanswer messages by official post.
 func (s *Store) ListQOTDAnswerMessagesByOfficialPost(ctx context.Context, officialPostID int64) (_ []QOTDAnswerMessageRecord, err error) {
 	defer func() {
 		if err != nil {
@@ -295,6 +302,7 @@ func (s *Store) ListQOTDAnswerMessagesByOfficialPost(ctx context.Context, offici
 	return records, nil
 }
 
+// UpdateQOTDAnswerMessageState updates qotdanswer message state.
 func (s *Store) UpdateQOTDAnswerMessageState(ctx context.Context, id int64, state string, closedAt, archivedAt *time.Time) (_ *QOTDAnswerMessageRecord, err error) {
 	defer func() {
 		if err != nil {

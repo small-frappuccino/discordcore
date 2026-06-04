@@ -17,6 +17,7 @@ import (
 // back to FailureClassUnknown so the caller decides how to surface it.
 type FailureClass int
 
+// FailureClassUnknown defines failure class unknown.
 const (
 	FailureClassUnknown FailureClass = iota
 	// FailureClassMissingMessage means the message no longer exists

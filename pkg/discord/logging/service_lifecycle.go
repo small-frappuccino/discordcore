@@ -30,6 +30,7 @@ func newServiceLifecycle(name string) serviceLifecycle {
 	return serviceLifecycle{name: name}
 }
 
+// Start starts.
 func (sl *serviceLifecycle) Start(parent context.Context) (context.Context, error) {
 	if parent == nil {
 		parent = context.Background()
@@ -56,6 +57,7 @@ func (sl *serviceLifecycle) Start(parent context.Context) (context.Context, erro
 	return runCtx, nil
 }
 
+// Begin begins.
 func (sl *serviceLifecycle) Begin() (context.Context, func(), bool) {
 	sl.mu.RLock()
 	if sl.state != lifecycleStateRunning || sl.runCtx == nil {
@@ -69,6 +71,7 @@ func (sl *serviceLifecycle) Begin() (context.Context, func(), bool) {
 	return runCtx, sl.wg.Done, true
 }
 
+// Cancel cancels.
 func (sl *serviceLifecycle) Cancel() error {
 	sl.mu.Lock()
 	if sl.state != lifecycleStateRunning {
@@ -88,6 +91,7 @@ func (sl *serviceLifecycle) Cancel() error {
 	return nil
 }
 
+// Wait waits.
 func (sl *serviceLifecycle) Wait(ctx context.Context) error {
 	if ctx == nil {
 		ctx = context.Background()
@@ -112,6 +116,7 @@ func (sl *serviceLifecycle) Wait(ctx context.Context) error {
 	}
 }
 
+// Stop stops.
 func (sl *serviceLifecycle) Stop(ctx context.Context) error {
 	if err := sl.Cancel(); err != nil {
 		return fmt.Errorf("serviceLifecycle.Stop: %w", err)
@@ -119,6 +124,7 @@ func (sl *serviceLifecycle) Stop(ctx context.Context) error {
 	return sl.Wait(ctx)
 }
 
+// IsRunning is running.
 func (sl *serviceLifecycle) IsRunning() bool {
 	sl.mu.RLock()
 	defer sl.mu.RUnlock()

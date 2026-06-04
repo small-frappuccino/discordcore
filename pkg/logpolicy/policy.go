@@ -11,6 +11,17 @@ import (
 // LogEventType identifies an internal logging event kind.
 type LogEventType string
 
+// LogEventRoleChange defines log event role change.
+// LogEventMemberJoin defines log event member join.
+// LogEventMessageProcess defines log event message process.
+// LogEventMessageEdit defines log event message edit.
+// LogEventMessageDelete defines log event message delete.
+// LogEventReactionMetric defines log event reaction metric.
+// LogEventAutomodAction defines log event automod action.
+// LogEventModerationCase defines log event moderation case.
+// LogEventMemberLeave defines log event member leave.
+// LogEventAvatarChange defines log event avatar change.
+// LogEventCleanAction defines log event clean action.
 const (
 	LogEventAvatarChange   LogEventType = "avatar_change"
 	LogEventRoleChange     LogEventType = "role_change"
@@ -28,6 +39,11 @@ const (
 // LogEventCategory groups events by subsystem.
 type LogEventCategory string
 
+// LogCategoryAutomod defines log category automod.
+// LogCategoryModeration defines log category moderation.
+// LogCategoryUser defines log category user.
+// LogCategoryReaction defines log category reaction.
+// LogCategoryMessage defines log category message.
 const (
 	LogCategoryUser       LogEventCategory = "user"
 	LogCategoryMessage    LogEventCategory = "message"
@@ -39,6 +55,28 @@ const (
 // EmitReason is a deterministic reason for a should-emit decision.
 type EmitReason string
 
+// EmitReasonFeatureLoggingMessageDisabled defines emit reason feature logging message disabled.
+// EmitReasonFeatureLoggingAutomodDisabled defines emit reason feature logging automod disabled.
+// EmitReasonFeatureLoggingUserDisabled defines emit reason feature logging user disabled.
+// EmitReasonFeatureLoggingModerationDisabled defines emit reason feature logging moderation disabled.
+// EmitReasonConfigUnavailable defines emit reason config unavailable.
+// EmitReasonConfigManagerUnavailable defines emit reason config manager unavailable.
+// EmitReasonUnknownEvent defines emit reason unknown event.
+// EmitReasonEnabled defines emit reason enabled.
+// EmitReasonFeatureLoggingCleanDisabled defines emit reason feature logging clean disabled.
+// EmitReasonRuntimeDisableUserLogs defines emit reason runtime disable user logs.
+// EmitReasonFeatureLoggingReactionDisabled defines emit reason feature logging reaction disabled.
+// EmitReasonGuildConfigMissing defines emit reason guild config missing.
+// EmitReasonFeatureLoggingEntryExitDisabled defines emit reason feature logging entry exit disabled.
+// EmitReasonRuntimeDisableReactionLogs defines emit reason runtime disable reaction logs.
+// EmitReasonRuntimeDisableAutomodLogs defines emit reason runtime disable automod logs.
+// EmitReasonRuntimeModerationLoggingOff defines emit reason runtime moderation logging off.
+// EmitReasonRuntimeDisableCleanLog defines emit reason runtime disable clean log.
+// EmitReasonNoChannelConfigured defines emit reason no channel configured.
+// EmitReasonMissingIntent defines emit reason missing intent.
+// EmitReasonChannelInvalid defines emit reason channel invalid.
+// EmitReasonRuntimeDisableEntryExitLogs defines emit reason runtime disable entry exit logs.
+// EmitReasonRuntimeDisableMessageLogs defines emit reason runtime disable message logs.
 const (
 	EmitReasonEnabled                          EmitReason = "enabled"
 	EmitReasonUnknownEvent                     EmitReason = "unknown_event"
@@ -435,6 +473,7 @@ func firstNonEmptyChannel(values ...string) string {
 	return ""
 }
 
+// IsSharedModerationChannel is shared moderation channel.
 func IsSharedModerationChannel(channelID string, gcfg *files.GuildConfig) bool {
 	channelID = strings.TrimSpace(channelID)
 	if gcfg == nil || channelID == "" {
@@ -459,6 +498,7 @@ func IsSharedModerationChannel(channelID string, gcfg *files.GuildConfig) bool {
 	return false
 }
 
+// ValidateModerationLogChannel validates moderation log channel.
 func ValidateModerationLogChannel(session *discordgo.Session, guildID, channelID, botID string) error {
 	if session == nil {
 		return fmt.Errorf("session is nil")

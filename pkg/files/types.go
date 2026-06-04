@@ -142,6 +142,10 @@ type WebhookEmbedUpdateConfig struct {
 	Embed      json.RawMessage `json:"embed,omitempty"`
 }
 
+// WebhookEmbedValidationModeSoft defines webhook embed validation mode soft.
+// WebhookEmbedValidationModeStrict defines webhook embed validation mode strict.
+// DefaultWebhookEmbedValidationTimeoutMS defines default webhook embed validation timeout ms.
+// WebhookEmbedValidationModeOff defines webhook embed validation mode off.
 const (
 	WebhookEmbedValidationModeOff    = "off"
 	WebhookEmbedValidationModeSoft   = "soft"
@@ -233,6 +237,7 @@ type ChannelsConfig struct {
 	EntryBackfill  string `json:"entry_backfill,omitempty"`
 }
 
+// UnmarshalJSON unmarshals json.
 func (cc *ChannelsConfig) UnmarshalJSON(data []byte) error {
 	type alias ChannelsConfig
 	type rawChannelsConfig struct {
@@ -250,6 +255,7 @@ func (cc *ChannelsConfig) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// BackfillChannelID backfills channel id.
 func (cc ChannelsConfig) BackfillChannelID() string {
 	return strings.TrimSpace(cc.EntryBackfill)
 }
@@ -287,6 +293,7 @@ type RolesConfig struct {
 	MuteRole       string               `json:"mute_role,omitempty"`
 }
 
+// UnmarshalJSON unmarshals json.
 func (rc *RolesConfig) UnmarshalJSON(data []byte) error {
 	type alias RolesConfig
 	type rawRolesConfig struct {
@@ -304,6 +311,8 @@ func (rc *RolesConfig) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// EmbedUpdateTargetTypeWebhookMessage defines embed update target type webhook message.
+// EmbedUpdateTargetTypeChannelMessage defines embed update target type channel message.
 const (
 	EmbedUpdateTargetTypeWebhookMessage = "webhook_message"
 	EmbedUpdateTargetTypeChannelMessage = "channel_message"
@@ -404,6 +413,7 @@ type UserPruneConfig struct {
 	Enabled bool `json:"enabled,omitempty"`
 }
 
+// UnmarshalJSON unmarshals json.
 func (upc *UserPruneConfig) UnmarshalJSON(data []byte) error {
 	type alias UserPruneConfig
 	type rawUserPruneConfig struct {
@@ -503,6 +513,7 @@ type GuildConfig struct {
 	RuntimeConfig RuntimeConfig `json:"runtime_config,omitempty"`
 }
 
+// UnmarshalJSON unmarshals json.
 func (gc *GuildConfig) UnmarshalJSON(data []byte) error {
 	type alias GuildConfig
 	var parsed alias
@@ -732,6 +743,10 @@ func (rc RuntimeConfig) ModerationLoggingEnabled() bool {
 }
 
 // ConfigManager handles bot configuration management.
+//
+// Concurrency: ConfigManager is safe for concurrent use by multiple goroutines.
+// Readers should treat Config() and GuildConfig() results as read-only snapshots;
+// persist changes through the existing update helpers.
 type ConfigManager struct {
 	configFilePath  string
 	logsDirPath     string
@@ -876,10 +891,12 @@ type ValidationError struct {
 	Message string
 }
 
+// ValidationField validations field.
 func (e ValidationError) ValidationField() string {
 	return e.Field
 }
 
+// Error errors.
 func (e ValidationError) Error() string {
 	return fmt.Sprintf("validation failed for field '%s': %s", e.Field, e.Message)
 }
@@ -900,10 +917,12 @@ type ConfigError struct {
 	Cause     error
 }
 
+// ConfigErrorPath configs error path.
 func (e ConfigError) ConfigErrorPath() string {
 	return e.Path
 }
 
+// Error errors.
 func (e ConfigError) Error() string {
 	if e.Cause != nil {
 		return fmt.Sprintf("config %s failed for %s: %v", e.Operation, e.Path, e.Cause)
@@ -911,6 +930,7 @@ func (e ConfigError) Error() string {
 	return fmt.Sprintf("config %s failed for %s", e.Operation, e.Path)
 }
 
+// Unwrap unwraps.
 func (e ConfigError) Unwrap() error {
 	return e.Cause
 }
@@ -932,10 +952,12 @@ type DiscordError struct {
 	Cause     error
 }
 
+// DiscordErrorCode discords error code.
 func (e DiscordError) DiscordErrorCode() int {
 	return e.Code
 }
 
+// Error errors.
 func (e DiscordError) Error() string {
 	if e.Code > 0 {
 		return fmt.Sprintf("Discord API error during %s (code %d): %s", e.Operation, e.Code, e.Message)
@@ -943,6 +965,7 @@ func (e DiscordError) Error() string {
 	return fmt.Sprintf("Discord API error during %s: %s", e.Operation, e.Message)
 }
 
+// Unwrap unwraps.
 func (e DiscordError) Unwrap() error {
 	return e.Cause
 }
@@ -982,4 +1005,5 @@ func IsRetryableError(err error) bool {
 
 // ## General Errors
 
+// ErrRateLimited defines err rate limited.
 var ErrRateLimited = errors.New("rate limited")

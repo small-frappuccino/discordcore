@@ -92,14 +92,17 @@ type ServiceStatusCommand struct {
 	adminCommands *AdminCommands
 }
 
+// Name names.
 func (cmd *ServiceStatusCommand) Name() string {
 	return "status"
 }
 
+// Description descriptions.
 func (cmd *ServiceStatusCommand) Description() string {
 	return "Show detailed status of a service"
 }
 
+// Options options.
 func (cmd *ServiceStatusCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{
@@ -111,14 +114,17 @@ func (cmd *ServiceStatusCommand) Options() []*discordgo.ApplicationCommandOption
 	}
 }
 
+// RequiresGuild requires guild.
 func (cmd *ServiceStatusCommand) RequiresGuild() bool {
 	return true
 }
 
+// RequiresPermissions requires permissions.
 func (cmd *ServiceStatusCommand) RequiresPermissions() bool {
 	return true
 }
 
+// Handle handles.
 func (cmd *ServiceStatusCommand) Handle(ctx *core.Context) error {
 	serviceName := core.GetStringOption(core.GetSubCommandOptions(ctx.Interaction), "service")
 	if serviceName == "" {
@@ -219,26 +225,32 @@ type ServiceListCommand struct {
 	adminCommands *AdminCommands
 }
 
+// Name names.
 func (cmd *ServiceListCommand) Name() string {
 	return "list"
 }
 
+// Description descriptions.
 func (cmd *ServiceListCommand) Description() string {
 	return "List all registered services"
 }
 
+// Options options.
 func (cmd *ServiceListCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{}
 }
 
+// RequiresGuild requires guild.
 func (cmd *ServiceListCommand) RequiresGuild() bool {
 	return true
 }
 
+// RequiresPermissions requires permissions.
 func (cmd *ServiceListCommand) RequiresPermissions() bool {
 	return true
 }
 
+// Handle handles.
 func (cmd *ServiceListCommand) Handle(ctx *core.Context) error {
 	services := cmd.adminCommands.serviceManager.GetAllServices()
 
@@ -290,14 +302,17 @@ type ServiceRestartCommand struct {
 	adminCommands *AdminCommands
 }
 
+// Name names.
 func (cmd *ServiceRestartCommand) Name() string {
 	return "restart"
 }
 
+// Description descriptions.
 func (cmd *ServiceRestartCommand) Description() string {
 	return "Restart a specific service"
 }
 
+// Options options.
 func (cmd *ServiceRestartCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{
@@ -309,14 +324,17 @@ func (cmd *ServiceRestartCommand) Options() []*discordgo.ApplicationCommandOptio
 	}
 }
 
+// RequiresGuild requires guild.
 func (cmd *ServiceRestartCommand) RequiresGuild() bool {
 	return true
 }
 
+// RequiresPermissions requires permissions.
 func (cmd *ServiceRestartCommand) RequiresPermissions() bool {
 	return true
 }
 
+// Handle handles.
 func (cmd *ServiceRestartCommand) Handle(ctx *core.Context) error {
 	serviceName := core.GetStringOption(core.GetSubCommandOptions(ctx.Interaction), "service")
 	if serviceName == "" {
@@ -355,26 +373,32 @@ type HealthCheckCommand struct {
 	adminCommands *AdminCommands
 }
 
+// Name names.
 func (cmd *HealthCheckCommand) Name() string {
 	return "health"
 }
 
+// Description descriptions.
 func (cmd *HealthCheckCommand) Description() string {
 	return "Perform system-wide health check"
 }
 
+// Options options.
 func (cmd *HealthCheckCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{}
 }
 
+// RequiresGuild requires guild.
 func (cmd *HealthCheckCommand) RequiresGuild() bool {
 	return true
 }
 
+// RequiresPermissions requires permissions.
 func (cmd *HealthCheckCommand) RequiresPermissions() bool {
 	return true
 }
 
+// Handle handles.
 func (cmd *HealthCheckCommand) Handle(ctx *core.Context) error {
 	services := cmd.adminCommands.serviceManager.GetAllServices()
 
@@ -441,26 +465,32 @@ type SystemInfoCommand struct {
 	adminCommands *AdminCommands
 }
 
+// Name names.
 func (cmd *SystemInfoCommand) Name() string {
 	return "info"
 }
 
+// Description descriptions.
 func (cmd *SystemInfoCommand) Description() string {
 	return "Show general system information"
 }
 
+// Options options.
 func (cmd *SystemInfoCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{}
 }
 
+// RequiresGuild requires guild.
 func (cmd *SystemInfoCommand) RequiresGuild() bool {
 	return true
 }
 
+// RequiresPermissions requires permissions.
 func (cmd *SystemInfoCommand) RequiresPermissions() bool {
 	return true
 }
 
+// Handle handles.
 func (cmd *SystemInfoCommand) Handle(ctx *core.Context) error {
 	services := cmd.adminCommands.serviceManager.GetAllServices()
 	runningServices := cmd.adminCommands.serviceManager.GetRunningServices()

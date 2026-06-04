@@ -447,6 +447,7 @@ func ShowConfiguredGuilds(s *discordgo.Session, configManager *ConfigManager) {
 	}
 }
 
+// FindSuitableChannel finds suitable channel.
 func FindSuitableChannel(session *discordgo.Session, guildID string) string {
 	// Verify session state is properly initialized
 	if session == nil || session.State == nil || session.State.User == nil {
@@ -472,6 +473,7 @@ func FindSuitableChannel(session *discordgo.Session, guildID string) string {
 	return ""
 }
 
+// FindEntryLeaveChannel finds entry leave channel.
 func FindEntryLeaveChannel(session *discordgo.Session, guildID string) string {
 	// Verify session state is properly initialized
 	if session == nil || session.State == nil || session.State.User == nil {
@@ -494,6 +496,7 @@ func FindEntryLeaveChannel(session *discordgo.Session, guildID string) string {
 	return ""
 }
 
+// HasSendPermission has send permission.
 func HasSendPermission(session *discordgo.Session, channelID string) bool {
 	if session == nil || session.State == nil || session.State.User == nil || channelID == "" {
 		return false
@@ -504,6 +507,7 @@ func HasSendPermission(session *discordgo.Session, channelID string) bool {
 	return false
 }
 
+// FindAdminRoles finds admin roles.
 func FindAdminRoles(session *discordgo.Session, guildID, ownerID string) []string {
 	var allowedRoles []string
 	roles, err := session.GuildRoles(guildID)
@@ -522,6 +526,7 @@ func FindAdminRoles(session *discordgo.Session, guildID, ownerID string) []strin
 	return allowedRoles
 }
 
+// TextChannels texts channels.
 func TextChannels(session *discordgo.Session, guildID string) ([]*discordgo.Channel, error) {
 	// Verify session state is properly initialized
 	if session == nil || session.State == nil || session.State.User == nil {
@@ -543,6 +548,7 @@ func TextChannels(session *discordgo.Session, guildID string) ([]*discordgo.Chan
 	return textChannels, nil
 }
 
+// ValidateChannel validates channel.
 func ValidateChannel(session *discordgo.Session, guildID, channelID string) error {
 	// Verify session state is properly initialized
 	if session == nil || session.State == nil || session.State.User == nil {

@@ -54,6 +54,13 @@ type CachedMessage struct {
 	Timestamp time.Time
 }
 
+// TaskTypeFlushAvatarCache defines task type flush avatar cache.
+// TaskTypeProcessAvatarChange defines task type process avatar change.
+// TaskTypeSendAutomodAction defines task type send automod action.
+// TaskTypeSendMessageDelete defines task type send message delete.
+// TaskTypeSendMessageEdit defines task type send message edit.
+// TaskTypeSendMemberLeave defines task type send member leave.
+// TaskTypeSendMemberJoin defines task type send member join.
 const (
 	TaskTypeSendMemberJoin    = "notifications.member_join"
 	TaskTypeSendMemberLeave   = "notifications.member_leave"

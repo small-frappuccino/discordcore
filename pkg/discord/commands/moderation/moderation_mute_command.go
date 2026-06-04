@@ -11,10 +11,13 @@ type muteCommand struct{}
 
 func newMuteCommand() *muteCommand { return &muteCommand{} }
 
+// Name names.
 func (c *muteCommand) Name() string { return "mute" }
 
+// Description descriptions.
 func (c *muteCommand) Description() string { return "Apply the configured mute role to a member" }
 
+// Options options.
 func (c *muteCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{
@@ -32,12 +35,16 @@ func (c *muteCommand) Options() []*discordgo.ApplicationCommandOption {
 	}
 }
 
+// RequiresGuild requires guild.
 func (c *muteCommand) RequiresGuild() bool { return true }
 
+// RequiresPermissions requires permissions.
 func (c *muteCommand) RequiresPermissions() bool { return true }
 
+// DefaultMemberPermissions defaults member permissions.
 func (c *muteCommand) DefaultMemberPermissions() int64 { return discordgo.PermissionManageRoles }
 
+// Handle handles.
 func (c *muteCommand) Handle(ctx *core.Context) error {
 	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 

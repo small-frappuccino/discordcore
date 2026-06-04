@@ -136,16 +136,33 @@ type MetricsSnapshot struct {
 // library code call s.metrics.RecordX(...) without nil checks.
 type NopMetrics struct{}
 
-func (NopMetrics) RecordPublishAttempt(PublishMode)                {}
+// RecordPublishAttempt records publish attempt.
+func (NopMetrics) RecordPublishAttempt(PublishMode) {}
+
+// RecordPublishSuccess records publish success.
 func (NopMetrics) RecordPublishSuccess(PublishMode, time.Duration) {}
+
+// RecordPublishFailure records publish failure.
 func (NopMetrics) RecordPublishFailure(PublishMode, string, time.Duration) {
 }
+
+// RecordReconcileCycle records reconcile cycle.
 func (NopMetrics) RecordReconcileCycle(time.Duration, error) {}
-func (NopMetrics) RecordOfficialPostAbandoned()              {}
-func (NopMetrics) RecordStateDivergence()                    {}
-func (NopMetrics) RecordUnmanageableThread()                 {}
-func (NopMetrics) RecordOrphanReclaim(int)                   {}
-func (NopMetrics) RecordSuppressionCleared()                 {}
+
+// RecordOfficialPostAbandoned records official post abandoned.
+func (NopMetrics) RecordOfficialPostAbandoned() {}
+
+// RecordStateDivergence records state divergence.
+func (NopMetrics) RecordStateDivergence() {}
+
+// RecordUnmanageableThread records unmanageable thread.
+func (NopMetrics) RecordUnmanageableThread() {}
+
+// RecordOrphanReclaim records orphan reclaim.
+func (NopMetrics) RecordOrphanReclaim(int) {}
+
+// RecordSuppressionCleared records suppression cleared.
+func (NopMetrics) RecordSuppressionCleared() {}
 
 // InMemoryMetrics is the lightweight implementation backing
 // /v1/health/qotd. All counters are atomic int64; the labeled counters
@@ -176,21 +193,25 @@ type InMemoryMetrics struct {
 	suppressionCleared atomic.Int64
 }
 
+// RecordPublishAttempt records publish attempt.
 func (m *InMemoryMetrics) RecordPublishAttempt(mode PublishMode) {
 	m.counterFor(mode, m.publishAttemptsGetOrCreate).Add(1)
 }
 
+// RecordPublishSuccess records publish success.
 func (m *InMemoryMetrics) RecordPublishSuccess(mode PublishMode, duration time.Duration) {
 	m.counterFor(mode, m.publishSuccessGetOrCreate).Add(1)
 	m.durationFor(mode).Observe(duration)
 }
 
+// RecordPublishFailure records publish failure.
 func (m *InMemoryMetrics) RecordPublishFailure(mode PublishMode, cause string, duration time.Duration) {
 	m.counterFor(mode, m.publishFailureGetOrCreate).Add(1)
 	m.failureCauseFor(mode, cause).Add(1)
 	m.durationFor(mode).Observe(duration)
 }
 
+// RecordReconcileCycle records reconcile cycle.
 func (m *InMemoryMetrics) RecordReconcileCycle(duration time.Duration, err error) {
 	m.reconcileCycles.Add(1)
 	if err != nil {
@@ -199,11 +220,19 @@ func (m *InMemoryMetrics) RecordReconcileCycle(duration time.Duration, err error
 	m.reconcileDuration.Observe(duration)
 }
 
+// RecordOfficialPostAbandoned records official post abandoned.
 func (m *InMemoryMetrics) RecordOfficialPostAbandoned() { m.abandoned.Add(1) }
-func (m *InMemoryMetrics) RecordStateDivergence()       { m.divergence.Add(1) }
-func (m *InMemoryMetrics) RecordUnmanageableThread()    { m.unmanageableThread.Add(1) }
-func (m *InMemoryMetrics) RecordSuppressionCleared()    { m.suppressionCleared.Add(1) }
 
+// RecordStateDivergence records state divergence.
+func (m *InMemoryMetrics) RecordStateDivergence() { m.divergence.Add(1) }
+
+// RecordUnmanageableThread records unmanageable thread.
+func (m *InMemoryMetrics) RecordUnmanageableThread() { m.unmanageableThread.Add(1) }
+
+// RecordSuppressionCleared records suppression cleared.
+func (m *InMemoryMetrics) RecordSuppressionCleared() { m.suppressionCleared.Add(1) }
+
+// RecordOrphanReclaim records orphan reclaim.
 func (m *InMemoryMetrics) RecordOrphanReclaim(count int) {
 	if count <= 0 {
 		return

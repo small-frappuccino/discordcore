@@ -17,6 +17,7 @@ type MemoryConfigStore struct {
 	description string
 }
 
+// NewMemoryConfigStore news memory config store.
 func NewMemoryConfigStore() *MemoryConfigStore {
 	return &MemoryConfigStore{
 		description: defaultMemoryConfigStoreDescription,
@@ -28,6 +29,7 @@ func NewMemoryConfigManager() *ConfigManager {
 	return NewConfigManagerWithStore(NewMemoryConfigStore())
 }
 
+// Load loads.
 func (s *MemoryConfigStore) Load() (*BotConfig, error) {
 	cfg := &BotConfig{Guilds: []GuildConfig{}}
 	if s == nil {
@@ -51,6 +53,7 @@ func (s *MemoryConfigStore) Load() (*BotConfig, error) {
 	return out, nil
 }
 
+// Save saves.
 func (s *MemoryConfigStore) Save(cfg *BotConfig) error {
 	if cfg == nil {
 		return fmt.Errorf("cannot save nil config")
@@ -73,6 +76,7 @@ func (s *MemoryConfigStore) Save(cfg *BotConfig) error {
 	return nil
 }
 
+// Exists exists.
 func (s *MemoryConfigStore) Exists() (bool, error) {
 	if s == nil {
 		return false, nil
@@ -83,6 +87,7 @@ func (s *MemoryConfigStore) Exists() (bool, error) {
 	return s.exists, nil
 }
 
+// Describe describes.
 func (s *MemoryConfigStore) Describe() string {
 	if s == nil || s.description == "" {
 		return defaultMemoryConfigStoreDescription

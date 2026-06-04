@@ -20,6 +20,8 @@ import (
 // directly rather than a Level value.
 type Level int
 
+// WarnLevel defines warn level.
+// InfoLevel defines info level.
 const (
 	InfoLevel Level = iota
 	WarnLevel
@@ -60,28 +62,34 @@ var GlobalLogger *Logger
 
 // -- Instance Methods --
 
+// Info infos.
 func (l *Logger) Info() *CategorizedLogger {
 	return &CategorizedLogger{logger: l, level: InfoLevel}
 }
 
+// Warn warns.
 func (l *Logger) Warn() *CategorizedLogger {
 	return &CategorizedLogger{logger: l, level: WarnLevel}
 }
 
+// Error errors.
 func (l *Logger) Error() *ErrorLogger {
 	return &ErrorLogger{logger: l}
 }
 
 // -- Package-Level Functions --
 
+// Info infos.
 func Info() *CategorizedLogger {
 	return &CategorizedLogger{logger: globalLogger, level: InfoLevel}
 }
 
+// Warn warns.
 func Warn() *CategorizedLogger {
 	return &CategorizedLogger{logger: globalLogger, level: WarnLevel}
 }
 
+// Error errors.
 func Error() *ErrorLogger {
 	return &ErrorLogger{logger: globalLogger}
 }
@@ -133,6 +141,7 @@ func GlobalLevelVar() *slog.LevelVar {
 
 // --- Fluent API Finalizers (kept for compatibility) ---
 
+// Applicationf applicationfs.
 func (cl *CategorizedLogger) Applicationf(format string, v ...any) {
 	if cl == nil || cl.logger == nil || cl.logger.application == nil {
 		stdlog.Printf(format, v...)
@@ -149,6 +158,7 @@ func (cl *CategorizedLogger) Applicationf(format string, v ...any) {
 	}
 }
 
+// Discordf discordfs.
 func (cl *CategorizedLogger) Discordf(format string, v ...any) {
 	if cl == nil || cl.logger == nil || cl.logger.discord == nil {
 		stdlog.Printf(format, v...)
@@ -165,6 +175,7 @@ func (cl *CategorizedLogger) Discordf(format string, v ...any) {
 	}
 }
 
+// Databasef databasefs.
 func (cl *CategorizedLogger) Databasef(format string, v ...any) {
 	if cl == nil || cl.logger == nil || cl.logger.database == nil {
 		stdlog.Printf(format, v...)
@@ -181,6 +192,7 @@ func (cl *CategorizedLogger) Databasef(format string, v ...any) {
 	}
 }
 
+// Errorf errorfs.
 func (el *ErrorLogger) Errorf(format string, v ...any) {
 	if el == nil || el.logger == nil || el.logger.error == nil {
 		stdlog.Printf("ERROR: "+format, v...)
@@ -190,6 +202,7 @@ func (el *ErrorLogger) Errorf(format string, v ...any) {
 	el.logger.error.Error(msg)
 }
 
+// Fatalf fatalfs.
 func (el *ErrorLogger) Fatalf(format string, v ...any) {
 	msg := fmt.Sprintf(format, v...)
 	if el == nil || el.logger == nil || el.logger.error == nil {
@@ -221,6 +234,7 @@ type multiHandler struct {
 	handlers []slog.Handler
 }
 
+// Enabled enableds.
 func (m *multiHandler) Enabled(ctx context.Context, level slog.Level) bool {
 	for _, h := range m.handlers {
 		if h.Enabled(ctx, level) {
@@ -230,6 +244,7 @@ func (m *multiHandler) Enabled(ctx context.Context, level slog.Level) bool {
 	return false
 }
 
+// Handle handles.
 func (m *multiHandler) Handle(ctx context.Context, r slog.Record) error {
 	var firstErr error
 	for _, h := range m.handlers {
@@ -240,6 +255,7 @@ func (m *multiHandler) Handle(ctx context.Context, r slog.Record) error {
 	return firstErr
 }
 
+// WithAttrs withs attrs.
 func (m *multiHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	out := make([]slog.Handler, 0, len(m.handlers))
 	for _, h := range m.handlers {
@@ -248,6 +264,7 @@ func (m *multiHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	return &multiHandler{handlers: out}
 }
 
+// WithGroup withs group.
 func (m *multiHandler) WithGroup(name string) slog.Handler {
 	out := make([]slog.Handler, 0, len(m.handlers))
 	for _, h := range m.handlers {

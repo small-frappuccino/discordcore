@@ -16,6 +16,13 @@ import (
 // ServiceState represents the current state of a service
 type ServiceState string
 
+// StateInitializing defines state initializing.
+// StateRunning defines state running.
+// StateUninitialized defines state uninitialized.
+// StateStopped defines state stopped.
+// StateError defines state error.
+// StateRecovering defines state recovering.
+// StateStopping defines state stopping.
 const (
 	StateUninitialized ServiceState = "uninitialized"
 	StateInitializing  ServiceState = "initializing"
@@ -29,6 +36,11 @@ const (
 // ServiceType represents different types of services
 type ServiceType string
 
+// TypeMonitoring defines type monitoring.
+// TypeCommands defines type commands.
+// TypeCache defines type cache.
+// TypeNotifier defines type notifier.
+// TypeAutomod defines type automod.
 const (
 	TypeMonitoring ServiceType = "monitoring"
 	TypeAutomod    ServiceType = "automod"
@@ -40,6 +52,9 @@ const (
 // ServicePriority determines startup/shutdown order (higher number = higher priority)
 type ServicePriority int
 
+// PriorityLow defines priority low.
+// PriorityNormal defines priority normal.
+// PriorityHigh defines priority high.
 const (
 	PriorityLow    ServicePriority = 1
 	PriorityNormal ServicePriority = 5

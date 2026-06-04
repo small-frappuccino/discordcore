@@ -13,6 +13,7 @@ type PostgresConfigStore struct {
 	key string
 }
 
+// NewPostgresConfigStore news postgres config store.
 func NewPostgresConfigStore(db *sql.DB, key string) *PostgresConfigStore {
 	key = strings.TrimSpace(key)
 	if key == "" {
@@ -24,6 +25,7 @@ func NewPostgresConfigStore(db *sql.DB, key string) *PostgresConfigStore {
 	}
 }
 
+// Load loads.
 func (s *PostgresConfigStore) Load() (*BotConfig, error) {
 	cfg := &BotConfig{Guilds: []GuildConfig{}}
 	if s == nil || s.db == nil {
@@ -53,6 +55,7 @@ func (s *PostgresConfigStore) Load() (*BotConfig, error) {
 	return cfg, nil
 }
 
+// Save saves.
 func (s *PostgresConfigStore) Save(cfg *BotConfig) error {
 	if cfg == nil {
 		return fmt.Errorf("cannot save nil config")
@@ -79,6 +82,7 @@ func (s *PostgresConfigStore) Save(cfg *BotConfig) error {
 	return nil
 }
 
+// Exists exists.
 func (s *PostgresConfigStore) Exists() (bool, error) {
 	if s == nil || s.db == nil {
 		return false, fmt.Errorf("postgres config store database handle is nil")
@@ -94,6 +98,7 @@ func (s *PostgresConfigStore) Exists() (bool, error) {
 	return exists, nil
 }
 
+// Describe describes.
 func (s *PostgresConfigStore) Describe() string {
 	key := DefaultPostgresConfigStoreKey
 	if s != nil && strings.TrimSpace(s.key) != "" {

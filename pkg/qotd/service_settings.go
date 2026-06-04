@@ -8,6 +8,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
+// Settings settings.
 func (s *Service) Settings(guildID string) (files.QOTDConfig, error) {
 	if err := s.validate(); err != nil {
 		return files.QOTDConfig{}, fmt.Errorf("Service.Settings: %w", err)
@@ -19,10 +20,12 @@ func (s *Service) Settings(guildID string) (files.QOTDConfig, error) {
 	return files.DashboardQOTDConfig(settings), nil
 }
 
+// GetSettings gets settings.
 func (s *Service) GetSettings(guildID string) (files.QOTDConfig, error) {
 	return s.Settings(guildID)
 }
 
+// UpdateSettings updates settings.
 func (s *Service) UpdateSettings(guildID string, cfg files.QOTDConfig) (files.QOTDConfig, error) {
 	if err := s.validate(); err != nil {
 		return files.QOTDConfig{}, fmt.Errorf("Service.UpdateSettings: %w", err)

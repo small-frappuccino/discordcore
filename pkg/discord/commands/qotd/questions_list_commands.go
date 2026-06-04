@@ -63,10 +63,12 @@ type Commands struct {
 	service QuestionCatalogService
 }
 
+// NewCommands news commands.
 func NewCommands(service QuestionCatalogService) *Commands {
 	return &Commands{service: service}
 }
 
+// RegisterCommands registers commands.
 func (c *Commands) RegisterCommands(router *core.CommandRouter) {
 	if router == nil || c == nil || c.service == nil {
 		return
@@ -184,12 +186,15 @@ type questionsListControlTimer struct {
 
 type questionsListMessageEditor func(session *discordgo.Session, channelID, messageID string, components []discordgo.MessageComponent) error
 
+// Name names.
 func (c *questionsListCommand) Name() string { return questionsListSubCommand }
 
+// Description descriptions.
 func (c *questionsListCommand) Description() string {
 	return "Show all questions in a QOTD deck"
 }
 
+// Options options.
 func (c *questionsListCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{{
 		Type:        discordgo.ApplicationCommandOptionString,
@@ -199,15 +204,21 @@ func (c *questionsListCommand) Options() []*discordgo.ApplicationCommandOption {
 	}}
 }
 
-func (c *questionsListCommand) RequiresGuild() bool       { return true }
+// RequiresGuild requires guild.
+func (c *questionsListCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
 func (c *questionsListCommand) RequiresPermissions() bool { return true }
 
+// Name names.
 func (c *questionsQueueCommand) Name() string { return questionsQueueSubCommand }
 
+// Description descriptions.
 func (c *questionsQueueCommand) Description() string {
 	return "Show the real automatic QOTD queue state"
 }
 
+// Options options.
 func (c *questionsQueueCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{{
 		Type:        discordgo.ApplicationCommandOptionString,
@@ -217,15 +228,21 @@ func (c *questionsQueueCommand) Options() []*discordgo.ApplicationCommandOption 
 	}}
 }
 
-func (c *questionsQueueCommand) RequiresGuild() bool       { return true }
+// RequiresGuild requires guild.
+func (c *questionsQueueCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
 func (c *questionsQueueCommand) RequiresPermissions() bool { return true }
 
+// Name names.
 func (c *questionsAddCommand) Name() string { return questionsAddSubCommand }
 
+// Description descriptions.
 func (c *questionsAddCommand) Description() string {
 	return "Add a question to a QOTD deck"
 }
 
+// Options options.
 func (c *questionsAddCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{
@@ -243,9 +260,13 @@ func (c *questionsAddCommand) Options() []*discordgo.ApplicationCommandOption {
 	}
 }
 
-func (c *questionsAddCommand) RequiresGuild() bool       { return true }
+// RequiresGuild requires guild.
+func (c *questionsAddCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
 func (c *questionsAddCommand) RequiresPermissions() bool { return true }
 
+// Handle handles.
 func (c *questionsAddCommand) Handle(ctx *core.Context) error {
 	if err := requireQuestionsGuild(ctx); err != nil {
 		return fmt.Errorf("questionsAddCommand.Handle: %w", err)
@@ -273,24 +294,31 @@ func (c *questionsAddCommand) Handle(ctx *core.Context) error {
 		Success(ctx.Interaction, fmt.Sprintf("Added QOTD question ID %d to deck `%s`.", visibleQuestionID(*created), deck.Name))
 }
 
+// Name names.
 func (c *questionsRemoveCommand) Name() string { return questionsRemoveSubCommand }
 
+// Description descriptions.
 func (c *questionsRemoveCommand) Description() string {
 	return "Remove a question from QOTD by visible ID"
 }
 
+// Name names.
 func (c *questionsRecoverCommand) Name() string { return questionsRecoverSubCommand }
 
+// Description descriptions.
 func (c *questionsRecoverCommand) Description() string {
 	return "Move a used QOTD question back to ready so it can be published again"
 }
 
+// Name names.
 func (c *questionsMarkPublishedCommand) Name() string { return questionsMarkPublishedSubCommand }
 
+// Description descriptions.
 func (c *questionsMarkPublishedCommand) Description() string {
 	return "Mark a ready QOTD question as already published"
 }
 
+// Options options.
 func (c *questionsMarkPublishedCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{
@@ -308,9 +336,13 @@ func (c *questionsMarkPublishedCommand) Options() []*discordgo.ApplicationComman
 	}
 }
 
-func (c *questionsMarkPublishedCommand) RequiresGuild() bool       { return true }
+// RequiresGuild requires guild.
+func (c *questionsMarkPublishedCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
 func (c *questionsMarkPublishedCommand) RequiresPermissions() bool { return true }
 
+// Options options.
 func (c *questionsRemoveCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{
@@ -328,9 +360,13 @@ func (c *questionsRemoveCommand) Options() []*discordgo.ApplicationCommandOption
 	}
 }
 
-func (c *questionsRemoveCommand) RequiresGuild() bool       { return true }
+// RequiresGuild requires guild.
+func (c *questionsRemoveCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
 func (c *questionsRemoveCommand) RequiresPermissions() bool { return true }
 
+// Options options.
 func (c *questionsRecoverCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{
@@ -348,9 +384,13 @@ func (c *questionsRecoverCommand) Options() []*discordgo.ApplicationCommandOptio
 	}
 }
 
-func (c *questionsRecoverCommand) RequiresGuild() bool       { return true }
+// RequiresGuild requires guild.
+func (c *questionsRecoverCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
 func (c *questionsRecoverCommand) RequiresPermissions() bool { return true }
 
+// Handle handles.
 func (c *questionsQueueCommand) Handle(ctx *core.Context) error {
 	if err := requireQuestionsGuild(ctx); err != nil {
 		return fmt.Errorf("questionsQueueCommand.Handle: %w", err)
@@ -370,12 +410,15 @@ func (c *questionsQueueCommand) Handle(ctx *core.Context) error {
 		Info(ctx.Interaction, formatAutomaticQueueState(state))
 }
 
+// Name names.
 func (c *qotdPublishCommand) Name() string { return publishSubCommandName }
 
+// Description descriptions.
 func (c *qotdPublishCommand) Description() string {
 	return "Publish the next ready QOTD question immediately"
 }
 
+// Options options.
 func (c *qotdPublishCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{{
 		Type:        discordgo.ApplicationCommandOptionBoolean,
@@ -385,7 +428,10 @@ func (c *qotdPublishCommand) Options() []*discordgo.ApplicationCommandOption {
 	}}
 }
 
-func (c *qotdPublishCommand) RequiresGuild() bool       { return true }
+// RequiresGuild requires guild.
+func (c *qotdPublishCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
 func (c *qotdPublishCommand) RequiresPermissions() bool { return true }
 
 // InteractionAckPolicy defers the slash response so the publish flow has the
@@ -396,6 +442,7 @@ func (c *qotdPublishCommand) InteractionAckPolicy() core.InteractionAckPolicy {
 	return core.InteractionAckPolicy{Mode: core.InteractionAckModeDefer}
 }
 
+// Handle handles.
 func (c *qotdPublishCommand) Handle(ctx *core.Context) error {
 	if err := requireQuestionsGuild(ctx); err != nil {
 		return fmt.Errorf("qotdPublishCommand.Handle: %w", err)
@@ -440,17 +487,23 @@ func (c *qotdPublishCommand) Handle(ctx *core.Context) error {
 		Success(ctx.Interaction, message)
 }
 
+// Name names.
 func (c *qotdSkipCommand) Name() string { return questionsSkipSubCommand }
 
+// Description descriptions.
 func (c *qotdSkipCommand) Description() string {
 	return "Skip the current QOTD question, remove it from the deck, and publish the next one."
 }
 
+// Options options.
 func (c *qotdSkipCommand) Options() []*discordgo.ApplicationCommandOption {
 	return nil
 }
 
-func (c *qotdSkipCommand) RequiresGuild() bool       { return true }
+// RequiresGuild requires guild.
+func (c *qotdSkipCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
 func (c *qotdSkipCommand) RequiresPermissions() bool { return true }
 
 // InteractionAckPolicy defers the slash response so the replacement flow has the
@@ -459,6 +512,7 @@ func (c *qotdSkipCommand) InteractionAckPolicy() core.InteractionAckPolicy {
 	return core.InteractionAckPolicy{Mode: core.InteractionAckModeDefer}
 }
 
+// Handle handles.
 func (c *qotdSkipCommand) Handle(ctx *core.Context) error {
 	if err := requireQuestionsGuild(ctx); err != nil {
 		return fmt.Errorf("qotdSkipCommand.Handle: %w", err)
@@ -488,6 +542,7 @@ func (c *qotdSkipCommand) Handle(ctx *core.Context) error {
 		Success(ctx.Interaction, message)
 }
 
+// Handle handles.
 func (c *questionsRemoveCommand) Handle(ctx *core.Context) error {
 	if err := requireQuestionsGuild(ctx); err != nil {
 		return fmt.Errorf("questionsRemoveCommand.Handle: %w", err)
@@ -519,6 +574,7 @@ func (c *questionsRemoveCommand) Handle(ctx *core.Context) error {
 		Success(ctx.Interaction, fmt.Sprintf("Removed QOTD question ID %d from deck `%s`.", displayID, deck.Name))
 }
 
+// Handle handles.
 func (c *questionsRecoverCommand) Handle(ctx *core.Context) error {
 	if err := requireQuestionsGuild(ctx); err != nil {
 		return fmt.Errorf("questionsRecoverCommand.Handle: %w", err)
@@ -558,6 +614,7 @@ func (c *questionsRecoverCommand) Handle(ctx *core.Context) error {
 		Success(ctx.Interaction, fmt.Sprintf("Recovered QOTD question ID %d from used to ready in deck `%s` and it is now listed as ID %d.", displayID, deck.Name, visibleQuestionID(*updated)))
 }
 
+// Handle handles.
 func (c *questionsMarkPublishedCommand) Handle(ctx *core.Context) error {
 	if err := requireQuestionsGuild(ctx); err != nil {
 		return fmt.Errorf("questionsMarkPublishedCommand.Handle: %w", err)
@@ -593,6 +650,7 @@ func (c *questionsMarkPublishedCommand) Handle(ctx *core.Context) error {
 		Success(ctx.Interaction, fmt.Sprintf("Marked QOTD question ID %d as already published in deck `%s` without changing the day state.", displayID, deck.Name))
 }
 
+// Handle handles.
 func (c *questionsListCommand) Handle(ctx *core.Context) error {
 	if err := requireQuestionsGuild(ctx); err != nil {
 		return fmt.Errorf("questionsListCommand.Handle: %w", err)
@@ -617,6 +675,7 @@ func (c *questionsListCommand) Handle(ctx *core.Context) error {
 	return nil
 }
 
+// HandleComponent handles component.
 func (c *questionsListCommand) HandleComponent(ctx *core.Context) error {
 	if ctx == nil || ctx.Interaction == nil {
 		return nil

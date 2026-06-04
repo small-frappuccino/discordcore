@@ -37,6 +37,7 @@ func newPlatformTrustInstaller() TrustInstaller {
 	return windowsTrustInstaller{}
 }
 
+// EnsureTrusted ensures trusted.
 func (windowsTrustInstaller) EnsureTrusted(_ context.Context, cert *x509.Certificate) (TrustResult, error) {
 	if cert == nil {
 		return TrustResult{}, fmt.Errorf("ca certificate is required")

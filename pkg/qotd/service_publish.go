@@ -12,10 +12,12 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
+// PublishNow publishs now.
 func (s *Service) PublishNow(ctx context.Context, guildID string, session *discordgo.Session) (*PublishResult, error) {
 	return s.PublishNowWithParams(ctx, guildID, session, PublishNowParams{})
 }
 
+// PublishNowWithParams publishs now with params.
 func (s *Service) PublishNowWithParams(ctx context.Context, guildID string, session *discordgo.Session, params PublishNowParams) (result *PublishResult, err error) {
 
 	publishStart := time.Now()

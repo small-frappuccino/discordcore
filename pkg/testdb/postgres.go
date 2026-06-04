@@ -16,12 +16,16 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/persistence"
 )
 
+// EnvDatabaseURL defines env database url.
 const EnvDatabaseURL = "DISCORDCORE_TEST_DATABASE_URL"
 
 var dbNamePattern = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]{0,62}$`)
 var schemaCounter atomic.Uint64
+
+// ErrDatabaseURLNotConfigured defines err database urlnot configured.
 var ErrDatabaseURLNotConfigured = errors.New("postgres test database url not configured")
 
+// BaseDatabaseURLFromEnv bases database urlfrom env.
 func BaseDatabaseURLFromEnv() (string, error) {
 	dsn := strings.TrimSpace(os.Getenv(EnvDatabaseURL))
 	if dsn == "" {
@@ -30,6 +34,7 @@ func BaseDatabaseURLFromEnv() (string, error) {
 	return dsn, nil
 }
 
+// IsDatabaseURLNotConfigured is database urlnot configured.
 func IsDatabaseURLNotConfigured(err error) bool {
 	return errors.Is(err, ErrDatabaseURLNotConfigured)
 }

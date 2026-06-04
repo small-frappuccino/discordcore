@@ -11,14 +11,17 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
+// TicketService represents ticket service.
 type TicketService struct {
 	store *storage.Store
 }
 
+// NewTicketService news ticket service.
 func NewTicketService(store *storage.Store) *TicketService {
 	return &TicketService{store: store}
 }
 
+// HandleCategorySelect handles category select.
 func (s *TicketService) HandleCategorySelect(ctx *core.Context) error {
 	data := ctx.Interaction.MessageComponentData()
 	if len(data.Values) == 0 {
@@ -124,6 +127,7 @@ func (s *TicketService) HandleCategorySelect(ctx *core.Context) error {
 	return core.NewResponseBuilder(ctx.Session).WithContext(ctx).Ephemeral().Success(ctx.Interaction, fmt.Sprintf("Ticket created: <#%s>", createdChannel.ID))
 }
 
+// HandleClose handles close.
 func (s *TicketService) HandleClose(ctx *core.Context) error {
 	channelID := ctx.Interaction.ChannelID
 	ch, err := ctx.Session.Channel(channelID)
@@ -192,6 +196,7 @@ func (s *TicketService) HandleClose(ctx *core.Context) error {
 	return core.NewResponseBuilder(ctx.Session).WithContext(ctx).Ephemeral().Success(ctx.Interaction, "Ticket has been closed.")
 }
 
+// HandleReopen handles reopen.
 func (s *TicketService) HandleReopen(ctx *core.Context) error {
 	channelID := ctx.Interaction.ChannelID
 	ch, err := ctx.Session.Channel(channelID)
@@ -229,6 +234,7 @@ func (s *TicketService) HandleReopen(ctx *core.Context) error {
 	return core.NewResponseBuilder(ctx.Session).WithContext(ctx).Ephemeral().Success(ctx.Interaction, "Ticket has been reopened.")
 }
 
+// HandleDelete handles delete.
 func (s *TicketService) HandleDelete(ctx *core.Context) error {
 	channelID := ctx.Interaction.ChannelID
 	_, err := ctx.Session.ChannelDelete(channelID)

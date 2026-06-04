@@ -42,6 +42,7 @@ type StatsService struct {
 	fetchMembers  func(context.Context, string, func([]*discordgo.Member) error) (int, error)
 }
 
+// NewStatsService news stats service.
 func NewStatsService(
 	session *discordgo.Session,
 	configManager *files.ConfigManager,
@@ -69,11 +70,13 @@ func NewStatsService(
 	}
 }
 
+// Start starts.
 func (s *StatsService) Start(ctx context.Context) error {
 	go s.loop(ctx)
 	return nil
 }
 
+// Stop stops.
 func (s *StatsService) Stop(ctx context.Context) error {
 	return nil
 }
@@ -259,6 +262,7 @@ func (state *statsGuildState) addContribution(snapshot statsMemberSnapshot, delt
 	}
 }
 
+// UpdateStatsChannels updates stats channels.
 func (s *StatsService) UpdateStatsChannels(ctx context.Context) error {
 	if s == nil || s.session == nil || s.configManager == nil {
 		return nil
@@ -791,6 +795,7 @@ func renderStatsChannelName(label, template string, count int) string {
 	return strings.TrimSpace(out)
 }
 
+// HandleStatsMemberAdd handles stats member add.
 func (s *StatsService) HandleStatsMemberAdd(_ *discordgo.Session, m *discordgo.GuildMemberAdd) {
 	if m == nil || m.Member == nil || m.Member.User == nil {
 		return
@@ -801,6 +806,7 @@ func (s *StatsService) HandleStatsMemberAdd(_ *discordgo.Session, m *discordgo.G
 	s.applyStatsMemberAdd(m.Member)
 }
 
+// HandleStatsMemberRemove handles stats member remove.
 func (s *StatsService) HandleStatsMemberRemove(_ *discordgo.Session, m *discordgo.GuildMemberRemove) {
 	if m == nil || m.User == nil {
 		return
@@ -843,6 +849,7 @@ func (s *StatsService) applyStatsMemberAdd(member *discordgo.Member) {
 	}
 }
 
+// ApplyStatsMemberUpdate applys stats member update.
 func (s *StatsService) ApplyStatsMemberUpdate(guildID, userID string, isBot bool, roles []string) {
 	guildID = strings.TrimSpace(guildID)
 	userID = strings.TrimSpace(userID)

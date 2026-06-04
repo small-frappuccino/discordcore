@@ -43,6 +43,7 @@ type OfficialPostStateDivergenceError struct {
 	Cause          error
 }
 
+// Error errors.
 func (e *OfficialPostStateDivergenceError) Error() string {
 	if e == nil {
 		return ""
@@ -57,6 +58,7 @@ func (e *OfficialPostStateDivergenceError) Error() string {
 	return fmt.Sprintf("qotd official post %d: thread state applied but DB transition to %s failed: %v", e.OfficialPostID, intended, e.Cause)
 }
 
+// Unwrap unwraps.
 func (e *OfficialPostStateDivergenceError) Unwrap() error {
 	if e == nil {
 		return nil

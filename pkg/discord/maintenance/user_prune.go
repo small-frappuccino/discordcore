@@ -47,6 +47,7 @@ type UserPruneService struct {
 	running bool
 }
 
+// NewUserPruneServiceForBot news user prune service for bot.
 func NewUserPruneServiceForBot(
 	session *discordgo.Session,
 	configManager *files.ConfigManager,
@@ -64,6 +65,7 @@ func NewUserPruneServiceForBot(
 	}
 }
 
+// Start starts.
 func (s *UserPruneService) Start() {
 	s.mu.Lock()
 	if s.running {
@@ -77,6 +79,7 @@ func (s *UserPruneService) Start() {
 	go s.loop()
 }
 
+// Stop stops.
 func (s *UserPruneService) Stop() {
 	s.stopOnce.Do(func() { close(s.stopCh) })
 	s.wg.Wait()
@@ -86,6 +89,7 @@ func (s *UserPruneService) Stop() {
 	s.mu.Unlock()
 }
 
+// IsRunning is running.
 func (s *UserPruneService) IsRunning() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

@@ -112,13 +112,26 @@ type MonitoringCacheSnapshot struct {
 // checks.
 type NopMetrics struct{}
 
-func (NopMetrics) RecordAuditLogCall()        {}
-func (NopMetrics) RecordGuildMemberCall()     {}
-func (NopMetrics) RecordMessageSent()         {}
+// RecordAuditLogCall records audit log call.
+func (NopMetrics) RecordAuditLogCall() {}
+
+// RecordGuildMemberCall records guild member call.
+func (NopMetrics) RecordGuildMemberCall() {}
+
+// RecordMessageSent records message sent.
+func (NopMetrics) RecordMessageSent() {}
+
+// RecordStateMemberCacheHit records state member cache hit.
 func (NopMetrics) RecordStateMemberCacheHit() {}
+
+// RecordRolesCacheMemoryHit records roles cache memory hit.
 func (NopMetrics) RecordRolesCacheMemoryHit() {}
-func (NopMetrics) RecordRolesCacheStoreHit()  {}
-func (NopMetrics) RecordRolesAuditCacheHit()  {}
+
+// RecordRolesCacheStoreHit records roles cache store hit.
+func (NopMetrics) RecordRolesCacheStoreHit() {}
+
+// RecordRolesAuditCacheHit records roles audit cache hit.
+func (NopMetrics) RecordRolesAuditCacheHit() {}
 
 // InMemoryMetrics is the lightweight implementation backing
 // /v1/health/monitoring. All counters are atomic int64; Snapshot performs
@@ -136,13 +149,26 @@ type InMemoryMetrics struct {
 	rolesAuditHits  atomic.Int64
 }
 
-func (m *InMemoryMetrics) RecordAuditLogCall()        { m.auditLogCalls.Add(1) }
-func (m *InMemoryMetrics) RecordGuildMemberCall()     { m.guildMemberCalls.Add(1) }
-func (m *InMemoryMetrics) RecordMessageSent()         { m.messagesSent.Add(1) }
+// RecordAuditLogCall records audit log call.
+func (m *InMemoryMetrics) RecordAuditLogCall() { m.auditLogCalls.Add(1) }
+
+// RecordGuildMemberCall records guild member call.
+func (m *InMemoryMetrics) RecordGuildMemberCall() { m.guildMemberCalls.Add(1) }
+
+// RecordMessageSent records message sent.
+func (m *InMemoryMetrics) RecordMessageSent() { m.messagesSent.Add(1) }
+
+// RecordStateMemberCacheHit records state member cache hit.
 func (m *InMemoryMetrics) RecordStateMemberCacheHit() { m.stateMemberHits.Add(1) }
+
+// RecordRolesCacheMemoryHit records roles cache memory hit.
 func (m *InMemoryMetrics) RecordRolesCacheMemoryHit() { m.rolesMemoryHits.Add(1) }
-func (m *InMemoryMetrics) RecordRolesCacheStoreHit()  { m.rolesStoreHits.Add(1) }
-func (m *InMemoryMetrics) RecordRolesAuditCacheHit()  { m.rolesAuditHits.Add(1) }
+
+// RecordRolesCacheStoreHit records roles cache store hit.
+func (m *InMemoryMetrics) RecordRolesCacheStoreHit() { m.rolesStoreHits.Add(1) }
+
+// RecordRolesAuditCacheHit records roles audit cache hit.
+func (m *InMemoryMetrics) RecordRolesAuditCacheHit() { m.rolesAuditHits.Add(1) }
 
 // Snapshot returns a JSON-friendly view of the current counter state. The
 // returned MetricsSnapshot is a value copy; callers can mutate it without

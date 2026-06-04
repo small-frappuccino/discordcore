@@ -5,6 +5,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/tickets"
 )
 
+// RegisterComponents registers components.
 func RegisterComponents(registry *core.CommandRegistry, svc *tickets.TicketService) {
 	// The core.CommandRegistry doesn't directly register component routes yet.
 	// We need to bind these to the core router using InteractionRouteBinding if that's the pattern,
@@ -14,6 +15,7 @@ func RegisterComponents(registry *core.CommandRegistry, svc *tickets.TicketServi
 	// returning bindings.
 }
 
+// GetBindings gets bindings.
 func GetBindings(svc *tickets.TicketService) []core.InteractionRouteBinding {
 	return []core.InteractionRouteBinding{
 		{

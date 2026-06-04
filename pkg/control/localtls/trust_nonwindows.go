@@ -8,6 +8,7 @@ import (
 	"fmt"
 )
 
+// EnsureTrusted ensures trusted.
 func (unsupportedTrustInstaller) EnsureTrusted(context.Context, *x509.Certificate) (TrustResult, error) {
 	return TrustResult{}, fmt.Errorf("automatic local tls trust is only supported on windows")
 }

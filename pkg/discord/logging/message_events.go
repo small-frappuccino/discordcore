@@ -497,10 +497,12 @@ func (mes *MessageEventService) SetWriterMetrics(metrics MessageWriterMetrics) {
 	mes.writerMetrics = metrics
 }
 
+// SetAdapters sets adapters.
 func (mes *MessageEventService) SetAdapters(adapters *task.NotificationAdapters) {
 	mes.adapters = adapters
 }
 
+// SetTaskRouter sets task router.
 func (mes *MessageEventService) SetTaskRouter(router *task.TaskRouter) {
 	mes.taskRouter = router
 }

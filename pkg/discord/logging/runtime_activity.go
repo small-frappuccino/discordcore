@@ -88,6 +88,7 @@ func newMonitoringRuntimeActivity(store *storage.Store, botInstanceID ...string)
 	})
 }
 
+// MarkEvent marks event.
 func (ra *runtimeActivity) MarkEvent(ctx context.Context, source string) {
 	if ra == nil || ra.store == nil {
 		return
@@ -103,6 +104,7 @@ func (ra *runtimeActivity) MarkEvent(ctx context.Context, source string) {
 	}
 }
 
+// StartHeartbeat starts heartbeat.
 func (ra *runtimeActivity) StartHeartbeat(ctx context.Context, interval time.Duration) {
 	if ra == nil || ra.store == nil || interval <= 0 {
 		return
@@ -183,6 +185,7 @@ func (ra *runtimeActivity) runCancellableHeartbeat(ctx context.Context, failureM
 	}
 }
 
+// StopHeartbeat stops heartbeat.
 func (ra *runtimeActivity) StopHeartbeat(ctx context.Context) error {
 	if ra == nil {
 		return nil

@@ -42,6 +42,7 @@ const (
 	defaultAccessibleGuildsCache = 45 * time.Second
 )
 
+// ErrControlServerBind defines err control server bind.
 var ErrControlServerBind = errors.New("control server bind failed")
 
 type botGuildIDsProvider func(context.Context) ([]string, error)
@@ -632,7 +633,10 @@ type httpError struct {
 	err  error
 }
 
+// Error errors.
 func (e *httpError) Error() string { return e.err.Error() }
+
+// Unwrap unwraps.
 func (e *httpError) Unwrap() error { return e.err }
 
 func decodeString(raw json.RawMessage) (string, error) {

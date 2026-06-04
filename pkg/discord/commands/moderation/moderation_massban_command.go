@@ -12,10 +12,13 @@ type massBanCommand struct{}
 
 func newMassBanCommand() *massBanCommand { return &massBanCommand{} }
 
+// Name names.
 func (c *massBanCommand) Name() string { return "massban" }
 
+// Description descriptions.
 func (c *massBanCommand) Description() string { return "Ban multiple users by ID or mention" }
 
+// Options options.
 func (c *massBanCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{
@@ -33,12 +36,16 @@ func (c *massBanCommand) Options() []*discordgo.ApplicationCommandOption {
 	}
 }
 
+// RequiresGuild requires guild.
 func (c *massBanCommand) RequiresGuild() bool { return true }
 
+// RequiresPermissions requires permissions.
 func (c *massBanCommand) RequiresPermissions() bool { return true }
 
+// DefaultMemberPermissions defaults member permissions.
 func (c *massBanCommand) DefaultMemberPermissions() int64 { return discordgo.PermissionBanMembers }
 
+// Handle handles.
 func (c *massBanCommand) Handle(ctx *core.Context) error {
 	if enabled, _ := ctx.Config.Config().ResolveFeatures(ctx.GuildID).Lookup("moderation.massban"); !enabled {
 		return core.NewCommandError("Mass ban command is disabled for this server.", true)

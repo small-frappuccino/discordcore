@@ -10,6 +10,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// HandleTranscript handles transcript.
 func (s *TicketService) HandleTranscript(ctx *core.Context) error {
 	channelID := ctx.Interaction.ChannelID
 

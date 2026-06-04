@@ -30,6 +30,7 @@ func newDiscordOAuthSessionStore(path string) (*discordOAuthSessionDiskStore, er
 	return store, nil
 }
 
+// Create creates.
 func (s *discordOAuthSessionDiskStore) Create(params discordOAuthSessionCreateParams) (discordOAuthSession, error) {
 	sessionID, err := generateRandomToken(32)
 	if err != nil {
@@ -67,6 +68,7 @@ func (s *discordOAuthSessionDiskStore) Create(params discordOAuthSessionCreatePa
 	return cloneDiscordOAuthSession(session), nil
 }
 
+// Get gets.
 func (s *discordOAuthSessionDiskStore) Get(sessionID string, now time.Time) (discordOAuthSession, bool, error) {
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
@@ -90,6 +92,7 @@ func (s *discordOAuthSessionDiskStore) Get(sessionID string, now time.Time) (dis
 	return cloneDiscordOAuthSession(session), true, nil
 }
 
+// Save saves.
 func (s *discordOAuthSessionDiskStore) Save(session discordOAuthSession) error {
 	session = canonicalizeDiscordOAuthSession(session)
 	if session.ID == "" {
@@ -112,6 +115,7 @@ func (s *discordOAuthSessionDiskStore) Save(session discordOAuthSession) error {
 	return s.persistLocked()
 }
 
+// Delete deletes.
 func (s *discordOAuthSessionDiskStore) Delete(sessionID string) error {
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {

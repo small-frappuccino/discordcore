@@ -13,6 +13,7 @@ type qotdRowScanner interface {
 	Scan(dest ...any) error
 }
 
+// CreateQOTDQuestion creates qotdquestion.
 func (s *Store) CreateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) (res *QOTDQuestionRecord, err error) {
 	defer func() {
 		if err != nil {
@@ -93,6 +94,7 @@ func (s *Store) CreateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 	return created, nil
 }
 
+// UpdateQOTDQuestion updates qotdquestion.
 func (s *Store) UpdateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) (_ *QOTDQuestionRecord, err error) {
 	defer func() {
 		if err != nil {
@@ -209,6 +211,7 @@ func (s *Store) UpdateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 	return updated, nil
 }
 
+// DeleteQOTDQuestion deletes qotdquestion.
 func (s *Store) DeleteQOTDQuestion(ctx context.Context, guildID string, questionID int64) (err error) {
 	defer func() {
 		if err != nil {
@@ -250,6 +253,7 @@ func (s *Store) DeleteQOTDQuestion(ctx context.Context, guildID string, question
 	return nil
 }
 
+// DeleteQOTDQuestionsByDecks deletes qotdquestions by decks.
 func (s *Store) DeleteQOTDQuestionsByDecks(ctx context.Context, guildID string, deckIDs []string) (err error) {
 	defer func() {
 		if err != nil {
@@ -287,6 +291,7 @@ func (s *Store) DeleteQOTDQuestionsByDecks(ctx context.Context, guildID string, 
 	return nil
 }
 
+// ListQOTDQuestions lists qotdquestions.
 func (s *Store) ListQOTDQuestions(ctx context.Context, guildID, deckID string) (_ []QOTDQuestionRecord, err error) {
 	defer func() {
 		if err != nil {
@@ -341,6 +346,7 @@ func (s *Store) ListQOTDQuestions(ctx context.Context, guildID, deckID string) (
 	return records, nil
 }
 
+// GetQOTDQuestion gets qotdquestion.
 func (s *Store) GetQOTDQuestion(ctx context.Context, guildID string, questionID int64) (*QOTDQuestionRecord, error) {
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" || questionID <= 0 {
@@ -377,6 +383,7 @@ func (s *Store) GetQOTDQuestion(ctx context.Context, guildID string, questionID 
 	return record, nil
 }
 
+// ReorderQOTDQuestions reorders qotdquestions.
 func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID, deckID string, orderedIDs []int64) (err error) {
 	defer func() {
 		if err != nil {
@@ -470,6 +477,7 @@ func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID, deckID string
 	return nil
 }
 
+// ReserveNextQOTDQuestion reserves next qotdquestion.
 func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID, deckID string, publishDateUTC time.Time, selector QOTDQuestionSelector) (_ *QOTDQuestionRecord, err error) {
 	defer func() {
 		if err != nil {
@@ -564,6 +572,7 @@ func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID, deckID str
 	return record, nil
 }
 
+// ReserveNextReadyQOTDQuestion reserves next ready qotdquestion.
 func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID, deckID string, selector QOTDQuestionSelector) (_ *QOTDQuestionRecord, err error) {
 	defer func() {
 		if err != nil {

@@ -21,10 +21,15 @@ func newPartnerAddSubCommand(cm *files.ConfigManager, s *partnerPostingSyncer) *
 	return &partnerAddSubCommand{configManager: cm, syncer: s}
 }
 
+// Name names.
 func (c *partnerAddSubCommand) Name() string { return "add" }
+
+// Description descriptions.
 func (c *partnerAddSubCommand) Description() string {
 	return "Add a new partner to the board"
 }
+
+// Options options.
 func (c *partnerAddSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{Type: discordgo.ApplicationCommandOptionString, Name: optionFandom, Description: "Partner fandom category", Required: true},
@@ -32,8 +37,14 @@ func (c *partnerAddSubCommand) Options() []*discordgo.ApplicationCommandOption {
 		{Type: discordgo.ApplicationCommandOptionString, Name: optionLink, Description: "Partner Discord invite link", Required: true},
 	}
 }
-func (c *partnerAddSubCommand) RequiresGuild() bool       { return true }
+
+// RequiresGuild requires guild.
+func (c *partnerAddSubCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
 func (c *partnerAddSubCommand) RequiresPermissions() bool { return true }
+
+// Handle handles.
 func (c *partnerAddSubCommand) Handle(ctx *core.Context) error {
 	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 	fandom, _ := extractor.StringRequired(optionFandom)
@@ -83,20 +94,33 @@ func newPartnerRemoveSubCommand(cm *files.ConfigManager, s *partnerPostingSyncer
 	return &partnerRemoveSubCommand{configManager: cm, syncer: s}
 }
 
+// Name names.
 func (c *partnerRemoveSubCommand) Name() string { return "remove" }
+
+// Description descriptions.
 func (c *partnerRemoveSubCommand) Description() string {
 	return "Remove a partner from the board"
 }
+
+// Options options.
 func (c *partnerRemoveSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{Type: discordgo.ApplicationCommandOptionString, Name: optionName, Description: "Partner name", Required: true, Autocomplete: true},
 	}
 }
-func (c *partnerRemoveSubCommand) RequiresGuild() bool       { return true }
+
+// RequiresGuild requires guild.
+func (c *partnerRemoveSubCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
 func (c *partnerRemoveSubCommand) RequiresPermissions() bool { return true }
+
+// Autocomplete autocompletes.
 func (c *partnerRemoveSubCommand) Autocomplete(ctx *core.Context) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	return autocompletePartnerName(ctx, c.configManager)
 }
+
+// Handle handles.
 func (c *partnerRemoveSubCommand) Handle(ctx *core.Context) error {
 	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 	name, _ := extractor.StringRequired(optionName)
@@ -140,21 +164,34 @@ func newPartnerLinkSubCommand(cm *files.ConfigManager, s *partnerPostingSyncer) 
 	return &partnerLinkSubCommand{configManager: cm, syncer: s}
 }
 
+// Name names.
 func (c *partnerLinkSubCommand) Name() string { return "link" }
+
+// Description descriptions.
 func (c *partnerLinkSubCommand) Description() string {
 	return "Update a partner's Discord invite link"
 }
+
+// Options options.
 func (c *partnerLinkSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{Type: discordgo.ApplicationCommandOptionString, Name: optionName, Description: "Partner name", Required: true, Autocomplete: true},
 		{Type: discordgo.ApplicationCommandOptionString, Name: optionLink, Description: "New partner Discord invite link", Required: true},
 	}
 }
-func (c *partnerLinkSubCommand) RequiresGuild() bool       { return true }
+
+// RequiresGuild requires guild.
+func (c *partnerLinkSubCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
 func (c *partnerLinkSubCommand) RequiresPermissions() bool { return true }
+
+// Autocomplete autocompletes.
 func (c *partnerLinkSubCommand) Autocomplete(ctx *core.Context) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	return autocompletePartnerName(ctx, c.configManager)
 }
+
+// Handle handles.
 func (c *partnerLinkSubCommand) Handle(ctx *core.Context) error {
 	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 	name, _ := extractor.StringRequired(optionName)
@@ -197,10 +234,15 @@ func newPartnerRenameSubCommand(cm *files.ConfigManager, s *partnerPostingSyncer
 	return &partnerRenameSubCommand{configManager: cm, syncer: s}
 }
 
+// Name names.
 func (c *partnerRenameSubCommand) Name() string { return "rename" }
+
+// Description descriptions.
 func (c *partnerRenameSubCommand) Description() string {
 	return "Rename a partner and/or move them to a different fandom"
 }
+
+// Options options.
 func (c *partnerRenameSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{Type: discordgo.ApplicationCommandOptionString, Name: optionCurrentName, Description: "Current partner name", Required: true, Autocomplete: true},
@@ -208,8 +250,14 @@ func (c *partnerRenameSubCommand) Options() []*discordgo.ApplicationCommandOptio
 		{Type: discordgo.ApplicationCommandOptionString, Name: optionFandom, Description: "New partner fandom category", Required: false},
 	}
 }
-func (c *partnerRenameSubCommand) RequiresGuild() bool       { return true }
+
+// RequiresGuild requires guild.
+func (c *partnerRenameSubCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
 func (c *partnerRenameSubCommand) RequiresPermissions() bool { return true }
+
+// Autocomplete autocompletes.
 func (c *partnerRenameSubCommand) Autocomplete(ctx *core.Context) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	opts := core.GetSubCommandOptions(ctx.Interaction)
 	focused, found := core.HasFocusedOption(opts)
@@ -218,6 +266,8 @@ func (c *partnerRenameSubCommand) Autocomplete(ctx *core.Context) ([]*discordgo.
 	}
 	return nil, nil
 }
+
+// Handle handles.
 func (c *partnerRenameSubCommand) Handle(ctx *core.Context) error {
 	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 	currentName, _ := extractor.StringRequired(optionCurrentName)
@@ -276,11 +326,22 @@ func newPartnerListSubCommand(cm *files.ConfigManager) *partnerListSubCommand {
 	return &partnerListSubCommand{configManager: cm}
 }
 
-func (c *partnerListSubCommand) Name() string                                   { return "list" }
-func (c *partnerListSubCommand) Description() string                            { return "List all partners on the board" }
+// Name names.
+func (c *partnerListSubCommand) Name() string { return "list" }
+
+// Description descriptions.
+func (c *partnerListSubCommand) Description() string { return "List all partners on the board" }
+
+// Options options.
 func (c *partnerListSubCommand) Options() []*discordgo.ApplicationCommandOption { return nil }
-func (c *partnerListSubCommand) RequiresGuild() bool                            { return true }
-func (c *partnerListSubCommand) RequiresPermissions() bool                      { return true }
+
+// RequiresGuild requires guild.
+func (c *partnerListSubCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
+func (c *partnerListSubCommand) RequiresPermissions() bool { return true }
+
+// Handle handles.
 func (c *partnerListSubCommand) Handle(ctx *core.Context) error {
 	cfg := c.configManager.GuildConfig(ctx.GuildID)
 	if cfg == nil {
@@ -313,11 +374,23 @@ type partnerRefreshSubCommand struct {
 func newPartnerRefreshSubCommand(cm *files.ConfigManager, s *partnerPostingSyncer) *partnerRefreshSubCommand {
 	return &partnerRefreshSubCommand{configManager: cm, syncer: s}
 }
-func (c *partnerRefreshSubCommand) Name() string                                   { return "refresh" }
-func (c *partnerRefreshSubCommand) Description() string                            { return "Refresh all active partner postings" }
+
+// Name names.
+func (c *partnerRefreshSubCommand) Name() string { return "refresh" }
+
+// Description descriptions.
+func (c *partnerRefreshSubCommand) Description() string { return "Refresh all active partner postings" }
+
+// Options options.
 func (c *partnerRefreshSubCommand) Options() []*discordgo.ApplicationCommandOption { return nil }
-func (c *partnerRefreshSubCommand) RequiresGuild() bool                            { return true }
-func (c *partnerRefreshSubCommand) RequiresPermissions() bool                      { return true }
+
+// RequiresGuild requires guild.
+func (c *partnerRefreshSubCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
+func (c *partnerRefreshSubCommand) RequiresPermissions() bool { return true }
+
+// Handle handles.
 func (c *partnerRefreshSubCommand) Handle(ctx *core.Context) error {
 	builder := core.NewResponseBuilder(ctx.Session)
 	if err := builder.Build().DeferResponse(ctx.Interaction, true); err != nil {

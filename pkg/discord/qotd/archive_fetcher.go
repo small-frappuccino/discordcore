@@ -26,6 +26,7 @@ type ArchivedMessage struct {
 	CreatedAt          time.Time
 }
 
+// FetchThreadMessages fetchs thread messages.
 func (p *Publisher) FetchThreadMessages(ctx context.Context, session *discordgo.Session, threadID string) ([]ArchivedMessage, error) {
 	collected, err := fetchThreadMessagesRaw(ctx, session, threadID)
 	if err != nil {

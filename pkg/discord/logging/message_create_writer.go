@@ -95,6 +95,7 @@ func newMessageCreateWriter(store *storage.Store, metrics MessageWriterMetrics, 
 	return writer
 }
 
+// Start starts.
 func (w *messageCreateWriter) Start() {
 	if w == nil {
 		return
@@ -102,6 +103,7 @@ func (w *messageCreateWriter) Start() {
 	go w.run()
 }
 
+// Stop stops.
 func (w *messageCreateWriter) Stop(ctx context.Context) error {
 	if w == nil {
 		return nil
@@ -135,6 +137,7 @@ func (w *messageCreateWriter) beginStop() {
 	w.state.CompareAndSwap(uint32(writerStateOpen), uint32(writerStateStopping))
 }
 
+// Enqueue enqueues.
 func (w *messageCreateWriter) Enqueue(record storage.MessageRecord, version *storage.MessageVersion, metric storage.DailyMessageCountDelta) error {
 	if w == nil {
 		return fmt.Errorf("message create writer is nil")
@@ -160,6 +163,7 @@ func (w *messageCreateWriter) Enqueue(record storage.MessageRecord, version *sto
 	return nil
 }
 
+// EnqueueDelete enqueues delete.
 func (w *messageCreateWriter) EnqueueDelete(guildID, messageID string, version *storage.MessageVersion) error {
 	if w == nil {
 		return fmt.Errorf("message create writer is nil")
@@ -183,6 +187,7 @@ func (w *messageCreateWriter) EnqueueDelete(guildID, messageID string, version *
 	return nil
 }
 
+// EnqueueVersion enqueues version.
 func (w *messageCreateWriter) EnqueueVersion(version storage.MessageVersion) error {
 	if w == nil {
 		return fmt.Errorf("message create writer is nil")
@@ -242,6 +247,7 @@ func (w *messageCreateWriter) recordEnqueue(req messageWriteRequest) {
 	w.metrics.ObserveQueueDepth(len(w.queue))
 }
 
+// Lookup lookups.
 func (w *messageCreateWriter) Lookup(guildID, messageID string) *CachedMessage {
 	if w == nil {
 		return nil

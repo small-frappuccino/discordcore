@@ -44,12 +44,15 @@ func newReactionBlockCommand(configManager *files.ConfigManager) *reactionBlockC
 	return &reactionBlockCommand{configManager: configManager}
 }
 
+// Name names.
 func (c *reactionBlockCommand) Name() string { return reactionBlockCommandName }
 
+// Description descriptions.
 func (c *reactionBlockCommand) Description() string {
 	return "Manage blocked reaction emojis for a reactor/target pair"
 }
 
+// Options options.
 func (c *reactionBlockCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{
@@ -86,14 +89,18 @@ func (c *reactionBlockCommand) Options() []*discordgo.ApplicationCommandOption {
 	}
 }
 
+// RequiresGuild requires guild.
 func (c *reactionBlockCommand) RequiresGuild() bool { return true }
 
+// RequiresPermissions requires permissions.
 func (c *reactionBlockCommand) RequiresPermissions() bool { return true }
 
+// DefaultMemberPermissions defaults member permissions.
 func (c *reactionBlockCommand) DefaultMemberPermissions() int64 {
 	return discordgo.PermissionManageMessages
 }
 
+// Handle handles.
 func (c *reactionBlockCommand) Handle(ctx *core.Context) error {
 	action, err := parseReactionBlockAction(ctx)
 	if err != nil {

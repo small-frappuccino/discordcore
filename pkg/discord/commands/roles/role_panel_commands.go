@@ -153,24 +153,37 @@ func newRolePanelPostSubCommand(cm *files.ConfigManager) *rolePanelPostSubComman
 	return &rolePanelPostSubCommand{configManager: cm}
 }
 
+// Name names.
 func (c *rolePanelPostSubCommand) Name() string { return rolePanelSubPost }
+
+// Description descriptions.
 func (c *rolePanelPostSubCommand) Description() string {
 	return "Post one role panel publicly in this channel"
 }
+
+// Options options.
 func (c *rolePanelPostSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		rolePanelKeyOption(true),
 		{Type: discordgo.ApplicationCommandOptionString, Name: rolePanelOptionWebhookURL, Description: "Discord Webhook URL to post the panel with a custom name and avatar", Required: false},
 	}
 }
-func (c *rolePanelPostSubCommand) RequiresGuild() bool       { return true }
+
+// RequiresGuild requires guild.
+func (c *rolePanelPostSubCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
 func (c *rolePanelPostSubCommand) RequiresPermissions() bool { return true }
+
+// HandleAutocomplete handles autocomplete.
 func (c *rolePanelPostSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == rolePanelOptionKey {
 		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
 	}
 	return nil, nil
 }
+
+// Handle handles.
 func (c *rolePanelPostSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return fmt.Errorf("rolePanelPostSubCommand.Handle: %w", err)
@@ -297,21 +310,34 @@ func newRolePanelPreviewSubCommand(cm *files.ConfigManager) *rolePanelPreviewSub
 	return &rolePanelPreviewSubCommand{configManager: cm}
 }
 
+// Name names.
 func (c *rolePanelPreviewSubCommand) Name() string { return rolePanelSubPreview }
+
+// Description descriptions.
 func (c *rolePanelPreviewSubCommand) Description() string {
 	return "Show an ephemeral preview of one role panel"
 }
+
+// Options options.
 func (c *rolePanelPreviewSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{rolePanelKeyOption(true)}
 }
-func (c *rolePanelPreviewSubCommand) RequiresGuild() bool       { return true }
+
+// RequiresGuild requires guild.
+func (c *rolePanelPreviewSubCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
 func (c *rolePanelPreviewSubCommand) RequiresPermissions() bool { return true }
+
+// HandleAutocomplete handles autocomplete.
 func (c *rolePanelPreviewSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == rolePanelOptionKey {
 		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
 	}
 	return nil, nil
 }
+
+// Handle handles.
 func (c *rolePanelPreviewSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return fmt.Errorf("rolePanelPreviewSubCommand.Handle: %w", err)
@@ -341,10 +367,15 @@ func newRolePanelSetSubCommand(cm *files.ConfigManager, syncer *rolePanelPosting
 	return &rolePanelSetSubCommand{configManager: cm, syncer: syncer}
 }
 
+// Name names.
 func (c *rolePanelSetSubCommand) Name() string { return rolePanelSubSet }
+
+// Description descriptions.
 func (c *rolePanelSetSubCommand) Description() string {
 	return "Set embed title, description, and color for one role panel"
 }
+
+// Options options.
 func (c *rolePanelSetSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		rolePanelKeyOption(true),
@@ -359,14 +390,22 @@ func (c *rolePanelSetSubCommand) Options() []*discordgo.ApplicationCommandOption
 		{Type: discordgo.ApplicationCommandOptionString, Name: rolePanelOptionThumbnailURL, Description: "Embed thumbnail URL (omit to keep current, pass empty string to clear)", Required: false},
 	}
 }
-func (c *rolePanelSetSubCommand) RequiresGuild() bool       { return true }
+
+// RequiresGuild requires guild.
+func (c *rolePanelSetSubCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
 func (c *rolePanelSetSubCommand) RequiresPermissions() bool { return true }
+
+// HandleAutocomplete handles autocomplete.
 func (c *rolePanelSetSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == rolePanelOptionKey {
 		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
 	}
 	return nil, nil
 }
+
+// Handle handles.
 func (c *rolePanelSetSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return fmt.Errorf("rolePanelSetSubCommand.Handle: %w", err)
@@ -431,21 +470,34 @@ func newRolePanelDeleteSubCommand(cm *files.ConfigManager, syncer *rolePanelPost
 	return &rolePanelDeleteSubCommand{configManager: cm, syncer: syncer}
 }
 
+// Name names.
 func (c *rolePanelDeleteSubCommand) Name() string { return rolePanelSubDelete }
+
+// Description descriptions.
 func (c *rolePanelDeleteSubCommand) Description() string {
 	return "Delete one role panel entirely"
 }
+
+// Options options.
 func (c *rolePanelDeleteSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{rolePanelKeyOption(true)}
 }
-func (c *rolePanelDeleteSubCommand) RequiresGuild() bool       { return true }
+
+// RequiresGuild requires guild.
+func (c *rolePanelDeleteSubCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
 func (c *rolePanelDeleteSubCommand) RequiresPermissions() bool { return true }
+
+// HandleAutocomplete handles autocomplete.
 func (c *rolePanelDeleteSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == rolePanelOptionKey {
 		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
 	}
 	return nil, nil
 }
+
+// Handle handles.
 func (c *rolePanelDeleteSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return fmt.Errorf("rolePanelDeleteSubCommand.Handle: %w", err)
@@ -492,13 +544,24 @@ func newRolePanelListSubCommand(cm *files.ConfigManager) *rolePanelListSubComman
 	return &rolePanelListSubCommand{configManager: cm}
 }
 
+// Name names.
 func (c *rolePanelListSubCommand) Name() string { return rolePanelSubList }
+
+// Description descriptions.
 func (c *rolePanelListSubCommand) Description() string {
 	return "List configured role panel keys for this server"
 }
+
+// Options options.
 func (c *rolePanelListSubCommand) Options() []*discordgo.ApplicationCommandOption { return nil }
-func (c *rolePanelListSubCommand) RequiresGuild() bool                            { return true }
-func (c *rolePanelListSubCommand) RequiresPermissions() bool                      { return true }
+
+// RequiresGuild requires guild.
+func (c *rolePanelListSubCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
+func (c *rolePanelListSubCommand) RequiresPermissions() bool { return true }
+
+// Handle handles.
 func (c *rolePanelListSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return fmt.Errorf("rolePanelListSubCommand.Handle: %w", err)
@@ -533,10 +596,15 @@ func newRolePanelButtonAddSubCommand(cm *files.ConfigManager, syncer *rolePanelP
 	return &rolePanelButtonAddSubCommand{configManager: cm, syncer: syncer}
 }
 
+// Name names.
 func (c *rolePanelButtonAddSubCommand) Name() string { return rolePanelSubButtonAdd }
+
+// Description descriptions.
 func (c *rolePanelButtonAddSubCommand) Description() string {
 	return "Add or replace one button on a panel"
 }
+
+// Options options.
 func (c *rolePanelButtonAddSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		rolePanelKeyOption(true),
@@ -545,14 +613,22 @@ func (c *rolePanelButtonAddSubCommand) Options() []*discordgo.ApplicationCommand
 		{Type: discordgo.ApplicationCommandOptionString, Name: rolePanelOptionEmoji, Description: "Custom emoji like <:name:id> or a unicode glyph (optional)", Required: false},
 	}
 }
-func (c *rolePanelButtonAddSubCommand) RequiresGuild() bool       { return true }
+
+// RequiresGuild requires guild.
+func (c *rolePanelButtonAddSubCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
 func (c *rolePanelButtonAddSubCommand) RequiresPermissions() bool { return true }
+
+// HandleAutocomplete handles autocomplete.
 func (c *rolePanelButtonAddSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == rolePanelOptionKey {
 		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
 	}
 	return nil, nil
 }
+
+// Handle handles.
 func (c *rolePanelButtonAddSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return fmt.Errorf("rolePanelButtonAddSubCommand.Handle: %w", err)
@@ -604,24 +680,37 @@ func newRolePanelButtonRemoveSubCommand(cm *files.ConfigManager, syncer *rolePan
 	return &rolePanelButtonRemoveSubCommand{configManager: cm, syncer: syncer}
 }
 
+// Name names.
 func (c *rolePanelButtonRemoveSubCommand) Name() string { return rolePanelSubButtonRemove }
+
+// Description descriptions.
 func (c *rolePanelButtonRemoveSubCommand) Description() string {
 	return "Remove one button from a panel"
 }
+
+// Options options.
 func (c *rolePanelButtonRemoveSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		rolePanelKeyOption(true),
 		{Type: discordgo.ApplicationCommandOptionRole, Name: rolePanelOptionRole, Description: "Role whose button should be removed", Required: true},
 	}
 }
-func (c *rolePanelButtonRemoveSubCommand) RequiresGuild() bool       { return true }
+
+// RequiresGuild requires guild.
+func (c *rolePanelButtonRemoveSubCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
 func (c *rolePanelButtonRemoveSubCommand) RequiresPermissions() bool { return true }
+
+// HandleAutocomplete handles autocomplete.
 func (c *rolePanelButtonRemoveSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == rolePanelOptionKey {
 		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
 	}
 	return nil, nil
 }
+
+// Handle handles.
 func (c *rolePanelButtonRemoveSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return fmt.Errorf("rolePanelButtonRemoveSubCommand.Handle: %w", err)
@@ -659,21 +748,34 @@ func newRolePanelButtonListSubCommand(cm *files.ConfigManager) *rolePanelButtonL
 	return &rolePanelButtonListSubCommand{configManager: cm}
 }
 
+// Name names.
 func (c *rolePanelButtonListSubCommand) Name() string { return rolePanelSubButtonList }
+
+// Description descriptions.
 func (c *rolePanelButtonListSubCommand) Description() string {
 	return "List the buttons configured on one panel"
 }
+
+// Options options.
 func (c *rolePanelButtonListSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{rolePanelKeyOption(true)}
 }
-func (c *rolePanelButtonListSubCommand) RequiresGuild() bool       { return true }
+
+// RequiresGuild requires guild.
+func (c *rolePanelButtonListSubCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
 func (c *rolePanelButtonListSubCommand) RequiresPermissions() bool { return true }
+
+// HandleAutocomplete handles autocomplete.
 func (c *rolePanelButtonListSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == rolePanelOptionKey {
 		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
 	}
 	return nil, nil
 }
+
+// Handle handles.
 func (c *rolePanelButtonListSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return fmt.Errorf("rolePanelButtonListSubCommand.Handle: %w", err)
@@ -712,10 +814,15 @@ func newRolePanelFieldAddSubCommand(cm *files.ConfigManager, syncer *rolePanelPo
 	return &rolePanelFieldAddSubCommand{configManager: cm, syncer: syncer}
 }
 
+// Name names.
 func (c *rolePanelFieldAddSubCommand) Name() string { return rolePanelSubFieldAdd }
+
+// Description descriptions.
 func (c *rolePanelFieldAddSubCommand) Description() string {
 	return "Add a field to the embed of a role panel"
 }
+
+// Options options.
 func (c *rolePanelFieldAddSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		rolePanelKeyOption(true),
@@ -724,14 +831,22 @@ func (c *rolePanelFieldAddSubCommand) Options() []*discordgo.ApplicationCommandO
 		{Type: discordgo.ApplicationCommandOptionBoolean, Name: rolePanelOptionFieldInline, Description: "Whether the field is inline (default: false)", Required: false},
 	}
 }
-func (c *rolePanelFieldAddSubCommand) RequiresGuild() bool       { return true }
+
+// RequiresGuild requires guild.
+func (c *rolePanelFieldAddSubCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
 func (c *rolePanelFieldAddSubCommand) RequiresPermissions() bool { return true }
+
+// HandleAutocomplete handles autocomplete.
 func (c *rolePanelFieldAddSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == rolePanelOptionKey {
 		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
 	}
 	return nil, nil
 }
+
+// Handle handles.
 func (c *rolePanelFieldAddSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return fmt.Errorf("rolePanelFieldAddSubCommand.Handle: %w", err)
@@ -779,24 +894,37 @@ func newRolePanelFieldRemoveSubCommand(cm *files.ConfigManager, syncer *rolePane
 	return &rolePanelFieldRemoveSubCommand{configManager: cm, syncer: syncer}
 }
 
+// Name names.
 func (c *rolePanelFieldRemoveSubCommand) Name() string { return rolePanelSubFieldRemove }
+
+// Description descriptions.
 func (c *rolePanelFieldRemoveSubCommand) Description() string {
 	return "Remove a field from the embed of a role panel by its index"
 }
+
+// Options options.
 func (c *rolePanelFieldRemoveSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		rolePanelKeyOption(true),
 		{Type: discordgo.ApplicationCommandOptionInteger, Name: rolePanelOptionFieldIndex, Description: "1-based index of the field to remove (use /roles field list to see indexes)", Required: true},
 	}
 }
-func (c *rolePanelFieldRemoveSubCommand) RequiresGuild() bool       { return true }
+
+// RequiresGuild requires guild.
+func (c *rolePanelFieldRemoveSubCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
 func (c *rolePanelFieldRemoveSubCommand) RequiresPermissions() bool { return true }
+
+// HandleAutocomplete handles autocomplete.
 func (c *rolePanelFieldRemoveSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == rolePanelOptionKey {
 		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
 	}
 	return nil, nil
 }
+
+// Handle handles.
 func (c *rolePanelFieldRemoveSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return fmt.Errorf("rolePanelFieldRemoveSubCommand.Handle: %w", err)
@@ -835,21 +963,34 @@ func newRolePanelFieldListSubCommand(cm *files.ConfigManager) *rolePanelFieldLis
 	return &rolePanelFieldListSubCommand{configManager: cm}
 }
 
+// Name names.
 func (c *rolePanelFieldListSubCommand) Name() string { return rolePanelSubFieldList }
+
+// Description descriptions.
 func (c *rolePanelFieldListSubCommand) Description() string {
 	return "List the fields configured on one panel"
 }
+
+// Options options.
 func (c *rolePanelFieldListSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{rolePanelKeyOption(true)}
 }
-func (c *rolePanelFieldListSubCommand) RequiresGuild() bool       { return true }
+
+// RequiresGuild requires guild.
+func (c *rolePanelFieldListSubCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
 func (c *rolePanelFieldListSubCommand) RequiresPermissions() bool { return true }
+
+// HandleAutocomplete handles autocomplete.
 func (c *rolePanelFieldListSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == rolePanelOptionKey {
 		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
 	}
 	return nil, nil
 }
+
+// Handle handles.
 func (c *rolePanelFieldListSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return fmt.Errorf("rolePanelFieldListSubCommand.Handle: %w", err)
@@ -892,21 +1033,34 @@ func newRolePanelRefreshSubCommand(cm *files.ConfigManager, syncer *rolePanelPos
 	return &rolePanelRefreshSubCommand{configManager: cm, syncer: syncer}
 }
 
+// Name names.
 func (c *rolePanelRefreshSubCommand) Name() string { return rolePanelSubRefresh }
+
+// Description descriptions.
 func (c *rolePanelRefreshSubCommand) Description() string {
 	return "Re-render all live postings of one panel to match the current configuration"
 }
+
+// Options options.
 func (c *rolePanelRefreshSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{rolePanelKeyOption(true)}
 }
-func (c *rolePanelRefreshSubCommand) RequiresGuild() bool       { return true }
+
+// RequiresGuild requires guild.
+func (c *rolePanelRefreshSubCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
 func (c *rolePanelRefreshSubCommand) RequiresPermissions() bool { return true }
+
+// HandleAutocomplete handles autocomplete.
 func (c *rolePanelRefreshSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == rolePanelOptionKey {
 		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
 	}
 	return nil, nil
 }
+
+// Handle handles.
 func (c *rolePanelRefreshSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return fmt.Errorf("rolePanelRefreshSubCommand.Handle: %w", err)
@@ -950,10 +1104,15 @@ func newRolePanelUnpostSubCommand(cm *files.ConfigManager, syncer *rolePanelPost
 	return &rolePanelUnpostSubCommand{configManager: cm, syncer: syncer}
 }
 
+// Name names.
 func (c *rolePanelUnpostSubCommand) Name() string { return rolePanelSubUnpost }
+
+// Description descriptions.
 func (c *rolePanelUnpostSubCommand) Description() string {
 	return "Stop tracking one posted panel message and strip its buttons"
 }
+
+// Options options.
 func (c *rolePanelUnpostSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{{
 		Type:        discordgo.ApplicationCommandOptionString,
@@ -962,14 +1121,22 @@ func (c *rolePanelUnpostSubCommand) Options() []*discordgo.ApplicationCommandOpt
 		Required:    true,
 	}}
 }
-func (c *rolePanelUnpostSubCommand) RequiresGuild() bool       { return true }
+
+// RequiresGuild requires guild.
+func (c *rolePanelUnpostSubCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
 func (c *rolePanelUnpostSubCommand) RequiresPermissions() bool { return true }
+
+// HandleAutocomplete handles autocomplete.
 func (c *rolePanelUnpostSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == rolePanelOptionKey {
 		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
 	}
 	return nil, nil
 }
+
+// Handle handles.
 func (c *rolePanelUnpostSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return fmt.Errorf("rolePanelUnpostSubCommand.Handle: %w", err)
@@ -1030,15 +1197,26 @@ func newRolePanelToggleSubCommand(cm *files.ConfigManager) *rolePanelToggleSubCo
 	return &rolePanelToggleSubCommand{configManager: cm}
 }
 
+// Name names.
 func (c *rolePanelToggleSubCommand) Name() string { return "toggle" }
+
+// Description descriptions.
 func (c *rolePanelToggleSubCommand) Description() string {
 	return "Toggle interactive ephemeral messages for this server"
 }
+
+// Options options.
 func (c *rolePanelToggleSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	return nil
 }
-func (c *rolePanelToggleSubCommand) RequiresGuild() bool       { return true }
+
+// RequiresGuild requires guild.
+func (c *rolePanelToggleSubCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
 func (c *rolePanelToggleSubCommand) RequiresPermissions() bool { return true }
+
+// Handle handles.
 func (c *rolePanelToggleSubCommand) Handle(ctx *core.Context) error {
 	var newValue bool
 	_, err := c.configManager.UpdateConfig(func(cfg *files.BotConfig) error {
@@ -1213,12 +1391,15 @@ func newRolePanelImportSubCommand(cm *files.ConfigManager, syncer *rolePanelPost
 	return &rolePanelImportSubCommand{configManager: cm, syncer: syncer}
 }
 
+// Name names.
 func (c *rolePanelImportSubCommand) Name() string { return rolePanelSubImport }
 
+// Description descriptions.
 func (c *rolePanelImportSubCommand) Description() string {
 	return "Import a JSON embed from a Pastebin URL"
 }
 
+// Options options.
 func (c *rolePanelImportSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{
@@ -1236,8 +1417,13 @@ func (c *rolePanelImportSubCommand) Options() []*discordgo.ApplicationCommandOpt
 	}
 }
 
-func (c *rolePanelImportSubCommand) RequiresGuild() bool       { return true }
+// RequiresGuild requires guild.
+func (c *rolePanelImportSubCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
 func (c *rolePanelImportSubCommand) RequiresPermissions() bool { return true }
+
+// HandleAutocomplete handles autocomplete.
 func (c *rolePanelImportSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == rolePanelOptionKey {
 		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
@@ -1245,6 +1431,7 @@ func (c *rolePanelImportSubCommand) HandleAutocomplete(ctx *core.Context, focuse
 	return nil, nil
 }
 
+// Handle handles.
 func (c *rolePanelImportSubCommand) Handle(ctx *core.Context) error {
 	builder := rolePanelConfigurationResponseBuilder(ctx.Session)
 	guildID := ctx.GuildID
@@ -1288,12 +1475,15 @@ func newRolePanelExportSubCommand(cm *files.ConfigManager) *rolePanelExportSubCo
 	return &rolePanelExportSubCommand{configManager: cm}
 }
 
+// Name names.
 func (c *rolePanelExportSubCommand) Name() string { return rolePanelSubExport }
 
+// Description descriptions.
 func (c *rolePanelExportSubCommand) Description() string {
 	return "Export a role panel embed to a Pastebin provider"
 }
 
+// Options options.
 func (c *rolePanelExportSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{
@@ -1305,8 +1495,13 @@ func (c *rolePanelExportSubCommand) Options() []*discordgo.ApplicationCommandOpt
 	}
 }
 
-func (c *rolePanelExportSubCommand) RequiresGuild() bool       { return true }
+// RequiresGuild requires guild.
+func (c *rolePanelExportSubCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
 func (c *rolePanelExportSubCommand) RequiresPermissions() bool { return true }
+
+// HandleAutocomplete handles autocomplete.
 func (c *rolePanelExportSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == rolePanelOptionKey {
 		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
@@ -1314,6 +1509,7 @@ func (c *rolePanelExportSubCommand) HandleAutocomplete(ctx *core.Context, focuse
 	return nil, nil
 }
 
+// Handle handles.
 func (c *rolePanelExportSubCommand) Handle(ctx *core.Context) error {
 	builder := rolePanelConfigurationResponseBuilder(ctx.Session)
 	guildID := ctx.GuildID

@@ -12,10 +12,13 @@ type timeoutCommand struct{}
 
 func newTimeoutCommand() *timeoutCommand { return &timeoutCommand{} }
 
+// Name names.
 func (c *timeoutCommand) Name() string { return "timeout" }
 
+// Description descriptions.
 func (c *timeoutCommand) Description() string { return "Timeout a member" }
 
+// Options options.
 func (c *timeoutCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{
@@ -41,14 +44,18 @@ func (c *timeoutCommand) Options() []*discordgo.ApplicationCommandOption {
 	}
 }
 
+// RequiresGuild requires guild.
 func (c *timeoutCommand) RequiresGuild() bool { return true }
 
+// RequiresPermissions requires permissions.
 func (c *timeoutCommand) RequiresPermissions() bool { return true }
 
+// DefaultMemberPermissions defaults member permissions.
 func (c *timeoutCommand) DefaultMemberPermissions() int64 {
 	return discordgo.PermissionModerateMembers
 }
 
+// Handle handles.
 func (c *timeoutCommand) Handle(ctx *core.Context) error {
 	if enabled, _ := ctx.Config.Config().ResolveFeatures(ctx.GuildID).Lookup("moderation.timeout"); !enabled {
 		return core.NewCommandError("Timeout command is disabled for this server.", true)

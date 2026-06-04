@@ -40,6 +40,7 @@ func (s *Store) NextModerationCaseNumber(guildID string) (int64, error) {
 	return next, nil
 }
 
+// CreateModerationWarning creates moderation warning.
 func (s *Store) CreateModerationWarning(guildID, userID, moderatorID, reason string, createdAt time.Time) (ModerationWarning, error) {
 
 	guildID = strings.TrimSpace(guildID)
@@ -104,6 +105,7 @@ func (s *Store) CreateModerationWarning(guildID, userID, moderatorID, reason str
 	return warning, nil
 }
 
+// ListModerationWarnings lists moderation warnings.
 func (s *Store) ListModerationWarnings(guildID, userID string, limit int) ([]ModerationWarning, error) {
 
 	guildID = strings.TrimSpace(guildID)

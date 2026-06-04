@@ -19,18 +19,29 @@ func newPartnerPostSubCommand(cm *files.ConfigManager) *partnerPostSubCommand {
 	return &partnerPostSubCommand{configManager: cm}
 }
 
+// Name names.
 func (c *partnerPostSubCommand) Name() string { return "post" }
+
+// Description descriptions.
 func (c *partnerPostSubCommand) Description() string {
 	return "Publish the partner board to a channel or webhook"
 }
+
+// Options options.
 func (c *partnerPostSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{Type: discordgo.ApplicationCommandOptionChannel, Name: "channel", Description: "Target channel", Required: false},
 		{Type: discordgo.ApplicationCommandOptionString, Name: optionWebhookURL, Description: "Target webhook URL", Required: false},
 	}
 }
-func (c *partnerPostSubCommand) RequiresGuild() bool       { return true }
+
+// RequiresGuild requires guild.
+func (c *partnerPostSubCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
 func (c *partnerPostSubCommand) RequiresPermissions() bool { return true }
+
+// Handle handles.
 func (c *partnerPostSubCommand) Handle(ctx *core.Context) error {
 	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 
@@ -155,17 +166,28 @@ func newPartnerUnpostSubCommand(cm *files.ConfigManager) *partnerUnpostSubComman
 	return &partnerUnpostSubCommand{configManager: cm}
 }
 
+// Name names.
 func (c *partnerUnpostSubCommand) Name() string { return "unpost" }
+
+// Description descriptions.
 func (c *partnerUnpostSubCommand) Description() string {
 	return "Stop tracking and remove a partner board posting"
 }
+
+// Options options.
 func (c *partnerUnpostSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{Type: discordgo.ApplicationCommandOptionString, Name: optionMessageID, Description: "Message ID of the posting to remove", Required: true},
 	}
 }
-func (c *partnerUnpostSubCommand) RequiresGuild() bool       { return true }
+
+// RequiresGuild requires guild.
+func (c *partnerUnpostSubCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
 func (c *partnerUnpostSubCommand) RequiresPermissions() bool { return true }
+
+// Handle handles.
 func (c *partnerUnpostSubCommand) Handle(ctx *core.Context) error {
 	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 	messageID, _ := extractor.StringRequired(optionMessageID)

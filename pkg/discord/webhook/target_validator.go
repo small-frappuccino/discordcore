@@ -16,6 +16,11 @@ const defaultWebhookTargetValidationTimeout = 3 * time.Second
 // TargetValidationClass classifies webhook target validation failures.
 type TargetValidationClass string
 
+// TargetValidationClassUnknown defines target validation class unknown.
+// TargetValidationClassDiscordUnavailable defines target validation class discord unavailable.
+// TargetValidationClassRateLimited defines target validation class rate limited.
+// TargetValidationClassNotFound defines target validation class not found.
+// TargetValidationClassAuthDenied defines target validation class auth denied.
 const (
 	TargetValidationClassAuthDenied         TargetValidationClass = "auth_denied"
 	TargetValidationClassNotFound           TargetValidationClass = "not_found"
@@ -33,6 +38,7 @@ type TargetValidationError struct {
 	Cause      error
 }
 
+// Error errors.
 func (e *TargetValidationError) Error() string {
 	if e == nil {
 		return "target validation error"
@@ -63,6 +69,7 @@ func (e *TargetValidationError) Error() string {
 	return base
 }
 
+// Unwrap unwraps.
 func (e *TargetValidationError) Unwrap() error {
 	if e == nil {
 		return nil

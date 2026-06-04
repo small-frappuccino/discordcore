@@ -18,8 +18,10 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/service"
 )
 
+// DefaultBotInstanceID defines default bot instance id.
 const DefaultBotInstanceID = "default"
 
+// ErrNoBotTokensConfigured defines err no bot tokens configured.
 var ErrNoBotTokensConfigured = errors.New("no bot instances have a configured token")
 
 // BotInstanceDefinition describes one Discord bot instance managed by the host

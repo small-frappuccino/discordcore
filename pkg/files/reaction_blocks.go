@@ -7,29 +7,37 @@ import (
 	"strings"
 )
 
+// ReactionBlockEmojiKindUnicode defines reaction block emoji kind unicode.
+// ReactionBlockEmojiKindCustom defines reaction block emoji kind custom.
 const (
 	ReactionBlockEmojiKindCustom  = "custom"
 	ReactionBlockEmojiKindUnicode = "unicode"
 )
 
+// ErrInvalidReactionBlockInput defines err invalid reaction block input.
 var ErrInvalidReactionBlockInput = errors.New("invalid reaction block input")
 
+// CloneReactionBlockConfig clones reaction block config.
 func CloneReactionBlockConfig(in ReactionBlockConfig) ReactionBlockConfig {
 	return cloneReactionBlockConfig(in)
 }
 
+// IsZero is zero.
 func (cfg ReactionBlockConfig) IsZero() bool {
 	return len(cfg.Rules) == 0
 }
 
+// IsZero is zero.
 func (rule ReactionBlockRuleConfig) IsZero() bool {
 	return strings.TrimSpace(rule.ReactorUserID) == "" && strings.TrimSpace(rule.TargetUserID) == "" && len(rule.Emojis) == 0
 }
 
+// IsZero is zero.
 func (emoji ReactionBlockEmojiConfig) IsZero() bool {
 	return reactionBlockEmojiKey(emoji) == ""
 }
 
+// Display displays.
 func (emoji ReactionBlockEmojiConfig) Display() string {
 	switch reactionBlockEmojiKind(emoji.Kind) {
 	case ReactionBlockEmojiKindCustom:
@@ -55,6 +63,7 @@ func (emoji ReactionBlockEmojiConfig) Display() string {
 	return ""
 }
 
+// EmojisForPair emojis for pair.
 func (cfg ReactionBlockConfig) EmojisForPair(reactorUserID, targetUserID string) []ReactionBlockEmojiConfig {
 	reactorUserID = strings.TrimSpace(reactorUserID)
 	targetUserID = strings.TrimSpace(targetUserID)
@@ -83,6 +92,7 @@ func (cfg ReactionBlockConfig) EmojisForPair(reactorUserID, targetUserID string)
 	return nil
 }
 
+// BlocksEmojiForPair blocks emoji for pair.
 func (cfg ReactionBlockConfig) BlocksEmojiForPair(reactorUserID, targetUserID string, emoji ReactionBlockEmojiConfig) bool {
 	key := reactionBlockEmojiKey(emoji)
 	if key == "" {
@@ -96,6 +106,7 @@ func (cfg ReactionBlockConfig) BlocksEmojiForPair(reactorUserID, targetUserID st
 	return false
 }
 
+// NormalizeReactionBlockConfig normalizes reaction block config.
 func NormalizeReactionBlockConfig(in ReactionBlockConfig) (ReactionBlockConfig, error) {
 	if len(in.Rules) == 0 {
 		return ReactionBlockConfig{}, nil
@@ -134,6 +145,7 @@ func NormalizeReactionBlockConfig(in ReactionBlockConfig) (ReactionBlockConfig, 
 	return ReactionBlockConfig{Rules: out}, nil
 }
 
+// ReactionBlockConfig reactions block config.
 func (mgr *ConfigManager) ReactionBlockConfig(guildID string) (_ ReactionBlockConfig, err error) {
 	defer func() {
 		if err != nil {
@@ -160,10 +172,12 @@ func (mgr *ConfigManager) ReactionBlockConfig(guildID string) (_ ReactionBlockCo
 	return normalized, nil
 }
 
+// GetReactionBlockConfig gets reaction block config.
 func (mgr *ConfigManager) GetReactionBlockConfig(guildID string) (ReactionBlockConfig, error) {
 	return mgr.ReactionBlockConfig(guildID)
 }
 
+// SetReactionBlockConfig sets reaction block config.
 func (mgr *ConfigManager) SetReactionBlockConfig(guildID string, cfg ReactionBlockConfig) (err error) {
 	defer func() {
 		if err != nil {

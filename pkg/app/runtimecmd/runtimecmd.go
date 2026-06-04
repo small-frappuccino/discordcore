@@ -13,6 +13,14 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
+// QOTDDevelopmentTokenEnv defines qotddevelopment token env.
+// QOTDProductionTokenEnv defines qotdproduction token env.
+// MainDevelopmentTokenEnv defines main development token env.
+// MainProductionTokenEnv defines main production token env.
+// QOTDRuntimeAppName defines qotdruntime app name.
+// MainRuntimeAppName defines main runtime app name.
+// QOTDBotInstanceID defines qotdbot instance id.
+// MainBotInstanceID defines main bot instance id.
 const (
 	MainBotInstanceID       = "main"
 	QOTDBotInstanceID       = "companion"
@@ -40,6 +48,7 @@ type Spec struct {
 // It is the injection seam that lets Run be tested without a live runtime.
 type Runner func(appName, tokenEnv string, opts discordcoreapp.RunOptions) error
 
+// Run runs.
 func Run(args []string, output io.Writer, spec Spec, runner Runner) error {
 	fs := flag.NewFlagSet(spec.CommandName, flag.ContinueOnError)
 	fs.SetOutput(output)
@@ -67,6 +76,7 @@ func Run(args []string, output io.Writer, spec Spec, runner Runner) error {
 	return nil
 }
 
+// SelectTokenEnv selects token env.
 func SelectTokenEnv(testMode bool, spec Spec) string {
 	if testMode {
 		return spec.DevelopmentTokenEnv
@@ -85,6 +95,7 @@ func SelectTokenEnv(testMode bool, spec Spec) string {
 	return spec.ProductionTokenEnv
 }
 
+// MainSpec mains spec.
 func MainSpec(commandName string) Spec {
 	return Spec{
 		CommandName:         commandName,
@@ -99,6 +110,7 @@ func MainSpec(commandName string) Spec {
 	}
 }
 
+// QOTDSpec qotdspecs.
 func QOTDSpec(commandName string) Spec {
 	return Spec{
 		CommandName:         commandName,

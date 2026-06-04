@@ -72,10 +72,12 @@ type RuntimeService struct {
 	running bool
 }
 
+// NewRuntimeService news runtime service.
 func NewRuntimeService(session *discordgo.Session, configManager *files.ConfigManager, lifecycleService GuildLifecycleService) *RuntimeService {
 	return NewRuntimeServiceForBot(session, configManager, lifecycleService, "", "")
 }
 
+// NewRuntimeServiceForBot news runtime service for bot.
 func NewRuntimeServiceForBot(
 	session *discordgo.Session,
 	configManager *files.ConfigManager,
@@ -98,6 +100,7 @@ func NewRuntimeServiceForBot(
 	}
 }
 
+// Start starts.
 func (s *RuntimeService) Start() {
 	s.mu.Lock()
 	if s.running {
@@ -117,6 +120,7 @@ func (s *RuntimeService) Start() {
 	go s.loop()
 }
 
+// Stop stops.
 func (s *RuntimeService) Stop() {
 	s.stopOnce.Do(func() { close(s.stopCh) })
 	s.wg.Wait()
@@ -126,6 +130,7 @@ func (s *RuntimeService) Stop() {
 	s.mu.Unlock()
 }
 
+// IsRunning is running.
 func (s *RuntimeService) IsRunning() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

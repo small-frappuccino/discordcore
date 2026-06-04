@@ -21,6 +21,7 @@ func newFeatureMutationApplier(configManager *files.ConfigManager) *featureMutat
 	return &featureMutationApplier{configManager: configManager}
 }
 
+// ApplyPatch applys patch.
 func (applier *featureMutationApplier) ApplyPatch(
 	r *http.Request,
 	guildID string,

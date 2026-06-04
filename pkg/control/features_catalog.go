@@ -12,6 +12,7 @@ type featurePatchBadRequestError struct {
 	message string
 }
 
+// Error errors.
 func (e featurePatchBadRequestError) Error() string {
 	return e.message
 }

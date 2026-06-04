@@ -22,6 +22,7 @@ type QuestionsListEmbedParams struct {
 	TotalQuestions int
 }
 
+// BuildQuestionsListEmbed builds questions list embed.
 func BuildQuestionsListEmbed(params QuestionsListEmbedParams) *discordgo.MessageEmbed {
 	pageSize := params.PageSize
 	if pageSize <= 0 {

@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 )
 
+// ErrEmbedJSONValidation defines err embed jsonvalidation.
 var (
 	ErrEmbedJSONValidation = errors.New("embed json validation failed")
 )

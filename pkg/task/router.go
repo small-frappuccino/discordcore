@@ -109,6 +109,7 @@ type ExecutionLimiter struct {
 	sem chan struct{}
 }
 
+// NewExecutionLimiter news execution limiter.
 func NewExecutionLimiter(maxWorkers int) *ExecutionLimiter {
 	if maxWorkers <= 0 {
 		return nil
@@ -118,6 +119,7 @@ func NewExecutionLimiter(maxWorkers int) *ExecutionLimiter {
 	}
 }
 
+// Acquire acquires.
 func (l *ExecutionLimiter) Acquire() {
 	if l == nil || l.sem == nil {
 		return
@@ -125,6 +127,7 @@ func (l *ExecutionLimiter) Acquire() {
 	l.sem <- struct{}{}
 }
 
+// Release releases.
 func (l *ExecutionLimiter) Release() {
 	if l == nil || l.sem == nil {
 		return
@@ -135,6 +138,7 @@ func (l *ExecutionLimiter) Release() {
 	}
 }
 
+// Capacity capacitys.
 func (l *ExecutionLimiter) Capacity() int {
 	if l == nil || l.sem == nil {
 		return 0
@@ -239,10 +243,12 @@ type scheduledRetry struct {
 
 type retryTaskHeap []*scheduledRetry
 
+// Len lens.
 func (h retryTaskHeap) Len() int {
 	return len(h)
 }
 
+// Less less.
 func (h retryTaskHeap) Less(i, j int) bool {
 	if h[i].at.Equal(h[j].at) {
 		return h[i].seq < h[j].seq
@@ -250,18 +256,21 @@ func (h retryTaskHeap) Less(i, j int) bool {
 	return h[i].at.Before(h[j].at)
 }
 
+// Swap swaps.
 func (h retryTaskHeap) Swap(i, j int) {
 	h[i], h[j] = h[j], h[i]
 	h[i].index = i
 	h[j].index = j
 }
 
+// Push pushs.
 func (h *retryTaskHeap) Push(x any) {
 	item := x.(*scheduledRetry)
 	item.index = len(*h)
 	*h = append(*h, item)
 }
 
+// Pop pops.
 func (h *retryTaskHeap) Pop() any {
 	old := *h
 	n := len(old)
@@ -450,6 +459,7 @@ type Stats struct {
 	CronDispatchFailures int64
 }
 
+// Stats stats.
 func (tr *TaskRouter) Stats() Stats {
 	tr.mu.RLock()
 	defer tr.mu.RUnlock()

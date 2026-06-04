@@ -392,6 +392,7 @@ func (ms *MonitoringService) GetUnifiedCache() *cache.UnifiedCache {
 	return ms.unifiedCache
 }
 
+// TaskRouter tasks router.
 func (ms *MonitoringService) TaskRouter() *task.TaskRouter {
 	return ms.router
 }

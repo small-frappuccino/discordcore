@@ -20,12 +20,15 @@ func newPartnerImportTemplateSubCommand(cm *files.ConfigManager) *partnerImportT
 	return &partnerImportTemplateSubCommand{configManager: cm}
 }
 
+// Name names.
 func (c *partnerImportTemplateSubCommand) Name() string { return "import_template" }
 
+// Description descriptions.
 func (c *partnerImportTemplateSubCommand) Description() string {
 	return "Import partner template embed properties from a Pastebin URL"
 }
 
+// Options options.
 func (c *partnerImportTemplateSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{
@@ -37,12 +40,18 @@ func (c *partnerImportTemplateSubCommand) Options() []*discordgo.ApplicationComm
 	}
 }
 
-func (c *partnerImportTemplateSubCommand) RequiresGuild() bool       { return true }
+// RequiresGuild requires guild.
+func (c *partnerImportTemplateSubCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
 func (c *partnerImportTemplateSubCommand) RequiresPermissions() bool { return true }
+
+// HandleAutocomplete handles autocomplete.
 func (c *partnerImportTemplateSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	return nil, nil
 }
 
+// Handle handles.
 func (c *partnerImportTemplateSubCommand) Handle(ctx *core.Context) error {
 	builder := core.NewResponseBuilder(ctx.Session).Ephemeral()
 	if err := builder.Build().DeferResponse(ctx.Interaction, true); err != nil {
@@ -89,22 +98,31 @@ func newPartnerExportTemplateSubCommand(cm *files.ConfigManager) *partnerExportT
 	return &partnerExportTemplateSubCommand{configManager: cm}
 }
 
+// Name names.
 func (c *partnerExportTemplateSubCommand) Name() string { return "export_template" }
 
+// Description descriptions.
 func (c *partnerExportTemplateSubCommand) Description() string {
 	return "Export partner template embed properties to a Pastebin provider"
 }
 
+// Options options.
 func (c *partnerExportTemplateSubCommand) Options() []*discordgo.ApplicationCommandOption {
 	return nil
 }
 
-func (c *partnerExportTemplateSubCommand) RequiresGuild() bool       { return true }
+// RequiresGuild requires guild.
+func (c *partnerExportTemplateSubCommand) RequiresGuild() bool { return true }
+
+// RequiresPermissions requires permissions.
 func (c *partnerExportTemplateSubCommand) RequiresPermissions() bool { return true }
+
+// HandleAutocomplete handles autocomplete.
 func (c *partnerExportTemplateSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	return nil, nil
 }
 
+// Handle handles.
 func (c *partnerExportTemplateSubCommand) Handle(ctx *core.Context) error {
 	builder := core.NewResponseBuilder(ctx.Session).Ephemeral()
 	if err := builder.Build().DeferResponse(ctx.Interaction, true); err != nil {

@@ -126,6 +126,7 @@ type discordOAuthGuild struct {
 	Permissions int64  `json:"permissions"`
 }
 
+// UnmarshalJSON unmarshals json.
 func (g *discordOAuthGuild) UnmarshalJSON(data []byte) error {
 	type rawDiscordOAuthGuild struct {
 		ID          string          `json:"id"`

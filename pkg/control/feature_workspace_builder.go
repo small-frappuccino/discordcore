@@ -25,6 +25,7 @@ func newFeatureWorkspaceBuilder(
 	}
 }
 
+// Workspace workspaces.
 func (builder *featureWorkspaceBuilder) Workspace(guildID string) (featureWorkspace, error) {
 	if builder == nil || builder.configManager == nil {
 		return featureWorkspace{}, fmt.Errorf("config manager unavailable")
@@ -44,6 +45,7 @@ func (builder *featureWorkspaceBuilder) Workspace(guildID string) (featureWorksp
 	return builder.buildWorkspace(cfg, guildID, session)
 }
 
+// Feature features.
 func (builder *featureWorkspaceBuilder) Feature(guildID, featureID string) (featureRecord, error) {
 	if builder == nil || builder.configManager == nil {
 		return featureRecord{}, fmt.Errorf("config manager unavailable")
@@ -53,6 +55,7 @@ func (builder *featureWorkspaceBuilder) Feature(guildID, featureID string) (feat
 	return builder.FeatureFromConfig(cfg, guildID, featureID)
 }
 
+// FeatureFromConfig features from config.
 func (builder *featureWorkspaceBuilder) FeatureFromConfig(
 	cfg files.BotConfig,
 	guildID string,

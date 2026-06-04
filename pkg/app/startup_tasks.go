@@ -25,6 +25,7 @@ type controlServerHolder struct {
 	server *control.Server
 }
 
+// Set sets.
 func (h *controlServerHolder) Set(server *control.Server) {
 	if h == nil || server == nil {
 		return
@@ -34,6 +35,7 @@ func (h *controlServerHolder) Set(server *control.Server) {
 	h.server = server
 }
 
+// Stop stops.
 func (h *controlServerHolder) Stop(ctx context.Context) error {
 	if h == nil {
 		return nil

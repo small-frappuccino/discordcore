@@ -11,6 +11,8 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
 
+// CurrentGitBranch defines current git branch.
+// ApplicationCachesPath defines application caches path.
 var (
 	// ConfiguredAppName can be set by host before Discord auth; when non-empty, EffectiveBotName() uses it.
 	ConfiguredAppName string

@@ -2,6 +2,7 @@ package files
 
 import "strings"
 
+// BotDomainQOTD defines bot domain qotd.
 const BotDomainQOTD = "qotd"
 
 // NormalizeBotInstanceID trims a persisted bot instance identifier.

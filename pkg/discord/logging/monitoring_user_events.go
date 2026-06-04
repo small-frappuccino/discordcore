@@ -28,6 +28,7 @@ type UserWatcher struct {
 	cache         *cache.UnifiedCache
 }
 
+// NewUserWatcher news user watcher.
 func NewUserWatcher(session *discordgo.Session, configManager *files.ConfigManager, store *storage.Store, notifier *NotificationSender, unifiedCache *cache.UnifiedCache) *UserWatcher {
 	return &UserWatcher{
 		session:       session,

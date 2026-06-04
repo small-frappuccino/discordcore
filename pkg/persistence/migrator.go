@@ -25,12 +25,14 @@ type postgresMigrator struct {
 	migrations []migration
 }
 
+// NewPostgresMigrator news postgres migrator.
 func NewPostgresMigrator(db *sql.DB) Migrator {
 	migs := append([]migration(nil), postgresMigrations...)
 	sort.Slice(migs, func(i, j int) bool { return migs[i].Version < migs[j].Version })
 	return &postgresMigrator{db: db, migrations: migs}
 }
 
+// Up ups.
 func (m *postgresMigrator) Up(ctx context.Context) error {
 	if m == nil || m.db == nil {
 		return fmt.Errorf("postgres migrator database handle is nil")
@@ -78,6 +80,7 @@ func (m *postgresMigrator) Up(ctx context.Context) error {
 	return nil
 }
 
+// Down downs.
 func (m *postgresMigrator) Down(ctx context.Context, steps int) error {
 	if m == nil || m.db == nil {
 		return fmt.Errorf("postgres migrator database handle is nil")
@@ -130,6 +133,7 @@ func (m *postgresMigrator) Down(ctx context.Context, steps int) error {
 	return nil
 }
 
+// Version versions.
 func (m *postgresMigrator) Version(ctx context.Context) (int64, error) {
 	if m == nil || m.db == nil {
 		return 0, fmt.Errorf("postgres migrator database handle is nil")

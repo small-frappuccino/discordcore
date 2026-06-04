@@ -99,6 +99,7 @@ func (s *Server) publicDiscordOAuthLoginURL(next string) string {
 	return s.publicControlURL(buildDiscordOAuthLoginPath(next))
 }
 
+// SetPublicOrigin sets public origin.
 func (s *Server) SetPublicOrigin(raw string) error {
 	if s == nil {
 		return nil

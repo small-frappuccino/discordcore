@@ -8,6 +8,7 @@ import (
 	"time"
 )
 
+// CreateQOTDOfficialPostProvisioning creates qotdofficial post provisioning.
 func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTDOfficialPostRecord) (res *QOTDOfficialPostRecord, err error) {
 	normalized, err := normalizeQOTDOfficialPostRecord(rec)
 	if err != nil {
@@ -120,6 +121,7 @@ type FinalizeQOTDOfficialPostParams struct {
 	PublishedAt                time.Time
 }
 
+// FinalizeQOTDOfficialPost finalizes qotdofficial post.
 func (s *Store) FinalizeQOTDOfficialPost(ctx context.Context, params FinalizeQOTDOfficialPostParams) (_ *QOTDOfficialPostRecord, err error) {
 	defer func() {
 		if err != nil {
@@ -197,6 +199,7 @@ func (s *Store) FinalizeQOTDOfficialPost(ctx context.Context, params FinalizeQOT
 	return updated, nil
 }
 
+// GetQOTDOfficialPostByID gets qotdofficial post by id.
 func (s *Store) GetQOTDOfficialPostByID(ctx context.Context, id int64) (res *QOTDOfficialPostRecord, err error) {
 	if id <= 0 {
 		return nil, nil
@@ -243,6 +246,7 @@ func (s *Store) GetQOTDOfficialPostByID(ctx context.Context, id int64) (res *QOT
 	return record, nil
 }
 
+// GetQOTDOfficialPostByDate gets qotdofficial post by date.
 func (s *Store) GetQOTDOfficialPostByDate(ctx context.Context, guildID string, publishDateUTC time.Time) (res *QOTDOfficialPostRecord, err error) {
 	guildID = strings.TrimSpace(guildID)
 	publishDateUTC = normalizeQOTDDateUTC(publishDateUTC)
@@ -306,6 +310,7 @@ func (s *Store) GetQOTDOfficialPostByDate(ctx context.Context, guildID string, p
 	return record, nil
 }
 
+// ListQOTDOfficialPostsByDate lists qotdofficial posts by date.
 func (s *Store) ListQOTDOfficialPostsByDate(ctx context.Context, guildID string, publishDateUTC time.Time) (_ []QOTDOfficialPostRecord, err error) {
 	defer func() {
 		if err != nil {
@@ -384,6 +389,7 @@ func (s *Store) ListQOTDOfficialPostsByDate(ctx context.Context, guildID string,
 	return records, nil
 }
 
+// GetAutomaticSlotQOTDOfficialPostByDate gets automatic slot qotdofficial post by date.
 func (s *Store) GetAutomaticSlotQOTDOfficialPostByDate(ctx context.Context, guildID string, publishDateUTC time.Time) (res *QOTDOfficialPostRecord, err error) {
 	guildID = strings.TrimSpace(guildID)
 	publishDateUTC = normalizeQOTDDateUTC(publishDateUTC)
@@ -449,6 +455,7 @@ func (s *Store) GetAutomaticSlotQOTDOfficialPostByDate(ctx context.Context, guil
 	return record, nil
 }
 
+// GetScheduledQOTDOfficialPostByDate gets scheduled qotdofficial post by date.
 func (s *Store) GetScheduledQOTDOfficialPostByDate(ctx context.Context, guildID string, publishDateUTC time.Time) (res *QOTDOfficialPostRecord, err error) {
 	guildID = strings.TrimSpace(guildID)
 	publishDateUTC = normalizeQOTDDateUTC(publishDateUTC)
@@ -512,6 +519,8 @@ func (s *Store) GetScheduledQOTDOfficialPostByDate(ctx context.Context, guildID 
 	}
 	return record, nil
 }
+
+// DeleteQOTDOfficialPostsByDeck deletes qotdofficial posts by deck.
 func (s *Store) DeleteQOTDOfficialPostsByDeck(ctx context.Context, guildID, deckID string) (count int, err error) {
 	guildID = strings.TrimSpace(guildID)
 	deckID = strings.TrimSpace(deckID)
@@ -534,6 +543,7 @@ func (s *Store) DeleteQOTDOfficialPostsByDeck(ctx context.Context, guildID, deck
 	return int(deleted), nil
 }
 
+// DeleteQOTDOfficialPostByID deletes qotdofficial post by id.
 func (s *Store) DeleteQOTDOfficialPostByID(ctx context.Context, id int64) (err error) {
 	if id <= 0 {
 		return nil
@@ -545,6 +555,7 @@ func (s *Store) DeleteQOTDOfficialPostByID(ctx context.Context, id int64) (err e
 	return nil
 }
 
+// DeleteQOTDUnpublishedOfficialPostsByDeck deletes qotdunpublished official posts by deck.
 func (s *Store) DeleteQOTDUnpublishedOfficialPostsByDeck(ctx context.Context, guildID, deckID string) (count int, err error) {
 	guildID = strings.TrimSpace(guildID)
 	deckID = strings.TrimSpace(deckID)

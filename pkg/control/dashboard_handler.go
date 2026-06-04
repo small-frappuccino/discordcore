@@ -53,6 +53,7 @@ func newDashboardHandler(assets fs.FS) (http.Handler, error) {
 	}, nil
 }
 
+// ServeHTTP serves http.
 func (h *dashboardHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

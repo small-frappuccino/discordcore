@@ -11,6 +11,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
+// ListQuestions lists questions.
 func (s *Service) ListQuestions(ctx context.Context, guildID, deckID string) ([]storage.QOTDQuestionRecord, error) {
 	if err := s.validate(); err != nil {
 		return nil, fmt.Errorf("Service.ListQuestions: %w", err)
@@ -22,6 +23,7 @@ func (s *Service) ListQuestions(ctx context.Context, guildID, deckID string) ([]
 	return s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
 }
 
+// CreateQuestion creates question.
 func (s *Service) CreateQuestion(ctx context.Context, guildID, actorID string, mutation QuestionMutation) (*storage.QOTDQuestionRecord, error) {
 	if err := s.validate(); err != nil {
 		return nil, fmt.Errorf("Service.CreateQuestion: %w", err)
@@ -44,6 +46,7 @@ func (s *Service) CreateQuestion(ctx context.Context, guildID, actorID string, m
 	})
 }
 
+// CreateQuestionsBatch creates questions batch.
 func (s *Service) CreateQuestionsBatch(ctx context.Context, guildID, actorID string, mutations []QuestionMutation) ([]storage.QOTDQuestionRecord, error) {
 	if err := s.validate(); err != nil {
 		return nil, fmt.Errorf("Service.CreateQuestionsBatch: %w", err)
@@ -78,6 +81,7 @@ func (s *Service) CreateQuestionsBatch(ctx context.Context, guildID, actorID str
 	return created, nil
 }
 
+// UpdateQuestion updates question.
 func (s *Service) UpdateQuestion(ctx context.Context, guildID string, questionID int64, mutation QuestionMutation) (*storage.QOTDQuestionRecord, error) {
 	if err := s.validate(); err != nil {
 		return nil, fmt.Errorf("Service.UpdateQuestion: %w", err)
@@ -110,6 +114,7 @@ func (s *Service) UpdateQuestion(ctx context.Context, guildID string, questionID
 	return s.store.UpdateQOTDQuestion(ctx, *current)
 }
 
+// DeleteQuestion deletes question.
 func (s *Service) DeleteQuestion(ctx context.Context, guildID string, questionID int64) error {
 	if err := s.validate(); err != nil {
 		return fmt.Errorf("Service.DeleteQuestion: %w", err)
@@ -127,6 +132,7 @@ func (s *Service) DeleteQuestion(ctx context.Context, guildID string, questionID
 	return s.store.DeleteQOTDQuestion(ctx, guildID, questionID)
 }
 
+// GetAutomaticQueueState gets automatic queue state.
 func (s *Service) GetAutomaticQueueState(ctx context.Context, guildID, deckID string) (AutomaticQueueState, error) {
 	if err := s.validate(); err != nil {
 		return AutomaticQueueState{}, fmt.Errorf("Service.GetAutomaticQueueState: %w", err)
@@ -199,6 +205,7 @@ func (s *Service) GetAutomaticQueueState(ctx context.Context, guildID, deckID st
 	return val.(AutomaticQueueState), nil
 }
 
+// RestoreUsedQuestion restores used question.
 func (s *Service) RestoreUsedQuestion(ctx context.Context, guildID, deckID string, questionID int64) (*storage.QOTDQuestionRecord, error) {
 	if err := s.validate(); err != nil {
 		return nil, fmt.Errorf("Service.RestoreUsedQuestion: %w", err)
@@ -280,6 +287,7 @@ func (s *Service) RestoreUsedQuestion(ctx context.Context, guildID, deckID strin
 	return val.(*storage.QOTDQuestionRecord), nil
 }
 
+// MarkQuestionPublished marks question published.
 func (s *Service) MarkQuestionPublished(ctx context.Context, guildID, deckID string, questionID int64) (*storage.QOTDQuestionRecord, error) {
 	if err := s.validate(); err != nil {
 		return nil, fmt.Errorf("Service.MarkQuestionPublished: %w", err)
@@ -349,6 +357,7 @@ func (s *Service) MarkQuestionPublished(ctx context.Context, guildID, deckID str
 	return val.(*storage.QOTDQuestionRecord), nil
 }
 
+// ReorderQuestions reorders questions.
 func (s *Service) ReorderQuestions(ctx context.Context, guildID, deckID string, orderedIDs []int64) ([]storage.QOTDQuestionRecord, error) {
 	if err := s.validate(); err != nil {
 		return nil, fmt.Errorf("Service.ReorderQuestions: %w", err)
@@ -388,6 +397,7 @@ func (s *Service) ReorderQuestions(ctx context.Context, guildID, deckID string, 
 	return val.([]storage.QOTDQuestionRecord), nil
 }
 
+// GetSummary gets summary.
 func (s *Service) GetSummary(ctx context.Context, guildID string) (Summary, error) {
 	if err := s.validate(); err != nil {
 		return Summary{}, fmt.Errorf("Service.GetSummary: %w", err)
@@ -499,6 +509,7 @@ func normalizeReorderInput(questions []storage.QOTDQuestionRecord, orderedIDs []
 	return normalized, nil
 }
 
+// ReorderQuestionIDs reorders question ids.
 func ReorderQuestionIDs(current []storage.QOTDQuestionRecord, movedID int64, direction int) []int64 {
 	if len(current) == 0 || movedID <= 0 || direction == 0 {
 		return nil

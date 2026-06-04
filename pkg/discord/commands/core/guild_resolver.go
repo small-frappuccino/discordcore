@@ -21,14 +21,17 @@ type PermissionChecker struct {
 	cache   *cache.UnifiedCache
 }
 
+// NewPermissionChecker news permission checker.
 func NewPermissionChecker(session *discordgo.Session, config *files.ConfigManager) *PermissionChecker {
 	return &PermissionChecker{session: session, config: config}
 }
 
+// SetStore sets store.
 func (pc *PermissionChecker) SetStore(store *storage.Store) {
 	pc.store = store
 }
 
+// SetCache sets cache.
 func (pc *PermissionChecker) SetCache(unifiedCache *cache.UnifiedCache) {
 	pc.cache = unifiedCache
 }

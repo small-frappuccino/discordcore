@@ -36,6 +36,7 @@ func newRolePanelComponentHandler(configManager *files.ConfigManager) *rolePanel
 	}
 }
 
+// HandleComponent handles component.
 func (h *rolePanelComponentHandler) HandleComponent(ctx *core.Context) error {
 	if ctx == nil || ctx.Interaction == nil {
 		return nil

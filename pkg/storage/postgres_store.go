@@ -9,6 +9,9 @@ import (
 
 // Store wraps a PostgreSQL database for durable caching of messages,
 // avatar hashes (current and history), guild metadata (e.g., bot_since) and member joins.
+//
+// Concurrency: Store is safe for concurrent use by multiple goroutines.
+// Lifecycle: Call Init() after creation before executing any queries. Call Close() to release resources.
 type Store struct {
 	db *sql.DB
 }

@@ -85,10 +85,12 @@ type ThreadState struct {
 // Publisher wraps Discord publishing and archive/state transitions for QOTD.
 type Publisher struct{}
 
+// NewPublisher news publisher.
 func NewPublisher() *Publisher {
 	return &Publisher{}
 }
 
+// PublishOfficialPost publishs official post.
 func (p *Publisher) PublishOfficialPost(ctx context.Context, session *discordgo.Session, params PublishOfficialPostParams) (*PublishedOfficialPost, error) {
 	if session == nil {
 		return nil, fmt.Errorf("publish official qotd post: discord session is required")
@@ -325,6 +327,7 @@ func buildThreadStateChannelEdit(state ThreadState) *discordgo.ChannelEdit {
 	return edit
 }
 
+// BuildThreadJumpURL builds thread jump url.
 func BuildThreadJumpURL(guildID, threadID string) string {
 	guildID = strings.TrimSpace(guildID)
 	threadID = strings.TrimSpace(threadID)
@@ -334,10 +337,12 @@ func BuildThreadJumpURL(guildID, threadID string) string {
 	return fmt.Sprintf("https://discord.com/channels/%s/%s", guildID, threadID)
 }
 
+// BuildChannelJumpURL builds channel jump url.
 func BuildChannelJumpURL(guildID, channelID string) string {
 	return BuildThreadJumpURL(guildID, channelID)
 }
 
+// BuildMessageJumpURL builds message jump url.
 func BuildMessageJumpURL(guildID, channelID, messageID string) string {
 	guildID = strings.TrimSpace(guildID)
 	channelID = strings.TrimSpace(channelID)

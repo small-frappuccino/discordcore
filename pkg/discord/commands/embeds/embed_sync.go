@@ -26,6 +26,7 @@ type customEmbedSyncResult struct {
 	Failed  []customEmbedSyncFailure
 }
 
+// HasIssues has issues.
 func (r customEmbedSyncResult) HasIssues() bool {
 	return len(r.Dropped) > 0 || len(r.Failed) > 0
 }
@@ -44,6 +45,7 @@ func newCustomEmbedPostingSyncer(cm *files.ConfigManager) *customEmbedPostingSyn
 	}
 }
 
+// Sync syncs.
 func (s *customEmbedPostingSyncer) Sync(
 	session *discordgo.Session,
 	guildID string,

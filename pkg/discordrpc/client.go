@@ -14,6 +14,7 @@ type rpcClient struct {
 	logged bool
 }
 
+// Login logins.
 func (c *rpcClient) Login(appID string) error {
 	if c.logged {
 		return nil
@@ -37,6 +38,7 @@ func (c *rpcClient) Login(appID string) error {
 	return nil
 }
 
+// Logout logouts.
 func (c *rpcClient) Logout() error {
 	if !c.logged {
 		return nil
@@ -48,6 +50,7 @@ func (c *rpcClient) Logout() error {
 	return nil
 }
 
+// SetActivity sets activity.
 func (c *rpcClient) SetActivity(activity *rpcActivity) error {
 	if !c.logged {
 		return nil

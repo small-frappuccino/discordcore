@@ -7,6 +7,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
+// PublishSchedule represents publish schedule.
 type PublishSchedule = files.QOTDPublishScheduleConfig
 
 func resolvePublishSchedule(cfg files.QOTDConfig) (PublishSchedule, error) {

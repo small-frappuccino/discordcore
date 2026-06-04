@@ -8,7 +8,10 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
+// QuestionRecord represents question record.
 type QuestionRecord = storage.QOTDQuestionRecord
+
+// OfficialPostRecord represents official post record.
 type OfficialPostRecord = storage.QOTDOfficialPostRecord
 
 // QuestionStatus is the lifecycle state of a QOTD question as it moves from
@@ -16,6 +19,11 @@ type OfficialPostRecord = storage.QOTDOfficialPostRecord
 // constants.
 type QuestionStatus string
 
+// QuestionStatusDraft defines question status draft.
+// QuestionStatusReady defines question status ready.
+// QuestionStatusReserved defines question status reserved.
+// QuestionStatusUsed defines question status used.
+// QuestionStatusDisabled defines question status disabled.
 const (
 	QuestionStatusDraft    QuestionStatus = "draft"
 	QuestionStatusReady    QuestionStatus = "ready"
@@ -29,6 +37,8 @@ const (
 // It participates in the scheduled-publish uniqueness index.
 type PublishMode string
 
+// PublishModeScheduled defines publish mode scheduled.
+// PublishModeManual defines publish mode manual.
 const (
 	PublishModeScheduled PublishMode = "scheduled"
 	PublishModeManual    PublishMode = "manual"
@@ -55,6 +65,12 @@ func (p PublishNowParams) ShouldConsumeAutomaticSlot() bool {
 // and isUnrecoverableDiscordPublishError).
 type OfficialPostState string
 
+// OfficialPostStateArchiving defines official post state archiving.
+// OfficialPostStatePrevious defines official post state previous.
+// OfficialPostStateArchived defines official post state archived.
+// OfficialPostStateProvisioning defines official post state provisioning.
+// OfficialPostStateMissingDiscord defines official post state missing discord.
+// OfficialPostStateCurrent defines official post state current.
 const (
 	OfficialPostStateProvisioning   OfficialPostState = "provisioning"
 	OfficialPostStateCurrent        OfficialPostState = "current"
@@ -79,6 +95,12 @@ const (
 // can be reconciled independently. See the AnswerRecordState* constants.
 type AnswerRecordState string
 
+// AnswerRecordStateActive defines answer record state active.
+// AnswerRecordStateArchiving defines answer record state archiving.
+// AnswerRecordStateArchived defines answer record state archived.
+// AnswerRecordStateMissingDiscord defines answer record state missing discord.
+// AnswerRecordStateFailed defines answer record state failed.
+// AnswerRecordStateProvisioning defines answer record state provisioning.
 const (
 	AnswerRecordStateProvisioning   AnswerRecordState = "provisioning"
 	AnswerRecordStateActive         AnswerRecordState = "active"
@@ -88,6 +110,7 @@ const (
 	AnswerRecordStateFailed         AnswerRecordState = "failed"
 )
 
+// ErrNoCurrentPublish defines err no current publish.
 var ErrNoCurrentPublish = errors.New("no current qotd publish found to replace")
 
 // AnswerWindow describes whether answers are currently accepted for a post and,

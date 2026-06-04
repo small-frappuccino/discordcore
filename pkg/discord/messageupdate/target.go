@@ -11,6 +11,8 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/webhook"
 )
 
+// TargetTypeChannelMessage defines target type channel message.
+// TargetTypeWebhookMessage defines target type webhook message.
 const (
 	TargetTypeWebhookMessage = "webhook_message"
 	TargetTypeChannelMessage = "channel_message"
@@ -42,6 +44,7 @@ type EmbedUpdater interface {
 // DefaultEmbedUpdater implements EmbedUpdater using Discord REST calls.
 type DefaultEmbedUpdater struct{}
 
+// UpdateEmbeds updates embeds.
 func (u *DefaultEmbedUpdater) UpdateEmbeds(
 	session *discordgo.Session,
 	target EmbedUpdateTarget,

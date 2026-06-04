@@ -12,10 +12,13 @@ type warnCommand struct{}
 
 func newWarnCommand() *warnCommand { return &warnCommand{} }
 
+// Name names.
 func (c *warnCommand) Name() string { return "warn" }
 
+// Description descriptions.
 func (c *warnCommand) Description() string { return "Record a warning for a member" }
 
+// Options options.
 func (c *warnCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{
@@ -33,12 +36,16 @@ func (c *warnCommand) Options() []*discordgo.ApplicationCommandOption {
 	}
 }
 
+// RequiresGuild requires guild.
 func (c *warnCommand) RequiresGuild() bool { return true }
 
+// RequiresPermissions requires permissions.
 func (c *warnCommand) RequiresPermissions() bool { return true }
 
+// DefaultMemberPermissions defaults member permissions.
 func (c *warnCommand) DefaultMemberPermissions() int64 { return discordgo.PermissionManageMessages }
 
+// Handle handles.
 func (c *warnCommand) Handle(ctx *core.Context) error {
 	if enabled, _ := ctx.Config.Config().ResolveFeatures(ctx.GuildID).Lookup("moderation.warn"); !enabled {
 		return core.NewCommandError("Warn command is disabled for this server.", true)

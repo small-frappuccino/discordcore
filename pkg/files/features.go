@@ -94,6 +94,7 @@ type FeatureToggles struct {
 	RolePanels     *bool                       `json:"role_panels,omitempty"`
 }
 
+// UnmarshalJSON unmarshals json.
 func (ft *FeatureToggles) UnmarshalJSON(data []byte) error {
 	type alias FeatureToggles
 	var parsed alias

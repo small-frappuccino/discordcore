@@ -27,4 +27,5 @@ type ConfigStore interface {
 	ConfigDescriber
 }
 
+// DefaultPostgresConfigStoreKey defines default postgres config store key.
 const DefaultPostgresConfigStoreKey = "primary"

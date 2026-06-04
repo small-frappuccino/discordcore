@@ -137,22 +137,27 @@ func (ms *MonitoringService) observability() Metrics {
 	return ms.metrics
 }
 
+// Name names.
 func (ms *MonitoringService) Name() string {
 	return "monitoring"
 }
 
+// Type types.
 func (ms *MonitoringService) Type() svc.ServiceType {
 	return svc.TypeMonitoring
 }
 
+// Priority prioritys.
 func (ms *MonitoringService) Priority() svc.ServicePriority {
 	return svc.PriorityHigh
 }
 
+// Dependencies dependencies.
 func (ms *MonitoringService) Dependencies() []string {
 	return nil
 }
 
+// IsRunning is running.
 func (ms *MonitoringService) IsRunning() bool {
 	ms.runMu.RLock()
 	defer ms.runMu.RUnlock()
@@ -171,6 +176,7 @@ func (ms *MonitoringService) currentRunCtx() context.Context {
 	return ms.run.ctx
 }
 
+// HealthCheck healths check.
 func (ms *MonitoringService) HealthCheck(ctx context.Context) svc.HealthStatus {
 	ms.runMu.RLock()
 	isRunning := ms.run.running
@@ -195,6 +201,7 @@ func (ms *MonitoringService) HealthCheck(ctx context.Context) svc.HealthStatus {
 	}
 }
 
+// Stats stats.
 func (ms *MonitoringService) Stats() svc.ServiceStats {
 	ms.runMu.RLock()
 	startTime := ms.run.startTime
@@ -426,6 +433,7 @@ func (ms *MonitoringService) rebuildTaskPipeline() {
 	}
 }
 
+// SetTaskRouterConfig sets task router config.
 func (ms *MonitoringService) SetTaskRouterConfig(cfg task.RouterConfig) {
 	if ms == nil {
 		return
@@ -1099,6 +1107,7 @@ func (ms *MonitoringService) dispatchMonitorTaskWithPayloadLocked(runCtx context
 	return true
 }
 
+// ScheduleStartupMemberWarmup schedules startup member warmup.
 func (ms *MonitoringService) ScheduleStartupMemberWarmup(config cache.WarmupConfig) bool {
 	if ms == nil {
 		return false

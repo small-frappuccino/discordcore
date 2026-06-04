@@ -22,6 +22,7 @@ func newGuildAccessEvaluator(
 	}
 }
 
+// ResolveGuildAccessLevel resolves guild access level.
 func (evaluator *guildAccessEvaluator) ResolveGuildAccessLevel(
 	guild discordOAuthGuild,
 	userID string,

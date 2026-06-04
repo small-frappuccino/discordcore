@@ -125,6 +125,7 @@ type fallbackDedupReq struct {
 	reply chan bool
 }
 
+// NewAutomodService news automod service.
 func NewAutomodService(session *discordgo.Session, configManager *files.ConfigManager) *AutomodService {
 	return &AutomodService{
 		session:       session,

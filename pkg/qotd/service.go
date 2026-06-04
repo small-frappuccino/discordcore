@@ -13,6 +13,17 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
+// ErrQOTDDisabled defines err qotddisabled.
+// ErrAlreadyPublished defines err already published.
+// ErrPublishInProgress defines err publish in progress.
+// ErrServiceUnavailable defines err service unavailable.
+// ErrImmutableQuestion defines err immutable question.
+// ErrQuestionNotFound defines err question not found.
+// ErrQuestionNotUsed defines err question not used.
+// ErrQuestionNotReady defines err question not ready.
+// ErrDiscordUnavailable defines err discord unavailable.
+// ErrDeckNotFound defines err deck not found.
+// ErrNoQuestionsAvailable defines err no questions available.
 var (
 	ErrServiceUnavailable   = errors.New("qotd service unavailable")
 	ErrQOTDDisabled         = errors.New("qotd is disabled")
@@ -78,6 +89,12 @@ type PublishResult struct {
 // the automatic publish pipeline. See the AutomaticQueueSlotStatus* constants.
 type AutomaticQueueSlotStatus string
 
+// AutomaticQueueSlotStatusWaiting defines automatic queue slot status waiting.
+// AutomaticQueueSlotStatusDue defines automatic queue slot status due.
+// AutomaticQueueSlotStatusReserved defines automatic queue slot status reserved.
+// AutomaticQueueSlotStatusRecovering defines automatic queue slot status recovering.
+// AutomaticQueueSlotStatusPublished defines automatic queue slot status published.
+// AutomaticQueueSlotStatusDisabled defines automatic queue slot status disabled.
 const (
 	AutomaticQueueSlotStatusDisabled   AutomaticQueueSlotStatus = "disabled"
 	AutomaticQueueSlotStatusWaiting    AutomaticQueueSlotStatus = "waiting"
@@ -120,6 +137,7 @@ type Service struct {
 	guildActors   map[string]chan func()
 }
 
+// ExecuteInGuildActor executes in guild actor.
 func (s *Service) ExecuteInGuildActor(guildID string, fn func()) {
 	s.ExecuteInGuildActorWithResult(guildID, func() (any, error) {
 		fn()
@@ -127,6 +145,7 @@ func (s *Service) ExecuteInGuildActor(guildID string, fn func()) {
 	})
 }
 
+// ExecuteInGuildActorWithResult executes in guild actor with result.
 func (s *Service) ExecuteInGuildActorWithResult(guildID string, fn func() (any, error)) (any, error) {
 	guildID = strings.TrimSpace(guildID)
 	type result struct {

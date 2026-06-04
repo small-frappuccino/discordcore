@@ -22,14 +22,17 @@ func NewFailingStore() *storage.Store {
 
 type failingConnector struct{}
 
+// Connect connects.
 func (failingConnector) Connect(context.Context) (driver.Conn, error) {
 	return nil, errors.New("storagetest: connector always fails")
 }
 
+// Driver drivers.
 func (failingConnector) Driver() driver.Driver { return failingDriver{} }
 
 type failingDriver struct{}
 
+// Open opens.
 func (failingDriver) Open(string) (driver.Conn, error) {
 	return nil, errors.New("storagetest: driver always fails")
 }

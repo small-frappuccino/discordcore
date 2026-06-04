@@ -26,6 +26,7 @@ type partnerSyncResult struct {
 	Failed  []partnerSyncFailure
 }
 
+// HasIssues has issues.
 func (r partnerSyncResult) HasIssues() bool {
 	return len(r.Dropped) > 0 || len(r.Failed) > 0
 }
@@ -46,6 +47,7 @@ func newPartnerPostingSyncer(cm *files.ConfigManager) *partnerPostingSyncer {
 	}
 }
 
+// Sync syncs.
 func (s *partnerPostingSyncer) Sync(
 	session *discordgo.Session,
 	guildID string,
@@ -102,6 +104,7 @@ func (s *partnerPostingSyncer) Sync(
 	return result
 }
 
+// SyncConfig syncs config.
 func (s *partnerPostingSyncer) SyncConfig(guildID string, session *discordgo.Session) error {
 	cfg := s.configManager.GuildConfig(guildID)
 	if cfg == nil {

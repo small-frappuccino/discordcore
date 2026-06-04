@@ -10,6 +10,11 @@ import (
 // ResponseType defines standard response types
 type ResponseType int
 
+// ResponseLoading defines response loading.
+// ResponseInfo defines response info.
+// ResponseWarning defines response warning.
+// ResponseError defines response error.
+// ResponseSuccess defines response success.
 const (
 	ResponseSuccess ResponseType = iota
 	ResponseError

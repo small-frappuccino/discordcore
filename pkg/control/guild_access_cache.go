@@ -37,6 +37,7 @@ func newAccessibleGuildCache(ttl time.Duration, now func() time.Time) *accessibl
 	}
 }
 
+// SetTTL sets ttl.
 func (cache *accessibleGuildCache) SetTTL(ttl time.Duration) {
 	if cache == nil {
 		return
@@ -47,6 +48,7 @@ func (cache *accessibleGuildCache) SetTTL(ttl time.Duration) {
 	cache.mu.Unlock()
 }
 
+// Get gets.
 func (cache *accessibleGuildCache) Get(sessionID string) ([]cachedAccessibleGuild, bool) {
 	if cache == nil {
 		return nil, false
@@ -80,6 +82,7 @@ func (cache *accessibleGuildCache) Get(sessionID string) ([]cachedAccessibleGuil
 	return cloneCachedAccessibleGuilds(entry.guilds), true
 }
 
+// Put puts.
 func (cache *accessibleGuildCache) Put(session discordOAuthSession, guilds []cachedAccessibleGuild) {
 	if cache == nil {
 		return
@@ -111,6 +114,7 @@ func (cache *accessibleGuildCache) Put(session discordOAuthSession, guilds []cac
 	cache.mu.Unlock()
 }
 
+// InvalidateAll invalidates all.
 func (cache *accessibleGuildCache) InvalidateAll() {
 	if cache == nil {
 		return

@@ -197,6 +197,7 @@ type ConfigCommands struct {
 	configManager *files.ConfigManager
 }
 
+// NewRuntimeConfigCommands news runtime config commands.
 func NewRuntimeConfigCommands(configManager *files.ConfigManager) *ConfigCommands {
 	return &ConfigCommands{configManager: configManager}
 }
@@ -214,14 +215,24 @@ func newRuntimeSubCommand(configManager *files.ConfigManager) *runtimeSubCommand
 	return &runtimeSubCommand{configManager: configManager}
 }
 
+// Name names.
 func (c *runtimeSubCommand) Name() string { return commandName }
+
+// Description descriptions.
 func (c *runtimeSubCommand) Description() string {
 	return "View and edit bot runtime configuration (replaces env vars)"
 }
-func (c *runtimeSubCommand) Options() []*discordgo.ApplicationCommandOption { return nil }
-func (c *runtimeSubCommand) RequiresGuild() bool                            { return false }
-func (c *runtimeSubCommand) RequiresPermissions() bool                      { return true }
 
+// Options options.
+func (c *runtimeSubCommand) Options() []*discordgo.ApplicationCommandOption { return nil }
+
+// RequiresGuild requires guild.
+func (c *runtimeSubCommand) RequiresGuild() bool { return false }
+
+// RequiresPermissions requires permissions.
+func (c *runtimeSubCommand) RequiresPermissions() bool { return true }
+
+// Handle handles.
 func (c *runtimeSubCommand) Handle(ctx *core.Context) error {
 	rc, err := loadRuntimeConfig(ctx.Config, "global")
 	if err != nil {

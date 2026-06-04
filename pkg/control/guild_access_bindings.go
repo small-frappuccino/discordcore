@@ -20,6 +20,7 @@ func newBotGuildBindingSource() *botGuildBindingSource {
 	return &botGuildBindingSource{}
 }
 
+// SetIDsProvider sets ids provider.
 func (src *botGuildBindingSource) SetIDsProvider(provider botGuildIDsProvider) {
 	if src == nil || provider == nil {
 		return
@@ -42,6 +43,7 @@ func (src *botGuildBindingSource) SetIDsProvider(provider botGuildIDsProvider) {
 	}
 }
 
+// SetBindingsProvider sets bindings provider.
 func (src *botGuildBindingSource) SetBindingsProvider(provider botGuildBindingsProvider) {
 	if src == nil || provider == nil {
 		return
@@ -73,6 +75,7 @@ func (src *botGuildBindingSource) SetBindingsProvider(provider botGuildBindingsP
 	}
 }
 
+// Bindings bindings.
 func (src *botGuildBindingSource) Bindings(ctx context.Context) ([]BotGuildBinding, error) {
 	if src == nil {
 		return nil, errBotGuildIDsProviderUnavailable
@@ -92,6 +95,7 @@ func (src *botGuildBindingSource) Bindings(ctx context.Context) ([]BotGuildBindi
 	return bindings, nil
 }
 
+// GuildIDSet guilds idset.
 func (src *botGuildBindingSource) GuildIDSet(ctx context.Context) (map[string]struct{}, error) {
 	bindings, err := src.Bindings(ctx)
 	if err != nil {

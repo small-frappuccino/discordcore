@@ -11,10 +11,13 @@ type banCommand struct{}
 
 func newBanCommand() *banCommand { return &banCommand{} }
 
+// Name names.
 func (c *banCommand) Name() string { return "ban" }
 
+// Description descriptions.
 func (c *banCommand) Description() string { return "Ban a user by ID or mention" }
 
+// Options options.
 func (c *banCommand) Options() []*discordgo.ApplicationCommandOption {
 	return []*discordgo.ApplicationCommandOption{
 		{
@@ -32,12 +35,16 @@ func (c *banCommand) Options() []*discordgo.ApplicationCommandOption {
 	}
 }
 
+// RequiresGuild requires guild.
 func (c *banCommand) RequiresGuild() bool { return true }
 
+// RequiresPermissions requires permissions.
 func (c *banCommand) RequiresPermissions() bool { return true }
 
+// DefaultMemberPermissions defaults member permissions.
 func (c *banCommand) DefaultMemberPermissions() int64 { return discordgo.PermissionBanMembers }
 
+// Handle handles.
 func (c *banCommand) Handle(ctx *core.Context) error {
 	if enabled, _ := ctx.Config.Config().ResolveFeatures(ctx.GuildID).Lookup("moderation.ban"); !enabled {
 		return core.NewCommandError("Ban command is disabled for this server.", true)

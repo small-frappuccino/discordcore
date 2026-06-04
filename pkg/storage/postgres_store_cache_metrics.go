@@ -45,6 +45,7 @@ func (s *Store) UpsertCacheEntry(key, cacheType, data string, expiresAt time.Tim
 	return err
 }
 
+// UpsertCacheEntriesContext upserts cache entries context.
 func (s *Store) UpsertCacheEntriesContext(ctx context.Context, entries []CacheEntryRecord) error {
 
 	normalized := make([]CacheEntryRecord, 0, len(entries))
@@ -409,22 +410,27 @@ func (s *Store) metricTotalsByDimension(ctx context.Context, tableName, dimensio
 	return out, nil
 }
 
+// MessageTotalsByChannel messages totals by channel.
 func (s *Store) MessageTotalsByChannel(ctx context.Context, guildID, cutoffDay, channelID string) ([]MetricTotal, error) {
 	return s.metricTotalsByDimension(ctx, "daily_message_metrics", "channel_id", guildID, cutoffDay, channelID)
 }
 
+// MessageTotalsByUser messages totals by user.
 func (s *Store) MessageTotalsByUser(ctx context.Context, guildID, cutoffDay, channelID string) ([]MetricTotal, error) {
 	return s.metricTotalsByDimension(ctx, "daily_message_metrics", "user_id", guildID, cutoffDay, channelID)
 }
 
+// ReactionTotalsByChannel reactions totals by channel.
 func (s *Store) ReactionTotalsByChannel(ctx context.Context, guildID, cutoffDay, channelID string) ([]MetricTotal, error) {
 	return s.metricTotalsByDimension(ctx, "daily_reaction_metrics", "channel_id", guildID, cutoffDay, channelID)
 }
 
+// ReactionTotalsByUser reactions totals by user.
 func (s *Store) ReactionTotalsByUser(ctx context.Context, guildID, cutoffDay, channelID string) ([]MetricTotal, error) {
 	return s.metricTotalsByDimension(ctx, "daily_reaction_metrics", "user_id", guildID, cutoffDay, channelID)
 }
 
+// CountDistinctMemberJoins counts distinct member joins.
 func (s *Store) CountDistinctMemberJoins(ctx context.Context, guildID string) (int64, error) {
 	if guildID == "" {
 		return 0, nil
@@ -439,6 +445,7 @@ func (s *Store) CountDistinctMemberJoins(ctx context.Context, guildID string) (i
 	return 0, nil
 }
 
+// ListDistinctMemberJoinUserIDs lists distinct member join user ids.
 func (s *Store) ListDistinctMemberJoinUserIDs(ctx context.Context, guildID string) ([]string, error) {
 	if guildID == "" {
 		return nil, nil
@@ -461,10 +468,12 @@ func (s *Store) ListDistinctMemberJoinUserIDs(ctx context.Context, guildID strin
 	return out, rows.Err()
 }
 
+// SumDailyMemberJoinsSince sums daily member joins since.
 func (s *Store) SumDailyMemberJoinsSince(ctx context.Context, guildID, cutoffDay string) (int64, error) {
 	return s.sumMetricSince(ctx, `SELECT SUM(count) FROM daily_member_joins WHERE guild_id=$1 AND day>=$2`, guildID, cutoffDay)
 }
 
+// SumDailyMemberLeavesSince sums daily member leaves since.
 func (s *Store) SumDailyMemberLeavesSince(ctx context.Context, guildID, cutoffDay string) (int64, error) {
 	return s.sumMetricSince(ctx, `SELECT SUM(count) FROM daily_member_leaves WHERE guild_id=$1 AND day>=$2`, guildID, cutoffDay)
 }
@@ -483,6 +492,7 @@ func (s *Store) sumMetricSince(ctx context.Context, query, guildID, cutoffDay st
 	return 0, nil
 }
 
+// DatabaseSizeBytes databases size bytes.
 func (s *Store) DatabaseSizeBytes(ctx context.Context) (int64, error) {
 	var size sql.NullInt64
 	if err := s.db.QueryRowContext(ctx, `SELECT pg_database_size(current_database())`).Scan(&size); err != nil {

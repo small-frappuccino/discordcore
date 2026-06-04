@@ -18,6 +18,7 @@ type currentSlotState struct {
 	OfficialPost       *storage.QOTDOfficialPostRecord
 }
 
+// BoundaryPassed boundarys passed.
 func (st currentSlotState) BoundaryPassed(now time.Time) bool {
 	if !st.ScheduleConfigured || st.PublishAtUTC.IsZero() {
 		return false
@@ -27,14 +28,17 @@ func (st currentSlotState) BoundaryPassed(now time.Time) bool {
 	return !now.Before(publishAt)
 }
 
+// HasOfficialPostRecord has official post record.
 func (st currentSlotState) HasOfficialPostRecord() bool {
 	return st.OfficialPost != nil
 }
 
+// HasPublishedOfficialPost has published official post.
 func (st currentSlotState) HasPublishedOfficialPost() bool {
 	return hasPublishedOfficialPostTarget(st.OfficialPost)
 }
 
+// HasProvisioningOfficialPost has provisioning official post.
 func (st currentSlotState) HasProvisioningOfficialPost() bool {
 	if !st.HasOfficialPostRecord() {
 		return false

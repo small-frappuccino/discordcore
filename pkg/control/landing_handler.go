@@ -320,6 +320,7 @@ func newLandingHandler() http.Handler {
 	return landingHandler{}
 }
 
+// ServeHTTP serves http.
 func (landingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
