@@ -1,6 +1,6 @@
 import * as React from "react";
 import type { UseFormReturn } from "react-hook-form";
-import { SettingsGroup, SettingsRow, Button } from "../../components/ui";
+import { SettingsGroup, SettingsRow, Button, FormControl } from "../../components/ui";
 import type { EmbedsFormData } from "../schemas/embeds";
 
 type EmbedEditorFormProps = {
@@ -41,12 +41,14 @@ export function EmbedEditorForm({
             <SettingsRow.Description>Unique identifier for this embed.</SettingsRow.Description>
           </SettingsRow.Info>
           <SettingsRow.Control>
-            <input
-              type="text"
-              {...form.register("key")}
-              className="form-input w-full max-w-xs"
-              disabled={!!selectedEmbedKey} // Cannot edit key after creation
-            />
+            <FormControl asChild>
+              <input
+                type="text"
+                {...form.register("key")}
+                className="form-input"
+                disabled={!!selectedEmbedKey} // Cannot edit key after creation
+              />
+            </FormControl>
           </SettingsRow.Control>
         </SettingsRow>
         <SettingsRow>
@@ -70,7 +72,9 @@ export function EmbedEditorForm({
             <SettingsRow.Title>Title</SettingsRow.Title>
           </SettingsRow.Info>
           <SettingsRow.Control>
-            <input type="text" {...form.register("title")} className="form-input w-full max-w-xs" />
+            <FormControl asChild>
+              <input type="text" {...form.register("title")} className="form-input" />
+            </FormControl>
           </SettingsRow.Control>
         </SettingsRow>
         <SettingsRow>
@@ -78,7 +82,9 @@ export function EmbedEditorForm({
             <SettingsRow.Title>Description</SettingsRow.Title>
           </SettingsRow.Info>
           <SettingsRow.Control>
-            <textarea {...form.register("description")} className="form-input w-full max-w-xs h-24 resize-y" />
+            <FormControl asChild>
+              <textarea {...form.register("description")} className="form-input h-24 resize-y" />
+            </FormControl>
           </SettingsRow.Control>
         </SettingsRow>
       </SettingsGroup>
@@ -89,7 +95,9 @@ export function EmbedEditorForm({
             <SettingsRow.Title>Author Name</SettingsRow.Title>
           </SettingsRow.Info>
           <SettingsRow.Control>
-            <input type="text" {...form.register("author_name")} className="form-input w-full max-w-xs" />
+            <FormControl asChild>
+              <input type="text" {...form.register("author_name")} className="form-input" />
+            </FormControl>
           </SettingsRow.Control>
         </SettingsRow>
         <SettingsRow>
@@ -97,7 +105,9 @@ export function EmbedEditorForm({
             <SettingsRow.Title>Author Icon URL</SettingsRow.Title>
           </SettingsRow.Info>
           <SettingsRow.Control>
-            <input type="text" {...form.register("author_icon_url")} className="form-input w-full max-w-xs" />
+            <FormControl asChild>
+              <input type="text" {...form.register("author_icon_url")} className="form-input" />
+            </FormControl>
           </SettingsRow.Control>
         </SettingsRow>
         <SettingsRow>
@@ -105,7 +115,9 @@ export function EmbedEditorForm({
             <SettingsRow.Title>Footer Text</SettingsRow.Title>
           </SettingsRow.Info>
           <SettingsRow.Control>
-            <input type="text" {...form.register("footer_text")} className="form-input w-full max-w-xs" />
+            <FormControl asChild>
+              <input type="text" {...form.register("footer_text")} className="form-input" />
+            </FormControl>
           </SettingsRow.Control>
         </SettingsRow>
         <SettingsRow>
@@ -113,7 +125,9 @@ export function EmbedEditorForm({
             <SettingsRow.Title>Footer Icon URL</SettingsRow.Title>
           </SettingsRow.Info>
           <SettingsRow.Control>
-            <input type="text" {...form.register("footer_icon_url")} className="form-input w-full max-w-xs" />
+            <FormControl asChild>
+              <input type="text" {...form.register("footer_icon_url")} className="form-input" />
+            </FormControl>
           </SettingsRow.Control>
         </SettingsRow>
       </SettingsGroup>
@@ -124,7 +138,9 @@ export function EmbedEditorForm({
             <SettingsRow.Title>Image URL</SettingsRow.Title>
           </SettingsRow.Info>
           <SettingsRow.Control>
-            <input type="text" {...form.register("image_url")} className="form-input w-full max-w-xs" />
+            <FormControl asChild>
+              <input type="text" {...form.register("image_url")} className="form-input" />
+            </FormControl>
           </SettingsRow.Control>
         </SettingsRow>
         <SettingsRow>
@@ -132,7 +148,9 @@ export function EmbedEditorForm({
             <SettingsRow.Title>Thumbnail URL</SettingsRow.Title>
           </SettingsRow.Info>
           <SettingsRow.Control>
-            <input type="text" {...form.register("thumbnail_url")} className="form-input w-full max-w-xs" />
+            <FormControl asChild>
+              <input type="text" {...form.register("thumbnail_url")} className="form-input" />
+            </FormControl>
           </SettingsRow.Control>
         </SettingsRow>
       </SettingsGroup>

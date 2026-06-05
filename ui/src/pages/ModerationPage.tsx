@@ -7,6 +7,7 @@ import {
   Badge,
   PageContainer,
   SettingsGroupSkeleton,
+  FormControl,
 } from "../components/ui";
 import { Stack } from "../components/layout";
 import { useModerationPageLogic } from "./hooks/useModerationPageLogic";
@@ -89,12 +90,14 @@ export function ModerationPage() {
                         <SettingsRow.Description>Role assigned when a user is muted.</SettingsRow.Description>
                       </SettingsRow.Info>
                       <SettingsRow.Control>
-                        <input
-                          type="text"
-                          {...form.register("mute_role")}
-                          placeholder="Role ID..."
-                          className="form-input w-full max-w-xs"
-                        />
+                        <FormControl asChild>
+                          <input
+                            type="text"
+                            {...form.register("mute_role")}
+                            placeholder="Role ID..."
+                            className="form-input"
+                          />
+                        </FormControl>
                       </SettingsRow.Control>
                     </SettingsRow>
                   </SettingsGroup>

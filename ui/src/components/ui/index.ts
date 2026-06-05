@@ -9,3 +9,5 @@ export * from "./PageContainer/PageContainer";
 export * from "./Skeleton/Skeleton";
 export * from "./Skeleton/SettingsGroupSkeleton";
 export * from "./Select/Select";
+export * from "./Slot/Slot";
+export * from "./FormControl/FormControl";

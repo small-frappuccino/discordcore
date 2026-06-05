@@ -1,4 +1,4 @@
-import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, PageContainer, SettingsGroupSkeleton } from "../components/ui";
+import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, PageContainer, SettingsGroupSkeleton, FormControl } from "../components/ui";
 import { Stack, Cluster } from "../components/layout";
 import { useQOTDPageLogic } from "./hooks/useQOTDPageLogic";
 
@@ -40,15 +40,17 @@ export function QOTDPage() {
                     <SettingsRow.Description>{`Currently active deck for drawing questions. ${activeDeck ? `Remaining cards: ${activeDeck.name}` : ""}`}</SettingsRow.Description>
                   </SettingsRow.Info>
                   <SettingsRow.Control>
-                    <select 
-                      {...form.register("active_deck_id")}
-                      className="form-select w-full max-w-xs"
-                    >
-                      <option value="">-- No Active Deck --</option>
-                      {config.decks?.map(d => (
-                        <option key={d.id} value={d.id}>{d.name}</option>
-                      ))}
-                    </select>
+                    <FormControl asChild>
+                      <select 
+                        {...form.register("active_deck_id")}
+                        className="form-select"
+                      >
+                        <option value="">-- No Active Deck --</option>
+                        {config.decks?.map(d => (
+                          <option key={d.id} value={d.id}>{d.name}</option>
+                        ))}
+                      </select>
+                    </FormControl>
                   </SettingsRow.Control>
                 </SettingsRow>
                 <SettingsRow>
@@ -57,12 +59,14 @@ export function QOTDPage() {
                     <SettingsRow.Description>If set, only users with this role can answer the QOTD.</SettingsRow.Description>
                   </SettingsRow.Info>
                   <SettingsRow.Control>
-                    <input
-                      type="text"
-                      placeholder="Role ID..."
-                      {...form.register("verified_role_id")}
-                      className="form-input w-full max-w-xs"
-                    />
+                    <FormControl asChild>
+                      <input
+                        type="text"
+                        placeholder="Role ID..."
+                        {...form.register("verified_role_id")}
+                        className="form-input"
+                      />
+                    </FormControl>
                   </SettingsRow.Control>
                 </SettingsRow>
               </SettingsGroup>

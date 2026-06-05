@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, PageContainer, Skeleton, Select, SettingsGroupSkeleton } from "../components/ui";
+import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, PageContainer, Skeleton, Select, SettingsGroupSkeleton, FormControl } from "../components/ui";
 import { Stack } from "../components/layout";
 import { useRolesPageLogic } from "./hooks/useRolesPageLogic";
 
@@ -65,9 +65,11 @@ export function RolesPage() {
                 <SettingsRow.Description>Roles allowed to view dashboard settings</SettingsRow.Description>
               </SettingsRow.Info>
               <SettingsRow.Control>
-                <Select multiple className="w-full max-w-xs" {...form.register("dashboard_read")}>
-                  {roleOptions}
-                </Select>
+                <FormControl asChild>
+                  <Select multiple {...form.register("dashboard_read")}>
+                    {roleOptions}
+                  </Select>
+                </FormControl>
               </SettingsRow.Control>
             </SettingsRow>
             <SettingsRow>
@@ -76,9 +78,11 @@ export function RolesPage() {
                 <SettingsRow.Description>Roles allowed to view and edit dashboard settings</SettingsRow.Description>
               </SettingsRow.Info>
               <SettingsRow.Control>
-                <Select multiple className="w-full max-w-xs" {...form.register("dashboard_write")}>
-                  {roleOptions}
-                </Select>
+                <FormControl asChild>
+                  <Select multiple {...form.register("dashboard_write")}>
+                    {roleOptions}
+                  </Select>
+                </FormControl>
               </SettingsRow.Control>
             </SettingsRow>
           </SettingsGroup>
@@ -106,10 +110,12 @@ export function RolesPage() {
                 <SettingsRow.Description>The role to assign automatically</SettingsRow.Description>
               </SettingsRow.Info>
               <SettingsRow.Control>
-                <Select className="w-full max-w-xs" {...form.register("auto_assignment.target_role")}>
-                  <option value="">-- None --</option>
-                  {roleOptions}
-                </Select>
+                <FormControl asChild>
+                  <Select {...form.register("auto_assignment.target_role")}>
+                    <option value="">-- None --</option>
+                    {roleOptions}
+                  </Select>
+                </FormControl>
               </SettingsRow.Control>
             </SettingsRow>
             <SettingsRow>
@@ -118,9 +124,11 @@ export function RolesPage() {
                 <SettingsRow.Description>Users must have all these roles to get the target role</SettingsRow.Description>
               </SettingsRow.Info>
               <SettingsRow.Control>
-                <Select multiple className="w-full max-w-xs" {...form.register("auto_assignment.required_roles")}>
-                  {roleOptions}
-                </Select>
+                <FormControl asChild>
+                  <Select multiple {...form.register("auto_assignment.required_roles")}>
+                    {roleOptions}
+                  </Select>
+                </FormControl>
               </SettingsRow.Control>
             </SettingsRow>
           </SettingsGroup>
@@ -135,10 +143,12 @@ export function RolesPage() {
                 <SettingsRow.Description>Role applied to muted users</SettingsRow.Description>
               </SettingsRow.Info>
               <SettingsRow.Control>
-                <Select className="w-full max-w-xs" {...form.register("mute_role")}>
-                  <option value="">-- None --</option>
-                  {roleOptions}
-                </Select>
+                <FormControl asChild>
+                  <Select {...form.register("mute_role")}>
+                    <option value="">-- None --</option>
+                    {roleOptions}
+                  </Select>
+                </FormControl>
               </SettingsRow.Control>
             </SettingsRow>
             <SettingsRow>
@@ -147,10 +157,12 @@ export function RolesPage() {
                 <SettingsRow.Description>Role representing Nitro Boosters</SettingsRow.Description>
               </SettingsRow.Info>
               <SettingsRow.Control>
-                <Select className="w-full max-w-xs" {...form.register("booster_role")}>
-                  <option value="">-- None --</option>
-                  {roleOptions}
-                </Select>
+                <FormControl asChild>
+                  <Select {...form.register("booster_role")}>
+                    <option value="">-- None --</option>
+                    {roleOptions}
+                  </Select>
+                </FormControl>
               </SettingsRow.Control>
             </SettingsRow>
           </SettingsGroup>

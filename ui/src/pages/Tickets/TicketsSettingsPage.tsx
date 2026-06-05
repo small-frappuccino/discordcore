@@ -1,4 +1,4 @@
-import { Button, SettingsGroupSkeleton, SurfaceCard, SettingsGroup, SettingsRow } from "../../components/ui";
+import { Button, SettingsGroupSkeleton, SurfaceCard, SettingsGroup, SettingsRow, FormControl } from "../../components/ui";
 import { useTicketsSettingsLogic } from "./hooks/useTicketsSettingsLogic";
 
 export function TicketsSettingsPage() {
@@ -48,12 +48,14 @@ export function TicketsSettingsPage() {
                   <SettingsRow.Description>Channel where HTML transcripts are sent when tickets close.</SettingsRow.Description>
                 </SettingsRow.Info>
                 <SettingsRow.Control>
-                  <input
-                    type="text"
-                    {...form.register("automation.transcriptChannelId" as const)}
-                    className="form-input w-full max-w-xs"
-                    placeholder="Discord Channel ID"
-                  />
+                  <FormControl asChild>
+                    <input
+                      type="text"
+                      {...form.register("automation.transcriptChannelId" as const)}
+                      className="form-input"
+                      placeholder="Discord Channel ID"
+                    />
+                  </FormControl>
                   {form.formState.errors?.automation?.transcriptChannelId && (
                     <p className="text-red-500 text-xs mt-1">
                       {form.formState.errors.automation.transcriptChannelId.message as string}
