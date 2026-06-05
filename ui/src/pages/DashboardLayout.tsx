@@ -18,6 +18,7 @@ const navigation: NavItem[] = [
   { id: "roles", label: "Roles", to: "/roles" },
   { id: "partners", label: "Partners", to: "/partners" },
   { id: "embeds", label: "Embeds", to: "/embeds" },
+  { id: "tickets", label: "Tickets", to: "/tickets" },
 ];
 
 export function DashboardLayout() {
