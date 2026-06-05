@@ -27,6 +27,11 @@ export const appRoutes = {
   dashboardRolesPattern: "/manage/:guildId/roles",
   dashboardRolesAutorolePattern: "/manage/:guildId/roles/autorole",
   dashboardRolesLevelRolesPattern: "/manage/:guildId/roles/level-roles",
+  dashboardTicketsPattern: "/manage/:guildId/tickets",
+  ticketsPanelsPattern: "/manage/:guildId/tickets/panels",
+  ticketsFormsPattern: "/manage/:guildId/tickets/forms",
+  ticketsTranscriptsPattern: "/manage/:guildId/tickets/transcripts",
+  ticketsSettingsPattern: "/manage/:guildId/tickets/settings",
   dashboardHome: (guildId: string) => `/manage/${encodeGuildID(guildId)}/home`,
   dashboardCore: (guildId: string) => `/manage/${encodeGuildID(guildId)}/core`,
   dashboardCoreControlPanel: (guildId: string) =>
@@ -63,6 +68,16 @@ export const appRoutes = {
     `/manage/${encodeGuildID(guildId)}/roles/autorole`,
   dashboardRolesLevelRoles: (guildId: string) =>
     `/manage/${encodeGuildID(guildId)}/roles/level-roles`,
+  dashboardTickets: (guildId: string) =>
+    `/manage/${encodeGuildID(guildId)}/tickets`,
+  ticketsPanels: (guildId: string) =>
+    `/manage/${encodeGuildID(guildId)}/tickets/panels`,
+  ticketsForms: (guildId: string) =>
+    `/manage/${encodeGuildID(guildId)}/tickets/forms`,
+  ticketsTranscripts: (guildId: string) =>
+    `/manage/${encodeGuildID(guildId)}/tickets/transcripts`,
+  ticketsSettings: (guildId: string) =>
+    `/manage/${encodeGuildID(guildId)}/tickets/settings`,
   legacyControlPanel: "/dashboard/control-panel",
   legacyCommands: "/dashboard/commands",
   legacyModeration: "/dashboard/moderation",
@@ -76,6 +91,15 @@ export function buildPartnerBoardTabs(guildId: string) {
     { label: "Entries", path: appRoutes.partnerBoardEntries(guildId) },
     { label: "Layout", path: appRoutes.partnerBoardLayout(guildId) },
     { label: "Destination", path: appRoutes.partnerBoardDelivery(guildId) },
+  ] as const;
+}
+
+export function buildTicketsTabs(guildId: string) {
+  return [
+    { label: "Panels", path: appRoutes.ticketsPanels(guildId) },
+    { label: "Intake Forms", path: appRoutes.ticketsForms(guildId) },
+    { label: "Operations & Transcripts", path: appRoutes.ticketsTranscripts(guildId) },
+    { label: "Automation", path: appRoutes.ticketsSettings(guildId) },
   ] as const;
 }
 
@@ -157,6 +181,15 @@ export function mapLegacyDashboardPathForGuild(
     case "roles":
     case "roles-members":
       return appRoutes.dashboardRolesAutorole(normalizedGuildID);
+    case "tickets":
+    case "tickets/panels":
+      return appRoutes.ticketsPanels(normalizedGuildID);
+    case "tickets/forms":
+      return appRoutes.ticketsForms(normalizedGuildID);
+    case "tickets/transcripts":
+      return appRoutes.ticketsTranscripts(normalizedGuildID);
+    case "tickets/settings":
+      return appRoutes.ticketsSettings(normalizedGuildID);
     default:
       return appRoutes.dashboardHome(normalizedGuildID);
   }

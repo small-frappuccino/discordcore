@@ -6,6 +6,11 @@ import { ModerationPage } from "../pages/ModerationPage";
 import { RolesPage } from "../pages/RolesPage";
 import { PartnersPage } from "../pages/PartnersPage";
 import { EmbedsPage } from "../pages/EmbedsPage";
+import { TicketsLayout } from "../pages/Tickets/TicketsLayout";
+import { TicketsPanelsPage } from "../pages/Tickets/TicketsPanelsPage";
+import { TicketsFormsPage } from "../pages/Tickets/TicketsFormsPage";
+import { TicketsTranscriptsPage } from "../pages/Tickets/TicketsTranscriptsPage";
+import { TicketsSettingsPage } from "../pages/Tickets/TicketsSettingsPage";
 import { useDashboardSession } from "../context/DashboardSessionContext";
 
 function ManageIndexRedirect() {
@@ -37,6 +42,13 @@ export function AppRoutes() {
           <Route path="roles" element={<RolesPage />} />
           <Route path="partners" element={<PartnersPage />} />
           <Route path="embeds" element={<EmbedsPage />} />
+          <Route path="tickets" element={<TicketsLayout />}>
+            <Route index element={<Navigate to="panels" replace />} />
+            <Route path="panels" element={<TicketsPanelsPage />} />
+            <Route path="forms" element={<TicketsFormsPage />} />
+            <Route path="transcripts" element={<TicketsTranscriptsPage />} />
+            <Route path="settings" element={<TicketsSettingsPage />} />
+          </Route>
         </Route>
         <Route path="*" element={<Navigate to="/manage" replace />} />
     </Routes>
