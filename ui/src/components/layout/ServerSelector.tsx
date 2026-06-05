@@ -1,8 +1,8 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, memo, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useDashboardSession } from "../../context/DashboardSessionContext";
 
-export function ServerSelector() {
+export const ServerSelector = memo(function ServerSelector() {
   const navigate = useNavigate();
   const { guildId } = useParams<{ guildId: string }>();
   const { accessibleGuilds, manageableGuilds } = useDashboardSession();
@@ -24,11 +24,13 @@ export function ServerSelector() {
   const serverTitle = currentGuild ? currentGuild.name : (guildId ? `Server ${guildId}` : "Select server");
   const serverSubtitle = "Choose workspace";
 
-  // Combine and deduplicate guilds for the server selector
-  const allGuildsMap = new Map();
-  accessibleGuilds?.forEach(g => allGuildsMap.set(g.id, g));
-  manageableGuilds?.forEach(g => allGuildsMap.set(g.id, g));
-  const uniqueGuilds = Array.from(allGuildsMap.values());
+  // Combine and deduplicate guilds for the server selector using useMemo
+  const uniqueGuilds = useMemo(() => {
+    const allGuildsMap = new Map();
+    accessibleGuilds?.forEach(g => allGuildsMap.set(g.id, g));
+    manageableGuilds?.forEach(g => allGuildsMap.set(g.id, g));
+    return Array.from(allGuildsMap.values());
+  }, [accessibleGuilds, manageableGuilds]);
 
   return (
     <div className="relative" ref={serverMenuRef}>
@@ -74,4 +76,4 @@ export function ServerSelector() {
       </div>
     </div>
   );
-}
+});

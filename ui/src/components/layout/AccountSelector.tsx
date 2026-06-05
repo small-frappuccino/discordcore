@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, memo } from "react";
 import { useDashboardSession } from "../../context/DashboardSessionContext";
 
-export function AccountSelector() {
+export const AccountSelector = memo(function AccountSelector() {
   const { session, sessionAvatarURL, logout } = useDashboardSession();
 
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
@@ -56,4 +56,4 @@ export function AccountSelector() {
       </div>
     </div>
   );
-}
+});
