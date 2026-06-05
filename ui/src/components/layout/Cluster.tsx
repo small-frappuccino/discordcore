@@ -1,9 +1,10 @@
 import * as React from "react";
 import { cn } from "../../lib/utils";
+import { Box, BoxProps } from "./Box";
+import { ResponsiveProp, SpacingToken, resolveSpacing } from "../../lib/layout-utils";
 
-export interface ClusterProps extends React.HTMLAttributes<HTMLElement> {
-  as?: React.ElementType;
-  spacing?: "none" | "xs" | "sm" | "md" | "lg" | "xl" | "2xl";
+export interface ClusterProps extends BoxProps {
+  spacing?: ResponsiveProp<SpacingToken>;
   align?: "start" | "center" | "end" | "stretch";
   justify?: "start" | "center" | "end" | "between";
 }
@@ -11,7 +12,7 @@ export interface ClusterProps extends React.HTMLAttributes<HTMLElement> {
 export const Cluster = React.forwardRef<HTMLElement, ClusterProps>(
   (
     {
-      as: Component = "div",
+      as = "div",
       spacing = "md",
       align = "center",
       justify,
@@ -22,19 +23,12 @@ export const Cluster = React.forwardRef<HTMLElement, ClusterProps>(
     ref
   ) => {
     return (
-      <Component
+      <Box
+        as={as}
         ref={ref}
         className={cn(
           "flex flex-wrap",
-          {
-            "gap-0": spacing === "none",
-            "gap-1": spacing === "xs",
-            "gap-2": spacing === "sm",
-            "gap-4": spacing === "md",
-            "gap-6": spacing === "lg",
-            "gap-8": spacing === "xl",
-            "gap-12": spacing === "2xl",
-          },
+          resolveSpacing(spacing, "gap"),
           align === "start" && "items-start",
           align === "center" && "items-center",
           align === "end" && "items-end",
@@ -48,7 +42,7 @@ export const Cluster = React.forwardRef<HTMLElement, ClusterProps>(
         {...props}
       >
         {children}
-      </Component>
+      </Box>
     );
   }
 );
