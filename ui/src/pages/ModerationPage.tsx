@@ -8,6 +8,7 @@ import {
   PageContainer,
   SettingsGroupSkeleton,
   FormControl,
+  TransitionState,
 } from "../components/ui";
 import { Stack } from "../components/layout";
 import { useModerationPageLogic } from "./hooks/useModerationPageLogic";
@@ -30,23 +31,35 @@ export function ModerationPage() {
   }
 
   return (
-    <PageContainer>
-      <Stack spacing="xl">
-        <PageHeader
-          title="Moderation"
-          description="Configure AutoMod, Logging, and specific moderation roles."
-          badge={<Badge variant="success">Active</Badge>}
-        />
-
-        {isLoading ? (
-          <Stack spacing="lg">
-            <SettingsGroupSkeleton rows={2} />
-            <Stack spacing="sm">
-              <h3 className="text-lg">Roles Config</h3>
-              <SettingsGroupSkeleton rows={1} />
+    <TransitionState
+      isLoading={isLoading}
+      fallback={
+        <PageContainer>
+          <Stack spacing="xl">
+            <PageHeader
+              title="Moderation"
+              description="Configure AutoMod, Logging, and specific moderation roles."
+              badge={<Badge variant="neutral">Loading</Badge>}
+            />
+            <Stack spacing="lg">
+              <SettingsGroupSkeleton rows={2} />
+              <Stack spacing="sm">
+                <h3 className="text-lg">Roles Config</h3>
+                <SettingsGroupSkeleton rows={1} />
+              </Stack>
             </Stack>
           </Stack>
-        ) : (
+        </PageContainer>
+      }
+    >
+      <PageContainer>
+        <Stack spacing="xl">
+          <PageHeader
+            title="Moderation"
+            description="Configure AutoMod, Logging, and specific moderation roles."
+            badge={<Badge variant="success">Active</Badge>}
+          />
+
           <SurfaceCard>
             <Stack spacing="xl">
               <SettingsGroup>
@@ -80,38 +93,40 @@ export function ModerationPage() {
                 </SettingsRow>
               </SettingsGroup>
               
-              <Stack as="form" onSubmit={onSubmit} spacing="lg">
-                <Stack spacing="sm">
-                  <h3 className="text-lg">Roles Config</h3>
-                  <SettingsGroup>
-                    <SettingsRow>
-                      <SettingsRow.Info>
-                        <SettingsRow.Title>Mute Role</SettingsRow.Title>
-                        <SettingsRow.Description>Role assigned when a user is muted.</SettingsRow.Description>
-                      </SettingsRow.Info>
-                      <SettingsRow.Control>
-                        <FormControl asChild>
-                          <input
-                            type="text"
-                            {...form.register("mute_role")}
-                            placeholder="Role ID..."
-                            className="form-input"
-                          />
-                        </FormControl>
-                      </SettingsRow.Control>
-                    </SettingsRow>
-                  </SettingsGroup>
+              <fieldset disabled={isSaving} className="border-none p-0 m-0 min-w-0">
+                <Stack as="form" onSubmit={onSubmit} spacing="lg">
+                  <Stack spacing="sm">
+                    <h3 className="text-lg">Roles Config</h3>
+                    <SettingsGroup>
+                      <SettingsRow>
+                        <SettingsRow.Info>
+                          <SettingsRow.Title>Mute Role</SettingsRow.Title>
+                          <SettingsRow.Description>Role assigned when a user is muted.</SettingsRow.Description>
+                        </SettingsRow.Info>
+                        <SettingsRow.Control>
+                          <FormControl asChild>
+                            <input
+                              type="text"
+                              {...form.register("mute_role")}
+                              placeholder="Role ID..."
+                              className="form-input"
+                            />
+                          </FormControl>
+                        </SettingsRow.Control>
+                      </SettingsRow>
+                    </SettingsGroup>
+                  </Stack>
+                  <Stack direction="horizontal">
+                    <Button variant="primary" type="submit" disabled={isSaving}>
+                      {isSaving ? "Saving..." : "Save Mute Role"}
+                    </Button>
+                  </Stack>
                 </Stack>
-                <Stack direction="horizontal">
-                  <Button variant="primary" type="submit" disabled={isSaving}>
-                    {isSaving ? "Saving..." : "Save Mute Role"}
-                  </Button>
-                </Stack>
-              </Stack>
+              </fieldset>
             </Stack>
           </SurfaceCard>
-        )}
-      </Stack>
-    </PageContainer>
+        </Stack>
+      </PageContainer>
+    </TransitionState>
   );
 }

@@ -1,4 +1,4 @@
-import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, PageContainer, SettingsGroupSkeleton, FormControl } from "../components/ui";
+import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, PageContainer, SettingsGroupSkeleton, FormControl, TransitionState } from "../components/ui";
 import { Stack, Cluster } from "../components/layout";
 import { useQOTDPageLogic } from "./hooks/useQOTDPageLogic";
 
@@ -13,23 +13,37 @@ export function QOTDPage() {
   } = useQOTDPageLogic();
 
   return (
-    <PageContainer>
-      <Stack as="form" spacing="xl" onSubmit={onSubmit}>
-        <PageHeader 
-          title="Question of the Day" 
-          description="Configure the automated QOTD system. When enabled, the bot will pick a question from the active deck and publish it daily."
-          badge={<Badge variant={config ? "success" : "neutral"}>{config ? "Active" : "Disabled"}</Badge>}
-        />
-
-        {isLoading ? (
-          <Stack spacing="lg">
-            <SettingsGroupSkeleton rows={3} />
-            <Stack spacing="sm">
-              <h2 className="text-lg">Publish Schedule (UTC)</h2>
-              <SettingsGroupSkeleton rows={2} />
+    <TransitionState
+      isLoading={isLoading}
+      fallback={
+        <PageContainer>
+          <Stack spacing="xl">
+            <PageHeader 
+              title="Question of the Day" 
+              description="Configure the automated QOTD system. When enabled, the bot will pick a question from the active deck and publish it daily."
+              badge={<Badge variant="neutral">Loading</Badge>}
+            />
+            <Stack spacing="lg">
+              <SettingsGroupSkeleton rows={3} />
+              <Stack spacing="sm">
+                <h2 className="text-lg">Publish Schedule (UTC)</h2>
+                <SettingsGroupSkeleton rows={2} />
+              </Stack>
             </Stack>
           </Stack>
-        ) : config ? (
+        </PageContainer>
+      }
+    >
+      <PageContainer>
+        <fieldset disabled={isSaving} className="border-none p-0 m-0 min-w-0">
+          <Stack as="form" spacing="xl" onSubmit={onSubmit}>
+            <PageHeader 
+              title="Question of the Day" 
+              description="Configure the automated QOTD system. When enabled, the bot will pick a question from the active deck and publish it daily."
+              badge={<Badge variant={config ? "success" : "neutral"}>{config ? "Active" : "Disabled"}</Badge>}
+            />
+
+            {config ? (
           <Stack spacing="xl">
             <Stack spacing="sm">
               <h2 className="text-lg">Core Settings</h2>
@@ -111,8 +125,10 @@ export function QOTDPage() {
           </Stack>
         ) : (
           <p className="text-muted">Failed to load QOTD settings.</p>
-        )}
-      </Stack>
-    </PageContainer>
+            )}
+          </Stack>
+        </fieldset>
+      </PageContainer>
+    </TransitionState>
   );
 }

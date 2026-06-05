@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, PageContainer, Skeleton, Select, SettingsGroupSkeleton, FormControl } from "../components/ui";
+import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, PageContainer, Skeleton, Select, SettingsGroupSkeleton, FormControl, TransitionState } from "../components/ui";
 import { Stack } from "../components/layout";
 import { useRolesPageLogic } from "./hooks/useRolesPageLogic";
 
@@ -21,35 +21,36 @@ export function RolesPage() {
     return <div>Select a guild</div>;
   }
 
-  if (isLoading) {
-    return (
-      <PageContainer>
-        <Stack spacing="lg">
-          <PageHeader 
-            title="Roles Configuration" 
-            description="Manage which roles grant dashboard access, and configure server-wide specific roles like AutoAssignment, Mute, and Booster."
-            badge={<Badge variant="success">Active</Badge>}
-          />
-          <Stack spacing="sm">
-            <Skeleton className="h-6 w-48" />
-            <SettingsGroupSkeleton rows={2} />
-          </Stack>
-          <Stack spacing="sm">
-            <Skeleton className="h-6 w-48" />
-            <SettingsGroupSkeleton rows={3} />
-          </Stack>
-          <Stack spacing="sm">
-            <Skeleton className="h-6 w-48" />
-            <SettingsGroupSkeleton rows={2} />
-          </Stack>
-        </Stack>
-      </PageContainer>
-    );
-  }
-
   return (
-    <PageContainer>
-      <Stack as="form" spacing="lg" onSubmit={onSubmit}>
+    <TransitionState
+      isLoading={isLoading}
+      fallback={
+        <PageContainer>
+          <Stack spacing="lg">
+            <PageHeader 
+              title="Roles Configuration" 
+              description="Manage which roles grant dashboard access, and configure server-wide specific roles like AutoAssignment, Mute, and Booster."
+              badge={<Badge variant="success">Active</Badge>}
+            />
+            <Stack spacing="sm">
+              <Skeleton className="h-6 w-48" />
+              <SettingsGroupSkeleton rows={2} />
+            </Stack>
+            <Stack spacing="sm">
+              <Skeleton className="h-6 w-48" />
+              <SettingsGroupSkeleton rows={3} />
+            </Stack>
+            <Stack spacing="sm">
+              <Skeleton className="h-6 w-48" />
+              <SettingsGroupSkeleton rows={2} />
+            </Stack>
+          </Stack>
+        </PageContainer>
+      }
+    >
+      <PageContainer>
+        <fieldset disabled={isSaving} className="border-none p-0 m-0 min-w-0">
+          <Stack as="form" spacing="lg" onSubmit={onSubmit}>
         <PageHeader 
           title="Roles Configuration" 
           description="Manage which roles grant dashboard access, and configure server-wide specific roles like AutoAssignment, Mute, and Booster."
@@ -173,7 +174,9 @@ export function RolesPage() {
             Save Changes
           </Button>
         </Stack>
-      </Stack>
-    </PageContainer>
+          </Stack>
+        </fieldset>
+      </PageContainer>
+    </TransitionState>
   );
 }

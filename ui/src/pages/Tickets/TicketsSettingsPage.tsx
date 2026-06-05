@@ -1,22 +1,34 @@
-import { Button, SettingsGroupSkeleton, SurfaceCard, SettingsGroup, SettingsRow, FormControl } from "../../components/ui";
+import { Button, SettingsGroupSkeleton, SurfaceCard, SettingsGroup, SettingsRow, FormControl, TransitionState } from "../../components/ui";
 import { useTicketsSettingsLogic } from "./hooks/useTicketsSettingsLogic";
 
 export function TicketsSettingsPage() {
   const { isLoading, isSaving, form, onSubmit } = useTicketsSettingsLogic();
 
   return (
-    <div>
-      <div className="mb-6 flex justify-between items-center">
+    <TransitionState
+      isLoading={isLoading}
+      fallback={
         <div>
-          <h2 className="text-xl font-semibold">Automation Settings</h2>
-          <p className="text-muted">Configure auto-close timers, transcript logs, and system enablement.</p>
+          <div className="mb-6 flex justify-between items-center">
+            <div>
+              <h2 className="text-xl font-semibold">Automation Settings</h2>
+              <p className="text-muted">Configure auto-close timers, transcript logs, and system enablement.</p>
+            </div>
+          </div>
+          <SettingsGroupSkeleton rows={3} />
         </div>
-      </div>
+      }
+    >
+      <div>
+        <div className="mb-6 flex justify-between items-center">
+          <div>
+            <h2 className="text-xl font-semibold">Automation Settings</h2>
+            <p className="text-muted">Configure auto-close timers, transcript logs, and system enablement.</p>
+          </div>
+        </div>
 
-      {isLoading ? (
-        <SettingsGroupSkeleton rows={3} />
-      ) : (
-        <form onSubmit={onSubmit} className="space-y-8">
+        <fieldset disabled={isSaving} className="border-none p-0 m-0 min-w-0">
+          <form onSubmit={onSubmit} className="space-y-8">
           <SurfaceCard className="p-6">
             <h3 className="text-lg font-semibold tracking-tight mb-6">Core System</h3>
             <SettingsGroup>
@@ -111,8 +123,9 @@ export function TicketsSettingsPage() {
               {isSaving ? "Saving..." : "Save Settings"}
             </Button>
           </div>
-        </form>
-      )}
-    </div>
+          </form>
+        </fieldset>
+      </div>
+    </TransitionState>
   );
 }
