@@ -30,15 +30,13 @@
 .shell-brand {
   display: flex;
   align-items: center;
-  gap: 12px;
-  font-weight: 700;
+  @apply gap-3 font-bold;
   font-size: 1.1rem;
   color: var(--text-primary);
 }
 
 .shell-brand img {
-  width: 28px;
-  height: 28px;
+  @apply w-7 h-7;
   border-radius: var(--radius-full);
 }
 
@@ -117,12 +115,11 @@
 .shell-trigger-btn {
   display: flex;
   align-items: center;
-  @apply gap-3 py-1.5 pr-3 pl-1.5;
+  @apply gap-3 py-1.5 pr-3 pl-1.5 h-10;
   border-radius: var(--radius-full);
   background-color: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   transition: all var(--transition-fast);
-  height: 40px;
 }
 
 .shell-trigger-btn:hover:not(:disabled) {
@@ -135,8 +132,7 @@
 }
 
 .shell-trigger-avatar {
-  width: 26px;
-  height: 26px;
+  @apply w-[26px] h-[26px];
   border-radius: var(--radius-full);
   background-color: var(--bg-surface-active);
   display: flex;
@@ -175,7 +171,7 @@
 
 .shell-trigger-chevron {
   color: var(--text-muted);
-  margin-left: 4px;
+  @apply ml-1;
 }
 
 /* Page Content */
@@ -196,18 +192,16 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-md);
-  min-width: 200px;
+  @apply min-w-[200px] p-1;
   z-index: 50;
   display: flex;
   flex-direction: column;
-  padding: 4px;
 }
 
 .shell-dropdown-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
+  @apply gap-3 py-2 px-3 w-full text-left;
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
   font-size: 0.9rem;
@@ -215,8 +209,6 @@
   text-decoration: none;
   background: none;
   border: none;
-  width: 100%;
-  text-align: left;
   cursor: pointer;
 }
 
@@ -234,7 +226,6 @@
 }
 
 .shell-dropdown-divider {
-  height: 1px;
+  @apply h-[1px] my-1;
   background-color: var(--border-subtle);
-  margin: 4px 0;
 }
