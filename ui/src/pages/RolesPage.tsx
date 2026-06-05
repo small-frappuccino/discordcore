@@ -158,15 +158,16 @@ export function RolesPage() {
                     </SettingsRow>
                   </SettingsGroup>
                 </Stack>
-
-                <div className="form-actions">
-                  <Button variant="primary" type="submit" isLoading={isSaving}>
-                    Save Changes
-                  </Button>
-                </div>
               </>
             )}
           </Stack>
+          {!isLoading && (
+            <div className="form-actions">
+              <Button variant="primary" type="submit" isLoading={isSaving}>
+                Save Changes
+              </Button>
+            </div>
+          )}
         </form>
       </FormProvider>
     </PageContainer>

@@ -94,19 +94,6 @@ export function TicketsFormsPage() {
                 <h3 className="text-lg font-medium text-foreground mb-2">No forms configured</h3>
                 <p className="text-muted m-0">Get started by creating your first intake form.</p>
               </div>
-              <Button
-                type="button"
-                variant="primary"
-                onClick={() =>
-                  addForm({
-                    id: crypto.randomUUID(),
-                    name: "New Form",
-                    questions: [],
-                  })
-                }
-              >
-                + Add Form
-              </Button>
             </div>
           )}
         </form>

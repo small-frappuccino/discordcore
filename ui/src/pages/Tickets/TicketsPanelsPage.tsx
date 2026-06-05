@@ -156,29 +156,11 @@ export function TicketsPanelsPage() {
           )}
 
           {panels.length === 0 && (
-            <div className="empty-state" style={{ display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center' }}>
+            <div className="empty-state">
               <div>
                 <h3 className="text-lg font-medium text-foreground mb-2">No panels configured</h3>
                 <p className="text-muted mb-4">Get started by creating your first ticket trigger panel.</p>
               </div>
-              <Button
-                type="button"
-                variant="primary"
-                onClick={() =>
-                  addPanel({
-                    id: crypto.randomUUID(),
-                    name: "New Panel",
-                    channelId: "",
-                    embedTitle: "Support Ticket",
-                    embedDescription: "Please click the button below to open a ticket.",
-                    embedColor: "#5865F2",
-                    categories: [],
-                  })
-                }
-                style={{ justifySelf: 'end' }}
-              >
-                + Add Panel
-              </Button>
             </div>
           )}
         </form>

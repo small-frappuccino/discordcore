@@ -101,15 +101,14 @@ export function PartnersPage() {
               {renderCheckboxRow("disable_fandom_sorting", "Disable Fandom Sorting")}
               {renderCheckboxRow("disable_partner_sorting", "Disable Partner Sorting")}
             </SettingsGroup>
-
-            <div className="form-actions">
-              <Button variant="primary" type="submit" disabled={isSaving}>
-                {isSaving ? "Saving..." : "Save Template"}
-              </Button>
-            </div>
           </Stack>
         )}
         </Stack>
+        <div className="form-actions">
+          <Button variant="primary" type="submit" disabled={isSaving}>
+            {isSaving ? "Saving..." : "Save Template"}
+          </Button>
+        </div>
       </form>
     </PageContainer>
   );

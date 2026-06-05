@@ -1,4 +1,4 @@
-import { Button, SettingsGroupSkeleton, SurfaceCard, SettingsGroup, SettingsRow, FormControl, FormProvider, FormInput, ToggleSwitch } from "../../components/ui";
+import { Button, SettingsGroupSkeleton, SettingsGroup, SettingsRow, FormControl, FormProvider, FormInput, ToggleSwitch } from "../../components/ui";
 import { Stack } from "../../components/layout";
 import { useTicketsSettingsLogic } from "./hooks/useTicketsSettingsLogic";
 
@@ -26,8 +26,6 @@ export function TicketsSettingsPage() {
           <FormProvider {...form}>
             <form className="settings-form" onSubmit={onSubmit}>
               <Stack spacing="xl">
-          <SurfaceCard>
-            <Stack spacing="lg">
               <h3 className="text-lg font-semibold tracking-tight">Core System</h3>
             <SettingsGroup>
               <SettingsRow>
@@ -40,11 +38,7 @@ export function TicketsSettingsPage() {
                 </SettingsRow.Control>
               </SettingsRow>
               </SettingsGroup>
-            </Stack>
-          </SurfaceCard>
 
-          <SurfaceCard>
-            <Stack spacing="lg">
               <h3 className="text-lg font-semibold tracking-tight">Automation & Logging</h3>
               <SettingsGroup>
               <SettingsRow>
@@ -94,8 +88,6 @@ export function TicketsSettingsPage() {
                 </SettingsRow.Control>
               </SettingsRow>
               </SettingsGroup>
-            </Stack>
-          </SurfaceCard>
 
           <div className="form-actions">
             <Button type="submit" variant="primary" disabled={isSaving}>

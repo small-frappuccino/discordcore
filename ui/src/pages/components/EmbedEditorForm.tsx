@@ -155,36 +155,44 @@ export function EmbedEditorForm({
         </SettingsRow>
       </SettingsGroup>
 
-      <SettingsGroup>
-        <div className="p-4 flex flex-col gap-4">
+        <div>
           {customFields.map((field, idx) => (
-            <div key={field.id} className="flex flex-col gap-4 py-4 border-b border-white/10 relative">
-              <div className="flex gap-4">
-                <div className="flex-1 flex flex-col gap-1">
-                  <label className="text-xs text-muted font-medium">Name</label>
-                  <input type="text" {...form.register(`fields.${idx}.name` as const)} className="form-input text-sm" />
+            <SettingsRow key={field.id}>
+              <SettingsRow.Info>
+                <SettingsRow.Title>Custom Field {idx + 1}</SettingsRow.Title>
+                <div className="mt-4 flex flex-col gap-4">
+                  <label className="flex items-center gap-2 text-sm text-foreground">
+                    <input type="checkbox" {...form.register(`fields.${idx}.inline` as const)} className="form-checkbox" />
+                    Inline
+                  </label>
+                  <Button type="button" variant="danger" onClick={() => removeField(idx)} className="px-2 py-1 text-xs self-start">
+                    Remove Field
+                  </Button>
                 </div>
-                <div className="flex-1 flex flex-col gap-1">
-                  <label className="text-xs text-muted font-medium">Value</label>
-                  <input type="text" {...form.register(`fields.${idx}.value` as const)} className="form-input text-sm" />
+              </SettingsRow.Info>
+              <SettingsRow.Control>
+                <div className="flex flex-col gap-4 w-full">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-muted font-medium">Name</label>
+                    <input type="text" {...form.register(`fields.${idx}.name` as const)} className="form-input text-sm w-full" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-muted font-medium">Value</label>
+                    <textarea {...form.register(`fields.${idx}.value` as const)} className="form-input text-sm w-full input-expansive min-h-[80px]" />
+                  </div>
                 </div>
-              </div>
-              <div className="flex justify-between items-center mt-2">
-                <label className="flex items-center gap-2 text-sm text-white">
-                  <input type="checkbox" {...form.register(`fields.${idx}.inline` as const)} className="form-checkbox" />
-                  Inline
-                </label>
-                <Button type="button" variant="danger" onClick={() => removeField(idx)} className="px-2 py-1 text-xs">
-                  Remove Field
-                </Button>
-              </div>
-            </div>
+              </SettingsRow.Control>
+            </SettingsRow>
           ))}
-          <Button type="button" variant="secondary" onClick={appendField} className="self-start">
-            + Add Field
-          </Button>
+          <SettingsRow>
+            <SettingsRow.Info></SettingsRow.Info>
+            <SettingsRow.Control>
+              <Button type="button" variant="secondary" onClick={appendField} className="self-start">
+                + Add Field
+              </Button>
+            </SettingsRow.Control>
+          </SettingsRow>
         </div>
-      </SettingsGroup>
 
       <div className="form-actions">
         <Button variant="primary" type="submit" disabled={isSaving}>
