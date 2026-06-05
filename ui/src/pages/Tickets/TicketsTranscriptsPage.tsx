@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useCurrentGuild } from "../../context/GuildContext";
 import { useLiveTickets, useTranscriptsList } from "../../api/hooks/useTickets";
+import type { LiveTicket, ClosedTicketTranscript } from "../../api/domains/tickets";
 import { Badge, SurfaceCard, Button } from "../../components/ui";
 import { TranscriptViewer } from "./components/TranscriptViewer";
 
@@ -52,7 +53,7 @@ export function TicketsTranscriptsPage() {
           {isLoadingLive ? (
             <div className="text-muted animate-pulse">Loading live tickets...</div>
           ) : liveResp?.tickets?.length ? (
-            liveResp.tickets.map((t: any) => (
+            liveResp.tickets.map((t: LiveTicket) => (
               <SurfaceCard key={t.id} className="p-4 flex flex-wrap justify-between items-center gap-4">
                 <div>
                   <h4 className="font-semibold flex items-center gap-2">
@@ -92,7 +93,7 @@ export function TicketsTranscriptsPage() {
           {isLoadingTranscripts ? (
             <div className="text-muted animate-pulse">Loading transcripts...</div>
           ) : transResp?.transcripts?.length ? (
-            transResp.transcripts.map((t: any) => (
+            transResp.transcripts.map((t: Omit<ClosedTicketTranscript, "messages">) => (
               <SurfaceCard key={t.id} className="p-4 flex flex-wrap justify-between items-center gap-4">
                 <div>
                   <h4 className="font-semibold flex items-center gap-2">

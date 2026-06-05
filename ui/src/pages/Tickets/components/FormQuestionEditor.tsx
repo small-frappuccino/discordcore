@@ -1,7 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useFieldArray, type UseFormReturn } from "react-hook-form";
 import { Button } from "../../../components/ui";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function FormQuestionEditor({ formIndex, form }: { formIndex: number; form: UseFormReturn<any> }) {
   const { fields, append, remove } = useFieldArray({
     control: form.control,

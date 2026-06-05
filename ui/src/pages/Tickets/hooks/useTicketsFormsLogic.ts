@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useEffect } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -20,6 +19,7 @@ export function useTicketsFormsLogic() {
   const { mutate: updateConfig, isPending: isSaving } = useUpdateTicketsConfig(selectedGuildID || "");
 
   const form = useForm<FormsPageValues>({
+    // @ts-expect-error - Zod resolver types mismatch with RHF defaults
     resolver: zodResolver(FormsPageSchema),
     defaultValues: { forms: [] },
   });
