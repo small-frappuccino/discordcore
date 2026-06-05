@@ -2,7 +2,18 @@
 @import "tailwindcss";
 
 @theme {
+  --color-base: var(--bg-base);
+  --color-surface: var(--bg-surface);
+  --color-surface-hover: var(--bg-surface-hover);
+  --color-surface-active: var(--bg-surface-active);
+  --color-primary: var(--text-primary);
+  --color-secondary: var(--text-secondary);
   --color-muted: var(--text-muted);
+  --color-accent: var(--accent-primary);
+  --color-accent-hover: var(--accent-primary-hover);
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+  --color-warning: var(--warning);
 }
 
 :root {
@@ -159,6 +170,23 @@ ul, ol {
   background-color: var(--bg-surface-active);
 }
 
+.btn-danger {
+  background-color: var(--danger);
+  color: white;
+}
+.btn-danger:hover {
+  background-color: #bd2a2e;
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-ghost {
+  background-color: transparent;
+  color: var(--text-primary);
+}
+.btn-ghost:hover {
+  background-color: var(--bg-surface-hover);
+}
+
 /* Surface Card */
 .surface-card {
   background-color: var(--bg-surface);
@@ -196,7 +224,7 @@ ul, ol {
 }
 .form-input:focus, .form-select:focus {
   border-color: var(--accent-primary);
-  @apply outline-none ring-2 ring-[var(--accent-primary)] ring-offset-2 ring-offset-[var(--bg-base)];
+  @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-base;
 }
 select[multiple].form-select {
   @apply h-24;

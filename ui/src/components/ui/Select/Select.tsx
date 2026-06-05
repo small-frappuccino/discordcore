@@ -7,7 +7,10 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
   ({ className, children, ...props }, ref) => {
     return (
       <select
-        className={cn("form-select", className)}
+        className={cn(
+          "form-select disabled:opacity-50 disabled:cursor-not-allowed",
+          className
+        )}
         ref={ref}
         {...props}
       >
