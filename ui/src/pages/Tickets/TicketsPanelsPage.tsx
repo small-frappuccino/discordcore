@@ -1,4 +1,3 @@
-import { motion } from "framer-motion";
 import { Button, SettingsGroupSkeleton, SurfaceCard } from "../../components/ui";
 import { useTicketsPanelsLogic } from "./hooks/useTicketsPanelsLogic";
 import { PanelCategoryEditor } from "./components/PanelCategoryEditor";
@@ -37,12 +36,9 @@ export function TicketsPanelsPage() {
       ) : (
         <form onSubmit={onSubmit} className="space-y-8">
           {panels.map((panel, index) => (
-            <motion.div
+            <div
               key={panel.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.2 }}
+              className="animate-in fade-in slide-in-from-top-2 duration-300 ease-out"
             >
               <SurfaceCard className="p-6">
                 <div className="flex justify-between items-center mb-6">
@@ -128,7 +124,7 @@ export function TicketsPanelsPage() {
                   )}
                 </div>
               </SurfaceCard>
-            </motion.div>
+            </div>
           ))}
 
           {panels.length > 0 && (

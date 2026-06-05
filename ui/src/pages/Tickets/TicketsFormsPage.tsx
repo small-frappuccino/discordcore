@@ -1,4 +1,3 @@
-import { motion } from "framer-motion";
 import { Button, SettingsGroupSkeleton, SurfaceCard } from "../../components/ui";
 import { useTicketsFormsLogic } from "./hooks/useTicketsFormsLogic";
 import { FormQuestionEditor } from "./components/FormQuestionEditor";
@@ -33,12 +32,9 @@ export function TicketsFormsPage() {
       ) : (
         <form onSubmit={onSubmit} className="space-y-8">
           {intakeForms.map((intakeForm, index) => (
-            <motion.div
+            <div
               key={intakeForm.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.2 }}
+              className="animate-in fade-in slide-in-from-top-2 duration-300 ease-out"
             >
               <SurfaceCard className="p-6">
                 <div className="flex justify-between items-center mb-6">
@@ -81,7 +77,7 @@ export function TicketsFormsPage() {
                   )}
                 </div>
               </SurfaceCard>
-            </motion.div>
+            </div>
           ))}
 
           {intakeForms.length > 0 && (

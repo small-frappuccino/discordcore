@@ -167,7 +167,7 @@
 .shell-content {
   flex: 1;
   overflow-y: auto;
-  @apply px-12 py-8 gap-8;
+  @apply px-4 sm:px-8 lg:px-12 py-6 lg:py-8 gap-6 sm:gap-8;
   display: flex;
   flex-direction: column;
 }

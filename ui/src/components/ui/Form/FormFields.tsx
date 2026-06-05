@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useFormContext, type RegisterOptions } from "react-hook-form";
+import { useFormContext, useFormState, type RegisterOptions } from "react-hook-form";
 import { cn } from "../../../lib/utils";
 import { Select } from "../Select/Select";
 
@@ -21,14 +21,15 @@ export interface FormInputProps extends React.InputHTMLAttributes<HTMLInputEleme
 }
 
 export function FormInput({ name, rules, className, ...props }: FormInputProps) {
-  const { register, formState: { errors } } = useFormContext();
+  const { register, control } = useFormContext();
+  const { errors } = useFormState({ name, control });
   const error = getError(errors as Record<string, unknown>, name);
 
   return (
     <div className="flex flex-col w-full">
       <input
         {...register(name, rules)}
-        className={cn("form-input", className)}
+        className={cn("form-input transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 focus-visible:ring-offset-base disabled:opacity-70 disabled:cursor-not-allowed hover:bg-white/5", className)}
         {...props}
       />
       {error && (
@@ -46,7 +47,8 @@ export interface FormSelectProps extends React.SelectHTMLAttributes<HTMLSelectEl
 }
 
 export function FormSelect({ name, rules, className, children, ...props }: FormSelectProps) {
-  const { register, formState: { errors } } = useFormContext();
+  const { register, control } = useFormContext();
+  const { errors } = useFormState({ name, control });
   const error = getError(errors as Record<string, unknown>, name);
 
   return (
@@ -73,7 +75,8 @@ export interface FormCheckboxProps extends React.InputHTMLAttributes<HTMLInputEl
 }
 
 export function FormCheckbox({ name, rules, className, ...props }: FormCheckboxProps) {
-  const { register, formState: { errors } } = useFormContext();
+  const { register, control } = useFormContext();
+  const { errors } = useFormState({ name, control });
   const error = getError(errors as Record<string, unknown>, name);
 
   return (
@@ -81,7 +84,7 @@ export function FormCheckbox({ name, rules, className, ...props }: FormCheckboxP
       <input
         type="checkbox"
         {...register(name, rules)}
-        className={cn("form-checkbox", className)}
+        className={cn("form-checkbox transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 focus-visible:ring-offset-base disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer", className)}
         {...props}
       />
       {error && (

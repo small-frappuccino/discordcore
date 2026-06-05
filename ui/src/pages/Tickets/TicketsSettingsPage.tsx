@@ -1,4 +1,5 @@
 import { Button, SettingsGroupSkeleton, SurfaceCard, SettingsGroup, SettingsRow, FormControl, TransitionState, FormProvider, FormInput } from "../../components/ui";
+import { Stack, Cluster } from "../../components/layout";
 import { useTicketsSettingsLogic } from "./hooks/useTicketsSettingsLogic";
 
 export function TicketsSettingsPage() {
@@ -8,30 +9,28 @@ export function TicketsSettingsPage() {
     <TransitionState
       isLoading={isLoading}
       fallback={
-        <div>
-          <div className="mb-6 flex justify-between items-center">
-            <div>
-              <h2 className="text-xl font-semibold">Automation Settings</h2>
-              <p className="text-muted">Configure auto-close timers, transcript logs, and system enablement.</p>
-            </div>
-          </div>
-          <SettingsGroupSkeleton rows={3} />
-        </div>
-      }
-    >
-      <div>
-        <div className="mb-6 flex justify-between items-center">
+        <Stack spacing="xl">
           <div>
             <h2 className="text-xl font-semibold">Automation Settings</h2>
             <p className="text-muted">Configure auto-close timers, transcript logs, and system enablement.</p>
           </div>
+          <SettingsGroupSkeleton rows={3} />
+        </Stack>
+      }
+    >
+      <Stack spacing="xl">
+        <div>
+          <h2 className="text-xl font-semibold">Automation Settings</h2>
+          <p className="text-muted">Configure auto-close timers, transcript logs, and system enablement.</p>
         </div>
 
         <fieldset disabled={isSaving} className="border-none p-0 m-0 min-w-0">
           <FormProvider {...form}>
-            <form onSubmit={onSubmit} className="space-y-8">
-          <SurfaceCard className="p-6">
-            <h3 className="text-lg font-semibold tracking-tight mb-6">Core System</h3>
+            <form onSubmit={onSubmit}>
+              <Stack spacing="xl">
+          <SurfaceCard>
+            <Stack spacing="lg">
+              <h3 className="text-lg font-semibold tracking-tight">Core System</h3>
             <SettingsGroup>
               <SettingsRow>
                 <SettingsRow.Info>
@@ -49,12 +48,14 @@ export function TicketsSettingsPage() {
                   </label>
                 </SettingsRow.Control>
               </SettingsRow>
-            </SettingsGroup>
+              </SettingsGroup>
+            </Stack>
           </SurfaceCard>
 
-          <SurfaceCard className="p-6">
-            <h3 className="text-lg font-semibold tracking-tight mb-6">Automation & Logging</h3>
-            <SettingsGroup>
+          <SurfaceCard>
+            <Stack spacing="lg">
+              <h3 className="text-lg font-semibold tracking-tight">Automation & Logging</h3>
+              <SettingsGroup>
               <SettingsRow>
                 <SettingsRow.Info>
                   <SettingsRow.Title>Transcript Log Channel</SettingsRow.Title>
@@ -101,18 +102,20 @@ export function TicketsSettingsPage() {
                   />
                 </SettingsRow.Control>
               </SettingsRow>
-            </SettingsGroup>
+              </SettingsGroup>
+            </Stack>
           </SurfaceCard>
 
-          <div className="sticky bottom-4 z-10 p-4 bg-surface-card border border-surface-border rounded-lg shadow-lg flex justify-end">
+          <Cluster justify="end" className="sticky bottom-4 z-10 p-4 bg-surface border border-surface-border rounded-lg shadow-lg">
             <Button type="submit" variant="primary" disabled={isSaving}>
               {isSaving ? "Saving..." : "Save Settings"}
             </Button>
-          </div>
+          </Cluster>
+              </Stack>
             </form>
           </FormProvider>
         </fieldset>
-      </div>
+      </Stack>
     </TransitionState>
   );
 }

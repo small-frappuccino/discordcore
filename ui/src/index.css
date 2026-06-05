@@ -192,12 +192,23 @@ ul, ol {
   background-color: var(--bg-surface);
   border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
-  @apply p-6;
+  @apply p-5 sm:p-6;
   box-shadow: var(--shadow-sm);
   outline: none;
 }
 .surface-card:focus-visible {
   @apply outline-none ring-2 ring-[var(--accent-primary)] ring-offset-2 ring-offset-[var(--bg-base)];
+}
+
+.surface-card.interactive {
+  cursor: pointer;
+  transition: background-color var(--transition-fast) ease-out;
+}
+.surface-card.interactive:hover {
+  background-color: var(--bg-surface-hover);
+}
+.surface-card.interactive:active {
+  background-color: var(--bg-surface-active);
 }
 
 /* Badges */
@@ -271,7 +282,7 @@ select[multiple].form-select {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  @apply p-4;
+  @apply p-4 sm:p-5;
   border-bottom: 1px solid var(--border-subtle);
 }
 .settings-row:last-child {

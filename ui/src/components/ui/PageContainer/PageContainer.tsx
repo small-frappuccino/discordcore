@@ -6,7 +6,7 @@ type PageContainerProps = React.HTMLAttributes<HTMLDivElement> & {
 
 export function PageContainer({ className = "", children, ...props }: PageContainerProps) {
   return (
-    <div className={`flex flex-col h-full w-full max-w-7xl mx-auto px-4 ${className}`} {...props}>
+    <div className={`flex flex-col h-full w-full max-w-7xl mx-auto ${className}`} {...props}>
       {children}
     </div>
   );

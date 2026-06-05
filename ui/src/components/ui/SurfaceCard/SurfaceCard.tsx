@@ -16,7 +16,7 @@ export const SurfaceCard = React.forwardRef<HTMLDivElement, SurfaceCardProps>(
           ref={ref as React.ForwardedRef<HTMLElement>}
           className={cn(
             "surface-card",
-            interactive && "cursor-pointer hover:bg-[var(--bg-surface-hover)] active:bg-[var(--bg-surface-active)] transition-colors",
+            interactive && "interactive",
             className
           )}
           {...props}
@@ -30,7 +30,7 @@ export const SurfaceCard = React.forwardRef<HTMLDivElement, SurfaceCardProps>(
         ref={ref}
         className={cn(
           "surface-card",
-          interactive && "cursor-pointer hover:bg-surface-hover active:bg-surface-active transition-colors",
+          interactive && "interactive",
           className
         )}
         {...props}
