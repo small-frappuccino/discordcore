@@ -81,8 +81,10 @@ export function TicketsTranscriptsPage() {
               </SurfaceCard>
             ))
           ) : (
-            <div className="text-center p-8 border-2 border-dashed border-surface-border rounded-xl">
-              <p className="text-muted">No active tickets right now.</p>
+            <div className="empty-state">
+              <div className="empty-state-content">
+                <p className="text-muted m-0">No active tickets right now.</p>
+              </div>
             </div>
           )}
         </div>
@@ -112,8 +114,10 @@ export function TicketsTranscriptsPage() {
               </SurfaceCard>
             ))
           ) : (
-            <div className="text-center p-8 border-2 border-dashed border-surface-border rounded-xl">
-              <p className="text-muted">No closed transcripts found.</p>
+            <div className="empty-state">
+              <div className="empty-state-content">
+                <p className="text-muted m-0">No closed transcripts found.</p>
+              </div>
             </div>
           )}
         </div>

@@ -1,5 +1,5 @@
 import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, PageContainer, SettingsGroupSkeleton, FormControl, FormProvider, FormSelect, FormInput } from "../components/ui";
-import { Stack, Cluster, Box } from "../components/layout";
+import { Stack, Box } from "../components/layout";
 import { useQOTDPageLogic } from "./hooks/useQOTDPageLogic";
 
 export function QOTDPage() {
@@ -80,7 +80,7 @@ export function QOTDPage() {
                         <SettingsRow.Description>The exact UTC time when the question should be posted.</SettingsRow.Description>
                       </SettingsRow.Info>
                       <SettingsRow.Control>
-                        <Cluster spacing="sm" align="center">
+                        <div style={{ display: 'flex', flexDirection: 'row', gap: '8px', alignItems: 'center' }}>
                           <FormInput
                             type="number"
                             min="0"
@@ -98,17 +98,17 @@ export function QOTDPage() {
                             rules={{ valueAsNumber: true }}
                             className="w-16"
                           />
-                        </Cluster>
+                        </div>
                       </SettingsRow.Control>
                     </SettingsRow>
                   </SettingsGroup>
                 </Stack>
 
-                <Stack direction="horizontal" spacing="sm">
+                <div className="form-actions">
                   <Button variant="primary" type="submit" isLoading={isSaving}>
                     Save Changes
                   </Button>
-                </Stack>
+                </div>
               </Stack>
             ) : (
               <p className="text-muted">Failed to load QOTD settings.</p>

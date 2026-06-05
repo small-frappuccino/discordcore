@@ -1,4 +1,4 @@
-import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, PageContainer, SettingsGroupSkeleton } from "../components/ui";
+import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, PageContainer, SettingsGroupSkeleton, ToggleSwitch } from "../components/ui";
 import { Stack } from "../components/layout";
 import { usePartnersPageLogic } from "./hooks/usePartnersPageLogic";
 import type { Path } from "react-hook-form";
@@ -34,14 +34,14 @@ export function PartnersPage() {
   );
 
   const renderTextareaRow = (name: Path<PartnersFormData>, title: string) => (
-    <SettingsRow>
+    <SettingsRow className="settings-row--multiline">
       <SettingsRow.Info>
         <SettingsRow.Title>{title}</SettingsRow.Title>
       </SettingsRow.Info>
       <SettingsRow.Control>
         <textarea
           {...form.register(name)}
-          className="form-input w-full min-h-16"
+          className="form-input w-full input-expansive"
         />
       </SettingsRow.Control>
     </SettingsRow>
@@ -53,18 +53,15 @@ export function PartnersPage() {
         <SettingsRow.Title>{title}</SettingsRow.Title>
       </SettingsRow.Info>
       <SettingsRow.Control>
-        <input
-          type="checkbox"
-          className="form-checkbox w-4 h-4"
-          {...form.register(name)}
-        />
+        <ToggleSwitch {...form.register(name)} />
       </SettingsRow.Control>
     </SettingsRow>
   );
 
   return (
     <PageContainer>
-      <Stack as="form" spacing="xl" onSubmit={onSubmit}>
+      <form className="settings-form" onSubmit={onSubmit}>
+        <Stack spacing="xl">
         <PageHeader>
           <PageHeader.TitleRow>
             <PageHeader.Title>Partner Board</PageHeader.Title>
@@ -105,14 +102,15 @@ export function PartnersPage() {
               {renderCheckboxRow("disable_partner_sorting", "Disable Partner Sorting")}
             </SettingsGroup>
 
-            <Stack direction="horizontal">
+            <div className="form-actions">
               <Button variant="primary" type="submit" disabled={isSaving}>
                 {isSaving ? "Saving..." : "Save Template"}
               </Button>
-            </Stack>
+            </div>
           </Stack>
         )}
-      </Stack>
+        </Stack>
+      </form>
     </PageContainer>
   );
 }

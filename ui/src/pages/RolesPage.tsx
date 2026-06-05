@@ -1,6 +1,6 @@
 import { useMemo } from "react";
-import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, PageContainer, Skeleton, SettingsGroupSkeleton, FormControl, FormProvider, FormSelect, FormCheckbox } from "../components/ui";
-import { Stack, Box } from "../components/layout";
+import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, PageContainer, Skeleton, SettingsGroupSkeleton, FormControl, FormProvider, FormSelect, ToggleSwitch } from "../components/ui";
+import { Stack } from "../components/layout";
 import { useRolesPageLogic } from "./hooks/useRolesPageLogic";
 
 export function RolesPage() {
@@ -23,9 +23,9 @@ export function RolesPage() {
 
   return (
     <PageContainer>
-      <Box as="fieldset" p="none" m="none" className="border-none min-w-0">
-        <FormProvider {...form}>
-          <Stack as="form" spacing="lg" onSubmit={onSubmit}>
+      <FormProvider {...form}>
+        <form className="settings-form" onSubmit={onSubmit}>
+          <Stack spacing="lg">
             <PageHeader>
               <PageHeader.TitleRow>
                 <PageHeader.Title>Roles Configuration</PageHeader.Title>
@@ -54,27 +54,27 @@ export function RolesPage() {
                 <Stack spacing="sm">
                   <h2 className="text-lg font-semibold tracking-tight text-text-primary">Dashboard Access</h2>
                   <SettingsGroup>
-                    <SettingsRow>
+                    <SettingsRow className="settings-row--multiline">
                       <SettingsRow.Info>
                         <SettingsRow.Title>Read Access Roles</SettingsRow.Title>
                         <SettingsRow.Description>Roles allowed to view dashboard settings</SettingsRow.Description>
                       </SettingsRow.Info>
                       <SettingsRow.Control>
                         <FormControl asChild>
-                          <FormSelect multiple name="dashboard_read">
+                          <FormSelect multiple name="dashboard_read" className="input-expansive">
                             {roleOptions}
                           </FormSelect>
                         </FormControl>
                       </SettingsRow.Control>
                     </SettingsRow>
-                    <SettingsRow>
+                    <SettingsRow className="settings-row--multiline">
                       <SettingsRow.Info>
                         <SettingsRow.Title>Write Access Roles</SettingsRow.Title>
                         <SettingsRow.Description>Roles allowed to view and edit dashboard settings</SettingsRow.Description>
                       </SettingsRow.Info>
                       <SettingsRow.Control>
                         <FormControl asChild>
-                          <FormSelect multiple name="dashboard_write">
+                          <FormSelect multiple name="dashboard_write" className="input-expansive">
                             {roleOptions}
                           </FormSelect>
                         </FormControl>
@@ -92,7 +92,7 @@ export function RolesPage() {
                         <SettingsRow.Description>Automatically assign the target role to users that have required roles</SettingsRow.Description>
                       </SettingsRow.Info>
                       <SettingsRow.Control>
-                        <FormCheckbox name="auto_assignment.enabled" />
+                        <ToggleSwitch {...form.register("auto_assignment.enabled")} />
                       </SettingsRow.Control>
                     </SettingsRow>
                     <SettingsRow>
@@ -109,14 +109,14 @@ export function RolesPage() {
                         </FormControl>
                       </SettingsRow.Control>
                     </SettingsRow>
-                    <SettingsRow>
+                    <SettingsRow className="settings-row--multiline">
                       <SettingsRow.Info>
                         <SettingsRow.Title>Required Roles</SettingsRow.Title>
                         <SettingsRow.Description>Users must have all these roles to get the target role</SettingsRow.Description>
                       </SettingsRow.Info>
                       <SettingsRow.Control>
                         <FormControl asChild>
-                          <FormSelect multiple name="auto_assignment.required_roles">
+                          <FormSelect multiple name="auto_assignment.required_roles" className="input-expansive">
                             {roleOptions}
                           </FormSelect>
                         </FormControl>
@@ -159,16 +159,16 @@ export function RolesPage() {
                   </SettingsGroup>
                 </Stack>
 
-                <Stack direction="horizontal" spacing="sm" align="center">
+                <div className="form-actions">
                   <Button variant="primary" type="submit" isLoading={isSaving}>
                     Save Changes
                   </Button>
-                </Stack>
+                </div>
               </>
             )}
           </Stack>
-        </FormProvider>
-      </Box>
+        </form>
+      </FormProvider>
     </PageContainer>
   );
 }

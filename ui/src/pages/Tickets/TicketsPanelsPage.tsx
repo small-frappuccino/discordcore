@@ -1,4 +1,4 @@
-import { Button, SettingsGroupSkeleton, SurfaceCard } from "../../components/ui";
+import { Button, SettingsGroupSkeleton, SurfaceCard, SettingsGroup, SettingsRow } from "../../components/ui";
 import { useTicketsPanelsLogic } from "./hooks/useTicketsPanelsLogic";
 import { PanelCategoryEditor } from "./components/PanelCategoryEditor";
 
@@ -48,68 +48,88 @@ export function TicketsPanelsPage() {
                   </Button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Panel Name</label>
-                    <input
-                      {...form.register(`panels.${index}.name` as const)}
-                      className="form-input w-full"
-                      placeholder="e.g. Main Support Panel"
-                    />
-                    {form.formState.errors?.panels?.[index]?.name && (
-                      <p className="text-red-500 text-xs mt-1">
-                        {form.formState.errors.panels[index].name.message as string}
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Target Channel ID</label>
-                    <input
-                      {...form.register(`panels.${index}.channelId` as const)}
-                      className="form-input w-full"
-                      placeholder="Where should this panel be posted?"
-                    />
-                    {form.formState.errors?.panels?.[index]?.channelId && (
-                      <p className="text-red-500 text-xs mt-1">
-                        {form.formState.errors.panels[index].channelId.message as string}
-                      </p>
-                    )}
-                  </div>
-                </div>
+                <SettingsGroup className="mb-8">
+                  <SettingsRow>
+                    <SettingsRow.Info>
+                      <SettingsRow.Title>Panel Name</SettingsRow.Title>
+                      {form.formState.errors?.panels?.[index]?.name && (
+                        <SettingsRow.Description className="text-danger">
+                          {form.formState.errors.panels[index].name.message as string}
+                        </SettingsRow.Description>
+                      )}
+                    </SettingsRow.Info>
+                    <SettingsRow.Control>
+                      <input
+                        {...form.register(`panels.${index}.name` as const)}
+                        className="form-input w-full"
+                        placeholder="e.g. Main Support Panel"
+                      />
+                    </SettingsRow.Control>
+                  </SettingsRow>
+                  <SettingsRow>
+                    <SettingsRow.Info>
+                      <SettingsRow.Title>Target Channel ID</SettingsRow.Title>
+                      {form.formState.errors?.panels?.[index]?.channelId && (
+                        <SettingsRow.Description className="text-danger">
+                          {form.formState.errors.panels[index].channelId.message as string}
+                        </SettingsRow.Description>
+                      )}
+                    </SettingsRow.Info>
+                    <SettingsRow.Control>
+                      <input
+                        {...form.register(`panels.${index}.channelId` as const)}
+                        className="form-input w-full"
+                        placeholder="Where should this panel be posted?"
+                      />
+                    </SettingsRow.Control>
+                  </SettingsRow>
+                </SettingsGroup>
 
                 <h4 className="text-md font-semibold mb-4 text-muted">Embed Appearance</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 p-4 bg-surface-base border border-surface-border rounded-lg">
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium mb-1">Embed Title</label>
-                    <input
-                      {...form.register(`panels.${index}.embedTitle` as const)}
-                      className="form-input w-full"
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium mb-1">Embed Description</label>
-                    <textarea
-                      {...form.register(`panels.${index}.embedDescription` as const)}
-                      className="form-input w-full min-h-[100px]"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Embed Color (Hex)</label>
-                    <div className="flex items-center gap-3">
+                <SettingsGroup className="mb-8 p-4 bg-surface-base border border-surface-border rounded-lg">
+                  <SettingsRow>
+                    <SettingsRow.Info>
+                      <SettingsRow.Title>Embed Title</SettingsRow.Title>
+                    </SettingsRow.Info>
+                    <SettingsRow.Control>
                       <input
-                        type="color"
-                        {...form.register(`panels.${index}.embedColor` as const)}
-                        className="h-9 w-12 rounded border border-surface-border bg-transparent p-1 cursor-pointer"
+                        {...form.register(`panels.${index}.embedTitle` as const)}
+                        className="form-input w-full"
                       />
-                      <input
-                        type="text"
-                        {...form.register(`panels.${index}.embedColor` as const)}
-                        className="form-input flex-1"
-                        placeholder="#FFFFFF"
+                    </SettingsRow.Control>
+                  </SettingsRow>
+                  <SettingsRow className="settings-row--multiline">
+                    <SettingsRow.Info>
+                      <SettingsRow.Title>Embed Description</SettingsRow.Title>
+                    </SettingsRow.Info>
+                    <SettingsRow.Control>
+                      <textarea
+                        {...form.register(`panels.${index}.embedDescription` as const)}
+                        className="form-input w-full min-h-[100px]"
                       />
-                    </div>
-                  </div>
-                </div>
+                    </SettingsRow.Control>
+                  </SettingsRow>
+                  <SettingsRow>
+                    <SettingsRow.Info>
+                      <SettingsRow.Title>Embed Color (Hex)</SettingsRow.Title>
+                    </SettingsRow.Info>
+                    <SettingsRow.Control>
+                      <div className="flex items-center gap-3 w-full">
+                        <input
+                          type="color"
+                          {...form.register(`panels.${index}.embedColor` as const)}
+                          className="h-9 w-12 rounded border border-surface-border bg-transparent p-1 cursor-pointer shrink-0"
+                        />
+                        <input
+                          type="text"
+                          {...form.register(`panels.${index}.embedColor` as const)}
+                          className="form-input flex-1"
+                          placeholder="#FFFFFF"
+                        />
+                      </div>
+                    </SettingsRow.Control>
+                  </SettingsRow>
+                </SettingsGroup>
 
                 <div className="mt-8 border-t border-surface-border pt-6">
                   <h4 className="text-md font-semibold mb-2">Dropdown Categories</h4>
@@ -128,7 +148,7 @@ export function TicketsPanelsPage() {
           ))}
 
           {panels.length > 0 && (
-            <div className="sticky bottom-4 z-10 p-4 bg-surface-card border border-surface-border rounded-lg shadow-lg flex justify-end">
+            <div className="form-actions sticky bottom-4 z-10 p-4 bg-surface-card border border-surface-border rounded-lg shadow-lg">
               <Button type="submit" variant="primary" disabled={isSaving}>
                 {isSaving ? "Saving..." : "Save Configuration"}
               </Button>
@@ -136,9 +156,29 @@ export function TicketsPanelsPage() {
           )}
 
           {panels.length === 0 && (
-            <div className="text-center p-12 border-2 border-dashed border-surface-border rounded-xl">
-              <h3 className="text-lg font-medium text-foreground mb-2">No panels configured</h3>
-              <p className="text-muted mb-4">Get started by creating your first ticket trigger panel.</p>
+            <div className="empty-state" style={{ display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center' }}>
+              <div>
+                <h3 className="text-lg font-medium text-foreground mb-2">No panels configured</h3>
+                <p className="text-muted mb-4">Get started by creating your first ticket trigger panel.</p>
+              </div>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() =>
+                  addPanel({
+                    id: crypto.randomUUID(),
+                    name: "New Panel",
+                    channelId: "",
+                    embedTitle: "Support Ticket",
+                    embedDescription: "Please click the button below to open a ticket.",
+                    embedColor: "#5865F2",
+                    categories: [],
+                  })
+                }
+                style={{ justifySelf: 'end' }}
+              >
+                + Add Panel
+              </Button>
             </div>
           )}
         </form>

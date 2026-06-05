@@ -30,7 +30,7 @@ export function TicketsFormsPage() {
       {isLoading ? (
         <SettingsGroupSkeleton rows={4} />
       ) : (
-        <form onSubmit={onSubmit} className="space-y-8">
+        <form onSubmit={onSubmit} className="settings-form space-y-8">
           {intakeForms.map((intakeForm, index) => (
             <div
               key={intakeForm.id}
@@ -81,7 +81,7 @@ export function TicketsFormsPage() {
           ))}
 
           {intakeForms.length > 0 && (
-            <div className="sticky bottom-4 z-10 p-4 bg-surface-card border border-surface-border rounded-lg shadow-lg flex justify-end">
+            <div className="form-actions">
               <Button type="submit" variant="primary" disabled={isSaving}>
                 {isSaving ? "Saving..." : "Save Forms"}
               </Button>
@@ -89,9 +89,24 @@ export function TicketsFormsPage() {
           )}
 
           {intakeForms.length === 0 && (
-            <div className="text-center p-12 border-2 border-dashed border-surface-border rounded-xl">
-              <h3 className="text-lg font-medium text-foreground mb-2">No forms configured</h3>
-              <p className="text-muted mb-4">Get started by creating your first intake form.</p>
+            <div className="empty-state">
+              <div>
+                <h3 className="text-lg font-medium text-foreground mb-2">No forms configured</h3>
+                <p className="text-muted m-0">Get started by creating your first intake form.</p>
+              </div>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() =>
+                  addForm({
+                    id: crypto.randomUUID(),
+                    name: "New Form",
+                    questions: [],
+                  })
+                }
+              >
+                + Add Form
+              </Button>
             </div>
           )}
         </form>

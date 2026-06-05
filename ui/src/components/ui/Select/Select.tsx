@@ -8,7 +8,7 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
     return (
       <select
         className={cn(
-          "form-select transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 focus-visible:ring-offset-base disabled:opacity-70 disabled:cursor-not-allowed hover:bg-white/5",
+          "form-select transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 focus-visible:ring-offset-base disabled:opacity-70 disabled:cursor-not-allowed hover:bg-white/5 min-w-[240px] max-w-[320px] text-ellipsis whitespace-nowrap overflow-hidden",
           className
         )}
         ref={ref}

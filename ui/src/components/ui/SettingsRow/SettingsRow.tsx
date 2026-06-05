@@ -80,13 +80,13 @@ function SettingsRowDescription({ className, asChild, children, ...props }: Sett
 function SettingsRowControl({ className, asChild, children, ...props }: SettingsRowSubComponentProps) {
   if (asChild) {
     return (
-      <Slot className={cn("settings-row-control flex items-center shrink-0 ml-4", className)} {...props}>
+      <Slot className={cn("settings-row-control flex items-center", className)} {...props}>
         {children}
       </Slot>
     );
   }
   return (
-    <Box className={cn("settings-row-control flex items-center shrink-0 ml-4", className)} {...props}>
+    <Box className={cn("settings-row-control flex items-center", className)} {...props}>
       {children}
     </Box>
   );

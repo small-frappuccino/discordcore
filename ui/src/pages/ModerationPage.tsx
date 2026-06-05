@@ -1,6 +1,5 @@
 import {
   PageHeader,
-  SurfaceCard,
   SettingsGroup,
   SettingsRow,
   Button,
@@ -10,6 +9,7 @@ import {
   FormControl,
   FormProvider,
   FormInput,
+  ToggleSwitch
 } from "../components/ui";
 import { Stack } from "../components/layout";
 import { useModerationPageLogic } from "./hooks/useModerationPageLogic";
@@ -63,7 +63,7 @@ export function ModerationPage() {
             <PageHeader.Description>Configure AutoMod, Logging, and specific moderation roles.</PageHeader.Description>
           </PageHeader>
 
-          <SurfaceCard>
+          <form className="settings-form" onSubmit={onSubmit}>
             <Stack spacing="xl">
               <SettingsGroup>
                 <SettingsRow>
@@ -72,12 +72,10 @@ export function ModerationPage() {
                     <SettingsRow.Description>Automatically detect and block forbidden content.</SettingsRow.Description>
                   </SettingsRow.Info>
                   <SettingsRow.Control>
-                    <Button
-                      variant={automodEnabled ? "danger" : "primary"}
-                      onClick={handleToggleAutomod}
-                    >
-                      {automodEnabled ? "Disable" : "Enable"}
-                    </Button>
+                    <ToggleSwitch
+                      checked={automodEnabled}
+                      onChange={handleToggleAutomod}
+                    />
                   </SettingsRow.Control>
                 </SettingsRow>
                 <SettingsRow>
@@ -86,21 +84,19 @@ export function ModerationPage() {
                     <SettingsRow.Description>Log moderation actions and deleted messages to a dedicated channel.</SettingsRow.Description>
                   </SettingsRow.Info>
                   <SettingsRow.Control>
-                    <Button
-                      variant={loggingEnabled ? "danger" : "primary"}
-                      onClick={handleToggleLogging}
-                    >
-                      {loggingEnabled ? "Disable" : "Enable"}
-                    </Button>
+                    <ToggleSwitch
+                      checked={loggingEnabled}
+                      onChange={handleToggleLogging}
+                    />
                   </SettingsRow.Control>
                 </SettingsRow>
               </SettingsGroup>
               
               <fieldset disabled={isSaving} className="border-none p-0 m-0 min-w-0">
                 <FormProvider {...form}>
-                  <Stack as="form" onSubmit={onSubmit} spacing="lg">
+                  <Stack spacing="lg">
                   <Stack spacing="sm">
-                    <h3 className="text-lg">Roles Config</h3>
+                    <h3 className="text-lg font-semibold tracking-tight">Roles Config</h3>
                     <SettingsGroup>
                       <SettingsRow>
                         <SettingsRow.Info>
@@ -118,16 +114,16 @@ export function ModerationPage() {
                       </SettingsRow>
                     </SettingsGroup>
                   </Stack>
-                  <Stack direction="horizontal">
+                  <div className="form-actions">
                     <Button variant="primary" type="submit" disabled={isSaving}>
                       {isSaving ? "Saving..." : "Save Mute Role"}
                     </Button>
-                  </Stack>
+                  </div>
                   </Stack>
                 </FormProvider>
               </fieldset>
             </Stack>
-          </SurfaceCard>
+          </form>
         </Stack>
       </PageContainer>
       )}

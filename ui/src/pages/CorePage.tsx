@@ -1,5 +1,5 @@
 
-import { PageHeader, SurfaceCard, SettingsGroup, SettingsRow, Badge, PageContainer, SettingsGroupSkeleton } from "../components/ui";
+import { PageHeader, SettingsGroup, SettingsRow, Badge, PageContainer, SettingsGroupSkeleton } from "../components/ui";
 import { Stack } from "../components/layout";
 import { useCorePageLogic } from "./hooks/useCorePageLogic";
 
@@ -19,9 +19,8 @@ export function CorePage() {
         {isLoading ? (
           <SettingsGroupSkeleton rows={2} />
         ) : (
-          <SurfaceCard interactive>
-            <Stack spacing="sm">
-              <h3 className="text-lg font-semibold tracking-tight text-text-primary">Domain Routing</h3>
+          <Stack spacing="sm">
+            <h3 className="text-lg font-semibold tracking-tight text-text-primary">Domain Routing</h3>
               <SettingsGroup>
                 <SettingsRow>
                   <SettingsRow.Info>
@@ -43,7 +42,6 @@ export function CorePage() {
                 </SettingsRow>
               </SettingsGroup>
             </Stack>
-          </SurfaceCard>
         )}
       </Stack>
     </PageContainer>

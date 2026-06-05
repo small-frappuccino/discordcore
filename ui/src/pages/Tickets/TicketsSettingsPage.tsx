@@ -1,5 +1,5 @@
-import { Button, SettingsGroupSkeleton, SurfaceCard, SettingsGroup, SettingsRow, FormControl, FormProvider, FormInput } from "../../components/ui";
-import { Stack, Cluster } from "../../components/layout";
+import { Button, SettingsGroupSkeleton, SurfaceCard, SettingsGroup, SettingsRow, FormControl, FormProvider, FormInput, ToggleSwitch } from "../../components/ui";
+import { Stack } from "../../components/layout";
 import { useTicketsSettingsLogic } from "./hooks/useTicketsSettingsLogic";
 
 export function TicketsSettingsPage() {
@@ -24,7 +24,7 @@ export function TicketsSettingsPage() {
 
         <fieldset disabled={isSaving} className="border-none p-0 m-0 min-w-0">
           <FormProvider {...form}>
-            <form onSubmit={onSubmit}>
+            <form className="settings-form" onSubmit={onSubmit}>
               <Stack spacing="xl">
           <SurfaceCard>
             <Stack spacing="lg">
@@ -36,14 +36,7 @@ export function TicketsSettingsPage() {
                   <SettingsRow.Description>If disabled, all ticket panels will stop working.</SettingsRow.Description>
                 </SettingsRow.Info>
                 <SettingsRow.Control>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      {...form.register("enabled")}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-surface-border peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                  </label>
+                  <ToggleSwitch {...form.register("enabled")} />
                 </SettingsRow.Control>
               </SettingsRow>
               </SettingsGroup>
@@ -104,11 +97,11 @@ export function TicketsSettingsPage() {
             </Stack>
           </SurfaceCard>
 
-          <Cluster justify="end" className="sticky bottom-4 z-10 p-4 bg-surface border border-surface-border rounded-lg shadow-lg">
+          <div className="form-actions">
             <Button type="submit" variant="primary" disabled={isSaving}>
               {isSaving ? "Saving..." : "Save Settings"}
             </Button>
-          </Cluster>
+          </div>
               </Stack>
             </form>
           </FormProvider>
