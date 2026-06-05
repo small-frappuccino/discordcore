@@ -23,7 +23,7 @@ export const AccountSelector = memo(function AccountSelector() {
   return (
     <div className="relative" ref={accountMenuRef}>
       <button 
-        className="shell-trigger-btn"
+        className="shell-trigger-btn hover:bg-[var(--bg-surface-hover)] active:scale-[0.98] transition-all"
         onClick={() => setIsAccountMenuOpen(!isAccountMenuOpen)}
       >
         <div className="shell-trigger-avatar">

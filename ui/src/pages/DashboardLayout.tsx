@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Link, Outlet, useLocation, useParams } from "react-router-dom";
 import { GuildProvider } from "../context/GuildContext";
 import { ServerSelector } from "../components/layout/ServerSelector";
@@ -21,7 +22,7 @@ const navigation: NavItem[] = [
   { id: "tickets", label: "Tickets", to: "/tickets" },
 ];
 
-export function DashboardLayout() {
+export const DashboardLayout = memo(function DashboardLayout() {
   const location = useLocation();
   const { guildId } = useParams<{ guildId: string }>();
 
@@ -79,4 +80,4 @@ export function DashboardLayout() {
       </main>
     </div>
   );
-}
+});

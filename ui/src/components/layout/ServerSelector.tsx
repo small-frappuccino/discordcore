@@ -35,7 +35,7 @@ export const ServerSelector = memo(function ServerSelector() {
   return (
     <div className="relative" ref={serverMenuRef}>
       <button 
-        className="shell-trigger-btn"
+        className="shell-trigger-btn hover:bg-[var(--bg-surface-hover)] active:scale-[0.98] transition-all"
         onClick={() => setIsServerMenuOpen(!isServerMenuOpen)}
       >
         <div className="shell-trigger-info">

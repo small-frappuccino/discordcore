@@ -11,13 +11,9 @@
 
 /* Sidebar */
 .shell-sidebar {
-  @apply w-[260px];
+  @apply w-64 bg-[var(--bg-surface)] border-r border-[var(--border-subtle)] flex flex-col shrink-0 transition-transform duration-300;
   background-color: var(--bg-surface);
   border-right: 1px solid var(--border-subtle);
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 0;
-  transition: transform var(--transition-smooth);
 }
 
 .shell-sidebar-header {
@@ -132,15 +128,8 @@
 }
 
 .shell-trigger-avatar {
-  @apply w-[26px] h-[26px];
-  border-radius: var(--radius-full);
+  @apply w-7 h-7 rounded-full bg-[var(--bg-surface-active)] flex items-center justify-center text-xs font-semibold overflow-hidden;
   background-color: var(--bg-surface-active);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.75rem;
-  font-weight: 600;
-  overflow: hidden;
 }
 
 .shell-trigger-avatar img {
@@ -192,10 +181,7 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-md);
-  @apply min-w-[200px] p-1;
-  z-index: 50;
-  display: flex;
-  flex-direction: column;
+  @apply min-w-48 p-1 flex flex-col z-50;
 }
 
 .shell-dropdown-item {
