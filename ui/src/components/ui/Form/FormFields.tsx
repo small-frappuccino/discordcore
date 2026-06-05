@@ -28,7 +28,7 @@ export function FormInput({ name, rules, className, ...props }: FormInputProps) 
     <div className="flex flex-col w-full">
       <input
         {...register(name, rules)}
-        className={cn("form-input", className)}
+        className={cn("form-input transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 focus-visible:ring-offset-base disabled:opacity-70 disabled:cursor-not-allowed hover:bg-white/5", className)}
         {...props}
       />
       {error && (
@@ -81,7 +81,7 @@ export function FormCheckbox({ name, rules, className, ...props }: FormCheckboxP
       <input
         type="checkbox"
         {...register(name, rules)}
-        className={cn("form-checkbox", className)}
+        className={cn("form-checkbox transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 focus-visible:ring-offset-base disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer", className)}
         {...props}
       />
       {error && (

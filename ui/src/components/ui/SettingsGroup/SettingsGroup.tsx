@@ -1,12 +1,13 @@
 import * as React from "react";
 import { cn } from "../../../lib/utils";
+import { Stack, StackProps } from "../../layout";
 
-export const SettingsGroup = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, children, ...props }, ref) => {
+export const SettingsGroup = React.forwardRef<HTMLElement, StackProps>(
+  ({ className, children, spacing = "md", ...props }, ref) => {
     return (
-      <div ref={ref} className={cn("settings-group", className)} {...props}>
+      <Stack ref={ref} className={cn("settings-group", className)} spacing={spacing} {...props}>
         {children}
-      </div>
+      </Stack>
     );
   }
 );

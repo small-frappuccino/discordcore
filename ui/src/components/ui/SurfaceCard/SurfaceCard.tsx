@@ -10,15 +10,15 @@ export interface SurfaceCardProps extends React.HTMLAttributes<HTMLDivElement> {
 
 export const SurfaceCard = React.forwardRef<HTMLDivElement, SurfaceCardProps>(
   ({ className, interactive, asChild, children, ...props }, ref) => {
+    const interactiveClasses = interactive
+      ? "cursor-pointer hover:bg-surface-hover hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99] active:bg-surface-active transition-all duration-200 ease-out"
+      : "";
+
     if (asChild) {
       return (
         <Slot
           ref={ref as React.ForwardedRef<HTMLElement>}
-          className={cn(
-            "surface-card",
-            interactive && "cursor-pointer hover:bg-[var(--bg-surface-hover)] active:bg-[var(--bg-surface-active)] transition-colors",
-            className
-          )}
+          className={cn("surface-card", interactiveClasses, className)}
           {...props}
         >
           {children}
@@ -28,11 +28,7 @@ export const SurfaceCard = React.forwardRef<HTMLDivElement, SurfaceCardProps>(
     return (
       <div
         ref={ref}
-        className={cn(
-          "surface-card",
-          interactive && "cursor-pointer hover:bg-surface-hover active:bg-surface-active transition-colors",
-          className
-        )}
+        className={cn("surface-card", interactiveClasses, className)}
         {...props}
       >
         {children}
