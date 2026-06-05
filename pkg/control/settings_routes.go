@@ -24,6 +24,45 @@ type registerGuildRequest struct {
 	BotInstanceID string `json:"bot_instance_id,omitempty"`
 }
 
+type settingsCatalogResponse struct {
+	Status  string          `json:"status"`
+	Catalog settingsCatalog `json:"catalog"`
+}
+
+type settingsOverviewResponse struct {
+	Status    string           `json:"status"`
+	Workspace settingsOverview `json:"workspace"`
+}
+
+type globalSettingsResponse struct {
+	Status    string                  `json:"status"`
+	Workspace globalSettingsWorkspace `json:"workspace"`
+}
+
+type guildRegistryResponse struct {
+	Status    string                   `json:"status"`
+	Workspace guildRegistryWorkspace   `json:"workspace"`
+	Guilds    []configuredGuildSummary `json:"guilds"`
+}
+
+type guildRegistrationResponse struct {
+	Status    string                 `json:"status"`
+	GuildID   string                 `json:"guild_id"`
+	Created   bool                   `json:"created"`
+	Workspace guildSettingsWorkspace `json:"workspace"`
+}
+
+type guildSettingsResponse struct {
+	Status    string                 `json:"status"`
+	Workspace guildSettingsWorkspace `json:"workspace"`
+}
+
+type guildDeletionResponse struct {
+	Status  string `json:"status"`
+	GuildID string `json:"guild_id"`
+	Deleted bool   `json:"deleted"`
+}
+
 func (s *Server) handleSettingsRoutes(w http.ResponseWriter, r *http.Request) {
 	auth, ok := s.authorizeRequest(w, r)
 	if !ok {
@@ -54,9 +93,9 @@ func (s *Server) handleSettingsRoutes(w http.ResponseWriter, r *http.Request) {
 		if !s.authorizeGlobalControlAccess(w, r, auth, guildAccessLevelRead) {
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{
-			"status":  "ok",
-			"catalog": buildSettingsCatalog(),
+		writeJSON(w, http.StatusOK, settingsCatalogResponse{
+			Status:  "ok",
+			Catalog: buildSettingsCatalog(),
 		})
 		return
 	case "/v1/settings/global":
@@ -108,17 +147,17 @@ func (s *Server) handleSettingsOverviewGet(w http.ResponseWriter, r *http.Reques
 	}
 
 	registry := buildGuildRegistryWorkspace(cfg, registrySources, allowedGuilds, s.defaultBotInstanceID)
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":    "ok",
-		"workspace": buildSettingsOverview(cfg, s.configManager.ConfigPath(), registry, allowedGuilds, s.defaultBotInstanceID),
+	writeJSON(w, http.StatusOK, settingsOverviewResponse{
+		Status:    "ok",
+		Workspace: buildSettingsOverview(cfg, s.configManager.ConfigPath(), registry, allowedGuilds, s.defaultBotInstanceID),
 	})
 }
 
 func (s *Server) handleGlobalSettingsGet(w http.ResponseWriter, _ *http.Request) {
 	cfg := s.configManager.SnapshotConfig()
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":    "ok",
-		"workspace": buildGlobalSettingsWorkspace(cfg),
+	writeJSON(w, http.StatusOK, globalSettingsResponse{
+		Status:    "ok",
+		Workspace: buildGlobalSettingsWorkspace(cfg),
 	})
 }
 
@@ -150,9 +189,9 @@ func (s *Server) handleGlobalSettingsPut(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":    "ok",
-		"workspace": buildGlobalSettingsWorkspace(updated),
+	writeJSON(w, http.StatusOK, globalSettingsResponse{
+		Status:    "ok",
+		Workspace: buildGlobalSettingsWorkspace(updated),
 	})
 }
 
@@ -169,10 +208,10 @@ func (s *Server) handleGuildRegistryGet(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":    "ok",
-		"workspace": buildGuildRegistryWorkspace(cfg, registrySources, allowedGuilds, s.defaultBotInstanceID),
-		"guilds":    buildConfiguredGuildSummaries(cfg, allowedGuilds, s.defaultBotInstanceID),
+	writeJSON(w, http.StatusOK, guildRegistryResponse{
+		Status:    "ok",
+		Workspace: buildGuildRegistryWorkspace(cfg, registrySources, allowedGuilds, s.defaultBotInstanceID),
+		Guilds:    buildConfiguredGuildSummaries(cfg, allowedGuilds, s.defaultBotInstanceID),
 	})
 }
 
@@ -207,11 +246,11 @@ func (s *Server) handleGuildRegistrationPost(w http.ResponseWriter, r *http.Requ
 	current := s.configManager.SnapshotConfig()
 	if guild, ok := findGuildSettings(current, guildID); ok {
 		logSettingsRegistrationResult(auth, guildID, "control.settings.guild_registry.register.skip", nil)
-		writeJSON(w, http.StatusOK, map[string]any{
-			"status":    "ok",
-			"guild_id":  guildID,
-			"created":   false,
-			"workspace": buildGuildSettingsWorkspaceWithBindings(current, guild, availableBotInstanceIDs, domainOverrideBotInstanceIDs, s.defaultBotInstanceID),
+		writeJSON(w, http.StatusOK, guildRegistrationResponse{
+			Status:    "ok",
+			GuildID:   guildID,
+			Created:   false,
+			Workspace: buildGuildSettingsWorkspaceWithBindings(current, guild, availableBotInstanceIDs, domainOverrideBotInstanceIDs, s.defaultBotInstanceID),
 		})
 		return
 	}
@@ -239,11 +278,11 @@ func (s *Server) handleGuildRegistrationPost(w http.ResponseWriter, r *http.Requ
 	}
 
 	logSettingsRegistrationResult(auth, guildID, "control.settings.guild_registry.register.success", nil)
-	writeJSON(w, http.StatusCreated, map[string]any{
-		"status":    "ok",
-		"guild_id":  guildID,
-		"created":   true,
-		"workspace": buildGuildSettingsWorkspaceWithBindings(updated, guild, availableBotInstanceIDs, domainOverrideBotInstanceIDs, s.defaultBotInstanceID),
+	writeJSON(w, http.StatusCreated, guildRegistrationResponse{
+		Status:    "ok",
+		GuildID:   guildID,
+		Created:   true,
+		Workspace: buildGuildSettingsWorkspaceWithBindings(updated, guild, availableBotInstanceIDs, domainOverrideBotInstanceIDs, s.defaultBotInstanceID),
 	})
 }
 
@@ -261,9 +300,9 @@ func (s *Server) handleGuildSettingsGet(w http.ResponseWriter, r *http.Request, 
 	}
 	domainOverrideBotInstanceIDs := s.resolveDomainOverrideBotInstanceIDs(availableBotInstanceIDs)
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":    "ok",
-		"workspace": buildGuildSettingsWorkspaceWithBindings(cfg, guild, availableBotInstanceIDs, domainOverrideBotInstanceIDs, s.defaultBotInstanceID),
+	writeJSON(w, http.StatusOK, guildSettingsResponse{
+		Status:    "ok",
+		Workspace: buildGuildSettingsWorkspaceWithBindings(cfg, guild, availableBotInstanceIDs, domainOverrideBotInstanceIDs, s.defaultBotInstanceID),
 	})
 }
 
@@ -407,9 +446,9 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 	}
 	domainOverrideBotInstanceIDs = s.resolveDomainOverrideBotInstanceIDs(availableBotInstanceIDs)
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":    "ok",
-		"workspace": buildGuildSettingsWorkspaceWithBindings(updated, guild, availableBotInstanceIDs, domainOverrideBotInstanceIDs, s.defaultBotInstanceID),
+	writeJSON(w, http.StatusOK, guildSettingsResponse{
+		Status:    "ok",
+		Workspace: buildGuildSettingsWorkspaceWithBindings(updated, guild, availableBotInstanceIDs, domainOverrideBotInstanceIDs, s.defaultBotInstanceID),
 	})
 }
 
@@ -438,10 +477,10 @@ func (s *Server) handleGuildSettingsDelete(w http.ResponseWriter, r *http.Reques
 		s.invalidateAccessibleGuildsCache()
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":   "ok",
-		"guild_id": guildID,
-		"deleted":  true,
+	writeJSON(w, http.StatusOK, guildDeletionResponse{
+		Status:  "ok",
+		GuildID: guildID,
+		Deleted: true,
 	})
 }
 

@@ -12,29 +12,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
-type settingsOverviewResponse struct {
-	Status    string           `json:"status"`
-	Workspace settingsOverview `json:"workspace"`
-}
-
-type globalSettingsResponse struct {
-	Status    string                  `json:"status"`
-	Workspace globalSettingsWorkspace `json:"workspace"`
-}
-
-type guildSettingsResponse struct {
-	Status    string                 `json:"status"`
-	GuildID   string                 `json:"guild_id"`
-	Created   bool                   `json:"created"`
-	Workspace guildSettingsWorkspace `json:"workspace"`
-}
-
-type guildRegistryResponse struct {
-	Status    string                   `json:"status"`
-	Workspace guildRegistryWorkspace   `json:"workspace"`
-	Guilds    []configuredGuildSummary `json:"guilds"`
-}
-
 func setTestBotGuildBindings(srv *Server, bindings ...BotGuildBinding) {
 	if srv == nil {
 		return
@@ -507,7 +484,7 @@ func TestGuildRegistrationPostCreatesGuildWorkspace(t *testing.T) {
 		t.Fatalf("POST /v1/settings/guilds status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	var response guildSettingsResponse
+	var response guildRegistrationResponse
 	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
 		t.Fatalf("decode guild registration response: %v", err)
 	}
@@ -537,7 +514,7 @@ func TestGuildRegistrationPostCreatesDormantGuildWorkspace(t *testing.T) {
 		t.Fatalf("POST /v1/settings/guilds status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	var response guildSettingsResponse
+	var response guildRegistrationResponse
 	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
 		t.Fatalf("decode guild registration response: %v", err)
 	}
@@ -595,7 +572,7 @@ func TestGuildRegistrationPostReturnsExistingWorkspaceWhenAlreadyConfigured(t *t
 		t.Fatalf("expected 200 for existing guild registration, got %d body=%q", rec.Code, rec.Body.String())
 	}
 
-	var response guildSettingsResponse
+	var response guildRegistrationResponse
 	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
 		t.Fatalf("decode existing registration response: %v", err)
 	}
@@ -702,7 +679,7 @@ func TestGuildRegistrationPostPersistsRequestedBotInstanceID(t *testing.T) {
 		t.Fatalf("POST /v1/settings/guilds status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	var response guildSettingsResponse
+	var response guildRegistrationResponse
 	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
 		t.Fatalf("decode guild registration response: %v", err)
 	}
