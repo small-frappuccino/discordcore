@@ -50,7 +50,7 @@ func newLoggingStore(t *testing.T, _ string) (*storage.Store, *sql.DB) {
 func newLoggingConfigManager(t *testing.T, guildID string, channels files.ChannelsConfig) *files.ConfigManager {
 	t.Helper()
 
-	mgr := files.NewMemoryConfigManager()
+	mgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := mgr.AddGuildConfig(files.GuildConfig{
 		GuildID:  guildID,
 		Channels: channels,

@@ -416,7 +416,14 @@ func (ms *MonitoringService) rebuildTaskPipeline() {
 	}
 
 	router := task.NewRouter(ms.routerConfig)
-	adapters := task.NewNotificationAdapters(router, ms.session, ms.configManager, ms.store, ms.notifier)
+	adapters := &task.NotificationAdapters{
+		Router:   router,
+		Session:  ms.session,
+		Config:   ms.configManager,
+		Store:    ms.store,
+		Notifier: ms.notifier,
+	}
+	adapters.RegisterHandlers()
 	if ms.userWatcher != nil {
 		adapters.SetAvatarProcessor(ms.userWatcher)
 	}

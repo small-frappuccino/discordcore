@@ -86,7 +86,7 @@ func TestValidateBotConfigRejectsInvalidRequiredRolesLength(t *testing.T) {
 }
 
 func TestConfigManagerLoadConfigMigratesAutoAssignmentBoosterRole(t *testing.T) {
-	store := NewMemoryConfigStore()
+	store := &MemoryConfigStore{}
 	input := BotConfig{
 		Guilds: []GuildConfig{
 			{
@@ -131,7 +131,7 @@ func TestConfigManagerLoadConfigMigratesAutoAssignmentBoosterRole(t *testing.T) 
 }
 
 func TestConfigManagerSaveConfigRejectsInvalidAutoAssignmentOrder(t *testing.T) {
-	mgr := NewMemoryConfigManager()
+	mgr := NewConfigManagerWithStore(&MemoryConfigStore{})
 	mgr.config = &BotConfig{
 		Guilds: []GuildConfig{
 			{
@@ -200,7 +200,7 @@ func TestValidateBotConfigRejectsReservedDomainBotInstanceBinding(t *testing.T) 
 }
 
 func TestConfigManagerLoadConfigNormalizesDomainBotInstanceBindings(t *testing.T) {
-	store := NewMemoryConfigStore()
+	store := &MemoryConfigStore{}
 	input := BotConfig{
 		Guilds: []GuildConfig{{
 			GuildID:       "g1",

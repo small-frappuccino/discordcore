@@ -453,10 +453,10 @@ func (c *qotdPublishCommand) Handle(ctx *core.Context) error {
 		return fmt.Errorf("qotdPublishCommand.Handle: %w", err)
 	}
 	if !deck.Enabled {
-		return core.NewCommandError("Enable QOTD publishing for the active deck before publishing manually.", false)
+		return &core.CommandError{Message: "Enable QOTD publishing for the active deck before publishing manually.", Ephemeral: false}
 	}
 	if strings.TrimSpace(deck.ChannelID) == "" {
-		return core.NewCommandError("Set a QOTD channel for the active deck before publishing manually.", false)
+		return &core.CommandError{Message: "Set a QOTD channel for the active deck before publishing manually.", Ephemeral: false}
 	}
 	consumeAutomaticSlot := true
 	options := core.GetSubCommandOptions(ctx.Interaction)
@@ -519,16 +519,16 @@ func (c *qotdSkipCommand) Handle(ctx *core.Context) error {
 	}
 
 	if ctx.Interaction.Member == nil || (ctx.Interaction.Member.Permissions&discordgo.PermissionManageMessages) == 0 {
-		return core.NewCommandError("You need the Manage Messages permission to skip QOTD questions.", false)
+		return &core.CommandError{Message: "You need the Manage Messages permission to skip QOTD questions.", Ephemeral: false}
 	}
 
 	result, err := c.publishCoordinator.ReplaceCurrentPublish(context.Background(), ctx.GuildID, ctx.Session)
 	if err != nil {
 		if errors.Is(err, applicationqotd.ErrNoCurrentPublish) {
-			return core.NewCommandError("There is no active QOTD question to skip.", false)
+			return &core.CommandError{Message: "There is no active QOTD question to skip.", Ephemeral: false}
 		}
 		if errors.Is(err, applicationqotd.ErrNoQuestionsAvailable) {
-			return core.NewCommandError("There are no remaining questions in the active deck to publish instead.", false)
+			return &core.CommandError{Message: "There are no remaining questions in the active deck to publish instead.", Ephemeral: false}
 		}
 		return translatePublishNowError(err)
 	}
@@ -551,7 +551,7 @@ func (c *questionsRemoveCommand) Handle(ctx *core.Context) error {
 	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 	displayID := extractor.Int(questionsIDOptionName)
 	if displayID <= 0 {
-		return core.NewCommandError("Question ID must be greater than zero.", false)
+		return &core.CommandError{Message: "Question ID must be greater than zero.", Ephemeral: false}
 	}
 	deck, err := loadCommandDeck(ctx, c.service, extractor.String(questionsDeckOptionName))
 	if err != nil {
@@ -583,7 +583,7 @@ func (c *questionsRecoverCommand) Handle(ctx *core.Context) error {
 	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 	displayID := extractor.Int(questionsIDOptionName)
 	if displayID <= 0 {
-		return core.NewCommandError("Question ID must be greater than zero.", false)
+		return &core.CommandError{Message: "Question ID must be greater than zero.", Ephemeral: false}
 	}
 	deck, err := loadCommandDeck(ctx, c.service, extractor.String(questionsDeckOptionName))
 	if err != nil {
@@ -623,7 +623,7 @@ func (c *questionsMarkPublishedCommand) Handle(ctx *core.Context) error {
 	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 	displayID := extractor.Int(questionsIDOptionName)
 	if displayID <= 0 {
-		return core.NewCommandError("Question ID must be greater than zero.", false)
+		return &core.CommandError{Message: "Question ID must be greater than zero.", Ephemeral: false}
 	}
 	deck, err := loadCommandDeck(ctx, c.service, extractor.String(questionsDeckOptionName))
 	if err != nil {
@@ -724,7 +724,7 @@ func requireQuestionsGuild(ctx *core.Context) error {
 		return nil
 	}
 	if strings.TrimSpace(ctx.GuildID) == "" {
-		return core.NewCommandError(questionsListMissingGuild, false)
+		return &core.CommandError{Message: questionsListMissingGuild, Ephemeral: false}
 	}
 	return nil
 }
@@ -747,7 +747,7 @@ func resolveDeck(settings files.QOTDConfig, requestedDeck string) (files.QOTDDec
 		if deck, ok := settings.ActiveDeck(); ok {
 			return deck, nil
 		}
-		return files.QOTDDeckConfig{}, core.NewCommandError(questionsListUnknownDeck, false)
+		return files.QOTDDeckConfig{}, &core.CommandError{Message: questionsListUnknownDeck, Ephemeral: false}
 	}
 
 	if deck, ok := settings.DeckByID(requestedDeck); ok {
@@ -758,7 +758,7 @@ func resolveDeck(settings files.QOTDConfig, requestedDeck string) (files.QOTDDec
 			return deck, nil
 		}
 	}
-	return files.QOTDDeckConfig{}, core.NewCommandError(fmt.Sprintf("%s: %s", questionsListUnknownDeck, requestedDeck), false)
+	return files.QOTDDeckConfig{}, &core.CommandError{Message: fmt.Sprintf("%s: %s", questionsListUnknownDeck, requestedDeck), Ephemeral: false}
 }
 
 func respondQuestionsList(
@@ -1099,7 +1099,7 @@ func translateQuestionsMutationError(err error) error {
 		if message == "" {
 			message = "Invalid QOTD question input"
 		}
-		return core.NewCommandError(message, false)
+		return &core.CommandError{Message: message, Ephemeral: false}
 	}
 	return err
 }
@@ -1109,10 +1109,10 @@ func translateQuestionsDeleteError(questionID int64, err error) error {
 		return nil
 	}
 	if errors.Is(err, applicationqotd.ErrQuestionNotFound) {
-		return core.NewCommandError(fmt.Sprintf("QOTD question ID %d was not found.", questionID), false)
+		return &core.CommandError{Message: fmt.Sprintf("QOTD question ID %d was not found.", questionID), Ephemeral: false}
 	}
 	if errors.Is(err, applicationqotd.ErrImmutableQuestion) {
-		return core.NewCommandError(fmt.Sprintf("QOTD question ID %d is already scheduled or used and cannot be removed.", questionID), false)
+		return &core.CommandError{Message: fmt.Sprintf("QOTD question ID %d is already scheduled or used and cannot be removed.", questionID), Ephemeral: false}
 	}
 	return translateQuestionsMutationError(err)
 }
@@ -1122,10 +1122,10 @@ func translateQuestionsRecoverError(questionID int64, err error) error {
 		return nil
 	}
 	if errors.Is(err, applicationqotd.ErrQuestionNotFound) {
-		return core.NewCommandError(fmt.Sprintf("QOTD question ID %d was not found.", questionID), false)
+		return &core.CommandError{Message: fmt.Sprintf("QOTD question ID %d was not found.", questionID), Ephemeral: false}
 	}
 	if errors.Is(err, applicationqotd.ErrQuestionNotUsed) {
-		return core.NewCommandError(fmt.Sprintf("QOTD question ID %d is not used and cannot be recovered.", questionID), false)
+		return &core.CommandError{Message: fmt.Sprintf("QOTD question ID %d is not used and cannot be recovered.", questionID), Ephemeral: false}
 	}
 	return translateQuestionsMutationError(err)
 }
@@ -1135,13 +1135,13 @@ func translateQuestionsMarkPublishedError(questionID int64, err error) error {
 		return nil
 	}
 	if errors.Is(err, applicationqotd.ErrQuestionNotFound) {
-		return core.NewCommandError(fmt.Sprintf("QOTD question ID %d was not found.", questionID), false)
+		return &core.CommandError{Message: fmt.Sprintf("QOTD question ID %d was not found.", questionID), Ephemeral: false}
 	}
 	if errors.Is(err, applicationqotd.ErrImmutableQuestion) {
-		return core.NewCommandError(fmt.Sprintf("QOTD question ID %d is already scheduled or published and cannot be marked manually.", questionID), false)
+		return &core.CommandError{Message: fmt.Sprintf("QOTD question ID %d is already scheduled or published and cannot be marked manually.", questionID), Ephemeral: false}
 	}
 	if errors.Is(err, applicationqotd.ErrQuestionNotReady) {
-		return core.NewCommandError(fmt.Sprintf("QOTD question ID %d must be ready before it can be marked as published.", questionID), false)
+		return &core.CommandError{Message: fmt.Sprintf("QOTD question ID %d must be ready before it can be marked as published.", questionID), Ephemeral: false}
 	}
 	return translateQuestionsMutationError(err)
 }
@@ -1151,19 +1151,19 @@ func translatePublishNowError(err error) error {
 		return nil
 	}
 	if errors.Is(err, applicationqotd.ErrAlreadyPublished) {
-		return core.NewCommandError("A QOTD question has already been published for the current slot.", false)
+		return &core.CommandError{Message: "A QOTD question has already been published for the current slot.", Ephemeral: false}
 	}
 	if errors.Is(err, applicationqotd.ErrPublishInProgress) {
-		return core.NewCommandError("A QOTD publish is already in progress for the current slot.", false)
+		return &core.CommandError{Message: "A QOTD publish is already in progress for the current slot.", Ephemeral: false}
 	}
 	if errors.Is(err, applicationqotd.ErrNoQuestionsAvailable) {
-		return core.NewCommandError("No ready QOTD questions are available in the active deck.", false)
+		return &core.CommandError{Message: "No ready QOTD questions are available in the active deck.", Ephemeral: false}
 	}
 	if errors.Is(err, applicationqotd.ErrQOTDDisabled) {
-		return core.NewCommandError("Enable QOTD publishing and set a channel before publishing manually.", false)
+		return &core.CommandError{Message: "Enable QOTD publishing and set a channel before publishing manually.", Ephemeral: false}
 	}
 	if errors.Is(err, applicationqotd.ErrDiscordUnavailable) {
-		return core.NewCommandError("Discord session unavailable for manual publish.", false)
+		return &core.CommandError{Message: "Discord session unavailable for manual publish.", Ephemeral: false}
 	}
 	return err
 }

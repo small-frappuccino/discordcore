@@ -164,7 +164,7 @@ func newIntegrationTestQOTDService(t *testing.T) (*Service, *storage.Store, *fak
 	}
 	t.Cleanup(func() { _ = store.Close() })
 
-	configManager := files.NewMemoryConfigManager()
+	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g1"}); err != nil {
 		t.Fatalf("add guild config: %v", err)
 	}

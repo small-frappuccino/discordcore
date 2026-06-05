@@ -5,7 +5,7 @@ import "testing"
 func TestMemoryConfigStoreRoundTrip(t *testing.T) {
 	t.Parallel()
 
-	store := NewMemoryConfigStore()
+	store := &MemoryConfigStore{}
 
 	exists, err := store.Exists()
 	if err != nil {
@@ -47,7 +47,7 @@ func TestMemoryConfigStoreRoundTrip(t *testing.T) {
 func TestMemoryConfigStoreReturnsDefensiveCopies(t *testing.T) {
 	t.Parallel()
 
-	store := NewMemoryConfigStore()
+	store := &MemoryConfigStore{}
 	if err := store.Save(&BotConfig{
 		Guilds: []GuildConfig{{
 			GuildID: "g1",

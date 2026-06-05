@@ -122,7 +122,7 @@ func (c *reactionBlockCommand) Handle(ctx *core.Context) error {
 	case reactionBlockActionClear:
 		return c.handleClear(ctx, request)
 	default:
-		return core.NewCommandError("Unknown reaction_block action.", true)
+		return &core.CommandError{Message: "Unknown reaction_block action.", Ephemeral: true}
 	}
 }
 
@@ -243,7 +243,7 @@ func parseReactionBlockAction(ctx *core.Context) (string, error) {
 	options := core.GetSubCommandOptions(ctx.Interaction)
 	action := strings.ToLower(strings.TrimSpace(core.OptionList(options).String(reactionBlockActionOptionName)))
 	if action == "" {
-		return "", core.NewCommandError("An action is required.", true)
+		return "", &core.CommandError{Message: "An action is required.", Ephemeral: true}
 	}
 	return action, nil
 }
@@ -264,11 +264,11 @@ func parseReactionBlockRequest(ctx *core.Context, requireEmojis bool) (reactionB
 	options := core.GetSubCommandOptions(ctx.Interaction)
 	reactorUserID := userOptionID(options, reactionBlockReactorOptionName)
 	if reactorUserID == "" {
-		return reactionBlockRequest{}, core.NewCommandError("A reactor user is required.", true)
+		return reactionBlockRequest{}, &core.CommandError{Message: "A reactor user is required.", Ephemeral: true}
 	}
 	targetUserID := userOptionID(options, reactionBlockTargetOptionName)
 	if targetUserID == "" {
-		return reactionBlockRequest{}, core.NewCommandError("A target user is required.", true)
+		return reactionBlockRequest{}, &core.CommandError{Message: "A target user is required.", Ephemeral: true}
 	}
 	request := reactionBlockRequest{
 		reactorUserID: reactorUserID,
@@ -280,7 +280,7 @@ func parseReactionBlockRequest(ctx *core.Context, requireEmojis bool) (reactionB
 
 	emojis, err := parseReactionBlockEmojiList(core.OptionList(options).String(reactionBlockEmojisOptionName))
 	if err != nil {
-		return reactionBlockRequest{}, core.NewCommandError(err.Error(), true)
+		return reactionBlockRequest{}, &core.CommandError{Message: err.Error(), Ephemeral: true}
 	}
 	request.emojis = emojis
 	return request, nil
@@ -404,22 +404,22 @@ func updateReactionBlockConfig(
 
 func loadReactionBlockConfig(configManager *files.ConfigManager, guildID string) (files.ReactionBlockConfig, error) {
 	if configManager == nil {
-		return files.ReactionBlockConfig{}, core.NewCommandError("Configuration is not available right now.", true)
+		return files.ReactionBlockConfig{}, &core.CommandError{Message: "Configuration is not available right now.", Ephemeral: true}
 	}
 	current, err := configManager.ReactionBlockConfig(guildID)
 	if err != nil {
-		return files.ReactionBlockConfig{}, core.NewCommandError("The reaction block list for this server couldn't be loaded. This reply stays private so it can be adjusted and retried without extra channel noise.", true)
+		return files.ReactionBlockConfig{}, &core.CommandError{Message: "The reaction block list for this server couldn't be loaded. This reply stays private so it can be adjusted and retried without extra channel noise.", Ephemeral: true}
 	}
 	return current, nil
 }
 
 func saveReactionBlockConfig(ctx *core.Context, configManager *files.ConfigManager, cfg files.ReactionBlockConfig) error {
 	if configManager == nil {
-		return core.NewCommandError("Configuration is not available right now.", true)
+		return &core.CommandError{Message: "Configuration is not available right now.", Ephemeral: true}
 	}
 	if err := configManager.SetReactionBlockConfig(ctx.GuildID, cfg); err != nil {
 		ctx.Logger.Error().Errorf("Failed to save reaction block config: %v", err)
-		return core.NewCommandError("That reaction block change couldn't be saved. This reply stays private so it can be adjusted and retried without extra channel noise.", true)
+		return &core.CommandError{Message: "That reaction block change couldn't be saved. This reply stays private so it can be adjusted and retried without extra channel noise.", Ephemeral: true}
 	}
 	if ctx.GuildConfig != nil {
 		updated, err := configManager.ReactionBlockConfig(ctx.GuildID)

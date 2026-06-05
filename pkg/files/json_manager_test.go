@@ -16,7 +16,7 @@ func TestJSONManagerSaveWritesAtomically(t *testing.T) {
 	}
 
 	path := filepath.Join(t.TempDir(), "payload.json")
-	manager := NewJSONManager(path)
+	manager := &JSONManager{FilePath: path}
 
 	if err := manager.Save(payload{Name: "first", Count: 1}); err != nil {
 		t.Fatalf("first save: %v", err)

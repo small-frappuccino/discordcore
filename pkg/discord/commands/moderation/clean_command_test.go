@@ -716,7 +716,7 @@ func newCleanCommandHarness(t *testing.T, cfg cleanHarnessConfig) *cleanHarness 
 		t.Fatalf("MemberAdd actor: %v", err)
 	}
 
-	cm := files.NewMemoryConfigManager()
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	guildCfg := files.GuildConfig{GuildID: cfg.guildID}
 	if cfg.logChannelID != "" {
 		guildCfg.Channels.CleanAction = cfg.logChannelID

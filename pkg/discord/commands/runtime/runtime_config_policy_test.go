@@ -37,7 +37,7 @@ func TestRuntimeVisibilityPolicy(t *testing.T) {
 
 func TestRegisterCommands_RuntimeComponentRejectsExpiredPanel(t *testing.T) {
 	session, rec := newRuntimePanelTestSession(t, 0, 0)
-	cm := files.NewMemoryConfigManager()
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := cm.LoadConfig(); err != nil {
 		t.Fatalf("failed to load config manager: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestRegisterCommands_RuntimeComponentRejectsExpiredPanel(t *testing.T) {
 
 func TestRegisterCommands_RuntimeModalRejectsExpiredState(t *testing.T) {
 	session, rec := newRuntimePanelTestSession(t, 0, 0)
-	cm := files.NewMemoryConfigManager()
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := cm.LoadConfig(); err != nil {
 		t.Fatalf("failed to load config manager: %v", err)
 	}

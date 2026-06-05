@@ -21,7 +21,7 @@ func (s *TicketService) HandleTranscript(ctx *core.Context) error {
 	}
 	if auditChannelID == "" {
 		// Fallback to replying in the current channel or returning an error
-		return core.NewCommandError("Audit channel is not configured.", true)
+		return &core.CommandError{Message: "Audit channel is not configured.", Ephemeral: true}
 	}
 
 	pr, pw := io.Pipe()

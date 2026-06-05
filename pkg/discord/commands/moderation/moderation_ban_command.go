@@ -47,18 +47,18 @@ func (c *banCommand) DefaultMemberPermissions() int64 { return discordgo.Permiss
 // Handle handles.
 func (c *banCommand) Handle(ctx *core.Context) error {
 	if enabled, _ := ctx.Config.Config().ResolveFeatures(ctx.GuildID).Lookup("moderation.ban"); !enabled {
-		return core.NewCommandError("Ban command is disabled for this server.", true)
+		return &core.CommandError{Message: "Ban command is disabled for this server.", Ephemeral: true}
 	}
 	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 
 	rawUserID, err := extractor.StringRequired("user")
 	if err != nil {
-		return core.NewCommandError(err.Error(), true)
+		return &core.CommandError{Message: err.Error(), Ephemeral: true}
 	}
 
 	userID, ok := normalizeUserID(rawUserID)
 	if !ok {
-		return core.NewCommandError("Invalid user ID or mention.", true)
+		return &core.CommandError{Message: "Invalid user ID or mention.", Ephemeral: true}
 	}
 
 	reason, truncated := sanitizeReason(extractor.String("reason"))
@@ -69,13 +69,13 @@ func (c *banCommand) Handle(ctx *core.Context) error {
 	}
 
 	if ok, reasonText := canBanTarget(ctx, banCtx, userID); !ok {
-		return core.NewCommandError(fmt.Sprintf("Cannot ban `%s`: %s.", userID, reasonText), true)
+		return &core.CommandError{Message: fmt.Sprintf("Cannot ban `%s`: %s.", userID, reasonText), Ephemeral: true}
 	}
 
 	targetUsername := resolveUserDisplayName(ctx, userID)
 
 	if err := ctx.Session.GuildBanCreateWithReason(ctx.GuildID, userID, reason, 0); err != nil {
-		return core.NewCommandError(fmt.Sprintf("Failed to ban user %s: %v", userID, err), true)
+		return &core.CommandError{Message: fmt.Sprintf("Failed to ban user %s: %v", userID, err), Ephemeral: true}
 	}
 
 	details := "Status: Success"

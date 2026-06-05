@@ -47,18 +47,18 @@ func (c *kickCommand) DefaultMemberPermissions() int64 { return discordgo.Permis
 // Handle handles.
 func (c *kickCommand) Handle(ctx *core.Context) error {
 	if enabled, _ := ctx.Config.Config().ResolveFeatures(ctx.GuildID).Lookup("moderation.kick"); !enabled {
-		return core.NewCommandError("Kick command is disabled for this server.", true)
+		return &core.CommandError{Message: "Kick command is disabled for this server.", Ephemeral: true}
 	}
 	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 
 	rawUserID, err := extractor.StringRequired("user")
 	if err != nil {
-		return core.NewCommandError(err.Error(), true)
+		return &core.CommandError{Message: err.Error(), Ephemeral: true}
 	}
 
 	userID, ok := normalizeUserID(rawUserID)
 	if !ok {
-		return core.NewCommandError("Invalid user ID or mention.", true)
+		return &core.CommandError{Message: "Invalid user ID or mention.", Ephemeral: true}
 	}
 
 	reason, truncated := sanitizeReason(extractor.String("reason"))
@@ -69,12 +69,12 @@ func (c *kickCommand) Handle(ctx *core.Context) error {
 	}
 
 	if ok, reasonText := canKickTarget(ctx, kickCtx, userID); !ok {
-		return core.NewCommandError(fmt.Sprintf("Cannot kick `%s`: %s.", userID, reasonText), true)
+		return &core.CommandError{Message: fmt.Sprintf("Cannot kick `%s`: %s.", userID, reasonText), Ephemeral: true}
 	}
 
 	targetUsername := resolveUserDisplayName(ctx, userID)
 	if err := ctx.Session.GuildMemberDeleteWithReason(ctx.GuildID, userID, reason); err != nil {
-		return core.NewCommandError(fmt.Sprintf("Failed to kick user %s: %v", userID, err), true)
+		return &core.CommandError{Message: fmt.Sprintf("Failed to kick user %s: %v", userID, err), Ephemeral: true}
 	}
 
 	details := "Status: Success"

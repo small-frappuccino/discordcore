@@ -665,25 +665,25 @@ func (gc *GroupCommand) RequiresPermissions() bool {
 func (gc *GroupCommand) Handle(ctx *Context) error {
 	subCommandName := GetSubCommandName(ctx.Interaction)
 	if subCommandName == "" {
-		return NewCommandError("This command needs a subcommand before it can continue, so this reply stays private.", true)
+		return &CommandError{Message: "This command needs a subcommand before it can continue, so this reply stays private.", Ephemeral: true}
 	}
 
 	subcmd, exists := gc.subcommands[subCommandName]
 	if !exists {
-		return NewCommandError("That subcommand couldn't be matched, so this reply stays private.", true)
+		return &CommandError{Message: "That subcommand couldn't be matched, so this reply stays private.", Ephemeral: true}
 	}
 
 	// Check subcommand-specific permissions
 	if subcmd.RequiresGuild() && ctx.GuildID == "" {
-		return NewCommandError("This subcommand only works inside a server, so this failure stays private.", true)
+		return &CommandError{Message: "This subcommand only works inside a server, so this failure stays private.", Ephemeral: true}
 	}
 
 	if ctx.GuildConfig != nil && len(ctx.GuildConfig.Roles.Allowed) > 0 && !gc.checker.HasPermission(ctx.GuildID, ctx.UserID) {
-		return NewCommandError("You don't have access to this subcommand, so this reply stays private.", true)
+		return &CommandError{Message: "You don't have access to this subcommand, so this reply stays private.", Ephemeral: true}
 	}
 
 	if subcmd.RequiresPermissions() && !gc.checker.HasPermission(ctx.GuildID, ctx.UserID) {
-		return NewCommandError("You don't have access to this subcommand, so this reply stays private.", true)
+		return &CommandError{Message: "You don't have access to this subcommand, so this reply stays private.", Ephemeral: true}
 	}
 
 	return subcmd.Handle(ctx)

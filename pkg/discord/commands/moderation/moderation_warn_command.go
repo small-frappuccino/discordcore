@@ -48,18 +48,18 @@ func (c *warnCommand) DefaultMemberPermissions() int64 { return discordgo.Permis
 // Handle handles.
 func (c *warnCommand) Handle(ctx *core.Context) error {
 	if enabled, _ := ctx.Config.Config().ResolveFeatures(ctx.GuildID).Lookup("moderation.warn"); !enabled {
-		return core.NewCommandError("Warn command is disabled for this server.", true)
+		return &core.CommandError{Message: "Warn command is disabled for this server.", Ephemeral: true}
 	}
 	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 
 	rawUserID, err := extractor.StringRequired("user")
 	if err != nil {
-		return core.NewCommandError(err.Error(), true)
+		return &core.CommandError{Message: err.Error(), Ephemeral: true}
 	}
 
 	userID, ok := normalizeUserID(rawUserID)
 	if !ok {
-		return core.NewCommandError("Invalid user ID or mention.", true)
+		return &core.CommandError{Message: "Invalid user ID or mention.", Ephemeral: true}
 	}
 
 	reason, truncated := sanitizeReason(extractor.String("reason"))
@@ -70,18 +70,18 @@ func (c *warnCommand) Handle(ctx *core.Context) error {
 	}
 
 	if ok, reasonText := canWarnTarget(ctx, warnCtx, userID); !ok {
-		return core.NewCommandError(fmt.Sprintf("Cannot warn `%s`: %s.", userID, reasonText), true)
+		return &core.CommandError{Message: fmt.Sprintf("Cannot warn `%s`: %s.", userID, reasonText), Ephemeral: true}
 	}
 
 	store := moderationStoreFromContext(ctx)
 	if store == nil {
-		return core.NewCommandError("Warnings storage is not available for this bot instance.", true)
+		return &core.CommandError{Message: "Warnings storage is not available for this bot instance.", Ephemeral: true}
 	}
 
 	targetUsername := resolveUserDisplayName(ctx, userID)
 	warning, err := store.CreateModerationWarning(ctx.GuildID, userID, ctx.UserID, reason, time.Now().UTC())
 	if err != nil {
-		return core.NewCommandError(fmt.Sprintf("Failed to create warning for %s: %v", userID, err), true)
+		return &core.CommandError{Message: fmt.Sprintf("Failed to create warning for %s: %v", userID, err), Ephemeral: true}
 	}
 
 	details := "Warning recorded"

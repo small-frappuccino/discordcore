@@ -285,7 +285,7 @@ func (c *ConfigSetSubCommand) Handle(ctx *Context) error {
 	// Persist configuration
 	if err := c.configManager.SaveGuildConfig(*ctx.GuildConfig); err != nil {
 		ctx.Logger.Error().Errorf("Failed to save config: %v", err)
-		return NewCommandError("Failed to save configuration", true)
+		return &CommandError{Message: "Failed to save configuration", Ephemeral: true}
 	}
 
 	return NewResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("Configuration `%s` set to `%s`", key, value))
@@ -529,7 +529,7 @@ func (c *AdvancedCommand) Handle(ctx *Context) error {
 		ctx.Logger.Error().Errorf("Failed to process input: %v", err)
 
 		// Return a user-friendly error
-		return NewCommandError("Failed to process your input. Please try again.", true)
+		return &CommandError{Message: "Failed to process your input. Please try again.", Ephemeral: true}
 	}
 
 	// Success response

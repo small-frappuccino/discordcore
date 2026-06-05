@@ -445,7 +445,7 @@ func newMessageWriterConfigManager(t *testing.T, guildID string, channels files.
 		opt(&cfg)
 	}
 
-	mgr := files.NewMemoryConfigManager()
+	mgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := mgr.AddGuildConfig(cfg); err != nil {
 		t.Fatalf("add guild config: %v", err)
 	}

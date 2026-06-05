@@ -106,7 +106,7 @@ func TestCommandHandlerSetupAndShutdownLifecycle(t *testing.T) {
 		}
 	})
 
-	cfgMgr := files.NewMemoryConfigManager()
+	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	handler := NewCommandHandler(session, cfgMgr)
 
 	if err := handler.SetupCommands(); err != nil {
@@ -152,7 +152,7 @@ func TestCommandHandlerSetupRollbackOnManagerFailure(t *testing.T) {
 	session.State = discordgo.NewState()
 	session.State.User = nil
 
-	cfgMgr := files.NewMemoryConfigManager()
+	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	handler := NewCommandHandler(session, cfgMgr)
 
 	err = handler.SetupCommands()
@@ -169,7 +169,7 @@ func TestCommandHandlerSetupRollbackOnManagerFailure(t *testing.T) {
 
 func TestCommandHandlerSkipsGuildWithoutCommandsFeature(t *testing.T) {
 	boolPtr := func(v bool) *bool { return &v }
-	cfgMgr := files.NewMemoryConfigManager()
+	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if _, err := cfgMgr.UpdateConfig(func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
 			{
@@ -206,7 +206,7 @@ func TestCommandHandlerFiltersRoutesByDomainBinding(t *testing.T) {
 	t.Parallel()
 
 	boolPtr := func(v bool) *bool { return &v }
-	cfgMgr := files.NewMemoryConfigManager()
+	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if _, err := cfgMgr.UpdateConfig(func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{{
 			GuildID:       "guild-1",
@@ -263,7 +263,7 @@ func TestCommandHandlerFiltersRoutesByDomainBinding(t *testing.T) {
 func TestCommandHandlerRegistersOnlySupportedDomains(t *testing.T) {
 	t.Parallel()
 
-	cfgMgr := files.NewMemoryConfigManager()
+	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	handler := NewCommandHandler(nil, cfgMgr)
 	handler.SetSupportedDomains(files.BotDomainQOTD)
 	handler.SetQOTDService(handlerQOTDServiceStub{})
@@ -307,7 +307,7 @@ func TestCommandHandlerRegistersOnlySupportedDomains(t *testing.T) {
 func TestCommandHandlerAppliesInjectedCatalogRegistrars(t *testing.T) {
 	t.Parallel()
 
-	cfgMgr := files.NewMemoryConfigManager()
+	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	handler := NewCommandHandler(nil, cfgMgr)
 	handler.SetSupportedDomains(files.BotDomainQOTD)
 	handler.commandManager = core.NewCommandManager(nil, cfgMgr)
@@ -348,7 +348,7 @@ func TestCommandHandlerAppliesInjectedCatalogRegistrars(t *testing.T) {
 func TestCommandHandlerRegistersAdminCatalogOnlyWhenCapabilityEnabled(t *testing.T) {
 	t.Parallel()
 
-	cfgMgr := files.NewMemoryConfigManager()
+	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 
 	withoutCapability := NewCommandHandler(nil, cfgMgr)
 	withoutCapability.commandManager = core.NewCommandManager(nil, cfgMgr)

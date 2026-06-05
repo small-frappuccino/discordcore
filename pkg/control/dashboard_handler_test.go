@@ -288,7 +288,7 @@ func TestDashboardEndpointInteraction(t *testing.T) {
 func TestDashboardEndpointInteractionWithoutConfiguredAuth(t *testing.T) {
 	t.Parallel()
 
-	cm := files.NewMemoryConfigManager()
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	srv := NewServer("127.0.0.1:0", cm, nil)
 	if srv == nil {
 		t.Fatal("expected non-nil control server")
@@ -335,7 +335,7 @@ func TestDashboardEndpointInteractionWithoutConfiguredAuth(t *testing.T) {
 func TestDashboardBrandAssetAccessibleWithoutSession(t *testing.T) {
 	t.Parallel()
 
-	cm := files.NewMemoryConfigManager()
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	srv := NewServer("127.0.0.1:0", cm, nil)
 	if srv == nil {
 		t.Fatal("expected non-nil control server")

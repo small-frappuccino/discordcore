@@ -111,7 +111,7 @@ func (f *blockingContextLifecycleService) NextScheduledPublishTime(string, time.
 }
 
 func TestRuntimeServiceLoopRunsPublishCycleOnStartAndInterval(t *testing.T) {
-	configManager := files.NewMemoryConfigManager()
+	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	for _, guild := range []files.GuildConfig{
 		{
 			GuildID:       "g-enabled",
@@ -196,7 +196,7 @@ func TestRuntimeServiceLoopRunsPublishCycleOnStartAndInterval(t *testing.T) {
 func TestRuntimeServiceCyclesUseScopedGuilds(t *testing.T) {
 	t.Parallel()
 
-	configManager := files.NewMemoryConfigManager()
+	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	for _, guild := range []files.GuildConfig{
 		{
 			GuildID:       "g-enabled",
@@ -281,7 +281,7 @@ func TestRuntimeServiceCyclesUseScopedGuilds(t *testing.T) {
 func TestRuntimeServiceCyclesUseQOTDDomainScopedGuilds(t *testing.T) {
 	t.Parallel()
 
-	configManager := files.NewMemoryConfigManager()
+	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	for _, guild := range []files.GuildConfig{
 		{
 			GuildID:       "g-qotd-enabled",
@@ -354,7 +354,7 @@ func TestRuntimeServiceCyclesUseQOTDDomainScopedGuilds(t *testing.T) {
 }
 
 func TestRuntimeServiceRestartResumesIntervalCycles(t *testing.T) {
-	configManager := files.NewMemoryConfigManager()
+	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := configManager.AddGuildConfig(files.GuildConfig{
 		GuildID:       "g-enabled",
 		BotInstanceID: "main",
@@ -419,7 +419,7 @@ func TestRuntimeServiceRestartResumesIntervalCycles(t *testing.T) {
 // reset logic only manifests on the second-or-later restart (e.g. failing to
 // reseat stopOnce after a previous reset), this test catches it.
 func TestRuntimeServiceMultipleRestartsResumeIntervalCycles(t *testing.T) {
-	configManager := files.NewMemoryConfigManager()
+	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := configManager.AddGuildConfig(files.GuildConfig{
 		GuildID:       "g-enabled",
 		BotInstanceID: "main",
@@ -487,7 +487,7 @@ func TestRuntimeServiceMultipleRestartsResumeIntervalCycles(t *testing.T) {
 }
 
 func TestRuntimeServiceStopCancelsInflightPublish(t *testing.T) {
-	configManager := files.NewMemoryConfigManager()
+	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := configManager.AddGuildConfig(files.GuildConfig{
 		GuildID:       "g-enabled",
 		BotInstanceID: "main",
@@ -599,7 +599,7 @@ func TestNextPublishDelayClampsToConfiguredBounds(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			cm := files.NewMemoryConfigManager()
+			cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 			if err := cm.AddGuildConfig(files.GuildConfig{
 				GuildID:       "g",
 				BotInstanceID: "main",
@@ -639,7 +639,7 @@ func TestNextPublishDelayClampsToConfiguredBounds(t *testing.T) {
 // loop and is the regression most likely to surface in production (publishes
 // firing late by up to one cap interval).
 func TestRuntimeServiceLoopWakesAtScheduledMoment(t *testing.T) {
-	cm := files.NewMemoryConfigManager()
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := cm.AddGuildConfig(files.GuildConfig{
 		GuildID:       "g-enabled",
 		BotInstanceID: "main",
@@ -706,7 +706,7 @@ func TestRuntimeServiceLoopWakesAtScheduledMoment(t *testing.T) {
 // configuration changes are still discovered. Regression guard for a future
 // "if no schedule, sleep forever" mistake.
 func TestRuntimeServiceLoopFallsBackToCapWithoutSchedule(t *testing.T) {
-	cm := files.NewMemoryConfigManager()
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := cm.AddGuildConfig(files.GuildConfig{
 		GuildID:       "g-enabled",
 		BotInstanceID: "main",

@@ -885,7 +885,7 @@ func loadCustomEmbed(cm *files.ConfigManager, guildID, key string) (files.Custom
 }
 
 func customEmbedDetailedCommandError(message string) error {
-	return core.NewCommandError(message, true)
+	return &core.CommandError{Message: message, Ephemeral: true}
 }
 
 func customEmbedResponseBuilder(session *discordgo.Session) *core.ResponseBuilder {

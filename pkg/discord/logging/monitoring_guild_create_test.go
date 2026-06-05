@@ -12,7 +12,7 @@ func TestMonitoringServiceHandleGuildCreatePersistsDormantGuild(t *testing.T) {
 
 	const guildID = "guild-any"
 
-	cfgMgr := files.NewMemoryConfigManager()
+	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	session := newLoggingLifecycleSession(t)
 	ms := &MonitoringService{
 		session:       session,

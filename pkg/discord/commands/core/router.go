@@ -52,7 +52,7 @@ func (cr *CommandRouter) handleSlashCommandRoute(i *discordgo.InteractionCreate,
 	err := cr.executeRoute(ctx, routeKey, func(ctx *Context) error {
 		handler, exists := cr.lookupSlashHandler(ctx.RouteKey)
 		if !exists {
-			return NewCommandError("That command couldn't be found, so this reply stays private.", true)
+			return &CommandError{Message: "That command couldn't be found, so this reply stays private.", Ephemeral: true}
 		}
 		return handler.Handle(ctx)
 	})

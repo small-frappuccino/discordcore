@@ -9,7 +9,7 @@ import (
 
 func TestSlashAckPolicyDefersExactlyOnce(t *testing.T) {
 	session, rec := newTestSession(t)
-	router := NewCommandRouter(session, files.NewMemoryConfigManager())
+	router := NewCommandRouter(session, files.NewConfigManagerWithStore(&files.MemoryConfigStore{}))
 
 	handlerCalls := 0
 	router.RegisterSlashCommand(testCommand{
@@ -47,7 +47,7 @@ func TestSlashAckPolicyDefersExactlyOnce(t *testing.T) {
 
 func TestComponentAckPolicyDefersUpdateBeforeHandler(t *testing.T) {
 	session, rec := newTestSession(t)
-	router := NewCommandRouter(session, files.NewMemoryConfigManager())
+	router := NewCommandRouter(session, files.NewConfigManagerWithStore(&files.MemoryConfigStore{}))
 
 	handlerCalls := 0
 	router.RegisterInteractionRoute(InteractionRouteBinding{
@@ -82,7 +82,7 @@ func TestComponentAckPolicyDefersUpdateBeforeHandler(t *testing.T) {
 
 func TestModalAckPolicyDefersUpdateBeforeHandler(t *testing.T) {
 	session, rec := newTestSession(t)
-	router := NewCommandRouter(session, files.NewMemoryConfigManager())
+	router := NewCommandRouter(session, files.NewConfigManagerWithStore(&files.MemoryConfigStore{}))
 
 	handlerCalls := 0
 	router.RegisterInteractionRoute(InteractionRouteBinding{
@@ -117,7 +117,7 @@ func TestModalAckPolicyDefersUpdateBeforeHandler(t *testing.T) {
 
 func TestComponentModalPathDoesNotPreAckBeforeOpeningModal(t *testing.T) {
 	session, rec := newTestSession(t)
-	router := NewCommandRouter(session, files.NewMemoryConfigManager())
+	router := NewCommandRouter(session, files.NewConfigManagerWithStore(&files.MemoryConfigStore{}))
 
 	handlerCalls := 0
 	router.RegisterInteractionRoute(InteractionRouteBinding{

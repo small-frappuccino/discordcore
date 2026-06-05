@@ -25,13 +25,13 @@ func NewTicketService(store *storage.Store) *TicketService {
 func (s *TicketService) HandleCategorySelect(ctx *core.Context) error {
 	data := ctx.Interaction.MessageComponentData()
 	if len(data.Values) == 0 {
-		return core.NewCommandError("No category selected.", true)
+		return &core.CommandError{Message: "No category selected.", Ephemeral: true}
 	}
 	categoryName := data.Values[0]
 
 	// 1. Resolve role from Config
 	if ctx.GuildConfig == nil || !ctx.GuildConfig.Tickets.Enabled {
-		return core.NewCommandError("Tickets are not enabled on this server.", true)
+		return &core.CommandError{Message: "Tickets are not enabled on this server.", Ephemeral: true}
 	}
 
 	var roleID string
@@ -42,7 +42,7 @@ func (s *TicketService) HandleCategorySelect(ctx *core.Context) error {
 		}
 	}
 	if roleID == "" {
-		return core.NewCommandError("Invalid category selected.", true)
+		return &core.CommandError{Message: "Invalid category selected.", Ephemeral: true}
 	}
 
 	// 2. Check 500 channels limit
@@ -51,7 +51,7 @@ func (s *TicketService) HandleCategorySelect(ctx *core.Context) error {
 		return fmt.Errorf("fetch channels: %w", err)
 	}
 	if len(channels) >= 490 {
-		return core.NewCommandError("Cannot create ticket: The server is nearing the 500 channel limit.", true)
+		return &core.CommandError{Message: "Cannot create ticket: The server is nearing the 500 channel limit.", Ephemeral: true}
 	}
 
 	// 3. Get next ticket ID
@@ -136,7 +136,7 @@ func (s *TicketService) HandleClose(ctx *core.Context) error {
 	}
 
 	if !strings.HasPrefix(ch.Name, "ticket-") {
-		return core.NewCommandError("This is not an open ticket.", true)
+		return &core.CommandError{Message: "This is not an open ticket.", Ephemeral: true}
 	}
 
 	newName := strings.Replace(ch.Name, "ticket-", "closed-", 1)
@@ -205,7 +205,7 @@ func (s *TicketService) HandleReopen(ctx *core.Context) error {
 	}
 
 	if !strings.HasPrefix(ch.Name, "closed-") {
-		return core.NewCommandError("This is not a closed ticket.", true)
+		return &core.CommandError{Message: "This is not a closed ticket.", Ephemeral: true}
 	}
 
 	newName := strings.Replace(ch.Name, "closed-", "ticket-", 1)

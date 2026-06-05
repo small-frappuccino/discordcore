@@ -109,11 +109,11 @@ func CommandLogEntry(i *discordgo.InteractionCreate, command string, userID stri
 // ValidateGuildContext validates if the context has the required server information
 func ValidateGuildContext(ctx *Context) error {
 	if ctx.GuildID == "" {
-		return NewCommandError("This command only works inside a server, so this failure stays private.", true)
+		return &CommandError{Message: "This command only works inside a server, so this failure stays private.", Ephemeral: true}
 	}
 
 	if ctx.GuildConfig == nil {
-		return NewCommandError("This server's configuration couldn't be found, so this reply stays private.", true)
+		return &CommandError{Message: "This server's configuration couldn't be found, so this reply stays private.", Ephemeral: true}
 	}
 
 	return nil
@@ -122,7 +122,7 @@ func ValidateGuildContext(ctx *Context) error {
 // ValidateUserContext validates if the context has the required user information
 func ValidateUserContext(ctx *Context) error {
 	if ctx.UserID == "" {
-		return NewCommandError("The user who ran this command couldn't be identified, so this reply stays private.", true)
+		return &CommandError{Message: "The user who ran this command couldn't be identified, so this reply stays private.", Ephemeral: true}
 	}
 
 	return nil
@@ -208,7 +208,7 @@ func RequiresGuildConfig(ctx *Context) error {
 	}
 
 	if ctx.GuildConfig == nil {
-		return NewCommandError("This command needs a server configuration before it can run, so this reply stays private.", true)
+		return &CommandError{Message: "This command needs a server configuration before it can run, so this reply stays private.", Ephemeral: true}
 	}
 
 	return nil

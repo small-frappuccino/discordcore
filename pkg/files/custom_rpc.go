@@ -49,7 +49,7 @@ func LoadCustomRPCFileFromPath(path string) (*CustomRPCConfig, error) {
 		return cfg, fmt.Errorf("custom rpc path is empty")
 	}
 
-	jsonManager := NewJSONManager(path)
+	jsonManager := &JSONManager{FilePath: path}
 	if err := jsonManager.Load(cfg); err != nil {
 		return nil, fmt.Errorf("failed to load custom rpc config from %s: %w", path, err)
 	}
@@ -69,7 +69,7 @@ func SaveCustomRPCFileToPath(path string, config *CustomRPCConfig) error {
 	if path == "" {
 		return fmt.Errorf("custom rpc path is empty")
 	}
-	jsonManager := NewJSONManager(path)
+	jsonManager := &JSONManager{FilePath: path}
 	if err := jsonManager.Save(config); err != nil {
 		return fmt.Errorf("failed to save custom rpc config to %s: %w", path, err)
 	}

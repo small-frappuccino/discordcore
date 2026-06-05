@@ -34,7 +34,7 @@ func TestSetTLSCertificatesValidation(t *testing.T) {
 }
 
 func TestControlServerStartWithTLS(t *testing.T) {
-	cm := files.NewMemoryConfigManager()
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: "g1"}); err != nil {
 		t.Fatalf("add guild config: %v", err)
 	}

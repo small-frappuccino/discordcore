@@ -8,7 +8,7 @@ import (
 
 func TestCommandRouterMiddlewareUsesRouteKeyPipeline(t *testing.T) {
 	session, _ := newTestSession(t)
-	config := files.NewMemoryConfigManager()
+	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	router := NewCommandRouter(session, config)
 
 	var order []string

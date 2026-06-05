@@ -13,7 +13,7 @@ import (
 func TestBotRuntimeResolverSessionForGuildUsesConfiguredBinding(t *testing.T) {
 	t.Parallel()
 
-	configManager := files.NewMemoryConfigManager()
+	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g1", BotInstanceID: "main"}); err != nil {
 		t.Fatalf("add guild g1: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestBotRuntimeResolverSessionForGuildUsesConfiguredBinding(t *testing.T) {
 func TestBotRuntimeResolverSessionForGuildDomainUsesDomainOverride(t *testing.T) {
 	t.Parallel()
 
-	configManager := files.NewMemoryConfigManager()
+	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := configManager.AddGuildConfig(files.GuildConfig{
 		GuildID:       "g1",
 		BotInstanceID: "main",
@@ -94,7 +94,7 @@ func TestBotRuntimeResolverSessionForGuildDomainUsesDomainOverride(t *testing.T)
 func TestBotRuntimeResolverSessionForGuildRejectsMissingGuild(t *testing.T) {
 	t.Parallel()
 
-	configManager := files.NewMemoryConfigManager()
+	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g1", BotInstanceID: "main"}); err != nil {
 		t.Fatalf("add guild g1: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestBotRuntimeResolverSessionForGuildRejectsMissingGuild(t *testing.T) {
 func TestBotRuntimeResolverSessionForGuildRejectsUnavailableRuntime(t *testing.T) {
 	t.Parallel()
 
-	configManager := files.NewMemoryConfigManager()
+	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g1", BotInstanceID: "main"}); err != nil {
 		t.Fatalf("add guild g1: %v", err)
 	}
@@ -135,7 +135,7 @@ func TestBotRuntimeResolverSessionForGuildRejectsUnavailableRuntime(t *testing.T
 func TestBotRuntimeResolverSessionForGuildRejectsMissingSession(t *testing.T) {
 	t.Parallel()
 
-	configManager := files.NewMemoryConfigManager()
+	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g1", BotInstanceID: "main"}); err != nil {
 		t.Fatalf("add guild g1: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestBotRuntimeResolverSessionForGuildRejectsMissingSession(t *testing.T) {
 func TestBotRuntimeResolverRegisterGuildPersistsDormantConfig(t *testing.T) {
 	t.Parallel()
 
-	configManager := files.NewMemoryConfigManager()
+	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 
 	mainSession, err := discordgo.New("Bot main-token")
 	if err != nil {

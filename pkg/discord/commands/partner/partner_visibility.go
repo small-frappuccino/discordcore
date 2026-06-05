@@ -37,7 +37,7 @@ func partnerResponseBuilder(session *discordgo.Session, class partnerVisibilityC
 }
 
 func partnerCommandError(class partnerVisibilityClass, message string) error {
-	return core.NewCommandError(message, partnerVisibilityIsEphemeral(class))
+	return &core.CommandError{Message: message, Ephemeral: partnerVisibilityIsEphemeral(class)}
 }
 
 func partnerDetailedCommandError(message string) error {

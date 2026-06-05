@@ -17,18 +17,6 @@ type MemoryConfigStore struct {
 	description string
 }
 
-// NewMemoryConfigStore news memory config store.
-func NewMemoryConfigStore() *MemoryConfigStore {
-	return &MemoryConfigStore{
-		description: defaultMemoryConfigStoreDescription,
-	}
-}
-
-// NewMemoryConfigManager creates a ConfigManager backed by an in-memory store.
-func NewMemoryConfigManager() *ConfigManager {
-	return NewConfigManagerWithStore(NewMemoryConfigStore())
-}
-
 // Load loads.
 func (s *MemoryConfigStore) Load() (*BotConfig, error) {
 	cfg := &BotConfig{Guilds: []GuildConfig{}}

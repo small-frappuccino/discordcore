@@ -115,7 +115,7 @@ func TestMonitoringServiceUpdateStatsChannelsUsesIncrementalState(t *testing.T) 
 		}
 	})
 
-	cfgMgr := files.NewMemoryConfigManager()
+	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := cfgMgr.AddGuildConfig(files.GuildConfig{
 		GuildID: guildID,
 		Features: files.FeatureToggles{
@@ -191,7 +191,7 @@ func TestMonitoringServiceHandleMemberUpdateUpdatesStatsWhenRoleLogSuppressed(t 
 		roleID  = "role-a"
 	)
 
-	cfgMgr := files.NewMemoryConfigManager()
+	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := cfgMgr.AddGuildConfig(files.GuildConfig{
 		GuildID: guildID,
 		Features: files.FeatureToggles{
@@ -316,7 +316,7 @@ func TestMonitoringServiceUpdateStatsChannelsHydratesFromStore(t *testing.T) {
 		}
 	})
 
-	cfgMgr := files.NewMemoryConfigManager()
+	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := cfgMgr.AddGuildConfig(files.GuildConfig{
 		GuildID: guildID,
 		Features: files.FeatureToggles{

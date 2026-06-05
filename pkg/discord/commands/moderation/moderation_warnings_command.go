@@ -51,18 +51,18 @@ func (c *warningsCommand) DefaultMemberPermissions() int64 {
 // Handle handles.
 func (c *warningsCommand) Handle(ctx *core.Context) error {
 	if enabled, _ := ctx.Config.Config().ResolveFeatures(ctx.GuildID).Lookup("moderation.warnings"); !enabled {
-		return core.NewCommandError("Warnings command is disabled for this server.", true)
+		return &core.CommandError{Message: "Warnings command is disabled for this server.", Ephemeral: true}
 	}
 	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 
 	rawUserID, err := extractor.StringRequired("user")
 	if err != nil {
-		return core.NewCommandError(err.Error(), true)
+		return &core.CommandError{Message: err.Error(), Ephemeral: true}
 	}
 
 	userID, ok := normalizeUserID(rawUserID)
 	if !ok {
-		return core.NewCommandError("Invalid user ID or mention.", true)
+		return &core.CommandError{Message: "Invalid user ID or mention.", Ephemeral: true}
 	}
 
 	limit := int(extractor.Int("limit"))
@@ -76,18 +76,18 @@ func (c *warningsCommand) Handle(ctx *core.Context) error {
 	}
 
 	if ok, reasonText := canWarnTarget(ctx, warnCtx, userID); !ok {
-		return core.NewCommandError(fmt.Sprintf("Cannot inspect warnings for `%s`: %s.", userID, reasonText), true)
+		return &core.CommandError{Message: fmt.Sprintf("Cannot inspect warnings for `%s`: %s.", userID, reasonText), Ephemeral: true}
 	}
 
 	store := moderationStoreFromContext(ctx)
 	if store == nil {
-		return core.NewCommandError("Warnings storage is not available for this bot instance.", true)
+		return &core.CommandError{Message: "Warnings storage is not available for this bot instance.", Ephemeral: true}
 	}
 
 	targetUsername := resolveUserDisplayName(ctx, userID)
 	warnings, err := store.ListModerationWarnings(ctx.GuildID, userID, limit)
 	if err != nil {
-		return core.NewCommandError(fmt.Sprintf("Failed to load warnings for %s: %v", userID, err), true)
+		return &core.CommandError{Message: fmt.Sprintf("Failed to load warnings for %s: %v", userID, err), Ephemeral: true}
 	}
 
 	return core.NewResponseBuilder(ctx.Session).Ephemeral().Info(ctx.Interaction, buildWarningsCommandMessage(targetUsername, warnings))

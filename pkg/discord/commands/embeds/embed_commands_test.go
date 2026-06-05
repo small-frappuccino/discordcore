@@ -65,7 +65,7 @@ func TestRenderCustomEmbed(t *testing.T) {
 func TestCustomEmbedPostingSyncer(t *testing.T) {
 	t.Parallel()
 
-	cm := files.NewMemoryConfigManager()
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	guildID := "guild-sync"
 	key := "embed-key"
 
@@ -212,7 +212,7 @@ func TestEmbedCommandsIntegration(t *testing.T) {
 		session.State = discordgo.NewState()
 	}
 
-	cm := files.NewMemoryConfigManager()
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	guildID := "guild-embed-test"
 	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: guildID}); err != nil {
 		t.Fatalf("add guild config: %v", err)

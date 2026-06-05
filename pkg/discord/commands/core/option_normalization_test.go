@@ -144,7 +144,7 @@ func TestCommandManagerSetupCommands_NormalizesOptionOrderBeforeSync(t *testing.
 		}
 	})
 
-	cfgMgr := files.NewMemoryConfigManager()
+	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	cm := NewCommandManager(session, cfgMgr)
 	cm.GetRouter().RegisterCommand(orderedOptionsCommand{})
 

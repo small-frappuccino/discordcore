@@ -58,26 +58,26 @@ func (c *timeoutCommand) DefaultMemberPermissions() int64 {
 // Handle handles.
 func (c *timeoutCommand) Handle(ctx *core.Context) error {
 	if enabled, _ := ctx.Config.Config().ResolveFeatures(ctx.GuildID).Lookup("moderation.timeout"); !enabled {
-		return core.NewCommandError("Timeout command is disabled for this server.", true)
+		return &core.CommandError{Message: "Timeout command is disabled for this server.", Ephemeral: true}
 	}
 	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 
 	rawUserID, err := extractor.StringRequired("user")
 	if err != nil {
-		return core.NewCommandError(err.Error(), true)
+		return &core.CommandError{Message: err.Error(), Ephemeral: true}
 	}
 
 	userID, ok := normalizeUserID(rawUserID)
 	if !ok {
-		return core.NewCommandError("Invalid user ID or mention.", true)
+		return &core.CommandError{Message: "Invalid user ID or mention.", Ephemeral: true}
 	}
 
 	minutes := extractor.Int("minutes")
 	if minutes <= 0 {
-		return core.NewCommandError("Please provide a valid timeout duration in minutes.", true)
+		return &core.CommandError{Message: "Please provide a valid timeout duration in minutes.", Ephemeral: true}
 	}
 	if minutes > timeoutMaxMinutes {
-		return core.NewCommandError("Timeout duration cannot exceed 40320 minutes (28 days).", true)
+		return &core.CommandError{Message: "Timeout duration cannot exceed 40320 minutes (28 days).", Ephemeral: true}
 	}
 
 	reason, truncated := sanitizeReason(extractor.String("reason"))
@@ -88,13 +88,13 @@ func (c *timeoutCommand) Handle(ctx *core.Context) error {
 	}
 
 	if ok, reasonText := canTimeoutTarget(ctx, timeoutCtx, userID); !ok {
-		return core.NewCommandError(fmt.Sprintf("Cannot timeout `%s`: %s.", userID, reasonText), true)
+		return &core.CommandError{Message: fmt.Sprintf("Cannot timeout `%s`: %s.", userID, reasonText), Ephemeral: true}
 	}
 
 	targetUsername := resolveUserDisplayName(ctx, userID)
 	until := time.Now().UTC().Add(time.Duration(minutes) * time.Minute)
 	if err := ctx.Session.GuildMemberTimeout(ctx.GuildID, userID, &until, discordgo.WithAuditLogReason(reason)); err != nil {
-		return core.NewCommandError(fmt.Sprintf("Failed to timeout user %s: %v", userID, err), true)
+		return &core.CommandError{Message: fmt.Sprintf("Failed to timeout user %s: %v", userID, err), Ephemeral: true}
 	}
 
 	details := fmt.Sprintf("Duration: %s | Ends: <t:%d:F> (<t:%d:R>)", formatTimeoutDuration(minutes), until.Unix(), until.Unix())

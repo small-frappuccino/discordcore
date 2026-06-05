@@ -18,7 +18,7 @@ type capturedEdit struct {
 
 func newRolePanelSyncTestManager(t *testing.T) *files.ConfigManager {
 	t.Helper()
-	cm := files.NewMemoryConfigManager()
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: "guild"}); err != nil {
 		t.Fatalf("add guild config: %v", err)
 	}

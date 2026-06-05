@@ -143,7 +143,7 @@ func (c *cleanCommand) Handle(ctx *core.Context) error {
 	c.metrics.RecordCleanAttempt()
 
 	if enabled, _ := ctx.Config.Config().ResolveFeatures(ctx.GuildID).Lookup("moderation.clean"); !enabled {
-		err := core.NewCommandError("Clean command is disabled for this server.", true)
+		err := &core.CommandError{Message: "Clean command is disabled for this server.", Ephemeral: true}
 		c.recordEarlyFailure(ctx, "", CleanFailureCauseFeatureDisabled, start, err)
 		return err
 	}
@@ -232,14 +232,14 @@ func (c *cleanCommand) logCleanCompleted(ctx *core.Context, request cleanRequest
 func parseCleanRequest(ctx *core.Context) (cleanRequest, error) {
 	channelID := strings.TrimSpace(ctx.Interaction.ChannelID)
 	if channelID == "" {
-		return cleanRequest{}, core.NewCommandError("This command needs a channel context before it can clean messages.", true)
+		return cleanRequest{}, &core.CommandError{Message: "This command needs a channel context before it can clean messages.", Ephemeral: true}
 	}
 
 	options := core.GetSubCommandOptions(ctx.Interaction)
 	extractor := core.OptionList(options)
 	count := int(extractor.Int(cleanCountOptionName))
 	if count <= 0 || count > cleanMaxDeleteCount {
-		return cleanRequest{}, core.NewCommandError("Count must be between 1 and 100.", true)
+		return cleanRequest{}, &core.CommandError{Message: "Count must be between 1 and 100.", Ephemeral: true}
 	}
 	fromID, err := normalizeCleanMessageID(extractor.String(cleanFromOptionName), cleanFromOptionName)
 	if err != nil {
@@ -250,7 +250,7 @@ func parseCleanRequest(ctx *core.Context) (cleanRequest, error) {
 		return cleanRequest{}, fmt.Errorf("parseCleanRequest: %w", err)
 	}
 	if fromID != "" && toID != "" && compareSnowflakeIDs(fromID, toID) >= 0 {
-		return cleanRequest{}, core.NewCommandError("The `from` message ID must be older than the `to` message ID.", true)
+		return cleanRequest{}, &core.CommandError{Message: "The `from` message ID must be older than the `to` message ID.", Ephemeral: true}
 	}
 
 	request := cleanRequest{
@@ -270,7 +270,7 @@ func normalizeCleanMessageID(input, optionName string) (string, error) {
 		return "", nil
 	}
 	if !isLikelySnowflake(value) {
-		return "", core.NewCommandError(fmt.Sprintf("Option `%s` must be a valid Discord message ID.", optionName), true)
+		return "", &core.CommandError{Message: fmt.Sprintf("Option `%s` must be a valid Discord message ID.", optionName), Ephemeral: true}
 	}
 	return value, nil
 }
@@ -311,13 +311,13 @@ func validateCleanPermissions(ctx *core.Context, channelID string) error {
 func requireChannelPermissions(session *discordgo.Session, userID, channelID string, required int64, message string) error {
 	perms, err := session.UserChannelPermissions(userID, channelID)
 	if err != nil {
-		return core.NewCommandError("Channel permissions could not be checked right now.", true)
+		return &core.CommandError{Message: "Channel permissions could not be checked right now.", Ephemeral: true}
 	}
 	if perms&discordgo.PermissionAdministrator == discordgo.PermissionAdministrator {
 		return nil
 	}
 	if perms&required != required {
-		return core.NewCommandError(message, true)
+		return &core.CommandError{Message: message, Ephemeral: true}
 	}
 	return nil
 }
@@ -463,7 +463,7 @@ func (c *cleanCommand) collectCleanTargets(ctx *core.Context, request cleanReque
 				"err", err,
 			)
 			c.metrics.RecordCleanFailure(ClassifyCleanFetchFailure(class), c.now().Sub(start))
-			return nil, cleanResult{}, core.NewCommandError(cleanFetchErrorMessage(class), true)
+			return nil, cleanResult{}, &core.CommandError{Message: cleanFetchErrorMessage(class), Ephemeral: true}
 		}
 		if len(page) == 0 {
 			break

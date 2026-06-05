@@ -97,7 +97,7 @@ func newQOTDControlTestServer(t *testing.T) (*Server, *qotd.Service, *storage.St
 	}
 	t.Cleanup(func() { _ = store.Close() })
 
-	cm := files.NewMemoryConfigManager()
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: "g1"}); err != nil {
 		t.Fatalf("add guild config: %v", err)
 	}

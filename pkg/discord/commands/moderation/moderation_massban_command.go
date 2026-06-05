@@ -48,18 +48,18 @@ func (c *massBanCommand) DefaultMemberPermissions() int64 { return discordgo.Per
 // Handle handles.
 func (c *massBanCommand) Handle(ctx *core.Context) error {
 	if enabled, _ := ctx.Config.Config().ResolveFeatures(ctx.GuildID).Lookup("moderation.massban"); !enabled {
-		return core.NewCommandError("Mass ban command is disabled for this server.", true)
+		return &core.CommandError{Message: "Mass ban command is disabled for this server.", Ephemeral: true}
 	}
 	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 
 	membersInput, err := extractor.StringRequired("members")
 	if err != nil {
-		return core.NewCommandError(err.Error(), true)
+		return &core.CommandError{Message: err.Error(), Ephemeral: true}
 	}
 
 	memberIDs, invalidTokens := parseMemberIDs(membersInput)
 	if len(memberIDs) == 0 {
-		return core.NewCommandError("No valid member IDs provided", true)
+		return &core.CommandError{Message: "No valid member IDs provided", Ephemeral: true}
 	}
 	if len(invalidTokens) > 0 {
 		log.ApplicationLogger().Info("Massban ignored invalid member tokens", "guildID", ctx.GuildID, "invalid_count", len(invalidTokens))

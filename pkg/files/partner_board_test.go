@@ -15,7 +15,7 @@ func newPartnerBoardTestManager(t *testing.T, cfg *BotConfig) *ConfigManager {
 		cfg.Guilds = []GuildConfig{}
 	}
 
-	mgr := NewMemoryConfigManager()
+	mgr := NewConfigManagerWithStore(&MemoryConfigStore{})
 	mgr.config = cfg
 	if _, err := mgr.rebuildGuildIndexLocked("test"); err != nil {
 		t.Fatalf("rebuild index: %v", err)

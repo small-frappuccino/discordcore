@@ -73,7 +73,7 @@ func TestNewMinimalGuildConfigDisablesAllFeatures(t *testing.T) {
 func TestEnsureMinimalGuildConfigForBotPersistsDormantGuild(t *testing.T) {
 	t.Parallel()
 
-	store := NewMemoryConfigStore()
+	store := &MemoryConfigStore{}
 	mgr := NewConfigManagerWithStore(store)
 
 	if err := mgr.EnsureMinimalGuildConfigForBot("guild-new", "companion"); err != nil {
@@ -109,7 +109,7 @@ func TestEnsureMinimalGuildConfigForBotPersistsDormantGuild(t *testing.T) {
 func TestEnsureMinimalGuildConfigForBotPreservesDomainOverridesOnExistingGuild(t *testing.T) {
 	t.Parallel()
 
-	store := NewMemoryConfigStore()
+	store := &MemoryConfigStore{}
 	mgr := NewConfigManagerWithStore(store)
 	if _, err := mgr.UpdateConfig(func(cfg *BotConfig) error {
 		cfg.Guilds = []GuildConfig{{

@@ -13,21 +13,14 @@ import (
 
 // JSONManager handles reading and writing JSON data to a file.
 type JSONManager struct {
-	filePath    string
-	projectRoot string // Optional: for safe saving
+	FilePath    string
+	ProjectRoot string // Optional: for safe saving
 	mu          sync.RWMutex
-}
-
-// NewJSONManager creates a new JSONManager.
-func NewJSONManager(filePath string) *JSONManager {
-	return &JSONManager{
-		filePath: filePath,
-	}
 }
 
 // WithProjectRoot sets the project root for safe saving.
 func (m *JSONManager) WithProjectRoot(projectRoot string) *JSONManager {
-	m.projectRoot = projectRoot
+	m.ProjectRoot = projectRoot
 	return m
 }
 
@@ -36,7 +29,7 @@ func (m *JSONManager) Load(data any) error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	fileData, err := os.ReadFile(m.filePath)
+	fileData, err := os.ReadFile(m.FilePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -61,9 +54,9 @@ func (m *JSONManager) Save(data any) (err error) {
 		return fmt.Errorf("failed to marshal json: %w", err)
 	}
 
-	targetPath := m.filePath
-	if m.projectRoot != "" {
-		safePath, err := safeJoin(m.projectRoot, m.filePath)
+	targetPath := m.FilePath
+	if m.ProjectRoot != "" {
+		safePath, err := safeJoin(m.ProjectRoot, m.FilePath)
 		if err != nil {
 			return fmt.Errorf("failed to resolve safe file path: %w", err)
 		}

@@ -128,12 +128,12 @@ func (cmd *ServiceStatusCommand) RequiresPermissions() bool {
 func (cmd *ServiceStatusCommand) Handle(ctx *core.Context) error {
 	serviceName := core.GetStringOption(core.GetSubCommandOptions(ctx.Interaction), "service")
 	if serviceName == "" {
-		return core.NewCommandError("This command needs a service name before it can continue, so this reply stays private.", true)
+		return &core.CommandError{Message: "This command needs a service name before it can continue, so this reply stays private.", Ephemeral: true}
 	}
 
 	info, err := cmd.adminCommands.serviceManager.GetServiceInfo(serviceName)
 	if err != nil {
-		return core.NewCommandError(fmt.Sprintf("No service named %s was found, so this reply stays private.", serviceName), true)
+		return &core.CommandError{Message: fmt.Sprintf("No service named %s was found, so this reply stays private.", serviceName), Ephemeral: true}
 	}
 
 	// Perform health check
@@ -338,13 +338,13 @@ func (cmd *ServiceRestartCommand) RequiresPermissions() bool {
 func (cmd *ServiceRestartCommand) Handle(ctx *core.Context) error {
 	serviceName := core.GetStringOption(core.GetSubCommandOptions(ctx.Interaction), "service")
 	if serviceName == "" {
-		return core.NewCommandError("This command needs a service name before it can continue, so this reply stays private.", true)
+		return &core.CommandError{Message: "This command needs a service name before it can continue, so this reply stays private.", Ephemeral: true}
 	}
 
 	// Check if service exists
 	_, err := cmd.adminCommands.serviceManager.GetServiceInfo(serviceName)
 	if err != nil {
-		return core.NewCommandError(fmt.Sprintf("No service named %s was found, so this reply stays private.", serviceName), true)
+		return &core.CommandError{Message: fmt.Sprintf("No service named %s was found, so this reply stays private.", serviceName), Ephemeral: true}
 	}
 
 	// Send initial response

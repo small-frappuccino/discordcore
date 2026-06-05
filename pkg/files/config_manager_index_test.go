@@ -158,7 +158,7 @@ func TestGuildConfigIndexDuplicateFix(t *testing.T) {
 }
 
 func TestGuildConfigIndexDedupePersistsOnLoad(t *testing.T) {
-	store := NewMemoryConfigStore()
+	store := &MemoryConfigStore{}
 	raw := &BotConfig{
 		Guilds: []GuildConfig{
 			{GuildID: "g1"},

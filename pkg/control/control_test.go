@@ -16,7 +16,7 @@ const controlTestAuthToken = "test-control-token"
 func newControlTestServer(t *testing.T) (*Server, *files.ConfigManager) {
 	t.Helper()
 
-	cm := files.NewMemoryConfigManager()
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: "g1"}); err != nil {
 		t.Fatalf("add guild config: %v", err)
 	}

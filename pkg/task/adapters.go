@@ -129,25 +129,6 @@ type NotificationAdapters struct {
 	Session         *discordgo.Session
 }
 
-// NewNotificationAdapters creates adapters and registers task handlers.
-func NewNotificationAdapters(
-	router *TaskRouter,
-	session *discordgo.Session,
-	cfg *files.ConfigManager,
-	store *storage.Store,
-	notifier NotificationSender,
-) *NotificationAdapters {
-	ad := &NotificationAdapters{
-		Router:   router,
-		Notifier: notifier,
-		Store:    store,
-		Config:   cfg,
-		Session:  session,
-	}
-	ad.RegisterHandlers()
-	return ad
-}
-
 // SetAvatarProcessor sets the processor for avatar change tasks.
 func (a *NotificationAdapters) SetAvatarProcessor(p AvatarProcessor) {
 	a.AvatarProcessor = p

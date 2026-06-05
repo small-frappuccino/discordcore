@@ -8,7 +8,7 @@ import (
 
 func newTestConfigManager(t *testing.T) *files.ConfigManager {
 	t.Helper()
-	return files.NewMemoryConfigManager()
+	return files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 }
 
 func mustUpdateConfig(t *testing.T, cm *files.ConfigManager, fn func(*files.BotConfig)) {

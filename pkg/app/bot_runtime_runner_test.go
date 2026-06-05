@@ -14,7 +14,7 @@ func TestInitializeBotRuntimeSkipsCommandHandlerWhenCommandsDisabled(t *testing.
 		t.Fatalf("create discord session: %v", err)
 	}
 
-	cfgMgr := files.NewMemoryConfigManager()
+	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	boolPtr := func(v bool) *bool { return &v }
 	if _, err := cfgMgr.UpdateConfig(func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
@@ -92,7 +92,7 @@ func TestInitializeBotRuntimeStartsCommandHandlerForDormantQOTDCommandCatalog(t 
 		t.Fatalf("create discord session: %v", err)
 	}
 
-	cfgMgr := files.NewMemoryConfigManager()
+	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	origNewCommandHandlerForBot := newCommandHandlerForBot
 	origSetupCommandHandler := setupCommandHandler
 	defer func() {

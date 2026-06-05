@@ -286,12 +286,12 @@ func prepareWarnContext(ctx *core.Context) (*banContext, error) {
 
 func prepareModerationContext(ctx *core.Context, requiredPermission int64, actorPermissionError, botPermissionError string) (*banContext, error) {
 	if ctx == nil || ctx.Session == nil {
-		return nil, core.NewCommandError("Session not ready. Try again shortly.", true)
+		return nil, &core.CommandError{Message: "Session not ready. Try again shortly.", Ephemeral: true}
 	}
 
 	checker := permissionCheckerForContext(ctx)
 	if checker == nil {
-		return nil, core.NewCommandError("Permission resolver not available.", true)
+		return nil, &core.CommandError{Message: "Permission resolver not available.", Ephemeral: true}
 	}
 
 	roles, err := checker.ResolveRoles(ctx.GuildID)
@@ -303,7 +303,7 @@ func prepareModerationContext(ctx *core.Context, requiredPermission int64, actor
 			"userID", ctx.UserID,
 			"err", err,
 		)
-		return nil, core.NewCommandError("Failed to resolve server roles.", true)
+		return nil, &core.CommandError{Message: "Failed to resolve server roles.", Ephemeral: true}
 	}
 	rolesByID := buildRoleIndex(roles)
 
@@ -316,7 +316,7 @@ func prepareModerationContext(ctx *core.Context, requiredPermission int64, actor
 			"userID", ctx.UserID,
 			"err", err,
 		)
-		return nil, core.NewCommandError("Failed to resolve server owner.", true)
+		return nil, &core.CommandError{Message: "Failed to resolve server owner.", Ephemeral: true}
 	}
 	if !ownerFound {
 		ownerID = ""
@@ -327,7 +327,7 @@ func prepareModerationContext(ctx *core.Context, requiredPermission int64, actor
 		botID = ctx.Session.State.User.ID
 	}
 	if botID == "" {
-		return nil, core.NewCommandError("Bot identity not available.", true)
+		return nil, &core.CommandError{Message: "Bot identity not available.", Ephemeral: true}
 	}
 
 	var actorMember *discordgo.Member
@@ -345,10 +345,10 @@ func prepareModerationContext(ctx *core.Context, requiredPermission int64, actor
 				"userID", ctx.UserID,
 				"err", err,
 			)
-			return nil, core.NewCommandError("Unable to resolve your member record.", true)
+			return nil, &core.CommandError{Message: "Unable to resolve your member record.", Ephemeral: true}
 		}
 		if !ok || actorMember == nil {
-			return nil, core.NewCommandError("Unable to resolve your member record.", true)
+			return nil, &core.CommandError{Message: "Unable to resolve your member record.", Ephemeral: true}
 		}
 	}
 
@@ -361,20 +361,20 @@ func prepareModerationContext(ctx *core.Context, requiredPermission int64, actor
 			"botID", botID,
 			"err", err,
 		)
-		return nil, core.NewCommandError("Unable to resolve the bot member record.", true)
+		return nil, &core.CommandError{Message: "Unable to resolve the bot member record.", Ephemeral: true}
 	}
 	if !ok || botMember == nil {
-		return nil, core.NewCommandError("Unable to resolve the bot member record.", true)
+		return nil, &core.CommandError{Message: "Unable to resolve the bot member record.", Ephemeral: true}
 	}
 
 	actorIsOwner := ctx.IsOwner || (ownerID != "" && ctx.UserID == ownerID)
 	botIsOwner := ownerID != "" && botID == ownerID
 
 	if !actorIsOwner && !memberHasPermission(actorMember, rolesByID, ctx.GuildID, ownerID, requiredPermission) {
-		return nil, core.NewCommandError(actorPermissionError, true)
+		return nil, &core.CommandError{Message: actorPermissionError, Ephemeral: true}
 	}
 	if !botIsOwner && !memberHasPermission(botMember, rolesByID, ctx.GuildID, ownerID, requiredPermission) {
-		return nil, core.NewCommandError(botPermissionError, true)
+		return nil, &core.CommandError{Message: botPermissionError, Ephemeral: true}
 	}
 
 	return &banContext{
@@ -463,14 +463,14 @@ func canModerateTarget(ctx *core.Context, actionCtx *banContext, targetID, actio
 
 func resolveConfiguredMuteRole(ctx *core.Context, actionCtx *banContext) (*discordgo.Role, string, error) {
 	if ctx == nil || ctx.Config == nil {
-		return nil, "", core.NewCommandError("Configuration is not available right now.", true)
+		return nil, "", &core.CommandError{Message: "Configuration is not available right now.", Ephemeral: true}
 	}
 	cfg := ctx.Config.Config()
 	if cfg == nil {
-		return nil, "", core.NewCommandError("Configuration is not available right now.", true)
+		return nil, "", &core.CommandError{Message: "Configuration is not available right now.", Ephemeral: true}
 	}
 	if !cfg.ResolveFeatures(ctx.GuildID).MuteRole {
-		return nil, "", core.NewCommandError("Mute role moderation is disabled for this server.", true)
+		return nil, "", &core.CommandError{Message: "Mute role moderation is disabled for this server.", Ephemeral: true}
 	}
 
 	roleID := ""
@@ -486,24 +486,24 @@ func resolveConfiguredMuteRole(ctx *core.Context, actionCtx *banContext) (*disco
 		}
 	}
 	if roleID == "" {
-		return nil, "", core.NewCommandError("Mute role is not configured for this server.", true)
+		return nil, "", &core.CommandError{Message: "Mute role is not configured for this server.", Ephemeral: true}
 	}
 	if actionCtx == nil {
-		return nil, roleID, core.NewCommandError("Mute role context is not available right now.", true)
+		return nil, roleID, &core.CommandError{Message: "Mute role context is not available right now.", Ephemeral: true}
 	}
 
 	role, ok := actionCtx.rolesByID[roleID]
 	if !ok || role == nil {
-		return nil, roleID, core.NewCommandError("Configured mute role is no longer available in this server.", true)
+		return nil, roleID, &core.CommandError{Message: "Configured mute role is no longer available in this server.", Ephemeral: true}
 	}
 	if role.Managed {
-		return nil, roleID, core.NewCommandError("Configured mute role is managed by an integration and cannot be assigned manually.", true)
+		return nil, roleID, &core.CommandError{Message: "Configured mute role is managed by an integration and cannot be assigned manually.", Ephemeral: true}
 	}
 	if !actionCtx.actorIsOwner && actionCtx.actorRolePos <= role.Position {
-		return nil, roleID, core.NewCommandError("Your highest role must stay above the configured mute role.", true)
+		return nil, roleID, &core.CommandError{Message: "Your highest role must stay above the configured mute role.", Ephemeral: true}
 	}
 	if !actionCtx.botIsOwner && actionCtx.botRolePos <= role.Position {
-		return nil, roleID, core.NewCommandError("My highest role must stay above the configured mute role.", true)
+		return nil, roleID, &core.CommandError{Message: "My highest role must stay above the configured mute role.", Ephemeral: true}
 	}
 	return role, roleID, nil
 }

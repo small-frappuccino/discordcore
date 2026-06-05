@@ -166,7 +166,7 @@ func TestModerationHealthRouteRejectsNonGETMethods(t *testing.T) {
 func newModerationHealthTestServer(t *testing.T) *Server {
 	t.Helper()
 
-	cm := files.NewMemoryConfigManager()
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	srv := NewServer("127.0.0.1:0", cm, nil)
 	if srv == nil {
 		t.Fatal("NewServer returned nil")

@@ -145,35 +145,6 @@ type Response struct {
 	Success   bool
 }
 
-// BaseHandler provides common functionality for all handlers
-type BaseHandler struct {
-	session       *discordgo.Session
-	configManager *files.ConfigManager
-}
-
-// NewBaseHandler news base handler.
-func NewBaseHandler(
-	session *discordgo.Session,
-	configManager *files.ConfigManager,
-) *BaseHandler {
-	return &BaseHandler{
-		session:       session,
-		configManager: configManager,
-	}
-}
-
-// GetSession returns the Discord session
-func (bh *BaseHandler) GetSession() *discordgo.Session {
-	return bh.session
-}
-
-// GetConfigManager returns the configuration manager
-func (bh *BaseHandler) GetConfigManager() *files.ConfigManager {
-	return bh.configManager
-}
-
-// GetAvatarCacheManager retorna o gerenciador de cache de avatar
-
 // CommandRegistry manages command registration and execution
 type CommandRegistry struct {
 	commands    map[string]Command
@@ -339,14 +310,6 @@ func (e *CommandError) CommandErrorCode() string {
 // Error errors.
 func (e *CommandError) Error() string {
 	return e.Message
-}
-
-// NewCommandError creates a new command error
-func NewCommandError(message string, ephemeral bool) *CommandError {
-	return &CommandError{
-		Message:   message,
-		Ephemeral: ephemeral,
-	}
 }
 
 // ValidationError represents validation errors

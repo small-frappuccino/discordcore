@@ -38,7 +38,7 @@ func rolePanelResponseBuilder(session *discordgo.Session, class rolePanelVisibil
 }
 
 func rolePanelDetailedCommandError(message string) error {
-	return core.NewCommandError(message, rolePanelVisibilityIsEphemeral(rolePanelVisibilityDetailedError))
+	return &core.CommandError{Message: message, Ephemeral: rolePanelVisibilityIsEphemeral(rolePanelVisibilityDetailedError)}
 }
 
 func rolePanelConfigurationResponseBuilder(session *discordgo.Session) *core.ResponseBuilder {

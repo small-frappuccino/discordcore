@@ -175,7 +175,14 @@ func buildAutomodWrapper(runtime *botRuntime, opts botRuntimeOptions, routerConf
 	if monitoringService != nil {
 		notifier = monitoringService.Notifier()
 	}
-	automodAdapters := task.NewNotificationAdapters(automodRouter, runtime.session, opts.configManager, opts.store, notifier)
+	automodAdapters := &task.NotificationAdapters{
+		Router:   automodRouter,
+		Session:  runtime.session,
+		Config:   opts.configManager,
+		Store:    opts.store,
+		Notifier: notifier,
+	}
+	automodAdapters.RegisterHandlers()
 	automodService.SetAdapters(automodAdapters)
 
 	return service.NewServiceWrapper(service.ServiceWrapperSpec{

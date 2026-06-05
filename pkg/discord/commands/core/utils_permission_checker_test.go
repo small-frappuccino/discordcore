@@ -62,7 +62,7 @@ func TestPermissionCheckerGetOwnerID_StoreWriteFailureKeepsRESTFallbackAndCache(
 		_ = json.NewEncoder(w).Encode(map[string]any{})
 	})
 
-	cfg := files.NewMemoryConfigManager()
+	cfg := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	checker := NewPermissionChecker(session, cfg)
 
 	// Failing store forces Get/SetGuildOwnerID errors, so REST is the only path.
@@ -123,7 +123,7 @@ func TestPermissionCheckerHasPermissionAllowsAdministratorRoleWithoutAllowedRole
 		t.Fatalf("member add: %v", err)
 	}
 
-	cfg := files.NewMemoryConfigManager()
+	cfg := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := cfg.AddGuildConfig(files.GuildConfig{GuildID: "g1"}); err != nil {
 		t.Fatalf("add guild config: %v", err)
 	}
@@ -158,7 +158,7 @@ func TestPermissionCheckerHasPermissionAllowsManageGuildWithoutAllowedRoles(t *t
 		t.Fatalf("member add: %v", err)
 	}
 
-	cfg := files.NewMemoryConfigManager()
+	cfg := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := cfg.AddGuildConfig(files.GuildConfig{GuildID: "g1"}); err != nil {
 		t.Fatalf("add guild config: %v", err)
 	}

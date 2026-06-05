@@ -90,7 +90,7 @@ func newIntegrationQOTDCommandTestRouterWithPublisher(
 	}
 	t.Cleanup(func() { _ = store.Close() })
 
-	cm := files.NewMemoryConfigManager()
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: guildID}); err != nil {
 		t.Fatalf("failed to add guild config: %v", err)
 	}

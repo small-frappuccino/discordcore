@@ -59,7 +59,7 @@ func TestCommandManagerSetupAndShutdownHandlerLifecycle(t *testing.T) {
 		_, _ = w.Write([]byte(`{}`))
 	})
 
-	cfgMgr := files.NewMemoryConfigManager()
+	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	cm := NewCommandManager(session, cfgMgr)
 
 	if err := cm.SetupCommands(); err != nil {
@@ -101,7 +101,7 @@ func TestCommandManagerSetupCommandsRollbackOnFetchError(t *testing.T) {
 		_, _ = w.Write([]byte(`{}`))
 	})
 
-	cfgMgr := files.NewMemoryConfigManager()
+	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	cm := NewCommandManager(session, cfgMgr)
 
 	err := cm.SetupCommands()
@@ -124,7 +124,7 @@ func TestCommandManagerSetupCommandsRequiresSessionUser(t *testing.T) {
 	session.State = discordgo.NewState()
 	session.State.User = nil
 
-	cfgMgr := files.NewMemoryConfigManager()
+	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	cm := NewCommandManager(session, cfgMgr)
 
 	err = cm.SetupCommands()
@@ -159,7 +159,7 @@ func TestCommandManagerSetupCommandsRollbackOnCreateError(t *testing.T) {
 		}
 	})
 
-	cfgMgr := files.NewMemoryConfigManager()
+	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	cm := NewCommandManager(session, cfgMgr)
 	cm.GetRouter().RegisterCommand(testCommand{name: "ping"})
 
@@ -199,7 +199,7 @@ func TestCommandManagerSetupCommandsUsesGlobalSyncWithoutDomainOverrides(t *test
 		}
 	})
 
-	cfgMgr := files.NewMemoryConfigManager()
+	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	cm := NewCommandManager(session, cfgMgr)
 	cm.GetRouter().RegisterCommand(testCommand{name: "ping"})
 
@@ -280,7 +280,7 @@ func TestCommandManagerSetupCommandsUsesGuildSyncWhenDomainOverridesExist(t *tes
 				}
 			})
 
-			cfgMgr := files.NewMemoryConfigManager()
+			cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 			if _, err := cfgMgr.UpdateConfig(func(cfg *files.BotConfig) error {
 				cfg.Guilds = []files.GuildConfig{{
 					GuildID:       "g1",
@@ -385,7 +385,7 @@ func TestCommandManagerSetupCommandsSkipsConfiguredGuildsMissingFromSessionState
 	})
 	session.State.Guilds = []*discordgo.Guild{{ID: "g1"}}
 
-	cfgMgr := files.NewMemoryConfigManager()
+	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if _, err := cfgMgr.UpdateConfig(func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
 			{
