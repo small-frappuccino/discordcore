@@ -39,7 +39,7 @@ export function EmbedSidebarList({
               key={emb.key}
               type="button"
               onClick={() => selectEmbed(emb)}
-              className={`px-4 py-2 rounded-md border text-sm font-medium transition-colors ${
+              className={`px-4 py-2 rounded-md border text-sm font-medium transition-all duration-200 ease-out active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 focus-visible:ring-offset-base ${
                 selectedEmbedKey === emb.key
                   ? "border-brand-500 bg-brand-500/10 text-white"
                   : "border-white/10 bg-white/5 text-muted hover:bg-white/10 hover:text-white"

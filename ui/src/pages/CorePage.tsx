@@ -8,11 +8,13 @@ export function CorePage() {
   return (
     <PageContainer>
       <Stack spacing="lg">
-        <PageHeader
-          title="Core Settings"
-          description="Global operational parameters and domain routing overrides."
-          badge={<Badge variant="success">Online</Badge>}
-        />
+        <PageHeader>
+          <PageHeader.TitleRow>
+            <PageHeader.Title>Core Settings</PageHeader.Title>
+            <Badge variant="success">Online</Badge>
+          </PageHeader.TitleRow>
+          <PageHeader.Description>Global operational parameters and domain routing overrides.</PageHeader.Description>
+        </PageHeader>
 
         {isLoading ? (
           <SettingsGroupSkeleton rows={2} />

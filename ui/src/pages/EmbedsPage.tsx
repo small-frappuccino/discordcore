@@ -25,11 +25,13 @@ export function EmbedsPage() {
   return (
     <PageContainer>
       <Stack spacing="lg">
-        <PageHeader 
-          title="Custom Embeds" 
-          description="Design and manage custom embeds for your server."
-          badge={<Badge variant="success">Active</Badge>}
-        />
+        <PageHeader>
+          <PageHeader.TitleRow>
+            <PageHeader.Title>Custom Embeds</PageHeader.Title>
+            <Badge variant="success">Active</Badge>
+          </PageHeader.TitleRow>
+          <PageHeader.Description>Design and manage custom embeds for your server.</PageHeader.Description>
+        </PageHeader>
 
         <Stack direction="horizontal" spacing="xl" align="start" className="h-full">
           {/* Left Pane: List & Editor */}
