@@ -12,7 +12,7 @@ import {
   FormProvider,
   FormInput,
 } from "../components/ui";
-import { Stack } from "../components/layout";
+import { Stack, Box } from "../components/layout";
 import { useModerationPageLogic } from "./hooks/useModerationPageLogic";
 
 export function ModerationPage() {
@@ -38,11 +38,13 @@ export function ModerationPage() {
       fallback={
         <PageContainer>
           <Stack spacing="xl">
-            <PageHeader
-              title="Moderation"
-              description="Configure AutoMod, Logging, and specific moderation roles."
-              badge={<Badge variant="neutral">Loading</Badge>}
-            />
+            <PageHeader>
+              <PageHeader.TitleRow>
+                <PageHeader.Title>Moderation</PageHeader.Title>
+                <Badge variant="neutral">Loading</Badge>
+              </PageHeader.TitleRow>
+              <PageHeader.Description>Configure AutoMod, Logging, and specific moderation roles.</PageHeader.Description>
+            </PageHeader>
             <Stack spacing="lg">
               <SettingsGroupSkeleton rows={2} />
               <Stack spacing="sm">
@@ -56,11 +58,13 @@ export function ModerationPage() {
     >
       <PageContainer>
         <Stack spacing="xl">
-          <PageHeader
-            title="Moderation"
-            description="Configure AutoMod, Logging, and specific moderation roles."
-            badge={<Badge variant="success">Active</Badge>}
-          />
+          <PageHeader>
+            <PageHeader.TitleRow>
+              <PageHeader.Title>Moderation</PageHeader.Title>
+              <Badge variant="success">Active</Badge>
+            </PageHeader.TitleRow>
+            <PageHeader.Description>Configure AutoMod, Logging, and specific moderation roles.</PageHeader.Description>
+          </PageHeader>
 
           <SurfaceCard>
             <Stack spacing="xl">
@@ -95,7 +99,7 @@ export function ModerationPage() {
                 </SettingsRow>
               </SettingsGroup>
               
-              <fieldset disabled={isSaving} className="border-none p-0 m-0 min-w-0">
+              <Box as="fieldset" disabled={isSaving} p="none" m="none" className="border-none min-w-0">
                 <FormProvider {...form}>
                   <Stack as="form" onSubmit={onSubmit} spacing="lg">
                   <Stack spacing="sm">
@@ -124,7 +128,7 @@ export function ModerationPage() {
                   </Stack>
                   </Stack>
                 </FormProvider>
-              </fieldset>
+              </Box>
             </Stack>
           </SurfaceCard>
         </Stack>

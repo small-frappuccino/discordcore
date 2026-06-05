@@ -1,12 +1,13 @@
 import * as React from "react";
 import { cn } from "../../../lib/utils";
 import { Slot } from "../Slot/Slot";
+import { Box, BoxProps } from "../../layout";
 
-export interface SettingsRowRootProps extends React.HTMLAttributes<HTMLDivElement> {
+export interface SettingsRowProps extends BoxProps {
   asChild?: boolean;
 }
 
-function SettingsRowRoot({ className, asChild, children, ...props }: SettingsRowRootProps) {
+function SettingsRowRoot({ className, asChild, children, ...props }: SettingsRowProps) {
   if (asChild) {
     return (
       <Slot 
@@ -18,44 +19,76 @@ function SettingsRowRoot({ className, asChild, children, ...props }: SettingsRow
     );
   }
   return (
-    <div 
+    <Box 
       className={cn("settings-row", className)} 
       {...props}
     >
       {children}
-    </div>
+    </Box>
   );
 }
 
-function SettingsRowInfo({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+export interface SettingsRowSubComponentProps extends BoxProps {
+  asChild?: boolean;
+}
+
+function SettingsRowInfo({ className, asChild, children, ...props }: SettingsRowSubComponentProps) {
+  if (asChild) {
+    return (
+      <Slot className={cn("settings-row-info", className)} {...props}>
+        {children}
+      </Slot>
+    );
+  }
   return (
-    <div className={cn("settings-row-info", className)} {...props}>
+    <Box className={cn("settings-row-info", className)} {...props}>
       {children}
-    </div>
+    </Box>
   );
 }
 
-function SettingsRowTitle({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+function SettingsRowTitle({ className, asChild, children, ...props }: SettingsRowSubComponentProps) {
+  if (asChild) {
+    return (
+      <Slot className={cn("settings-row-title text-base font-medium text-text-primary", className)} {...props}>
+        {children}
+      </Slot>
+    );
+  }
   return (
-    <div className={cn("settings-row-title", className)} {...props}>
+    <Box className={cn("settings-row-title text-base font-medium text-text-primary", className)} {...props}>
       {children}
-    </div>
+    </Box>
   );
 }
 
-function SettingsRowDescription({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+function SettingsRowDescription({ className, asChild, children, ...props }: SettingsRowSubComponentProps) {
+  if (asChild) {
+    return (
+      <Slot className={cn("settings-row-desc text-sm text-text-secondary mt-1", className)} {...props}>
+        {children}
+      </Slot>
+    );
+  }
   return (
-    <div className={cn("settings-row-desc", className)} {...props}>
+    <Box className={cn("settings-row-desc text-sm text-text-secondary mt-1", className)} {...props}>
       {children}
-    </div>
+    </Box>
   );
 }
 
-function SettingsRowControl({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+function SettingsRowControl({ className, asChild, children, ...props }: SettingsRowSubComponentProps) {
+  if (asChild) {
+    return (
+      <Slot className={cn("settings-row-control flex items-center shrink-0 ml-4", className)} {...props}>
+        {children}
+      </Slot>
+    );
+  }
   return (
-    <div className={cn("settings-row-control", className)} {...props}>
+    <Box className={cn("settings-row-control flex items-center shrink-0 ml-4", className)} {...props}>
       {children}
-    </div>
+    </Box>
   );
 }
 

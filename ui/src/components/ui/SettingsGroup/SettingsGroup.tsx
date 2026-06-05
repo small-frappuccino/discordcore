@@ -1,12 +1,13 @@
 import * as React from "react";
 import { cn } from "../../../lib/utils";
+import { Stack, StackProps } from "../../layout";
 
-export const SettingsGroup = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, children, ...props }, ref) => {
+export const SettingsGroup = React.forwardRef<HTMLElement, StackProps>(
+  ({ className, children, spacing = "md", ...props }, ref) => {
     return (
-      <div ref={ref} className={cn("settings-group animate-in fade-in slide-in-from-bottom-2 duration-300 ease-out", className)} {...props}>
+      <Stack ref={ref} className={cn("settings-group animate-in fade-in slide-in-from-bottom-2 duration-300 ease-out", className)} spacing={spacing} {...props}>
         {children}
-      </div>
+      </Stack>
     );
   }
 );

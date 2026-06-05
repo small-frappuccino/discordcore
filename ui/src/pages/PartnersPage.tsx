@@ -65,11 +65,13 @@ export function PartnersPage() {
   return (
     <PageContainer>
       <Stack as="form" spacing="xl" onSubmit={onSubmit}>
-        <PageHeader
-          title="Partner Board"
-          description="Design how your automated partner board renders."
-          badge={<Badge variant="success">Active</Badge>}
-        />
+        <PageHeader>
+          <PageHeader.TitleRow>
+            <PageHeader.Title>Partner Board</PageHeader.Title>
+            <Badge variant="success">Active</Badge>
+          </PageHeader.TitleRow>
+          <PageHeader.Description>Design how your automated partner board renders.</PageHeader.Description>
+        </PageHeader>
 
         {isLoading ? (
           <SettingsGroupSkeleton rows={12} />

@@ -1,18 +1,34 @@
 import * as React from "react";
 import { cn } from "../../lib/utils";
+import { Box, BoxProps } from "./Box";
+import { ResponsiveProp, SpacingToken, resolveSpacing } from "../../lib/layout-utils";
 
-export interface StackProps extends React.HTMLAttributes<HTMLElement> {
-  as?: React.ElementType;
-  direction?: "vertical" | "horizontal";
-  spacing?: "none" | "xs" | "sm" | "md" | "lg" | "xl" | "2xl";
+export interface StackProps extends BoxProps {
+  direction?: "vertical" | "horizontal" | { base?: "vertical" | "horizontal", sm?: "vertical" | "horizontal", md?: "vertical" | "horizontal", lg?: "vertical" | "horizontal", xl?: "vertical" | "horizontal" };
+  spacing?: ResponsiveProp<SpacingToken>;
   align?: "start" | "center" | "end" | "stretch";
   justify?: "start" | "center" | "end" | "between";
+}
+
+// Since direction mapping isn't as trivial (flex-col vs flex-row), we can handle string vs object here
+function resolveDirection(direction: StackProps["direction"]) {
+  if (!direction) return "";
+  if (typeof direction === "string") {
+    return direction === "vertical" ? "flex-col" : "flex-row";
+  }
+  const classes: string[] = [];
+  if (direction.base) classes.push(direction.base === "vertical" ? "flex-col" : "flex-row");
+  if (direction.sm) classes.push(direction.sm === "vertical" ? "sm:flex-col" : "sm:flex-row");
+  if (direction.md) classes.push(direction.md === "vertical" ? "md:flex-col" : "md:flex-row");
+  if (direction.lg) classes.push(direction.lg === "vertical" ? "lg:flex-col" : "lg:flex-row");
+  if (direction.xl) classes.push(direction.xl === "vertical" ? "xl:flex-col" : "xl:flex-row");
+  return classes.join(" ");
 }
 
 export const Stack = React.forwardRef<HTMLElement, StackProps>(
   (
     {
-      as: Component = "div",
+      as = "div",
       direction = "vertical",
       spacing = "md",
       align,
@@ -24,20 +40,13 @@ export const Stack = React.forwardRef<HTMLElement, StackProps>(
     ref
   ) => {
     return (
-      <Component
+      <Box
+        as={as}
         ref={ref}
         className={cn(
           "flex",
-          direction === "vertical" ? "flex-col" : "flex-row",
-          {
-            "gap-0": spacing === "none",
-            "gap-1": spacing === "xs",
-            "gap-2": spacing === "sm",
-            "gap-4": spacing === "md",
-            "gap-6": spacing === "lg",
-            "gap-8": spacing === "xl",
-            "gap-12": spacing === "2xl",
-          },
+          resolveDirection(direction),
+          resolveSpacing(spacing, "gap"),
           align === "start" && "items-start",
           align === "center" && "items-center",
           align === "end" && "items-end",
@@ -51,7 +60,7 @@ export const Stack = React.forwardRef<HTMLElement, StackProps>(
         {...props}
       >
         {children}
-      </Component>
+      </Box>
     );
   }
 );

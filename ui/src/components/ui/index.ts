@@ -11,6 +11,5 @@ export * from "./Skeleton/SettingsGroupSkeleton";
 export * from "./Select/Select";
 export * from "./Slot/Slot";
 export * from "./FormControl/FormControl";
-export * from "./TransitionState/TransitionState";
 export * from "./Form/FormFields";
 export { FormProvider } from "react-hook-form";
