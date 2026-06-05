@@ -9,6 +9,8 @@ import {
   SettingsGroupSkeleton,
   FormControl,
   TransitionState,
+  FormProvider,
+  FormInput,
 } from "../components/ui";
 import { Stack } from "../components/layout";
 import { useModerationPageLogic } from "./hooks/useModerationPageLogic";
@@ -94,7 +96,8 @@ export function ModerationPage() {
               </SettingsGroup>
               
               <fieldset disabled={isSaving} className="border-none p-0 m-0 min-w-0">
-                <Stack as="form" onSubmit={onSubmit} spacing="lg">
+                <FormProvider {...form}>
+                  <Stack as="form" onSubmit={onSubmit} spacing="lg">
                   <Stack spacing="sm">
                     <h3 className="text-lg">Roles Config</h3>
                     <SettingsGroup>
@@ -105,11 +108,9 @@ export function ModerationPage() {
                         </SettingsRow.Info>
                         <SettingsRow.Control>
                           <FormControl asChild>
-                            <input
-                              type="text"
-                              {...form.register("mute_role")}
+                            <FormInput
+                              name="mute_role"
                               placeholder="Role ID..."
-                              className="form-input"
                             />
                           </FormControl>
                         </SettingsRow.Control>
@@ -121,7 +122,8 @@ export function ModerationPage() {
                       {isSaving ? "Saving..." : "Save Mute Role"}
                     </Button>
                   </Stack>
-                </Stack>
+                  </Stack>
+                </FormProvider>
               </fieldset>
             </Stack>
           </SurfaceCard>

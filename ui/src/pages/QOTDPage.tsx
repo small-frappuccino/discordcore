@@ -1,4 +1,4 @@
-import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, PageContainer, SettingsGroupSkeleton, FormControl, TransitionState } from "../components/ui";
+import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, PageContainer, SettingsGroupSkeleton, FormControl, TransitionState, FormProvider, FormSelect, FormInput } from "../components/ui";
 import { Stack, Cluster } from "../components/layout";
 import { useQOTDPageLogic } from "./hooks/useQOTDPageLogic";
 
@@ -36,7 +36,8 @@ export function QOTDPage() {
     >
       <PageContainer>
         <fieldset disabled={isSaving} className="border-none p-0 m-0 min-w-0">
-          <Stack as="form" spacing="xl" onSubmit={onSubmit}>
+          <FormProvider {...form}>
+            <Stack as="form" spacing="xl" onSubmit={onSubmit}>
             <PageHeader 
               title="Question of the Day" 
               description="Configure the automated QOTD system. When enabled, the bot will pick a question from the active deck and publish it daily."
@@ -55,15 +56,12 @@ export function QOTDPage() {
                   </SettingsRow.Info>
                   <SettingsRow.Control>
                     <FormControl asChild>
-                      <select 
-                        {...form.register("active_deck_id")}
-                        className="form-select"
-                      >
+                      <FormSelect name="active_deck_id">
                         <option value="">-- No Active Deck --</option>
                         {config.decks?.map(d => (
                           <option key={d.id} value={d.id}>{d.name}</option>
                         ))}
-                      </select>
+                      </FormSelect>
                     </FormControl>
                   </SettingsRow.Control>
                 </SettingsRow>
@@ -74,11 +72,9 @@ export function QOTDPage() {
                   </SettingsRow.Info>
                   <SettingsRow.Control>
                     <FormControl asChild>
-                      <input
-                        type="text"
+                      <FormInput
+                        name="verified_role_id"
                         placeholder="Role ID..."
-                        {...form.register("verified_role_id")}
-                        className="form-input"
                       />
                     </FormControl>
                   </SettingsRow.Control>
@@ -96,20 +92,22 @@ export function QOTDPage() {
                   </SettingsRow.Info>
                   <SettingsRow.Control>
                     <Cluster spacing="sm" align="center">
-                      <input
+                      <FormInput
                         type="number"
                         min="0"
                         max="23"
-                        {...form.register("schedule.hour_utc", { valueAsNumber: true })}
-                        className="form-input w-16"
+                        name="schedule.hour_utc"
+                        rules={{ valueAsNumber: true }}
+                        className="w-16"
                       />
                       <span className="text-muted">:</span>
-                      <input
+                      <FormInput
                         type="number"
                         min="0"
                         max="59"
-                        {...form.register("schedule.minute_utc", { valueAsNumber: true })}
-                        className="form-input w-16"
+                        name="schedule.minute_utc"
+                        rules={{ valueAsNumber: true }}
+                        className="w-16"
                       />
                     </Cluster>
                   </SettingsRow.Control>
@@ -126,7 +124,8 @@ export function QOTDPage() {
         ) : (
           <p className="text-muted">Failed to load QOTD settings.</p>
             )}
-          </Stack>
+            </Stack>
+          </FormProvider>
         </fieldset>
       </PageContainer>
     </TransitionState>

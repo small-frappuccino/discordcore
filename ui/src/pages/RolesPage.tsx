@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, PageContainer, Skeleton, Select, SettingsGroupSkeleton, FormControl, TransitionState } from "../components/ui";
+import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, PageContainer, Skeleton, SettingsGroupSkeleton, FormControl, TransitionState, FormProvider, FormSelect, FormCheckbox } from "../components/ui";
 import { Stack } from "../components/layout";
 import { useRolesPageLogic } from "./hooks/useRolesPageLogic";
 
@@ -50,7 +50,8 @@ export function RolesPage() {
     >
       <PageContainer>
         <fieldset disabled={isSaving} className="border-none p-0 m-0 min-w-0">
-          <Stack as="form" spacing="lg" onSubmit={onSubmit}>
+          <FormProvider {...form}>
+            <Stack as="form" spacing="lg" onSubmit={onSubmit}>
         <PageHeader 
           title="Roles Configuration" 
           description="Manage which roles grant dashboard access, and configure server-wide specific roles like AutoAssignment, Mute, and Booster."
@@ -67,9 +68,9 @@ export function RolesPage() {
               </SettingsRow.Info>
               <SettingsRow.Control>
                 <FormControl asChild>
-                  <Select multiple {...form.register("dashboard_read")}>
+                  <FormSelect multiple name="dashboard_read">
                     {roleOptions}
-                  </Select>
+                  </FormSelect>
                 </FormControl>
               </SettingsRow.Control>
             </SettingsRow>
@@ -80,9 +81,9 @@ export function RolesPage() {
               </SettingsRow.Info>
               <SettingsRow.Control>
                 <FormControl asChild>
-                  <Select multiple {...form.register("dashboard_write")}>
+                  <FormSelect multiple name="dashboard_write">
                     {roleOptions}
-                  </Select>
+                  </FormSelect>
                 </FormControl>
               </SettingsRow.Control>
             </SettingsRow>
@@ -98,11 +99,7 @@ export function RolesPage() {
                 <SettingsRow.Description>Automatically assign the target role to users that have required roles</SettingsRow.Description>
               </SettingsRow.Info>
               <SettingsRow.Control>
-                <input 
-                  type="checkbox" 
-                  className="form-checkbox"
-                  {...form.register("auto_assignment.enabled")}
-                />
+                <FormCheckbox name="auto_assignment.enabled" />
               </SettingsRow.Control>
             </SettingsRow>
             <SettingsRow>
@@ -112,10 +109,10 @@ export function RolesPage() {
               </SettingsRow.Info>
               <SettingsRow.Control>
                 <FormControl asChild>
-                  <Select {...form.register("auto_assignment.target_role")}>
+                  <FormSelect name="auto_assignment.target_role">
                     <option value="">-- None --</option>
                     {roleOptions}
-                  </Select>
+                  </FormSelect>
                 </FormControl>
               </SettingsRow.Control>
             </SettingsRow>
@@ -126,9 +123,9 @@ export function RolesPage() {
               </SettingsRow.Info>
               <SettingsRow.Control>
                 <FormControl asChild>
-                  <Select multiple {...form.register("auto_assignment.required_roles")}>
+                  <FormSelect multiple name="auto_assignment.required_roles">
                     {roleOptions}
-                  </Select>
+                  </FormSelect>
                 </FormControl>
               </SettingsRow.Control>
             </SettingsRow>
@@ -145,10 +142,10 @@ export function RolesPage() {
               </SettingsRow.Info>
               <SettingsRow.Control>
                 <FormControl asChild>
-                  <Select {...form.register("mute_role")}>
+                  <FormSelect name="mute_role">
                     <option value="">-- None --</option>
                     {roleOptions}
-                  </Select>
+                  </FormSelect>
                 </FormControl>
               </SettingsRow.Control>
             </SettingsRow>
@@ -159,10 +156,10 @@ export function RolesPage() {
               </SettingsRow.Info>
               <SettingsRow.Control>
                 <FormControl asChild>
-                  <Select {...form.register("booster_role")}>
+                  <FormSelect name="booster_role">
                     <option value="">-- None --</option>
                     {roleOptions}
-                  </Select>
+                  </FormSelect>
                 </FormControl>
               </SettingsRow.Control>
             </SettingsRow>
@@ -174,7 +171,8 @@ export function RolesPage() {
             Save Changes
           </Button>
         </Stack>
-          </Stack>
+            </Stack>
+          </FormProvider>
         </fieldset>
       </PageContainer>
     </TransitionState>

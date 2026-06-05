@@ -1,4 +1,4 @@
-import { Button, SettingsGroupSkeleton, SurfaceCard, SettingsGroup, SettingsRow, FormControl, TransitionState } from "../../components/ui";
+import { Button, SettingsGroupSkeleton, SurfaceCard, SettingsGroup, SettingsRow, FormControl, TransitionState, FormProvider, FormInput } from "../../components/ui";
 import { useTicketsSettingsLogic } from "./hooks/useTicketsSettingsLogic";
 
 export function TicketsSettingsPage() {
@@ -28,7 +28,8 @@ export function TicketsSettingsPage() {
         </div>
 
         <fieldset disabled={isSaving} className="border-none p-0 m-0 min-w-0">
-          <form onSubmit={onSubmit} className="space-y-8">
+          <FormProvider {...form}>
+            <form onSubmit={onSubmit} className="space-y-8">
           <SurfaceCard className="p-6">
             <h3 className="text-lg font-semibold tracking-tight mb-6">Core System</h3>
             <SettingsGroup>
@@ -61,18 +62,11 @@ export function TicketsSettingsPage() {
                 </SettingsRow.Info>
                 <SettingsRow.Control>
                   <FormControl asChild>
-                    <input
-                      type="text"
-                      {...form.register("automation.transcriptChannelId" as const)}
-                      className="form-input"
+                    <FormInput
+                      name="automation.transcriptChannelId"
                       placeholder="Discord Channel ID"
                     />
                   </FormControl>
-                  {form.formState.errors?.automation?.transcriptChannelId && (
-                    <p className="text-red-500 text-xs mt-1">
-                      {form.formState.errors.automation.transcriptChannelId.message as string}
-                    </p>
-                  )}
                 </SettingsRow.Control>
               </SettingsRow>
 
@@ -82,17 +76,13 @@ export function TicketsSettingsPage() {
                   <SettingsRow.Description>Automatically close the ticket if no one sends a message for this long. Set to 0 to disable.</SettingsRow.Description>
                 </SettingsRow.Info>
                 <SettingsRow.Control>
-                  <input
+                  <FormInput
                     type="number"
                     min="0"
-                    {...form.register("automation.autoCloseTimerHours" as const, { valueAsNumber: true })}
-                    className="form-input w-24"
+                    name="automation.autoCloseTimerHours"
+                    rules={{ valueAsNumber: true }}
+                    className="w-24"
                   />
-                  {form.formState.errors?.automation?.autoCloseTimerHours && (
-                    <p className="text-red-500 text-xs mt-1">
-                      {form.formState.errors.automation.autoCloseTimerHours.message as string}
-                    </p>
-                  )}
                 </SettingsRow.Control>
               </SettingsRow>
 
@@ -102,17 +92,13 @@ export function TicketsSettingsPage() {
                   <SettingsRow.Description>Ping the ticket creator with a warning before auto-closing. Set to 0 to disable.</SettingsRow.Description>
                 </SettingsRow.Info>
                 <SettingsRow.Control>
-                  <input
+                  <FormInput
                     type="number"
                     min="0"
-                    {...form.register("automation.inactivityWarningHours" as const, { valueAsNumber: true })}
-                    className="form-input w-24"
+                    name="automation.inactivityWarningHours"
+                    rules={{ valueAsNumber: true }}
+                    className="w-24"
                   />
-                  {form.formState.errors?.automation?.inactivityWarningHours && (
-                    <p className="text-red-500 text-xs mt-1">
-                      {form.formState.errors.automation.inactivityWarningHours.message as string}
-                    </p>
-                  )}
                 </SettingsRow.Control>
               </SettingsRow>
             </SettingsGroup>
@@ -123,7 +109,8 @@ export function TicketsSettingsPage() {
               {isSaving ? "Saving..." : "Save Settings"}
             </Button>
           </div>
-          </form>
+            </form>
+          </FormProvider>
         </fieldset>
       </div>
     </TransitionState>
