@@ -23,39 +23,41 @@ export function EmbedsPage() {
 
   return (
     <PageContainer>
-      <PageHeader 
-        title="Custom Embeds" 
-        description="Design and manage custom embeds for your server."
-        badge={<Badge variant="success">Active</Badge>}
-      />
+      <div className="flex flex-col gap-6">
+        <PageHeader 
+          title="Custom Embeds" 
+          description="Design and manage custom embeds for your server."
+          badge={<Badge variant="success">Active</Badge>}
+        />
 
-      <div className="mt-8 flex gap-8 h-full items-start">
-        {/* Left Pane: List & Editor */}
-        <div className="flex-1 flex flex-col gap-6">
-          <EmbedSidebarList
-            isLoading={isLoading}
-            embeds={embeds}
-            selectedEmbedKey={selectedEmbedKey}
-            selectEmbed={selectEmbed}
-            createNewEmbed={createNewEmbed}
-          />
+        <div className="flex gap-8 h-full items-start">
+          {/* Left Pane: List & Editor */}
+          <div className="flex-1 flex flex-col gap-6">
+            <EmbedSidebarList
+              isLoading={isLoading}
+              embeds={embeds}
+              selectedEmbedKey={selectedEmbedKey}
+              selectEmbed={selectEmbed}
+              createNewEmbed={createNewEmbed}
+            />
 
-          <EmbedEditorForm
-            form={form}
-            customFields={customFields}
-            appendField={appendField}
-            removeField={removeField}
-            onSubmit={onSubmit}
-            isSaving={isSaving}
-            isDeleting={isDeleting}
-            deleteEmbed={deleteEmbed}
-            selectedEmbedKey={selectedEmbedKey}
-            activeEmbedDataKey={form.getValues("key")}
-          />
+            <EmbedEditorForm
+              form={form}
+              customFields={customFields}
+              appendField={appendField}
+              removeField={removeField}
+              onSubmit={onSubmit}
+              isSaving={isSaving}
+              isDeleting={isDeleting}
+              deleteEmbed={deleteEmbed}
+              selectedEmbedKey={selectedEmbedKey}
+              activeEmbedDataKey={form.getValues("key")}
+            />
+          </div>
+
+          {/* Right Pane: Live Preview */}
+          <EmbedLivePreview control={form.control} />
         </div>
-
-        {/* Right Pane: Live Preview */}
-        <EmbedLivePreview control={form.control} />
       </div>
     </PageContainer>
   );
