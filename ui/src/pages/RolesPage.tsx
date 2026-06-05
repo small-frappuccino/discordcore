@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, PageContainer, Skeleton, Select, SettingsGroupSkeleton } from "../components/ui";
+import { Stack } from "../components/layout";
 import { useRolesPageLogic } from "./hooks/useRolesPageLogic";
 
 export function RolesPage() {
@@ -23,40 +24,40 @@ export function RolesPage() {
   if (isLoading) {
     return (
       <PageContainer>
-        <div className="flex flex-col gap-6">
+        <Stack spacing="lg">
           <PageHeader 
             title="Roles Configuration" 
             description="Manage which roles grant dashboard access, and configure server-wide specific roles like AutoAssignment, Mute, and Booster."
             badge={<Badge variant="success">Active</Badge>}
           />
-          <div>
-            <Skeleton className="h-6 w-48 mb-2" />
+          <Stack spacing="sm">
+            <Skeleton className="h-6 w-48" />
             <SettingsGroupSkeleton rows={2} />
-          </div>
-          <div>
-            <Skeleton className="h-6 w-48 mb-2" />
+          </Stack>
+          <Stack spacing="sm">
+            <Skeleton className="h-6 w-48" />
             <SettingsGroupSkeleton rows={3} />
-          </div>
-          <div>
-            <Skeleton className="h-6 w-48 mb-2" />
+          </Stack>
+          <Stack spacing="sm">
+            <Skeleton className="h-6 w-48" />
             <SettingsGroupSkeleton rows={2} />
-          </div>
-        </div>
+          </Stack>
+        </Stack>
       </PageContainer>
     );
   }
 
   return (
     <PageContainer>
-      <form className="flex flex-col gap-6" onSubmit={onSubmit}>
+      <Stack as="form" spacing="lg" onSubmit={onSubmit}>
         <PageHeader 
           title="Roles Configuration" 
           description="Manage which roles grant dashboard access, and configure server-wide specific roles like AutoAssignment, Mute, and Booster."
           badge={<Badge variant="success">Active</Badge>}
         />
 
-        <div>
-          <h2 className="text-lg mb-2 font-semibold tracking-tight text-text-primary">Dashboard Access</h2>
+        <Stack spacing="sm">
+          <h2 className="text-lg font-semibold tracking-tight text-text-primary">Dashboard Access</h2>
           <SettingsGroup>
             <SettingsRow>
               <SettingsRow.Info>
@@ -81,10 +82,10 @@ export function RolesPage() {
               </SettingsRow.Control>
             </SettingsRow>
           </SettingsGroup>
-        </div>
+        </Stack>
 
-        <div>
-          <h2 className="text-lg mb-2 font-semibold tracking-tight text-text-primary">Auto Assignment</h2>
+        <Stack spacing="sm">
+          <h2 className="text-lg font-semibold tracking-tight text-text-primary">Auto Assignment</h2>
           <SettingsGroup>
             <SettingsRow>
               <SettingsRow.Info>
@@ -123,10 +124,10 @@ export function RolesPage() {
               </SettingsRow.Control>
             </SettingsRow>
           </SettingsGroup>
-        </div>
+        </Stack>
 
-        <div>
-          <h2 className="text-lg mb-2 font-semibold tracking-tight text-text-primary">Special Roles</h2>
+        <Stack spacing="sm">
+          <h2 className="text-lg font-semibold tracking-tight text-text-primary">Special Roles</h2>
           <SettingsGroup>
             <SettingsRow>
               <SettingsRow.Info>
@@ -153,14 +154,14 @@ export function RolesPage() {
               </SettingsRow.Control>
             </SettingsRow>
           </SettingsGroup>
-        </div>
+        </Stack>
 
-        <div className="flex items-center gap-2">
+        <Stack direction="horizontal" spacing="sm" align="center">
           <Button variant="primary" type="submit" isLoading={isSaving}>
             Save Changes
           </Button>
-        </div>
-      </form>
+        </Stack>
+      </Stack>
     </PageContainer>
   );
 }

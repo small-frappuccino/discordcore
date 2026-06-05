@@ -8,6 +8,7 @@ import {
   PageContainer,
   SettingsGroupSkeleton,
 } from "../components/ui";
+import { Stack } from "../components/layout";
 import { useModerationPageLogic } from "./hooks/useModerationPageLogic";
 
 export function ModerationPage() {
@@ -29,77 +30,85 @@ export function ModerationPage() {
 
   return (
     <PageContainer>
-      <PageHeader
-        title="Moderation"
-        description="Configure AutoMod, Logging, and specific moderation roles."
-        badge={<Badge variant="success">Active</Badge>}
-      />
+      <Stack spacing="xl">
+        <PageHeader
+          title="Moderation"
+          description="Configure AutoMod, Logging, and specific moderation roles."
+          badge={<Badge variant="success">Active</Badge>}
+        />
 
-      {isLoading ? (
-        <div className="mt-8">
-          <SettingsGroupSkeleton rows={2} />
-          <h3 className="mb-4 mt-8 text-lg">Roles Config</h3>
-          <SettingsGroupSkeleton rows={1} />
-        </div>
-      ) : (
-        <SurfaceCard className="mt-8">
-          <SettingsGroup>
-            <SettingsRow>
-              <SettingsRow.Info>
-                <SettingsRow.Title>AutoMod Engine</SettingsRow.Title>
-                <SettingsRow.Description>Automatically detect and block forbidden content.</SettingsRow.Description>
-              </SettingsRow.Info>
-              <SettingsRow.Control>
-                <Button
-                  variant={automodEnabled ? "danger" : "primary"}
-                  onClick={handleToggleAutomod}
-                >
-                  {automodEnabled ? "Disable" : "Enable"}
-                </Button>
-              </SettingsRow.Control>
-            </SettingsRow>
-            <SettingsRow>
-              <SettingsRow.Info>
-                <SettingsRow.Title>Audit Logging</SettingsRow.Title>
-                <SettingsRow.Description>Log moderation actions and deleted messages to a dedicated channel.</SettingsRow.Description>
-              </SettingsRow.Info>
-              <SettingsRow.Control>
-                <Button
-                  variant={loggingEnabled ? "danger" : "primary"}
-                  onClick={handleToggleLogging}
-                >
-                  {loggingEnabled ? "Disable" : "Enable"}
-                </Button>
-              </SettingsRow.Control>
-            </SettingsRow>
-          </SettingsGroup>
-          
-          <form onSubmit={onSubmit} className="mt-8">
-            <h3 className="mb-4 text-lg">Roles Config</h3>
-            <SettingsGroup>
-              <SettingsRow>
-                <SettingsRow.Info>
-                  <SettingsRow.Title>Mute Role</SettingsRow.Title>
-                  <SettingsRow.Description>Role assigned when a user is muted.</SettingsRow.Description>
-                </SettingsRow.Info>
-                <SettingsRow.Control>
-                  <input
-                    type="text"
-                    {...form.register("mute_role")}
-                    placeholder="Role ID..."
-                    className="form-input w-full max-w-xs"
-                  />
-                </SettingsRow.Control>
-              </SettingsRow>
-            </SettingsGroup>
-            <div className="mt-4">
-              <Button variant="primary" type="submit" disabled={isSaving}>
-                {isSaving ? "Saving..." : "Save Mute Role"}
-              </Button>
-            </div>
-          </form>
-        </SurfaceCard>
-      )}
+        {isLoading ? (
+          <Stack spacing="lg">
+            <SettingsGroupSkeleton rows={2} />
+            <Stack spacing="sm">
+              <h3 className="text-lg">Roles Config</h3>
+              <SettingsGroupSkeleton rows={1} />
+            </Stack>
+          </Stack>
+        ) : (
+          <SurfaceCard>
+            <Stack spacing="xl">
+              <SettingsGroup>
+                <SettingsRow>
+                  <SettingsRow.Info>
+                    <SettingsRow.Title>AutoMod Engine</SettingsRow.Title>
+                    <SettingsRow.Description>Automatically detect and block forbidden content.</SettingsRow.Description>
+                  </SettingsRow.Info>
+                  <SettingsRow.Control>
+                    <Button
+                      variant={automodEnabled ? "danger" : "primary"}
+                      onClick={handleToggleAutomod}
+                    >
+                      {automodEnabled ? "Disable" : "Enable"}
+                    </Button>
+                  </SettingsRow.Control>
+                </SettingsRow>
+                <SettingsRow>
+                  <SettingsRow.Info>
+                    <SettingsRow.Title>Audit Logging</SettingsRow.Title>
+                    <SettingsRow.Description>Log moderation actions and deleted messages to a dedicated channel.</SettingsRow.Description>
+                  </SettingsRow.Info>
+                  <SettingsRow.Control>
+                    <Button
+                      variant={loggingEnabled ? "danger" : "primary"}
+                      onClick={handleToggleLogging}
+                    >
+                      {loggingEnabled ? "Disable" : "Enable"}
+                    </Button>
+                  </SettingsRow.Control>
+                </SettingsRow>
+              </SettingsGroup>
+              
+              <Stack as="form" onSubmit={onSubmit} spacing="lg">
+                <Stack spacing="sm">
+                  <h3 className="text-lg">Roles Config</h3>
+                  <SettingsGroup>
+                    <SettingsRow>
+                      <SettingsRow.Info>
+                        <SettingsRow.Title>Mute Role</SettingsRow.Title>
+                        <SettingsRow.Description>Role assigned when a user is muted.</SettingsRow.Description>
+                      </SettingsRow.Info>
+                      <SettingsRow.Control>
+                        <input
+                          type="text"
+                          {...form.register("mute_role")}
+                          placeholder="Role ID..."
+                          className="form-input w-full max-w-xs"
+                        />
+                      </SettingsRow.Control>
+                    </SettingsRow>
+                  </SettingsGroup>
+                </Stack>
+                <Stack direction="horizontal">
+                  <Button variant="primary" type="submit" disabled={isSaving}>
+                    {isSaving ? "Saving..." : "Save Mute Role"}
+                  </Button>
+                </Stack>
+              </Stack>
+            </Stack>
+          </SurfaceCard>
+        )}
+      </Stack>
     </PageContainer>
   );
 }

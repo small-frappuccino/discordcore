@@ -1,4 +1,5 @@
 import { PageHeader, Badge, PageContainer } from "../components/ui";
+import { Stack } from "../components/layout";
 import { useEmbedsPageLogic } from "./hooks/useEmbedsPageLogic";
 import { EmbedSidebarList } from "./components/EmbedSidebarList";
 import { EmbedEditorForm } from "./components/EmbedEditorForm";
@@ -23,16 +24,16 @@ export function EmbedsPage() {
 
   return (
     <PageContainer>
-      <div className="flex flex-col gap-6">
+      <Stack spacing="lg">
         <PageHeader 
           title="Custom Embeds" 
           description="Design and manage custom embeds for your server."
           badge={<Badge variant="success">Active</Badge>}
         />
 
-        <div className="flex gap-8 h-full items-start">
+        <Stack direction="horizontal" spacing="xl" align="start" className="h-full">
           {/* Left Pane: List & Editor */}
-          <div className="flex-1 flex flex-col gap-6">
+          <Stack spacing="lg" className="flex-1">
             <EmbedSidebarList
               isLoading={isLoading}
               embeds={embeds}
@@ -53,12 +54,12 @@ export function EmbedsPage() {
               selectedEmbedKey={selectedEmbedKey}
               activeEmbedDataKey={form.getValues("key")}
             />
-          </div>
+          </Stack>
 
           {/* Right Pane: Live Preview */}
           <EmbedLivePreview control={form.control} />
-        </div>
-      </div>
+        </Stack>
+      </Stack>
     </PageContainer>
   );
 }
