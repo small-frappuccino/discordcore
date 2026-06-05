@@ -1,7 +1,9 @@
 import * as React from "react";
 import { cn } from "../../lib/utils";
-import { Box, BoxProps } from "./Box";
-import { ResponsiveProp, SpacingToken, resolveSpacing } from "../../lib/layout-utils";
+import { Box } from "./Box";
+import type { BoxProps } from "./Box";
+import type { ResponsiveProp, SpacingToken } from "../../lib/layout-utils";
+import { resolveSpacing } from "../../lib/layout-utils";
 
 export interface ClusterProps extends BoxProps {
   spacing?: ResponsiveProp<SpacingToken>;

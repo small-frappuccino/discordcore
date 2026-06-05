@@ -1,7 +1,9 @@
 import * as React from "react";
 import { cn } from "../../lib/utils";
-import { Box, BoxProps } from "./Box";
-import { ResponsiveProp, SpacingToken, resolveSpacing, resolveResponsiveProp } from "../../lib/layout-utils";
+import { Box } from "./Box";
+import type { BoxProps } from "./Box";
+import type { ResponsiveProp, SpacingToken } from "../../lib/layout-utils";
+import { resolveSpacing, resolveResponsiveProp } from "../../lib/layout-utils";
 
 export type GridColumns = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10" | "11" | "12";
 

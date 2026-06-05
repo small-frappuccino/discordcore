@@ -1,6 +1,7 @@
 import * as React from "react";
 import { cn } from "../../../lib/utils";
-import { Stack, StackProps } from "../../layout";
+import { Stack } from "../../layout";
+import type { StackProps } from "../../layout";
 
 export const SettingsGroup = React.forwardRef<HTMLElement, StackProps>(
   ({ className, children, spacing = "md", ...props }, ref) => {

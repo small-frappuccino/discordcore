@@ -1,4 +1,4 @@
-import { Button, SettingsGroupSkeleton, SurfaceCard, SettingsGroup, SettingsRow, FormControl, TransitionState, FormProvider, FormInput } from "../../components/ui";
+import { Button, SettingsGroupSkeleton, SurfaceCard, SettingsGroup, SettingsRow, FormControl, FormProvider, FormInput } from "../../components/ui";
 import { Stack, Cluster } from "../../components/layout";
 import { useTicketsSettingsLogic } from "./hooks/useTicketsSettingsLogic";
 
@@ -6,9 +6,8 @@ export function TicketsSettingsPage() {
   const { isLoading, isSaving, form, onSubmit } = useTicketsSettingsLogic();
 
   return (
-    <TransitionState
-      isLoading={isLoading}
-      fallback={
+    <>
+      {isLoading ? (
         <Stack spacing="xl">
           <div>
             <h2 className="text-xl font-semibold">Automation Settings</h2>
@@ -16,8 +15,7 @@ export function TicketsSettingsPage() {
           </div>
           <SettingsGroupSkeleton rows={3} />
         </Stack>
-      }
-    >
+      ) : (
       <Stack spacing="xl">
         <div>
           <h2 className="text-xl font-semibold">Automation Settings</h2>
@@ -116,6 +114,7 @@ export function TicketsSettingsPage() {
           </FormProvider>
         </fieldset>
       </Stack>
-    </TransitionState>
+      )}
+    </>
   );
 }

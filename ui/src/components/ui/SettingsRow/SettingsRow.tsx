@@ -1,7 +1,7 @@
-import * as React from "react";
 import { cn } from "../../../lib/utils";
 import { Slot } from "../Slot/Slot";
-import { Box, BoxProps } from "../../layout";
+import { Box } from "../../layout";
+import type { BoxProps } from "../../layout";
 
 export interface SettingsRowProps extends BoxProps {
   asChild?: boolean;

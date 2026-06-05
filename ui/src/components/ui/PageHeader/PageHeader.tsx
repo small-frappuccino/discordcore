@@ -1,9 +1,11 @@
-import * as React from "react";
 import { cn } from "../../../lib/utils";
 import { Slot } from "../Slot/Slot";
-import { Stack, StackProps } from "../../layout/Stack";
-import { Box, BoxProps } from "../../layout/Box";
-import { Cluster, ClusterProps } from "../../layout/Cluster";
+import { Stack } from "../../layout/Stack";
+import type { StackProps } from "../../layout/Stack";
+import { Box } from "../../layout/Box";
+import type { BoxProps } from "../../layout/Box";
+import { Cluster } from "../../layout/Cluster";
+import type { ClusterProps } from "../../layout/Cluster";
 
 export interface PageHeaderProps extends StackProps {
   asChild?: boolean;

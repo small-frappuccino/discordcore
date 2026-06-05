@@ -1,7 +1,9 @@
 import * as React from "react";
 import { cn } from "../../lib/utils";
-import { Box, BoxProps } from "./Box";
-import { ResponsiveProp, SpacingToken, resolveSpacing } from "../../lib/layout-utils";
+import { Box } from "./Box";
+import type { BoxProps } from "./Box";
+import type { ResponsiveProp, SpacingToken } from "../../lib/layout-utils";
+import { resolveSpacing } from "../../lib/layout-utils";
 
 export interface StackProps extends BoxProps {
   direction?: "vertical" | "horizontal" | { base?: "vertical" | "horizontal", sm?: "vertical" | "horizontal", md?: "vertical" | "horizontal", lg?: "vertical" | "horizontal", xl?: "vertical" | "horizontal" };

@@ -10,6 +10,10 @@ export interface SurfaceCardProps extends React.HTMLAttributes<HTMLDivElement> {
 
 export const SurfaceCard = React.forwardRef<HTMLDivElement, SurfaceCardProps>(
   ({ className, interactive, asChild, children, ...props }, ref) => {
+    if (asChild) {
+      return (
+        <Slot
+          ref={ref as React.ForwardedRef<HTMLElement>}
           className={cn(
             "surface-card",
             interactive && "interactive",

@@ -8,11 +8,10 @@ import {
   PageContainer,
   SettingsGroupSkeleton,
   FormControl,
-  TransitionState,
   FormProvider,
   FormInput,
 } from "../components/ui";
-import { Stack, Box } from "../components/layout";
+import { Stack } from "../components/layout";
 import { useModerationPageLogic } from "./hooks/useModerationPageLogic";
 
 export function ModerationPage() {
@@ -33,9 +32,8 @@ export function ModerationPage() {
   }
 
   return (
-    <TransitionState
-      isLoading={isLoading}
-      fallback={
+    <>
+      {isLoading ? (
         <PageContainer>
           <Stack spacing="xl">
             <PageHeader>
@@ -54,8 +52,7 @@ export function ModerationPage() {
             </Stack>
           </Stack>
         </PageContainer>
-      }
-    >
+      ) : (
       <PageContainer>
         <Stack spacing="xl">
           <PageHeader>
@@ -99,7 +96,7 @@ export function ModerationPage() {
                 </SettingsRow>
               </SettingsGroup>
               
-              <Box as="fieldset" disabled={isSaving} p="none" m="none" className="border-none min-w-0">
+              <fieldset disabled={isSaving} className="border-none p-0 m-0 min-w-0">
                 <FormProvider {...form}>
                   <Stack as="form" onSubmit={onSubmit} spacing="lg">
                   <Stack spacing="sm">
@@ -128,11 +125,12 @@ export function ModerationPage() {
                   </Stack>
                   </Stack>
                 </FormProvider>
-              </Box>
+              </fieldset>
             </Stack>
           </SurfaceCard>
         </Stack>
       </PageContainer>
-    </TransitionState>
+      )}
+    </>
   );
 }

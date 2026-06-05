@@ -1,6 +1,7 @@
 import * as React from "react";
 import { cn } from "../../lib/utils";
-import { ResponsiveProp, SpacingToken, resolveSpacing } from "../../lib/layout-utils";
+import type { ResponsiveProp, SpacingToken } from "../../lib/layout-utils";
+import { resolveSpacing } from "../../lib/layout-utils";
 
 export interface BoxProps extends React.HTMLAttributes<HTMLElement> {
   as?: React.ElementType;
