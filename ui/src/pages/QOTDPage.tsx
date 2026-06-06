@@ -43,8 +43,8 @@ export function QOTDPage() {
               </Stack>
             ) : config ? (
               <Stack spacing="xl">
-                <Stack spacing="sm">
-                  <h2 className="text-lg">Core Settings</h2>
+                <div>
+                  <h3 className="text-lg font-semibold tracking-tight text-text-primary mb-4">Core Settings</h3>
                   <SettingsGroup>
                     <SettingsRow
                       title="Active Deck"
@@ -77,10 +77,10 @@ export function QOTDPage() {
                       }
                     />
                   </SettingsGroup>
-                </Stack>
+                </div>
 
-                <Stack spacing="sm">
-                  <h2 className="text-lg">Publish Schedule (UTC)</h2>
+                <div>
+                  <h3 className="text-lg font-semibold tracking-tight text-text-primary mb-4">Publish Schedule (UTC)</h3>
                   <SettingsGroup>
                     <SettingsRow
                       title="Hour & Minute"
@@ -106,7 +106,7 @@ export function QOTDPage() {
                       }
                     />
                   </SettingsGroup>
-                </Stack>
+                </div>
 
                 <div className="form-actions">
                   <ActionTrigger variant="primary" type="submit" isLoading={isSaving}>
