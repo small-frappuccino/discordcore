@@ -24,7 +24,7 @@ export function TicketsSettingsPage() {
         </Stack>
       ) : (
       <Stack spacing="xl">
-        <div>
+        <div className="settings-form">
           <h2 className="text-xl font-semibold">Automation Settings</h2>
           <p className="text-muted">Configure auto-close timers, transcript logs, and system enablement.</p>
         </div>

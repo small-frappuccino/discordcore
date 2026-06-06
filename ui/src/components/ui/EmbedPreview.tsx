@@ -1,7 +1,55 @@
+import * as React from "react";
 import type { CustomEmbedConfig } from "../../api/domains/embeds";
 
-interface EmbedPreviewProps {
+export interface EmbedPreviewProps {
   embed: Partial<CustomEmbedConfig>;
+}
+
+function parseTextFormatting(text: string, keyPrefix: number | string): React.ReactNode[] {
+  const boldRegex = /\*\*([^*]+)\*\*/g;
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = boldRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.substring(lastIndex, match.index));
+    }
+    parts.push(<strong key={`bold-${keyPrefix}-${match.index}`} className="font-bold">{match[1]}</strong>);
+    lastIndex = boldRegex.lastIndex;
+  }
+  
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+  return parts;
+}
+
+function renderBasicMarkdown(text: string | undefined | null): React.ReactNode {
+  if (!text) return null;
+  
+  const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = linkRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(...parseTextFormatting(text.substring(lastIndex, match.index), lastIndex));
+    }
+    parts.push(
+      <a key={`link-${match.index}`} href={match[2]} target="_blank" rel="noopener noreferrer" className="text-[#00aff4] hover:underline break-all">
+        {match[1]}
+      </a>
+    );
+    lastIndex = linkRegex.lastIndex;
+  }
+  
+  if (lastIndex < text.length) {
+    parts.push(...parseTextFormatting(text.substring(lastIndex), lastIndex));
+  }
+  
+  return <>{parts}</>;
 }
 
 export function EmbedPreview({ embed }: EmbedPreviewProps) {
@@ -37,7 +85,7 @@ export function EmbedPreview({ embed }: EmbedPreviewProps) {
             )}
             {embed.description && (
               <div className="text-sm whitespace-pre-wrap break-words">
-                {embed.description}
+                {renderBasicMarkdown(embed.description)}
               </div>
             )}
           </div>
@@ -54,7 +102,7 @@ export function EmbedPreview({ embed }: EmbedPreviewProps) {
             {embed.fields.map((field, idx) => (
               <div key={idx} className={`${field.inline ? 'col-span-4' : 'col-span-12'} flex flex-col gap-1 min-w-0`}>
                 <div className="text-xs font-semibold text-white truncate">{field.name || "\u200B"}</div>
-                <div className="text-sm break-words">{field.value || "\u200B"}</div>
+                <div className="text-sm break-words whitespace-pre-wrap">{renderBasicMarkdown(field.value) || "\u200B"}</div>
               </div>
             ))}
           </div>

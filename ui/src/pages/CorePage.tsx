@@ -1,5 +1,6 @@
 
-import { PageHeader, SettingsGroup, SettingsRow, Badge, PageContainer, SettingsGroupSkeleton } from "../components/ui";
+import { PageHeader, Badge, PageContainer, SettingsGroupSkeleton } from "../components/ui";
+import { SettingsGroup, SettingsRow } from "../components/ui/tahoe";
 import { Stack } from "../components/layout";
 import { useCorePageLogic } from "./hooks/useCorePageLogic";
 
@@ -20,27 +21,21 @@ export function CorePage() {
           <SettingsGroupSkeleton rows={2} />
         ) : (
           <Stack spacing="sm">
-            <h3 className="text-lg font-semibold tracking-tight text-text-primary">Domain Routing</h3>
+            <div className="settings-form">
+              <h3 className="text-lg font-semibold tracking-tight text-text-primary mb-4">Domain Routing</h3>
               <SettingsGroup>
-                <SettingsRow>
-                  <SettingsRow.Info>
-                    <SettingsRow.Title>Default Bot Instance</SettingsRow.Title>
-                    <SettingsRow.Description>The fallback worker instance for this server.</SettingsRow.Description>
-                  </SettingsRow.Info>
-                  <SettingsRow.Control>
-                    <span className="text-muted">{settings?.workspace?.sections?.bot_routing?.bot_instance_id || "Main Worker"}</span>
-                  </SettingsRow.Control>
-                </SettingsRow>
-                <SettingsRow>
-                  <SettingsRow.Info>
-                    <SettingsRow.Title>QOTD Domain Override</SettingsRow.Title>
-                    <SettingsRow.Description>Specific worker assigned to QOTD processing.</SettingsRow.Description>
-                  </SettingsRow.Info>
-                  <SettingsRow.Control>
-                    <span className="text-muted">{settings?.workspace?.sections?.bot_routing?.domain_bot_instance_ids?.qotd || "Inherited"}</span>
-                  </SettingsRow.Control>
-                </SettingsRow>
+                <SettingsRow
+                  title="Default Bot Instance"
+                  description="The fallback worker instance for this server."
+                  control={<span className="text-muted">{settings?.workspace?.sections?.bot_routing?.bot_instance_id || "Main Worker"}</span>}
+                />
+                <SettingsRow
+                  title="QOTD Domain Override"
+                  description="Specific worker assigned to QOTD processing."
+                  control={<span className="text-muted">{settings?.workspace?.sections?.bot_routing?.domain_bot_instance_ids?.qotd || "Inherited"}</span>}
+                />
               </SettingsGroup>
+            </div>
             </Stack>
         )}
       </Stack>

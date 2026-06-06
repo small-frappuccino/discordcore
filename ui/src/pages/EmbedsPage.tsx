@@ -33,7 +33,7 @@ export function EmbedsPage() {
           <PageHeader.Description>Design and manage custom embeds for your server.</PageHeader.Description>
         </PageHeader>
 
-        <Stack direction="horizontal" spacing="xl" align="start" className="h-full">
+        <div className="flex flex-col xl:flex-row gap-8 items-start h-full">
           {/* Left Pane: List & Editor */}
           <Stack spacing="lg" className="flex-1">
             <EmbedSidebarList
@@ -60,7 +60,7 @@ export function EmbedsPage() {
 
           {/* Right Pane: Live Preview */}
           <EmbedLivePreview control={form.control} />
-        </Stack>
+        </div>
       </Stack>
     </PageContainer>
   );
