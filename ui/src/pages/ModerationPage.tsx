@@ -82,8 +82,8 @@ export function ModerationPage() {
               <fieldset disabled={isSaving} className="border-none p-0 m-0 min-w-0">
                 <FormProvider {...form}>
                   <Stack spacing="lg">
-                  <div>
-                    <h3 className="text-lg font-semibold tracking-tight text-text-primary mb-6">Roles Config</h3>
+                  <Stack spacing="md">
+                    <h3 className="text-lg font-semibold tracking-tight text-text-primary">Roles Config</h3>
                     <SettingsGroup>
                       <SettingsRow
                         title="Mute Role"
@@ -91,7 +91,7 @@ export function ModerationPage() {
                         control={<TextInput placeholder="Role ID..." {...form.register("mute_role")} />}
                       />
                     </SettingsGroup>
-                  </div>
+                  </Stack>
                   <div className="form-actions">
                     <ActionTrigger variant="primary" type="submit" isLoading={isSaving}>
                       Save Mute Role

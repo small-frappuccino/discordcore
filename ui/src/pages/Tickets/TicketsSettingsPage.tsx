@@ -33,8 +33,8 @@ export function TicketsSettingsPage() {
           <FormProvider {...form}>
             <form className="settings-form" onSubmit={onSubmit}>
               <Stack spacing="xl">
-                <div>
-                  <h3 className="text-lg font-semibold tracking-tight text-text-primary mb-6">Core System</h3>
+                <Stack spacing="md">
+                  <h3 className="text-lg font-semibold tracking-tight text-text-primary">Core System</h3>
                   <SettingsGroup>
                     <SettingsRow
                       title="Enable Tickets System"
@@ -42,10 +42,10 @@ export function TicketsSettingsPage() {
                       control={<ToggleSwitch {...form.register("enabled")} />}
                     />
                   </SettingsGroup>
-                </div>
+                </Stack>
 
-                <div>
-                  <h3 className="text-lg font-semibold tracking-tight text-text-primary mb-6">Automation & Logging</h3>
+                <Stack spacing="md">
+                  <h3 className="text-lg font-semibold tracking-tight text-text-primary">Automation & Logging</h3>
                   <SettingsGroup>
                   <SettingsRow
                     title="Transcript Log Channel"
@@ -84,7 +84,7 @@ export function TicketsSettingsPage() {
                     }
                   />
                   </SettingsGroup>
-                </div>
+                </Stack>
 
                 <div className="form-actions">
                   <ActionTrigger type="submit" variant="primary" isLoading={isSaving}>
