@@ -327,12 +327,13 @@ select[multiple].form-select {
 /* Empty State */
 .empty-state {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
   min-height: 160px;
-  border: 2px dashed var(--border-subtle);
-  border-radius: var(--radius-xl);
+  background-color: var(--bg-surface);
+  border-radius: 12px;
   padding: 2rem;
+  text-align: center;
 }
 
 /* TAHOE PRIMITIVES */
@@ -340,6 +341,9 @@ select[multiple].form-select {
   display: flex;
   flex-direction: column;
   background-color: var(--bg-surface);
+  max-width: 768px;
+  margin: 0 auto;
+  width: 100%;
   /* The border-radius clipping is handled on the children (first/last child) to prevent SelectMenu overlap issues with overflow:hidden */
 }
 
@@ -358,7 +362,7 @@ select[multiple].form-select {
   grid-template-columns: 1fr auto;
   column-gap: 24px;
   align-items: center;
-  padding: 16px 20px;
+  padding: 12px 20px;
   border-bottom: 1px solid var(--border-subtle);
   background-color: transparent;
   transition: background-color var(--transition-fast);
@@ -413,7 +417,7 @@ select[multiple].form-select {
 }
 
 .tahoe-toggle-switch:checked {
-  background-color: var(--success);
+  background-color: #30D158;
   border-color: transparent;
 }
 
@@ -657,12 +661,12 @@ select[multiple].form-select {
 }
 
 .tahoe-action-trigger--primary {
-  background-color: var(--accent-primary);
-  color: white;
+  background-color: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
 }
 
 .tahoe-action-trigger--primary:hover {
-  background-color: var(--accent-primary-hover);
+  background-color: rgba(255, 255, 255, 0.15);
 }
 
 .tahoe-action-trigger--danger {
