@@ -1,16 +1,17 @@
 import {
   PageHeader,
-  SettingsGroup,
-  SettingsRow,
-  Button,
   Badge,
   PageContainer,
   SettingsGroupSkeleton,
-  FormControl,
   FormProvider,
-  FormInput,
-  ToggleSwitch
 } from "../components/ui";
+import {
+  SettingsGroup,
+  SettingsRow,
+  ToggleSwitch,
+  ActionTrigger,
+  TextInput
+} from "../components/ui/tahoe";
 import { Stack } from "../components/layout";
 import { useModerationPageLogic } from "./hooks/useModerationPageLogic";
 
@@ -66,30 +67,16 @@ export function ModerationPage() {
           <form className="settings-form" onSubmit={onSubmit}>
             <Stack spacing="xl">
               <SettingsGroup>
-                <SettingsRow>
-                  <SettingsRow.Info>
-                    <SettingsRow.Title>AutoMod Engine</SettingsRow.Title>
-                    <SettingsRow.Description>Automatically detect and block forbidden content.</SettingsRow.Description>
-                  </SettingsRow.Info>
-                  <SettingsRow.Control>
-                    <ToggleSwitch
-                      checked={automodEnabled}
-                      onChange={handleToggleAutomod}
-                    />
-                  </SettingsRow.Control>
-                </SettingsRow>
-                <SettingsRow>
-                  <SettingsRow.Info>
-                    <SettingsRow.Title>Audit Logging</SettingsRow.Title>
-                    <SettingsRow.Description>Log moderation actions and deleted messages to a dedicated channel.</SettingsRow.Description>
-                  </SettingsRow.Info>
-                  <SettingsRow.Control>
-                    <ToggleSwitch
-                      checked={loggingEnabled}
-                      onChange={handleToggleLogging}
-                    />
-                  </SettingsRow.Control>
-                </SettingsRow>
+                <SettingsRow
+                  title="AutoMod Engine"
+                  description="Automatically detect and block forbidden content."
+                  control={<ToggleSwitch checked={automodEnabled} onChange={handleToggleAutomod} />}
+                />
+                <SettingsRow
+                  title="Audit Logging"
+                  description="Log moderation actions and deleted messages to a dedicated channel."
+                  control={<ToggleSwitch checked={loggingEnabled} onChange={handleToggleLogging} />}
+                />
               </SettingsGroup>
               
               <fieldset disabled={isSaving} className="border-none p-0 m-0 min-w-0">
@@ -98,26 +85,17 @@ export function ModerationPage() {
                   <Stack spacing="sm">
                     <h3 className="text-lg font-semibold tracking-tight">Roles Config</h3>
                     <SettingsGroup>
-                      <SettingsRow>
-                        <SettingsRow.Info>
-                          <SettingsRow.Title>Mute Role</SettingsRow.Title>
-                          <SettingsRow.Description>Role assigned when a user is muted.</SettingsRow.Description>
-                        </SettingsRow.Info>
-                        <SettingsRow.Control>
-                          <FormControl asChild>
-                            <FormInput
-                              name="mute_role"
-                              placeholder="Role ID..."
-                            />
-                          </FormControl>
-                        </SettingsRow.Control>
-                      </SettingsRow>
+                      <SettingsRow
+                        title="Mute Role"
+                        description="Role assigned when a user is muted."
+                        control={<TextInput placeholder="Role ID..." {...form.register("mute_role")} />}
+                      />
                     </SettingsGroup>
                   </Stack>
                   <div className="form-actions">
-                    <Button variant="primary" type="submit" disabled={isSaving}>
-                      {isSaving ? "Saving..." : "Save Mute Role"}
-                    </Button>
+                    <ActionTrigger variant="primary" type="submit" isLoading={isSaving}>
+                      Save Mute Role
+                    </ActionTrigger>
                   </div>
                   </Stack>
                 </FormProvider>

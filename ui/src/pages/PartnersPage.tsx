@@ -1,4 +1,12 @@
-import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, PageContainer, SettingsGroupSkeleton, ToggleSwitch } from "../components/ui";
+import { PageHeader, Badge, PageContainer, SettingsGroupSkeleton } from "../components/ui";
+import {
+  SettingsGroup,
+  SettingsRow,
+  ToggleSwitch,
+  ActionTrigger,
+  TextInput,
+  TextArea
+} from "../components/ui/tahoe";
 import { Stack } from "../components/layout";
 import { usePartnersPageLogic } from "./hooks/usePartnersPageLogic";
 import type { Path } from "react-hook-form";
@@ -18,44 +26,25 @@ export function PartnersPage() {
   }
 
   const renderInputRow = (name: Path<PartnersFormData>, title: string, placeholder: string = "") => (
-    <SettingsRow>
-      <SettingsRow.Info>
-        <SettingsRow.Title>{title}</SettingsRow.Title>
-      </SettingsRow.Info>
-      <SettingsRow.Control>
-        <input
-          type="text"
-          placeholder={placeholder}
-          {...form.register(name)}
-          className="form-input w-full"
-        />
-      </SettingsRow.Control>
-    </SettingsRow>
+    <SettingsRow
+      title={title}
+      control={<TextInput placeholder={placeholder} {...form.register(name)} className="w-full" />}
+    />
   );
 
   const renderTextareaRow = (name: Path<PartnersFormData>, title: string) => (
-    <SettingsRow className="settings-row--multiline">
-      <SettingsRow.Info>
-        <SettingsRow.Title>{title}</SettingsRow.Title>
-      </SettingsRow.Info>
-      <SettingsRow.Control>
-        <textarea
-          {...form.register(name)}
-          className="form-input w-full input-expansive"
-        />
-      </SettingsRow.Control>
-    </SettingsRow>
+    <SettingsRow
+      isMultiline
+      title={title}
+      control={<TextArea {...form.register(name)} className="w-full input-expansive" />}
+    />
   );
 
   const renderCheckboxRow = (name: Path<PartnersFormData>, title: string) => (
-    <SettingsRow>
-      <SettingsRow.Info>
-        <SettingsRow.Title>{title}</SettingsRow.Title>
-      </SettingsRow.Info>
-      <SettingsRow.Control>
-        <ToggleSwitch {...form.register(name)} />
-      </SettingsRow.Control>
-    </SettingsRow>
+    <SettingsRow
+      title={title}
+      control={<ToggleSwitch {...form.register(name)} />}
+    />
   );
 
   return (
@@ -85,19 +74,17 @@ export function PartnersPage() {
               {renderInputRow("empty_state_text", "Empty State Text")}
               {renderTextareaRow("footer_template", "Footer Template")}
               {renderInputRow("other_fandom_label", "Other Fandom Label")}
-              <SettingsRow>
-                <SettingsRow.Info>
-                  <SettingsRow.Title>Embed Color (Decimal)</SettingsRow.Title>
-                  <SettingsRow.Description>Color of the embed side border.</SettingsRow.Description>
-                </SettingsRow.Info>
-                <SettingsRow.Control>
-                  <input
+              <SettingsRow
+                title="Embed Color (Decimal)"
+                description="Color of the embed side border."
+                control={
+                  <TextInput
                     type="number"
                     {...form.register("color", { valueAsNumber: true })}
-                    className="form-input w-40"
+                    className="w-40"
                   />
-                </SettingsRow.Control>
-              </SettingsRow>
+                }
+              />
               {renderCheckboxRow("disable_fandom_sorting", "Disable Fandom Sorting")}
               {renderCheckboxRow("disable_partner_sorting", "Disable Partner Sorting")}
             </SettingsGroup>
@@ -105,9 +92,9 @@ export function PartnersPage() {
         )}
         </Stack>
         <div className="form-actions">
-          <Button variant="primary" type="submit" disabled={isSaving}>
-            {isSaving ? "Saving..." : "Save Template"}
-          </Button>
+          <ActionTrigger variant="primary" type="submit" isLoading={isSaving}>
+            Save Template
+          </ActionTrigger>
         </div>
       </form>
     </PageContainer>

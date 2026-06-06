@@ -6,6 +6,7 @@ import { ModerationPage } from "../pages/ModerationPage";
 import { RolesPage } from "../pages/RolesPage";
 import { PartnersPage } from "../pages/PartnersPage";
 import { EmbedsPage } from "../pages/EmbedsPage";
+import { TahoeMockPage } from "../pages/TahoeMockPage";
 import { TicketsLayout } from "../pages/Tickets/TicketsLayout";
 import { TicketsPanelsPage } from "../pages/Tickets/TicketsPanelsPage";
 import { TicketsFormsPage } from "../pages/Tickets/TicketsFormsPage";
@@ -34,6 +35,7 @@ export function AppRoutes() {
   return (
     <Routes>
         <Route path="/manage" element={<ManageIndexRedirect />} />
+        <Route path="/manage/tahoe" element={<TahoeMockPage />} />
         <Route path="/manage/:guildId" element={<DashboardLayout />}>
           <Route index element={<Navigate to="core" replace />} />
           <Route path="core" element={<CorePage />} />

@@ -1,6 +1,6 @@
 import * as React from "react";
 import type { UseFormReturn } from "react-hook-form";
-import { SettingsGroup, SettingsRow, Button, FormControl } from "../../components/ui";
+import { ActionTrigger, SettingsGroup, SettingsRow, TextInput, TextArea } from "../../components/ui/tahoe";
 import type { EmbedsFormData } from "../schemas/embeds";
 
 type EmbedEditorFormProps = {
@@ -35,173 +35,109 @@ export function EmbedEditorForm({
   return (
     <form onSubmit={onSubmit} className="settings-form">
       <SettingsGroup>
-        <SettingsRow>
-          <SettingsRow.Info>
-            <SettingsRow.Title>Embed Key</SettingsRow.Title>
-            <SettingsRow.Description>Unique identifier for this embed.</SettingsRow.Description>
-          </SettingsRow.Info>
-          <SettingsRow.Control>
-            <FormControl asChild>
-              <input
-                type="text"
-                {...form.register("key")}
-                className="form-input"
-                disabled={!!selectedEmbedKey} // Cannot edit key after creation
-              />
-            </FormControl>
-          </SettingsRow.Control>
-        </SettingsRow>
-        <SettingsRow>
-          <SettingsRow.Info>
-            <SettingsRow.Title>Color</SettingsRow.Title>
-            <SettingsRow.Description>Hex color code (as an integer number).</SettingsRow.Description>
-          </SettingsRow.Info>
-          <SettingsRow.Control>
-            <input
-              type="number"
-              {...form.register("color", { valueAsNumber: true })}
-              className="form-input w-40"
-            />
-          </SettingsRow.Control>
-        </SettingsRow>
+        <SettingsRow
+          title="Embed Key"
+          description="Unique identifier for this embed."
+          control={<TextInput type="text" {...form.register("key")} disabled={!!selectedEmbedKey} />}
+        />
+        <SettingsRow
+          title="Color"
+          description="Hex color code (as an integer number)."
+          control={<TextInput type="number" {...form.register("color", { valueAsNumber: true })} className="w-40" />}
+        />
       </SettingsGroup>
 
       <SettingsGroup>
-        <SettingsRow>
-          <SettingsRow.Info>
-            <SettingsRow.Title>Title</SettingsRow.Title>
-          </SettingsRow.Info>
-          <SettingsRow.Control>
-            <FormControl asChild>
-              <input type="text" {...form.register("title")} className="form-input" />
-            </FormControl>
-          </SettingsRow.Control>
-        </SettingsRow>
-        <SettingsRow>
-          <SettingsRow.Info>
-            <SettingsRow.Title>Description</SettingsRow.Title>
-          </SettingsRow.Info>
-          <SettingsRow.Control>
-            <FormControl asChild>
-              <textarea {...form.register("description")} className="form-input w-full resize-y input-expansive" />
-            </FormControl>
-          </SettingsRow.Control>
-        </SettingsRow>
+        <SettingsRow
+          title="Title"
+          control={<TextInput type="text" {...form.register("title")} />}
+        />
+        <SettingsRow
+          isMultiline
+          title="Description"
+          control={<TextArea {...form.register("description")} className="w-full input-expansive" />}
+        />
       </SettingsGroup>
 
       <SettingsGroup>
-        <SettingsRow>
-          <SettingsRow.Info>
-            <SettingsRow.Title>Author Name</SettingsRow.Title>
-          </SettingsRow.Info>
-          <SettingsRow.Control>
-            <FormControl asChild>
-              <input type="text" {...form.register("author_name")} className="form-input" />
-            </FormControl>
-          </SettingsRow.Control>
-        </SettingsRow>
-        <SettingsRow>
-          <SettingsRow.Info>
-            <SettingsRow.Title>Author Icon URL</SettingsRow.Title>
-          </SettingsRow.Info>
-          <SettingsRow.Control>
-            <FormControl asChild>
-              <input type="text" {...form.register("author_icon_url")} className="form-input" />
-            </FormControl>
-          </SettingsRow.Control>
-        </SettingsRow>
-        <SettingsRow>
-          <SettingsRow.Info>
-            <SettingsRow.Title>Footer Text</SettingsRow.Title>
-          </SettingsRow.Info>
-          <SettingsRow.Control>
-            <FormControl asChild>
-              <input type="text" {...form.register("footer_text")} className="form-input" />
-            </FormControl>
-          </SettingsRow.Control>
-        </SettingsRow>
-        <SettingsRow>
-          <SettingsRow.Info>
-            <SettingsRow.Title>Footer Icon URL</SettingsRow.Title>
-          </SettingsRow.Info>
-          <SettingsRow.Control>
-            <FormControl asChild>
-              <input type="text" {...form.register("footer_icon_url")} className="form-input" />
-            </FormControl>
-          </SettingsRow.Control>
-        </SettingsRow>
+        <SettingsRow
+          title="Author Name"
+          control={<TextInput type="text" {...form.register("author_name")} />}
+        />
+        <SettingsRow
+          title="Author Icon URL"
+          control={<TextInput type="text" {...form.register("author_icon_url")} />}
+        />
+        <SettingsRow
+          title="Footer Text"
+          control={<TextInput type="text" {...form.register("footer_text")} />}
+        />
+        <SettingsRow
+          title="Footer Icon URL"
+          control={<TextInput type="text" {...form.register("footer_icon_url")} />}
+        />
       </SettingsGroup>
 
       <SettingsGroup>
-        <SettingsRow>
-          <SettingsRow.Info>
-            <SettingsRow.Title>Image URL</SettingsRow.Title>
-          </SettingsRow.Info>
-          <SettingsRow.Control>
-            <FormControl asChild>
-              <input type="text" {...form.register("image_url")} className="form-input" />
-            </FormControl>
-          </SettingsRow.Control>
-        </SettingsRow>
-        <SettingsRow>
-          <SettingsRow.Info>
-            <SettingsRow.Title>Thumbnail URL</SettingsRow.Title>
-          </SettingsRow.Info>
-          <SettingsRow.Control>
-            <FormControl asChild>
-              <input type="text" {...form.register("thumbnail_url")} className="form-input" />
-            </FormControl>
-          </SettingsRow.Control>
-        </SettingsRow>
+        <SettingsRow
+          title="Image URL"
+          control={<TextInput type="text" {...form.register("image_url")} />}
+        />
+        <SettingsRow
+          title="Thumbnail URL"
+          control={<TextInput type="text" {...form.register("thumbnail_url")} />}
+        />
       </SettingsGroup>
 
         <div>
           {customFields.map((field, idx) => (
-            <SettingsRow key={field.id}>
-              <SettingsRow.Info>
-                <SettingsRow.Title>Custom Field {idx + 1}</SettingsRow.Title>
+            <SettingsRow
+              isMultiline
+              key={field.id}
+              title={`Custom Field ${idx + 1}`}
+              description={
                 <div className="mt-4 flex flex-col gap-4">
                   <label className="flex items-center gap-2 text-sm text-foreground">
                     <input type="checkbox" {...form.register(`fields.${idx}.inline` as const)} className="form-checkbox" />
                     Inline
                   </label>
-                  <Button type="button" variant="danger" onClick={() => removeField(idx)} className="px-2 py-1 text-xs self-start">
+                  <ActionTrigger variant="danger" onClick={() => removeField(idx)} className="px-2 py-1 text-xs self-start w-auto">
                     Remove Field
-                  </Button>
+                  </ActionTrigger>
                 </div>
-              </SettingsRow.Info>
-              <SettingsRow.Control>
+              }
+              control={
                 <div className="flex flex-col gap-4 w-full">
                   <div className="flex flex-col gap-1">
                     <label className="text-xs text-muted font-medium">Name</label>
-                    <input type="text" {...form.register(`fields.${idx}.name` as const)} className="form-input text-sm w-full" />
+                    <TextInput type="text" {...form.register(`fields.${idx}.name` as const)} className="text-sm w-full" />
                   </div>
                   <div className="flex flex-col gap-1">
                     <label className="text-xs text-muted font-medium">Value</label>
-                    <textarea {...form.register(`fields.${idx}.value` as const)} className="form-input text-sm w-full input-expansive min-h-[80px]" />
+                    <TextArea {...form.register(`fields.${idx}.value` as const)} className="text-sm w-full input-expansive min-h-[80px]" />
                   </div>
                 </div>
-              </SettingsRow.Control>
-            </SettingsRow>
+              }
+            />
           ))}
-          <SettingsRow>
-            <SettingsRow.Info></SettingsRow.Info>
-            <SettingsRow.Control>
-              <Button type="button" variant="secondary" onClick={appendField} className="self-start">
+          <SettingsRow
+            title=""
+            control={
+              <ActionTrigger variant="secondary" onClick={appendField} className="self-start">
                 + Add Field
-              </Button>
-            </SettingsRow.Control>
-          </SettingsRow>
+              </ActionTrigger>
+            }
+          />
         </div>
 
       <div className="form-actions">
-        <Button variant="primary" type="submit" disabled={isSaving}>
-          {isSaving ? "Saving..." : "Save Embed"}
-        </Button>
+        <ActionTrigger variant="primary" type="submit" isLoading={isSaving}>
+          Save Embed
+        </ActionTrigger>
         {selectedEmbedKey && (
-          <Button type="button" variant="danger" disabled={isDeleting} onClick={deleteEmbed}>
-            {isDeleting ? "Deleting..." : "Delete Embed"}
-          </Button>
+          <ActionTrigger variant="danger" onClick={deleteEmbed} isLoading={isDeleting}>
+            Delete Embed
+          </ActionTrigger>
         )}
       </div>
     </form>

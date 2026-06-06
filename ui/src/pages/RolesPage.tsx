@@ -1,7 +1,16 @@
 import { useMemo } from "react";
-import { PageHeader, SettingsGroup, SettingsRow, Button, Badge, PageContainer, Skeleton, SettingsGroupSkeleton, FormControl, FormProvider, FormSelect, ToggleSwitch } from "../components/ui";
+import { PageHeader, Badge, PageContainer, Skeleton, SettingsGroupSkeleton, FormProvider } from "../components/ui";
+import {
+  SettingsGroup,
+  SettingsRow,
+  ToggleSwitch,
+  SelectMenu,
+  SelectMenuMultiple,
+  ActionTrigger
+} from "../components/ui/tahoe";
 import { Stack } from "../components/layout";
 import { useRolesPageLogic } from "./hooks/useRolesPageLogic";
+import { Controller } from "react-hook-form";
 
 export function RolesPage() {
   const {
@@ -13,8 +22,8 @@ export function RolesPage() {
     onSubmit,
   } = useRolesPageLogic();
 
-  const roleOptions = useMemo(() => {
-    return roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>);
+  const selectOptions = useMemo(() => {
+    return roles.map(r => ({ value: r.id, label: r.name }));
   }, [roles]);
 
   if (!selectedGuildID) {
@@ -54,108 +63,131 @@ export function RolesPage() {
                 <Stack spacing="sm">
                   <h2 className="text-lg font-semibold tracking-tight text-text-primary">Dashboard Access</h2>
                   <SettingsGroup>
-                    <SettingsRow className="settings-row--multiline">
-                      <SettingsRow.Info>
-                        <SettingsRow.Title>Read Access Roles</SettingsRow.Title>
-                        <SettingsRow.Description>Roles allowed to view dashboard settings</SettingsRow.Description>
-                      </SettingsRow.Info>
-                      <SettingsRow.Control>
-                        <FormControl asChild>
-                          <FormSelect multiple name="dashboard_read" className="input-expansive">
-                            {roleOptions}
-                          </FormSelect>
-                        </FormControl>
-                      </SettingsRow.Control>
-                    </SettingsRow>
-                    <SettingsRow className="settings-row--multiline">
-                      <SettingsRow.Info>
-                        <SettingsRow.Title>Write Access Roles</SettingsRow.Title>
-                        <SettingsRow.Description>Roles allowed to view and edit dashboard settings</SettingsRow.Description>
-                      </SettingsRow.Info>
-                      <SettingsRow.Control>
-                        <FormControl asChild>
-                          <FormSelect multiple name="dashboard_write" className="input-expansive">
-                            {roleOptions}
-                          </FormSelect>
-                        </FormControl>
-                      </SettingsRow.Control>
-                    </SettingsRow>
+                    <SettingsRow
+                      isMultiline
+                      title="Read Access Roles"
+                      description="Roles allowed to view dashboard settings"
+                      control={
+                        <Controller
+                          name="dashboard_read"
+                          control={form.control}
+                          render={({ field }) => (
+                            <SelectMenuMultiple
+                              options={selectOptions}
+                              value={field.value}
+                              onChange={field.onChange}
+                              className="w-full max-w-sm"
+                            />
+                          )}
+                        />
+                      }
+                    />
+                    <SettingsRow
+                      isMultiline
+                      title="Write Access Roles"
+                      description="Roles allowed to view and edit dashboard settings"
+                      control={
+                        <Controller
+                          name="dashboard_write"
+                          control={form.control}
+                          render={({ field }) => (
+                            <SelectMenuMultiple
+                              options={selectOptions}
+                              value={field.value}
+                              onChange={field.onChange}
+                              className="w-full max-w-sm"
+                            />
+                          )}
+                        />
+                      }
+                    />
                   </SettingsGroup>
                 </Stack>
 
                 <Stack spacing="sm">
                   <h2 className="text-lg font-semibold tracking-tight text-text-primary">Auto Assignment</h2>
                   <SettingsGroup>
-                    <SettingsRow>
-                      <SettingsRow.Info>
-                        <SettingsRow.Title>Enable Auto Assignment</SettingsRow.Title>
-                        <SettingsRow.Description>Automatically assign the target role to users that have required roles</SettingsRow.Description>
-                      </SettingsRow.Info>
-                      <SettingsRow.Control>
-                        <ToggleSwitch {...form.register("auto_assignment.enabled")} />
-                      </SettingsRow.Control>
-                    </SettingsRow>
-                    <SettingsRow>
-                      <SettingsRow.Info>
-                        <SettingsRow.Title>Target Role</SettingsRow.Title>
-                        <SettingsRow.Description>The role to assign automatically</SettingsRow.Description>
-                      </SettingsRow.Info>
-                      <SettingsRow.Control>
-                        <FormControl asChild>
-                          <FormSelect name="auto_assignment.target_role">
-                            <option value="">-- None --</option>
-                            {roleOptions}
-                          </FormSelect>
-                        </FormControl>
-                      </SettingsRow.Control>
-                    </SettingsRow>
-                    <SettingsRow className="settings-row--multiline">
-                      <SettingsRow.Info>
-                        <SettingsRow.Title>Required Roles</SettingsRow.Title>
-                        <SettingsRow.Description>Users must have all these roles to get the target role</SettingsRow.Description>
-                      </SettingsRow.Info>
-                      <SettingsRow.Control>
-                        <FormControl asChild>
-                          <FormSelect multiple name="auto_assignment.required_roles" className="input-expansive">
-                            {roleOptions}
-                          </FormSelect>
-                        </FormControl>
-                      </SettingsRow.Control>
-                    </SettingsRow>
+                    <SettingsRow
+                      title="Enable Auto Assignment"
+                      description="Automatically assign the target role to users that have required roles"
+                      control={<ToggleSwitch {...form.register("auto_assignment.enabled")} />}
+                    />
+                    <SettingsRow
+                      title="Target Role"
+                      description="The role to assign automatically"
+                      control={
+                        <Controller
+                          name="auto_assignment.target_role"
+                          control={form.control}
+                          render={({ field }) => (
+                            <SelectMenu
+                              options={[{ value: "", label: "-- None --" }, ...selectOptions]}
+                              value={field.value || ""}
+                              onChange={field.onChange}
+                            />
+                          )}
+                        />
+                      }
+                    />
+                    <SettingsRow
+                      isMultiline
+                      title="Required Roles"
+                      description="Users must have all these roles to get the target role"
+                      control={
+                        <Controller
+                          name="auto_assignment.required_roles"
+                          control={form.control}
+                          render={({ field }) => (
+                            <SelectMenuMultiple
+                              options={selectOptions}
+                              value={field.value}
+                              onChange={field.onChange}
+                              className="w-full max-w-sm"
+                            />
+                          )}
+                        />
+                      }
+                    />
                   </SettingsGroup>
                 </Stack>
 
                 <Stack spacing="sm">
                   <h2 className="text-lg font-semibold tracking-tight text-text-primary">Special Roles</h2>
                   <SettingsGroup>
-                    <SettingsRow>
-                      <SettingsRow.Info>
-                        <SettingsRow.Title>Mute Role</SettingsRow.Title>
-                        <SettingsRow.Description>Role applied to muted users</SettingsRow.Description>
-                      </SettingsRow.Info>
-                      <SettingsRow.Control>
-                        <FormControl asChild>
-                          <FormSelect name="mute_role">
-                            <option value="">-- None --</option>
-                            {roleOptions}
-                          </FormSelect>
-                        </FormControl>
-                      </SettingsRow.Control>
-                    </SettingsRow>
-                    <SettingsRow>
-                      <SettingsRow.Info>
-                        <SettingsRow.Title>Booster Role</SettingsRow.Title>
-                        <SettingsRow.Description>Role representing Nitro Boosters</SettingsRow.Description>
-                      </SettingsRow.Info>
-                      <SettingsRow.Control>
-                        <FormControl asChild>
-                          <FormSelect name="booster_role">
-                            <option value="">-- None --</option>
-                            {roleOptions}
-                          </FormSelect>
-                        </FormControl>
-                      </SettingsRow.Control>
-                    </SettingsRow>
+                    <SettingsRow
+                      title="Mute Role"
+                      description="Role applied to muted users"
+                      control={
+                        <Controller
+                          name="mute_role"
+                          control={form.control}
+                          render={({ field }) => (
+                            <SelectMenu
+                              options={[{ value: "", label: "-- None --" }, ...selectOptions]}
+                              value={field.value || ""}
+                              onChange={field.onChange}
+                            />
+                          )}
+                        />
+                      }
+                    />
+                    <SettingsRow
+                      title="Booster Role"
+                      description="Role representing Nitro Boosters"
+                      control={
+                        <Controller
+                          name="booster_role"
+                          control={form.control}
+                          render={({ field }) => (
+                            <SelectMenu
+                              options={[{ value: "", label: "-- None --" }, ...selectOptions]}
+                              value={field.value || ""}
+                              onChange={field.onChange}
+                            />
+                          )}
+                        />
+                      }
+                    />
                   </SettingsGroup>
                 </Stack>
               </>
@@ -163,9 +195,9 @@ export function RolesPage() {
           </Stack>
           {!isLoading && (
             <div className="form-actions">
-              <Button variant="primary" type="submit" isLoading={isSaving}>
+              <ActionTrigger variant="primary" type="submit" isLoading={isSaving}>
                 Save Changes
-              </Button>
+              </ActionTrigger>
             </div>
           )}
         </form>

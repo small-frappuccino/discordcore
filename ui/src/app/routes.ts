@@ -6,6 +6,7 @@ export const appRoutes = {
   landing: "/",
   manage: "/manage",
   manageLegacy: "/dashboard",
+  tahoeMock: "/manage/tahoe",
   transcriptView: "/transcripts/view",
   dashboardGuildPattern: "/manage/:guildId",
   dashboardHomePattern: "/manage/:guildId/home",

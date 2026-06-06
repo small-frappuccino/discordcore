@@ -1,4 +1,11 @@
-import { Button, SettingsGroupSkeleton, SettingsGroup, SettingsRow, FormControl, FormProvider, FormInput, ToggleSwitch } from "../../components/ui";
+import { SettingsGroupSkeleton, FormProvider } from "../../components/ui";
+import {
+  SettingsGroup,
+  SettingsRow,
+  ToggleSwitch,
+  ActionTrigger,
+  TextInput
+} from "../../components/ui/tahoe";
 import { Stack } from "../../components/layout";
 import { useTicketsSettingsLogic } from "./hooks/useTicketsSettingsLogic";
 
@@ -28,71 +35,57 @@ export function TicketsSettingsPage() {
               <Stack spacing="xl">
               <h3 className="text-lg font-semibold tracking-tight">Core System</h3>
             <SettingsGroup>
-              <SettingsRow>
-                <SettingsRow.Info>
-                  <SettingsRow.Title>Enable Tickets System</SettingsRow.Title>
-                  <SettingsRow.Description>If disabled, all ticket panels will stop working.</SettingsRow.Description>
-                </SettingsRow.Info>
-                <SettingsRow.Control>
-                  <ToggleSwitch {...form.register("enabled")} />
-                </SettingsRow.Control>
-              </SettingsRow>
-              </SettingsGroup>
+              <SettingsRow
+                title="Enable Tickets System"
+                description="If disabled, all ticket panels will stop working."
+                control={<ToggleSwitch {...form.register("enabled")} />}
+              />
+            </SettingsGroup>
 
               <h3 className="text-lg font-semibold tracking-tight">Automation & Logging</h3>
               <SettingsGroup>
-              <SettingsRow>
-                <SettingsRow.Info>
-                  <SettingsRow.Title>Transcript Log Channel</SettingsRow.Title>
-                  <SettingsRow.Description>Channel where HTML transcripts are sent when tickets close.</SettingsRow.Description>
-                </SettingsRow.Info>
-                <SettingsRow.Control>
-                  <FormControl asChild>
-                    <FormInput
-                      name="automation.transcriptChannelId"
-                      placeholder="Discord Channel ID"
-                    />
-                  </FormControl>
-                </SettingsRow.Control>
-              </SettingsRow>
+              <SettingsRow
+                title="Transcript Log Channel"
+                description="Channel where HTML transcripts are sent when tickets close."
+                control={
+                  <TextInput
+                    placeholder="Discord Channel ID"
+                    {...form.register("automation.transcriptChannelId")}
+                  />
+                }
+              />
 
-              <SettingsRow>
-                <SettingsRow.Info>
-                  <SettingsRow.Title>Auto-Close Timer (Hours)</SettingsRow.Title>
-                  <SettingsRow.Description>Automatically close the ticket if no one sends a message for this long. Set to 0 to disable.</SettingsRow.Description>
-                </SettingsRow.Info>
-                <SettingsRow.Control>
-                  <FormInput
+              <SettingsRow
+                title="Auto-Close Timer (Hours)"
+                description="Automatically close the ticket if no one sends a message for this long. Set to 0 to disable."
+                control={
+                  <TextInput
                     type="number"
                     min="0"
-                    name="automation.autoCloseTimerHours"
-                    rules={{ valueAsNumber: true }}
+                    {...form.register("automation.autoCloseTimerHours", { valueAsNumber: true })}
                     className="w-24"
                   />
-                </SettingsRow.Control>
-              </SettingsRow>
+                }
+              />
 
-              <SettingsRow>
-                <SettingsRow.Info>
-                  <SettingsRow.Title>Inactivity Warning (Hours)</SettingsRow.Title>
-                  <SettingsRow.Description>Ping the ticket creator with a warning before auto-closing. Set to 0 to disable.</SettingsRow.Description>
-                </SettingsRow.Info>
-                <SettingsRow.Control>
-                  <FormInput
+              <SettingsRow
+                title="Inactivity Warning (Hours)"
+                description="Ping the ticket creator with a warning before auto-closing. Set to 0 to disable."
+                control={
+                  <TextInput
                     type="number"
                     min="0"
-                    name="automation.inactivityWarningHours"
-                    rules={{ valueAsNumber: true }}
+                    {...form.register("automation.inactivityWarningHours", { valueAsNumber: true })}
                     className="w-24"
                   />
-                </SettingsRow.Control>
-              </SettingsRow>
+                }
+              />
               </SettingsGroup>
 
           <div className="form-actions">
-            <Button type="submit" variant="primary" disabled={isSaving}>
-              {isSaving ? "Saving..." : "Save Settings"}
-            </Button>
+            <ActionTrigger type="submit" variant="primary" isLoading={isSaving}>
+              Save Settings
+            </ActionTrigger>
           </div>
               </Stack>
             </form>
