@@ -158,7 +158,7 @@ func setupMonitoringService(runtime *botRuntime, opts botRuntimeOptions, routerC
 // buildAutomodWrapper constructs the automod logging service wrapper when the runtime
 // has the automod capability and automod logs are not disabled, sharing the monitoring
 // notifier when available. It returns nil when automod should not run.
-func buildAutomodWrapper(runtime *botRuntime, opts botRuntimeOptions, routerConfig task.RouterConfig, runtimeConfig files.RuntimeConfig, monitoringService *logging.MonitoringService) *service.ServiceWrapper {
+func buildAutomodWrapper(runtime *botRuntime, opts botRuntimeOptions, routerConfig task.RouterConfig, runtimeConfig files.RuntimeConfig, monitoringService *logging.MonitoringService) *service.LegacyServiceWrapper {
 	if !runtime.capabilities.automod {
 		log.ApplicationLogger().Info("Automod service skipped; no effective automod logging workload is enabled", "botInstanceID", runtime.instanceID)
 		return nil
@@ -184,7 +184,7 @@ func buildAutomodWrapper(runtime *botRuntime, opts botRuntimeOptions, routerConf
 	automodAdapters.RegisterHandlers()
 	automodService.SetAdapters(automodAdapters)
 
-	return service.NewServiceWrapper(service.ServiceWrapperSpec{
+	return service.NewLegacyServiceWrapper(service.LegacyServiceWrapperSpec{
 		Name:         "automod",
 		Type:         service.TypeAutomod,
 		Priority:     service.PriorityNormal,
@@ -210,7 +210,7 @@ func registerUserPruneService(runtime *botRuntime, opts botRuntimeOptions, monit
 	if monitoringService != nil {
 		userPruneDependencies = []string{"monitoring"}
 	}
-	userPruneWrapper := service.NewServiceWrapper(service.ServiceWrapperSpec{
+	userPruneWrapper := service.NewLegacyServiceWrapper(service.LegacyServiceWrapperSpec{
 		Name:         "user-prune",
 		Type:         service.TypeMonitoring,
 		Priority:     service.PriorityNormal,
@@ -239,7 +239,7 @@ func registerQOTDRuntimeService(runtime *botRuntime, opts botRuntimeOptions) err
 		runtime.instanceID,
 		opts.defaultBotInstanceID,
 	)
-	qotdWrapper := service.NewServiceWrapper(service.ServiceWrapperSpec{
+	qotdWrapper := service.NewLegacyServiceWrapper(service.LegacyServiceWrapperSpec{
 		Name:         "qotd",
 		Type:         service.TypeMonitoring,
 		Priority:     service.PriorityNormal,
@@ -257,7 +257,7 @@ func registerQOTDRuntimeService(runtime *botRuntime, opts botRuntimeOptions) err
 
 // setupRuntimeCommandHandler builds and registers the slash-command handler for runtimes
 // that expose commands; otherwise it logs why commands were skipped.
-func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg *files.BotConfig, monitoringService *logging.MonitoringService) *service.ServiceWrapper {
+func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg *files.BotConfig, monitoringService *logging.MonitoringService) *service.LegacyServiceWrapper {
 	if !runtime.capabilities.HasCommands() {
 		logRuntimeCommandsSkipped(runtime, opts, cfg)
 		return nil
@@ -291,7 +291,7 @@ func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg
 		deps = append(deps, "monitoring")
 	}
 
-	return service.NewServiceWrapper(service.ServiceWrapperSpec{
+	return service.NewLegacyServiceWrapper(service.LegacyServiceWrapperSpec{
 		Name:         "command-handler",
 		Type:         service.TypeCommands,
 		Priority:     service.PriorityNormal,
@@ -340,19 +340,24 @@ func scheduleRuntimeWarmup(runtime *botRuntime, store *storage.Store, startupTas
 	}
 
 	if startupTasks == nil {
-		if err := runWarmup(context.Background(), baseWarmupConfig); err != nil {
-			log.ApplicationLogger().Warn(
-				fmt.Sprintf("Cache warmup base phase failed (continuing): %v", err),
-				"botInstanceID", runtime.instanceID,
-			)
-			return
-		}
-		if err := runWarmup(context.Background(), memberWarmupConfig); err != nil {
-			log.ApplicationLogger().Warn(
-				fmt.Sprintf("Cache warmup member phase failed (continuing): %v", err),
-				"botInstanceID", runtime.instanceID,
-			)
-		}
+		go func() {
+			if err := runWarmup(context.Background(), baseWarmupConfig); err != nil {
+				log.ApplicationLogger().Warn(
+					fmt.Sprintf("Cache warmup base phase failed (continuing): %v", err),
+					"botInstanceID", runtime.instanceID,
+				)
+				return
+			}
+			if scheduleStartupMemberWarmupFn(runtime.monitoringService, memberWarmupConfig) {
+				return
+			}
+			if err := runWarmup(context.Background(), memberWarmupConfig); err != nil {
+				log.ApplicationLogger().Warn(
+					fmt.Sprintf("Cache warmup member phase failed (continuing): %v", err),
+					"botInstanceID", runtime.instanceID,
+				)
+			}
+		}()
 		return
 	}
 

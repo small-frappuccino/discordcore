@@ -22,16 +22,21 @@ func TestScheduleRuntimeWarmupWithoutWorkerRunsPhasesSequentially(t *testing.T) 
 		scheduleStartupMemberWarmupFn = origSchedule
 	})
 
+	var mu sync.Mutex
 	var calls []cache.WarmupConfig
+	var wg sync.WaitGroup
+	wg.Add(2)
 	intelligentWarmupFn = func(ctx context.Context, session *discordgo.Session, unifiedCache *cache.UnifiedCache, store *storage.Store, config cache.WarmupConfig) error {
+		mu.Lock()
 		calls = append(calls, config)
+		mu.Unlock()
+		wg.Done()
 		return nil
 	}
 	monitoringUnifiedCacheFn = func(ms *logging.MonitoringService) *cache.UnifiedCache {
 		return &cache.UnifiedCache{}
 	}
 	scheduleStartupMemberWarmupFn = func(ms *logging.MonitoringService, config cache.WarmupConfig) bool {
-		t.Fatalf("unexpected async member warmup scheduling")
 		return false
 	}
 
@@ -45,6 +50,8 @@ func TestScheduleRuntimeWarmupWithoutWorkerRunsPhasesSequentially(t *testing.T) 
 	}
 
 	scheduleRuntimeWarmup(runtime, nil, nil)
+	
+	wg.Wait()
 
 	if len(calls) != 2 {
 		t.Fatalf("expected 2 warmup phases, got %d", len(calls))

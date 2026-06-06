@@ -32,14 +32,14 @@ func TestBaseServiceStopReturnsErrorAndKeepsErrorState(t *testing.T) {
 	}
 }
 
-func TestServiceWrapperPassesLifecycleContext(t *testing.T) {
+func TestLegacyServiceWrapperPassesLifecycleContext(t *testing.T) {
 	startCtxKey := struct{}{}
 	stopCtxKey := struct{}{}
 
 	var startValue string
 	var stopValue string
 
-	wrapper := NewServiceWrapper(ServiceWrapperSpec{
+	wrapper := NewLegacyServiceWrapper(LegacyServiceWrapperSpec{
 		Name:     "wrapped",
 		Type:     TypeMonitoring,
 		Priority: PriorityNormal,

@@ -58,41 +58,7 @@ func resolveStartupLightQueueSize(runtimeCount int) int {
 	}
 }
 
-func openBotRuntimes(botInstances []resolvedBotInstance, runtimeCapabilities map[string]botRuntimeCapabilities) (map[string]*botRuntime, []*botRuntime, error) {
-	opened := make([]*botRuntime, len(botInstances))
 
-	var group errgroup.Group
-	group.SetLimit(resolveRuntimeStartupParallelism(len(botInstances)))
-
-	for i, instance := range botInstances {
-		i := i
-		instance := instance
-		capabilities := runtimeCapabilities[instance.ID]
-
-		group.Go(func() error {
-			runtime, err := openBotRuntimeFn(instance, capabilities)
-			if err != nil {
-				return fmt.Errorf("openBotRuntimes: %w", err)
-			}
-			opened[i] = runtime
-			return nil
-		})
-	}
-
-	err := group.Wait()
-
-	runtimes := make(map[string]*botRuntime, len(botInstances))
-	runtimeOrder := make([]*botRuntime, 0, len(botInstances))
-	for _, runtime := range opened {
-		if runtime == nil {
-			continue
-		}
-		runtimes[runtime.instanceID] = runtime
-		runtimeOrder = append(runtimeOrder, runtime)
-	}
-
-	return runtimes, runtimeOrder, err
-}
 
 type runtimeStartupBackgroundWorker struct {
 	ctx          context.Context

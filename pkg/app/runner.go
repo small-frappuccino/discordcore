@@ -107,10 +107,7 @@ func runWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	msg := formatStartupMessage(appName, AppVersion(), Version)
 	log.ApplicationLogger().Info(msg)
 
-	botInstances, defaultBotInstanceID, err := resolveBotInstances(tokenEnv, opts)
-	if err != nil {
-		return fmt.Errorf("RunWithOptions: %w", err)
-	}
+
 
 	databaseBootstrap, err := resolveDatabaseBootstrap()
 	if err != nil {
@@ -156,37 +153,13 @@ func runWithOptions(appName, tokenEnv string, opts RunOptions) error {
 		runtimeApplier.SetInitial(cfg.RuntimeConfig)
 	}
 
-	runtimes := make(map[string]*botRuntime, len(botInstances))
-	runtimeOrder := make([]*botRuntime, 0, len(botInstances))
 	controlServerRegistry := &controlServerHolder{}
-	cleanupRuntimesOnReturn := true
-	defer func() { rollbackBotRuntimes(cleanupRuntimesOnReturn, runtimeOrder) }()
-	closeDiscordSessionsOnReturn := true
-	defer func() { rollbackDiscordSessions(closeDiscordSessionsOnReturn, runtimeOrder) }()
-	startupTasks := newStartupTaskOrchestrator(len(botInstances))
+	startupTasks := newStartupTaskOrchestrator(1) // dynamic
 	defer shutdownStartupServices(startupTasks, controlServerRegistry, "Startup background tasks did not finish cleanly")
 
-	runtimeCapabilities := resolveRuntimeCapabilities(configManager.Config(), botInstances, defaultBotInstanceID)
-
-	var openErr error
-	runtimes, runtimeOrder, openErr = openBotRuntimes(botInstances, runtimeCapabilities)
-	if openErr != nil {
-		return openErr
-	}
-
-	if err := validateConfiguredBotInstances(
-		configManager.Config(),
-		knownBotInstanceCatalog(runtimes, opts.KnownBotInstanceIDs),
-		defaultBotInstanceID,
-	); err != nil {
-		return fmt.Errorf("validate configured bot instances: %w", err)
-	}
-
-	runtimeResolver := newBotRuntimeResolver(configManager, runtimes, defaultBotInstanceID)
-	var defaultSession *discordgo.Session
-	defaultSession, err = runtimeResolver.sessionForGuild("")
-	if err != nil {
-		return fmt.Errorf("resolve default discord session: %w", err)
+	defaultBotInstanceID := strings.TrimSpace(opts.DefaultOwnerBotInstanceID)
+	if defaultBotInstanceID == "" {
+		defaultBotInstanceID = DefaultBotInstanceID
 	}
 
 	// Wire the in-memory metrics sink so /v1/health/qotd has counters to
@@ -202,7 +175,7 @@ func runWithOptions(appName, tokenEnv string, opts RunOptions) error {
 
 	appServiceManager := service.NewServiceManager()
 
-	storeService := service.NewServiceWrapper(service.ServiceWrapperSpec{
+	storeService := service.NewLegacyServiceWrapper(service.LegacyServiceWrapperSpec{
 		Name:     "postgres-store",
 		Type:     service.TypeCache,
 		Priority: service.PriorityHigh,
@@ -218,8 +191,7 @@ func runWithOptions(appName, tokenEnv string, opts RunOptions) error {
 
 	botOpts := botRuntimeOptions{
 		defaultBotInstanceID:     defaultBotInstanceID,
-		runtimeCount:             len(runtimeOrder),
-
+		runtimeCount:             0, // dynamic
 		configManager:            configManager,
 		store:                    store,
 		commandCatalogRegistrars: opts.CommandCatalogRegistrars,
@@ -230,33 +202,14 @@ func runWithOptions(appName, tokenEnv string, opts RunOptions) error {
 		startupTasks:             startupTasks,
 	}
 
-	for _, rt := range runtimeOrder {
-		runtime := rt
-		runtimeService := service.NewServiceWrapper(service.ServiceWrapperSpec{
-			Name:         "bot-runtime-" + runtime.instanceID,
-			Type:         service.TypeMonitoring,
-			Priority:     service.PriorityNormal,
-			Dependencies: []string{"postgres-store"},
-			Start: func(context.Context) error {
-				return initializeBotRuntime(runtime, botOpts)
-			},
-			Stop: func(ctx context.Context) error {
-				errs := shutdownBotRuntimeFn(runtime, ctx)
-				if runtime.session != nil {
-					if err := closeDiscordSession(runtime.session); err != nil {
-						errs = append(errs, fmt.Errorf("close discord session for %s: %w", runtime.instanceID, err))
-					}
-				}
-				if len(errs) > 0 {
-					return stdErrors.Join(errs...)
-				}
-				return nil
-			},
-		})
-		if err := appServiceManager.Register(runtimeService); err != nil {
-			return fmt.Errorf("register runtime service %s: %w", runtime.instanceID, err)
-		}
+	botSupervisor := NewBotSupervisor(configManager, botOpts)
+	if err := botSupervisor.Start(); err != nil {
+		return fmt.Errorf("start bot supervisor: %w", err)
 	}
+	runtimeResolver := botSupervisor.GetResolver()
+
+	var defaultSession *discordgo.Session
+	defaultSession, _ = runtimeResolver.sessionForGuild("")
 
 	if err := appServiceManager.StartAll(); err != nil {
 		return err
@@ -290,9 +243,7 @@ func runWithOptions(appName, tokenEnv string, opts RunOptions) error {
 
 	// Steady state reached: take over explicit, ordered shutdown and disable the
 	// rollback defers so resources are not closed twice.
-	cleanupRuntimesOnReturn = false
 	closeStoreOnReturn = false
-	closeDiscordSessionsOnReturn = false
 	if err := appServiceManager.StopAll(); err != nil {
 		return fmt.Errorf("shutdown: %w", err)
 	}

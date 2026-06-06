@@ -277,17 +277,18 @@ func (bs *BaseService) getUptime() time.Duration {
 	return time.Since(*bs.startTime)
 }
 
-// ServiceWrapper can be used to wrap existing services that don't implement the Service interface
-type ServiceWrapper struct {
+// LegacyServiceWrapper can be used to wrap existing services that don't implement the Service interface
+type LegacyServiceWrapper struct {
 	*BaseService
 	wrappedStart func(context.Context) error
 	wrappedStop  func(context.Context) error
 	wrappedCheck func() bool
+	doneChan     chan struct{}
 }
 
-// ServiceWrapperSpec configures a ServiceWrapper: identity/metadata plus the
+// LegacyServiceWrapperSpec configures a LegacyServiceWrapper: identity/metadata plus the
 // start/stop/health callbacks invoked through the wrapper's hooks.
-type ServiceWrapperSpec struct {
+type LegacyServiceWrapperSpec struct {
 	Name         string
 	Type         ServiceType
 	Priority     ServicePriority
@@ -297,13 +298,14 @@ type ServiceWrapperSpec struct {
 	Check        func() bool
 }
 
-// NewServiceWrapper creates a wrapper for existing services
-func NewServiceWrapper(spec ServiceWrapperSpec) *ServiceWrapper {
-	wrapper := &ServiceWrapper{
+// NewLegacyServiceWrapper creates a wrapper for existing services
+func NewLegacyServiceWrapper(spec LegacyServiceWrapperSpec) *LegacyServiceWrapper {
+	wrapper := &LegacyServiceWrapper{
 		BaseService:  NewBaseService(spec.Name, spec.Type, spec.Priority, spec.Dependencies),
 		wrappedStart: spec.Start,
 		wrappedStop:  spec.Stop,
 		wrappedCheck: spec.Check,
+		doneChan:     make(chan struct{}),
 	}
 
 	// Set up hooks to call the wrapped functions
@@ -315,6 +317,7 @@ func NewServiceWrapper(spec ServiceWrapperSpec) *ServiceWrapper {
 	})
 
 	wrapper.SetStopHook(func(ctx context.Context) error {
+		defer close(wrapper.doneChan)
 		if wrapper.wrappedStop != nil {
 			return wrapper.wrappedStop(ctx)
 		}
@@ -343,6 +346,11 @@ func NewServiceWrapper(spec ServiceWrapperSpec) *ServiceWrapper {
 	})
 
 	return wrapper
+}
+
+// Done returns a channel that is closed when the service stops.
+func (s *LegacyServiceWrapper) Done() <-chan struct{} {
+	return s.doneChan
 }
 
 // ManagedService provides a higher-level service implementation with automatic lifecycle management

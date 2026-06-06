@@ -755,6 +755,12 @@ type ConfigManager struct {
 	indexMisses     atomic.Uint64
 	indexDuplicates atomic.Uint64
 	mu              sync.RWMutex
+
+	// Watcher fields
+	watchers      []ConfigWatcher
+	watcherMu     sync.Mutex
+	debounceTimer *time.Timer
+	debounceMu    sync.Mutex
 }
 
 type publishedConfigSnapshot struct {

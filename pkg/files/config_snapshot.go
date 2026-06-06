@@ -118,6 +118,10 @@ func (mgr *ConfigManager) UpdateConfig(fn func(*BotConfig) error) (BotConfig, er
 	}
 
 	snapshot := mgr.publishSnapshotLocked()
+	
+	// Notify watchers of the successful update
+	mgr.notifyWatchers()
+
 	if snapshot == nil || snapshot.config == nil {
 		return BotConfig{Guilds: []GuildConfig{}}, nil
 	}

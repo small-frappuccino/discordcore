@@ -110,6 +110,10 @@ func (mgr *ConfigManager) saveConfigLocked() error {
 	}
 
 	log.ApplicationLogger().Info(fmt.Sprintf(LogSaveConfigSuccess, mgr.ConfigPath()))
+	
+	// Notify watchers of the successful save
+	mgr.notifyWatchers()
+
 	return nil
 }
 
