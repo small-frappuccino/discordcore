@@ -56,37 +56,25 @@ export function CorePage() {
                   title="Instance: main"
                   description={configuredTokens["main"] ? "A token is currently configured for this instance." : "No token configured for this instance."}
                   control={
-                    <div className="flex items-center gap-2">
-                      <input 
-                        type="password" 
-                        className="w-full max-w-[240px] px-3 py-2 bg-surface-base border border-border-default rounded-md text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-shadow"
-                        placeholder={configuredTokens["main"] ? "••••••••" : "Enter bot token..."}
-                        value={tokensState["main"] !== undefined ? tokensState["main"] : ""}
-                        onChange={(e) => setTokensState(prev => ({ ...prev, main: e.target.value }))}
-                      />
-                      {(configuredTokens["main"] || tokensState["main"] !== undefined) && (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => setTokensState(prev => ({ ...prev, main: "" }))}
-                        >
-                          Clear
-                        </Button>
-                      )}
-                    </div>
+                    <input 
+                      type="password" 
+                      className="tahoe-text-input w-full min-w-[320px]"
+                      placeholder={configuredTokens["main"] ? "••••••••" : "Enter bot token..."}
+                      value={tokensState["main"] !== undefined ? tokensState["main"] : ""}
+                      onChange={(e) => setTokensState(prev => ({ ...prev, main: e.target.value }))}
+                    />
                   }
                 />
 
                 {/* Secondary Instances (Toggleable) */}
-                {secondaryInstances.map(instanceId => {
+                {secondaryInstances.map((instanceId) => {
                   const hasToken = !!configuredTokens[instanceId];
                   const isEnabled = enabledInstances[instanceId] || hasToken;
                   const label = instanceId === "companion" ? "discordqotd (companion)" : instanceId;
                   
                   return (
-                    <div key={instanceId} className="flex flex-col border-t border-border-subtle">
+                    <div key={instanceId} className="flex flex-col">
                       <SettingsRow
-                        className="!border-b-0"
                         title={`Instance: ${label}`}
                         description={hasToken ? "A token is currently configured for this instance." : "Enable to configure a custom token for this instance."}
                         control={
@@ -106,25 +94,14 @@ export function CorePage() {
                         }
                       />
                       {isEnabled && (
-                        <div className="px-5 pb-5 pt-1 flex items-center justify-end">
-                          <div className="flex items-center gap-2">
-                            <input 
-                              type="password" 
-                              className="w-full min-w-[320px] px-3 py-2 bg-surface-base border border-border-default rounded-md text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-shadow"
-                              placeholder={hasToken ? "••••••••" : "Enter bot token..."}
-                              value={tokensState[instanceId] !== undefined ? tokensState[instanceId] : ""}
-                              onChange={(e) => setTokensState(prev => ({ ...prev, [instanceId]: e.target.value }))}
-                            />
-                            {(hasToken || tokensState[instanceId] !== undefined) && (
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => setTokensState(prev => ({ ...prev, [instanceId]: "" }))}
-                              >
-                                Clear
-                              </Button>
-                            )}
-                          </div>
+                        <div className="px-5 py-4 flex items-center justify-end" style={{ borderTop: "1px solid var(--border-subtle)", backgroundColor: "transparent" }}>
+                          <input 
+                            type="password" 
+                            className="tahoe-text-input w-full min-w-[320px]"
+                            placeholder={hasToken ? "••••••••" : "Enter bot token..."}
+                            value={tokensState[instanceId] !== undefined ? tokensState[instanceId] : ""}
+                            onChange={(e) => setTokensState(prev => ({ ...prev, [instanceId]: e.target.value }))}
+                          />
                         </div>
                       )}
                     </div>
