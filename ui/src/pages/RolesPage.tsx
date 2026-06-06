@@ -44,7 +44,7 @@ export function RolesPage() {
             </PageHeader>
 
             {isLoading ? (
-              <>
+              <Stack spacing="xl">
                 <Stack spacing="sm">
                   <Skeleton className="h-6 w-48" />
                   <SettingsGroupSkeleton rows={2} />
@@ -57,7 +57,7 @@ export function RolesPage() {
                   <Skeleton className="h-6 w-48" />
                   <SettingsGroupSkeleton rows={2} />
                 </Stack>
-              </>
+              </Stack>
             ) : (
               <Stack spacing="xl">
                 <Stack spacing="sm">

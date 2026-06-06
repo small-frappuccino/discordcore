@@ -2,6 +2,7 @@ import {
   PageHeader,
   Badge,
   PageContainer,
+  Skeleton,
   SettingsGroupSkeleton,
   FormProvider,
 } from "../components/ui";
@@ -44,10 +45,13 @@ export function ModerationPage() {
               </PageHeader.TitleRow>
               <PageHeader.Description>Configure AutoMod, Logging, and specific moderation roles.</PageHeader.Description>
             </PageHeader>
-            <Stack spacing="lg">
-              <SettingsGroupSkeleton rows={2} />
+            <Stack spacing="xl">
               <Stack spacing="sm">
-                <h3 className="text-lg">Roles Config</h3>
+                <Skeleton className="h-6 w-48" />
+                <SettingsGroupSkeleton rows={2} />
+              </Stack>
+              <Stack spacing="sm">
+                <Skeleton className="h-6 w-48" />
                 <SettingsGroupSkeleton rows={1} />
               </Stack>
             </Stack>

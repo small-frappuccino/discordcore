@@ -1,4 +1,4 @@
-import { SettingsGroupSkeleton, FormProvider } from "../../components/ui";
+import { Skeleton, SettingsGroupSkeleton, FormProvider } from "../../components/ui";
 import {
   SettingsGroup,
   SettingsRow,
@@ -20,7 +20,14 @@ export function TicketsSettingsPage() {
             <h2 className="text-xl font-semibold">Automation Settings</h2>
             <p className="text-muted">Configure auto-close timers, transcript logs, and system enablement.</p>
           </div>
-          <SettingsGroupSkeleton rows={3} />
+          <Stack spacing="sm">
+            <Skeleton className="h-6 w-48" />
+            <SettingsGroupSkeleton rows={1} />
+          </Stack>
+          <Stack spacing="sm">
+            <Skeleton className="h-6 w-48" />
+            <SettingsGroupSkeleton rows={3} />
+          </Stack>
         </Stack>
       ) : (
       <Stack spacing="xl">

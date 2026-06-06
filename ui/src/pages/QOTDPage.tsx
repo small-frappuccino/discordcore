@@ -1,4 +1,4 @@
-import { PageHeader, Badge, PageContainer, SettingsGroupSkeleton, FormProvider } from "../components/ui";
+import { PageHeader, Badge, PageContainer, Skeleton, SettingsGroupSkeleton, FormProvider } from "../components/ui";
 import {
   SettingsGroup,
   SettingsRow,
@@ -34,11 +34,14 @@ export function QOTDPage() {
             </PageHeader>
 
             {isLoading ? (
-              <Stack spacing="lg">
-                <SettingsGroupSkeleton rows={3} />
+              <Stack spacing="xl">
                 <Stack spacing="sm">
-                  <h2 className="text-lg">Publish Schedule (UTC)</h2>
+                  <Skeleton className="h-6 w-48" />
                   <SettingsGroupSkeleton rows={2} />
+                </Stack>
+                <Stack spacing="sm">
+                  <Skeleton className="h-6 w-48" />
+                  <SettingsGroupSkeleton rows={1} />
                 </Stack>
               </Stack>
             ) : config ? (
