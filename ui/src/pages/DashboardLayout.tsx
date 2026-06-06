@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useState } from "react";
 import { Link, Outlet, useLocation, useParams } from "react-router-dom";
 import { GuildProvider } from "../context/GuildContext";
 import { ServerSelector } from "../components/layout/ServerSelector";
@@ -25,6 +25,7 @@ const navigation: NavItem[] = [
 export const DashboardLayout = memo(function DashboardLayout() {
   const location = useLocation();
   const { guildId } = useParams<{ guildId: string }>();
+  const [brandIconError, setBrandIconError] = useState(false);
 
   return (
     <div className="dashboard-layout">
@@ -32,14 +33,15 @@ export const DashboardLayout = memo(function DashboardLayout() {
       <aside className="shell-sidebar">
         <div className="shell-sidebar-header">
           <Link to="/manage" className="shell-brand">
-            <img 
-              src={siteBrandIconSrc} 
-              alt="Brand" 
-              onError={(e) => {
-                e.currentTarget.style.display = 'none';
-                e.currentTarget.parentElement?.insertAdjacentHTML('afterbegin', '<div style="width: 28px; height: 28px; border-radius: 50%; background-color: var(--bg-surface-active); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold;">D</div>');
-              }}
-            />
+            {brandIconError ? (
+              <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: 'var(--bg-surface-active)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 'bold' }}>D</div>
+            ) : (
+              <img 
+                src={siteBrandIconSrc} 
+                alt="Brand" 
+                onError={() => setBrandIconError(true)}
+              />
+            )}
             <span>Discordcore</span>
           </Link>
         </div>

@@ -8,6 +8,7 @@ export const ServerSelector = memo(function ServerSelector() {
   const { accessibleGuilds, manageableGuilds } = useDashboardSession();
 
   const [isServerMenuOpen, setIsServerMenuOpen] = useState(false);
+  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
   const serverMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -39,15 +40,12 @@ export const ServerSelector = memo(function ServerSelector() {
         onClick={() => setIsServerMenuOpen(!isServerMenuOpen)}
       >
         <div className="shell-trigger-info" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
-          {currentGuild?.icon ? (
+          {currentGuild?.icon && !imageErrors[currentGuild.id] ? (
             <img 
               src={`https://cdn.discordapp.com/icons/${currentGuild.id}/${currentGuild.icon}.png`} 
               alt="" 
               className="w-8 h-8 rounded-full" 
-              onError={(e) => {
-                e.currentTarget.style.display = 'none';
-                e.currentTarget.parentElement?.insertAdjacentHTML('afterbegin', `<div class="w-8 h-8 rounded-full bg-surface-active flex items-center justify-center text-xs font-semibold">${currentGuild.name.charAt(0)}</div>`);
-              }}
+              onError={() => setImageErrors(prev => ({ ...prev, [currentGuild.id]: true }))}
             />
           ) : currentGuild ? (
             <div className="w-8 h-8 rounded-full bg-surface-active flex items-center justify-center text-xs font-semibold">
@@ -83,8 +81,13 @@ export const ServerSelector = memo(function ServerSelector() {
                 navigate(`/manage/${g.id}/core`);
               }}
             >
-              {g.icon ? (
-                <img src={`https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png`} alt="" className="w-5 h-5 rounded-full" />
+              {g.icon && !imageErrors[g.id] ? (
+                <img 
+                  src={`https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png`} 
+                  alt="" 
+                  className="w-5 h-5 rounded-full" 
+                  onError={() => setImageErrors(prev => ({ ...prev, [g.id]: true }))}
+                />
               ) : (
                 <div className="w-5 h-5 rounded-full bg-surface-active flex items-center justify-center text-xs">
                   {g.name.charAt(0)}
