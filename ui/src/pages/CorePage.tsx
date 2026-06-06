@@ -15,8 +15,12 @@ export function CorePage() {
   const isDirty = Object.keys(tokensState).length > 0;
 
   // Ensure main is always present, filter it out from secondary instances
-  const secondaryInstances = Array.from(new Set([...availableInstances, ...Object.keys(configuredTokens)]))
-    .filter(id => id !== "main");
+  // We explicitly add 'companion' to the set so it always renders, even if not currently connected
+  const secondaryInstances = Array.from(new Set([
+    "companion",
+    ...availableInstances, 
+    ...Object.keys(configuredTokens)
+  ])).filter(id => id !== "main");
 
   return (
     <PageContainer>
