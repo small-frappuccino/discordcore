@@ -273,6 +273,9 @@ select[multiple].form-select {
   max-width: 768px;
   margin: 0 auto;
   width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
 }
 
 /* Settings Group (Flattened) */
@@ -346,6 +349,8 @@ select[multiple].form-select {
   max-width: 768px;
   margin: 0 auto;
   width: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
   /* The border-radius clipping is handled on the children (first/last child) to prevent SelectMenu overlap issues with overflow:hidden */
 }
 

@@ -1,8 +1,10 @@
-import { memo, useState } from "react";
+import { memo, useState, useEffect } from "react";
 import { Link, Outlet, useLocation, useParams } from "react-router-dom";
 import { GuildProvider } from "../context/GuildContext";
 import { ServerSelector } from "../components/layout/ServerSelector";
 import { AccountSelector } from "../components/layout/AccountSelector";
+import { useDashboardSession } from "../context/DashboardSessionContext";
+import { getHealthLive } from "../api/domains/health";
 
 const siteBrandIconSrc = "/favicon.ico";
 
@@ -25,7 +27,21 @@ const navigation: NavItem[] = [
 export const DashboardLayout = memo(function DashboardLayout() {
   const location = useLocation();
   const { guildId } = useParams<{ guildId: string }>();
+  const { client } = useDashboardSession();
   const [brandIconError, setBrandIconError] = useState(false);
+  const [botName, setBotName] = useState<string | null>(null);
+  const [botAvatar, setBotAvatar] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    getHealthLive(client).then(res => {
+      if (mounted && res.available && res.snapshot.bot_user) {
+        setBotName(res.snapshot.bot_user);
+        setBotAvatar(res.snapshot.bot_avatar_url || null);
+      }
+    }).catch(() => {});
+    return () => { mounted = false; };
+  }, [client]);
 
   return (
     <div className="dashboard-layout">
@@ -33,7 +49,15 @@ export const DashboardLayout = memo(function DashboardLayout() {
       <aside className="shell-sidebar">
         <div className="shell-sidebar-header">
           <Link to="/manage" className="shell-brand">
-            {brandIconError ? (
+            {botAvatar && !brandIconError ? (
+              <img 
+                src={botAvatar} 
+                alt="Brand" 
+                onError={() => setBrandIconError(true)}
+              />
+            ) : botName && !brandIconError ? (
+              <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: 'var(--bg-surface-active)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 'bold' }}>{botName.charAt(0).toUpperCase()}</div>
+            ) : brandIconError ? (
               <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: 'var(--bg-surface-active)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 'bold' }}>D</div>
             ) : (
               <img 
@@ -42,7 +66,7 @@ export const DashboardLayout = memo(function DashboardLayout() {
                 onError={() => setBrandIconError(true)}
               />
             )}
-            <span>Discordcore</span>
+            <span>{botName || "Discordcore"}</span>
           </Link>
         </div>
 

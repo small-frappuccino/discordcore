@@ -23,6 +23,7 @@ type LiveHealthSnapshot struct {
 	AppVersion    string `json:"app_version,omitempty"`
 	CoreVersion   string `json:"core_version"`
 	BotUser       string `json:"bot_user,omitempty"`
+	BotAvatarURL  string `json:"bot_avatar_url,omitempty"`
 	StartedAt     string `json:"started_at"`
 	UptimeSeconds int64  `json:"uptime_seconds"`
 }
@@ -48,12 +49,25 @@ func (s *Server) handleLiveHealthRoute(w http.ResponseWriter, r *http.Request) {
 		if uptime < 0 {
 			uptime = 0
 		}
+		botUser := strings.TrimSpace(files.DiscordBotName)
+		botAvatarURL := ""
+		if s.discordSession != nil {
+			session, err := s.discordSession("", "")
+			if err == nil && session != nil && session.State != nil && session.State.User != nil {
+				if session.State.User.Username != "" {
+					botUser = session.State.User.Username
+				}
+				botAvatarURL = session.State.User.AvatarURL("")
+			}
+		}
+
 		return LiveHealthSnapshot{
 			Status:        "ok",
 			App:           strings.TrimSpace(files.ConfiguredAppName),
 			AppVersion:    strings.TrimSpace(files.AppVersion),
 			CoreVersion:   files.DiscordCoreVersion,
-			BotUser:       strings.TrimSpace(files.DiscordBotName),
+			BotUser:       botUser,
+			BotAvatarURL:  botAvatarURL,
 			StartedAt:     startedAt.UTC().Format(time.RFC3339),
 			UptimeSeconds: int64(uptime.Seconds()),
 		}, ""

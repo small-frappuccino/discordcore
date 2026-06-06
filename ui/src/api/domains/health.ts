@@ -7,6 +7,7 @@ export interface HealthLiveSnapshot {
   app_version?: string;
   core_version: string;
   bot_user?: string;
+  bot_avatar_url?: string;
   started_at: string;
   uptime_seconds: number;
 }
