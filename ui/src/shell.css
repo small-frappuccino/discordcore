@@ -64,6 +64,18 @@
   transition: all var(--transition-fast);
 }
 
+.shell-nav-icon {
+  width: 20px;
+  height: 20px;
+  opacity: 0.7;
+  transition: opacity var(--transition-fast);
+}
+
+.shell-nav-link:hover .shell-nav-icon,
+.shell-nav-link.is-active .shell-nav-icon {
+  opacity: 1;
+}
+
 .shell-nav-link:hover {
   background-color: var(--bg-surface-hover);
   color: var(--text-primary);

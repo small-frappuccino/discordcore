@@ -68,6 +68,7 @@ func seedRunnerConfig(t *testing.T, store files.ConfigStore, cfg files.BotConfig
 func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 	const (
 		appName  = "discordmain-run-test"
+	)
 	appDataDir, err := os.MkdirTemp("", "discordmain-run-test-*")
 	if err != nil {
 		t.Fatalf("create APPDATA temp dir: %v", err)
@@ -290,6 +291,7 @@ func TestRun_ShutdownAggregatesStoreAndSessionCloseErrors(t *testing.T) {
 }
 
 func TestRun_ControlServerBindFailureIsNonFatal(t *testing.T) {
+	const appName = "discordmain-run-test-bind-failure"
 	appDataDir, err := os.MkdirTemp("", "discordmain-run-test-*")
 	if err != nil {
 		t.Fatalf("create APPDATA temp dir: %v", err)

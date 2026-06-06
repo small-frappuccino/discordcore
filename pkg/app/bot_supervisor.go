@@ -171,9 +171,36 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token string) {
 
 	capabilities := resolveBotRuntimeCapabilities(s.configManager.Config(), instanceID, s.opts.defaultBotInstanceID)
 
-	runtime, err := openBotRuntime(resolvedBotInstance{ID: instanceID, Token: token}, capabilities)
+	var runtime *botRuntime
+	var err error
+	
+	baseDelay := 2 * time.Second
+	maxDelay := 30 * time.Second
+	maxRetries := 5
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		runtime, err = openBotRuntime(resolvedBotInstance{ID: instanceID, Token: token}, capabilities)
+		if err == nil {
+			break
+		}
+		
+		log.ApplicationLogger().Warn("failed to open bot runtime, retrying", "botInstanceID", instanceID, "attempt", attempt+1, "error", err)
+		
+		delay := float64(baseDelay) * float64(uint(1)<<attempt)
+		if delay > float64(maxDelay) {
+			delay = float64(maxDelay)
+		}
+		
+		// Pseudo-jitter using time component if math/rand is not imported to avoid import bloat, 
+		// but wait we can just add simple jitter
+		jitter := time.Duration(float64(time.Now().UnixNano()%1000) / 1000.0 * delay * 0.2)
+		sleepTime := time.Duration(delay) + jitter
+		
+		time.Sleep(sleepTime)
+	}
+
 	if err != nil {
-		log.ApplicationLogger().Error("failed to open bot runtime", "botInstanceID", instanceID, "error", err)
+		log.ApplicationLogger().Error("failed to open bot runtime after retries", "botInstanceID", instanceID, "error", err)
 		s.mu.Lock()
 		delete(s.knownTokens, instanceID)
 		s.mu.Unlock()

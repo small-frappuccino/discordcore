@@ -594,11 +594,5 @@ func setupStorage(dbb resolvedDatabaseBootstrap) (*storage.Store, *files.ConfigM
 		return nil, nil, fmt.Errorf("sync runtime database bootstrap config: %w", err)
 	}
 
-	if seeded, err := seedBotTokensFromEnv(configManager); err != nil {
-		return nil, nil, fmt.Errorf("seed bot tokens from environment: %w", err)
-	} else if seeded > 0 {
-		log.ApplicationLogger().Info(fmt.Sprintf("Seeded %d bot token(s) from environment into config store", seeded))
-	}
-
 	return store, configManager, nil
 }

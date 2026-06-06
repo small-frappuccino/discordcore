@@ -8,20 +8,29 @@ import { getHealthLive } from "../api/domains/health";
 
 const siteBrandIconSrc = "/favicon.ico";
 
+import { CoreSettingsIcon } from "../components/icons/CoreSettingsIcon";
+import { QOTDIcon } from "../components/icons/QOTDIcon";
+import { ModerationIcon } from "../components/icons/ModerationIcon";
+import { RolesIcon } from "../components/icons/RolesIcon";
+import { PartnersIcon } from "../components/icons/PartnersIcon";
+import { EmbedsIcon } from "../components/icons/EmbedsIcon";
+import { TicketsIcon } from "../components/icons/TicketsIcon";
+
 type NavItem = {
   id: string;
   label: string;
   to: string;
+  icon?: React.FC<React.SVGProps<SVGSVGElement>>;
 };
 
 const navigation: NavItem[] = [
-  { id: "core", label: "Core Settings", to: "/core" },
-  { id: "qotd", label: "QOTD", to: "/qotd" },
-  { id: "moderation", label: "Moderation", to: "/moderation" },
-  { id: "roles", label: "Roles", to: "/roles" },
-  { id: "partners", label: "Partners", to: "/partners" },
-  { id: "embeds", label: "Embeds", to: "/embeds" },
-  { id: "tickets", label: "Tickets", to: "/tickets" },
+  { id: "core", label: "Core Settings", to: "/core", icon: CoreSettingsIcon },
+  { id: "qotd", label: "QOTD", to: "/qotd", icon: QOTDIcon },
+  { id: "moderation", label: "Moderation", to: "/moderation", icon: ModerationIcon },
+  { id: "roles", label: "Roles", to: "/roles", icon: RolesIcon },
+  { id: "partners", label: "Partners", to: "/partners", icon: PartnersIcon },
+  { id: "embeds", label: "Embeds", to: "/embeds", icon: EmbedsIcon },
+  { id: "tickets", label: "Tickets", to: "/tickets", icon: TicketsIcon },
 ];
 
 export const DashboardLayout = memo(function DashboardLayout() {
@@ -81,7 +90,8 @@ export const DashboardLayout = memo(function DashboardLayout() {
                 to={fullPath}
                 className={`shell-nav-link ${isActive ? "is-active" : ""}`}
               >
-                {item.label}
+                {item.icon && <item.icon className="shell-nav-icon" />}
+                <span>{item.label}</span>
               </Link>
             );
           })}
