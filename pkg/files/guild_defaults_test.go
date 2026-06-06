@@ -7,19 +7,13 @@ import (
 func TestNewMinimalGuildConfigDisablesAllFeatures(t *testing.T) {
 	t.Parallel()
 
-	guild := NewMinimalGuildConfig("guild-new", "companion")
+	guild := NewMinimalGuildConfig("guild-new")
 	cfg := &BotConfig{
 		Guilds: []GuildConfig{guild},
 	}
 
 	if guild.GuildID != "guild-new" {
 		t.Fatalf("expected guild id to be preserved, got %+v", guild)
-	}
-	if guild.BotInstanceID != "companion" {
-		t.Fatalf("expected bot instance binding to be preserved, got %+v", guild)
-	}
-	if guild.DomainBotInstanceIDs != nil {
-		t.Fatalf("expected minimal guild to start without domain overrides, got %+v", guild.DomainBotInstanceIDs)
 	}
 	if guild.Channels != (ChannelsConfig{}) {
 		t.Fatalf("expected minimal guild to avoid channel bootstrap, got %+v", guild.Channels)
@@ -70,22 +64,19 @@ func TestNewMinimalGuildConfigDisablesAllFeatures(t *testing.T) {
 	}
 }
 
-func TestEnsureMinimalGuildConfigForBotPersistsDormantGuild(t *testing.T) {
+func TestEnsureMinimalGuildConfigPersistsDormantGuild(t *testing.T) {
 	t.Parallel()
 
 	store := &MemoryConfigStore{}
 	mgr := NewConfigManagerWithStore(store)
 
-	if err := mgr.EnsureMinimalGuildConfigForBot("guild-new", "companion"); err != nil {
+	if err := mgr.EnsureMinimalGuildConfig("guild-new"); err != nil {
 		t.Fatalf("ensure minimal guild config: %v", err)
 	}
 
 	snapshot := mgr.SnapshotConfig()
 	if len(snapshot.Guilds) != 1 {
 		t.Fatalf("expected one guild in snapshot, got %+v", snapshot.Guilds)
-	}
-	if snapshot.Guilds[0].BotInstanceID != "companion" {
-		t.Fatalf("expected persisted bot instance binding, got %+v", snapshot.Guilds[0])
 	}
 	if resolved := snapshot.ResolveFeatures("guild-new"); resolved.Services.Commands {
 		t.Fatalf("expected dormant guild commands feature to be disabled, got %+v", resolved.Services)
@@ -98,7 +89,7 @@ func TestEnsureMinimalGuildConfigForBotPersistsDormantGuild(t *testing.T) {
 	if len(loaded.Guilds) != 1 {
 		t.Fatalf("expected one persisted guild, got %+v", loaded.Guilds)
 	}
-	if loaded.Guilds[0].GuildID != "guild-new" || loaded.Guilds[0].BotInstanceID != "companion" {
+	if loaded.Guilds[0].GuildID != "guild-new" {
 		t.Fatalf("unexpected persisted guild config: %+v", loaded.Guilds[0])
 	}
 	if resolved := loaded.ResolveFeatures("guild-new"); resolved.Logging.MemberJoin {
@@ -106,7 +97,7 @@ func TestEnsureMinimalGuildConfigForBotPersistsDormantGuild(t *testing.T) {
 	}
 }
 
-func TestEnsureMinimalGuildConfigForBotPreservesDomainOverridesOnExistingGuild(t *testing.T) {
+func TestEnsureMinimalGuildConfigPreservesDomainOverridesOnExistingGuild(t *testing.T) {
 	t.Parallel()
 
 	store := &MemoryConfigStore{}
@@ -114,16 +105,13 @@ func TestEnsureMinimalGuildConfigForBotPreservesDomainOverridesOnExistingGuild(t
 	if _, err := mgr.UpdateConfig(func(cfg *BotConfig) error {
 		cfg.Guilds = []GuildConfig{{
 			GuildID: "guild-existing",
-			DomainBotInstanceIDs: map[string]string{
-				BotDomainQOTD: "companion",
-			},
 		}}
 		return nil
 	}); err != nil {
 		t.Fatalf("seed existing guild config: %v", err)
 	}
 
-	if err := mgr.EnsureMinimalGuildConfigForBot("guild-existing", "main"); err != nil {
+	if err := mgr.EnsureMinimalGuildConfig("guild-existing"); err != nil {
 		t.Fatalf("ensure minimal guild config: %v", err)
 	}
 
@@ -131,19 +119,13 @@ func TestEnsureMinimalGuildConfigForBotPreservesDomainOverridesOnExistingGuild(t
 	if len(snapshot.Guilds) != 1 {
 		t.Fatalf("expected one guild in snapshot, got %+v", snapshot.Guilds)
 	}
-	if got := snapshot.Guilds[0].BotInstanceID; got != "main" {
-		t.Fatalf("expected guild-wide bot binding main, got %q", got)
-	}
-	if got := snapshot.Guilds[0].DomainBotInstanceIDs[BotDomainQOTD]; got != "companion" {
-		t.Fatalf("expected qotd override to be preserved, got %q", got)
-	}
 }
 
-func TestEnsureMinimalGuildConfigForBotPersistsDormantGuildToPostgres(t *testing.T) {
+func TestEnsureMinimalGuildConfigPersistsDormantGuildToPostgres(t *testing.T) {
 	store := openIsolatedPostgresConfigStore(t)
 	mgr := NewConfigManagerWithStore(store)
 
-	if err := mgr.EnsureMinimalGuildConfigForBot("guild-pg", "main"); err != nil {
+	if err := mgr.EnsureMinimalGuildConfig("guild-pg"); err != nil {
 		t.Fatalf("ensure minimal guild config in postgres: %v", err)
 	}
 
@@ -154,7 +136,7 @@ func TestEnsureMinimalGuildConfigForBotPersistsDormantGuildToPostgres(t *testing
 	if len(loaded.Guilds) != 1 {
 		t.Fatalf("expected one persisted guild in postgres, got %+v", loaded.Guilds)
 	}
-	if loaded.Guilds[0].GuildID != "guild-pg" || loaded.Guilds[0].BotInstanceID != "main" {
+	if loaded.Guilds[0].GuildID != "guild-pg" {
 		t.Fatalf("unexpected postgres-backed guild config: %+v", loaded.Guilds[0])
 	}
 	if resolved := loaded.ResolveFeatures("guild-pg"); resolved.Services.Monitoring || resolved.Services.Commands || resolved.Logging.MemberJoin {

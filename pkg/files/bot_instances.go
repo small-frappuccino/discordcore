@@ -12,7 +12,7 @@ func NormalizeBotInstanceID(botInstanceID string) string {
 func (gc GuildConfig) BelongsToBotInstance(botInstanceID string) bool {
 	botInstanceID = NormalizeBotInstanceID(botInstanceID)
 	if botInstanceID == "" {
-		return false
+		return true
 	}
 	token, ok := gc.BotInstanceTokens[botInstanceID]
 	return ok && len(token) > 0
@@ -26,6 +26,12 @@ func (cfg *BotConfig) GuildsForBotInstance(botInstanceID string) []GuildConfig {
 	}
 
 	target := NormalizeBotInstanceID(botInstanceID)
+	if target == "" {
+		out := make([]GuildConfig, len(cfg.Guilds))
+		copy(out, cfg.Guilds)
+		return out
+	}
+
 	out := make([]GuildConfig, 0, len(cfg.Guilds))
 	for _, guild := range cfg.Guilds {
 		if guild.BelongsToBotInstance(target) {

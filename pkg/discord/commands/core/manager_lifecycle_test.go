@@ -217,7 +217,7 @@ func TestCommandManagerSetupCommandsUsesGlobalSyncWithoutDomainOverrides(t *test
 	}
 }
 
-func TestCommandManagerSetupCommandsUsesGuildSyncWhenDomainOverridesExist(t *testing.T) {
+func TestCommandManagerSetupCommandsUsesGuildSyncWhenBotInstanceTokensExist(t *testing.T) {
 	tests := []struct {
 		name                  string
 		allowRoute            func(routeKey InteractionRouteKey) bool

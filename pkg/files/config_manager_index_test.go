@@ -65,10 +65,6 @@ func TestSnapshotConfigReturnsDefensiveCopy(t *testing.T) {
 	mgr := newTestConfigManager([]GuildConfig{
 		{
 			GuildID:       "g1",
-			BotInstanceID: "main",
-			DomainBotInstanceIDs: map[string]string{
-				BotDomainQOTD: "companion",
-			},
 			Channels: ChannelsConfig{
 				MessageDelete: "c1",
 			},
@@ -80,18 +76,11 @@ func TestSnapshotConfigReturnsDefensiveCopy(t *testing.T) {
 		t.Fatal("expected config snapshot")
 	}
 
-	cfg.Guilds[0].Channels.MessageDelete = "mutated"
-	cfg.Guilds[0].DomainBotInstanceIDs[BotDomainQOTD] = "mutated"
+	cfg.Guilds[0].Channels.MessageDelete = "modified"
 
-	fresh := mgr.SnapshotConfig()
-	if len(fresh.Guilds) == 0 {
-		t.Fatal("expected fresh config snapshot")
-	}
+	fresh := mgr.Config()
 	if got := fresh.Guilds[0].Channels.MessageDelete; got != "c1" {
 		t.Fatalf("expected original channel to remain unchanged, got %q", got)
-	}
-	if got := fresh.Guilds[0].DomainBotInstanceIDs[BotDomainQOTD]; got != "companion" {
-		t.Fatalf("expected original domain bot binding to remain unchanged, got %q", got)
 	}
 }
 

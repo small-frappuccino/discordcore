@@ -64,16 +64,14 @@ func TestRunUsesMainProfileOptions(t *testing.T) {
 	if len(called.opts.KnownBotInstanceIDs) != 1 || called.opts.KnownBotInstanceIDs[0] != QOTDBotInstanceID {
 		t.Fatalf("unexpected known bot ids: %+v", called.opts.KnownBotInstanceIDs)
 	}
-	if len(called.opts.SupportedDomains) != 1 || called.opts.SupportedDomains[0] != "default" {
-		t.Fatalf("unexpected supported domains: %+v", called.opts.SupportedDomains)
-	}
+
 	if len(called.opts.CommandCatalogRegistrars) != 2 {
 		t.Fatalf("unexpected main command registrars: %+v", called.opts.CommandCatalogRegistrars)
 	}
-	if called.opts.CommandCatalogRegistrars[0].Domain != "" || called.opts.CommandCatalogRegistrars[0].RequiredCapabilities.Admin {
+	if called.opts.CommandCatalogRegistrars[0].RequiredCapabilities.Admin {
 		t.Fatalf("expected base registrar first, got %+v", called.opts.CommandCatalogRegistrars)
 	}
-	if called.opts.CommandCatalogRegistrars[1].Domain != "" || !called.opts.CommandCatalogRegistrars[1].RequiredCapabilities.Admin {
+	if !called.opts.CommandCatalogRegistrars[1].RequiredCapabilities.Admin {
 		t.Fatalf("expected admin registrar second, got %+v", called.opts.CommandCatalogRegistrars)
 	}
 	if !called.opts.Control.LocalHTTPS.Enabled || !called.opts.Control.LocalHTTPS.AutoTrust {
@@ -120,10 +118,8 @@ func TestRunUsesQOTDProfileOptions(t *testing.T) {
 	if len(called.opts.KnownBotInstanceIDs) != 1 || called.opts.KnownBotInstanceIDs[0] != MainBotInstanceID {
 		t.Fatalf("unexpected known bot ids: %+v", called.opts.KnownBotInstanceIDs)
 	}
-	if len(called.opts.SupportedDomains) != 1 || called.opts.SupportedDomains[0] != files.BotDomainQOTD {
-		t.Fatalf("unexpected supported domains: %+v", called.opts.SupportedDomains)
-	}
-	if len(called.opts.CommandCatalogRegistrars) != 1 || called.opts.CommandCatalogRegistrars[0].Domain != files.BotDomainQOTD {
+
+	if len(called.opts.CommandCatalogRegistrars) != 1 {
 		t.Fatalf("unexpected qotd command registrars: %+v", called.opts.CommandCatalogRegistrars)
 	}
 }

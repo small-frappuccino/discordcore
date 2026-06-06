@@ -145,10 +145,10 @@ func (s *Server) handleSettingsOverviewGet(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	registry := buildGuildRegistryWorkspace(cfg, registrySources, allowedGuilds, s.defaultBotInstanceID)
+	registry := buildGuildRegistryWorkspace(cfg, registrySources, allowedGuilds)
 	writeJSON(w, http.StatusOK, settingsOverviewResponse{
 		Status:    "ok",
-		Workspace: buildSettingsOverview(cfg, s.configManager.ConfigPath(), registry, allowedGuilds, s.defaultBotInstanceID),
+		Workspace: buildSettingsOverview(cfg, s.configManager.ConfigPath(), registry, allowedGuilds),
 	})
 }
 
@@ -209,8 +209,8 @@ func (s *Server) handleGuildRegistryGet(w http.ResponseWriter, r *http.Request, 
 
 	writeJSON(w, http.StatusOK, guildRegistryResponse{
 		Status:    "ok",
-		Workspace: buildGuildRegistryWorkspace(cfg, registrySources, allowedGuilds, s.defaultBotInstanceID),
-		Guilds:    buildConfiguredGuildSummaries(cfg, allowedGuilds, s.defaultBotInstanceID),
+		Workspace: buildGuildRegistryWorkspace(cfg, registrySources, allowedGuilds),
+		Guilds:    buildConfiguredGuildSummaries(cfg, allowedGuilds),
 	})
 }
 
@@ -243,7 +243,7 @@ func (s *Server) handleGuildRegistrationPost(w http.ResponseWriter, r *http.Requ
 			Status:    "ok",
 			GuildID:   guildID,
 			Created:   false,
-			Workspace: buildGuildSettingsWorkspaceWithBindings(current, guild, availableBotInstanceIDs, s.defaultBotInstanceID),
+			Workspace: buildGuildSettingsWorkspaceWithBindings(current, guild, availableBotInstanceIDs),
 		})
 		return
 	}
@@ -275,7 +275,7 @@ func (s *Server) handleGuildRegistrationPost(w http.ResponseWriter, r *http.Requ
 		Status:    "ok",
 		GuildID:   guildID,
 		Created:   true,
-		Workspace: buildGuildSettingsWorkspaceWithBindings(updated, guild, availableBotInstanceIDs, s.defaultBotInstanceID),
+		Workspace: buildGuildSettingsWorkspaceWithBindings(updated, guild, availableBotInstanceIDs),
 	})
 }
 
@@ -293,7 +293,7 @@ func (s *Server) handleGuildSettingsGet(w http.ResponseWriter, r *http.Request, 
 	}
 	writeJSON(w, http.StatusOK, guildSettingsResponse{
 		Status:    "ok",
-		Workspace: buildGuildSettingsWorkspaceWithBindings(cfg, guild, availableBotInstanceIDs, s.defaultBotInstanceID),
+		Workspace: buildGuildSettingsWorkspaceWithBindings(cfg, guild, availableBotInstanceIDs),
 	})
 }
 
@@ -398,7 +398,7 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 
 	writeJSON(w, http.StatusOK, guildSettingsResponse{
 		Status:    "ok",
-		Workspace: buildGuildSettingsWorkspaceWithBindings(updated, guild, availableBotInstanceIDs, s.defaultBotInstanceID),
+		Workspace: buildGuildSettingsWorkspaceWithBindings(updated, guild, availableBotInstanceIDs),
 	})
 }
 
@@ -574,14 +574,6 @@ func (s *Server) resolveAvailableBotInstanceIDsForGuild(
 	return available, nil
 }
 
-func (s *Server) resolveDomainOverrideBotInstanceIDs(availableBotInstanceIDs []string) []string {
-	merged := slices.Clone(availableBotInstanceIDs)
-	if s != nil {
-		merged = append(merged, s.knownBotInstanceIDs...)
-	}
-	return normalizeBotInstanceIDs(merged)
-}
-
 func guildIDPresentInBindings(bindings []BotGuildBinding, guildID string) bool {
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
@@ -593,30 +585,6 @@ func guildIDPresentInBindings(bindings []BotGuildBinding, guildID string) bool {
 		}
 	}
 	return false
-}
-
-func selectGuildBotInstanceID(requested string, availableBotInstanceIDs []string) (string, error) {
-	availableBotInstanceIDs = normalizeBotInstanceIDs(availableBotInstanceIDs)
-	requested = strings.TrimSpace(requested)
-
-	switch {
-	case requested == "" && len(availableBotInstanceIDs) == 0:
-		return "", nil
-	case requested == "" && len(availableBotInstanceIDs) == 1:
-		return availableBotInstanceIDs[0], nil
-	case requested == "":
-		return "", fmt.Errorf("bot_instance_id is required when multiple bot instances are available")
-	}
-
-	if len(availableBotInstanceIDs) == 0 {
-		return requested, nil
-	}
-	for _, candidate := range availableBotInstanceIDs {
-		if candidate == requested {
-			return requested, nil
-		}
-	}
-	return "", fmt.Errorf("bot_instance_id %q is not available for this guild", requested)
 }
 
 func groupBotInstanceIDsByGuild(bindings []BotGuildBinding) map[string][]string {

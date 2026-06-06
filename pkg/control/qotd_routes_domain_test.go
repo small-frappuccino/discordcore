@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/small-frappuccino/discordcore/pkg/files"
 	applicationqotd "github.com/small-frappuccino/discordcore/pkg/qotd"
 )
 

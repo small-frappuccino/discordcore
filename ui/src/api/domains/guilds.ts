@@ -82,10 +82,9 @@ export interface GuildRolesSettingsSection {
 export interface GuildSettingsWorkspace {
   scope: string;
   guild_id: string;
-  bot_instance_id?: string;
   available_bot_instance_ids?: string[];
   sections: {
-    bot_instance_tokens: Record<string, string>;
+    bot_instance_tokens_configured: Record<string, boolean>;
     roles: GuildRolesSettingsSection;
   };
 }

@@ -1,7 +1,7 @@
 package app
 
 import (
-	"context"
+
 	"errors"
 	"strings"
 	"testing"
@@ -128,7 +128,7 @@ func TestBotRuntimeResolverRegisterGuildPersistsDormantConfig(t *testing.T) {
 		t.Fatalf("create companion session: %v", err)
 	}
 
-	resolver := newBotRuntimeResolver(configManager, map[string]*botRuntime{
+	_ = newBotRuntimeResolver(configManager, map[string]*botRuntime{
 		"main":      {instanceID: "main", session: mainSession},
 		"companion": {instanceID: "companion", session: companionSession},
 	}, "main")
@@ -292,7 +292,7 @@ func TestResolveBotInstancesAllowsRemoteDefaultWhenDefaultDomainIsUnsupported(t 
 
 	resolved, defaultOwnerBotInstanceID, err := resolveBotInstances("", RunOptions{
 		DefaultOwnerBotInstanceID: "main",
-		SupportedDomains:          []string{files.BotDomainQOTD},
+
 		BotCatalog: []BotInstanceDefinition{{
 			ID:       "companion",
 			TokenEnv: "COMPANION_TOKEN",

@@ -33,7 +33,6 @@ type settingsOverview struct {
 
 type configuredGuildSummary struct {
 	GuildID             string `json:"guild_id"`
-	BotInstanceID       string `json:"bot_instance_id,omitempty"`
 	ConfiguredChannels  int    `json:"configured_channels"`
 	AllowedRoles        int    `json:"allowed_roles"`
 	StatsChannels       int    `json:"stats_channels"`
@@ -56,7 +55,6 @@ type guildRegistryEntry struct {
 	Owner                   bool     `json:"owner"`
 	Permissions             int64    `json:"permissions"`
 	Configured              bool     `json:"configured"`
-	BotInstanceID           string   `json:"bot_instance_id,omitempty"`
 	AvailableBotInstanceIDs []string `json:"available_bot_instance_ids,omitempty"`
 	ConfiguredChannels      int      `json:"configured_channels,omitempty"`
 	AllowedRoles            int      `json:"allowed_roles,omitempty"`
@@ -94,14 +92,13 @@ type globalSettingsEffective struct {
 type guildSettingsWorkspace struct {
 	Scope                   string                 `json:"scope"`
 	GuildID                 string                 `json:"guild_id"`
-	BotInstanceID           string                 `json:"bot_instance_id,omitempty"`
 	AvailableBotInstanceIDs []string               `json:"available_bot_instance_ids,omitempty"`
 	Sections                guildSettingsSections  `json:"sections"`
 	Effective               guildSettingsEffective `json:"effective"`
 }
 
 type guildSettingsSections struct {
-	BotInstanceTokens map[string]string         `json:"bot_instance_tokens"`
+	BotInstanceTokensConfigured map[string]bool         `json:"bot_instance_tokens_configured"`
 	Features     files.FeatureToggles      `json:"features"`
 	Channels     files.ChannelsConfig      `json:"channels"`
 	Roles        files.RolesConfig         `json:"roles"`
@@ -219,7 +216,7 @@ func buildSettingsCatalog() settingsCatalog {
 		},
 		Guild: []settingsCatalogSection{
 			{
-				ID:          "bot_instance_tokens",
+				ID:          "bot_instance_tokens_configured",
 				Title:       "Bot instances",
 				Description: "Configured bot tokens mapped by their instance ID for this guild.",
 				Scope:       "guild",
@@ -293,14 +290,13 @@ func buildSettingsOverview(
 	configPath string,
 	registry guildRegistryWorkspace,
 	allowedGuilds map[string]struct{},
-	defaultBotInstanceID string,
 ) settingsOverview {
 	return settingsOverview{
 		ConfigPath: configPath,
 		Catalog:    buildSettingsCatalog(),
 		Global:     buildGlobalSettingsWorkspace(cfg),
 		Registry:   registry,
-		Guilds:     buildConfiguredGuildSummaries(cfg, allowedGuilds, defaultBotInstanceID),
+		Guilds:     buildConfiguredGuildSummaries(cfg, allowedGuilds),
 	}
 }
 
@@ -322,15 +318,13 @@ func buildGuildSettingsWorkspaceWithBindings(
 	cfg files.BotConfig,
 	guild files.GuildConfig,
 	availableBotInstanceIDs []string,
-
-	defaultBotInstanceID string,
 ) guildSettingsWorkspace {
 	return guildSettingsWorkspace{
 		Scope:                   "guild",
 		GuildID:                 guild.GuildID,
 		AvailableBotInstanceIDs: slices.Clone(availableBotInstanceIDs),
 		Sections: guildSettingsSections{
-			BotInstanceTokens: buildBotInstanceTokensSection(guild.BotInstanceTokens),
+			BotInstanceTokensConfigured: buildBotInstanceTokensSection(guild.BotInstanceTokens),
 			Features:   guild.Features,
 			Channels:   guild.Channels,
 			Roles:      guild.Roles,
@@ -352,13 +346,13 @@ func buildGuildSettingsWorkspaceWithBindings(
 	}
 }
 
-func buildBotInstanceTokensSection(tokens map[string]files.EncryptedString) map[string]string {
+func buildBotInstanceTokensSection(tokens map[string]files.EncryptedString) map[string]bool {
 	if len(tokens) == 0 {
 		return nil
 	}
-	out := make(map[string]string, len(tokens))
+	out := make(map[string]bool, len(tokens))
 	for k := range tokens {
-		out[k] = "••••••••"
+		out[k] = true
 	}
 	return out
 }
@@ -366,14 +360,13 @@ func buildBotInstanceTokensSection(tokens map[string]files.EncryptedString) map[
 func buildConfiguredGuildSummaries(
 	cfg files.BotConfig,
 	allowedGuilds map[string]struct{},
-	defaultBotInstanceID string,
 ) []configuredGuildSummary {
 	out := make([]configuredGuildSummary, 0, len(cfg.Guilds))
 	for _, guild := range cfg.Guilds {
 		if !guildAllowed(guild.GuildID, allowedGuilds) {
 			continue
 		}
-		out = append(out, buildConfiguredGuildSummary(guild, defaultBotInstanceID))
+		out = append(out, buildConfiguredGuildSummary(guild))
 	}
 	return out
 }
@@ -382,14 +375,13 @@ func buildGuildRegistryWorkspace(
 	cfg files.BotConfig,
 	sources []guildRegistrySource,
 	allowedGuilds map[string]struct{},
-	defaultBotInstanceID string,
 ) guildRegistryWorkspace {
 	configured := make(map[string]configuredGuildSummary, len(cfg.Guilds))
 	for _, guild := range cfg.Guilds {
 		if !guildAllowed(guild.GuildID, allowedGuilds) {
 			continue
 		}
-		configured[guild.GuildID] = buildConfiguredGuildSummary(guild, defaultBotInstanceID)
+		configured[guild.GuildID] = buildConfiguredGuildSummary(guild)
 	}
 
 	entries := make([]guildRegistryEntry, 0, len(sources)+len(configured))
@@ -461,7 +453,7 @@ func buildGuildRegistryWorkspace(
 	}
 }
 
-func buildConfiguredGuildSummary(guild files.GuildConfig, defaultBotInstanceID string) configuredGuildSummary {
+func buildConfiguredGuildSummary(guild files.GuildConfig) configuredGuildSummary {
 	return configuredGuildSummary{
 		GuildID:             guild.GuildID,
 		ConfiguredChannels:  countConfiguredChannels(guild.Channels),
@@ -477,7 +469,6 @@ func applyConfiguredSummary(entry *guildRegistryEntry, summary configuredGuildSu
 	if entry == nil {
 		return
 	}
-	entry.BotInstanceID = summary.BotInstanceID
 	entry.ConfiguredChannels = summary.ConfiguredChannels
 	entry.AllowedRoles = summary.AllowedRoles
 	entry.StatsChannels = summary.StatsChannels

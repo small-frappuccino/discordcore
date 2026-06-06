@@ -237,7 +237,6 @@ func TestRuntimeServiceCyclesUseScopedGuilds(t *testing.T) {
 		},
 		{
 			GuildID:       "g-other-runtime",
-			BotInstanceID: "other",
 			QOTD: files.QOTDConfig{
 				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 				Decks: []files.QOTDDeckConfig{{
@@ -286,9 +285,6 @@ func TestRuntimeServiceCyclesUseQOTDDomainScopedGuilds(t *testing.T) {
 		{
 			GuildID:       "g-qotd-enabled",
 			BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
-			DomainBotInstanceIDs: map[string]string{
-				files.BotDomainQOTD: "companion",
-			},
 			QOTD: files.QOTDConfig{
 				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 				Decks: []files.QOTDDeckConfig{{
@@ -302,9 +298,6 @@ func TestRuntimeServiceCyclesUseQOTDDomainScopedGuilds(t *testing.T) {
 		{
 			GuildID:       "g-qotd-configured-disabled",
 			BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
-			DomainBotInstanceIDs: map[string]string{
-				files.BotDomainQOTD: "companion",
-			},
 			QOTD: files.QOTDConfig{
 				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 				Decks: []files.QOTDDeckConfig{{
@@ -357,7 +350,6 @@ func TestRuntimeServiceRestartResumesIntervalCycles(t *testing.T) {
 	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := configManager.AddGuildConfig(files.GuildConfig{
 		GuildID:       "g-enabled",
-		BotInstanceID: "main",
 		QOTD: files.QOTDConfig{
 			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 			Decks: []files.QOTDDeckConfig{{
@@ -422,7 +414,6 @@ func TestRuntimeServiceMultipleRestartsResumeIntervalCycles(t *testing.T) {
 	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := configManager.AddGuildConfig(files.GuildConfig{
 		GuildID:       "g-enabled",
-		BotInstanceID: "main",
 		QOTD: files.QOTDConfig{
 			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 			Decks: []files.QOTDDeckConfig{{
@@ -490,7 +481,6 @@ func TestRuntimeServiceStopCancelsInflightPublish(t *testing.T) {
 	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := configManager.AddGuildConfig(files.GuildConfig{
 		GuildID:       "g-enabled",
-		BotInstanceID: "main",
 		QOTD: files.QOTDConfig{
 			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 			Decks: []files.QOTDDeckConfig{{
@@ -602,7 +592,7 @@ func TestNextPublishDelayClampsToConfiguredBounds(t *testing.T) {
 			cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 			if err := cm.AddGuildConfig(files.GuildConfig{
 				GuildID:       "g",
-				BotInstanceID: "main",
+				BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
 				QOTD: files.QOTDConfig{
 					ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 					Decks: []files.QOTDDeckConfig{{
@@ -642,7 +632,6 @@ func TestRuntimeServiceLoopWakesAtScheduledMoment(t *testing.T) {
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := cm.AddGuildConfig(files.GuildConfig{
 		GuildID:       "g-enabled",
-		BotInstanceID: "main",
 		QOTD: files.QOTDConfig{
 			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 			Decks: []files.QOTDDeckConfig{{
@@ -709,7 +698,6 @@ func TestRuntimeServiceLoopFallsBackToCapWithoutSchedule(t *testing.T) {
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := cm.AddGuildConfig(files.GuildConfig{
 		GuildID:       "g-enabled",
-		BotInstanceID: "main",
 		QOTD: files.QOTDConfig{
 			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 			Decks: []files.QOTDDeckConfig{{

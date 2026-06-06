@@ -8,7 +8,7 @@ export function CorePage() {
   const { settings, isLoading, tokensState, setTokensState, handleUpdateTokens } = useCorePageLogic();
   
   const availableInstances = settings?.workspace?.available_bot_instance_ids || [];
-  const configuredTokens = settings?.workspace?.sections?.bot_instance_tokens || {};
+  const configuredTokens = settings?.workspace?.sections?.bot_instance_tokens_configured || {};
   
   const isDirty = Object.keys(tokensState).length > 0;
   return (
@@ -47,13 +47,24 @@ export function CorePage() {
                       title={`Instance: ${instanceId}`}
                       description={hasToken ? "A token is currently configured for this instance." : "No token configured for this instance."}
                       control={
-                        <input 
-                          type="password" 
-                          className="w-full max-w-[240px] px-3 py-2 bg-surface-base border border-border-default rounded-md text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-shadow"
-                          placeholder={hasToken ? "••••••••" : "Enter bot token..."}
-                          value={tokensState[instanceId] || ""}
-                          onChange={(e) => setTokensState(prev => ({ ...prev, [instanceId]: e.target.value }))}
-                        />
+                        <div className="flex items-center gap-2">
+                          <input 
+                            type="password" 
+                            className="w-full max-w-[240px] px-3 py-2 bg-surface-base border border-border-default rounded-md text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-shadow"
+                            placeholder={hasToken ? "••••••••" : "Enter bot token..."}
+                            value={tokensState[instanceId] !== undefined ? tokensState[instanceId] : ""}
+                            onChange={(e) => setTokensState(prev => ({ ...prev, [instanceId]: e.target.value }))}
+                          />
+                          {(hasToken || tokensState[instanceId] !== undefined) && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => setTokensState(prev => ({ ...prev, [instanceId]: "" }))}
+                            >
+                              Clear
+                            </Button>
+                          )}
+                        </div>
                       }
                     />
                   );

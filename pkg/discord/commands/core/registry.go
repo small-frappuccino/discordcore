@@ -244,6 +244,15 @@ func (cm *CommandManager) usesGuildScopedSync() bool {
 	if configManager == nil {
 		return false
 	}
+	cfg := configManager.Config()
+	if cfg == nil {
+		return false
+	}
+	for _, guild := range cfg.Guilds {
+		if len(guild.BotInstanceTokens) > 0 {
+			return true
+		}
+	}
 	return false
 }
 

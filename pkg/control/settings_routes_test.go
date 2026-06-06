@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"slices"
 	"strings"
 	"testing"
 
@@ -371,7 +370,7 @@ func TestGuildRegistrationPostCreatesDormantGuildWorkspace(t *testing.T) {
 	srv.SetDefaultBotInstanceID("main")
 	setTestBotGuildBindings(srv, BotGuildBinding{GuildID: "g2", BotInstanceID: "main"})
 	srv.SetGuildRegistrationResolver(func(_ context.Context, guildID string) error {
-		return cm.EnsureMinimalGuildConfigForBot(guildID)
+		return cm.EnsureMinimalGuildConfig(guildID)
 	})
 
 	rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodPost, "/v1/settings/guilds", registerGuildRequest{GuildID: "g2"})
