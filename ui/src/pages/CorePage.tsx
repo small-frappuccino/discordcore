@@ -38,20 +38,20 @@ export function CorePage() {
             <SettingsGroupSkeleton rows={2} />
           ) : (
             <Stack spacing="sm">
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold tracking-tight text-text-primary">Bot Instance Tokens</h3>
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className="text-base font-semibold text-text-primary">Bot Instance Tokens</h3>
                   {isDirty && (
                     <Button onClick={handleUpdateTokens} variant="primary" size="sm">
                       Save Changes
                     </Button>
                   )}
                 </div>
-                <p className="text-sm text-text-secondary mb-4">
+                <p className="text-sm text-text-secondary">
                   Assign a specific bot developer token to each instance for this guild. Tokens are stored securely and are write-only.
                 </p>
-                
-                <SettingsGroup>
+              </div>
+              <SettingsGroup>
                   {/* Main Instance (Always Visible) */}
                   <SettingsRow
                     title="Instance: main"
@@ -114,7 +114,6 @@ export function CorePage() {
                     );
                   })}
                 </SettingsGroup>
-              </div>
             </Stack>
           )}
         </Stack>
