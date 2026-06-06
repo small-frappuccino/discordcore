@@ -89,7 +89,7 @@ func (s *BotSupervisor) onConfigChanged(cfg *files.BotConfig) {
 	for _, guild := range cfg.Guilds {
 		for instanceID, encryptedToken := range guild.BotInstanceTokens {
 			token := string(encryptedToken)
-			if token == "" {
+			if token == "" || instanceID != s.opts.defaultBotInstanceID {
 				continue
 			}
 			currentTokens[instanceID] = token
@@ -158,17 +158,6 @@ func (s *BotSupervisor) stopBotInstanceLocked(instanceID string) error {
 }
 
 func (s *BotSupervisor) startBotInstanceBackground(instanceID, token string) {
-	log.ApplicationLogger().Info("Acquiring Discord Identify semaphore", "botInstanceID", instanceID)
-	
-	if err := s.identifySemaphore.Acquire(context.Background(), 1); err != nil {
-		log.ApplicationLogger().Error("identify semaphore error", "botInstanceID", instanceID, "error", err)
-		return
-	}
-	defer s.identifySemaphore.Release(1)
-
-	// Small delay to ensure we don't spam identify even after acquiring semaphore
-	time.Sleep(identifyStaggerDelay)
-
 	capabilities := resolveBotRuntimeCapabilities(s.configManager.Config(), instanceID, s.opts.defaultBotInstanceID)
 
 	var runtime *botRuntime
@@ -179,7 +168,20 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token string) {
 	maxRetries := 5
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
+		log.ApplicationLogger().Info("Acquiring Discord Identify semaphore", "botInstanceID", instanceID)
+		
+		if acqErr := s.identifySemaphore.Acquire(context.Background(), 1); acqErr != nil {
+			log.ApplicationLogger().Error("identify semaphore error", "botInstanceID", instanceID, "error", acqErr)
+			return
+		}
+
+		// Small delay to ensure we don't spam identify even after acquiring semaphore
+		time.Sleep(identifyStaggerDelay)
+
 		runtime, err = openBotRuntime(resolvedBotInstance{ID: instanceID, Token: token}, capabilities)
+		
+		s.identifySemaphore.Release(1)
+		
 		if err == nil {
 			break
 		}
@@ -191,8 +193,7 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token string) {
 			delay = float64(maxDelay)
 		}
 		
-		// Pseudo-jitter using time component if math/rand is not imported to avoid import bloat, 
-		// but wait we can just add simple jitter
+		// Pseudo-jitter using time component if math/rand is not imported to avoid import bloat
 		jitter := time.Duration(float64(time.Now().UnixNano()%1000) / 1000.0 * delay * 0.2)
 		sleepTime := time.Duration(delay) + jitter
 		
