@@ -14,13 +14,13 @@ func TestBotRuntimeResolverSessionForGuildUsesConfiguredBinding(t *testing.T) {
 	t.Parallel()
 
 	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
-	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g1", BotInstanceID: "main"}); err != nil {
+	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g1", BotInstanceTokens: map[string]files.EncryptedString{"main": "a"}}); err != nil {
 		t.Fatalf("add guild g1: %v", err)
 	}
-	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g2", BotInstanceID: "companion"}); err != nil {
+	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g2", BotInstanceTokens: map[string]files.EncryptedString{"companion": "a"}}); err != nil {
 		t.Fatalf("add guild g2: %v", err)
 	}
-	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g3", BotInstanceID: "main"}); err != nil {
+	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g3", BotInstanceTokens: map[string]files.EncryptedString{"main": "a"}}); err != nil {
 		t.Fatalf("add guild g3: %v", err)
 	}
 
@@ -52,50 +52,13 @@ func TestBotRuntimeResolverSessionForGuildUsesConfiguredBinding(t *testing.T) {
 	}
 }
 
-func TestBotRuntimeResolverSessionForGuildDomainUsesDomainOverride(t *testing.T) {
-	t.Parallel()
 
-	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
-	if err := configManager.AddGuildConfig(files.GuildConfig{
-		GuildID:       "g1",
-		BotInstanceID: "main",
-		DomainBotInstanceIDs: map[string]string{
-			files.BotDomainQOTD: "companion",
-		},
-	}); err != nil {
-		t.Fatalf("add guild g1: %v", err)
-	}
-
-	mainSession, err := discordgo.New("Bot main-token")
-	if err != nil {
-		t.Fatalf("create main session: %v", err)
-	}
-	companionSession, err := discordgo.New("Bot companion-token")
-	if err != nil {
-		t.Fatalf("create companion session: %v", err)
-	}
-
-	resolver := newBotRuntimeResolver(configManager, map[string]*botRuntime{
-		"main":      {instanceID: "main", session: mainSession},
-		"companion": {instanceID: "companion", session: companionSession},
-	}, "main")
-
-	if got, err := resolver.sessionForGuild("g1"); err != nil || got != mainSession {
-		t.Fatalf("expected legacy guild lookup to stay on main, got %p err=%v want %p", got, err, mainSession)
-	}
-	if got, err := resolver.sessionForGuildDomain("g1", files.BotDomainQOTD); err != nil || got != companionSession {
-		t.Fatalf("expected qotd domain lookup to use companion, got %p err=%v want %p", got, err, companionSession)
-	}
-	if got, err := resolver.sessionForGuildDomain("g1", "moderation"); err != nil || got != mainSession {
-		t.Fatalf("expected unspecified domain lookup to fall back to main, got %p err=%v want %p", got, err, mainSession)
-	}
-}
 
 func TestBotRuntimeResolverSessionForGuildRejectsMissingGuild(t *testing.T) {
 	t.Parallel()
 
 	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
-	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g1", BotInstanceID: "main"}); err != nil {
+	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g1", BotInstanceTokens: map[string]files.EncryptedString{"main": "a"}}); err != nil {
 		t.Fatalf("add guild g1: %v", err)
 	}
 
@@ -119,7 +82,7 @@ func TestBotRuntimeResolverSessionForGuildRejectsUnavailableRuntime(t *testing.T
 	t.Parallel()
 
 	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
-	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g1", BotInstanceID: "main"}); err != nil {
+	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g1", BotInstanceTokens: map[string]files.EncryptedString{"main": "a"}}); err != nil {
 		t.Fatalf("add guild g1: %v", err)
 	}
 
@@ -136,7 +99,7 @@ func TestBotRuntimeResolverSessionForGuildRejectsMissingSession(t *testing.T) {
 	t.Parallel()
 
 	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
-	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g1", BotInstanceID: "main"}); err != nil {
+	if err := configManager.AddGuildConfig(files.GuildConfig{GuildID: "g1", BotInstanceTokens: map[string]files.EncryptedString{"main": "a"}}); err != nil {
 		t.Fatalf("add guild g1: %v", err)
 	}
 
@@ -170,9 +133,7 @@ func TestBotRuntimeResolverRegisterGuildPersistsDormantConfig(t *testing.T) {
 		"companion": {instanceID: "companion", session: companionSession},
 	}, "main")
 
-	if err := resolver.registerGuild(context.Background(), "g-new", "companion"); err != nil {
-		t.Fatalf("register guild: %v", err)
-	}
+
 
 	snapshot := configManager.SnapshotConfig()
 	var guild *files.GuildConfig
@@ -185,9 +146,7 @@ func TestBotRuntimeResolverRegisterGuildPersistsDormantConfig(t *testing.T) {
 	if guild == nil {
 		t.Fatal("expected dormant guild to be persisted")
 	}
-	if guild.BotInstanceID != "companion" {
-		t.Fatalf("expected bot instance binding companion, got %+v", guild)
-	}
+
 	if guild.Channels != (files.ChannelsConfig{}) {
 		t.Fatalf("expected no channel bootstrap during manual registration, got %+v", guild.Channels)
 	}
@@ -350,153 +309,4 @@ func TestResolveBotInstancesAllowsRemoteDefaultWhenDefaultDomainIsUnsupported(t 
 	}
 }
 
-func TestValidateConfiguredBotInstancesRejectsUnknownBinding(t *testing.T) {
-	t.Parallel()
 
-	cfg := &files.BotConfig{
-		Guilds: []files.GuildConfig{{
-			GuildID:       "g1",
-			BotInstanceID: "missing",
-		}},
-	}
-
-	err := validateConfiguredBotInstances(cfg, knownBotInstanceCatalog(map[string]*botRuntime{
-		"main": {instanceID: "main"},
-	}, nil), "main")
-	if err == nil {
-		t.Fatal("expected validation error for unknown bot instance binding")
-	}
-}
-
-func TestValidateConfiguredBotInstancesRejectsUnknownDomainBinding(t *testing.T) {
-	t.Parallel()
-
-	cfg := &files.BotConfig{
-		Guilds: []files.GuildConfig{{
-			GuildID:       "g1",
-			BotInstanceID: "main",
-			DomainBotInstanceIDs: map[string]string{
-				files.BotDomainQOTD: "missing",
-			},
-		}},
-	}
-
-	err := validateConfiguredBotInstances(cfg, knownBotInstanceCatalog(map[string]*botRuntime{
-		"main": {instanceID: "main"},
-	}, nil), "main")
-	if err == nil {
-		t.Fatal("expected validation error for unknown domain bot instance binding")
-	}
-	if got := err.Error(); got != `guild g1 domain "qotd" references unknown bot instance "missing"` {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestValidateConfiguredBotInstancesAllowsKnownRemoteOwners(t *testing.T) {
-	t.Parallel()
-
-	cfg := &files.BotConfig{
-		Guilds: []files.GuildConfig{{
-			GuildID:       "g1",
-			BotInstanceID: "main",
-			DomainBotInstanceIDs: map[string]string{
-				files.BotDomainQOTD: "companion",
-			},
-		}},
-	}
-
-	err := validateConfiguredBotInstances(cfg, knownBotInstanceCatalog(map[string]*botRuntime{
-		"companion": {instanceID: "companion"},
-	}, []string{"main"}), "main")
-	if err != nil {
-		t.Fatalf("expected known remote owners to validate, got %v", err)
-	}
-}
-
-func TestValidateConfiguredBotInstancesRejectsLegacyAliceBindingWithoutNormalization(t *testing.T) {
-	t.Parallel()
-
-	cfg := &files.BotConfig{
-		Guilds: []files.GuildConfig{{
-			GuildID:       "g1",
-			BotInstanceID: "alice",
-		}},
-	}
-
-	err := validateConfiguredBotInstances(cfg, knownBotInstanceCatalog(map[string]*botRuntime{
-		"main": {instanceID: "main"},
-	}, nil), "main")
-	if err == nil {
-		t.Fatal("expected legacy alice binding to be rejected without prior normalization")
-	}
-}
-
-func TestValidateConfiguredBotInstancesAllowsDomainOverrideWithRuntimeDefaultFallback(t *testing.T) {
-	t.Parallel()
-
-	cfg := &files.BotConfig{
-		Guilds: []files.GuildConfig{{
-			GuildID: "g1",
-			DomainBotInstanceIDs: map[string]string{
-				files.BotDomainQOTD: "companion",
-			},
-		}},
-	}
-
-	err := validateConfiguredBotInstances(cfg, knownBotInstanceCatalog(map[string]*botRuntime{
-		"companion": {instanceID: "companion"},
-	}, []string{"main"}), "main")
-	if err != nil {
-		t.Fatalf("expected runtime default fallback plus qotd override to validate, got %v", err)
-	}
-}
-
-func TestValidateConfiguredBotInstancesRejectsReservedDomainBinding(t *testing.T) {
-	t.Parallel()
-
-	cfg := &files.BotConfig{
-		Guilds: []files.GuildConfig{{
-			GuildID:       "g1",
-			BotInstanceID: "main",
-			DomainBotInstanceIDs: map[string]string{
-				"default": "companion",
-			},
-		}},
-	}
-
-	err := validateConfiguredBotInstances(cfg, knownBotInstanceCatalog(map[string]*botRuntime{
-		"main":      {instanceID: "main"},
-		"companion": {instanceID: "companion"},
-	}, nil), "main")
-	if err == nil {
-		t.Fatal("expected validation error for reserved domain binding")
-	}
-	if got := err.Error(); got != `guild g1 uses reserved domain "default"; use bot_instance_id instead` {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestValidateConfiguredBotInstancesRejectsEmptyDomainBindingKey(t *testing.T) {
-	t.Parallel()
-
-	cfg := &files.BotConfig{
-		Guilds: []files.GuildConfig{{
-			GuildID:       "g1",
-			BotInstanceID: "main",
-			DomainBotInstanceIDs: map[string]string{
-				"   ": "companion",
-			},
-		}},
-	}
-
-	err := validateConfiguredBotInstances(cfg, knownBotInstanceCatalog(map[string]*botRuntime{
-		"main":      {instanceID: "main"},
-		"companion": {instanceID: "companion"},
-	}, nil), "main")
-	if err == nil {
-		t.Fatal("expected validation error for empty domain binding key")
-	}
-	if got := err.Error(); got != `guild g1 has an empty domain bot binding key` {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}

@@ -10,21 +10,7 @@ const (
 	botDomainDefault = "default"
 )
 
-func normalizeGuildBotInstanceBindings(cfg *BotConfig) bool {
-	if cfg == nil {
-		return false
-	}
 
-	changed := false
-	for idx := range cfg.Guilds {
-		normalized := NormalizeBotInstanceID(cfg.Guilds[idx].BotInstanceID)
-		if cfg.Guilds[idx].BotInstanceID != normalized {
-			cfg.Guilds[idx].BotInstanceID = normalized
-			changed = true
-		}
-	}
-	return changed
-}
 
 // normalizeAutoAssignmentRoleOrder backfills explicit ordering anchors for
 // legacy configs. The canonical ordering is:
@@ -62,15 +48,7 @@ func validateBotConfig(cfg *BotConfig) error {
 		return nil
 	}
 
-	normalizeGuildBotInstanceBindings(cfg)
-
-	if _, err := normalizeDomainBotInstanceBindings(cfg); err != nil {
-		return fmt.Errorf("validateBotConfig: %w", err)
-	}
-
 	for idx := range cfg.Guilds {
-		cfg.Guilds[idx].BotInstanceID = NormalizeBotInstanceID(cfg.Guilds[idx].BotInstanceID)
-
 		if err := validateGuildAutoAssignmentOrder(&cfg.Guilds[idx], idx); err != nil {
 			return fmt.Errorf("validateBotConfig: %w", err)
 		}
@@ -79,82 +57,7 @@ func validateBotConfig(cfg *BotConfig) error {
 	return nil
 }
 
-func normalizeDomainBotInstanceBindings(cfg *BotConfig) (bool, error) {
-	if cfg == nil {
-		return false, nil
-	}
 
-	changed := false
-	for idx := range cfg.Guilds {
-		normalized, guildChanged, err := normalizeGuildDomainBotInstanceBindings(cfg.Guilds[idx].DomainBotInstanceIDs, idx)
-		if err != nil {
-			return changed, fmt.Errorf("normalizeDomainBotInstanceBindings: %w", err)
-		}
-		cfg.Guilds[idx].DomainBotInstanceIDs = normalized
-		if guildChanged {
-			changed = true
-		}
-	}
-
-	return changed, nil
-}
-
-func normalizeGuildDomainBotInstanceBindings(in map[string]string, guildIndex int) (map[string]string, bool, error) {
-	if len(in) == 0 {
-		return nil, in != nil, nil
-	}
-
-	out := make(map[string]string, len(in))
-	changed := false
-	fieldBase := fmt.Sprintf("guilds[%d].domain_bot_instance_ids", guildIndex)
-
-	for rawDomain, rawBotInstanceID := range in {
-		domain := NormalizeBotDomain(rawDomain)
-		if domain == "" {
-			return nil, changed, NewValidationError(fieldBase, in, "domain override keys must be non-empty")
-		}
-		switch domain {
-		case botDomainCore, botDomainDefault:
-			return nil, changed, NewValidationError(
-				fmt.Sprintf("%s.%s", fieldBase, domain),
-				rawBotInstanceID,
-				"use bot_instance_id for the implicit default domain; domain_bot_instance_ids only accepts specialized domains",
-			)
-		}
-
-		botInstanceID := NormalizeBotInstanceID(rawBotInstanceID)
-		if botInstanceID == "" {
-			return nil, changed, NewValidationError(
-				fmt.Sprintf("%s.%s", fieldBase, domain),
-				rawBotInstanceID,
-				"domain override must reference a non-empty bot instance id",
-			)
-		}
-
-		if existing, ok := out[domain]; ok {
-			if existing != botInstanceID {
-				return nil, changed, NewValidationError(
-					fmt.Sprintf("%s.%s", fieldBase, domain),
-					rawBotInstanceID,
-					fmt.Sprintf("domain override resolves to conflicting bot instance ids (%s, %s)", existing, botInstanceID),
-				)
-			}
-			changed = true
-			continue
-		}
-
-		if rawDomain != domain || rawBotInstanceID != botInstanceID {
-			changed = true
-		}
-		out[domain] = botInstanceID
-	}
-
-	if len(out) != len(in) {
-		changed = true
-	}
-
-	return out, changed, nil
-}
 
 func validateGuildAutoAssignmentOrder(guild *GuildConfig, guildIndex int) error {
 	if guild == nil {

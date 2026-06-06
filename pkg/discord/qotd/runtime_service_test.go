@@ -115,7 +115,7 @@ func TestRuntimeServiceLoopRunsPublishCycleOnStartAndInterval(t *testing.T) {
 	for _, guild := range []files.GuildConfig{
 		{
 			GuildID:       "g-enabled",
-			BotInstanceID: "main",
+			BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
 			QOTD: files.QOTDConfig{
 				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 				Decks: []files.QOTDDeckConfig{{
@@ -128,7 +128,7 @@ func TestRuntimeServiceLoopRunsPublishCycleOnStartAndInterval(t *testing.T) {
 		},
 		{
 			GuildID:       "g-disabled",
-			BotInstanceID: "main",
+			BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
 			QOTD: files.QOTDConfig{
 				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 				Decks: []files.QOTDDeckConfig{{
@@ -200,7 +200,7 @@ func TestRuntimeServiceCyclesUseScopedGuilds(t *testing.T) {
 	for _, guild := range []files.GuildConfig{
 		{
 			GuildID:       "g-enabled",
-			BotInstanceID: "main",
+			BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
 			QOTD: files.QOTDConfig{
 				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 				Decks: []files.QOTDDeckConfig{{
@@ -213,7 +213,7 @@ func TestRuntimeServiceCyclesUseScopedGuilds(t *testing.T) {
 		},
 		{
 			GuildID:       "g-enabled-missing-channel",
-			BotInstanceID: "main",
+			BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
 			QOTD: files.QOTDConfig{
 				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 				Decks: []files.QOTDDeckConfig{{
@@ -225,7 +225,7 @@ func TestRuntimeServiceCyclesUseScopedGuilds(t *testing.T) {
 		},
 		{
 			GuildID:       "g-configured-disabled",
-			BotInstanceID: "main",
+			BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
 			QOTD: files.QOTDConfig{
 				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 				Decks: []files.QOTDDeckConfig{{
@@ -250,7 +250,7 @@ func TestRuntimeServiceCyclesUseScopedGuilds(t *testing.T) {
 		},
 		{
 			GuildID:       "g-empty",
-			BotInstanceID: "main",
+			BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
 		},
 	} {
 		if err := configManager.AddGuildConfig(guild); err != nil {
@@ -285,7 +285,7 @@ func TestRuntimeServiceCyclesUseQOTDDomainScopedGuilds(t *testing.T) {
 	for _, guild := range []files.GuildConfig{
 		{
 			GuildID:       "g-qotd-enabled",
-			BotInstanceID: "main",
+			BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
 			DomainBotInstanceIDs: map[string]string{
 				files.BotDomainQOTD: "companion",
 			},
@@ -301,7 +301,7 @@ func TestRuntimeServiceCyclesUseQOTDDomainScopedGuilds(t *testing.T) {
 		},
 		{
 			GuildID:       "g-qotd-configured-disabled",
-			BotInstanceID: "main",
+			BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
 			DomainBotInstanceIDs: map[string]string{
 				files.BotDomainQOTD: "companion",
 			},
@@ -316,7 +316,7 @@ func TestRuntimeServiceCyclesUseQOTDDomainScopedGuilds(t *testing.T) {
 		},
 		{
 			GuildID:       "g-default-main",
-			BotInstanceID: "main",
+			BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
 			QOTD: files.QOTDConfig{
 				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 				Decks: []files.QOTDDeckConfig{{

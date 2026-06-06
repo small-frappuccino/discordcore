@@ -107,13 +107,12 @@ func (c *Commands) RegisterCommands(router *core.CommandRouter) {
 	group.AddSubCommand(publishCommand)
 	group.AddSubCommand(skipCommand)
 	group.AddSubCommand(questionsGroup)
-	router.RegisterSlashCommandForDomain(files.BotDomainQOTD, group)
+	router.RegisterSlashCommand(group)
 
 	handler := core.ComponentHandlerFunc(func(ctx *core.Context) error {
 		return listCommand.HandleComponent(ctx)
 	})
-	router.RegisterInteractionRoutesForDomain(
-		files.BotDomainQOTD,
+	router.RegisterInteractionRoutes(
 		core.InteractionRouteBinding{Path: questionsListRouteFirst, Component: handler},
 		core.InteractionRouteBinding{Path: questionsListRoutePrev, Component: handler},
 		core.InteractionRouteBinding{Path: questionsListRouteNext, Component: handler},

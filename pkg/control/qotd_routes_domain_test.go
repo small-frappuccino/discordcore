@@ -31,10 +31,8 @@ func TestQOTDActionRoutesResolveDiscordSessionForQOTDDomain(t *testing.T) {
 			srv.SetQOTDService(&applicationqotd.Service{})
 
 			var gotGuildID string
-			var gotDomain string
-			srv.SetDiscordSessionResolverForDomain(func(guildID, domain string) (*discordgo.Session, error) {
+			srv.SetDiscordSessionResolver(func(guildID string) (*discordgo.Session, error) {
 				gotGuildID = guildID
-				gotDomain = domain
 				return nil, errors.New("discord unavailable")
 			})
 
@@ -45,9 +43,7 @@ func TestQOTDActionRoutesResolveDiscordSessionForQOTDDomain(t *testing.T) {
 			if gotGuildID != "g1" {
 				t.Fatalf("expected resolver guild g1, got %q", gotGuildID)
 			}
-			if gotDomain != files.BotDomainQOTD {
-				t.Fatalf("expected resolver domain %q, got %q", files.BotDomainQOTD, gotDomain)
-			}
+
 			if !strings.Contains(rec.Body.String(), "failed to resolve discord session") {
 				t.Fatalf("expected discord session resolution failure body, got %q", rec.Body.String())
 			}

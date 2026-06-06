@@ -56,7 +56,6 @@ type botRuntimeResolver struct {
 func resolveBotInstances(primaryTokenEnv string, opts RunOptions) ([]resolvedBotInstance, string, error) {
 	catalog := opts.BotCatalog
 	defaultOwnerBotInstanceID := strings.TrimSpace(opts.DefaultOwnerBotInstanceID)
-	domainSupport := newRuntimeDomainSupport(opts.SupportedDomains)
 	if len(catalog) == 0 {
 		primaryTokenEnv = strings.TrimSpace(primaryTokenEnv)
 		if primaryTokenEnv == "" {
@@ -114,10 +113,8 @@ func resolveBotInstances(primaryTokenEnv string, opts RunOptions) ([]resolvedBot
 	if defaultOwnerBotInstanceID == "" && len(resolved) > 0 {
 		defaultOwnerBotInstanceID = resolved[0].ID
 	}
-	if domainSupport.supportsDefaultDomain() {
-		if _, ok := resolvedIDs[defaultOwnerBotInstanceID]; !ok {
-			return nil, "", fmt.Errorf("default bot instance %q is not present in the runtime catalog", defaultOwnerBotInstanceID)
-		}
+	if _, ok := resolvedIDs[defaultOwnerBotInstanceID]; !ok {
+		return nil, "", fmt.Errorf("default bot instance %q is not present in the runtime catalog", defaultOwnerBotInstanceID)
 	}
 
 	return resolved, defaultOwnerBotInstanceID, nil
@@ -232,10 +229,6 @@ func (r *botRuntimeResolver) defaultRuntime() (*botRuntime, string, error) {
 }
 
 func (r *botRuntimeResolver) runtimeForGuild(guildID string) (*botRuntime, string, error) {
-	return r.runtimeForGuildDomain(guildID, "")
-}
-
-func (r *botRuntimeResolver) runtimeForGuildDomain(guildID, domain string) (*botRuntime, string, error) {
 	if r == nil {
 		return nil, "", fmt.Errorf("bot runtime resolver is unavailable")
 	}
@@ -250,25 +243,37 @@ func (r *botRuntimeResolver) runtimeForGuildDomain(guildID, domain string) (*bot
 	if guild == nil {
 		return nil, "", fmt.Errorf("guild %s is not configured", guildID)
 	}
-	botInstanceID := guild.EffectiveBotInstanceIDForDomain(domain, r.defaultBotInstanceID)
-	if botInstanceID == "" {
-		return nil, "", fmt.Errorf("guild %s does not resolve to a bot instance", guildID)
+
+	var bestInstanceID string
+	var bestRuntime *botRuntime
+
+	for instanceID, runtime := range r.runtimes {
+		token, ok := guild.BotInstanceTokens[instanceID]
+		if ok && token != "" {
+			bestInstanceID = instanceID
+			bestRuntime = runtime
+			if instanceID == r.defaultBotInstanceID {
+				break
+			}
+		}
 	}
-	runtime := r.runtimes[botInstanceID]
-	if runtime == nil {
-		return nil, botInstanceID, fmt.Errorf("bot instance %q is unavailable for guild %s", botInstanceID, guildID)
+
+	if bestRuntime == nil {
+		if r.defaultBotInstanceID != "" && r.runtimes[r.defaultBotInstanceID] != nil {
+			if len(guild.BotInstanceTokens) == 0 {
+				return r.runtimes[r.defaultBotInstanceID], r.defaultBotInstanceID, nil
+			}
+		}
+		return nil, "", fmt.Errorf("guild %s does not resolve to a running bot instance", guildID)
 	}
-	return runtime, botInstanceID, nil
+
+	return bestRuntime, bestInstanceID, nil
 }
 
 func (r *botRuntimeResolver) sessionForGuild(guildID string) (*discordgo.Session, error) {
-	return r.sessionForGuildDomain(guildID, "")
-}
-
-func (r *botRuntimeResolver) sessionForGuildDomain(guildID, domain string) (*discordgo.Session, error) {
-	runtime, botInstanceID, err := r.runtimeForGuildDomain(guildID, domain)
+	runtime, botInstanceID, err := r.runtimeForGuild(guildID)
 	if err != nil {
-		return nil, fmt.Errorf("botRuntimeResolver.sessionForGuildDomain: %w", err)
+		return nil, fmt.Errorf("botRuntimeResolver.sessionForGuild: %w", err)
 	}
 	if runtime.session == nil {
 		guildID = strings.TrimSpace(guildID)
@@ -280,19 +285,11 @@ func (r *botRuntimeResolver) sessionForGuildDomain(guildID, domain string) (*dis
 	return runtime.session, nil
 }
 
-func (r *botRuntimeResolver) registerGuild(_ context.Context, guildID, botInstanceID string) error {
+func (r *botRuntimeResolver) registerGuild(_ context.Context, guildID string) error {
 	if r == nil || r.configManager == nil {
 		return fmt.Errorf("bot runtime resolver is unavailable")
 	}
-	selectedBotInstanceID := strings.TrimSpace(botInstanceID)
-	if selectedBotInstanceID == "" {
-		selectedBotInstanceID = r.defaultBotInstanceID
-	}
-	runtime := r.runtimes[selectedBotInstanceID]
-	if runtime == nil || runtime.session == nil {
-		return fmt.Errorf("bot instance %q is unavailable", selectedBotInstanceID)
-	}
-	return r.configManager.EnsureMinimalGuildConfigForBot(guildID, selectedBotInstanceID)
+	return r.configManager.EnsureMinimalGuildConfig(guildID)
 }
 
 func (r *botRuntimeResolver) guildBindings(context.Context) ([]control.BotGuildBinding, error) {
@@ -346,29 +343,17 @@ func validateConfiguredBotInstances(
 		return nil
 	}
 	for _, guild := range cfg.Guilds {
-		botInstanceID := guild.EffectiveBotInstanceID(defaultBotInstanceID)
-		if botInstanceID == "" {
-			return fmt.Errorf("guild %s does not resolve to a bot instance", guild.GuildID)
+		if len(guild.BotInstanceTokens) == 0 {
+			if defaultBotInstanceID == "" {
+				return fmt.Errorf("guild %s does not resolve to a bot instance", guild.GuildID)
+			}
+			if _, ok := knownBotInstanceIDs[defaultBotInstanceID]; !ok {
+				return fmt.Errorf("guild %s references unknown default bot instance %q", guild.GuildID, defaultBotInstanceID)
+			}
 		}
-		if _, ok := knownBotInstanceIDs[botInstanceID]; !ok {
-			return fmt.Errorf("guild %s references unknown bot instance %q", guild.GuildID, botInstanceID)
-		}
-		for domain, explicitBotInstanceID := range guild.DomainBotInstanceIDs {
-			normalizedDomain := files.NormalizeBotDomain(domain)
-			if normalizedDomain == "" {
-				return fmt.Errorf("guild %s has an empty domain bot binding key", guild.GuildID)
-			}
-			switch normalizedDomain {
-			case "core", "default":
-				return fmt.Errorf("guild %s uses reserved domain %q; use bot_instance_id instead", guild.GuildID, normalizedDomain)
-			}
-
-			normalizedBotInstanceID := files.NormalizeBotInstanceID(explicitBotInstanceID)
-			if normalizedBotInstanceID == "" {
-				return fmt.Errorf("guild %s domain %q does not resolve to a bot instance", guild.GuildID, normalizedDomain)
-			}
-			if _, ok := knownBotInstanceIDs[normalizedBotInstanceID]; !ok {
-				return fmt.Errorf("guild %s domain %q references unknown bot instance %q", guild.GuildID, normalizedDomain, normalizedBotInstanceID)
+		for botInstanceID := range guild.BotInstanceTokens {
+			if _, ok := knownBotInstanceIDs[botInstanceID]; !ok {
+				return fmt.Errorf("guild %s references unknown bot instance %q", guild.GuildID, botInstanceID)
 			}
 		}
 	}

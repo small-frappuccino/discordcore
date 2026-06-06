@@ -77,13 +77,7 @@ export interface GuildRolesSettingsSection {
   mute_role?: string;
 }
 
-export interface GuildBotRoutingSettingsSection {
-  bot_instance_id?: string;
-  available_bot_instance_ids?: string[];
-  domain_override_bot_instance_ids?: string[];
-  domain_bot_instance_ids?: Record<string, string>;
-  editable_domains?: string[];
-}
+
 
 export interface GuildSettingsWorkspace {
   scope: string;
@@ -91,7 +85,7 @@ export interface GuildSettingsWorkspace {
   bot_instance_id?: string;
   available_bot_instance_ids?: string[];
   sections: {
-    bot_routing: GuildBotRoutingSettingsSection;
+    bot_instance_tokens: Record<string, string>;
     roles: GuildRolesSettingsSection;
   };
 }
@@ -150,8 +144,7 @@ export async function updateGuildSettings(
   client: ControlApiClient,
   guildId: string,
   payload: {
-    bot_instance_id?: string;
-    bot_routing?: GuildBotRoutingSettingsSection;
+    bot_instance_tokens?: Record<string, string>;
     roles?: GuildRolesSettingsSection;
   },
 ): Promise<GuildSettingsWorkspaceResponse> {

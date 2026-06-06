@@ -483,13 +483,10 @@ type TicketsConfig struct {
 
 // GuildConfig holds the configuration for a specific guild.
 type GuildConfig struct {
-	GuildID       string `json:"guild_id"`
-	BotInstanceID string `json:"bot_instance_id,omitempty"`
-	// DomainBotInstanceIDs overrides the owning bot instance for specialized
-	// domains such as qotd. Domains not listed here fall back to BotInstanceID
-	// and then the runtime default bot instance.
-	DomainBotInstanceIDs map[string]string `json:"domain_bot_instance_ids,omitempty"`
-	Features             FeatureToggles    `json:"features,omitempty"`
+	GuildID string `json:"guild_id"`
+	// BotInstanceTokens maps an instance ID (e.g. "main", "companion") to its safely encrypted Discord API token for this guild.
+	BotInstanceTokens map[string]EncryptedString `json:"bot_instance_tokens,omitempty"`
+	Features          FeatureToggles             `json:"features,omitempty"`
 	Channels             ChannelsConfig    `json:"channels,omitempty"`
 	Roles                RolesConfig       `json:"roles,omitempty"`
 	Stats                StatsConfig       `json:"stats,omitempty"`

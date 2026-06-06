@@ -2,8 +2,6 @@ package core
 
 import (
 	"strings"
-
-	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 type interactionRouteRegistry struct {
@@ -71,7 +69,7 @@ func (cr *CommandRouter) RegisterInteractionRoutesForDomain(domain string, bindi
 	if cr == nil {
 		return
 	}
-	normalizedDomain := files.NormalizeBotDomain(domain)
+	normalizedDomain := normalizeDomain(domain)
 	scopedBindings := make([]InteractionRouteBinding, 0, len(bindings))
 	for _, binding := range bindings {
 		binding.Domain = normalizedDomain
@@ -194,7 +192,7 @@ func (cr *CommandRouter) registerSlashCommandRoutesForDomain(domain string, cmd 
 	if cr == nil || cr.routeRegistry == nil || cmd == nil {
 		return
 	}
-	cr.registerDerivedInteractionRouteTree(strings.TrimSpace(cmd.Name()), files.NormalizeBotDomain(domain), cmd)
+	cr.registerDerivedInteractionRouteTree(strings.TrimSpace(cmd.Name()), normalizeDomain(domain), cmd)
 }
 
 func (cr *CommandRouter) registerSlashSubCommandRoutes(parentName string, subcmd Command) {
@@ -205,7 +203,7 @@ func (cr *CommandRouter) registerSlashSubCommandRoutesForDomain(domain, parentNa
 	if cr == nil || cr.routeRegistry == nil || subcmd == nil {
 		return
 	}
-	cr.registerDerivedInteractionRouteTree(JoinRoutePath(parentName, subcmd.Name()), files.NormalizeBotDomain(domain), subcmd)
+	cr.registerDerivedInteractionRouteTree(JoinRoutePath(parentName, subcmd.Name()), normalizeDomain(domain), subcmd)
 }
 
 func (cr *CommandRouter) registerDerivedInteractionRouteTree(path, domain string, handler SlashHandler) {
@@ -236,7 +234,7 @@ func (cr *CommandRouter) storeInteractionRoute(binding InteractionRouteBinding, 
 		cr.routeRegistry.routes[path] = entry
 	}
 
-	if domain := files.NormalizeBotDomain(binding.Domain); domain != "" {
+	if domain := normalizeDomain(binding.Domain); domain != "" {
 		entry.domain = domain
 	}
 
@@ -260,7 +258,7 @@ func collectInteractionRouteBindings(path, domain string, handler SlashHandler) 
 		return nil
 	}
 
-	binding := InteractionRouteBinding{Path: path, Domain: files.NormalizeBotDomain(domain), Slash: handler}
+	binding := InteractionRouteBinding{Path: path, Domain: normalizeDomain(domain), Slash: handler}
 	if provider, ok := handler.(AutocompleteRouteProvider); ok {
 		binding.Autocomplete = provider.AutocompleteRouteHandler()
 	}
@@ -294,4 +292,8 @@ func JoinRoutePath(parts ...string) string {
 		}
 	}
 	return strings.Join(filtered, " ")
+}
+
+func normalizeDomain(domain string) string {
+	return strings.ToLower(strings.TrimSpace(domain))
 }

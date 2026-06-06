@@ -2,96 +2,35 @@ package files
 
 import "strings"
 
-// BotDomainQOTD defines bot domain qotd.
-const BotDomainQOTD = "qotd"
-
 // NormalizeBotInstanceID trims a persisted bot instance identifier.
 func NormalizeBotInstanceID(botInstanceID string) string {
 	return strings.TrimSpace(botInstanceID)
 }
 
-// NormalizeBotDomain canonicalizes a persisted or requested domain key.
-func NormalizeBotDomain(domain string) string {
-	return strings.ToLower(strings.TrimSpace(domain))
-}
-
-// EffectiveBotInstanceID resolves the guild bot binding, falling back to the
-// provided default instance ID when the config is unset.
-func (gc GuildConfig) EffectiveBotInstanceID(defaultBotInstanceID string) string {
-	if botInstanceID := NormalizeBotInstanceID(gc.BotInstanceID); botInstanceID != "" {
-		return botInstanceID
-	}
-	return NormalizeBotInstanceID(defaultBotInstanceID)
-}
-
-// BotInstanceIDOverrideForDomain returns the explicit bot-instance override for
-// the provided domain, or an empty string when the domain falls back to the
-// guild-wide bot binding. DomainBotInstanceIDs is normalized at config write
-// time, so lookups are direct map reads.
-func (gc GuildConfig) BotInstanceIDOverrideForDomain(domain string) string {
-	domain = NormalizeBotDomain(domain)
-	if domain == "" {
-		return ""
-	}
-	return gc.DomainBotInstanceIDs[domain]
-}
-
-// EffectiveBotInstanceIDForDomain resolves the bot binding for a specialized
-// domain, falling back to the guild-wide binding and then the runtime default.
-func (gc GuildConfig) EffectiveBotInstanceIDForDomain(domain, defaultBotInstanceID string) string {
-	if botInstanceID := gc.BotInstanceIDOverrideForDomain(domain); botInstanceID != "" {
-		return botInstanceID
-	}
-	return gc.EffectiveBotInstanceID(defaultBotInstanceID)
-}
-
 // BelongsToBotInstance reports whether the guild should be handled by the
-// provided runtime, considering the default binding for legacy configs.
-func (gc GuildConfig) BelongsToBotInstance(botInstanceID, defaultBotInstanceID string) bool {
-	return gc.BelongsToBotInstanceForDomain("", botInstanceID, defaultBotInstanceID)
+// provided runtime, which is true if the guild has a configured token for it.
+func (gc GuildConfig) BelongsToBotInstance(botInstanceID string) bool {
+	botInstanceID = NormalizeBotInstanceID(botInstanceID)
+	if botInstanceID == "" {
+		return false
+	}
+	token, ok := gc.BotInstanceTokens[botInstanceID]
+	return ok && len(token) > 0
 }
 
-// BelongsToBotInstanceForDomain reports whether the provided runtime should own
-// the requested domain for the guild, considering explicit domain overrides and
-// legacy guild-wide bindings.
-func (gc GuildConfig) BelongsToBotInstanceForDomain(domain, botInstanceID, defaultBotInstanceID string) bool {
-	return gc.EffectiveBotInstanceIDForDomain(domain, defaultBotInstanceID) == NormalizeBotInstanceID(botInstanceID)
-}
-
-// GuildsForBotInstance returns the guild subset assigned to the provided bot
-// instance, preserving config order.
-func (cfg *BotConfig) GuildsForBotInstance(botInstanceID, defaultBotInstanceID string) []GuildConfig {
-	return cfg.GuildsForBotInstanceForDomain("", botInstanceID, defaultBotInstanceID)
-}
-
-// GuildsForBotInstanceForDomain returns the guild subset whose requested
-// domain resolves to the provided bot instance, preserving config order.
-func (cfg *BotConfig) GuildsForBotInstanceForDomain(domain, botInstanceID, defaultBotInstanceID string) []GuildConfig {
+// GuildsForBotInstance returns the guild subset assigned to the provided bot instance,
+// preserving config order.
+func (cfg *BotConfig) GuildsForBotInstance(botInstanceID string) []GuildConfig {
 	if cfg == nil || len(cfg.Guilds) == 0 {
 		return nil
 	}
 
-	domain = NormalizeBotDomain(domain)
 	target := NormalizeBotInstanceID(botInstanceID)
 	out := make([]GuildConfig, 0, len(cfg.Guilds))
 	for _, guild := range cfg.Guilds {
-		if guild.BelongsToBotInstanceForDomain(domain, target, defaultBotInstanceID) {
+		if guild.BelongsToBotInstance(target) {
 			out = append(out, guild)
 		}
 	}
 	return out
-}
-
-// HasDomainBotInstanceOverrides reports whether any guild contains a
-// specialized domain binding override.
-func (cfg *BotConfig) HasDomainBotInstanceOverrides() bool {
-	if cfg == nil {
-		return false
-	}
-	for _, guild := range cfg.Guilds {
-		if len(guild.DomainBotInstanceIDs) > 0 {
-			return true
-		}
-	}
-	return false
 }

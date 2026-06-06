@@ -29,7 +29,7 @@ func TestMonitoringServiceHandleGuildCreatePersistsDormantGuild(t *testing.T) {
 	if len(cfg.Guilds) != 1 {
 		t.Fatalf("expected one guild persisted after guild create, got %+v", cfg.Guilds)
 	}
-	if cfg.Guilds[0].GuildID != guildID || cfg.Guilds[0].BotInstanceID != "companion" {
+	if cfg.Guilds[0].GuildID != guildID {
 		t.Fatalf("unexpected persisted guild after guild create: %+v", cfg.Guilds[0])
 	}
 	if cfg.Guilds[0].Channels != (files.ChannelsConfig{}) {

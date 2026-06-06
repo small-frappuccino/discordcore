@@ -141,7 +141,7 @@ func buildMainRunOptions(primaryTokenEnv string) discordcoreapp.RunOptions {
 		}},
 		DefaultOwnerBotInstanceID: MainBotInstanceID,
 		KnownBotInstanceIDs:       []string{QOTDBotInstanceID},
-		SupportedDomains:          []string{"default"},
+
 		CommandCatalogRegistrars: []discordcommands.CommandCatalogRegistrar{
 			discordcommands.BaseCommandCatalogRegistrar(),
 			discordcommands.AdminCommandCatalogRegistrar(),
@@ -160,7 +160,7 @@ func buildQOTDRunOptions(primaryTokenEnv string) discordcoreapp.RunOptions {
 		}},
 		DefaultOwnerBotInstanceID: MainBotInstanceID,
 		KnownBotInstanceIDs:       []string{MainBotInstanceID},
-		SupportedDomains:          []string{files.BotDomainQOTD},
+
 		CommandCatalogRegistrars: []discordcommands.CommandCatalogRegistrar{
 			discordcommands.QOTDCommandCatalogRegistrar(),
 		},

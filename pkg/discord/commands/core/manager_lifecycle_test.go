@@ -284,10 +284,7 @@ func TestCommandManagerSetupCommandsUsesGuildSyncWhenDomainOverridesExist(t *tes
 			if _, err := cfgMgr.UpdateConfig(func(cfg *files.BotConfig) error {
 				cfg.Guilds = []files.GuildConfig{{
 					GuildID:       "g1",
-					BotInstanceID: "main",
-					DomainBotInstanceIDs: map[string]string{
-						files.BotDomainQOTD: "companion",
-					},
+					BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
 				}}
 				return nil
 			}); err != nil {
@@ -305,8 +302,8 @@ func TestCommandManagerSetupCommandsUsesGuildSyncWhenDomainOverridesExist(t *tes
 
 			qotdSubcommand := testSubCommand{name: "qotd_channel"}
 			configGroup.AddSubCommand(qotdSubcommand)
-			router.RegisterSlashSubCommandForDomain(files.BotDomainQOTD, "config", qotdSubcommand)
-			router.RegisterSlashCommandForDomain(files.BotDomainQOTD, testCommand{name: "qotd"})
+			router.RegisterSlashSubCommandForDomain("qotd", "config", qotdSubcommand)
+			router.RegisterSlashCommandForDomain("qotd", testCommand{name: "qotd"})
 			router.SetGuildRouteFilter(func(guildID string, routeKey InteractionRouteKey) bool {
 				return guildID == "g1" && tc.allowRoute(routeKey)
 			})
@@ -390,17 +387,11 @@ func TestCommandManagerSetupCommandsSkipsConfiguredGuildsMissingFromSessionState
 		cfg.Guilds = []files.GuildConfig{
 			{
 				GuildID:       "g1",
-				BotInstanceID: "main",
-				DomainBotInstanceIDs: map[string]string{
-					files.BotDomainQOTD: "companion",
-				},
+				BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
 			},
 			{
 				GuildID:       "g2",
-				BotInstanceID: "main",
-				DomainBotInstanceIDs: map[string]string{
-					files.BotDomainQOTD: "companion",
-				},
+				BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
 			},
 		}
 		return nil
@@ -416,8 +407,8 @@ func TestCommandManagerSetupCommandsSkipsConfiguredGuildsMissingFromSessionState
 	qotdSubcommand := testSubCommand{name: "qotd_channel"}
 	configGroup.AddSubCommand(qotdSubcommand)
 	router.RegisterSlashCommand(configGroup)
-	router.RegisterSlashSubCommandForDomain(files.BotDomainQOTD, "config", qotdSubcommand)
-	router.RegisterSlashCommandForDomain(files.BotDomainQOTD, testCommand{name: "qotd"})
+	router.RegisterSlashSubCommandForDomain("qotd", "config", qotdSubcommand)
+	router.RegisterSlashCommandForDomain("qotd", testCommand{name: "qotd"})
 	router.SetGuildRouteFilter(func(guildID string, routeKey InteractionRouteKey) bool {
 		return guildID == "g1" && (routeKey.Path == "config qotd_channel" || routeKey.Path == "qotd")
 	})

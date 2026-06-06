@@ -20,7 +20,6 @@ type CommandHandler struct {
 	configManager        *files.ConfigManager
 	botInstanceID        string
 	defaultBotInstanceID string
-	supportedDomains     map[string]struct{}
 	catalogCapabilities  CommandCatalogCapabilities
 	catalogRegistrars    []CommandCatalogRegistrar
 	commandManager       *core.CommandManager
@@ -140,22 +139,7 @@ func (ch *CommandHandler) SetCommandCatalogCapabilities(capabilities CommandCata
 	ch.catalogCapabilities = capabilities
 }
 
-// SetSupportedDomains limits catalog registration to the provided domains. If
-// not called, the handler preserves the legacy behavior and registers every
-// known fragment.
-func (ch *CommandHandler) SetSupportedDomains(domains ...string) {
-	if ch == nil {
-		return
-	}
-	if len(domains) == 0 {
-		ch.supportedDomains = nil
-		return
-	}
-	ch.supportedDomains = make(map[string]struct{}, len(domains))
-	for _, domain := range domains {
-		ch.supportedDomains[files.NormalizeBotDomain(domain)] = struct{}{}
-	}
-}
+
 
 func (ch *CommandHandler) registerCommandCatalog() error {
 	router := ch.commandManager.GetRouter()
@@ -171,19 +155,9 @@ func (ch *CommandHandler) registerCommandCatalog() error {
 }
 
 func (ch *CommandHandler) commandCatalogRegistrarsForSetup() []CommandCatalogRegistrar {
-	if ch.supportedDomains == nil {
-		filtered := make([]CommandCatalogRegistrar, 0, len(ch.catalogRegistrars))
-		for _, registrar := range ch.catalogRegistrars {
-			if ch.supportsCatalogCapabilities(registrar.RequiredCapabilities) {
-				filtered = append(filtered, registrar)
-			}
-		}
-		return filtered
-	}
-
 	filtered := make([]CommandCatalogRegistrar, 0, len(ch.catalogRegistrars))
 	for _, registrar := range ch.catalogRegistrars {
-		if ch.supportsDomain(registrar.Domain) && ch.supportsCatalogCapabilities(registrar.RequiredCapabilities) {
+		if ch.supportsCatalogCapabilities(registrar.RequiredCapabilities) {
 			filtered = append(filtered, registrar)
 		}
 	}
@@ -197,13 +171,7 @@ func (ch *CommandHandler) supportsCatalogCapabilities(required CommandCatalogCap
 	return true
 }
 
-func (ch *CommandHandler) supportsDomain(domain string) bool {
-	if ch == nil || ch.supportedDomains == nil {
-		return true
-	}
-	_, ok := ch.supportedDomains[files.NormalizeBotDomain(domain)]
-	return ok
-}
+
 
 // Shutdown performs cleanup for the command handler resources
 func (ch *CommandHandler) Shutdown() error {
@@ -230,11 +198,7 @@ func (ch *CommandHandler) handlesGuild(guildID string) bool {
 }
 
 func (ch *CommandHandler) handlesGuildRoute(guildID string, routeKey core.InteractionRouteKey) bool {
-	domain := ch.routeDomain(routeKey)
-	if !ch.supportsDomain(domain) {
-		return false
-	}
-	if !ch.matchesGuildBotInstanceForDomain(guildID, domain) {
+	if !ch.matchesGuildBotInstance(guildID) {
 		return false
 	}
 	cfg := ch.configManager.Config()
@@ -248,10 +212,6 @@ func (ch *CommandHandler) handlesGuildRoute(guildID string, routeKey core.Intera
 }
 
 func (ch *CommandHandler) matchesGuildBotInstance(guildID string) bool {
-	return ch.matchesGuildBotInstanceForDomain(guildID, "")
-}
-
-func (ch *CommandHandler) matchesGuildBotInstanceForDomain(guildID, domain string) bool {
 	if ch == nil {
 		return false
 	}
@@ -266,20 +226,17 @@ func (ch *CommandHandler) matchesGuildBotInstanceForDomain(guildID, domain strin
 	if guild == nil {
 		return false
 	}
-	if guild.EffectiveBotInstanceIDForDomain(domain, ch.defaultBotInstanceID) != files.NormalizeBotInstanceID(ch.botInstanceID) {
-		return false
-	}
-	return true
-}
 
-func (ch *CommandHandler) routeDomain(routeKey core.InteractionRouteKey) string {
-	if ch != nil && ch.commandManager != nil {
-		if router := ch.commandManager.GetRouter(); router != nil {
-			if domain := router.InteractionRouteDomain(routeKey); domain != "" {
-				return domain
-			}
-		}
+	botInstanceID := ch.botInstanceID
+	if botInstanceID == "" {
+		botInstanceID = ch.defaultBotInstanceID
 	}
-
-	return ""
+	if botInstanceID == "" {
+		return true
+	}
+	if len(guild.BotInstanceTokens) == 0 {
+		return botInstanceID == ch.defaultBotInstanceID
+	}
+	token, ok := guild.BotInstanceTokens[botInstanceID]
+	return ok && token != ""
 }

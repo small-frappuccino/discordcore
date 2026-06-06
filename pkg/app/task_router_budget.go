@@ -39,7 +39,7 @@ func configuredRuntimeTaskRouterWorkers(
 		selected = cfg.RuntimeConfig.GlobalMaxWorkers
 	}
 
-	for _, guild := range cfg.GuildsForBotInstance(botInstanceID, defaultBotInstanceID) {
+	for _, guild := range cfg.GuildsForBotInstance(botInstanceID) {
 		override := guild.RuntimeConfig.GlobalMaxWorkers
 		if override <= 0 {
 			continue

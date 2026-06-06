@@ -20,7 +20,7 @@ func TestInitializeBotRuntimeSkipsCommandHandlerWhenCommandsDisabled(t *testing.
 		cfg.Guilds = []files.GuildConfig{
 			{
 				GuildID:       "guild-1",
-				BotInstanceID: "main",
+				BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
 						Commands: boolPtr(false),
@@ -86,52 +86,4 @@ func TestInitializeBotRuntimeSkipsCommandHandlerWhenCommandsDisabled(t *testing.
 	}
 }
 
-func TestInitializeBotRuntimeStartsCommandHandlerForDormantQOTDCommandCatalog(t *testing.T) {
-	session, err := discordgo.New("Bot test-token")
-	if err != nil {
-		t.Fatalf("create discord session: %v", err)
-	}
 
-	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
-	origNewCommandHandlerForBot := newCommandHandlerForBot
-	origSetupCommandHandler := setupCommandHandler
-	defer func() {
-		newCommandHandlerForBot = origNewCommandHandlerForBot
-		setupCommandHandler = origSetupCommandHandler
-	}()
-
-	var created bool
-	var setupCommandsCalls int
-
-	newCommandHandlerForBot = func(session *discordgo.Session, configManager *files.ConfigManager, botInstanceID string, defaultBotInstanceID string) *commands.CommandHandler {
-		created = true
-		return commands.NewCommandHandlerForBot(session, configManager, botInstanceID, defaultBotInstanceID)
-	}
-	setupCommandHandler = func(ch *commands.CommandHandler) error {
-		setupCommandsCalls++
-		return nil
-	}
-
-	runtime := &botRuntime{
-		instanceID: "companion",
-		capabilities: botRuntimeCapabilities{
-			commandDomains: commandDomainSet{files.BotDomainQOTD: {}},
-		},
-		session: session,
-	}
-	err = initializeBotRuntime(runtime, botRuntimeOptions{
-		defaultBotInstanceID: "main",
-		runtimeCount:         2,
-		configManager:        cfgMgr,
-	})
-	if err != nil {
-		t.Fatalf("initialize bot runtime: %v", err)
-	}
-
-	if !created {
-		t.Fatal("expected dormant qotd runtime to create a command handler")
-	}
-	if setupCommandsCalls != 1 {
-		t.Fatalf("expected slash command setup once, got %d calls", setupCommandsCalls)
-	}
-}

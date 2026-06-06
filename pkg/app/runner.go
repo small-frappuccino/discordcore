@@ -159,7 +159,6 @@ func runWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	runtimes := make(map[string]*botRuntime, len(botInstances))
 	runtimeOrder := make([]*botRuntime, 0, len(botInstances))
 	controlServerRegistry := &controlServerHolder{}
-	domainSupport := newRuntimeDomainSupport(opts.SupportedDomains)
 	cleanupRuntimesOnReturn := true
 	defer func() { rollbackBotRuntimes(cleanupRuntimesOnReturn, runtimeOrder) }()
 	closeDiscordSessionsOnReturn := true
@@ -167,7 +166,7 @@ func runWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	startupTasks := newStartupTaskOrchestrator(len(botInstances))
 	defer shutdownStartupServices(startupTasks, controlServerRegistry, "Startup background tasks did not finish cleanly")
 
-	runtimeCapabilities := resolveRuntimeCapabilities(configManager.Config(), botInstances, defaultBotInstanceID, domainSupport)
+	runtimeCapabilities := resolveRuntimeCapabilities(configManager.Config(), botInstances, defaultBotInstanceID)
 
 	var openErr error
 	runtimes, runtimeOrder, openErr = openBotRuntimes(botInstances, runtimeCapabilities)
@@ -185,11 +184,9 @@ func runWithOptions(appName, tokenEnv string, opts RunOptions) error {
 
 	runtimeResolver := newBotRuntimeResolver(configManager, runtimes, defaultBotInstanceID)
 	var defaultSession *discordgo.Session
-	if domainSupport.supportsDefaultDomain() {
-		defaultSession, err = runtimeResolver.sessionForGuild("")
-		if err != nil {
-			return fmt.Errorf("resolve default discord session: %w", err)
-		}
+	defaultSession, err = runtimeResolver.sessionForGuild("")
+	if err != nil {
+		return fmt.Errorf("resolve default discord session: %w", err)
 	}
 
 	// Wire the in-memory metrics sink so /v1/health/qotd has counters to
@@ -222,7 +219,7 @@ func runWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	botOpts := botRuntimeOptions{
 		defaultBotInstanceID:     defaultBotInstanceID,
 		runtimeCount:             len(runtimeOrder),
-		supportedDomains:         opts.SupportedDomains,
+
 		configManager:            configManager,
 		store:                    store,
 		commandCatalogRegistrars: opts.CommandCatalogRegistrars,
@@ -345,16 +342,13 @@ func scheduleDBCleanup(store *storage.Store, configManager *files.ConfigManager)
 	return nil
 }
 
-// resolveRuntimeCapabilities resolves the per-instance runtime capabilities for the
-// given config snapshot and supported domains.
-func resolveRuntimeCapabilities(configSnapshot *files.BotConfig, botInstances []resolvedBotInstance, defaultBotInstanceID string, domainSupport runtimeDomainSupport) map[string]botRuntimeCapabilities {
+func resolveRuntimeCapabilities(configSnapshot *files.BotConfig, botInstances []resolvedBotInstance, defaultBotInstanceID string) map[string]botRuntimeCapabilities {
 	capabilities := make(map[string]botRuntimeCapabilities, len(botInstances))
 	for _, instance := range botInstances {
-		capabilities[instance.ID] = resolveBotRuntimeCapabilitiesForDomains(
+		capabilities[instance.ID] = resolveBotRuntimeCapabilities(
 			configSnapshot,
 			instance.ID,
 			defaultBotInstanceID,
-			domainSupport,
 		)
 	}
 	return capabilities

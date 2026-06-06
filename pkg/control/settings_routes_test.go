@@ -275,141 +275,6 @@ func TestGuildSettingsPutGetListAndDelete(t *testing.T) {
 	}
 }
 
-func TestGuildSettingsPutPersistsBotRoutingOverrides(t *testing.T) {
-	t.Parallel()
-
-	srv, cm := newControlTestServer(t)
-	setTestBotGuildBindings(
-		srv,
-		BotGuildBinding{GuildID: "g1", BotInstanceID: "main"},
-		BotGuildBinding{GuildID: "g1", BotInstanceID: "companion"},
-	)
-
-	payload := updateGuildSettingsRequest{
-		BotRouting: &guildBotRoutingSection{
-			BotInstanceID: "main",
-			DomainBotInstanceIDs: map[string]string{
-				files.BotDomainQOTD: "companion",
-			},
-		},
-	}
-
-	rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodPut, "/v1/guilds/g1/settings", payload)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("PUT /v1/guilds/g1/settings status=%d body=%q", rec.Code, rec.Body.String())
-	}
-
-	var response guildSettingsResponse
-	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
-		t.Fatalf("decode guild settings response: %v", err)
-	}
-	if response.Workspace.Sections.BotRouting.BotInstanceID != "main" {
-		t.Fatalf("unexpected bot routing bot_instance_id: %+v", response.Workspace.Sections.BotRouting)
-	}
-	if strings.Join(response.Workspace.Sections.BotRouting.AvailableBotInstanceIDs, ",") != "companion,main" {
-		t.Fatalf("unexpected bot routing available bot instances: %+v", response.Workspace.Sections.BotRouting)
-	}
-	if strings.Join(response.Workspace.Sections.BotRouting.DomainOverrideBotInstanceIDs, ",") != "companion,main" {
-		t.Fatalf("unexpected bot routing override bot instances: %+v", response.Workspace.Sections.BotRouting)
-	}
-	if got := response.Workspace.Sections.BotRouting.DomainBotInstanceIDs[files.BotDomainQOTD]; got != "companion" {
-		t.Fatalf("expected qotd domain override=companion, got %+v", response.Workspace.Sections.BotRouting.DomainBotInstanceIDs)
-	}
-	if !slices.Equal(response.Workspace.Sections.BotRouting.EditableDomains, []string{files.BotDomainQOTD}) {
-		t.Fatalf("unexpected editable bot routing domains: %+v", response.Workspace.Sections.BotRouting.EditableDomains)
-	}
-
-	cfg := cm.SnapshotConfig()
-	guild, ok := findGuildSettings(cfg, "g1")
-	if !ok {
-		t.Fatal("expected guild g1 in config after bot routing update")
-	}
-	if guild.BotInstanceID != "main" {
-		t.Fatalf("expected persisted bot_instance_id=main, got %+v", guild)
-	}
-	if got := guild.DomainBotInstanceIDs[files.BotDomainQOTD]; got != "companion" {
-		t.Fatalf("expected persisted qotd bot binding=companion, got %+v", guild.DomainBotInstanceIDs)
-	}
-	if response.Workspace.BotInstanceID != "main" {
-		t.Fatalf("expected workspace top-level bot_instance_id=main, got %+v", response.Workspace)
-	}
-}
-
-func TestGuildSettingsPutAllowsKnownDomainOverrideBotInstances(t *testing.T) {
-	t.Parallel()
-
-	srv, cm := newControlTestServer(t)
-	setTestBotGuildBindings(
-		srv,
-		BotGuildBinding{GuildID: "g1", BotInstanceID: "main"},
-	)
-	setTestKnownBotInstanceIDs(srv, "main", "companion")
-
-	payload := updateGuildSettingsRequest{
-		BotRouting: &guildBotRoutingSection{
-			BotInstanceID: "main",
-			DomainBotInstanceIDs: map[string]string{
-				files.BotDomainQOTD: "companion",
-			},
-		},
-	}
-
-	rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodPut, "/v1/guilds/g1/settings", payload)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("PUT /v1/guilds/g1/settings status=%d body=%q", rec.Code, rec.Body.String())
-	}
-
-	var response guildSettingsResponse
-	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
-		t.Fatalf("decode guild settings response: %v", err)
-	}
-	if strings.Join(response.Workspace.Sections.BotRouting.AvailableBotInstanceIDs, ",") != "main" {
-		t.Fatalf("unexpected default bot instance options: %+v", response.Workspace.Sections.BotRouting)
-	}
-	if strings.Join(response.Workspace.Sections.BotRouting.DomainOverrideBotInstanceIDs, ",") != "companion,main" {
-		t.Fatalf("unexpected domain override bot instances: %+v", response.Workspace.Sections.BotRouting)
-	}
-	if got := response.Workspace.Sections.BotRouting.DomainBotInstanceIDs[files.BotDomainQOTD]; got != "companion" {
-		t.Fatalf("expected qotd domain override=companion, got %+v", response.Workspace.Sections.BotRouting.DomainBotInstanceIDs)
-	}
-
-	cfg := cm.SnapshotConfig()
-	guild, ok := findGuildSettings(cfg, "g1")
-	if !ok {
-		t.Fatal("expected guild g1 in config after bot routing update")
-	}
-	if got := guild.DomainBotInstanceIDs[files.BotDomainQOTD]; got != "companion" {
-		t.Fatalf("expected persisted qotd bot binding=companion, got %+v", guild.DomainBotInstanceIDs)
-	}
-}
-
-func TestGuildSettingsPutRejectsUnknownBotRoutingDomain(t *testing.T) {
-	t.Parallel()
-
-	srv, _ := newControlTestServer(t)
-	setTestBotGuildBindings(
-		srv,
-		BotGuildBinding{GuildID: "g1", BotInstanceID: "main"},
-		BotGuildBinding{GuildID: "g1", BotInstanceID: "companion"},
-	)
-
-	payload := updateGuildSettingsRequest{
-		BotRouting: &guildBotRoutingSection{
-			BotInstanceID: "main",
-			DomainBotInstanceIDs: map[string]string{
-				"tickets": "companion",
-			},
-		},
-	}
-
-	rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodPut, "/v1/guilds/g1/settings", payload)
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for unknown bot routing domain, got %d body=%q", rec.Code, rec.Body.String())
-	}
-	if !strings.Contains(rec.Body.String(), "is not editable via settings") {
-		t.Fatalf("expected editable-domain error, got %q", rec.Body.String())
-	}
-}
 
 func TestGuildSettingsGetOmitsLegacyModerationWorkspaceSection(t *testing.T) {
 	t.Parallel()
@@ -505,8 +370,8 @@ func TestGuildRegistrationPostCreatesDormantGuildWorkspace(t *testing.T) {
 	srv, cm := newControlTestServer(t)
 	srv.SetDefaultBotInstanceID("main")
 	setTestBotGuildBindings(srv, BotGuildBinding{GuildID: "g2", BotInstanceID: "main"})
-	srv.SetGuildRegistrationResolver(func(_ context.Context, guildID, botInstanceID string) error {
-		return cm.EnsureMinimalGuildConfigForBot(guildID, botInstanceID)
+	srv.SetGuildRegistrationResolver(func(_ context.Context, guildID string) error {
+		return cm.EnsureMinimalGuildConfigForBot(guildID)
 	})
 
 	rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodPost, "/v1/settings/guilds", registerGuildRequest{GuildID: "g2"})
@@ -521,9 +386,7 @@ func TestGuildRegistrationPostCreatesDormantGuildWorkspace(t *testing.T) {
 	if !response.Created {
 		t.Fatalf("expected created=true, got %+v", response)
 	}
-	if response.Workspace.BotInstanceID != "main" {
-		t.Fatalf("expected workspace bot_instance_id=main, got %+v", response.Workspace)
-	}
+
 	if response.Workspace.Sections.Channels != (files.ChannelsConfig{}) {
 		t.Fatalf("expected empty channels for dormant guild, got %+v", response.Workspace.Sections.Channels)
 	}
@@ -548,9 +411,7 @@ func TestGuildRegistrationPostCreatesDormantGuildWorkspace(t *testing.T) {
 	if !ok {
 		t.Fatal("expected registered guild g2 in config")
 	}
-	if guild.BotInstanceID != "main" {
-		t.Fatalf("expected persisted bot_instance_id=main, got %+v", guild)
-	}
+
 	if guild.Channels != (files.ChannelsConfig{}) {
 		t.Fatalf("expected persisted dormant guild channels to remain empty, got %+v", guild.Channels)
 	}
@@ -648,87 +509,7 @@ func TestGuildRegistryWorkspaceIncludesAvailableGuilds(t *testing.T) {
 	}
 }
 
-func TestGuildRegistrationPostPersistsRequestedBotInstanceID(t *testing.T) {
-	t.Parallel()
 
-	srv, cm := newControlTestServer(t)
-	srv.SetDefaultBotInstanceID("main")
-	setTestBotGuildBindings(srv,
-		BotGuildBinding{GuildID: "g2", BotInstanceID: "main"},
-		BotGuildBinding{GuildID: "g2", BotInstanceID: "companion"},
-	)
-	srv.SetGuildRegistrationResolver(func(_ context.Context, guildID, botInstanceID string) error {
-		_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
-			cfg.Guilds = append(cfg.Guilds, files.GuildConfig{
-				GuildID:       guildID,
-				BotInstanceID: botInstanceID,
-			})
-			return nil
-		})
-		return err
-	})
-
-	rec := performHandlerJSONRequest(
-		t,
-		srv.httpServer.Handler,
-		http.MethodPost,
-		"/v1/settings/guilds",
-		registerGuildRequest{GuildID: "g2", BotInstanceID: "companion"},
-	)
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("POST /v1/settings/guilds status=%d body=%q", rec.Code, rec.Body.String())
-	}
-
-	var response guildRegistrationResponse
-	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
-		t.Fatalf("decode guild registration response: %v", err)
-	}
-	if response.Workspace.BotInstanceID != "companion" {
-		t.Fatalf("expected workspace bot_instance_id=companion, got %+v", response.Workspace)
-	}
-	if strings.Join(response.Workspace.AvailableBotInstanceIDs, ",") != "companion,main" {
-		t.Fatalf("unexpected available bot instances: %+v", response.Workspace.AvailableBotInstanceIDs)
-	}
-	if response.Workspace.Sections.BotRouting.BotInstanceID != "companion" {
-		t.Fatalf("expected bot routing section bot_instance_id=companion, got %+v", response.Workspace.Sections.BotRouting)
-	}
-	if !slices.Equal(response.Workspace.Sections.BotRouting.EditableDomains, []string{files.BotDomainQOTD}) {
-		t.Fatalf("unexpected editable bot routing domains: %+v", response.Workspace.Sections.BotRouting.EditableDomains)
-	}
-
-	cfg := cm.SnapshotConfig()
-	guild, ok := findGuildSettings(cfg, "g2")
-	if !ok {
-		t.Fatal("expected registered guild g2 in config")
-	}
-	if guild.BotInstanceID != "companion" {
-		t.Fatalf("expected persisted bot_instance_id=companion, got %+v", guild)
-	}
-}
-
-func TestSettingsOverviewDisplaysEffectiveBotInstanceID(t *testing.T) {
-	t.Parallel()
-
-	srv, _ := newControlTestServer(t)
-	srv.SetDefaultBotInstanceID("main")
-	setTestBotGuildBindings(srv, BotGuildBinding{GuildID: "g1"})
-
-	rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodGet, "/v1/settings", nil)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("GET /v1/settings status=%d body=%q", rec.Code, rec.Body.String())
-	}
-
-	var payload settingsOverviewResponse
-	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
-		t.Fatalf("decode settings overview: %v", err)
-	}
-	if len(payload.Workspace.Guilds) != 1 {
-		t.Fatalf("expected one configured guild summary, got %+v", payload.Workspace.Guilds)
-	}
-	if payload.Workspace.Guilds[0].BotInstanceID != "main" {
-		t.Fatalf("expected effective bot_instance_id=main, got %+v", payload.Workspace.Guilds[0])
-	}
-}
 
 func TestGuildSettingsPutRejectsInvalidAutoAssignmentOrdering(t *testing.T) {
 	t.Parallel()

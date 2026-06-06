@@ -89,7 +89,7 @@ func (s *StatsService) handlesGuild(guildID string) bool {
 	if cfg == nil {
 		return false
 	}
-	return cfg.BelongsToBotInstance(s.botInstanceID, s.defaultBotInstanceID)
+	return cfg.BelongsToBotInstance(s.botInstanceID)
 }
 
 func (s *StatsService) scopedConfig() *files.BotConfig {
@@ -100,7 +100,7 @@ func (s *StatsService) scopedConfig() *files.BotConfig {
 	if cfg == nil {
 		return nil
 	}
-	scopedGuilds := cfg.GuildsForBotInstance(s.botInstanceID, s.defaultBotInstanceID)
+	scopedGuilds := cfg.GuildsForBotInstance(s.botInstanceID)
 	if len(scopedGuilds) == len(cfg.Guilds) {
 		return cfg
 	}

@@ -10,7 +10,7 @@ import (
 	qotdcmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/roles"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/runtime"
-	"github.com/small-frappuccino/discordcore/pkg/files"
+
 )
 
 // CommandCatalogCapabilities captures runtime capabilities that can gate
@@ -22,7 +22,6 @@ type CommandCatalogCapabilities struct {
 // CommandCatalogRegistrar applies one domain-scoped command catalog fragment to
 // a command router.
 type CommandCatalogRegistrar struct {
-	Domain               string
 	RequiredCapabilities CommandCatalogCapabilities
 	Register             func(*CommandHandler, *core.CommandRouter)
 }
@@ -40,7 +39,6 @@ func DefaultCommandCatalogRegistrars() []CommandCatalogRegistrar {
 // surfaces.
 func BaseCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
-		Domain: "",
 		Register: func(ch *CommandHandler, router *core.CommandRouter) {
 			runtime.NewRuntimeConfigCommands(ch.configManager).RegisterCommands(router)
 			analytics.RegisterAnalyticsCommands(router)
@@ -55,7 +53,6 @@ func BaseCommandCatalogRegistrar() CommandCatalogRegistrar {
 // QOTDCommandCatalogRegistrar registers the QOTD domain slash command surfaces.
 func QOTDCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
-		Domain: files.BotDomainQOTD,
 		Register: func(ch *CommandHandler, router *core.CommandRouter) {
 			qotdcmd.NewCommands(ch.qotdService).RegisterCommands(router)
 		},
@@ -66,7 +63,6 @@ func QOTDCommandCatalogRegistrar() CommandCatalogRegistrar {
 // surface when the runtime exposes admin capability.
 func AdminCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
-		Domain: "",
 		RequiredCapabilities: CommandCatalogCapabilities{
 			Admin: true,
 		},

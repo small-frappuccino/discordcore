@@ -52,7 +52,7 @@ func (s *Server) handleLiveHealthRoute(w http.ResponseWriter, r *http.Request) {
 		botUser := strings.TrimSpace(files.DiscordBotName)
 		botAvatarURL := ""
 		if s.discordSession != nil {
-			session, err := s.discordSession("", "")
+			session, err := s.discordSession("")
 			if err == nil && session != nil && session.State != nil && session.State.User != nil {
 				if session.State.User.Username != "" {
 					botUser = session.State.User.Username

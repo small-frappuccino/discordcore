@@ -52,13 +52,6 @@ func (mgr *ConfigManager) LoadConfig() error {
 	if err != nil {
 		log.ApplicationLogger().Warn("Guild config index rebuild warning", "error", err, "path", mgr.ConfigPath())
 	}
-	guildBindingMigrated := normalizeGuildBotInstanceBindings(mgr.config)
-	domainBindingMigrated, validationErr := normalizeDomainBotInstanceBindings(mgr.config)
-	if validationErr != nil {
-		mgr.mu.Unlock()
-		return wrapValidationError(validationErr)
-	}
-	orderMigrated := normalizeAutoAssignmentRoleOrder(mgr.config)
 	if validationErr := validateBotConfig(mgr.config); validationErr != nil {
 		mgr.mu.Unlock()
 		return wrapValidationError(validationErr)
@@ -66,11 +59,11 @@ func (mgr *ConfigManager) LoadConfig() error {
 	mgr.publishSnapshotLocked()
 	mgr.mu.Unlock()
 
-	if dupCount > 0 || orderMigrated || domainBindingMigrated || guildBindingMigrated {
+	if dupCount > 0 {
 		if saveErr := mgr.SaveConfig(); saveErr != nil {
 			return fmt.Errorf("save config after normalization: %w", saveErr)
 		}
-		log.ApplicationLogger().Info("Saved config after normalization", "path", mgr.ConfigPath(), "duplicates", dupCount, "autoRoleOrderMigrated", orderMigrated, "domainBindingsMigrated", domainBindingMigrated, "guildBindingsMigrated", guildBindingMigrated)
+		log.ApplicationLogger().Info("Saved config after normalization", "path", mgr.ConfigPath(), "duplicates", dupCount)
 	} else if exists, err := mgr.store.Exists(); err == nil && !exists {
 		log.ApplicationLogger().Info(fmt.Sprintf(LogLoadConfigFileNotFound, mgr.ConfigPath()))
 	}
@@ -272,7 +265,6 @@ func (mgr *ConfigManager) GuildIndexStats() GuildIndexStats {
 func (mgr *ConfigManager) AddGuildConfig(guildCfg GuildConfig) error {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
-	guildCfg.BotInstanceID = NormalizeBotInstanceID(guildCfg.BotInstanceID)
 	next := cloneBotConfigPtr(mgr.config)
 	if next == nil {
 		next = &BotConfig{Guilds: []GuildConfig{}}
@@ -343,7 +335,6 @@ func (mgr *ConfigManager) DetectGuildsForBot(session *discordgo.Session, botInst
 		}
 		guildCfg := GuildConfig{
 			GuildID:       g.ID,
-			BotInstanceID: botInstanceID,
 			Channels: ChannelsConfig{
 				Commands:      channelID,
 				AvatarLogging: channelID,
@@ -400,7 +391,6 @@ func (mgr *ConfigManager) RegisterGuildForBot(session *discordgo.Session, guildI
 
 	guildCfg := GuildConfig{
 		GuildID:       guildID,
-		BotInstanceID: botInstanceID,
 		Channels: ChannelsConfig{
 			Commands:      channelID,
 			AvatarLogging: channelID,
@@ -596,30 +586,19 @@ func ValidateChannel(session *discordgo.Session, guildID, channelID string) erro
 
 // LogConfiguredGuilds logs a summary of configured guilds. Returns error if any guilds are inaccessible.
 func LogConfiguredGuilds(configManager *ConfigManager, session *discordgo.Session) error {
-	return LogConfiguredGuildsForBot(configManager, session, "", "")
+	return LogConfiguredGuildsForBot(configManager, session, "")
 }
 
 // LogConfiguredGuildsForBot logs the guild subset assigned to the provided bot
 // instance. Legacy guilds without a binding are included when botInstanceID is
 // empty.
-func LogConfiguredGuildsForBot(configManager *ConfigManager, session *discordgo.Session, botInstanceID, defaultBotInstanceID string) error {
+func LogConfiguredGuildsForBot(configManager *ConfigManager, session *discordgo.Session, botInstanceID string) error {
 	return logConfiguredGuildSubset(configManager, session, func(cfg *BotConfig) []GuildConfig {
 		guilds := cfg.Guilds
 		if normalizedBotInstanceID := NormalizeBotInstanceID(botInstanceID); normalizedBotInstanceID != "" {
-			guilds = cfg.GuildsForBotInstance(normalizedBotInstanceID, defaultBotInstanceID)
+			guilds = cfg.GuildsForBotInstance(normalizedBotInstanceID)
 		}
 		return guilds
-	})
-}
-
-// LogConfiguredGuildsForBotDomain logs the guild subset assigned to the
-// provided bot instance for a specific domain.
-func LogConfiguredGuildsForBotDomain(configManager *ConfigManager, session *discordgo.Session, domain, botInstanceID, defaultBotInstanceID string) error {
-	return logConfiguredGuildSubset(configManager, session, func(cfg *BotConfig) []GuildConfig {
-		if normalizedBotInstanceID := NormalizeBotInstanceID(botInstanceID); normalizedBotInstanceID != "" {
-			return cfg.GuildsForBotInstanceForDomain(domain, normalizedBotInstanceID, defaultBotInstanceID)
-		}
-		return cfg.Guilds
 	})
 }
 

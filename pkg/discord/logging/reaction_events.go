@@ -303,5 +303,5 @@ func (rs *ReactionEventService) handlesGuild(guildID string) bool {
 	if guild == nil {
 		return false
 	}
-	return guild.EffectiveBotInstanceID(rs.defaultBotID) == files.NormalizeBotInstanceID(rs.botInstanceID)
+	return guild.BelongsToBotInstance(rs.botInstanceID)
 }

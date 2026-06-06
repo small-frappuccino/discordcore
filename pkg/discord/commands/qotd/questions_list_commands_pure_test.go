@@ -19,16 +19,16 @@ func TestQOTDCommandsRegisterRoutesUnderQOTDDomain(t *testing.T) {
 	service := &publishCommandStubService{t: t}
 	router, _ := newQOTDCommandTestRouterWithService(t, session, "guild-1", "owner-1", service)
 
-	if got := router.InteractionRouteDomain(core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "qotd publish"}); got != files.BotDomainQOTD {
+	if got := router.InteractionRouteDomain(core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "qotd publish"}); got != "qotd" {
 		t.Fatalf("expected qotd publish slash route domain, got %q", got)
 	}
-	if got := router.InteractionRouteDomain(core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "qotd questions mark_published"}); got != files.BotDomainQOTD {
+	if got := router.InteractionRouteDomain(core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "qotd questions mark_published"}); got != "qotd" {
 		t.Fatalf("expected qotd questions mark_published slash route domain, got %q", got)
 	}
-	if got := router.InteractionRouteDomain(core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "qotd questions list"}); got != files.BotDomainQOTD {
+	if got := router.InteractionRouteDomain(core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "qotd questions list"}); got != "qotd" {
 		t.Fatalf("expected qotd questions list slash route domain, got %q", got)
 	}
-	if got := router.InteractionRouteDomain(core.InteractionRouteKey{Kind: core.InteractionKindComponent, Path: questionsListRouteNext}); got != files.BotDomainQOTD {
+	if got := router.InteractionRouteDomain(core.InteractionRouteKey{Kind: core.InteractionKindComponent, Path: questionsListRouteNext}); got != "qotd" {
 		t.Fatalf("expected qotd questions component route domain, got %q", got)
 	}
 }

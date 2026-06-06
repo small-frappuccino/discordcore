@@ -122,7 +122,7 @@ func (s *UserPruneService) runIfDue(now time.Time) {
 	if cfg == nil {
 		return
 	}
-	guilds := cfg.GuildsForBotInstance(s.botInstanceID, s.defaultBotID)
+	guilds := cfg.GuildsForBotInstance(s.botInstanceID)
 	if len(guilds) == 0 {
 		return
 	}

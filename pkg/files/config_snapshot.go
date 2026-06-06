@@ -162,8 +162,7 @@ func cloneGuildConfigs(in []GuildConfig) []GuildConfig {
 func cloneGuildConfig(in GuildConfig) GuildConfig {
 	return GuildConfig{
 		GuildID:              in.GuildID,
-		BotInstanceID:        in.BotInstanceID,
-		DomainBotInstanceIDs: cloneStringMap(in.DomainBotInstanceIDs),
+		BotInstanceTokens:    cloneEncryptedStringMap(in.BotInstanceTokens),
 		Features:             cloneFeatureToggles(in.Features),
 		Channels:             in.Channels,
 		Roles:                cloneRolesConfig(in.Roles),
@@ -209,6 +208,17 @@ func cloneStringMap(in map[string]string) map[string]string {
 		return nil
 	}
 	out := make(map[string]string, len(in))
+	for key, value := range in {
+		out[key] = value
+	}
+	return out
+}
+
+func cloneEncryptedStringMap(in map[string]EncryptedString) map[string]EncryptedString {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]EncryptedString, len(in))
 	for key, value := range in {
 		out[key] = value
 	}

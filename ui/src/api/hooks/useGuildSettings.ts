@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ControlApiClient } from "../client";
-import { getGuildSettings, updateGuildSettings, type GuildBotRoutingSettingsSection, type GuildRolesSettingsSection } from "../domains/guilds";
+import { getGuildSettings, updateGuildSettings, type GuildRolesSettingsSection } from "../domains/guilds";
 
 export const guildSettingsQueryKey = (baseUrl: string, guildId: string) => ["guildSettings", baseUrl, guildId];
 
@@ -16,7 +16,7 @@ export function useUpdateGuildSettingsMutation(client: ControlApiClient, guildId
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (payload: { bot_instance_id?: string; bot_routing?: GuildBotRoutingSettingsSection; roles?: GuildRolesSettingsSection; }) => 
+    mutationFn: (payload: { bot_instance_tokens?: Record<string, string>; roles?: GuildRolesSettingsSection; }) => 
       updateGuildSettings(client, guildId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: guildSettingsQueryKey(client.getBaseUrl(), guildId) });

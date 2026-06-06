@@ -314,7 +314,7 @@ func (s *Server) handleQOTDPublishNowPost(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	session, err := s.discordSessionForGuildDomain(guildID, files.BotDomainQOTD)
+	session, err := s.discordSessionForGuild(guildID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to resolve discord session: %v", err), http.StatusServiceUnavailable)
 		return
@@ -349,7 +349,7 @@ func (s *Server) handleQOTDPublishNowPost(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleQOTDReconcilePost(w http.ResponseWriter, r *http.Request, guildID string, auth requestAuthorization) {
-	session, err := s.discordSessionForGuildDomain(guildID, files.BotDomainQOTD)
+	session, err := s.discordSessionForGuild(guildID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to resolve discord session: %v", err), http.StatusServiceUnavailable)
 		return

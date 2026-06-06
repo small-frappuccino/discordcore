@@ -244,7 +244,7 @@ func (cm *CommandManager) usesGuildScopedSync() bool {
 	if configManager == nil {
 		return false
 	}
-	return configManager.Config().HasDomainBotInstanceOverrides()
+	return false
 }
 
 func (cm *CommandManager) syncGuildScopedCommands() error {

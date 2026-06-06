@@ -77,7 +77,7 @@ func (ms *MonitoringService) ensureGuildsListed() {
 			continue
 		}
 		if ms.configManager.GuildConfig(g.ID) == nil {
-			if err := ms.configManager.EnsureMinimalGuildConfigForBot(g.ID, ms.botInstanceID); err != nil {
+			if err := ms.configManager.EnsureMinimalGuildConfig(g.ID); err != nil {
 				log.ErrorLoggerRaw().Error("Error adding minimal dormant guild entry", "guildID", g.ID, "err", err)
 			} else {
 				log.ApplicationLogger().Info("📘 Guild listed in config with disabled defaults", "guildID", g.ID)
@@ -102,7 +102,7 @@ func (ms *MonitoringService) handleGuildCreate(s *discordgo.Session, e *discordg
 	defer done()
 
 	if ms.configManager.GuildConfig(guildID) == nil {
-		if err := ms.configManager.EnsureMinimalGuildConfigForBot(guildID, ms.botInstanceID); err != nil {
+		if err := ms.configManager.EnsureMinimalGuildConfig(guildID); err != nil {
 			log.ErrorLoggerRaw().Error("Error adding dormant guild entry for new guild", "guildID", guildID, "err", err)
 			return
 		}

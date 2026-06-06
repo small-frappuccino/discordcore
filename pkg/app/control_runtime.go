@@ -52,9 +52,6 @@ type RunOptions struct {
 	// KnownBotInstanceIDs are valid owner IDs referenced by shared config even when
 	// this process does not host their tokens locally.
 	KnownBotInstanceIDs []string
-	// SupportedDomains limits which domains this process should host. Empty means
-	// all domains, including the implicit default domain.
-	SupportedDomains []string
 	// CommandCatalogRegistrars optionally override the default slash command
 	// catalog composition for handlers started by this process.
 	CommandCatalogRegistrars []commands.CommandCatalogRegistrar

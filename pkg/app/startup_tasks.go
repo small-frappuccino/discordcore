@@ -69,7 +69,6 @@ func scheduleRuntimeConfiguredGuildLogging(
 	runtime *botRuntime,
 	configManager *files.ConfigManager,
 	defaultBotInstanceID string,
-	supportedDomains []string,
 	startupTasks *startupTaskOrchestrator,
 ) {
 	if runtime == nil || runtime.session == nil || configManager == nil {
@@ -77,13 +76,7 @@ func scheduleRuntimeConfiguredGuildLogging(
 	}
 
 	run := func(context.Context) error {
-		domainSupport := newRuntimeDomainSupport(supportedDomains)
-		var err error
-		if domainSupport.supports(files.BotDomainQOTD) && !domainSupport.supportsDefaultDomain() {
-			err = files.LogConfiguredGuildsForBotDomain(configManager, runtime.session, files.BotDomainQOTD, runtime.instanceID, defaultBotInstanceID)
-		} else {
-			err = files.LogConfiguredGuildsForBot(configManager, runtime.session, runtime.instanceID, defaultBotInstanceID)
-		}
+		err := files.LogConfiguredGuildsForBot(configManager, runtime.session, runtime.instanceID)
 		if err != nil {
 			log.ErrorLoggerRaw().Error(
 				"Some configured guilds could not be accessed",
@@ -228,14 +221,14 @@ func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskO
 		}
 		return opts.runtimeResolver.defaultMonitoringMetrics()
 	})
-	controlServer.SetDiscordSessionResolverForDomain(func(guildID, domain string) (*discordgo.Session, error) {
-		return opts.runtimeResolver.sessionForGuildDomain(guildID, domain)
+	controlServer.SetDiscordSessionResolver(func(guildID string) (*discordgo.Session, error) {
+		return opts.runtimeResolver.sessionForGuild(guildID)
 	})
 	controlServer.SetBotGuildBindingsProvider(func(ctx context.Context) ([]control.BotGuildBinding, error) {
 		return opts.runtimeResolver.guildBindings(ctx)
 	})
-	controlServer.SetGuildRegistrationResolver(func(ctx context.Context, guildID, botInstanceID string) error {
-		return opts.runtimeResolver.registerGuild(ctx, guildID, botInstanceID)
+	controlServer.SetGuildRegistrationResolver(func(ctx context.Context, guildID string) error {
+		return opts.runtimeResolver.registerGuild(ctx, guildID)
 	})
 	if err := controlServer.SetPublicOrigin(controlRuntime.publicOrigin); err != nil {
 		return fmt.Errorf("configure control public origin: %w", err)

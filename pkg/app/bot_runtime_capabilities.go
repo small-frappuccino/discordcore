@@ -1,44 +1,13 @@
 package app
 
 import (
-	"sort"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
-// commandDomainSet records which command domains a runtime serves. Domain keys
-// are normalized; the empty string represents the implicit default domain.
-type commandDomainSet map[string]struct{}
 
-func (s *commandDomainSet) add(domain string) {
-	if *s == nil {
-		*s = make(commandDomainSet)
-	}
-	(*s)[domain] = struct{}{}
-}
-
-func (s commandDomainSet) has(domain string) bool {
-	_, ok := s[domain]
-	return ok
-}
-
-func (s commandDomainSet) isNotEmpty() bool { return len(s) > 0 }
-
-// sorted returns the contained domains in stable order so that callers and
-// tests get deterministic output.
-func (s commandDomainSet) sorted() []string {
-	if len(s) == 0 {
-		return nil
-	}
-	out := make([]string, 0, len(s))
-	for d := range s {
-		out = append(out, d)
-	}
-	sort.Strings(out)
-	return out
-}
 
 type botRuntimeCapabilities struct {
 	monitoring     bool
@@ -48,40 +17,16 @@ type botRuntimeCapabilities struct {
 	qotdRuntime    bool
 	warmup         bool
 	intents        discordgo.Intent
-	commandDomains commandDomainSet
+	hasCommands    bool
 }
 
 // hasCommands reports whether any command catalog should be installed.
-func (c botRuntimeCapabilities) hasCommands() bool { return c.commandDomains.isNotEmpty() }
-
-// hasCommandDomain reports whether the runtime serves the given domain.
-func (c botRuntimeCapabilities) hasCommandDomain(domain string) bool {
-	return c.commandDomains.has(domain)
-}
-
-// commandDomainList returns the served command domains in stable order.
-func (c botRuntimeCapabilities) commandDomainList() []string {
-	return c.commandDomains.sorted()
-}
+func (c botRuntimeCapabilities) HasCommands() bool { return c.hasCommands }
 
 func resolveBotRuntimeCapabilities(
 	cfg *files.BotConfig,
 	botInstanceID string,
 	defaultBotInstanceID string,
-) botRuntimeCapabilities {
-	return resolveBotRuntimeCapabilitiesForDomains(
-		cfg,
-		botInstanceID,
-		defaultBotInstanceID,
-		newRuntimeDomainSupport(nil),
-	)
-}
-
-func resolveBotRuntimeCapabilitiesForDomains(
-	cfg *files.BotConfig,
-	botInstanceID string,
-	defaultBotInstanceID string,
-	domainSupport runtimeDomainSupport,
 ) botRuntimeCapabilities {
 	capabilities := botRuntimeCapabilities{
 		intents: discordgo.IntentsGuilds,
@@ -90,27 +35,17 @@ func resolveBotRuntimeCapabilitiesForDomains(
 		return capabilities
 	}
 
-	if domainSupport.supports(files.BotDomainQOTD) {
-		qotdGuilds := cfg.GuildsForBotInstanceForDomain(files.BotDomainQOTD, botInstanceID, defaultBotInstanceID)
-		for _, guild := range qotdGuilds {
-			capabilities.commandDomains.add(files.BotDomainQOTD)
-			if botRuntimeNeedsQOTDRuntime(guild) {
-				capabilities.qotdRuntime = true
-			}
-		}
-	}
-
-	if !domainSupport.supportsDefaultDomain() {
-		return capabilities
-	}
-
-	guilds := cfg.GuildsForBotInstance(botInstanceID, defaultBotInstanceID)
+	guilds := cfg.GuildsForBotInstance(botInstanceID)
 	for _, guild := range guilds {
 		features := cfg.ResolveFeatures(guild.GuildID)
 		runtimeConfig := cfg.ResolveRuntimeConfig(guild.GuildID)
 
+		if botRuntimeNeedsQOTDRuntime(guild) {
+			capabilities.qotdRuntime = true
+		}
+
 		if features.Services.Commands {
-			capabilities.commandDomains.add("")
+			capabilities.hasCommands = true
 			if features.Services.AdminCommands {
 				capabilities.admin = true
 			}

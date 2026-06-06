@@ -174,7 +174,7 @@ func TestCommandHandlerSkipsGuildWithoutCommandsFeature(t *testing.T) {
 		cfg.Guilds = []files.GuildConfig{
 			{
 				GuildID:       "guild-1",
-				BotInstanceID: "main",
+				BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
 						Commands: boolPtr(false),
@@ -202,148 +202,7 @@ func TestCommandHandlerSkipsGuildWithoutCommandsFeature(t *testing.T) {
 	}
 }
 
-func TestCommandHandlerFiltersRoutesByDomainBinding(t *testing.T) {
-	t.Parallel()
 
-	boolPtr := func(v bool) *bool { return &v }
-	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
-	if _, err := cfgMgr.UpdateConfig(func(cfg *files.BotConfig) error {
-		cfg.Guilds = []files.GuildConfig{{
-			GuildID:       "guild-1",
-			BotInstanceID: "main",
-			DomainBotInstanceIDs: map[string]string{
-				files.BotDomainQOTD: "companion",
-			},
-			Features: files.FeatureToggles{
-				Services: files.FeatureServiceToggles{
-					Commands: boolPtr(true),
-				},
-			},
-		}}
-		return nil
-	}); err != nil {
-		t.Fatalf("seed config: %v", err)
-	}
-
-	mainHandler := NewCommandHandlerForBot(nil, cfgMgr, "main", "main")
-	mainHandler.SetQOTDService(handlerQOTDServiceStub{})
-	mainHandler.commandManager = core.NewCommandManager(nil, cfgMgr)
-	if err := mainHandler.registerCommandCatalog(); err != nil {
-		t.Fatalf("register main command catalog: %v", err)
-	}
-
-	companionHandler := NewCommandHandlerForBot(nil, cfgMgr, "companion", "main")
-	companionHandler.SetQOTDService(handlerQOTDServiceStub{})
-	companionHandler.commandManager = core.NewCommandManager(nil, cfgMgr)
-	if err := companionHandler.registerCommandCatalog(); err != nil {
-		t.Fatalf("register companion command catalog: %v", err)
-	}
-
-	if !mainHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "partner list"}) {
-		t.Fatal("expected base-domain slash route to stay on main")
-	}
-	if mainHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "qotd publish"}) {
-		t.Fatal("expected qotd slash route to move off main")
-	}
-	if mainHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindComponent, Path: "qotd:questions:list:next"}) {
-		t.Fatal("expected qotd component route to move off main")
-	}
-
-	if companionHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "partner list"}) {
-		t.Fatal("expected base-domain slash route to stay off companion")
-	}
-	if !companionHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "qotd publish"}) {
-		t.Fatal("expected qotd slash route to move to companion")
-	}
-	if !companionHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Kind: core.InteractionKindComponent, Path: "qotd:questions:list:next"}) {
-		t.Fatal("expected qotd component route to move to companion")
-	}
-}
-
-func TestCommandHandlerRegistersOnlySupportedDomains(t *testing.T) {
-	t.Parallel()
-
-	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
-	handler := NewCommandHandler(nil, cfgMgr)
-	handler.SetSupportedDomains(files.BotDomainQOTD)
-	handler.SetQOTDService(handlerQOTDServiceStub{})
-	handler.commandManager = core.NewCommandManager(nil, cfgMgr)
-
-	if err := handler.registerCommandCatalog(); err != nil {
-		t.Fatalf("registerCommandCatalog() failed: %v", err)
-	}
-
-	router := handler.commandManager.GetRouter()
-	if _, ok := router.GetRegistry().GetCommand("config"); ok {
-		t.Fatal("expected /config to not be registered for qotd domain")
-	}
-	qotdCommand, ok := router.GetRegistry().GetCommand("qotd")
-	if !ok {
-		t.Fatal("expected /qotd to be registered for qotd domain")
-	}
-	options := qotdCommand.Options()
-	got := make(map[string]struct{}, len(options))
-	for _, option := range options {
-		if option != nil {
-			got[option.Name] = struct{}{}
-		}
-	}
-	for _, name := range []string{"publish", "skip", "questions"} {
-		if _, ok := got[name]; !ok {
-			t.Fatalf("expected qotd catalog to include %q, got %#v", name, got)
-		}
-	}
-	if _, ok := router.GetRegistry().GetCommand("ping"); ok {
-		t.Fatal("expected qotd-only catalog to omit /ping")
-	}
-	if _, ok := router.GetRegistry().GetCommand("partner"); ok {
-		t.Fatal("expected qotd-only catalog to omit /partner")
-	}
-	if got := router.InteractionRouteDomain(core.InteractionRouteKey{Kind: core.InteractionKindSlash, Path: "qotd publish"}); got != files.BotDomainQOTD {
-		t.Fatalf("expected qotd publish route domain, got %q", got)
-	}
-}
-
-func TestCommandHandlerAppliesInjectedCatalogRegistrars(t *testing.T) {
-	t.Parallel()
-
-	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
-	handler := NewCommandHandler(nil, cfgMgr)
-	handler.SetSupportedDomains(files.BotDomainQOTD)
-	handler.commandManager = core.NewCommandManager(nil, cfgMgr)
-
-	called := make([]string, 0, 2)
-	handler.SetCommandCatalogRegistrars(
-		CommandCatalogRegistrar{
-			Domain: "",
-			Register: func(*CommandHandler, *core.CommandRouter) {
-				called = append(called, "default")
-			},
-		},
-		CommandCatalogRegistrar{
-			Domain: files.BotDomainQOTD,
-			Register: func(*CommandHandler, *core.CommandRouter) {
-				called = append(called, files.BotDomainQOTD)
-			},
-		},
-		CommandCatalogRegistrar{
-			Domain: "",
-			RequiredCapabilities: CommandCatalogCapabilities{
-				Admin: true,
-			},
-			Register: func(*CommandHandler, *core.CommandRouter) {
-				called = append(called, "admin")
-			},
-		},
-	)
-
-	if err := handler.registerCommandCatalog(); err != nil {
-		t.Fatalf("registerCommandCatalog() failed: %v", err)
-	}
-	if len(called) != 1 || called[0] != files.BotDomainQOTD {
-		t.Fatalf("expected only qotd registrar to run, got %#v", called)
-	}
-}
 
 func TestCommandHandlerRegistersAdminCatalogOnlyWhenCapabilityEnabled(t *testing.T) {
 	t.Parallel()

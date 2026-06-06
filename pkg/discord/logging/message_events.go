@@ -1091,7 +1091,7 @@ func (mes *MessageEventService) handlesGuild(guildID string) bool {
 	if guild == nil {
 		return false
 	}
-	return guild.EffectiveBotInstanceID(mes.defaultBotID) == files.NormalizeBotInstanceID(mes.botInstanceID)
+	return guild.BelongsToBotInstance(mes.botInstanceID)
 }
 
 // determineDeletedBy tries to resolve the actor for a deletion via audit log (best-effort).
