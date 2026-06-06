@@ -113,8 +113,18 @@ func resolveBotInstances(primaryTokenEnv string, opts RunOptions) ([]resolvedBot
 	if defaultOwnerBotInstanceID == "" && len(resolved) > 0 {
 		defaultOwnerBotInstanceID = resolved[0].ID
 	}
-	if _, ok := resolvedIDs[defaultOwnerBotInstanceID]; !ok {
-		return nil, "", fmt.Errorf("default bot instance %q is not present in the runtime catalog", defaultOwnerBotInstanceID)
+	defaultInCatalog := false
+	for _, item := range catalog {
+		if item.ID == defaultOwnerBotInstanceID {
+			defaultInCatalog = true
+			break
+		}
+	}
+
+	if defaultInCatalog {
+		if _, ok := resolvedIDs[defaultOwnerBotInstanceID]; !ok {
+			return nil, "", fmt.Errorf("default bot instance %q is not present in the runtime catalog", defaultOwnerBotInstanceID)
+		}
 	}
 
 	return resolved, defaultOwnerBotInstanceID, nil

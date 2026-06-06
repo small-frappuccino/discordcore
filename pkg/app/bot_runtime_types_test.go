@@ -1,7 +1,7 @@
 package app
 
 import (
-
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -90,7 +90,7 @@ func TestBotRuntimeResolverSessionForGuildRejectsUnavailableRuntime(t *testing.T
 
 	if got, err := resolver.sessionForGuild("g1"); err == nil {
 		t.Fatalf("expected unavailable runtime to fail, got session %p", got)
-	} else if gotErr := err.Error(); !strings.Contains(gotErr, `bot instance "main" is unavailable for guild g1`) {
+	} else if gotErr := err.Error(); !strings.Contains(gotErr, `does not resolve to a running bot instance`) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -128,12 +128,14 @@ func TestBotRuntimeResolverRegisterGuildPersistsDormantConfig(t *testing.T) {
 		t.Fatalf("create companion session: %v", err)
 	}
 
-	_ = newBotRuntimeResolver(configManager, map[string]*botRuntime{
+	resolver := newBotRuntimeResolver(configManager, map[string]*botRuntime{
 		"main":      {instanceID: "main", session: mainSession},
 		"companion": {instanceID: "companion", session: companionSession},
 	}, "main")
 
-
+	if err := resolver.registerGuild(context.Background(), "g-new"); err != nil {
+		t.Fatalf("register guild: %v", err)
+	}
 
 	snapshot := configManager.SnapshotConfig()
 	var guild *files.GuildConfig

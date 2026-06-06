@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	discordcoreapp "github.com/small-frappuccino/discordcore/pkg/app"
-	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 func setTempHome(t *testing.T) {
