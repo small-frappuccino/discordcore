@@ -331,6 +331,36 @@ func TestGuildSettingsPutAutoRegistersMissingGuild(t *testing.T) {
 	}
 }
 
+func TestGuildSettingsPutSavesBotInstanceTokenForUndiscoveredGuild(t *testing.T) {
+	t.Parallel()
+
+	srv, cm := newControlTestServer(t)
+	// Bot bindings cover only g1; g2 has no live session yet, so resolving its
+	// bot instances returns errGuildDiscoveryRequired. The bootstrap token write
+	// must still succeed so the first token can ever be saved.
+	setTestBotGuildBindings(srv, BotGuildBinding{GuildID: "g1"})
+	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: "g2"}); err != nil {
+		t.Fatalf("seed guild g2: %v", err)
+	}
+
+	tokens := map[string]string{"main": "bootstrap-token"}
+	payload := updateGuildSettingsRequest{BotInstanceTokens: &tokens}
+
+	rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodPut, "/v1/guilds/g2/settings", payload)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK saving bootstrap token for undiscovered guild, got %d body=%q", rec.Code, rec.Body.String())
+	}
+
+	cfg := cm.SnapshotConfig()
+	guild, ok := findGuildSettings(cfg, "g2")
+	if !ok {
+		t.Fatal("expected guild g2 in config")
+	}
+	if got := string(guild.BotInstanceTokens["main"]); got != "bootstrap-token" {
+		t.Fatalf("expected persisted bootstrap token, got %q", got)
+	}
+}
+
 func TestGuildRegistrationPostCreatesGuildWorkspace(t *testing.T) {
 	t.Parallel()
 
