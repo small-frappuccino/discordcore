@@ -25,10 +25,9 @@ const DefaultBotInstanceID = "default"
 var ErrNoBotTokensConfigured = errors.New("no bot instances have a configured token")
 
 // BotInstanceDefinition describes one Discord bot instance managed by the host
-// runtime. Tokens remain host-owned and are referenced by environment variable.
+// runtime.
 type BotInstanceDefinition struct {
 	ID       string
-	TokenEnv string
 	Optional bool
 }
 

@@ -1,9 +1,7 @@
 package runtimecmd
 
 import (
-	"errors"
 	"io"
-	"strings"
 	"testing"
 
 	discordcoreapp "github.com/small-frappuccino/discordcore/pkg/app"
@@ -14,38 +12,23 @@ func setTempHome(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 }
 
-func TestSelectTokenEnvPrefersConfiguredDevelopmentTokenWhenProductionIsMissing(t *testing.T) {
-	setTempHome(t)
-	t.Setenv(MainProductionTokenEnv, "")
-	t.Setenv(MainDevelopmentTokenEnv, "dev-token")
-
-	if got := SelectTokenEnv(false, MainSpec("discordmain")); got != MainDevelopmentTokenEnv {
-		t.Fatalf("expected development env when production token is missing, got %s", got)
-	}
-	if got := SelectTokenEnv(true, MainSpec("discordmain")); got != MainDevelopmentTokenEnv {
-		t.Fatalf("expected explicit testing mode to use development env, got %s", got)
-	}
-}
-
 func TestRunUsesMainProfileOptions(t *testing.T) {
 	setTempHome(t)
 
 	called := struct {
 		name string
-		env  string
 		opts discordcoreapp.RunOptions
 	}{}
 
-	err := Run(nil, io.Discard, MainSpec("discordmain"), func(name, tokenEnv string, opts discordcoreapp.RunOptions) error {
+	err := Run(nil, io.Discard, MainSpec("discordmain"), func(name string, opts discordcoreapp.RunOptions) error {
 		called.name = name
-		called.env = tokenEnv
 		called.opts = opts
 		return nil
 	})
 	if err != nil {
 		t.Fatalf("run returned error: %v", err)
 	}
-	if called.name != MainRuntimeAppName || called.env != MainProductionTokenEnv {
+	if called.name != MainRuntimeAppName {
 		t.Fatalf("unexpected call args: %+v", called)
 	}
 	if called.opts.DefaultOwnerBotInstanceID != MainBotInstanceID {
@@ -86,20 +69,18 @@ func TestRunUsesQOTDProfileOptions(t *testing.T) {
 
 	called := struct {
 		name string
-		env  string
 		opts discordcoreapp.RunOptions
 	}{}
 
-	err := Run(nil, io.Discard, QOTDSpec("discordqotd"), func(name, tokenEnv string, opts discordcoreapp.RunOptions) error {
+	err := Run(nil, io.Discard, QOTDSpec("discordqotd"), func(name string, opts discordcoreapp.RunOptions) error {
 		called.name = name
-		called.env = tokenEnv
 		called.opts = opts
 		return nil
 	})
 	if err != nil {
 		t.Fatalf("run returned error: %v", err)
 	}
-	if called.name != QOTDRuntimeAppName || called.env != QOTDProductionTokenEnv {
+	if called.name != QOTDRuntimeAppName {
 		t.Fatalf("unexpected call args: %+v", called)
 	}
 	if called.opts.DefaultOwnerBotInstanceID != MainBotInstanceID {
@@ -123,21 +104,3 @@ func TestRunUsesQOTDProfileOptions(t *testing.T) {
 	}
 }
 
-func TestRunExplainsMissingTokensWithProfileSpecificEnvNames(t *testing.T) {
-	setTempHome(t)
-
-	err := Run(nil, io.Discard, QOTDSpec("discordqotd"), func(name, tokenEnv string, opts discordcoreapp.RunOptions) error {
-		return discordcoreapp.ErrNoBotTokensConfigured
-	})
-	if err == nil {
-		t.Fatal("expected missing token error")
-	}
-	for _, tokenEnv := range []string{QOTDProductionTokenEnv, QOTDDevelopmentTokenEnv} {
-		if !strings.Contains(err.Error(), tokenEnv) {
-			t.Fatalf("expected error to mention %s, got %v", tokenEnv, err)
-		}
-	}
-	if !errors.Is(err, discordcoreapp.ErrNoBotTokensConfigured) {
-		t.Fatalf("expected wrapped ErrNoBotTokensConfigured, got %v", err)
-	}
-}

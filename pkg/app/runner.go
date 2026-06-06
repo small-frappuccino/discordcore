@@ -33,6 +33,7 @@ var (
 	shutdownCommandHandler       = func(ch *commands.CommandHandler) error { return ch.Shutdown() }
 	closeStore                   = func(c interface{ Close() error }) error { return c.Close() }
 	closeDiscordSession          = func(c interface{ Close() error }) error { return c.Close() }
+	openDiscordSession           = func(s interface{ Open() error }) error { return s.Open() }
 	waitForInterrupt             = WaitForInterrupt
 	shutdownDelay                = time.Sleep
 )
@@ -51,18 +52,16 @@ const (
 )
 
 // Run bootstraps the bot with a unified flow and blocks until shutdown.
-// appName affects config/cache/log paths; tokenEnv is the environment variable containing the bot token.
+// appName affects config/cache/log paths.
 // Run bootstraps the bot with a unified flow and blocks until shutdown.
-// Environment: the tokenEnv is read from the current process environment first; if empty,
-// a fallback D:\Users\smallfrappuccino\.local\bin\.env file will be loaded and the variable re-checked.
 // Persistent cache: guild-level cleanup uses explicit (type + key prefix) deletion to safely
 // remove rows for members (prefix guildID:), guilds (key guildID), and roles (key guildID).
-func Run(appName, tokenEnv string) error {
-	return RunWithOptions(appName, tokenEnv, RunOptions{})
+func Run(appName string) error {
+	return RunWithOptions(appName, RunOptions{})
 }
 
 // RunWithOptions bootstraps the bot and allows hosts to override control-plane wiring.
-func RunWithOptions(appName, tokenEnv string, opts RunOptions) (err error) {
+func RunWithOptions(appName string, opts RunOptions) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			notifyLifecycleEvent("fatal", fmt.Sprintf("panic recovered during runtime: %v", r))
@@ -73,10 +72,10 @@ func RunWithOptions(appName, tokenEnv string, opts RunOptions) (err error) {
 			notifyLifecycleEvent("stopping", "")
 		}
 	}()
-	return runWithOptions(appName, tokenEnv, opts)
+	return runWithOptions(appName, opts)
 }
 
-func runWithOptions(appName, tokenEnv string, opts RunOptions) error {
+func runWithOptions(appName string, opts RunOptions) error {
 	started := time.Now()
 
 	// App name first (affects paths)
@@ -203,9 +202,23 @@ func runWithOptions(appName, tokenEnv string, opts RunOptions) error {
 	}
 
 	botSupervisor := NewBotSupervisor(configManager, botOpts)
-	if err := botSupervisor.Start(); err != nil {
-		return fmt.Errorf("start bot supervisor: %w", err)
+
+	botSupervisorService := service.NewLegacyServiceWrapper(service.LegacyServiceWrapperSpec{
+		Name:     "bot-supervisor",
+		Type:     service.TypeMonitoring,
+		Priority: service.PriorityNormal,
+		Start: func(context.Context) error {
+			return botSupervisor.Start()
+		},
+		Stop: func(ctx context.Context) error {
+			return botSupervisor.Stop()
+		},
+	})
+
+	if err := appServiceManager.Register(botSupervisorService); err != nil {
+		return fmt.Errorf("register bot supervisor service: %w", err)
 	}
+
 	runtimeResolver := botSupervisor.GetResolver()
 
 	var defaultSession *discordgo.Session
@@ -579,6 +592,12 @@ func setupStorage(dbb resolvedDatabaseBootstrap) (*storage.Store, *files.ConfigM
 	}
 	if err := syncBootstrapDatabaseConfig(configManager, dbCfg); err != nil {
 		return nil, nil, fmt.Errorf("sync runtime database bootstrap config: %w", err)
+	}
+
+	if seeded, err := seedBotTokensFromEnv(configManager); err != nil {
+		return nil, nil, fmt.Errorf("seed bot tokens from environment: %w", err)
+	} else if seeded > 0 {
+		log.ApplicationLogger().Info(fmt.Sprintf("Seeded %d bot token(s) from environment into config store", seeded))
 	}
 
 	return store, configManager, nil

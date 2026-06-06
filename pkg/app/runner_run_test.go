@@ -68,9 +68,6 @@ func seedRunnerConfig(t *testing.T, store files.ConfigStore, cfg files.BotConfig
 func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 	const (
 		appName  = "discordmain-run-test"
-		tokenEnv = "ALICE_TEST_TOKEN"
-	)
-
 	appDataDir, err := os.MkdirTemp("", "discordmain-run-test-*")
 	if err != nil {
 		t.Fatalf("create APPDATA temp dir: %v", err)
@@ -79,7 +76,6 @@ func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 		_ = os.RemoveAll(appDataDir)
 	})
 	t.Setenv("APPDATA", appDataDir)
-	t.Setenv(tokenEnv, "test-token")
 
 	boolPtr := func(v bool) *bool { return &v }
 	dbCfg, configStore := openRunnerConfigStore(t)
@@ -101,6 +97,12 @@ func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 		},
 		Guilds: []files.GuildConfig{{
 			GuildID: "guild-1",
+			BotInstanceTokens: map[string]files.EncryptedString{
+				"main": files.EncryptedString("test-token"),
+			},
+			Channels: files.ChannelsConfig{
+				Commands: "channel-1",
+			},
 		}},
 	}
 	seedRunnerConfig(t, configStore, cfg)
@@ -115,6 +117,7 @@ func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 		Discriminator: "0001",
 		Bot:           true,
 	}
+	session.State.Guilds = []*discordgo.Guild{{ID: "guild-1"}}
 
 	origNewDiscordSession := newDiscordSession
 	origNewDiscordSessionWithIntents := newDiscordSessionWithIntents
@@ -137,8 +140,14 @@ func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 	newDiscordSessionWithIntents = func(string, discordgo.Intent) (*discordgo.Session, error) {
 		return session, nil
 	}
-	waitForInterrupt = func() {}
+	origOpenDiscordSession := openDiscordSession
+	t.Cleanup(func() {
+		openDiscordSession = origOpenDiscordSession
+	})
+	openDiscordSession = func(s interface{ Open() error }) error { return nil }
+	waitForInterrupt = func() { time.Sleep(100 * time.Millisecond) }
 	shutdownDelay = func(time.Duration) {}
+	identifyStaggerDelay = 0
 
 	var setupCalls int32
 	var shutdownCalls int32
@@ -151,7 +160,7 @@ func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 		return nil
 	}
 
-	if err := Run(appName, tokenEnv); err != nil {
+	if err := Run(appName); err != nil {
 		t.Fatalf("run returned error: %v", err)
 	}
 
@@ -197,7 +206,12 @@ func TestRun_ShutdownAggregatesStoreAndSessionCloseErrors(t *testing.T) {
 				DBCleanup: boolPtr(false),
 			},
 		},
-		Guilds: []files.GuildConfig{},
+		Guilds: []files.GuildConfig{{
+			GuildID: "guild-1",
+			BotInstanceTokens: map[string]files.EncryptedString{
+				"main": files.EncryptedString("test-token"),
+			},
+		}},
 	}
 	seedRunnerConfig(t, configStore, cfg)
 
@@ -211,6 +225,7 @@ func TestRun_ShutdownAggregatesStoreAndSessionCloseErrors(t *testing.T) {
 		Discriminator: "0001",
 		Bot:           true,
 	}
+	session.State.Guilds = []*discordgo.Guild{{ID: "guild-1"}}
 
 	origNewDiscordSession := newDiscordSession
 	origNewDiscordSessionWithIntents := newDiscordSessionWithIntents
@@ -233,8 +248,14 @@ func TestRun_ShutdownAggregatesStoreAndSessionCloseErrors(t *testing.T) {
 	newDiscordSessionWithIntents = func(string, discordgo.Intent) (*discordgo.Session, error) {
 		return session, nil
 	}
-	waitForInterrupt = func() {}
+	origOpenDiscordSession := openDiscordSession
+	t.Cleanup(func() {
+		openDiscordSession = origOpenDiscordSession
+	})
+	openDiscordSession = func(s interface{ Open() error }) error { return nil }
+	waitForInterrupt = func() { time.Sleep(100 * time.Millisecond) }
 	shutdownDelay = func(time.Duration) {}
+	identifyStaggerDelay = 0
 
 	storeCloseErr := errors.New("store close failure")
 	discordCloseErr := errors.New("discord close failure")
@@ -250,7 +271,7 @@ func TestRun_ShutdownAggregatesStoreAndSessionCloseErrors(t *testing.T) {
 		return discordCloseErr
 	}
 
-	err = Run(appName, tokenEnv)
+	err = Run(appName)
 	if err == nil {
 		t.Fatalf("expected shutdown error, got nil")
 	}
@@ -269,12 +290,7 @@ func TestRun_ShutdownAggregatesStoreAndSessionCloseErrors(t *testing.T) {
 }
 
 func TestRun_ControlServerBindFailureIsNonFatal(t *testing.T) {
-	const (
-		appName  = "discordmain-run-bind-warning-test"
-		tokenEnv = "ALICE_TEST_TOKEN"
-	)
-
-	appDataDir, err := os.MkdirTemp("", "discordmain-run-bind-warning-test-*")
+	appDataDir, err := os.MkdirTemp("", "discordmain-run-test-*")
 	if err != nil {
 		t.Fatalf("create APPDATA temp dir: %v", err)
 	}
@@ -282,7 +298,6 @@ func TestRun_ControlServerBindFailureIsNonFatal(t *testing.T) {
 		_ = os.RemoveAll(appDataDir)
 	})
 	t.Setenv("APPDATA", appDataDir)
-	t.Setenv(tokenEnv, "test-token")
 
 	boolPtr := func(v bool) *bool { return &v }
 	dbCfg, configStore := openRunnerConfigStore(t)
@@ -342,10 +357,16 @@ func TestRun_ControlServerBindFailureIsNonFatal(t *testing.T) {
 	newDiscordSessionWithIntents = func(string, discordgo.Intent) (*discordgo.Session, error) {
 		return session, nil
 	}
-	waitForInterrupt = func() {}
+	origOpenDiscordSession := openDiscordSession
+	t.Cleanup(func() {
+		openDiscordSession = origOpenDiscordSession
+	})
+	openDiscordSession = func(s interface{ Open() error }) error { return nil }
+	waitForInterrupt = func() { time.Sleep(100 * time.Millisecond) }
 	shutdownDelay = func(time.Duration) {}
+	identifyStaggerDelay = 0
 
-	if err := Run(appName, tokenEnv); err != nil {
+	if err := Run(appName); err != nil {
 		t.Fatalf("run returned error despite control bind conflict: %v", err)
 	}
 }

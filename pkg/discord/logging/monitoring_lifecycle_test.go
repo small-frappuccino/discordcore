@@ -30,6 +30,7 @@ func TestMonitoringServiceRestartRebuildsTaskPipeline(t *testing.T) {
 	}
 	if err := cfgMgr.AddGuildConfig(files.GuildConfig{
 		GuildID: "g-restart",
+		BotInstanceTokens: map[string]files.EncryptedString{"default": "test-token"},
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
 				Monitoring: testBoolPtr(true),

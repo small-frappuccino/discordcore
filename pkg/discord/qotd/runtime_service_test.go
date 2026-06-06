@@ -284,7 +284,7 @@ func TestRuntimeServiceCyclesUseQOTDDomainScopedGuilds(t *testing.T) {
 	for _, guild := range []files.GuildConfig{
 		{
 			GuildID:       "g-qotd-enabled",
-			BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
+			BotInstanceTokens: map[string]files.EncryptedString{"companion": "a"},
 			QOTD: files.QOTDConfig{
 				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 				Decks: []files.QOTDDeckConfig{{
@@ -297,7 +297,7 @@ func TestRuntimeServiceCyclesUseQOTDDomainScopedGuilds(t *testing.T) {
 		},
 		{
 			GuildID:       "g-qotd-configured-disabled",
-			BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
+			BotInstanceTokens: map[string]files.EncryptedString{"companion": "a"},
 			QOTD: files.QOTDConfig{
 				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 				Decks: []files.QOTDDeckConfig{{
@@ -350,6 +350,7 @@ func TestRuntimeServiceRestartResumesIntervalCycles(t *testing.T) {
 	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := configManager.AddGuildConfig(files.GuildConfig{
 		GuildID:       "g-enabled",
+		BotInstanceTokens: map[string]files.EncryptedString{"main": "test-token"},
 		QOTD: files.QOTDConfig{
 			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 			Decks: []files.QOTDDeckConfig{{
@@ -414,6 +415,7 @@ func TestRuntimeServiceMultipleRestartsResumeIntervalCycles(t *testing.T) {
 	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := configManager.AddGuildConfig(files.GuildConfig{
 		GuildID:       "g-enabled",
+		BotInstanceTokens: map[string]files.EncryptedString{"main": "test-token"},
 		QOTD: files.QOTDConfig{
 			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 			Decks: []files.QOTDDeckConfig{{
@@ -481,6 +483,7 @@ func TestRuntimeServiceStopCancelsInflightPublish(t *testing.T) {
 	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := configManager.AddGuildConfig(files.GuildConfig{
 		GuildID:       "g-enabled",
+		BotInstanceTokens: map[string]files.EncryptedString{"main": "test-token"},
 		QOTD: files.QOTDConfig{
 			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 			Decks: []files.QOTDDeckConfig{{
@@ -632,6 +635,7 @@ func TestRuntimeServiceLoopWakesAtScheduledMoment(t *testing.T) {
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := cm.AddGuildConfig(files.GuildConfig{
 		GuildID:       "g-enabled",
+		BotInstanceTokens: map[string]files.EncryptedString{"main": "test-token"},
 		QOTD: files.QOTDConfig{
 			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 			Decks: []files.QOTDDeckConfig{{
@@ -698,6 +702,7 @@ func TestRuntimeServiceLoopFallsBackToCapWithoutSchedule(t *testing.T) {
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := cm.AddGuildConfig(files.GuildConfig{
 		GuildID:       "g-enabled",
+		BotInstanceTokens: map[string]files.EncryptedString{"main": "test-token"},
 		QOTD: files.QOTDConfig{
 			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 			Decks: []files.QOTDDeckConfig{{

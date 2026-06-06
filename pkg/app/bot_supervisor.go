@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
@@ -10,6 +11,8 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/service"
 	"golang.org/x/sync/semaphore"
 )
+
+var identifyStaggerDelay = 5 * time.Second
 
 type BotSupervisor struct {
 	configManager   *files.ConfigManager
@@ -41,6 +44,30 @@ func NewBotSupervisor(configManager *files.ConfigManager, opts botRuntimeOptions
 
 func (s *BotSupervisor) Start() error {
 	s.onConfigChanged(nil) // trigger initial resolution
+	return nil
+}
+
+func (s *BotSupervisor) Stop() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Stop all known bot instances
+	var toStop []string
+	for id := range s.knownTokens {
+		toStop = append(toStop, id)
+	}
+
+	var errs []error
+	for _, id := range toStop {
+		log.ApplicationLogger().Info("Stopping bot instance during supervisor shutdown", "botInstanceID", id)
+		if err := s.stopBotInstanceLocked(id); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
 	return nil
 }
 
@@ -106,7 +133,7 @@ func (s *BotSupervisor) onConfigChanged(cfg *files.BotConfig) {
 	}
 }
 
-func (s *BotSupervisor) stopBotInstanceLocked(instanceID string) {
+func (s *BotSupervisor) stopBotInstanceLocked(instanceID string) error {
 	delete(s.knownTokens, instanceID)
 	
 	// Remove from resolver so new events don't route here
@@ -125,7 +152,9 @@ func (s *BotSupervisor) stopBotInstanceLocked(instanceID string) {
 
 	if err := s.serviceManager.StopAndRemove(ctx, "bot-runtime-"+instanceID); err != nil {
 		log.ApplicationLogger().Warn("Failed to cleanly stop bot instance", "botInstanceID", instanceID, "error", err)
+		return err
 	}
+	return nil
 }
 
 func (s *BotSupervisor) startBotInstanceBackground(instanceID, token string) {
@@ -138,7 +167,7 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token string) {
 	defer s.identifySemaphore.Release(1)
 
 	// Small delay to ensure we don't spam identify even after acquiring semaphore
-	time.Sleep(5 * time.Second)
+	time.Sleep(identifyStaggerDelay)
 
 	capabilities := resolveBotRuntimeCapabilities(s.configManager.Config(), instanceID, s.opts.defaultBotInstanceID)
 
@@ -165,15 +194,14 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token string) {
 		Type:     service.TypeMonitoring,
 		Priority: service.PriorityNormal,
 		Start: func(ctx context.Context) error {
-			if err := runtime.session.Open(); err != nil {
+			if err := openDiscordSession(runtime.session); err != nil {
 				return err
 			}
-			<-ctx.Done()
 			return nil
 		},
 		Stop: func(context.Context) error {
 			shutdownBotRuntime(runtime, context.Background())
-			return runtime.session.Close()
+			return closeDiscordSession(runtime.session)
 		},
 	})
 
