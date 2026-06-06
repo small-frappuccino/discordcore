@@ -34,7 +34,7 @@ export function TicketsSettingsPage() {
             <form className="settings-form" onSubmit={onSubmit}>
               <Stack spacing="xl">
                 <div>
-                  <h3 className="text-lg font-semibold tracking-tight text-text-primary mb-4">Core System</h3>
+                  <h3 className="text-lg font-semibold tracking-tight text-text-primary mb-6">Core System</h3>
                   <SettingsGroup>
                     <SettingsRow
                       title="Enable Tickets System"
@@ -45,7 +45,7 @@ export function TicketsSettingsPage() {
                 </div>
 
                 <div>
-                  <h3 className="text-lg font-semibold tracking-tight text-text-primary mb-4">Automation & Logging</h3>
+                  <h3 className="text-lg font-semibold tracking-tight text-text-primary mb-6">Automation & Logging</h3>
                   <SettingsGroup>
                   <SettingsRow
                     title="Transcript Log Channel"

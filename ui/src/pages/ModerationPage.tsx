@@ -83,7 +83,7 @@ export function ModerationPage() {
                 <FormProvider {...form}>
                   <Stack spacing="lg">
                   <div>
-                    <h3 className="text-lg font-semibold tracking-tight text-text-primary mb-4">Roles Config</h3>
+                    <h3 className="text-lg font-semibold tracking-tight text-text-primary mb-6">Roles Config</h3>
                     <SettingsGroup>
                       <SettingsRow
                         title="Mute Role"

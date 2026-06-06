@@ -61,7 +61,7 @@ export function RolesPage() {
             ) : (
               <Stack spacing="xl">
                 <div>
-                  <h3 className="text-lg font-semibold tracking-tight text-text-primary mb-4">Dashboard Access</h3>
+                  <h3 className="text-lg font-semibold tracking-tight text-text-primary mb-6">Dashboard Access</h3>
                   <SettingsGroup>
                     <SettingsRow
                       isMultiline
@@ -105,7 +105,7 @@ export function RolesPage() {
                 </div>
 
                 <div>
-                  <h3 className="text-lg font-semibold tracking-tight text-text-primary mb-4">Auto Assignment</h3>
+                  <h3 className="text-lg font-semibold tracking-tight text-text-primary mb-6">Auto Assignment</h3>
                   <SettingsGroup>
                     <SettingsRow
                       title="Enable Auto Assignment"
@@ -152,7 +152,7 @@ export function RolesPage() {
                 </div>
 
                 <div>
-                  <h3 className="text-lg font-semibold tracking-tight text-text-primary mb-4">Special Roles</h3>
+                  <h3 className="text-lg font-semibold tracking-tight text-text-primary mb-6">Special Roles</h3>
                   <SettingsGroup>
                     <SettingsRow
                       title="Mute Role"

@@ -44,7 +44,7 @@ export function QOTDPage() {
             ) : config ? (
               <Stack spacing="xl">
                 <div>
-                  <h3 className="text-lg font-semibold tracking-tight text-text-primary mb-4">Core Settings</h3>
+                  <h3 className="text-lg font-semibold tracking-tight text-text-primary mb-6">Core Settings</h3>
                   <SettingsGroup>
                     <SettingsRow
                       title="Active Deck"
@@ -80,7 +80,7 @@ export function QOTDPage() {
                 </div>
 
                 <div>
-                  <h3 className="text-lg font-semibold tracking-tight text-text-primary mb-4">Publish Schedule (UTC)</h3>
+                  <h3 className="text-lg font-semibold tracking-tight text-text-primary mb-6">Publish Schedule (UTC)</h3>
                   <SettingsGroup>
                     <SettingsRow
                       title="Hour & Minute"
