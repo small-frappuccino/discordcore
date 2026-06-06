@@ -60,7 +60,7 @@ export function RolesPage() {
               </>
             ) : (
               <Stack spacing="xl">
-                <Stack spacing="md">
+                <Stack spacing="sm">
                   <h3 className="text-lg font-semibold tracking-tight text-text-primary">Dashboard Access</h3>
                   <SettingsGroup>
                     <SettingsRow
@@ -104,7 +104,7 @@ export function RolesPage() {
                   </SettingsGroup>
                 </Stack>
 
-                <Stack spacing="md">
+                <Stack spacing="sm">
                   <h3 className="text-lg font-semibold tracking-tight text-text-primary">Auto Assignment</h3>
                   <SettingsGroup>
                     <SettingsRow
@@ -151,7 +151,7 @@ export function RolesPage() {
                   </SettingsGroup>
                 </Stack>
 
-                <Stack spacing="md">
+                <Stack spacing="sm">
                   <h3 className="text-lg font-semibold tracking-tight text-text-primary">Special Roles</h3>
                   <SettingsGroup>
                     <SettingsRow

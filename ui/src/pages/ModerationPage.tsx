@@ -82,7 +82,7 @@ export function ModerationPage() {
               <fieldset disabled={isSaving} className="border-none p-0 m-0 min-w-0">
                 <FormProvider {...form}>
                   <Stack spacing="lg">
-                  <Stack spacing="md">
+                  <Stack spacing="sm">
                     <h3 className="text-lg font-semibold tracking-tight text-text-primary">Roles Config</h3>
                     <SettingsGroup>
                       <SettingsRow

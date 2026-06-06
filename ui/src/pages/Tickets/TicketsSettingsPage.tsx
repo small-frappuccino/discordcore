@@ -33,7 +33,7 @@ export function TicketsSettingsPage() {
           <FormProvider {...form}>
             <form className="settings-form" onSubmit={onSubmit}>
               <Stack spacing="xl">
-                <Stack spacing="md">
+                <Stack spacing="sm">
                   <h3 className="text-lg font-semibold tracking-tight text-text-primary">Core System</h3>
                   <SettingsGroup>
                     <SettingsRow
@@ -44,7 +44,7 @@ export function TicketsSettingsPage() {
                   </SettingsGroup>
                 </Stack>
 
-                <Stack spacing="md">
+                <Stack spacing="sm">
                   <h3 className="text-lg font-semibold tracking-tight text-text-primary">Automation & Logging</h3>
                   <SettingsGroup>
                   <SettingsRow
