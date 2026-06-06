@@ -111,11 +111,13 @@
 .shell-trigger-btn {
   display: flex;
   align-items: center;
-  @apply gap-3 py-1.5 pr-3 pl-1.5 h-10;
-  border-radius: var(--radius-full);
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
   background-color: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   transition: all var(--transition-fast);
+  min-width: 200px;
 }
 
 .shell-trigger-btn:hover:not(:disabled) {

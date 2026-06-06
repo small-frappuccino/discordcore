@@ -231,7 +231,7 @@ ul, ol {
   background-color: var(--bg-surface-hover);
   color: var(--text-primary);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
+  border-radius: 8px;
   @apply p-2;
   outline: none;
   font-family: inherit;
@@ -270,7 +270,9 @@ select[multiple].form-select {
 
 /* Settings Form (Parent Container) */
 .settings-form {
-  max-width: 960px;
+  max-width: 768px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 /* Settings Group (Flattened) */
@@ -444,8 +446,13 @@ select[multiple].form-select {
   gap: 8px;
   background-color: transparent;
   color: var(--text-primary);
-  font-size: 0.95rem;
+  font-size: 14px;
+  line-height: 1.5;
   cursor: pointer;
+  width: 100%;
+  min-width: 200px;
+  padding: 8px 12px;
+  border-radius: 8px;
 }
 
 .tahoe-select-trigger:hover {
@@ -473,11 +480,18 @@ select[multiple].form-select {
   min-width: 160px;
   z-index: 100;
   overflow: hidden;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px;
 }
 
 .tahoe-select-option {
-  padding: 8px 12px;
-  font-size: 0.9rem;
+  padding: 6px 12px;
+  font-size: 14px;
+  line-height: 1.5;
   color: var(--text-primary);
   cursor: pointer;
   display: flex;
@@ -494,7 +508,7 @@ select[multiple].form-select {
   background-color: rgba(255, 255, 255, 0.1);
   color: var(--text-primary);
   padding: 4px 12px;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 0.9rem;
   font-weight: 500;
   transition: background-color var(--transition-fast);

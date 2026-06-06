@@ -32,7 +32,14 @@ export const DashboardLayout = memo(function DashboardLayout() {
       <aside className="shell-sidebar">
         <div className="shell-sidebar-header">
           <Link to="/manage" className="shell-brand">
-            <img src={siteBrandIconSrc} alt="Brand" />
+            <img 
+              src={siteBrandIconSrc} 
+              alt="Brand" 
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+                e.currentTarget.parentElement?.insertAdjacentHTML('afterbegin', '<div style="width: 28px; height: 28px; border-radius: 50%; background-color: var(--bg-surface-active); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold;">D</div>');
+              }}
+            />
             <span>Discordcore</span>
           </Link>
         </div>
