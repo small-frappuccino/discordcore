@@ -17,6 +17,12 @@ func (s *Server) authorizeRequest(w http.ResponseWriter, r *http.Request) (reque
 
 	token := strings.TrimSpace(s.authBearerToken)
 	oauthControl := s.oauthControl()
+	oauthConfigured := oauthControl.configured()
+	if token == "" && !oauthConfigured {
+		http.Error(w, "control authentication is not configured", http.StatusServiceUnavailable)
+		return requestAuthorization{}, false
+	}
+
 	authz := strings.TrimSpace(r.Header.Get("Authorization"))
 	if authz != "" {
 		if !strings.HasPrefix(authz, "Bearer ") {
@@ -43,15 +49,17 @@ func (s *Server) authorizeRequest(w http.ResponseWriter, r *http.Request) (reque
 		return requestAuthorization{mode: requestAuthModeBearer}, true
 	}
 
-	if session, err := oauthControl.sessionFromRequest(r); err == nil {
-		if err := oauthControl.validateSessionCSRFToken(r, session); err != nil {
-			http.Error(w, "forbidden", http.StatusForbidden)
-			return requestAuthorization{}, false
+	if oauthConfigured {
+		if session, err := oauthControl.sessionFromRequest(r); err == nil {
+			if err := oauthControl.validateSessionCSRFToken(r, session); err != nil {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return requestAuthorization{}, false
+			}
+			return requestAuthorization{
+				mode:         requestAuthModeDiscordOAuthSession,
+				oauthSession: session,
+			}, true
 		}
-		return requestAuthorization{
-			mode:         requestAuthModeDiscordOAuthSession,
-			oauthSession: session,
-		}, true
 	}
 
 	http.Error(w, "missing authorization", http.StatusUnauthorized)

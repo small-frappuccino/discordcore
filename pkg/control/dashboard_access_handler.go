@@ -51,8 +51,7 @@ func (h *dashboardAccessHandler) isPublicDashboardAsset(r *http.Request) bool {
 func (s *Server) hasAuthenticatedDashboardSession(r *http.Request) bool {
 	oauthControl := s.oauthControl()
 	if !oauthControl.configured() {
-		// If OAuth is not configured, allow access so the dashboard setup UI can load.
-		return true
+		return false
 	}
 
 	_, err := oauthControl.sessionFromRequest(r)

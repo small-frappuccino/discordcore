@@ -82,24 +82,10 @@ func (svc *discordOAuthControlService) configured() bool {
 	return svc.provider() != nil
 }
 
-
-
-func localAdminSession() discordOAuthSession {
-	return discordOAuthSession{
-		ID: "local_admin_session",
-		User: discordOAuthUser{
-			ID:       "local_admin",
-			Username: "Local Administrator",
-		},
-		CSRFToken: "local_admin_csrf",
-		ExpiresAt: time.Now().Add(24 * time.Hour),
-	}
-}
-
 func (svc *discordOAuthControlService) sessionFromRequest(r *http.Request) (discordOAuthSession, error) {
 	provider := svc.provider()
 	if provider == nil {
-		return localAdminSession(), nil
+		return discordOAuthSession{}, errDiscordOAuthUnavailable
 	}
 	return provider.sessionFromRequest(r)
 }
@@ -107,9 +93,6 @@ func (svc *discordOAuthControlService) sessionFromRequest(r *http.Request) (disc
 func (svc *discordOAuthControlService) validateSessionCSRFToken(r *http.Request, session discordOAuthSession) error {
 	provider := svc.provider()
 	if provider == nil {
-		if session.ID == "local_admin_session" && r.Header.Get("X-CSRF-Token") == "local_admin_csrf" {
-			return nil
-		}
 		return errDiscordOAuthUnavailable
 	}
 	return provider.validateSessionCSRFToken(r, session)
@@ -300,13 +283,6 @@ func (svc *discordOAuthControlService) handleStatus(w http.ResponseWriter, r *ht
 		response.DashboardURL = svc.publicDashboardURL(dashboardRoutePrefix)
 	}
 	if !svc.configured() {
-		session := localAdminSession()
-		response.Authenticated = true
-		response.User = &session.User
-		response.Scopes = session.Scopes
-		response.CSRFToken = session.CSRFToken
-		response.ExpiresAt = session.ExpiresAt.UTC().Format(time.RFC3339)
-
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Pragma", "no-cache")
 		writeJSON(w, http.StatusOK, response)
@@ -402,14 +378,6 @@ func (svc *discordOAuthControlService) handleGuildAccessList(
 	}
 
 	accessible, err := resolveAccessible(ctx, session)
-	if err != nil && !errors.Is(err, context.Canceled) && svc.guildAccessResolver != nil {
-		log.ApplicationLogger().Warn(
-			"Falling back to local admin guilds due to Discord API error",
-			"err", err,
-			"sessionID", session.ID,
-		)
-		accessible, err = svc.guildAccessResolver.materializeLocalAdminGuilds(ctx)
-	}
 	if err != nil {
 		if shouldSuppressAccessibleGuildsRequestError(r.Context(), err) {
 			return

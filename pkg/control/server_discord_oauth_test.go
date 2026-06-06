@@ -31,6 +31,8 @@ func TestDiscordOAuthRoutesRequireConfig(t *testing.T) {
 	}{
 		{method: http.MethodGet, path: "/auth/discord/login"},
 		{method: http.MethodGet, path: "/auth/discord/callback?code=test&state=test"},
+		{method: http.MethodGet, path: "/auth/me"},
+		{method: http.MethodPost, path: "/auth/logout"},
 	}
 
 	for _, tc := range tests {
@@ -66,8 +68,8 @@ func TestDiscordOAuthStatusReportsUnavailableWithoutConfig(t *testing.T) {
 	if response.OAuthConfigured {
 		t.Fatalf("expected oauth_configured=false, got %+v", response)
 	}
-	if !response.Authenticated {
-		t.Fatalf("expected authenticated=true, got %+v", response)
+	if response.Authenticated {
+		t.Fatalf("expected authenticated=false, got %+v", response)
 	}
 	if response.DashboardURL != dashboardRoutePrefix {
 		t.Fatalf("expected dashboard_url=%q, got %+v", dashboardRoutePrefix, response)

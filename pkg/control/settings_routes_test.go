@@ -598,8 +598,8 @@ func TestSettingsRoutesRequireAuthorization(t *testing.T) {
 
 	srv, _ := newControlTestServer(t)
 	rec := performHandlerJSONRequestWithAuth(t, srv.httpServer.Handler, http.MethodGet, "/v1/settings", nil, "")
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 without auth, got %d body=%q", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without auth, got %d body=%q", rec.Code, rec.Body.String())
 	}
 }
 
