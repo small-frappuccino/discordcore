@@ -86,11 +86,26 @@ func (s *BotSupervisor) onConfigChanged(cfg *files.BotConfig) {
 
 	// 1. Gather all tokens from all guilds
 	currentTokens := make(map[string]string)
+	
+	allowedInstances := make(map[string]struct{})
+	for _, def := range s.opts.botCatalog {
+		allowedInstances[def.ID] = struct{}{}
+	}
+
 	for _, guild := range cfg.Guilds {
 		for instanceID, encryptedToken := range guild.BotInstanceTokens {
 			token := string(encryptedToken)
-			if token == "" || instanceID != s.opts.defaultBotInstanceID {
+			if token == "" {
 				continue
+			}
+			if len(allowedInstances) > 0 {
+				if _, allowed := allowedInstances[instanceID]; !allowed {
+					continue
+				}
+			} else {
+				if instanceID != s.opts.defaultBotInstanceID {
+					continue
+				}
 			}
 			currentTokens[instanceID] = token
 		}

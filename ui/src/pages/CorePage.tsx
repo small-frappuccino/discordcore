@@ -5,7 +5,7 @@ import { useCorePageLogic } from "./hooks/useCorePageLogic";
 import { useState, Fragment } from "react";
 
 export function CorePage() {
-  const { settings, isLoading, tokensState, setTokensState, handleUpdateTokens } = useCorePageLogic();
+  const { settings, isLoading, tokensState, setTokensState, handleUpdateTokens, isSaving, saveError, clearSaveError } = useCorePageLogic();
   
   const availableInstances = settings?.workspace?.available_bot_instance_ids || [];
   const configuredTokens = settings?.workspace?.sections?.bot_instance_tokens_configured || {};
@@ -42,7 +42,7 @@ export function CorePage() {
                 <div className="flex items-center justify-between mb-1">
                   <h3 className="text-base font-semibold text-text-primary">Bot Instance Tokens</h3>
                   {isDirty && (
-                    <Button onClick={handleUpdateTokens} variant="primary" size="sm">
+                    <Button onClick={handleUpdateTokens} variant="primary" size="sm" isLoading={isSaving} disabled={isSaving}>
                       Save Changes
                     </Button>
                   )}
@@ -50,6 +50,12 @@ export function CorePage() {
                 <p className="text-sm text-text-secondary">
                   Assign a specific bot developer token to each instance for this guild. Tokens are stored securely and are write-only.
                 </p>
+                {saveError && (
+                  <div className="mt-2 p-2 rounded bg-[var(--status-error-bg,rgba(239,68,68,0.1))] text-[var(--status-error,#ef4444)] text-sm flex items-center justify-between">
+                    <span>{saveError}</span>
+                    <button onClick={clearSaveError} className="ml-2 text-xs opacity-70 hover:opacity-100">&times;</button>
+                  </div>
+                )}
               </div>
               <SettingsGroup>
                   {/* Main Instance (Always Visible) */}

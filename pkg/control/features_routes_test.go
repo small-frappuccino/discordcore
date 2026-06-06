@@ -289,8 +289,8 @@ func TestFeaturePatchRejectsMissingAuthBadPayloadAndUnregisteredGuild(t *testing
 	handler := srv.httpServer.Handler
 
 	noAuth := performHandlerJSONRequestWithAuth(t, handler, http.MethodPatch, "/v1/features/services.monitoring", map[string]any{"enabled": false}, "")
-	if noAuth.Code != http.StatusUnauthorized {
-		t.Fatalf("expected unauthorized patch, got status=%d body=%q", noAuth.Code, noAuth.Body.String())
+	if noAuth.Code != http.StatusForbidden {
+		t.Fatalf("expected forbidden patch, got status=%d body=%q", noAuth.Code, noAuth.Body.String())
 	}
 
 	emptyPayload := performHandlerJSONRequest(t, handler, http.MethodPatch, "/v1/features/services.monitoring", map[string]any{})

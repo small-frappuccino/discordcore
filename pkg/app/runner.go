@@ -193,6 +193,7 @@ func runWithOptions(appName string, opts RunOptions) error {
 		runtimeCount:             0, // dynamic
 		configManager:            configManager,
 		store:                    store,
+		botCatalog:               opts.BotCatalog,
 		commandCatalogRegistrars: opts.CommandCatalogRegistrars,
 		runtimeApplier:           runtimeApplier,
 		qotdCommandService:       qotdService,

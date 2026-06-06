@@ -81,6 +81,9 @@ func (resolver *accessibleGuildResolver) resolveWithOptions(
 ) ([]accessibleGuildResponse, error) {
 	provider := resolver.provider()
 	if provider == nil {
+		if session.ID == "local_admin_session" {
+			return resolver.materializeLocalAdminGuilds(ctx)
+		}
 		return nil, errDiscordOAuthUnavailable
 	}
 
@@ -168,6 +171,35 @@ func (resolver *accessibleGuildResolver) materializeAccessibleGuilds(
 	})
 
 	return out
+}
+
+func (resolver *accessibleGuildResolver) materializeLocalAdminGuilds(ctx context.Context) ([]accessibleGuildResponse, error) {
+	if resolver == nil || resolver.evaluator == nil || resolver.evaluator.configManager == nil {
+		return nil, nil
+	}
+	cfg := resolver.evaluator.configManager.Config()
+	out := make([]accessibleGuildResponse, 0, len(cfg.Guilds))
+	for _, g := range cfg.Guilds {
+		guildID := strings.TrimSpace(g.GuildID)
+		if guildID == "" {
+			continue
+		}
+		out = append(out, accessibleGuildResponse{
+			ID:          guildID,
+			Name:        "Local Guild " + guildID,
+			Icon:        "",
+			BotPresent:  true,
+			Owner:       true,
+			Permissions: 8, // Administrator
+			AccessLevel: guildAccessLevelWrite,
+		})
+	}
+
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].ID < out[j].ID
+	})
+
+	return out, nil
 }
 
 func (resolver *accessibleGuildResolver) resolveBotGuildIDSet(ctx context.Context) (map[string]struct{}, error) {

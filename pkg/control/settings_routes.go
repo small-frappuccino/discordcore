@@ -287,7 +287,7 @@ func (s *Server) handleGuildSettingsGet(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	availableBotInstanceIDs, err := s.resolveAvailableBotInstanceIDsForGuild(r.Context(), requestAuthorization{mode: requestAuthModeBearer}, guildID)
-	if err != nil {
+	if err != nil && !errors.Is(err, errBotGuildIDsProviderUnavailable) {
 		http.Error(w, fmt.Sprintf("failed to resolve guild bot instances: %v", err), statusForManageableGuildsError(err))
 		return
 	}
@@ -313,13 +313,26 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 	)
 	if payload.BotInstanceTokens != nil {
 		available, err := s.resolveAvailableBotInstanceIDsForGuild(r.Context(), requestAuthorization{mode: requestAuthModeBearer}, guildID)
-		if err != nil {
+		if err != nil && !errors.Is(err, errBotGuildIDsProviderUnavailable) {
 			http.Error(w, fmt.Sprintf("failed to resolve guild bot instances: %v", err), statusForManageableGuildsError(err))
 			return
 		}
 		availableBotInstanceIDs = available
 		updateBotInstanceTokens = true
 	}
+	current := s.configManager.SnapshotConfig()
+	if _, ok := findGuildSettings(current, guildID); !ok {
+		if s.guildRegistration != nil {
+			if err := s.guildRegistration(r.Context(), guildID); err != nil {
+				http.Error(w, fmt.Sprintf("failed to auto-register guild settings: %v", err), statusForSettingsMutationError(err))
+				return
+			}
+		} else {
+			http.Error(w, fmt.Sprintf("guild settings not found for %s and registration is unavailable", guildID), http.StatusBadRequest)
+			return
+		}
+	}
+
 	updated, err := s.configManager.UpdateConfig(func(cfg *files.BotConfig) error {
 		guild, ok := findGuildSettingsMutable(cfg, guildID)
 		if !ok {
@@ -390,7 +403,7 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 	}
 	if payload.BotInstanceTokens == nil {
 		availableBotInstanceIDs, err = s.resolveAvailableBotInstanceIDsForGuild(r.Context(), requestAuthorization{mode: requestAuthModeBearer}, guildID)
-		if err != nil {
+		if err != nil && !errors.Is(err, errBotGuildIDsProviderUnavailable) {
 			http.Error(w, fmt.Sprintf("failed to resolve guild bot instances: %v", err), statusForManageableGuildsError(err))
 			return
 		}

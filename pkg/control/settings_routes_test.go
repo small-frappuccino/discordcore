@@ -304,22 +304,30 @@ func TestGuildSettingsGetOmitsLegacyModerationWorkspaceSection(t *testing.T) {
 	}
 }
 
-func TestGuildSettingsPutRejectsMissingGuildUntilRegistered(t *testing.T) {
+func TestGuildSettingsPutAutoRegistersMissingGuild(t *testing.T) {
 	t.Parallel()
 
-	srv, _ := newControlTestServer(t)
+	srv, cm := newControlTestServer(t)
 	setTestBotGuildBindings(srv, BotGuildBinding{GuildID: "g2"})
+
+	// Setup a mock guild registration function since auto-register depends on it
+	srv.SetGuildRegistrationFunc(func(_ context.Context, guildID string) error {
+		_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+			cfg.Guilds = append(cfg.Guilds, files.GuildConfig{
+				GuildID: guildID,
+			})
+			return nil
+		})
+		return err
+	})
 
 	payload := updateGuildSettingsRequest{
 		Channels: &files.ChannelsConfig{Commands: "100"},
 	}
 
 	rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodPut, "/v1/guilds/g2/settings", payload)
-	if rec.Code != http.StatusConflict {
-		t.Fatalf("expected 409 for missing guild settings, got %d body=%q", rec.Code, rec.Body.String())
-	}
-	if !strings.Contains(rec.Body.String(), "register this guild first") {
-		t.Fatalf("expected register-first message, got %q", rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK after auto-registration, got %d body=%q", rec.Code, rec.Body.String())
 	}
 }
 
@@ -560,8 +568,8 @@ func TestSettingsRoutesRequireAuthorization(t *testing.T) {
 
 	srv, _ := newControlTestServer(t)
 	rec := performHandlerJSONRequestWithAuth(t, srv.httpServer.Handler, http.MethodGet, "/v1/settings", nil, "")
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 without auth, got %d body=%q", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 without auth, got %d body=%q", rec.Code, rec.Body.String())
 	}
 }
 
