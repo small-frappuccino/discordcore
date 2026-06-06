@@ -39,27 +39,22 @@ export const ServerSelector = memo(function ServerSelector() {
         className="shell-trigger-btn hover:bg-[var(--bg-surface-hover)] active:scale-[0.98] transition-all"
         onClick={() => setIsServerMenuOpen(!isServerMenuOpen)}
       >
-        <div className="shell-trigger-info" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
+        <div className="shell-trigger-avatar">
           {currentGuild?.icon && !imageErrors[currentGuild.id] ? (
             <img 
               src={`https://cdn.discordapp.com/icons/${currentGuild.id}/${currentGuild.icon}.png`} 
               alt="" 
-              className="w-8 h-8 rounded-full" 
               onError={() => setImageErrors(prev => ({ ...prev, [currentGuild.id]: true }))}
             />
           ) : currentGuild ? (
-            <div className="w-8 h-8 rounded-full bg-surface-active flex items-center justify-center text-xs font-semibold">
-              {currentGuild.name.charAt(0)}
-            </div>
+            <span>{currentGuild.name.charAt(0)}</span>
           ) : (
-            <div className="w-8 h-8 rounded-full bg-surface-active flex items-center justify-center text-xs font-semibold">
-              ?
-            </div>
+            <span>?</span>
           )}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-            <span className="shell-trigger-title">{serverTitle}</span>
-            <span className="shell-trigger-subtitle">{serverSubtitle}</span>
-          </div>
+        </div>
+        <div className="shell-trigger-info">
+          <span className="shell-trigger-title">{serverTitle}</span>
+          <span className="shell-trigger-subtitle">{serverSubtitle}</span>
         </div>
         <span className="shell-trigger-chevron">v</span>
       </button>

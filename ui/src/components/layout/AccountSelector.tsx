@@ -31,6 +31,7 @@ export const AccountSelector = memo(function AccountSelector() {
         </div>
         <div className="shell-trigger-info">
           <span className="shell-trigger-title">{accountTitle}</span>
+          <span className="shell-trigger-subtitle">Manage Account</span>
         </div>
         <span className="shell-trigger-chevron">v</span>
       </button>
@@ -40,10 +41,11 @@ export const AccountSelector = memo(function AccountSelector() {
           isAccountMenuOpen ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 pointer-events-none'
         }`}
       >
-        <div className="px-3 py-2 border-b border-subtle mb-1">
+        <div className="px-3 py-2 mb-1">
           <div className="text-sm font-semibold">{accountTitle}</div>
-          <div className="text-xs text-muted">{session?.user?.id}</div>
+          <div className="text-xs text-muted truncate">{session?.user?.id}</div>
         </div>
+        <div className="shell-dropdown-divider"></div>
         <button
           className="shell-dropdown-item danger"
           onClick={() => {
