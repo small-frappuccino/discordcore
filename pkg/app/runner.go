@@ -366,12 +366,18 @@ func scheduleDBCleanup(store *storage.Store, configManager *files.ConfigManager)
 func resolveRuntimeCapabilities(configSnapshot *files.BotConfig, botInstances []resolvedBotInstance, defaultBotInstanceID string, profile RunProfile) map[string]botRuntimeCapabilities {
 	capabilities := make(map[string]botRuntimeCapabilities, len(botInstances))
 	for _, instance := range botInstances {
-		capabilities[instance.ID] = resolveBotRuntimeCapabilities(
+		cap := resolveBotRuntimeCapabilities(
 			configSnapshot,
 			instance.ID,
 			defaultBotInstanceID,
-			profile,
 		)
+
+		if profile == RunProfileDiscordQOTD {
+			var policy CapabilityModifier = QOTDCapabilityPolicy{}
+			cap = policy.Modify(cap)
+		}
+
+		capabilities[instance.ID] = cap
 	}
 	return capabilities
 }

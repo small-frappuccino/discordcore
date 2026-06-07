@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
@@ -91,7 +92,7 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 		},
 	}
 
-	capabilities := resolveBotRuntimeCapabilities(cfg, "companion", "main", RunProfileDiscordMain)
+	capabilities := resolveBotRuntimeCapabilities(cfg, "companion", "main")
 	if !capabilities.monitoring {
 		t.Fatal("expected monitoring capability for companion runtime")
 	}
@@ -126,7 +127,7 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 func TestResolveBotRuntimeCapabilitiesWithoutGuildBindingsIsIdle(t *testing.T) {
 	t.Parallel()
 
-	capabilities := resolveBotRuntimeCapabilities(&files.BotConfig{}, "companion", "main", RunProfileDiscordMain)
+	capabilities := resolveBotRuntimeCapabilities(&files.BotConfig{}, "companion", "main")
 	if capabilities.monitoring || capabilities.HasCommands() || capabilities.admin || capabilities.automod || capabilities.userPrune || capabilities.qotdRuntime {
 		t.Fatalf("expected idle capabilities for unbound bot, got %+v", capabilities)
 	}
@@ -191,7 +192,7 @@ func TestResolveBotRuntimeCapabilitiesAggregatesAllGuildsForSameBotInstance(t *t
 		},
 	}
 
-	capabilities := resolveBotRuntimeCapabilities(cfg, "main", "main", RunProfileDiscordMain)
+	capabilities := resolveBotRuntimeCapabilities(cfg, "main", "main")
 	if !capabilities.HasCommands() {
 		t.Fatal("expected commands capability to include any guild assigned to main")
 	}
@@ -205,3 +206,44 @@ func TestResolveBotRuntimeCapabilitiesAggregatesAllGuildsForSameBotInstance(t *t
 		t.Fatalf("expected reaction intents from guild aggregation, got %d", capabilities.intents)
 	}
 }
+
+func TestQOTDCapabilityPolicy_Modify_DeepCopyAndIsolation(t *testing.T) {
+	t.Parallel()
+
+	// 1. Arrange: Create a capability struct with many privileged intents and flags
+	original := botRuntimeCapabilities{
+		monitoring:  true,
+		admin:       true,
+		automod:     true,
+		userPrune:   true,
+		qotdRuntime: true,
+		warmup:      true,
+		intents:     discordgo.IntentsGuilds | discordgo.IntentsGuildMembers | discordgo.IntentsGuildMessages,
+		hasCommands: true,
+	}
+
+	// 2. Act: Apply the QOTD policy modifier
+	var policy CapabilityModifier = QOTDCapabilityPolicy{}
+	masked := policy.Modify(original)
+
+	// 3. Assert: Verify the memory addresses are completely different (Deep Copy contract)
+	addrOriginal := fmt.Sprintf("%p", &original)
+	addrMasked := fmt.Sprintf("%p", &masked)
+	if addrOriginal == addrMasked {
+		t.Fatalf("CapabilityModifier returned the same struct reference (%s). OCP requires deep copy to prevent side effects", addrOriginal)
+	}
+
+	// 4. Assert: Validate the mask logic stripped privileged access
+	if masked.monitoring || masked.admin || masked.automod || masked.userPrune || masked.warmup {
+		t.Fatalf("QOTD policy failed to strip privileged flags: %+v", masked)
+	}
+
+	if !masked.qotdRuntime || !masked.hasCommands {
+		t.Fatalf("QOTD policy incorrectly stripped essential QOTD flags: %+v", masked)
+	}
+
+	if masked.intents != discordgo.IntentsGuilds {
+		t.Fatalf("QOTD policy should only allow IntentsGuilds, got %d", masked.intents)
+	}
+}
+
