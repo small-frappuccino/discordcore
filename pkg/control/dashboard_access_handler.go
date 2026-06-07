@@ -23,14 +23,13 @@ func newProtectedEmbeddedDashboardHandler(oauthAvailable bool, redirectTarget st
 	}
 }
 
-// ServeHTTP serves http.
 func (h *dashboardAccessHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !h.oauthAvailable {
 		http.Error(w, "Dashboard access requires Discord OAuth configuration.", http.StatusForbidden)
 		return
 	}
 
-	if h.isPublicDashboardAsset(r) || (h.hasSession != nil && h.hasSession(r)) {
+	if h.hasSession != nil && h.hasSession(r) {
 		h.next.ServeHTTP(w, r)
 		return
 	}
@@ -40,18 +39,6 @@ func (h *dashboardAccessHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		redirect = "/"
 	}
 	http.Redirect(w, r, redirect, http.StatusFound)
-}
-
-func (h *dashboardAccessHandler) isPublicDashboardAsset(r *http.Request) bool {
-	if r == nil || r.URL == nil {
-		return false
-	}
-
-	assetPath, ok := normalizeDashboardAssetPath(r.URL.Path)
-	if !ok {
-		return false
-	}
-	return strings.TrimSpace(assetPath) == publicDashboardBrandAssetPath
 }
 
 func (s *Server) hasAuthenticatedDashboardSession(r *http.Request) bool {

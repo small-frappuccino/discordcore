@@ -48,29 +48,14 @@ func TestNewDiscordSessionCreateError(t *testing.T) {
 	}
 }
 
-func TestNewDiscordSessionConnectionErrorCloses(t *testing.T) {
-	session := &discordgo.Session{}
-	closed := false
-	restoreSessionStubs(t, func(token string) (*discordgo.Session, error) {
-		return session, nil
-	}, func(*discordgo.Session) error { return errors.New("connect-fail") }, func(*discordgo.Session) error {
-		closed = true
-		return nil
-	})
-
-	if _, err := NewDiscordSession("token"); err == nil || !strings.Contains(err.Error(), "failed to connect") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !closed {
-		t.Fatalf("expected closeSession to be called on connect failure")
-	}
-}
-
 func TestNewDiscordSessionSuccess(t *testing.T) {
 	session := &discordgo.Session{}
 	restoreSessionStubs(t, func(token string) (*discordgo.Session, error) {
 		return session, nil
-	}, func(*discordgo.Session) error { return nil }, func(*discordgo.Session) error { t.Fatalf("closeSession should not be called on success"); return nil })
+	}, func(*discordgo.Session) error {
+		t.Fatalf("openSession should not be called in constructor")
+		return nil
+	}, func(*discordgo.Session) error { t.Fatalf("closeSession should not be called on success"); return nil })
 
 	got, err := NewDiscordSession("token")
 	if err != nil {
@@ -88,7 +73,10 @@ func TestNewDiscordSessionWithIntentsUsesProvidedMask(t *testing.T) {
 	session := &discordgo.Session{}
 	restoreSessionStubs(t, func(token string) (*discordgo.Session, error) {
 		return session, nil
-	}, func(*discordgo.Session) error { return nil }, func(*discordgo.Session) error { t.Fatalf("closeSession should not be called on success"); return nil })
+	}, func(*discordgo.Session) error {
+		t.Fatalf("openSession should not be called in constructor")
+		return nil
+	}, func(*discordgo.Session) error { t.Fatalf("closeSession should not be called on success"); return nil })
 
 	mask := discordgo.IntentsGuilds | discordgo.IntentsGuildMessageReactions
 	got, err := NewDiscordSessionWithIntents("token", mask)

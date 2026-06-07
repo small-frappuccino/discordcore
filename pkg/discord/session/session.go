@@ -58,17 +58,5 @@ func NewDiscordSessionWithIntents(token string, intents discordgo.Intent) (*disc
 	}
 	s.Identify.Intents = intents
 
-	// Add logging for connection
-	log.DiscordLogger().Info("Connecting to Discord...")
-	if err := openSession(s); err != nil {
-		log.ErrorLoggerRaw().Error(fmt.Sprintf("Error during connection: %v", err))
-		// Clean up session if connection failed
-		if s != nil {
-			_ = closeSession(s)
-		}
-		return nil, fmt.Errorf(ErrSessionConnectionFailed, err)
-	}
-
-	log.DiscordLogger().Info("Connected to Discord successfully")
 	return s, nil
 }

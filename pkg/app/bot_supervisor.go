@@ -343,9 +343,6 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token string, sta
 		Type:     service.TypeMonitoring,
 		Priority: service.PriorityNormal,
 		Start: func(ctx context.Context) error {
-			if err := openDiscordSession(runtime.session); err != nil {
-				return err
-			}
 			return nil
 		},
 		Stop: func(context.Context) error {

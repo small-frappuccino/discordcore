@@ -11,6 +11,7 @@ import (
 	"log/slog"
 
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	"golang.org/x/sync/errgroup"
 )
 
 // ServiceState represents the current state of a service
@@ -174,18 +175,22 @@ type ServiceManager struct {
 	healthInterval  time.Duration
 	maxRestarts     int
 	restartDelay    time.Duration
+
+	eg *errgroup.Group
 }
 
 // NewServiceManager creates a new service manager
 func NewServiceManager() *ServiceManager {
 	ctx, cancel := context.WithCancel(context.Background())
+	eg, egCtx := errgroup.WithContext(ctx)
 
 	return &ServiceManager{
 		services:        make(map[string]*ServiceInfo),
 		dependsOn:       make(map[string][]string),
 		dependents:      make(map[string][]string),
-		ctx:             ctx,
+		ctx:             egCtx, // Contexto global cancelado pelo errgroup em caso de erro
 		cancel:          cancel,
+		eg:              eg,
 		healthStop:      make(chan struct{}),
 		shutdownTimeout: 30 * time.Second,
 		healthInterval:  5 * time.Minute,
@@ -232,23 +237,24 @@ func (sm *ServiceManager) StartAll() error {
 		return fmt.Errorf("failed to calculate start order: %w", err)
 	}
 
-	var startErrors []error
 	for _, name := range startOrder {
 		if err := sm.StartService(name); err != nil {
-			startErrors = append(startErrors, fmt.Errorf("failed to start service '%s': %w", name, err))
+			// Fail-fast and trigger immediate cancellation of all adjacent processes
+			sm.cancel()
+			sm.StopAll()
+			return fmt.Errorf("failed to start service '%s': %w", name, err)
 		}
-	}
-
-	if len(startErrors) > 0 {
-		// Try to stop services that were started successfully
-		sm.StopAll()
-		return fmt.Errorf("failed to start services: %w", stdErrors.Join(startErrors...))
 	}
 
 	// Start health monitoring
 	sm.healthStopOnce = sync.Once{}
 	sm.healthStop = make(chan struct{})
-	go sm.healthMonitor()
+
+	sm.eg.Go(func() error {
+		// Tie health monitor to the manager's context lifecycle via errgroup
+		sm.healthMonitor()
+		return nil
+	})
 
 	log.ApplicationLogger().Info("All services started successfully", "services_count", len(sm.services))
 	return nil

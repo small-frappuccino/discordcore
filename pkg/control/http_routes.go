@@ -1,6 +1,10 @@
 package control
 
-import "net/http"
+import (
+	"net/http"
+
+	embeddedui "github.com/small-frappuccino/discordcore/ui"
+)
 
 func (s *Server) registerHTTPRoutes(mux *http.ServeMux) {
 	if mux == nil {
@@ -44,6 +48,14 @@ func (s *Server) registerDashboardRoutes(mux *http.ServeMux) {
 
 	mux.Handle("/", newLandingHandler(oauthConfigured))
 	mux.HandleFunc("/manage", s.handleManageRoot)
+
+	// Segregação de assets públicos no roteador exigida pelo Go 1.22
+	if assets, err := embeddedui.DistFS(); err == nil {
+		fs := http.FileServer(http.FS(assets))
+		mux.Handle("GET "+dashboardRoutePrefix+"brand/", http.StripPrefix(dashboardRoutePrefix, fs))
+		mux.Handle("GET "+dashboardLegacyRoutePrefix+"brand/", http.StripPrefix(dashboardLegacyRoutePrefix, fs))
+	}
+
 	mux.Handle(dashboardRoutePrefix, newProtectedEmbeddedDashboardHandler(oauthConfigured, s.publicControlURL("/"), s.hasAuthenticatedDashboardSession))
 	mux.HandleFunc("/dashboard", s.handleDashboardRoot)
 	mux.Handle(dashboardLegacyRoutePrefix, newProtectedEmbeddedDashboardHandler(oauthConfigured, s.publicControlURL("/"), s.hasAuthenticatedDashboardSession))
