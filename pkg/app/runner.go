@@ -4,8 +4,11 @@ import (
 	"context"
 	stdErrors "errors"
 	"fmt"
+	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -221,7 +224,19 @@ func runWithOptions(appName string, opts RunOptions) error {
 	runtimeResolver := botSupervisor.GetResolver()
 
 	var defaultSession *discordgo.Session
-	defaultSession, _ = runtimeResolver.sessionForGuild("")
+	var sessionErr error
+	defaultSession, sessionErr = runtimeResolver.sessionForGuild("")
+	if sessionErr != nil {
+		if stdErrors.Is(sessionErr, ErrSessionUnavailable) {
+			log.ApplicationLogger().Info(
+				"Default discord session is unavailable; startup webhooks will be disabled",
+				"operation", "startup.default_session.resolve",
+				"botInstanceID", DefaultBotInstanceID,
+			)
+		} else {
+			return fmt.Errorf("resolve default session for startup: %w", sessionErr)
+		}
+	}
 
 	if err := appServiceManager.StartAll(); err != nil {
 		return err
@@ -246,8 +261,50 @@ func runWithOptions(appName string, opts RunOptions) error {
 	log.ApplicationLogger().Info(fmt.Sprintf("🎯 %s initialized successfully in %s", appName, time.Since(started).Round(time.Millisecond)))
 	log.ApplicationLogger().Info(fmt.Sprintf("🤖 %s running. Press Ctrl+C to stop...", appName))
 
-	// Wait for shutdown signal
-	waitForInterrupt()
+	// Configuração da escuta de sinais POSIX
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGHUP, os.Interrupt, syscall.SIGTERM)
+
+	// Loop principal de multiplexação no runner
+	for {
+		sig := <-sigCh
+		switch sig {
+		case syscall.SIGHUP:
+			// 1. Recarga estática e segura sem mutilar o estado atual
+			newCfg, needsSave, err := configManager.LoadConfigFromStore()
+			if err != nil {
+				log.ApplicationLogger().Info("Failed to reload config on SIGHUP", "error", err.Error())
+				continue // Aborta a recarga, preserva o estado estável em uso
+			}
+
+			// 2. Extração estrita do snapshot anterior via Read Lock
+			oldCfg := configManager.Config()
+
+			// 3. Orquestração: o supervisor deve receber ambos os estados para 
+			// calcular o delta exato de conexões antes da rotação global
+			botSupervisor.onConfigChanged(oldCfg, newCfg)
+
+			// 4. Rotação atômica do ponteiro global sob Write Lock (sync.RWMutex)
+			dupCount := configManager.ApplyConfig(newCfg)
+			
+			if dupCount > 0 || needsSave {
+				if saveErr := configManager.SaveConfig(); saveErr != nil {
+					log.ApplicationLogger().Error("Failed to save config after SIGHUP normalization", "error", saveErr)
+				} else {
+					log.ApplicationLogger().Info("Configuração recarregada com sucesso via SIGHUP (index rebuilt/normalized)", "duplicates", dupCount)
+				}
+			} else {
+				log.ApplicationLogger().Info("Configuração recarregada com sucesso via SIGHUP")
+			}
+
+		case os.Interrupt, syscall.SIGTERM:
+			log.ApplicationLogger().Info("Sinal de encerramento interceptado. Iniciando teardown gracioso...")
+			botSupervisor.Stop()
+			goto shutdown
+		}
+	}
+
+shutdown:
 	log.ApplicationLogger().Info(fmt.Sprintf("🛑 Stopping %s...", appName))
 	log.GlobalLogger.Sync()
 

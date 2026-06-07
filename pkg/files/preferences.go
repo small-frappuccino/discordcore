@@ -25,40 +25,56 @@ func NewConfigManagerWithStore(store ConfigStore) *ConfigManager {
 	}
 }
 
-// LoadConfig loads the configuration from file.
-func (mgr *ConfigManager) LoadConfig() error {
-	mgr.mu.Lock()
-
-	if mgr.config == nil {
-		mgr.config = &BotConfig{Guilds: []GuildConfig{}}
-	}
-
+// LoadConfigFromStore performs an atomic read and validation of the configuration
+// from the persistence layer without mutating the active manager state.
+func (mgr *ConfigManager) LoadConfigFromStore() (*BotConfig, bool, error) {
 	if mgr.store == nil {
-		mgr.mu.Unlock()
-		return fmt.Errorf("config store is not configured")
+		return nil, false, fmt.Errorf("config store is not configured")
 	}
 	cfg, err := mgr.store.Load()
 	if err != nil {
-		mgr.mu.Unlock()
-		return fmt.Errorf("load config from %s: %w", mgr.ConfigPath(), err)
+		return nil, false, fmt.Errorf("load config from %s: %w", mgr.ConfigPath(), err)
 	}
+	
+	orderMigrated := normalizeAutoAssignmentRoleOrder(cfg)
+
+	if validationErr := validateBotConfig(cfg); validationErr != nil {
+		return nil, false, wrapValidationError(validationErr)
+	}
+	return cfg, orderMigrated, nil
+}
+
+// ApplyConfig atomically rotates the global configuration pointer and rebuilds indices.
+func (mgr *ConfigManager) ApplyConfig(cfg *BotConfig) int {
+	if cfg == nil {
+		return 0
+	}
+	mgr.mu.Lock()
+	defer mgr.mu.Unlock()
+
 	mgr.config = cfg
 
 	if len(mgr.config.Guilds) == 0 {
 		log.ApplicationLogger().Info(fmt.Sprintf(LogLoadConfigNoGuilds, mgr.ConfigPath()))
 	}
 
-	dupCount, err := mgr.rebuildGuildIndexLocked("load")
+	dupCount, err := mgr.rebuildGuildIndexLocked("apply")
 	if err != nil {
 		log.ApplicationLogger().Warn("Guild config index rebuild warning", "error", err, "path", mgr.ConfigPath())
 	}
-	orderMigrated := normalizeAutoAssignmentRoleOrder(mgr.config)
-	if validationErr := validateBotConfig(mgr.config); validationErr != nil {
-		mgr.mu.Unlock()
-		return wrapValidationError(validationErr)
-	}
+
 	mgr.publishSnapshotLocked()
-	mgr.mu.Unlock()
+	return dupCount
+}
+
+// LoadConfig loads the configuration from file.
+func (mgr *ConfigManager) LoadConfig() error {
+	cfg, orderMigrated, err := mgr.LoadConfigFromStore()
+	if err != nil {
+		return err
+	}
+
+	dupCount := mgr.ApplyConfig(cfg)
 
 	if dupCount > 0 || orderMigrated {
 		if saveErr := mgr.SaveConfig(); saveErr != nil {
@@ -110,9 +126,6 @@ func (mgr *ConfigManager) saveConfigLocked() error {
 	}
 
 	log.ApplicationLogger().Info(fmt.Sprintf(LogSaveConfigSuccess, mgr.ConfigPath()))
-
-	// Notify watchers of the successful save
-	mgr.notifyWatchers()
 
 	return nil
 }

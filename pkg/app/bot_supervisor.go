@@ -59,13 +59,11 @@ func NewBotSupervisor(configManager *files.ConfigManager, opts botRuntimeOptions
 		instances:         make(map[string]*botInstanceState),
 	}
 
-	configManager.AddWatcher(supervisor.onConfigChanged)
-
 	return supervisor
 }
 
 func (s *BotSupervisor) Start() error {
-	s.onConfigChanged(nil) // trigger initial resolution
+	s.onConfigChanged(nil, nil) // trigger initial resolution
 	return nil
 }
 
@@ -100,10 +98,10 @@ func (s *BotSupervisor) GetResolver() *botRuntimeResolver {
 	return s.resolver
 }
 
-func (s *BotSupervisor) onConfigChanged(cfg *files.BotConfig) {
-	if cfg == nil {
+func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
+	if newCfg == nil {
 		snap := s.configManager.SnapshotConfig()
-		cfg = &snap
+		newCfg = &snap
 	}
 
 	s.mu.Lock()
@@ -117,7 +115,7 @@ func (s *BotSupervisor) onConfigChanged(cfg *files.BotConfig) {
 		allowedInstances[def.ID] = struct{}{}
 	}
 
-	for _, guild := range cfg.Guilds {
+	for _, guild := range newCfg.Guilds {
 		for instanceID, encryptedToken := range guild.BotInstanceTokens {
 			token := string(encryptedToken)
 			if token == "" {

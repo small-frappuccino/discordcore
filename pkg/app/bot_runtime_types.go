@@ -24,6 +24,9 @@ const DefaultBotInstanceID = "default"
 // ErrNoBotTokensConfigured defines err no bot tokens configured.
 var ErrNoBotTokensConfigured = errors.New("no bot instances have a configured token")
 
+// ErrSessionUnavailable defines err when a bot session is not available for a guild or globally.
+var ErrSessionUnavailable = errors.New("discord session is unavailable")
+
 // BotInstanceDefinition describes one Discord bot instance managed by the host
 // runtime.
 type BotInstanceDefinition struct {
@@ -201,14 +204,14 @@ func (r *botRuntimeResolver) runtimeForGuild(guildID string) (*botRuntime, strin
 func (r *botRuntimeResolver) sessionForGuild(guildID string) (*discordgo.Session, error) {
 	runtime, botInstanceID, err := r.runtimeForGuild(guildID)
 	if err != nil {
-		return nil, fmt.Errorf("botRuntimeResolver.sessionForGuild: %w", err)
+		return nil, fmt.Errorf("%w: %v", ErrSessionUnavailable, err)
 	}
 	if runtime.session == nil {
 		guildID = strings.TrimSpace(guildID)
 		if guildID == "" {
-			return nil, fmt.Errorf("discord session for default bot instance %q is unavailable", botInstanceID)
+			return nil, fmt.Errorf("%w: discord session for default bot instance %q is empty", ErrSessionUnavailable, botInstanceID)
 		}
-		return nil, fmt.Errorf("discord session for guild %s (bot instance %q) is unavailable", guildID, botInstanceID)
+		return nil, fmt.Errorf("%w: discord session for guild %s (bot instance %q) is empty", ErrSessionUnavailable, guildID, botInstanceID)
 	}
 	return runtime.session, nil
 }
