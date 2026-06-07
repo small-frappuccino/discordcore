@@ -113,28 +113,22 @@ func TestServerDashboardRoutesDoNotInterceptAPIOrAuth(t *testing.T) {
 	if rootRec.Code != http.StatusOK {
 		t.Fatalf("expected / to serve landing page, got %d body=%q", rootRec.Code, rootRec.Body.String())
 	}
-	if body := rootRec.Body.String(); !strings.Contains(body, "Login com Discord") {
-		t.Fatalf("expected landing page login button, got %q", body)
+	if body := rootRec.Body.String(); !strings.Contains(body, "Discord indisponível") {
+		t.Fatalf("expected landing page disabled login button, got %q", body)
 	}
 
 	manageReq := httptest.NewRequest(http.MethodGet, dashboardRoutePrefix, nil)
 	manageRec := httptest.NewRecorder()
 	handler.ServeHTTP(manageRec, manageReq)
-	if manageRec.Code != http.StatusFound {
-		t.Fatalf("expected %s to redirect to landing when dashboard auth is unavailable, got %d body=%q", dashboardRoutePrefix, manageRec.Code, manageRec.Body.String())
-	}
-	if location := strings.TrimSpace(manageRec.Header().Get("Location")); location != "/" {
-		t.Fatalf("expected %s redirect location %q, got %q", dashboardRoutePrefix, "/", location)
+	if manageRec.Code != http.StatusForbidden {
+		t.Fatalf("expected %s to return 403 when dashboard auth is unavailable, got %d body=%q", dashboardRoutePrefix, manageRec.Code, manageRec.Body.String())
 	}
 
 	dashboardReq := httptest.NewRequest(http.MethodGet, "/dashboard/", nil)
 	dashboardRec := httptest.NewRecorder()
 	handler.ServeHTTP(dashboardRec, dashboardReq)
-	if dashboardRec.Code != http.StatusFound {
-		t.Fatalf("expected legacy /dashboard/ to redirect to landing when dashboard auth is unavailable, got %d body=%q", dashboardRec.Code, dashboardRec.Body.String())
-	}
-	if location := strings.TrimSpace(dashboardRec.Header().Get("Location")); location != "/" {
-		t.Fatalf("expected legacy /dashboard/ redirect location %q, got %q", "/", location)
+	if dashboardRec.Code != http.StatusForbidden {
+		t.Fatalf("expected legacy /dashboard/ to return 403 when dashboard auth is unavailable, got %d body=%q", dashboardRec.Code, dashboardRec.Body.String())
 	}
 
 	apiRec := performHandlerJSONRequest(t, handler, http.MethodGet, "/v1/runtime-config", nil)
@@ -314,11 +308,8 @@ func TestDashboardEndpointInteractionWithoutConfiguredAuth(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusFound {
-		t.Fatalf("expected %s over live server to redirect without configured dashboard auth, got %d", dashboardRoutePrefix, resp.StatusCode)
-	}
-	if location := strings.TrimSpace(resp.Header.Get("Location")); location != "/" {
-		t.Fatalf("expected %s over live server to redirect to %q, got %q", dashboardRoutePrefix, "/", location)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected %s over live server to return 403 without configured dashboard auth, got %d", dashboardRoutePrefix, resp.StatusCode)
 	}
 
 	apiResp, err := http.Get("http://" + srv.listener.Addr().String() + "/v1/runtime-config")

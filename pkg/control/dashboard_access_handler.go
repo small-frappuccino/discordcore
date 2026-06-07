@@ -9,12 +9,12 @@ const publicDashboardBrandAssetPath = "brand/discordmain.webp"
 
 type dashboardAccessHandler struct {
 	next           http.Handler
-	oauthAvailable bool
-	redirectTarget string
+	oauthAvailable func() bool
+	redirectTarget func() string
 	hasSession     func(*http.Request) bool
 }
 
-func newProtectedEmbeddedDashboardHandler(oauthAvailable bool, redirectTarget string, hasSession func(*http.Request) bool) http.Handler {
+func newProtectedEmbeddedDashboardHandler(oauthAvailable func() bool, redirectTarget func() string, hasSession func(*http.Request) bool) http.Handler {
 	return &dashboardAccessHandler{
 		next:           newEmbeddedDashboardHandler(),
 		oauthAvailable: oauthAvailable,
@@ -24,7 +24,7 @@ func newProtectedEmbeddedDashboardHandler(oauthAvailable bool, redirectTarget st
 }
 
 func (h *dashboardAccessHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if !h.oauthAvailable {
+	if h.oauthAvailable != nil && !h.oauthAvailable() {
 		http.Error(w, "Dashboard access requires Discord OAuth configuration.", http.StatusForbidden)
 		return
 	}
@@ -34,7 +34,10 @@ func (h *dashboardAccessHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	redirect := strings.TrimSpace(h.redirectTarget)
+	var redirect string
+	if h.redirectTarget != nil {
+		redirect = strings.TrimSpace(h.redirectTarget())
+	}
 	if redirect == "" {
 		redirect = "/"
 	}

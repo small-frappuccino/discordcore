@@ -330,10 +330,10 @@ type LandingPageState struct {
 }
 
 type landingHandler struct {
-	oauthAvailable bool
+	oauthAvailable func() bool
 }
 
-func newLandingHandler(oauthAvailable bool) http.Handler {
+func newLandingHandler(oauthAvailable func() bool) http.Handler {
 	return &landingHandler{
 		oauthAvailable: oauthAvailable,
 	}
@@ -351,7 +351,7 @@ func (h *landingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	state := LandingPageState{
-		OAuthAvailable: h.oauthAvailable,
+		OAuthAvailable: h.oauthAvailable != nil && h.oauthAvailable(),
 	}
 
 	buf := bufferPool.Get().(*bytes.Buffer)
