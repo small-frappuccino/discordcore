@@ -118,7 +118,7 @@ func (mgr *ConfigManager) UpdateConfig(fn func(*BotConfig) error) (BotConfig, er
 	}
 
 	snapshot := mgr.publishSnapshotLocked()
-	
+
 	// Notify watchers of the successful update
 	mgr.notifyWatchers()
 
@@ -165,24 +165,24 @@ func cloneGuildConfigs(in []GuildConfig) []GuildConfig {
 
 func cloneGuildConfig(in GuildConfig) GuildConfig {
 	return GuildConfig{
-		GuildID:              in.GuildID,
-		BotInstanceTokens:    cloneEncryptedStringMap(in.BotInstanceTokens),
-		Features:             cloneFeatureToggles(in.Features),
-		Channels:             in.Channels,
-		Roles:                cloneRolesConfig(in.Roles),
-		Stats:                cloneStatsConfig(in.Stats),
-		RolesCacheTTL:        in.RolesCacheTTL,
-		MemberCacheTTL:       in.MemberCacheTTL,
-		GuildCacheTTL:        in.GuildCacheTTL,
-		ChannelCacheTTL:      in.ChannelCacheTTL,
-		UserPrune:            cloneUserPruneConfig(in.UserPrune),
-		PartnerBoard:         clonePartnerBoardConfig(in.PartnerBoard),
-		ReactionBlocks:       cloneReactionBlockConfig(in.ReactionBlocks),
-		QOTD:                 cloneQOTDConfig(in.QOTD),
-		Tickets:              cloneTicketsConfig(in.Tickets),
-		RolePanels:           cloneRolePanels(in.RolePanels),
-		CustomEmbeds:         cloneCustomEmbeds(in.CustomEmbeds),
-		RuntimeConfig:        cloneRuntimeConfig(in.RuntimeConfig),
+		GuildID:           in.GuildID,
+		BotInstanceTokens: cloneEncryptedStringMap(in.BotInstanceTokens),
+		Features:          cloneFeatureToggles(in.Features),
+		Channels:          in.Channels,
+		Roles:             cloneRolesConfig(in.Roles),
+		Stats:             cloneStatsConfig(in.Stats),
+		RolesCacheTTL:     in.RolesCacheTTL,
+		MemberCacheTTL:    in.MemberCacheTTL,
+		GuildCacheTTL:     in.GuildCacheTTL,
+		ChannelCacheTTL:   in.ChannelCacheTTL,
+		UserPrune:         cloneUserPruneConfig(in.UserPrune),
+		PartnerBoard:      clonePartnerBoardConfig(in.PartnerBoard),
+		ReactionBlocks:    cloneReactionBlockConfig(in.ReactionBlocks),
+		QOTD:              cloneQOTDConfig(in.QOTD),
+		Tickets:           cloneTicketsConfig(in.Tickets),
+		RolePanels:        cloneRolePanels(in.RolePanels),
+		CustomEmbeds:      cloneCustomEmbeds(in.CustomEmbeds),
+		RuntimeConfig:     cloneRuntimeConfig(in.RuntimeConfig),
 	}
 }
 

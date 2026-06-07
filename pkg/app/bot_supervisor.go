@@ -15,16 +15,16 @@ import (
 var identifyStaggerDelay = 5 * time.Second
 
 type BotSupervisor struct {
-	configManager   *files.ConfigManager
-	resolver        *botRuntimeResolver
-	serviceManager  *service.Manager
-	opts            botRuntimeOptions
+	configManager  *files.ConfigManager
+	resolver       *botRuntimeResolver
+	serviceManager *service.Manager
+	opts           botRuntimeOptions
 
 	// identifySemaphore limits concurrent Discord Identify calls
 	identifySemaphore *semaphore.Weighted
 
-	mu           sync.Mutex
-	knownTokens  map[string]string // botInstanceID -> token
+	mu          sync.Mutex
+	knownTokens map[string]string // botInstanceID -> token
 }
 
 func NewBotSupervisor(configManager *files.ConfigManager, opts botRuntimeOptions) *BotSupervisor {
@@ -86,7 +86,7 @@ func (s *BotSupervisor) onConfigChanged(cfg *files.BotConfig) {
 
 	// 1. Gather all tokens from all guilds
 	currentTokens := make(map[string]string)
-	
+
 	allowedInstances := make(map[string]struct{})
 	for _, def := range s.opts.botCatalog {
 		allowedInstances[def.ID] = struct{}{}
@@ -150,7 +150,7 @@ func (s *BotSupervisor) onConfigChanged(cfg *files.BotConfig) {
 
 func (s *BotSupervisor) stopBotInstanceLocked(instanceID string) error {
 	delete(s.knownTokens, instanceID)
-	
+
 	// Remove from resolver so new events don't route here
 	currentRuntimes := s.resolver.getRuntimes()
 	newRuntimes := make(map[string]*botRuntime)
@@ -177,14 +177,14 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token string) {
 
 	var runtime *botRuntime
 	var err error
-	
+
 	baseDelay := 2 * time.Second
 	maxDelay := 30 * time.Second
 	maxRetries := 5
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		log.ApplicationLogger().Info("Acquiring Discord Identify semaphore", "botInstanceID", instanceID)
-		
+
 		if acqErr := s.identifySemaphore.Acquire(context.Background(), 1); acqErr != nil {
 			log.ApplicationLogger().Error("identify semaphore error", "botInstanceID", instanceID, "error", acqErr)
 			return
@@ -194,24 +194,24 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token string) {
 		time.Sleep(identifyStaggerDelay)
 
 		runtime, err = openBotRuntime(resolvedBotInstance{ID: instanceID, Token: token}, capabilities)
-		
+
 		s.identifySemaphore.Release(1)
-		
+
 		if err == nil {
 			break
 		}
-		
+
 		log.ApplicationLogger().Warn("failed to open bot runtime, retrying", "botInstanceID", instanceID, "attempt", attempt+1, "error", err)
-		
+
 		delay := float64(baseDelay) * float64(uint(1)<<attempt)
 		if delay > float64(maxDelay) {
 			delay = float64(maxDelay)
 		}
-		
+
 		// Pseudo-jitter using time component if math/rand is not imported to avoid import bloat
 		jitter := time.Duration(float64(time.Now().UnixNano()%1000) / 1000.0 * delay * 0.2)
 		sleepTime := time.Duration(delay) + jitter
-		
+
 		time.Sleep(sleepTime)
 	}
 

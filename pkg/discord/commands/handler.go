@@ -139,8 +139,6 @@ func (ch *CommandHandler) SetCommandCatalogCapabilities(capabilities CommandCata
 	ch.catalogCapabilities = capabilities
 }
 
-
-
 func (ch *CommandHandler) registerCommandCatalog() error {
 	router := ch.commandManager.GetRouter()
 	for _, registrar := range ch.commandCatalogRegistrarsForSetup() {
@@ -170,8 +168,6 @@ func (ch *CommandHandler) supportsCatalogCapabilities(required CommandCatalogCap
 	}
 	return true
 }
-
-
 
 // Shutdown performs cleanup for the command handler resources
 func (ch *CommandHandler) Shutdown() error {

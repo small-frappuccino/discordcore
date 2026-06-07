@@ -7,17 +7,15 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
-
-
 type botRuntimeCapabilities struct {
-	monitoring     bool
-	admin          bool
-	automod        bool
-	userPrune      bool
-	qotdRuntime    bool
-	warmup         bool
-	intents        discordgo.Intent
-	hasCommands    bool
+	monitoring  bool
+	admin       bool
+	automod     bool
+	userPrune   bool
+	qotdRuntime bool
+	warmup      bool
+	intents     discordgo.Intent
+	hasCommands bool
 }
 
 // hasCommands reports whether any command catalog should be installed.

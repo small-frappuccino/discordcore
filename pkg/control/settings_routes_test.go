@@ -274,7 +274,6 @@ func TestGuildSettingsPutGetListAndDelete(t *testing.T) {
 	}
 }
 
-
 func TestGuildSettingsGetOmitsLegacyModerationWorkspaceSection(t *testing.T) {
 	t.Parallel()
 
@@ -545,8 +544,6 @@ func TestGuildRegistryWorkspaceIncludesAvailableGuilds(t *testing.T) {
 		t.Fatalf("unexpected configured flags: %+v", response.Workspace.Entries)
 	}
 }
-
-
 
 func TestGuildSettingsPutRejectsInvalidAutoAssignmentOrdering(t *testing.T) {
 	t.Parallel()

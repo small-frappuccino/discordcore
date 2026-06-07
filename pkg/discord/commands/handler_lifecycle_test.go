@@ -173,7 +173,7 @@ func TestCommandHandlerSkipsGuildWithoutCommandsFeature(t *testing.T) {
 	if _, err := cfgMgr.UpdateConfig(func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
 			{
-				GuildID:       "guild-1",
+				GuildID:           "guild-1",
 				BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
@@ -201,8 +201,6 @@ func TestCommandHandlerSkipsGuildWithoutCommandsFeature(t *testing.T) {
 		t.Fatal("expected slash command handler to remain disabled for commands-off guild")
 	}
 }
-
-
 
 func TestCommandHandlerRegistersAdminCatalogOnlyWhenCapabilityEnabled(t *testing.T) {
 	t.Parallel()

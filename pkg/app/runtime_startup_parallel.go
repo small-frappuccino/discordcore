@@ -58,8 +58,6 @@ func resolveStartupLightQueueSize(runtimeCount int) int {
 	}
 }
 
-
-
 type runtimeStartupBackgroundWorker struct {
 	ctx          context.Context
 	cancel       context.CancelFunc

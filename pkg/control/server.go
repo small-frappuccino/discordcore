@@ -277,7 +277,6 @@ func (s *Server) SetDiscordSessionResolver(resolver func(string) (*discordgo.Ses
 	}
 }
 
-
 // SetGuildRegistrationFunc configures Discord-aware guild bootstrap used by
 // the settings registry endpoints.
 func (s *Server) SetGuildRegistrationFunc(fn func(context.Context, string) error) {

@@ -103,4 +103,3 @@ func TestRunUsesQOTDProfileOptions(t *testing.T) {
 		t.Fatalf("unexpected qotd command registrars: %+v", called.opts.CommandCatalogRegistrars)
 	}
 }
-

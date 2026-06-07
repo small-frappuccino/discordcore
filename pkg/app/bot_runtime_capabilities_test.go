@@ -46,7 +46,7 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 		},
 		Guilds: []files.GuildConfig{
 			{
-				GuildID:       "main-guild",
+				GuildID:           "main-guild",
 				BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
@@ -64,7 +64,7 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 				},
 			},
 			{
-				GuildID:       "companion-guild",
+				GuildID:           "companion-guild",
 				BotInstanceTokens: map[string]files.EncryptedString{"companion": "a"},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
@@ -151,7 +151,7 @@ func TestResolveBotRuntimeCapabilitiesAggregatesAllGuildsForSameBotInstance(t *t
 		},
 		Guilds: []files.GuildConfig{
 			{
-				GuildID:       "g1",
+				GuildID:           "g1",
 				BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
@@ -169,7 +169,7 @@ func TestResolveBotRuntimeCapabilitiesAggregatesAllGuildsForSameBotInstance(t *t
 				},
 			},
 			{
-				GuildID:       "g2",
+				GuildID:           "g2",
 				BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
@@ -205,5 +205,3 @@ func TestResolveBotRuntimeCapabilitiesAggregatesAllGuildsForSameBotInstance(t *t
 		t.Fatalf("expected reaction intents from guild aggregation, got %d", capabilities.intents)
 	}
 }
-
-

@@ -110,7 +110,7 @@ func (mgr *ConfigManager) saveConfigLocked() error {
 	}
 
 	log.ApplicationLogger().Info(fmt.Sprintf(LogSaveConfigSuccess, mgr.ConfigPath()))
-	
+
 	// Notify watchers of the successful save
 	mgr.notifyWatchers()
 
@@ -339,7 +339,7 @@ func (mgr *ConfigManager) DetectGuildsForBot(session *discordgo.Session, botInst
 			entryLeaveID = channelID
 		}
 		guildCfg := GuildConfig{
-			GuildID:       g.ID,
+			GuildID: g.ID,
 			Channels: ChannelsConfig{
 				Commands:      channelID,
 				AvatarLogging: channelID,
@@ -395,7 +395,7 @@ func (mgr *ConfigManager) RegisterGuildForBot(session *discordgo.Session, guildI
 	}
 
 	guildCfg := GuildConfig{
-		GuildID:       guildID,
+		GuildID: guildID,
 		Channels: ChannelsConfig{
 			Commands:      channelID,
 			AvatarLogging: channelID,

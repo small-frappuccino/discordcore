@@ -519,7 +519,6 @@ func guildPayloadEmpty(payload updateGuildSettingsRequest) bool {
 		payload.Runtime == nil
 }
 
-
 func dashboardAccessRolesChanged(before, after files.RolesConfig) bool {
 	return !slices.Equal(normalizeDashboardAccessRoleIDs(before.DashboardRead), normalizeDashboardAccessRoleIDs(after.DashboardRead)) ||
 		!slices.Equal(normalizeDashboardAccessRoleIDs(before.DashboardWrite), normalizeDashboardAccessRoleIDs(after.DashboardWrite))

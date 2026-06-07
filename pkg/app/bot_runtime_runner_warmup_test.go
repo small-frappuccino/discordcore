@@ -50,7 +50,7 @@ func TestScheduleRuntimeWarmupWithoutWorkerRunsPhasesSequentially(t *testing.T) 
 	}
 
 	scheduleRuntimeWarmup(runtime, nil, nil)
-	
+
 	wg.Wait()
 
 	if len(calls) != 2 {

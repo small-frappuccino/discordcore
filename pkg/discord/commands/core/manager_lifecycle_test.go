@@ -283,7 +283,7 @@ func TestCommandManagerSetupCommandsUsesGuildSyncWhenBotInstanceTokensExist(t *t
 			cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 			if _, err := cfgMgr.UpdateConfig(func(cfg *files.BotConfig) error {
 				cfg.Guilds = []files.GuildConfig{{
-					GuildID:       "g1",
+					GuildID:           "g1",
 					BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
 				}}
 				return nil
@@ -386,11 +386,11 @@ func TestCommandManagerSetupCommandsSkipsConfiguredGuildsMissingFromSessionState
 	if _, err := cfgMgr.UpdateConfig(func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
 			{
-				GuildID:       "g1",
+				GuildID:           "g1",
 				BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
 			},
 			{
-				GuildID:       "g2",
+				GuildID:           "g2",
 				BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
 			},
 		}

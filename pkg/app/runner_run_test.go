@@ -67,7 +67,7 @@ func seedRunnerConfig(t *testing.T, store files.ConfigStore, cfg files.BotConfig
 
 func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 	const (
-		appName  = "discordmain-run-test"
+		appName = "discordmain-run-test"
 	)
 	appDataDir, err := os.MkdirTemp("", "discordmain-run-test-*")
 	if err != nil {

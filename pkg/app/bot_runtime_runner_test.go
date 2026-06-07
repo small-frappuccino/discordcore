@@ -19,7 +19,7 @@ func TestInitializeBotRuntimeSkipsCommandHandlerWhenCommandsDisabled(t *testing.
 	if _, err := cfgMgr.UpdateConfig(func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
 			{
-				GuildID:       "guild-1",
+				GuildID:           "guild-1",
 				BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
@@ -85,5 +85,3 @@ func TestInitializeBotRuntimeSkipsCommandHandlerWhenCommandsDisabled(t *testing.
 		t.Fatal("expected no command handler when commands are disabled")
 	}
 }
-
-

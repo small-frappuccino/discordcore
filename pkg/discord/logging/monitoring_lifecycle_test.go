@@ -29,7 +29,7 @@ func TestMonitoringServiceRestartRebuildsTaskPipeline(t *testing.T) {
 		t.Fatalf("update runtime config: %v", err)
 	}
 	if err := cfgMgr.AddGuildConfig(files.GuildConfig{
-		GuildID: "g-restart",
+		GuildID:           "g-restart",
 		BotInstanceTokens: map[string]files.EncryptedString{"default": "test-token"},
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{

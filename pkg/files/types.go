@@ -487,9 +487,9 @@ type GuildConfig struct {
 	// BotInstanceTokens maps an instance ID (e.g. "main", "companion") to its safely encrypted Discord API token for this guild.
 	BotInstanceTokens map[string]EncryptedString `json:"bot_instance_tokens,omitempty"`
 	Features          FeatureToggles             `json:"features,omitempty"`
-	Channels             ChannelsConfig    `json:"channels,omitempty"`
-	Roles                RolesConfig       `json:"roles,omitempty"`
-	Stats                StatsConfig       `json:"stats,omitempty"`
+	Channels          ChannelsConfig             `json:"channels,omitempty"`
+	Roles             RolesConfig                `json:"roles,omitempty"`
+	Stats             StatsConfig                `json:"stats,omitempty"`
 
 	// Cache TTL configuration (per-guild tuning)
 	RolesCacheTTL   string `json:"roles_cache_ttl,omitempty"`   // e.g.: "5m", "1h" (default: "5m")
@@ -513,11 +513,42 @@ type GuildConfig struct {
 // UnmarshalJSON unmarshals json.
 func (gc *GuildConfig) UnmarshalJSON(data []byte) error {
 	type alias GuildConfig
-	var parsed alias
-	if err := json.Unmarshal(data, &parsed); err != nil {
+	type rawGuildConfig struct {
+		alias
+		BotInstanceID        string            `json:"bot_instance_id,omitempty"`
+		DomainBotInstanceIDs map[string]string `json:"domain_bot_instance_ids,omitempty"`
+	}
+
+	var raw rawGuildConfig
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return fmt.Errorf("GuildConfig.UnmarshalJSON: %w", err)
 	}
-	*gc = GuildConfig(parsed)
+
+	if raw.BotInstanceID != "" || len(raw.DomainBotInstanceIDs) > 0 {
+		if raw.BotInstanceTokens == nil {
+			raw.BotInstanceTokens = make(map[string]EncryptedString)
+		}
+
+		if raw.BotInstanceID != "" {
+			normalized := NormalizeBotInstanceID(raw.BotInstanceID)
+			if normalized != "" {
+				if _, exists := raw.BotInstanceTokens[normalized]; !exists {
+					raw.BotInstanceTokens[normalized] = ""
+				}
+			}
+		}
+
+		for _, instanceID := range raw.DomainBotInstanceIDs {
+			normalized := NormalizeBotInstanceID(instanceID)
+			if normalized != "" {
+				if _, exists := raw.BotInstanceTokens[normalized]; !exists {
+					raw.BotInstanceTokens[normalized] = ""
+				}
+			}
+		}
+	}
+
+	*gc = GuildConfig(raw.alias)
 	return nil
 }
 

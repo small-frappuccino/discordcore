@@ -106,8 +106,6 @@ func runWithOptions(appName string, opts RunOptions) error {
 	msg := formatStartupMessage(appName, AppVersion(), Version)
 	log.ApplicationLogger().Info(msg)
 
-
-
 	databaseBootstrap, err := resolveDatabaseBootstrap()
 	if err != nil {
 		return fmt.Errorf("RunWithOptions: %w", err)

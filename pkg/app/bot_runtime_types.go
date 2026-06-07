@@ -63,8 +63,6 @@ func (r *botRuntimeResolver) swapRuntimes(newMap map[string]*botRuntime) {
 	r.runtimes.Store(newMap)
 }
 
-
-
 func knownBotInstanceCatalog(runtimes map[string]*botRuntime, additional []string) map[string]struct{} {
 	known := make(map[string]struct{}, len(runtimes)+len(additional))
 	for botInstanceID := range runtimes {
@@ -96,8 +94,6 @@ func knownBotInstanceCatalogSlice(catalog map[string]struct{}) []string {
 	sort.Strings(out)
 	return out
 }
-
-
 
 func newBotRuntimeResolver(
 	configManager *files.ConfigManager,

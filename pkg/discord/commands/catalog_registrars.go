@@ -10,7 +10,6 @@ import (
 	qotdcmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/roles"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/runtime"
-
 )
 
 // CommandCatalogCapabilities captures runtime capabilities that can gate

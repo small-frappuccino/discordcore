@@ -64,7 +64,7 @@ func TestGuildConfigIndexUpdate(t *testing.T) {
 func TestSnapshotConfigReturnsDefensiveCopy(t *testing.T) {
 	mgr := newTestConfigManager([]GuildConfig{
 		{
-			GuildID:       "g1",
+			GuildID: "g1",
 			Channels: ChannelsConfig{
 				MessageDelete: "c1",
 			},

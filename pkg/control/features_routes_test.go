@@ -578,8 +578,6 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 		}
 	})
 
-
-
 	t.Run("lists guild member options with selected member pinned", func(t *testing.T) {
 		t.Parallel()
 

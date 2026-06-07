@@ -10,8 +10,6 @@ const (
 	botDomainDefault = "default"
 )
 
-
-
 // normalizeAutoAssignmentRoleOrder backfills explicit ordering anchors for
 // legacy configs. The canonical ordering is:
 // - required_roles[0] => roleA (stable level role)
@@ -56,8 +54,6 @@ func validateBotConfig(cfg *BotConfig) error {
 
 	return nil
 }
-
-
 
 func validateGuildAutoAssignmentOrder(guild *GuildConfig, guildIndex int) error {
 	if guild == nil {

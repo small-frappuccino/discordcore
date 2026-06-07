@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
-
 )
 
 type guildChannelOption struct {

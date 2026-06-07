@@ -156,5 +156,3 @@ func TestConfigManagerSaveConfigRejectsInvalidAutoAssignmentOrder(t *testing.T) 
 		t.Fatalf("expected validation error, got: %v", err)
 	}
 }
-
-
