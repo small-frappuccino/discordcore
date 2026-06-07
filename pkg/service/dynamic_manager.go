@@ -75,3 +75,12 @@ func (m *Manager) StopAndRemove(ctx context.Context, name string) error {
 		return fmt.Errorf("drain timeout exceeded for %s: %w", name, ctx.Err())
 	}
 }
+
+func (m *Manager) ForceRemove(name string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if state, exists := m.services[name]; exists {
+		delete(m.services, name)
+		state.cancelFunc()
+	}
+}

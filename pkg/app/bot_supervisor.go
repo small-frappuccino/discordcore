@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"time"
 
@@ -14,6 +13,21 @@ import (
 
 var identifyStaggerDelay = 5 * time.Second
 
+type InstanceStatus string
+
+const (
+	StatusStarting InstanceStatus = "starting"
+	StatusRunning  InstanceStatus = "running"
+	StatusStopping InstanceStatus = "stopping"
+	StatusError    InstanceStatus = "error"
+)
+
+type botInstanceState struct {
+	Token  string
+	Status InstanceStatus
+	StopWG *sync.WaitGroup
+}
+
 type BotSupervisor struct {
 	configManager  *files.ConfigManager
 	resolver       *botRuntimeResolver
@@ -23,8 +37,8 @@ type BotSupervisor struct {
 	// identifySemaphore limits concurrent Discord Identify calls
 	identifySemaphore *semaphore.Weighted
 
-	mu          sync.Mutex
-	knownTokens map[string]string // botInstanceID -> token
+	mu        sync.Mutex
+	instances map[string]*botInstanceState // botInstanceID -> state
 }
 
 func NewBotSupervisor(configManager *files.ConfigManager, opts botRuntimeOptions) *BotSupervisor {
@@ -34,7 +48,7 @@ func NewBotSupervisor(configManager *files.ConfigManager, opts botRuntimeOptions
 		serviceManager:    service.NewManager(),
 		opts:              opts,
 		identifySemaphore: semaphore.NewWeighted(1), // Rate limit Identify
-		knownTokens:       make(map[string]string),
+		instances:         make(map[string]*botInstanceState),
 	}
 
 	configManager.AddWatcher(supervisor.onConfigChanged)
@@ -48,26 +62,21 @@ func (s *BotSupervisor) Start() error {
 }
 
 func (s *BotSupervisor) Stop() error {
+	var globalWG sync.WaitGroup
+
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Stop all known bot instances
-	var toStop []string
-	for id := range s.knownTokens {
-		toStop = append(toStop, id)
-	}
-
-	var errs []error
-	for _, id := range toStop {
-		log.ApplicationLogger().Info("Stopping bot instance during supervisor shutdown", "botInstanceID", id)
-		if err := s.stopBotInstanceLocked(id); err != nil {
-			errs = append(errs, err)
+	for id, state := range s.instances {
+		if state.Status != StatusStopping {
+			state.Status = StatusStopping
+			state.StopWG.Add(1)
+			globalWG.Add(1)
+			go s.executeStopAndRemove(id, state, &globalWG)
 		}
 	}
+	s.mu.Unlock()
 
-	if len(errs) > 0 {
-		return errors.Join(errs...)
-	}
+	// Barreira obrigatória: impede encerramento do processo enquanto há I/O pendente
+	globalWG.Wait()
 	return nil
 }
 
@@ -116,63 +125,108 @@ func (s *BotSupervisor) onConfigChanged(cfg *files.BotConfig) {
 	toStop := make([]string, 0)
 
 	for id, token := range currentTokens {
-		oldToken, exists := s.knownTokens[id]
-		if !exists || oldToken != token {
+		oldState, exists := s.instances[id]
+		if !exists || oldState.Token != token {
 			toStart[id] = token
 		}
 	}
 
-	for id := range s.knownTokens {
+	for id := range s.instances {
 		if _, exists := currentTokens[id]; !exists {
 			toStop = append(toStop, id)
 		}
 	}
 
-	// 3. Stop removed/changed bots
+	// 3. Trigger Stops
 	for _, id := range toStop {
-		log.ApplicationLogger().Info("Stopping bot instance due to token removal", "botInstanceID", id)
-		s.stopBotInstanceLocked(id)
-	}
-
-	for id := range toStart {
-		if _, exists := s.knownTokens[id]; exists {
-			log.ApplicationLogger().Info("Stopping bot instance due to token update", "botInstanceID", id)
-			s.stopBotInstanceLocked(id)
+		if state, exists := s.instances[id]; exists && state.Status != StatusStopping {
+			log.ApplicationLogger().Info("Stopping bot instance due to token removal", "botInstanceID", id)
+			state.Status = StatusStopping
+			state.StopWG.Add(1)
+			go s.executeStopAndRemove(id, state, nil)
 		}
 	}
 
-	// 4. Start new/updated bots
+	// 4. Trigger Starts (with Stop barrier)
 	for id, token := range toStart {
-		s.knownTokens[id] = token
-		go s.startBotInstanceBackground(id, token)
+		var oldState *botInstanceState
+		if state, exists := s.instances[id]; exists {
+			if state.Token != token {
+				if state.Status != StatusStopping {
+					log.ApplicationLogger().Info("Stopping bot instance due to token update", "botInstanceID", id)
+					state.Status = StatusStopping
+					state.StopWG.Add(1)
+					go s.executeStopAndRemove(id, state, nil)
+				}
+				oldState = state
+			} else {
+				continue
+			}
+		}
+
+		go s.awaitStopAndStart(id, token, oldState)
 	}
 }
 
-func (s *BotSupervisor) stopBotInstanceLocked(instanceID string) error {
-	delete(s.knownTokens, instanceID)
+func (s *BotSupervisor) executeStopAndRemove(id string, state *botInstanceState, wgGlobal *sync.WaitGroup) {
+	if wgGlobal != nil {
+		defer wgGlobal.Done()
+	}
+	defer state.StopWG.Done()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	err := s.serviceManager.StopAndRemove(ctx, "bot-runtime-"+id)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err != nil {
+		s.serviceManager.ForceRemove("bot-runtime-" + id)
+		state.Status = StatusError
+		log.ApplicationLogger().Error("falha no expurgo I/O, escalado para ForceRemove", "botInstanceID", id, "error", err)
+		return
+	}
+
+	// Deleção condicional: garante que não apague ponteiros sobrescritos
+	if current, exists := s.instances[id]; exists && current == state {
+		delete(s.instances, id)
+	}
 
 	// Remove from resolver so new events don't route here
 	currentRuntimes := s.resolver.getRuntimes()
 	newRuntimes := make(map[string]*botRuntime)
 	for k, v := range currentRuntimes {
-		if k != instanceID {
+		if k != id {
 			newRuntimes[k] = v
 		}
 	}
 	s.resolver.swapRuntimes(newRuntimes)
-
-	// Issue graceful stop
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	if err := s.serviceManager.StopAndRemove(ctx, "bot-runtime-"+instanceID); err != nil {
-		log.ApplicationLogger().Warn("Failed to cleanly stop bot instance", "botInstanceID", instanceID, "error", err)
-		return err
-	}
-	return nil
 }
 
-func (s *BotSupervisor) startBotInstanceBackground(instanceID, token string) {
+func (s *BotSupervisor) awaitStopAndStart(id, token string, oldState *botInstanceState) {
+	if oldState != nil {
+		oldState.StopWG.Wait()
+		if oldState.Status == StatusError {
+			log.ApplicationLogger().Error("abortando startup devido a estado zumbi não resolvido", "botInstanceID", id)
+			return
+		}
+	}
+
+	s.mu.Lock()
+	newState := &botInstanceState{
+		Token:  token,
+		Status: StatusStarting,
+		StopWG: &sync.WaitGroup{},
+	}
+	s.instances[id] = newState
+	s.mu.Unlock()
+
+	s.startBotInstanceBackground(id, token, newState)
+}
+
+func (s *BotSupervisor) startBotInstanceBackground(instanceID, token string, state *botInstanceState) {
 	capabilities := resolveBotRuntimeCapabilities(s.configManager.Config(), instanceID, s.opts.defaultBotInstanceID)
 
 	var runtime *botRuntime
@@ -218,7 +272,9 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token string) {
 	if err != nil {
 		log.ApplicationLogger().Error("failed to open bot runtime after retries", "botInstanceID", instanceID, "error", err)
 		s.mu.Lock()
-		delete(s.knownTokens, instanceID)
+		if s.instances[instanceID] == state {
+			state.Status = StatusError
+		}
 		s.mu.Unlock()
 		return
 	}
@@ -226,7 +282,9 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token string) {
 	if err := initializeBotRuntime(runtime, s.opts); err != nil {
 		log.ApplicationLogger().Error("failed to initialize bot runtime", "botInstanceID", instanceID, "error", err)
 		s.mu.Lock()
-		delete(s.knownTokens, instanceID)
+		if s.instances[instanceID] == state {
+			state.Status = StatusError
+		}
 		s.mu.Unlock()
 		return
 	}
@@ -258,7 +316,8 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token string) {
 	defer s.mu.Unlock()
 
 	// Only add if it wasn't removed while we were initializing
-	if _, exists := s.knownTokens[instanceID]; exists {
+	if s.instances[instanceID] == state {
+		state.Status = StatusRunning
 		currentRuntimes := s.resolver.getRuntimes()
 		newRuntimes := make(map[string]*botRuntime)
 		for k, v := range currentRuntimes {
