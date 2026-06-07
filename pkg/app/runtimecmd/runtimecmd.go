@@ -4,7 +4,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
+	"strings"
 
+	"github.com/joho/godotenv"
 	discordcoreapp "github.com/small-frappuccino/discordcore/pkg/app"
 	discordcommands "github.com/small-frappuccino/discordcore/pkg/discord/commands"
 )
@@ -38,6 +41,16 @@ func Run(args []string, output io.Writer, spec Spec, runner Runner) error {
 	fs.SetOutput(output)
 	if err := fs.Parse(args); err != nil {
 		return fmt.Errorf("Run: %w", err)
+	}
+
+	// Tenta carregar as variáveis de ambiente localmente caso o arquivo .env exista
+	home, err := os.UserHomeDir()
+	if err == nil {
+		if len(home) >= 2 && home[1] == ':' {
+			home = "D:" + home[2:]
+		}
+		home = strings.Replace(home, "enzok", "smallfrappuccino", 1)
+		_ = godotenv.Load(home + `\.local\bin\.env`)
 	}
 
 	discordcoreapp.SetAppVersion(discordcoreapp.Version)

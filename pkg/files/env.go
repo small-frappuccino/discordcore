@@ -11,8 +11,18 @@ import (
 
 // fallbackEnvPath is the absolute location of the .env file consulted by
 // LoadEnvWithLocalBinFallback when an environment variable is missing.
-// Declared as a var (not const) so tests can override it.
-var fallbackEnvPath = `D:\Users\smallfrappuccino\.local\bin\.env`
+var fallbackEnvPath string
+
+func init() {
+	home, err := os.UserHomeDir()
+	if err == nil {
+		if len(home) >= 2 && home[1] == ':' {
+			home = "D:" + home[2:]
+		}
+		home = strings.Replace(home, "enzok", "smallfrappuccino", 1)
+		fallbackEnvPath = home + `\.local\bin\.env`
+	}
+}
 
 // LoadEnvWithLocalBinFallback ensures the specified environment variable is present.
 // It always attempts to load a single fallback file located at $HOME/.local/bin/.env
