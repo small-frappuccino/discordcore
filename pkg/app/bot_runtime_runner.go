@@ -32,6 +32,7 @@ type botRuntimeOptions struct {
 	qotdLifecycleService     discordqotd.GuildLifecycleService
 	moderationMetrics        moderation.Metrics
 	startupTasks             *startupTaskOrchestrator
+	profile                  RunProfile
 }
 
 func openBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabilities) (*botRuntime, error) {

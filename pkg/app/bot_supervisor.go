@@ -262,7 +262,7 @@ func (s *BotSupervisor) awaitStopAndStart(id, token string, oldState *botInstanc
 }
 
 func (s *BotSupervisor) startBotInstanceBackground(instanceID, token string, state *botInstanceState) {
-	capabilities := resolveBotRuntimeCapabilities(s.configManager.Config(), instanceID, s.opts.defaultBotInstanceID)
+	capabilities := resolveBotRuntimeCapabilities(s.configManager.Config(), instanceID, s.opts.defaultBotInstanceID, s.opts.profile)
 
 	var runtime *botRuntime
 	var err error

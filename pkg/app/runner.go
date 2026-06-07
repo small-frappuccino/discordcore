@@ -201,6 +201,7 @@ func runWithOptions(appName string, opts RunOptions) error {
 		qotdLifecycleService:     qotdService,
 		moderationMetrics:        moderationMetrics,
 		startupTasks:             startupTasks,
+		profile:                  opts.Profile,
 	}
 
 	botSupervisor := NewBotSupervisor(configManager, botOpts)
@@ -280,13 +281,13 @@ func runWithOptions(appName string, opts RunOptions) error {
 			// 2. Extração estrita do snapshot anterior via Read Lock
 			oldCfg := configManager.Config()
 
-			// 3. Orquestração: o supervisor deve receber ambos os estados para 
+			// 3. Orquestração: o supervisor deve receber ambos os estados para
 			// calcular o delta exato de conexões antes da rotação global
 			botSupervisor.onConfigChanged(oldCfg, newCfg)
 
 			// 4. Rotação atômica do ponteiro global sob Write Lock (sync.RWMutex)
 			dupCount := configManager.ApplyConfig(newCfg)
-			
+
 			if dupCount > 0 || needsSave {
 				if saveErr := configManager.SaveConfig(); saveErr != nil {
 					log.ApplicationLogger().Error("Failed to save config after SIGHUP normalization", "error", saveErr)
@@ -362,13 +363,14 @@ func scheduleDBCleanup(store *storage.Store, configManager *files.ConfigManager)
 	return nil
 }
 
-func resolveRuntimeCapabilities(configSnapshot *files.BotConfig, botInstances []resolvedBotInstance, defaultBotInstanceID string) map[string]botRuntimeCapabilities {
+func resolveRuntimeCapabilities(configSnapshot *files.BotConfig, botInstances []resolvedBotInstance, defaultBotInstanceID string, profile RunProfile) map[string]botRuntimeCapabilities {
 	capabilities := make(map[string]botRuntimeCapabilities, len(botInstances))
 	for _, instance := range botInstances {
 		capabilities[instance.ID] = resolveBotRuntimeCapabilities(
 			configSnapshot,
 			instance.ID,
 			defaultBotInstanceID,
+			profile,
 		)
 	}
 	return capabilities

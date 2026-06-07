@@ -91,7 +91,7 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 		},
 	}
 
-	capabilities := resolveBotRuntimeCapabilities(cfg, "companion", "main")
+	capabilities := resolveBotRuntimeCapabilities(cfg, "companion", "main", RunProfileDiscordMain)
 	if !capabilities.monitoring {
 		t.Fatal("expected monitoring capability for companion runtime")
 	}
@@ -126,7 +126,7 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 func TestResolveBotRuntimeCapabilitiesWithoutGuildBindingsIsIdle(t *testing.T) {
 	t.Parallel()
 
-	capabilities := resolveBotRuntimeCapabilities(&files.BotConfig{}, "companion", "main")
+	capabilities := resolveBotRuntimeCapabilities(&files.BotConfig{}, "companion", "main", RunProfileDiscordMain)
 	if capabilities.monitoring || capabilities.HasCommands() || capabilities.admin || capabilities.automod || capabilities.userPrune || capabilities.qotdRuntime {
 		t.Fatalf("expected idle capabilities for unbound bot, got %+v", capabilities)
 	}
@@ -191,7 +191,7 @@ func TestResolveBotRuntimeCapabilitiesAggregatesAllGuildsForSameBotInstance(t *t
 		},
 	}
 
-	capabilities := resolveBotRuntimeCapabilities(cfg, "main", "main")
+	capabilities := resolveBotRuntimeCapabilities(cfg, "main", "main", RunProfileDiscordMain)
 	if !capabilities.HasCommands() {
 		t.Fatal("expected commands capability to include any guild assigned to main")
 	}

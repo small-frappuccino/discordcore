@@ -35,7 +35,7 @@ func (mgr *ConfigManager) LoadConfigFromStore() (*BotConfig, bool, error) {
 	if err != nil {
 		return nil, false, fmt.Errorf("load config from %s: %w", mgr.ConfigPath(), err)
 	}
-	
+
 	orderMigrated := normalizeAutoAssignmentRoleOrder(cfg)
 
 	if validationErr := validateBotConfig(cfg); validationErr != nil {

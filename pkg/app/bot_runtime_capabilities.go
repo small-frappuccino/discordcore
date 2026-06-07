@@ -25,6 +25,7 @@ func resolveBotRuntimeCapabilities(
 	cfg *files.BotConfig,
 	botInstanceID string,
 	defaultBotInstanceID string,
+	profile RunProfile,
 ) botRuntimeCapabilities {
 	capabilities := botRuntimeCapabilities{
 		intents: discordgo.IntentsGuilds,
@@ -32,6 +33,10 @@ func resolveBotRuntimeCapabilities(
 	if cfg == nil {
 		return capabilities
 	}
+
+	// The QOTD binary is strictly for QOTD commands and scheduled posting.
+	// It should never attempt to claim privileged intents or run monitoring workloads.
+	isQOTDProfile := profile == RunProfileDiscordQOTD
 
 	guilds := cfg.GuildsForBotInstance(botInstanceID)
 	for _, guild := range guilds {
@@ -47,6 +52,10 @@ func resolveBotRuntimeCapabilities(
 			if features.Services.AdminCommands {
 				capabilities.admin = true
 			}
+		}
+
+		if isQOTDProfile {
+			continue
 		}
 
 		if features.Services.Automod && features.Logging.AutomodAction && !runtimeConfig.DisableAutomodLogs {
