@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/bwmarrin/discordgo"
@@ -13,6 +14,33 @@ var (
 	openSession  = func(s *discordgo.Session) error { return s.Open() }
 	closeSession = func(s *discordgo.Session) error { return s.Close() }
 )
+
+// OpenSession formally connects the discordgo.Session to the gateway,
+// waiting for the READY payload asynchronously before returning.
+func OpenSession(ctx context.Context, s *discordgo.Session) error {
+	if s == nil {
+		return fmt.Errorf("session is nil")
+	}
+
+	readyCh := make(chan struct{})
+	removeHandler := s.AddHandlerOnce(func(s *discordgo.Session, r *discordgo.Ready) {
+		close(readyCh)
+	})
+
+	if err := openSession(s); err != nil {
+		removeHandler()
+		return fmt.Errorf(ErrSessionConnectionFailed, err)
+	}
+
+	select {
+	case <-ctx.Done():
+		removeHandler()
+		closeSession(s)
+		return fmt.Errorf("handshake timed out or canceled: %w", ctx.Err())
+	case <-readyCh:
+		return nil
+	}
+}
 
 const defaultSessionIntents = discordgo.IntentsGuilds |
 	discordgo.IntentsGuildMembers |

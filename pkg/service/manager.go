@@ -260,6 +260,18 @@ func (sm *ServiceManager) StartAll() error {
 	return nil
 }
 
+// Fatal allows a service to signal a terminal failure, triggering global cancellation.
+func (sm *ServiceManager) Fatal(err error) {
+	sm.eg.Go(func() error {
+		return err // Retornar erro no errgroup aciona o cancelamento do egCtx
+	})
+}
+
+// Wait blocks until the service manager's error group finishes.
+func (sm *ServiceManager) Wait() error {
+	return sm.eg.Wait()
+}
+
 // StopAll stops all services in reverse dependency order
 func (sm *ServiceManager) StopAll() error {
 	log.ApplicationLogger().Info("Stopping all services...")

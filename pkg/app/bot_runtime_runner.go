@@ -11,6 +11,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
 	"github.com/small-frappuccino/discordcore/pkg/discord/maintenance"
 	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
+	"github.com/small-frappuccino/discordcore/pkg/discord/session"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	applicationqotd "github.com/small-frappuccino/discordcore/pkg/qotd"
@@ -46,6 +47,16 @@ func openBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabil
 	if err != nil {
 		return nil, fmt.Errorf("create discord session for %s: %w", instance.ID, err)
 	}
+
+	// Estabelecer o handshake com o Discord respeitando o timeout do supervisor (implícito no loop de retry,
+	// mas adicionamos timeout explícito para não trancar o bot)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	if err := session.OpenSession(ctx, discordSession); err != nil {
+		return nil, fmt.Errorf("open discord session for %s: %w", instance.ID, err)
+	}
+
 	if discordSession.State == nil || discordSession.State.User == nil {
 		return nil, fmt.Errorf("discord session state not properly initialized for %s", instance.ID)
 	}

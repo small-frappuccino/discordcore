@@ -202,13 +202,13 @@ var landingTemplate = template.Must(template.New("landing").Parse(`<!doctype htm
 
         <div class="session-panel">
           <div class="actions">
-            <button id="login-button" class="button button-primary" type="button" {{if not .OAuthAvailable}}disabled{{end}}>
+            <button id="login-button" class="button button-primary" type="button" {{if not .OAuthAvailable}}disabled title="Backend não configurado com chaves OAuth"{{end}}>
               {{if .OAuthAvailable}}Login com Discord{{else}}Discord indisponível{{end}}
             </button>
-            {{if .OAuthAvailable}}
-            <button id="dashboard-button" class="button button-secondary" type="button">
+            <button id="dashboard-button" class="button button-secondary" type="button" {{if not .OAuthAvailable}}disabled title="Acesso ao Dashboard requer configuração de chaves OAuth do Discord no backend"{{end}}>
               Dashboard
             </button>
+            {{if .OAuthAvailable}}
             <button id="logout-button" class="button button-ghost is-hidden" type="button">
               Logout
             </button>

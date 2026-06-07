@@ -206,6 +206,10 @@ func runWithOptions(appName string, opts RunOptions) error {
 
 	botSupervisor := NewBotSupervisor(configManager, botOpts)
 
+	botSupervisor.SetFatalCallback(func(err error) {
+		appServiceManager.Fatal(err)
+	})
+
 	botSupervisorService := service.NewLegacyServiceWrapper(service.LegacyServiceWrapperSpec{
 		Name:     "bot-supervisor",
 		Type:     service.TypeMonitoring,
@@ -266,42 +270,58 @@ func runWithOptions(appName string, opts RunOptions) error {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGHUP, os.Interrupt, syscall.SIGTERM)
 
+	// Canal para erros críticos de background reportados pelo ServiceManager
+	fatalErrCh := make(chan error, 1)
+	go func() {
+		fatalErrCh <- appServiceManager.Wait()
+	}()
+
 	// Loop principal de multiplexação no runner
 	for {
-		sig := <-sigCh
-		switch sig {
-		case syscall.SIGHUP:
-			// 1. Recarga estática e segura sem mutilar o estado atual
-			newCfg, needsSave, err := configManager.LoadConfigFromStore()
+		select {
+		case err := <-fatalErrCh:
 			if err != nil {
-				log.ApplicationLogger().Info("Failed to reload config on SIGHUP", "error", err.Error())
-				continue // Aborta a recarga, preserva o estado estável em uso
+				log.ApplicationLogger().Error("Fatal background error encountered, initiating shutdown", "error", err)
+				return err
 			}
+			// if nil, services stopped cleanly somehow without OS signal. We exit cleanly.
+			return nil
 
-			// 2. Extração estrita do snapshot anterior via Read Lock
-			oldCfg := configManager.Config()
-
-			// 3. Orquestração: o supervisor deve receber ambos os estados para
-			// calcular o delta exato de conexões antes da rotação global
-			botSupervisor.onConfigChanged(oldCfg, newCfg)
-
-			// 4. Rotação atômica do ponteiro global sob Write Lock (sync.RWMutex)
-			dupCount := configManager.ApplyConfig(newCfg)
-
-			if dupCount > 0 || needsSave {
-				if saveErr := configManager.SaveConfig(); saveErr != nil {
-					log.ApplicationLogger().Error("Failed to save config after SIGHUP normalization", "error", saveErr)
-				} else {
-					log.ApplicationLogger().Info("Configuração recarregada com sucesso via SIGHUP (index rebuilt/normalized)", "duplicates", dupCount)
+		case sig := <-sigCh:
+			switch sig {
+			case syscall.SIGHUP:
+				// 1. Recarga estática e segura sem mutilar o estado atual
+				newCfg, needsSave, err := configManager.LoadConfigFromStore()
+				if err != nil {
+					log.ApplicationLogger().Info("Failed to reload config on SIGHUP", "error", err.Error())
+					continue // Aborta a recarga, preserva o estado estável em uso
 				}
-			} else {
-				log.ApplicationLogger().Info("Configuração recarregada com sucesso via SIGHUP")
-			}
 
-		case os.Interrupt, syscall.SIGTERM:
-			log.ApplicationLogger().Info("Sinal de encerramento interceptado. Iniciando teardown gracioso...")
-			botSupervisor.Stop()
-			goto shutdown
+				// 2. Extração estrita do snapshot anterior via Read Lock
+				oldCfg := configManager.Config()
+
+				// 3. Orquestração: o supervisor deve receber ambos os estados para
+				// calcular o delta exato de conexões antes da rotação global
+				botSupervisor.onConfigChanged(oldCfg, newCfg)
+
+				// 4. Rotação atômica do ponteiro global sob Write Lock (sync.RWMutex)
+				dupCount := configManager.ApplyConfig(newCfg)
+
+				if dupCount > 0 || needsSave {
+					if saveErr := configManager.SaveConfig(); saveErr != nil {
+						log.ApplicationLogger().Error("Failed to save config after SIGHUP normalization", "error", saveErr)
+					} else {
+						log.ApplicationLogger().Info("Configuração recarregada com sucesso via SIGHUP (index rebuilt/normalized)", "duplicates", dupCount)
+					}
+				} else {
+					log.ApplicationLogger().Info("Configuração recarregada com sucesso via SIGHUP")
+				}
+
+			case os.Interrupt, syscall.SIGTERM:
+				log.ApplicationLogger().Info("Sinal de encerramento interceptado. Iniciando teardown gracioso...")
+				botSupervisor.Stop()
+				goto shutdown
+			}
 		}
 	}
 

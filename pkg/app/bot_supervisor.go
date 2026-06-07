@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"math/rand/v2"
 	"sync"
 	"time"
@@ -44,6 +45,8 @@ type BotSupervisor struct {
 
 	mu        sync.Mutex
 	instances map[string]*botInstanceState // botInstanceID -> state
+
+	fatalCallback func(error)
 }
 
 func NewBotSupervisor(configManager *files.ConfigManager, opts botRuntimeOptions) *BotSupervisor {
@@ -60,6 +63,13 @@ func NewBotSupervisor(configManager *files.ConfigManager, opts botRuntimeOptions
 	}
 
 	return supervisor
+}
+
+// SetFatalCallback configures a callback to be invoked when a critical background failure occurs.
+func (s *BotSupervisor) SetFatalCallback(cb func(error)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.fatalCallback = cb
 }
 
 func (s *BotSupervisor) Start() error {
@@ -324,6 +334,10 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token string, sta
 			state.Status = StatusError
 		}
 		s.mu.Unlock()
+
+		if s.fatalCallback != nil {
+			s.fatalCallback(fmt.Errorf("fatal: failed to open bot runtime for instance %s after %d retries: %w", instanceID, maxRetries, err))
+		}
 		return
 	}
 
@@ -334,6 +348,10 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token string, sta
 			state.Status = StatusError
 		}
 		s.mu.Unlock()
+
+		if s.fatalCallback != nil {
+			s.fatalCallback(fmt.Errorf("fatal: failed to initialize bot runtime for instance %s: %w", instanceID, err))
+		}
 		return
 	}
 
