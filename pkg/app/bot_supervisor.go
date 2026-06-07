@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"math/rand/v2"
 	"sync"
 	"time"
 
@@ -37,17 +38,24 @@ type BotSupervisor struct {
 	// identifySemaphore limits concurrent Discord Identify calls
 	identifySemaphore *semaphore.Weighted
 
+	ctx    context.Context
+	cancel context.CancelFunc
+	bgWG   sync.WaitGroup
+
 	mu        sync.Mutex
 	instances map[string]*botInstanceState // botInstanceID -> state
 }
 
 func NewBotSupervisor(configManager *files.ConfigManager, opts botRuntimeOptions) *BotSupervisor {
+	ctx, cancel := context.WithCancel(context.Background())
 	supervisor := &BotSupervisor{
 		configManager:     configManager,
 		resolver:          newBotRuntimeResolver(configManager, make(map[string]*botRuntime), opts.defaultBotInstanceID),
 		serviceManager:    service.NewManager(),
 		opts:              opts,
 		identifySemaphore: semaphore.NewWeighted(1), // Rate limit Identify
+		ctx:               ctx,
+		cancel:            cancel,
 		instances:         make(map[string]*botInstanceState),
 	}
 
@@ -62,6 +70,8 @@ func (s *BotSupervisor) Start() error {
 }
 
 func (s *BotSupervisor) Stop() error {
+	s.cancel() // signal background goroutines to abort
+
 	var globalWG sync.WaitGroup
 
 	s.mu.Lock()
@@ -70,13 +80,19 @@ func (s *BotSupervisor) Stop() error {
 			state.Status = StatusStopping
 			state.StopWG.Add(1)
 			globalWG.Add(1)
-			go s.executeStopAndRemove(id, state, &globalWG)
+			s.bgWG.Add(1)
+			go func(id string, state *botInstanceState) {
+				defer s.bgWG.Done()
+				s.executeStopAndRemove(id, state, &globalWG)
+			}(id, state)
 		}
 	}
 	s.mu.Unlock()
 
 	// Barreira obrigatória: impede encerramento do processo enquanto há I/O pendente
 	globalWG.Wait()
+	// Barreira secundária: garante que processos em bg como retries limpem a memória
+	s.bgWG.Wait()
 	return nil
 }
 
@@ -143,7 +159,11 @@ func (s *BotSupervisor) onConfigChanged(cfg *files.BotConfig) {
 			log.ApplicationLogger().Info("Stopping bot instance due to token removal", "botInstanceID", id)
 			state.Status = StatusStopping
 			state.StopWG.Add(1)
-			go s.executeStopAndRemove(id, state, nil)
+			s.bgWG.Add(1)
+			go func(id string, state *botInstanceState) {
+				defer s.bgWG.Done()
+				s.executeStopAndRemove(id, state, nil)
+			}(id, state)
 		}
 	}
 
@@ -156,7 +176,11 @@ func (s *BotSupervisor) onConfigChanged(cfg *files.BotConfig) {
 					log.ApplicationLogger().Info("Stopping bot instance due to token update", "botInstanceID", id)
 					state.Status = StatusStopping
 					state.StopWG.Add(1)
-					go s.executeStopAndRemove(id, state, nil)
+					s.bgWG.Add(1)
+					go func(id string, state *botInstanceState) {
+						defer s.bgWG.Done()
+						s.executeStopAndRemove(id, state, nil)
+					}(id, state)
 				}
 				oldState = state
 			} else {
@@ -164,7 +188,11 @@ func (s *BotSupervisor) onConfigChanged(cfg *files.BotConfig) {
 			}
 		}
 
-		go s.awaitStopAndStart(id, token, oldState)
+		s.bgWG.Add(1)
+		go func(id, token string, oldState *botInstanceState) {
+			defer s.bgWG.Done()
+			s.awaitStopAndStart(id, token, oldState)
+		}(id, token, oldState)
 	}
 }
 
@@ -207,7 +235,16 @@ func (s *BotSupervisor) executeStopAndRemove(id string, state *botInstanceState,
 
 func (s *BotSupervisor) awaitStopAndStart(id, token string, oldState *botInstanceState) {
 	if oldState != nil {
-		oldState.StopWG.Wait()
+		waitCh := make(chan struct{})
+		go func() {
+			oldState.StopWG.Wait()
+			close(waitCh)
+		}()
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-waitCh:
+		}
 		if oldState.Status == StatusError {
 			log.ApplicationLogger().Error("abortando startup devido a estado zumbi não resolvido", "botInstanceID", id)
 			return
@@ -239,13 +276,18 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token string, sta
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		log.ApplicationLogger().Info("Acquiring Discord Identify semaphore", "botInstanceID", instanceID)
 
-		if acqErr := s.identifySemaphore.Acquire(context.Background(), 1); acqErr != nil {
+		if acqErr := s.identifySemaphore.Acquire(s.ctx, 1); acqErr != nil {
 			log.ApplicationLogger().Error("identify semaphore error", "botInstanceID", instanceID, "error", acqErr)
 			return
 		}
 
 		// Small delay to ensure we don't spam identify even after acquiring semaphore
-		time.Sleep(identifyStaggerDelay)
+		select {
+		case <-s.ctx.Done():
+			s.identifySemaphore.Release(1)
+			return
+		case <-time.After(identifyStaggerDelay):
+		}
 
 		runtime, err = openBotRuntime(resolvedBotInstance{ID: instanceID, Token: token}, capabilities)
 
@@ -262,11 +304,14 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token string, sta
 			delay = float64(maxDelay)
 		}
 
-		// Pseudo-jitter using time component if math/rand is not imported to avoid import bloat
-		jitter := time.Duration(float64(time.Now().UnixNano()%1000) / 1000.0 * delay * 0.2)
+		jitter := time.Duration(rand.Float64() * delay * 0.2)
 		sleepTime := time.Duration(delay) + jitter
 
-		time.Sleep(sleepTime)
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-time.After(sleepTime):
+		}
 	}
 
 	if err != nil {
@@ -279,7 +324,7 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token string, sta
 		return
 	}
 
-	if err := initializeBotRuntime(runtime, s.opts); err != nil {
+	if err := initializeBotRuntime(s.ctx, runtime, s.opts); err != nil {
 		log.ApplicationLogger().Error("failed to initialize bot runtime", "botInstanceID", instanceID, "error", err)
 		s.mu.Lock()
 		if s.instances[instanceID] == state {

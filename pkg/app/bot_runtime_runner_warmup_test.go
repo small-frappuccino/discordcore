@@ -49,7 +49,7 @@ func TestScheduleRuntimeWarmupWithoutWorkerRunsPhasesSequentially(t *testing.T) 
 		monitoringService: &logging.MonitoringService{},
 	}
 
-	scheduleRuntimeWarmup(runtime, nil, nil)
+	scheduleRuntimeWarmup(context.Background(), runtime, nil, nil)
 
 	wg.Wait()
 
@@ -114,7 +114,7 @@ func TestScheduleRuntimeWarmupQueuesMemberPhaseAfterBasePhase(t *testing.T) {
 		_ = worker.Shutdown(ctx)
 	})
 
-	scheduleRuntimeWarmup(runtime, nil, startupTasks)
+	scheduleRuntimeWarmup(context.Background(), runtime, nil, startupTasks)
 
 	select {
 	case <-baseDone:

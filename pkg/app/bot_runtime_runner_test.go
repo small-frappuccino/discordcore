@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
@@ -66,7 +67,7 @@ func TestInitializeBotRuntimeSkipsCommandHandlerWhenCommandsDisabled(t *testing.
 		capabilities: botRuntimeCapabilities{qotdRuntime: true},
 		session:      session,
 	}
-	err = initializeBotRuntime(runtime, botRuntimeOptions{
+	err = initializeBotRuntime(context.Background(), runtime, botRuntimeOptions{
 		defaultBotInstanceID: "main",
 		runtimeCount:         1,
 		configManager:        cfgMgr,

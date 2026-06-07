@@ -61,7 +61,7 @@ func openBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabil
 	}, nil
 }
 
-func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
+func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRuntimeOptions) error {
 	if runtime == nil || runtime.session == nil {
 		return fmt.Errorf("bot runtime is unavailable")
 	}
@@ -122,7 +122,7 @@ func initializeBotRuntime(runtime *botRuntime, opts botRuntimeOptions) error {
 	}
 
 	scheduleRuntimeConfiguredGuildLogging(runtime, opts.configManager, opts.defaultBotInstanceID, opts.startupTasks)
-	scheduleRuntimeWarmup(runtime, opts.store, opts.startupTasks)
+	scheduleRuntimeWarmup(ctx, runtime, opts.store, opts.startupTasks)
 	return nil
 }
 
@@ -321,7 +321,7 @@ var scheduleStartupMemberWarmupFn = func(ms *logging.MonitoringService, config c
 	return ms.ScheduleStartupMemberWarmup(config)
 }
 
-func scheduleRuntimeWarmup(runtime *botRuntime, store *storage.Store, startupTasks *startupTaskOrchestrator) {
+func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *storage.Store, startupTasks *startupTaskOrchestrator) {
 	if runtime == nil || runtime.session == nil || !runtime.capabilities.warmup || runtime.monitoringService == nil {
 		return
 	}
@@ -342,7 +342,10 @@ func scheduleRuntimeWarmup(runtime *botRuntime, store *storage.Store, startupTas
 
 	if startupTasks == nil {
 		go func() {
-			if err := runWarmup(context.Background(), baseWarmupConfig); err != nil {
+			if err := runWarmup(ctx, baseWarmupConfig); err != nil {
+				if ctx.Err() != nil {
+					return
+				}
 				log.ApplicationLogger().Warn(
 					fmt.Sprintf("Cache warmup base phase failed (continuing): %v", err),
 					"botInstanceID", runtime.instanceID,
@@ -352,7 +355,10 @@ func scheduleRuntimeWarmup(runtime *botRuntime, store *storage.Store, startupTas
 			if scheduleStartupMemberWarmupFn(runtime.monitoringService, memberWarmupConfig) {
 				return
 			}
-			if err := runWarmup(context.Background(), memberWarmupConfig); err != nil {
+			if err := runWarmup(ctx, memberWarmupConfig); err != nil {
+				if ctx.Err() != nil {
+					return
+				}
 				log.ApplicationLogger().Warn(
 					fmt.Sprintf("Cache warmup member phase failed (continuing): %v", err),
 					"botInstanceID", runtime.instanceID,
@@ -363,9 +369,20 @@ func scheduleRuntimeWarmup(runtime *botRuntime, store *storage.Store, startupTas
 	}
 
 	log.ApplicationLogger().Info("Scheduling cache warmup base phase in background", "botInstanceID", runtime.instanceID)
-	startupTasks.GoHeavy("cache_warmup_base:"+runtime.instanceID, func(ctx context.Context) error {
-		if err := runWarmup(ctx, baseWarmupConfig); err != nil {
-			if ctx.Err() != nil {
+	startupTasks.GoHeavy("cache_warmup_base:"+runtime.instanceID, func(taskCtx context.Context) error {
+		// Respect both the task context and the supervisor context
+		localCtx, localCancel := context.WithCancel(taskCtx)
+		defer localCancel()
+		go func() {
+			select {
+			case <-ctx.Done():
+				localCancel()
+			case <-localCtx.Done():
+			}
+		}()
+
+		if err := runWarmup(localCtx, baseWarmupConfig); err != nil {
+			if localCtx.Err() != nil {
 				return nil
 			}
 			log.ApplicationLogger().Warn(
@@ -380,8 +397,8 @@ func scheduleRuntimeWarmup(runtime *botRuntime, store *storage.Store, startupTas
 			return nil
 		}
 
-		if err := runWarmup(ctx, memberWarmupConfig); err != nil {
-			if ctx.Err() != nil {
+		if err := runWarmup(localCtx, memberWarmupConfig); err != nil {
+			if localCtx.Err() != nil {
 				return nil
 			}
 			log.ApplicationLogger().Warn(
