@@ -37,11 +37,16 @@ func (s *Server) registerAPIRoutes(mux *http.ServeMux) {
 }
 
 func (s *Server) registerDashboardRoutes(mux *http.ServeMux) {
-	mux.Handle("/", newLandingHandler())
+	oauthConfigured := false
+	if oauthControl := s.oauthControl(); oauthControl != nil {
+		oauthConfigured = oauthControl.configured()
+	}
+
+	mux.Handle("/", newLandingHandler(oauthConfigured))
 	mux.HandleFunc("/manage", s.handleManageRoot)
-	mux.Handle(dashboardRoutePrefix, newProtectedEmbeddedDashboardHandler(s))
+	mux.Handle(dashboardRoutePrefix, newProtectedEmbeddedDashboardHandler(oauthConfigured, s.publicControlURL("/"), s.hasAuthenticatedDashboardSession))
 	mux.HandleFunc("/dashboard", s.handleDashboardRoot)
-	mux.Handle(dashboardLegacyRoutePrefix, newProtectedEmbeddedDashboardHandler(s))
+	mux.Handle(dashboardLegacyRoutePrefix, newProtectedEmbeddedDashboardHandler(oauthConfigured, s.publicControlURL("/"), s.hasAuthenticatedDashboardSession))
 }
 
 func (s *Server) handleManageRoot(w http.ResponseWriter, r *http.Request) {

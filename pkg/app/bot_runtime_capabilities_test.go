@@ -246,4 +246,3 @@ func TestQOTDCapabilityPolicy_Modify_DeepCopyAndIsolation(t *testing.T) {
 		t.Fatalf("QOTD policy should only allow IntentsGuilds, got %d", masked.intents)
 	}
 }
-

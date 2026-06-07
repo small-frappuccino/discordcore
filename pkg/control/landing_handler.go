@@ -2,11 +2,13 @@ package control
 
 import (
 	"bytes"
+	"html/template"
 	"net/http"
+	"sync"
 	"time"
 )
 
-const controlLandingHTML = `<!doctype html>
+var landingTemplate = template.Must(template.New("landing").Parse(`<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -200,20 +202,23 @@ const controlLandingHTML = `<!doctype html>
 
         <div class="session-panel">
           <div class="actions">
-            <button id="login-button" class="button button-primary" type="button">
-              Login com Discord
+            <button id="login-button" class="button button-primary" type="button" {{if not .OAuthAvailable}}disabled{{end}}>
+              {{if .OAuthAvailable}}Login com Discord{{else}}Discord indisponível{{end}}
             </button>
+            {{if .OAuthAvailable}}
             <button id="dashboard-button" class="button button-secondary" type="button">
               Dashboard
             </button>
             <button id="logout-button" class="button button-ghost is-hidden" type="button">
               Logout
             </button>
+            {{end}}
           </div>
         </div>
       </div>
     </header>
 
+    {{if .OAuthAvailable}}
     <script>
       (() => {
         const loginButton = document.getElementById("login-button");
@@ -224,18 +229,19 @@ const controlLandingHTML = `<!doctype html>
         let dashboardURL = "/manage/";
 
         function hide(element, hidden) {
-          element.classList.toggle("is-hidden", hidden);
+          if (element) {
+            element.classList.toggle("is-hidden", hidden);
+          }
         }
 
-        function showSignedOut(oauthAvailable, nextLoginURL, nextDashboardURL) {
+        function showSignedOut(nextLoginURL, nextDashboardURL) {
           csrfToken = "";
           loginURL = nextLoginURL || "/auth/discord/login?next=%2Fmanage%2F";
           dashboardURL = nextDashboardURL || "/manage/";
           hide(loginButton, false);
           hide(dashboardButton, false);
           hide(logoutButton, true);
-          loginButton.disabled = !oauthAvailable;
-          loginButton.textContent = oauthAvailable ? "Login com Discord" : "Discord indisponível";
+          loginButton.disabled = false;
         }
 
         function showSignedIn(token, nextDashboardURL) {
@@ -245,7 +251,6 @@ const controlLandingHTML = `<!doctype html>
           hide(dashboardButton, false);
           hide(logoutButton, false);
           loginButton.disabled = false;
-          loginButton.textContent = "Login com Discord";
         }
 
         async function refreshSession() {
@@ -259,7 +264,6 @@ const controlLandingHTML = `<!doctype html>
             }
 
             const payload = await response.json();
-            const oauthAvailable = Boolean(payload.oauth_configured);
             const authenticated = Boolean(payload.authenticated);
             const nextLoginURL = String(payload.login_url || "").trim();
             const nextDashboardURL = String(payload.dashboard_url || "").trim();
@@ -269,9 +273,9 @@ const controlLandingHTML = `<!doctype html>
               return;
             }
 
-            showSignedOut(oauthAvailable, nextLoginURL, nextDashboardURL);
+            showSignedOut(nextLoginURL, nextDashboardURL);
           } catch {
-            showSignedOut(true, "", "");
+            showSignedOut("", "");
           }
         }
 
@@ -303,25 +307,40 @@ const controlLandingHTML = `<!doctype html>
               }
             });
           } finally {
-            showSignedOut(true, "");
+            showSignedOut("", "");
           }
         });
 
         refreshSession();
       })();
     </script>
+    {{end}}
   </body>
 </html>
-`
+`))
 
-type landingHandler struct{}
+var bufferPool = sync.Pool{
+	New: func() interface{} {
+		return new(bytes.Buffer)
+	},
+}
 
-func newLandingHandler() http.Handler {
-	return landingHandler{}
+type LandingPageState struct {
+	OAuthAvailable bool
+}
+
+type landingHandler struct {
+	oauthAvailable bool
+}
+
+func newLandingHandler(oauthAvailable bool) http.Handler {
+	return &landingHandler{
+		oauthAvailable: oauthAvailable,
+	}
 }
 
 // ServeHTTP serves http.
-func (landingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *landingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
 		return
@@ -331,7 +350,22 @@ func (landingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	state := LandingPageState{
+		OAuthAvailable: h.oauthAvailable,
+	}
+
+	buf := bufferPool.Get().(*bytes.Buffer)
+	defer func() {
+		buf.Reset()
+		bufferPool.Put(buf)
+	}()
+
+	if err := landingTemplate.Execute(buf, state); err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader([]byte(controlLandingHTML)))
+	http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(buf.Bytes()))
 }

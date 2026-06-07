@@ -8,32 +8,38 @@ import (
 const publicDashboardBrandAssetPath = "brand/discordmain.webp"
 
 type dashboardAccessHandler struct {
-	next   http.Handler
-	server *Server
+	next           http.Handler
+	oauthAvailable bool
+	redirectTarget string
+	hasSession     func(*http.Request) bool
 }
 
-func newProtectedEmbeddedDashboardHandler(server *Server) http.Handler {
+func newProtectedEmbeddedDashboardHandler(oauthAvailable bool, redirectTarget string, hasSession func(*http.Request) bool) http.Handler {
 	return &dashboardAccessHandler{
-		next:   newEmbeddedDashboardHandler(),
-		server: server,
+		next:           newEmbeddedDashboardHandler(),
+		oauthAvailable: oauthAvailable,
+		redirectTarget: redirectTarget,
+		hasSession:     hasSession,
 	}
 }
 
 // ServeHTTP serves http.
 func (h *dashboardAccessHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if h.isPublicDashboardAsset(r) || (h.server != nil && h.server.hasAuthenticatedDashboardSession(r)) {
+	if !h.oauthAvailable {
+		http.Error(w, "Dashboard access requires Discord OAuth configuration.", http.StatusForbidden)
+		return
+	}
+
+	if h.isPublicDashboardAsset(r) || (h.hasSession != nil && h.hasSession(r)) {
 		h.next.ServeHTTP(w, r)
 		return
 	}
 
-	redirectTarget := "/"
-	if h.server != nil {
-		redirectTarget = strings.TrimSpace(h.server.publicControlURL("/"))
-		if redirectTarget == "" {
-			redirectTarget = "/"
-		}
+	redirect := strings.TrimSpace(h.redirectTarget)
+	if redirect == "" {
+		redirect = "/"
 	}
-	http.Redirect(w, r, redirectTarget, http.StatusFound)
+	http.Redirect(w, r, redirect, http.StatusFound)
 }
 
 func (h *dashboardAccessHandler) isPublicDashboardAsset(r *http.Request) bool {
