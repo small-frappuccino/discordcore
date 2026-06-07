@@ -696,4 +696,19 @@ var postgresMigrations = []migration{
 			`DROP TABLE IF EXISTS ticket_sequences`,
 		},
 	},
+	{
+		Version: 23,
+		UpSQL: []string{
+			`ALTER TABLE persistent_cache ADD COLUMN IF NOT EXISTS guild_id TEXT`,
+			`ALTER TABLE persistent_cache
+			 ADD CONSTRAINT fk_persistent_cache_guild_id
+			 FOREIGN KEY (guild_id) REFERENCES guild_meta(guild_id) ON DELETE CASCADE`,
+			`CREATE INDEX IF NOT EXISTS idx_persistent_cache_guild_id ON persistent_cache(guild_id) WHERE guild_id IS NOT NULL`,
+		},
+		DownSQL: []string{
+			`DROP INDEX IF EXISTS idx_persistent_cache_guild_id`,
+			`ALTER TABLE persistent_cache DROP CONSTRAINT IF EXISTS fk_persistent_cache_guild_id`,
+			`ALTER TABLE persistent_cache DROP COLUMN IF EXISTS guild_id`,
+		},
+	},
 }

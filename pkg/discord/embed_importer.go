@@ -62,7 +62,8 @@ func FetchPastebinContent(ctx context.Context, pasteURL string) ([]byte, error) 
 	}
 
 	// Limit read to 64KB to avoid memory exhaustion (Discord embeds are small).
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
+	resp.Body = http.MaxBytesReader(nil, resp.Body, 64*1024)
+	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
@@ -124,6 +125,7 @@ func UploadPastebinContent(ctx context.Context, data []byte, devKey, username, p
 	}
 	defer resp.Body.Close()
 
+	resp.Body = http.MaxBytesReader(nil, resp.Body, 64*1024)
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("failed to read Pastebin auth response: %w", err)
@@ -156,6 +158,7 @@ func UploadPastebinContent(ctx context.Context, data []byte, devKey, username, p
 	}
 	defer postResp.Body.Close()
 
+	postResp.Body = http.MaxBytesReader(nil, postResp.Body, 64*1024)
 	postBodyBytes, err := io.ReadAll(postResp.Body)
 	if err != nil {
 		return "", fmt.Errorf("failed to read Pastebin upload response: %w", err)

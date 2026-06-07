@@ -103,10 +103,9 @@ func stripPersistKey(cacheType, key string) string {
 }
 
 type cacheIndices struct {
-	guildToChannels   map[string]map[string]struct{}
-	guildToChannelsMu sync.RWMutex
-	channelToGuild    map[string]string
-	channelToGuildMu  sync.RWMutex
+	guildToChannels map[string]map[string]struct{}
+	channelToGuild  map[string]string
+	mu              sync.RWMutex
 }
 
 func newCacheIndices() *cacheIndices {
@@ -117,12 +116,12 @@ func newCacheIndices() *cacheIndices {
 }
 
 func (ci *cacheIndices) associateChannel(channelID, guildID string) {
-	ci.channelToGuildMu.Lock()
+	ci.mu.Lock()
+	defer ci.mu.Unlock()
+
 	oldGuildID := ci.channelToGuild[channelID]
 	ci.channelToGuild[channelID] = guildID
-	ci.channelToGuildMu.Unlock()
 
-	ci.guildToChannelsMu.Lock()
 	if oldGuildID != "" && oldGuildID != guildID {
 		if set, ok := ci.guildToChannels[oldGuildID]; ok {
 			delete(set, channelID)
@@ -137,33 +136,27 @@ func (ci *cacheIndices) associateChannel(channelID, guildID string) {
 		ci.guildToChannels[guildID] = set
 	}
 	set[channelID] = struct{}{}
-	ci.guildToChannelsMu.Unlock()
 }
 
 func (ci *cacheIndices) removeChannel(channelID string) {
-	ci.channelToGuildMu.RLock()
-	guildID := ci.channelToGuild[channelID]
-	ci.channelToGuildMu.RUnlock()
+	ci.mu.Lock()
+	defer ci.mu.Unlock()
 
+	guildID := ci.channelToGuild[channelID]
 	if guildID != "" {
-		ci.guildToChannelsMu.Lock()
 		if set, ok := ci.guildToChannels[guildID]; ok {
 			delete(set, channelID)
 			if len(set) == 0 {
 				delete(ci.guildToChannels, guildID)
 			}
 		}
-		ci.guildToChannelsMu.Unlock()
 	}
-
-	ci.channelToGuildMu.Lock()
 	delete(ci.channelToGuild, channelID)
-	ci.channelToGuildMu.Unlock()
 }
 
 func (ci *cacheIndices) getChannelsForGuild(guildID string) []string {
-	ci.guildToChannelsMu.RLock()
-	defer ci.guildToChannelsMu.RUnlock()
+	ci.mu.RLock()
+	defer ci.mu.RUnlock()
 	var chIDs []string
 	if set, ok := ci.guildToChannels[guildID]; ok {
 		chIDs = slices.Collect(maps.Keys(set))
@@ -172,13 +165,10 @@ func (ci *cacheIndices) getChannelsForGuild(guildID string) []string {
 }
 
 func (ci *cacheIndices) clear() {
-	ci.guildToChannelsMu.Lock()
+	ci.mu.Lock()
+	defer ci.mu.Unlock()
 	clear(ci.guildToChannels)
-	ci.guildToChannelsMu.Unlock()
-
-	ci.channelToGuildMu.Lock()
 	clear(ci.channelToGuild)
-	ci.channelToGuildMu.Unlock()
 }
 
 // Cached value types
@@ -641,6 +631,7 @@ func (uc *UnifiedCache) persistDirtyMembers(ctx context.Context, now time.Time) 
 		return storage.CacheEntryRecord{
 			Key:       persistKey("member", snapshot.Key),
 			CacheType: "member",
+			GuildID:   snapshot.Value.GuildID,
 			Data:      data,
 			ExpiresAt: snapshot.ExpiresAt,
 		}, nil
@@ -659,6 +650,7 @@ func (uc *UnifiedCache) persistDirtyGuilds(ctx context.Context, now time.Time) e
 		return storage.CacheEntryRecord{
 			Key:       persistKey("guild", snapshot.Key),
 			CacheType: "guild",
+			GuildID:   snapshot.Value.ID,
 			Data:      data,
 			ExpiresAt: snapshot.ExpiresAt,
 		}, nil
@@ -674,9 +666,19 @@ func (uc *UnifiedCache) persistDirtyRoles(ctx context.Context, now time.Time) er
 		if err != nil {
 			return storage.CacheEntryRecord{}, fmt.Errorf("encode roles %s: %w", snapshot.Key, err)
 		}
+		var guildID string
+		if len(snapshot.Value) > 0 {
+			// Extract guild ID from the first role, as roles in the cache segment
+			// are stored per guild.
+			// Wait, snapshot.Key is the Guild ID!
+			guildID = snapshot.Key
+		} else {
+			guildID = snapshot.Key
+		}
 		return storage.CacheEntryRecord{
 			Key:       persistKey("roles", snapshot.Key),
 			CacheType: "roles",
+			GuildID:   guildID,
 			Data:      data,
 			ExpiresAt: snapshot.ExpiresAt,
 		}, nil
@@ -703,6 +705,7 @@ func (uc *UnifiedCache) persistDirtyChannels(ctx context.Context, now time.Time)
 		return storage.CacheEntryRecord{
 			Key:       persistKey("channel", cacheKey),
 			CacheType: "channel",
+			GuildID:   snapshot.Value.GuildID, // can be empty for DM channels
 			Data:      data,
 			ExpiresAt: snapshot.ExpiresAt,
 		}, nil

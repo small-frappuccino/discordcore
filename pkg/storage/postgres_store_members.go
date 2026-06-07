@@ -99,7 +99,7 @@ func upsertGuildMemberSnapshotBatch(ctx context.Context, tx *sql.Tx, guildID str
 	}
 
 	if len(roleRows) > 0 {
-		if err := deleteRolesForUsersBatch(ctx, tx, guildID, roleUserIDs); err != nil {
+		if err := deleteRolesForUsersBatch(ctx, tx, guildID, roleUserIDs, updatedAt); err != nil {
 			return fmt.Errorf("delete roles batch: %w", err)
 		}
 		if err := insertMemberRolesBatch(ctx, tx, guildID, roleRows, updatedAt); err != nil {
@@ -281,23 +281,15 @@ func upsertAvatarCurrentBatch(ctx context.Context, tx *sql.Tx, guildID string, s
 	return nil
 }
 
-func deleteRolesForUsersBatch(ctx context.Context, tx *sql.Tx, guildID string, userIDs []string) error {
+func deleteRolesForUsersBatch(ctx context.Context, tx *sql.Tx, guildID string, userIDs []string, updatedAt time.Time) error {
 	if len(userIDs) == 0 {
 		return nil
 	}
 
-	b := strings.Builder{}
-	b.WriteString("DELETE FROM roles_current WHERE guild_id=$1 AND user_id IN (")
-	args := []any{guildID}
-	for i, userID := range userIDs {
-		if i > 0 {
-			b.WriteString(",")
-		}
-		b.WriteString(fmt.Sprintf("$%d", i+2))
-		args = append(args, userID)
-	}
-	b.WriteString(")")
-	_, err := txExecContext(ctx, tx, b.String(), args...)
+	_, err := tx.ExecContext(ctx,
+		`DELETE FROM roles_current WHERE guild_id=$1 AND user_id = ANY($2::text[]) AND updated_at < $3`,
+		guildID, userIDs, updatedAt,
+	)
 	return err
 }
 
@@ -325,7 +317,8 @@ func insertMemberRolesBatch(ctx context.Context, tx *sql.Tx, guildID string, sna
 	_, err := tx.ExecContext(ctx,
 		`INSERT INTO roles_current (guild_id, user_id, role_id, updated_at)
          SELECT $1::text, * FROM UNNEST($2::text[], $3::text[], $4::timestamptz[])
-         ON CONFLICT(guild_id, user_id, role_id) DO UPDATE SET updated_at=excluded.updated_at`,
+         ON CONFLICT(guild_id, user_id, role_id) DO UPDATE SET updated_at=excluded.updated_at
+         WHERE roles_current.updated_at < excluded.updated_at`,
 		guildID, userIDs, roleIDs, updatedAts,
 	)
 	return err

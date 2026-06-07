@@ -1,10 +1,15 @@
 package storage
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 )
 
 // ModerationWarning is a stored warning against a user in a guild. CaseNumber is
@@ -214,27 +219,49 @@ func (s *Store) UpsertMemberRoles(guildID, userID string, roles []string, update
 		updatedAt = time.Now().UTC()
 	}
 
-	tx, err := s.db.Begin()
+	conn, err := s.db.Conn(context.Background())
 	if err != nil {
-		return fmt.Errorf("Store.UpsertMemberRoles: %w", err)
+		return err
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer conn.Close()
 
-	if _, err := txExec(tx, `DELETE FROM roles_current WHERE guild_id=$1 AND user_id=$2`, guildID, userID); err != nil {
-		return fmt.Errorf("Store.UpsertMemberRoles: %w", err)
-	}
-	for _, rid := range roles {
-		if rid == "" {
-			continue
+	return conn.Raw(func(driverConn any) error {
+		stdConn, ok := driverConn.(*stdlib.Conn)
+		if !ok {
+			return errors.New("underlying driver is not pgx stdlib")
 		}
-		if _, err := txExec(tx,
-			`INSERT INTO roles_current (guild_id, user_id, role_id, updated_at) VALUES ($1, $2, $3, $4)`,
-			guildID, userID, rid, updatedAt,
-		); err != nil {
+		
+		c := stdConn.Conn()
+		tx, err := c.Begin(context.Background())
+		if err != nil {
 			return err
 		}
-	}
-	return tx.Commit()
+		defer tx.Rollback(context.Background())
+
+		if _, err := tx.Exec(context.Background(), `DELETE FROM roles_current WHERE guild_id=$1 AND user_id=$2`, guildID, userID); err != nil {
+			return err
+		}
+		
+		var rows [][]any
+		for _, rid := range roles {
+			if rid != "" {
+				rows = append(rows, []any{guildID, userID, rid, updatedAt})
+			}
+		}
+
+		if len(rows) > 0 {
+			if _, err := tx.CopyFrom(
+				context.Background(),
+				pgx.Identifier{"roles_current"},
+				[]string{"guild_id", "user_id", "role_id", "updated_at"},
+				pgx.CopyFromRows(rows),
+			); err != nil {
+				return err
+			}
+		}
+		
+		return tx.Commit(context.Background())
+	})
 }
 
 // GetMemberRoles returns the current cached roles for a member in a guild.

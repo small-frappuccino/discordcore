@@ -1,5 +1,6 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import type { SelectOption } from "./SelectMenu";
+import { useVirtualizer } from '@tanstack/react-virtual';
 
 type SelectMenuMultipleProps = {
   options: SelectOption[];
@@ -12,8 +13,17 @@ type SelectMenuMultipleProps = {
 export function SelectMenuMultiple({ options, value = [], onChange, placeholder = "Select...", className = "" }: SelectMenuMultipleProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const selectedOptions = options.filter((opt) => value.includes(opt.value));
+  const selectedOptionsSet = useMemo(() => new Set(value), [value]);
+  const selectedOptions = useMemo(() => options.filter((opt) => selectedOptionsSet.has(opt.value)), [options, selectedOptionsSet]);
+
+  const rowVirtualizer = useVirtualizer({
+    count: options.length,
+    getScrollElement: () => dropdownRef.current,
+    estimateSize: () => 35,
+    overscan: 5,
+  });
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -75,24 +85,39 @@ export function SelectMenuMultiple({ options, value = [], onChange, placeholder 
       </div>
 
       {isOpen && (
-        <div className="tahoe-select-dropdown" style={{ top: "100%", left: 0, right: 0, marginTop: "4px", maxHeight: "240px", overflowY: "auto" }}>
-          {options.map((option) => {
-            const isSelected = value.includes(option.value);
-            return (
-              <div
-                key={option.value}
-                className="tahoe-select-option"
-                onClick={() => toggleOption(option.value)}
-              >
-                {option.label}
-                {isSelected && (
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="3">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                )}
-              </div>
-            );
-          })}
+        <div 
+          className="tahoe-select-dropdown" 
+          ref={dropdownRef}
+          style={{ top: "100%", left: 0, right: 0, marginTop: "4px", maxHeight: "240px", overflowY: "auto" }}
+        >
+          <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
+            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+              const option = options[virtualRow.index];
+              const isSelected = selectedOptionsSet.has(option.value);
+              return (
+                <div
+                  key={virtualRow.key}
+                  className="tahoe-select-option"
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: `${virtualRow.size}px`,
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                  onClick={() => toggleOption(option.value)}
+                >
+                  {option.label}
+                  {isSelected && (
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="3">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>

@@ -15,6 +15,7 @@ import (
 type CacheEntryRecord struct {
 	Key       string
 	CacheType string
+	GuildID   string
 	Data      string
 	ExpiresAt time.Time
 }
@@ -47,7 +48,6 @@ func (s *Store) UpsertCacheEntry(key, cacheType, data string, expiresAt time.Tim
 
 // UpsertCacheEntriesContext upserts cache entries context.
 func (s *Store) UpsertCacheEntriesContext(ctx context.Context, entries []CacheEntryRecord) error {
-
 	normalized := make([]CacheEntryRecord, 0, len(entries))
 	for _, entry := range entries {
 		if entry.Key == "" || entry.CacheType == "" || entry.Data == "" {
@@ -59,31 +59,68 @@ func (s *Store) UpsertCacheEntriesContext(ctx context.Context, entries []CacheEn
 		return nil
 	}
 
-	cachedAt := time.Now().UTC()
-	keys := make([]string, len(normalized))
-	cacheTypes := make([]string, len(normalized))
-	datas := make([]string, len(normalized))
-	expiresAts := make([]time.Time, len(normalized))
-	cachedAts := make([]time.Time, len(normalized))
-
-	for i, entry := range normalized {
-		keys[i] = entry.Key
-		cacheTypes[i] = entry.CacheType
-		datas[i] = entry.Data
-		expiresAts[i] = entry.ExpiresAt
-		cachedAts[i] = cachedAt
+	// Group by GuildID
+	byGuild := make(map[string][]CacheEntryRecord)
+	for _, entry := range normalized {
+		byGuild[entry.GuildID] = append(byGuild[entry.GuildID], entry)
 	}
 
-	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO persistent_cache (cache_key, cache_type, data, expires_at, cached_at)
-         SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::timestamptz[], $5::timestamptz[])
-         ON CONFLICT(cache_key) DO UPDATE SET
-			data=excluded.data,
-			expires_at=excluded.expires_at,
-			cached_at=excluded.cached_at`,
-		keys, cacheTypes, datas, expiresAts, cachedAts,
-	)
-	return err
+	cachedAt := time.Now().UTC()
+
+	for guildID, batch := range byGuild {
+		keys := make([]string, len(batch))
+		cacheTypes := make([]string, len(batch))
+		datas := make([]string, len(batch))
+		expiresAts := make([]time.Time, len(batch))
+		cachedAts := make([]time.Time, len(batch))
+
+		for i, entry := range batch {
+			keys[i] = entry.Key
+			cacheTypes[i] = entry.CacheType
+			datas[i] = entry.Data
+			expiresAts[i] = entry.ExpiresAt
+			cachedAts[i] = cachedAt
+		}
+
+		// Prepare the base query with optional guild_id column matching
+		var err error
+		if guildID != "" {
+			guildIDs := make([]string, len(batch))
+			for i := range batch {
+				guildIDs[i] = guildID
+			}
+			_, err = s.db.ExecContext(ctx,
+				`INSERT INTO persistent_cache (cache_key, cache_type, guild_id, data, expires_at, cached_at)
+				 SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[], $5::timestamptz[], $6::timestamptz[])
+				 ON CONFLICT(cache_key) DO UPDATE SET
+					guild_id=excluded.guild_id,
+					data=excluded.data,
+					expires_at=excluded.expires_at,
+					cached_at=excluded.cached_at`,
+				keys, cacheTypes, guildIDs, datas, expiresAts, cachedAts,
+			)
+		} else {
+			_, err = s.db.ExecContext(ctx,
+				`INSERT INTO persistent_cache (cache_key, cache_type, data, expires_at, cached_at)
+				 SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::timestamptz[], $5::timestamptz[])
+				 ON CONFLICT(cache_key) DO UPDATE SET
+					data=excluded.data,
+					expires_at=excluded.expires_at,
+					cached_at=excluded.cached_at`,
+				keys, cacheTypes, datas, expiresAts, cachedAts,
+			)
+		}
+
+		if err != nil {
+			// Catch foreign key violations (SQLSTATE 23503) for deleted guilds
+			if strings.Contains(err.Error(), "23503") || strings.Contains(err.Error(), "foreign key constraint") || strings.Contains(err.Error(), "violates foreign key") {
+				continue
+			}
+			return err
+		}
+	}
+
+	return nil
 }
 
 // GetCacheEntry retrieves a cache entry from persistent storage
