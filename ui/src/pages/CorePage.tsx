@@ -131,7 +131,7 @@ export function CorePage() {
                             {isMain && <Badge variant="neutral">Primary</Badge>}
                           </div>
                           <span className="text-sm text-text-secondary">
-                            {instanceId === "main" ? "Default bot handler" : `discordqotd (${instanceId})`}
+                            {instanceId === "main" ? "Default bot handler" : `Companion (${instanceId})`}
                           </span>
                         </div>
                         {instanceId !== "main" && (

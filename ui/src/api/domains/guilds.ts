@@ -169,14 +169,20 @@ export interface BotProfile {
   permissions: number;
 }
 
+export interface BotProfilesResponse {
+  status: string;
+  profiles: BotProfile[];
+}
+
 export async function getBotProfiles(
   client: ControlApiClient,
   guildId: string,
 ): Promise<BotProfile[]> {
-  return client.request<BotProfile[]>(
+  const resp = await client.request<BotProfilesResponse>(
     "GET",
     `/v1/guilds/${encodeURIComponent(guildId)}/bot-profiles`,
   );
+  return resp.profiles ?? [];
 }
 
 export async function listGuildRoleOptions(
