@@ -41,6 +41,7 @@ export function useRolesPage(selectedGuildID: string | null) {
     if (!selectedGuildID) return;
     try {
       await updateSettingsMutation.mutateAsync({
+        config_version: settingsData?.workspace.config_version ?? 0,
         roles: {
           dashboard_read: dashboardRead,
           dashboard_write: dashboardWrite,

@@ -57,6 +57,7 @@ export function useRolesPageLogic() {
     
     updateMutation.mutate(
       {
+        config_version: setRes?.workspace.config_version ?? 0,
         roles: data
       },
       {

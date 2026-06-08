@@ -60,7 +60,9 @@ export function useModerationPageLogic() {
   const onSubmit = form.handleSubmit((data) => {
     if (!selectedGuildID) return;
     settingsMutation.mutate({
+      config_version: settingsRes?.workspace?.config_version ?? 0,
       roles: {
+        ...(settingsRes?.workspace?.sections?.roles || {}),
         mute_role: data.mute_role,
       },
     }, {
