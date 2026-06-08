@@ -109,6 +109,13 @@ Across both:
 - do not add or rewrite comments on code that was not changed in the current task; comment churn pollutes blame
 - do not embed history references ("added for ticket X", "renamed in 2024") — those belong in commit messages
 
+## Agent Dynamic And Communication
+
+- **Tone & Style**: Adopt a strictly neutral, dense, technical tone. Remove pleasantries, emojis, preambles, and summaries. Do not reiterate prompts.
+- **Verbosity**: Scale response length to complexity; answer trivial questions in ≤3 lines.
+- **Emphasis & Language**: Bold only vital technical identifiers (metrics, flags, IDs). Keep technical terminology in English.
+- **Objectivity & Bias**: Retain directives unmodified. Enforce steelmanning of competing frameworks/design patterns in architectural disputes to evaluate trade-offs without subjective endorsement. Restrict personal opinions to labeled non-political ethical/philosophical debates.
+
 ## Scope Fidelity
 
 Do exactly what the user requested. Nothing more, nothing less.
@@ -116,6 +123,11 @@ Do exactly what the user requested. Nothing more, nothing less.
 - treat the user’s message as the contract; the deliverable is the smallest safe change that satisfies it
 - expect direct, task-focused instructions, occasionally in Portuguese (e.g., "Execute task M3", "Como isso fica..."). Acknowledge and proceed without conversational filler
 - leverage artifacts (`implementation_plan.md`, `task.md`) when a plan is required for complex tasks, but execute straightforward fixes immediately
+- **No Silent Placeholders**: All code must be complete, executable, with proper error handling. No `// ... existing code ...` shortcuts unless explicitly permitted
+- **Course Correction (Pushback)**: Explicitly object to flawed premises or suboptimal architectural paths before executing. Guide to the optimal path
+- **Binary Certainty**: No hedging or probabilistic language. Assert facts with conviction or provide a concrete verification path. Zero fabrication
+- **Context Integration**: Seamlessly apply provided context. Do not restate or summarize the provided architecture back to the user
+- **Audits & Analysis**: Focus on race conditions, I/O bottlenecks, transactional regressions, trade-offs, and failure modes instead of surface-level syntax or generic best practices. Contrast options side-by-side explicitly defining victory conditions
 - do not bundle adjacent improvements, cleanup, renames, or reformatting with the requested change
 - do not refactor surrounding code unless the requested change cannot land safely without it
 - do not add features, options, flags, configuration, logging, telemetry, metrics, or hooks the user did not ask for
@@ -185,6 +197,12 @@ Canonical dashboard contracts:
 - the SPA must not intercept `/v1/*` or `/auth/*`
 
 If dashboard routing changes, update backend, frontend, tests, docs, and embed assumptions together.
+
+### Structural Mandates (State-of-the-Art Architecture)
+
+- **Graceful Lifecycle Management**: Mandate context-aware cancellation pipelines utilizing `context.Context` and `sync.WaitGroup` to orchestrate isolated sub-service teardowns safely. Avoid serializing runtime states via `sync.RWMutex` which introduces write-starvation and deadlock vulnerabilities.
+- **TypeScript API Resiliency**: Enforce mandatory exponential backoff and randomized network jitter on all retry mechanisms for HTTP 502/504 errors to prevent thundering herd state collapses.
+- **Observability Accessors**: Mandate strict dependency validation during the application boot phase to ensure the metrics pipeline successfully attaches prior to the primary event loop, ensuring nil-safe accessors (`NopMetrics`) do not mask critical initialization failures.
 
 ## Config Schema Evolution Pattern
 

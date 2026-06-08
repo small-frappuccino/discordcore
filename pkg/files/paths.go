@@ -28,8 +28,6 @@ var (
 	CurrentGitBranch string
 )
 
-
-
 func init() {
 	// Detect current git branch (best-effort; used for token selection).
 	CurrentGitBranch = getCurrentGitBranch()

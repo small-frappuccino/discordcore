@@ -230,7 +230,7 @@ func (s *Store) UpsertMemberRoles(guildID, userID string, roles []string, update
 		if !ok {
 			return errors.New("underlying driver is not pgx stdlib")
 		}
-		
+
 		c := stdConn.Conn()
 		tx, err := c.Begin(context.Background())
 		if err != nil {
@@ -241,7 +241,7 @@ func (s *Store) UpsertMemberRoles(guildID, userID string, roles []string, update
 		if _, err := tx.Exec(context.Background(), `DELETE FROM roles_current WHERE guild_id=$1 AND user_id=$2`, guildID, userID); err != nil {
 			return err
 		}
-		
+
 		var rows [][]any
 		for _, rid := range roles {
 			if rid != "" {
@@ -259,7 +259,7 @@ func (s *Store) UpsertMemberRoles(guildID, userID string, roles []string, update
 				return err
 			}
 		}
-		
+
 		return tx.Commit(context.Background())
 	})
 }
