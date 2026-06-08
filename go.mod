@@ -8,7 +8,7 @@ require (
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/joho/godotenv v1.5.1
 	github.com/kyokomi/emoji/v2 v2.2.13
-	golang.org/x/sync v0.17.0
+	golang.org/x/sync v0.20.0
 	golang.org/x/sys v0.35.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )

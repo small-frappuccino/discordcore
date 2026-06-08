@@ -163,6 +163,8 @@ func cloneGuildConfigs(in []GuildConfig) []GuildConfig {
 func cloneGuildConfig(in GuildConfig) GuildConfig {
 	return GuildConfig{
 		GuildID:           in.GuildID,
+		MainBotInstanceID: in.MainBotInstanceID,
+		FeatureRouting:    cloneStringMap(in.FeatureRouting),
 		BotInstanceTokens: cloneEncryptedStringMap(in.BotInstanceTokens),
 		Features:          cloneFeatureToggles(in.Features),
 		Channels:          in.Channels,
