@@ -40,6 +40,9 @@ export function SelectMenuMultiple({ options, value = [], onChange, placeholder 
       e.stopPropagation();
       e.preventDefault();
     }
+    const option = options.find(o => o.value === optValue);
+    if (option?.disabled) return;
+    
     const newVals = value.includes(optValue)
       ? value.filter(v => v !== optValue)
       : [...value, optValue];
@@ -97,7 +100,7 @@ export function SelectMenuMultiple({ options, value = [], onChange, placeholder 
               return (
                 <div
                   key={virtualRow.key}
-                  className="tahoe-select-option"
+                  className={`tahoe-select-option ${option.disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                   style={{
                     position: 'absolute',
                     top: 0,
@@ -106,10 +109,11 @@ export function SelectMenuMultiple({ options, value = [], onChange, placeholder 
                     height: `${virtualRow.size}px`,
                     transform: `translateY(${virtualRow.start}px)`,
                   }}
-                  onClick={() => toggleOption(option.value)}
+                  onClick={() => !option.disabled && toggleOption(option.value)}
                 >
                   {option.label}
-                  {isSelected && (
+                  {option.disabled && <span className="ml-auto text-xs text-text-muted">Missing Perms</span>}
+                  {isSelected && !option.disabled && (
                     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="3">
                       <polyline points="20 6 9 17 4 12" />
                     </svg>

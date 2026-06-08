@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from "react";
 export type SelectOption = {
   value: string;
   label: string;
+  disabled?: boolean;
 };
 
 type SelectMenuProps = {

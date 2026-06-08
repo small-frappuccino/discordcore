@@ -80,11 +80,14 @@ export interface GuildRolesSettingsSection {
 
 
 export interface GuildSettingsWorkspace {
+  config_version: number;
   scope: string;
   guild_id: string;
   available_bot_instance_ids?: string[];
   sections: {
     bot_instance_tokens_configured: Record<string, boolean>;
+    main_bot_instance_id?: string;
+    feature_routing?: Record<string, string>;
     roles: GuildRolesSettingsSection;
   };
 }
@@ -143,7 +146,10 @@ export async function updateGuildSettings(
   client: ControlApiClient,
   guildId: string,
   payload: {
+    config_version: number;
     bot_instance_tokens?: Record<string, string>;
+    main_bot_instance_id?: string;
+    feature_routing?: Record<string, string>;
     roles?: GuildRolesSettingsSection;
   },
 ): Promise<GuildSettingsWorkspaceResponse> {
@@ -151,6 +157,25 @@ export async function updateGuildSettings(
     "PUT",
     `/v1/guilds/${encodeURIComponent(guildId)}/settings`,
     payload,
+  );
+}
+
+export interface BotProfile {
+  id: string;
+  logical_key: string;
+  username: string;
+  discriminator: string;
+  avatar_url: string;
+  permissions: number;
+}
+
+export async function getBotProfiles(
+  client: ControlApiClient,
+  guildId: string,
+): Promise<BotProfile[]> {
+  return client.request<BotProfile[]>(
+    "GET",
+    `/v1/guilds/${encodeURIComponent(guildId)}/bot-profiles`,
   );
 }
 

@@ -4,7 +4,6 @@ import { GuildProvider } from "../context/GuildContext";
 import { ServerSelector } from "../components/layout/ServerSelector";
 import { AccountSelector } from "../components/layout/AccountSelector";
 import { useDashboardSession } from "../context/DashboardSessionContext";
-import { getHealthLive } from "../api/domains/health";
 
 const siteBrandIconSrc = "/favicon.ico";
 
@@ -36,21 +35,17 @@ const navigation: NavItem[] = [
 export const DashboardLayout = memo(function DashboardLayout() {
   const location = useLocation();
   const { guildId } = useParams<{ guildId: string }>();
-  const { client } = useDashboardSession();
+  const { fetchMainBotProfile, mainBotProfile } = useDashboardSession();
   const [brandIconError, setBrandIconError] = useState(false);
-  const [botName, setBotName] = useState<string | null>(null);
-  const [botAvatar, setBotAvatar] = useState<string | null>(null);
 
   useEffect(() => {
-    let mounted = true;
-    getHealthLive(client).then(res => {
-      if (mounted && res.available && res.snapshot.bot_user) {
-        setBotName(res.snapshot.bot_user);
-        setBotAvatar(res.snapshot.bot_avatar_url || null);
-      }
-    }).catch(() => {});
-    return () => { mounted = false; };
-  }, [client]);
+    if (guildId) {
+      fetchMainBotProfile(guildId);
+    }
+  }, [guildId, fetchMainBotProfile]);
+
+  const botName = mainBotProfile ? mainBotProfile.username : null;
+  const botAvatar = mainBotProfile ? mainBotProfile.avatar_url : null;
 
   return (
     <div className="dashboard-layout">

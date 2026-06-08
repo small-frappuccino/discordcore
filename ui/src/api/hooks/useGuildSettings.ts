@@ -16,7 +16,7 @@ export function useUpdateGuildSettingsMutation(client: ControlApiClient, guildId
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (payload: { bot_instance_tokens?: Record<string, string>; roles?: GuildRolesSettingsSection; }) => 
+    mutationFn: (payload: { config_version: number; bot_instance_tokens?: Record<string, string>; main_bot_instance_id?: string; feature_routing?: Record<string, string>; roles?: GuildRolesSettingsSection; }) => 
       updateGuildSettings(client, guildId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: guildSettingsQueryKey(client.getBaseUrl(), guildId) });

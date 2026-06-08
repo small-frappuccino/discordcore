@@ -13,7 +13,7 @@ import {
 import { ControlApiClient } from "../api/client";
 import type { AccessibleGuild } from "../api/domains/guilds";
 import type { AuthSessionResponse } from "../api/domains/auth";
-import { listAccessibleGuilds, listManageableGuilds } from "../api/domains/guilds";
+import { listAccessibleGuilds, listManageableGuilds, getGuildSettings, getBotProfiles, type BotProfile } from "../api/domains/guilds";
 import { appRoutes } from "../app/routes";
 import type { DashboardAuthState, Notice } from "../app/types";
 import {
@@ -47,6 +47,8 @@ interface DashboardSessionContextValue {
   logout: () => Promise<void>;
   refreshSession: () => Promise<void>;
   setBaseUrlDraft: (value: string) => void;
+  mainBotProfile: BotProfile | null;
+  fetchMainBotProfile: (guildId: string) => Promise<void>;
 }
 
 const DashboardSessionContext =
@@ -70,6 +72,7 @@ export function DashboardSessionProvider({
   const [notice, setNotice] = useState<Notice | null>(null);
   const [sessionLoading, setSessionLoading] = useState(false);
   const [busyLabel, setBusyLabel] = useState("");
+  const [mainBotProfile, setMainBotProfile] = useState<BotProfile | null>(null);
   const lastFreshSessionRefreshAtRef = useRef(0);
   const freshSessionRefreshRef = useRef<Promise<void> | null>(null);
 
@@ -246,6 +249,24 @@ export function DashboardSessionProvider({
     });
   }, [startSessionRefresh, client]);
 
+  const fetchMainBotProfile = useCallback(async (guildId: string) => {
+    if (!guildId) {
+      setMainBotProfile(null);
+      return;
+    }
+    try {
+      const [settings, profiles] = await Promise.all([
+        getGuildSettings(client, guildId).catch(() => null),
+        getBotProfiles(client, guildId).catch(() => []),
+      ]);
+      const mainId = settings?.workspace?.sections?.main_bot_instance_id;
+      const main = profiles.find(p => p.logical_key === mainId) || profiles[0] || null;
+      setMainBotProfile(main);
+    } catch {
+      setMainBotProfile(null);
+    }
+  }, [client]);
+
   const beginLogin = useCallback(async (nextPath: string = `${appRoutes.manage}/`) => {
     try {
       const oauthStatus = await client.getDiscordOAuthStatus(nextPath);
@@ -334,6 +355,8 @@ export function DashboardSessionProvider({
       logout,
       refreshSession,
       setBaseUrlDraft,
+      mainBotProfile,
+      fetchMainBotProfile,
     }),
     [
       authState,
@@ -355,6 +378,8 @@ export function DashboardSessionProvider({
       logout,
       refreshSession,
       setBaseUrlDraft,
+      mainBotProfile,
+      fetchMainBotProfile,
     ]
   );
 
