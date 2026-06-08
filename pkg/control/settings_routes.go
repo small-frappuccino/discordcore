@@ -321,7 +321,7 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 		updateBotInstanceTokens = true
 	}
 	current := s.configManager.SnapshotConfig()
-	if _, ok := findGuildSettings(current, guildID); !ok {
+	if guildDisk, ok := findGuildSettings(current, guildID); !ok {
 		if s.guildRegistration != nil {
 			if err := s.guildRegistration(r.Context(), guildID); err != nil {
 				http.Error(w, fmt.Sprintf("failed to auto-register guild settings: %v", err), statusForSettingsMutationError(err))
@@ -331,12 +331,18 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 			http.Error(w, fmt.Sprintf("guild settings not found for %s and registration is unavailable", guildID), http.StatusBadRequest)
 			return
 		}
+	} else if payload.ConfigVersion != nil && *payload.ConfigVersion != guildDisk.ConfigVersion {
+		http.Error(w, "optimistic concurrency control: config_version mismatch", http.StatusPreconditionFailed)
+		return
 	}
 
 	updated, err := s.configManager.UpdateConfig(func(cfg *files.BotConfig) error {
 		guild, ok := findGuildSettingsMutable(cfg, guildID)
 		if !ok {
 			return fmt.Errorf("%w: register this guild first (guild_id=%s)", errGuildRegistrationRequired, guildID)
+		}
+		if payload.ConfigVersion != nil {
+			guild.ConfigVersion++
 		}
 		if updateBotInstanceTokens {
 			if guild.BotInstanceTokens == nil {
@@ -349,6 +355,12 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 					guild.BotInstanceTokens[k] = files.EncryptedString(v)
 				}
 			}
+		}
+		if payload.MainBotInstanceID != nil {
+			guild.MainBotInstanceID = *payload.MainBotInstanceID
+		}
+		if payload.FeatureRouting != nil {
+			guild.FeatureRouting = *payload.FeatureRouting
 		}
 		if payload.Features != nil {
 			guild.Features = *payload.Features
@@ -386,6 +398,18 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 			}
 			guild.RuntimeConfig = next
 		}
+
+		for feature, instanceID := range guild.FeatureRouting {
+			if _, ok := guild.BotInstanceTokens[instanceID]; !ok {
+				delete(guild.FeatureRouting, feature)
+			}
+		}
+		if guild.MainBotInstanceID != "" {
+			if _, ok := guild.BotInstanceTokens[guild.MainBotInstanceID]; !ok {
+				guild.MainBotInstanceID = ""
+			}
+		}
+
 		return nil
 	})
 	if err != nil {
@@ -509,6 +533,8 @@ func normalizeSettingsRoutePath(path string) string {
 
 func guildPayloadEmpty(payload updateGuildSettingsRequest) bool {
 	return payload.BotInstanceTokens == nil &&
+		payload.MainBotInstanceID == nil &&
+		payload.FeatureRouting == nil &&
 		payload.Features == nil &&
 		payload.Channels == nil &&
 		payload.Roles == nil &&

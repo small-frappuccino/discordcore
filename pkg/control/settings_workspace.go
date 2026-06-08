@@ -92,6 +92,7 @@ type globalSettingsEffective struct {
 type guildSettingsWorkspace struct {
 	Scope                   string                 `json:"scope"`
 	GuildID                 string                 `json:"guild_id"`
+	ConfigVersion           int64                  `json:"config_version"`
 	AvailableBotInstanceIDs []string               `json:"available_bot_instance_ids,omitempty"`
 	Sections                guildSettingsSections  `json:"sections"`
 	Effective               guildSettingsEffective `json:"effective"`
@@ -99,6 +100,8 @@ type guildSettingsWorkspace struct {
 
 type guildSettingsSections struct {
 	BotInstanceTokensConfigured map[string]bool           `json:"bot_instance_tokens_configured"`
+	MainBotInstanceID           string                    `json:"main_bot_instance_id,omitempty"`
+	FeatureRouting              map[string]string         `json:"feature_routing,omitempty"`
 	Features                    files.FeatureToggles      `json:"features"`
 	Channels                    files.ChannelsConfig      `json:"channels"`
 	Roles                       files.RolesConfig         `json:"roles"`
@@ -185,7 +188,10 @@ type updateGlobalSettingsRequest struct {
 }
 
 type updateGuildSettingsRequest struct {
+	ConfigVersion     *int64                     `json:"config_version,omitempty"`
 	BotInstanceTokens *map[string]string         `json:"bot_instance_tokens,omitempty"`
+	MainBotInstanceID *string                    `json:"main_bot_instance_id,omitempty"`
+	FeatureRouting    *map[string]string         `json:"feature_routing,omitempty"`
 	Features          *files.FeatureToggles      `json:"features,omitempty"`
 	Channels          *files.ChannelsConfig      `json:"channels,omitempty"`
 	Roles             *files.RolesConfig         `json:"roles,omitempty"`
@@ -322,9 +328,12 @@ func buildGuildSettingsWorkspaceWithBindings(
 	return guildSettingsWorkspace{
 		Scope:                   "guild",
 		GuildID:                 guild.GuildID,
+		ConfigVersion:           guild.ConfigVersion,
 		AvailableBotInstanceIDs: slices.Clone(availableBotInstanceIDs),
 		Sections: guildSettingsSections{
 			BotInstanceTokensConfigured: buildBotInstanceTokensSection(guild.BotInstanceTokens),
+			MainBotInstanceID:           guild.MainBotInstanceID,
+			FeatureRouting:              guild.FeatureRouting,
 			Features:                    guild.Features,
 			Channels:                    guild.Channels,
 			Roles:                       guild.Roles,

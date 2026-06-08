@@ -603,3 +603,63 @@ func TestSettingsRoutesRequireAuthorization(t *testing.T) {
 func testBoolPtr(v bool) *bool {
 	return &v
 }
+
+func TestGuildSettingsPutScrubsDanglingFeatureRouting(t *testing.T) {
+	t.Parallel()
+
+	srv, cm := newControlTestServer(t)
+	setTestBotGuildBindings(srv, BotGuildBinding{GuildID: "g1"})
+
+	_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+		guild, ok := findGuildSettingsMutable(cfg, "g1")
+		if !ok {
+			return fmt.Errorf("guild g1 not found")
+		}
+		guild.BotInstanceTokens = map[string]files.EncryptedString{
+			"bot-1": "token-1",
+			"bot-2": "token-2",
+		}
+		guild.MainBotInstanceID = "bot-1"
+		guild.FeatureRouting = map[string]string{
+			"qotd": "bot-2",
+			"music": "bot-1",
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed config: %v", err)
+	}
+
+	tokens := map[string]string{"bot-2": ""}
+	payload := updateGuildSettingsRequest{BotInstanceTokens: &tokens}
+
+	rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodPut, "/v1/guilds/g1/settings", payload)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PUT status=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	cfg := cm.SnapshotConfig()
+	guild, _ := findGuildSettings(cfg, "g1")
+	if _, ok := guild.FeatureRouting["qotd"]; ok {
+		t.Fatalf("expected qotd routing to be scrubbed")
+	}
+	if guild.FeatureRouting["music"] != "bot-1" {
+		t.Fatalf("expected music routing to remain intact")
+	}
+
+	tokens2 := map[string]string{"bot-1": ""}
+	payload2 := updateGuildSettingsRequest{BotInstanceTokens: &tokens2}
+	rec2 := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodPut, "/v1/guilds/g1/settings", payload2)
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("PUT 2 status=%d body=%q", rec2.Code, rec2.Body.String())
+	}
+
+	cfg = cm.SnapshotConfig()
+	guild, _ = findGuildSettings(cfg, "g1")
+	if _, ok := guild.FeatureRouting["music"]; ok {
+		t.Fatalf("expected music routing to be scrubbed")
+	}
+	if guild.MainBotInstanceID != "" {
+		t.Fatalf("expected main bot instance to be scrubbed, got %q", guild.MainBotInstanceID)
+	}
+}
