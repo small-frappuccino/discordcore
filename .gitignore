@@ -15,3 +15,17 @@ node_modules/
 # Temporary files
 .tmp/
 tmp/
+
+# Root-only files
+/*.txt
+/*.log
+/*.exe
+/*.ps1
+/*.js
+/bun.lock
+/bun.lockb
+/package.json
+/package-lock.json
+
+# Editor config
+/.claude/
