@@ -147,7 +147,7 @@ func getBotProfileCached(ctx context.Context, guildID, logicalKey, token string)
 	if err != nil {
 		return BotProfileResponse{}, err
 	}
-	
+
 	prof := v.(BotProfileResponse)
 	prof.LogicalKey = logicalKey
 	return prof, nil

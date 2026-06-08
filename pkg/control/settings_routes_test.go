@@ -621,7 +621,7 @@ func TestGuildSettingsPutScrubsDanglingFeatureRouting(t *testing.T) {
 		}
 		guild.MainBotInstanceID = "bot-1"
 		guild.FeatureRouting = map[string]string{
-			"qotd": "bot-2",
+			"qotd":  "bot-2",
 			"music": "bot-1",
 		}
 		return nil

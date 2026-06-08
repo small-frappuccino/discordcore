@@ -483,8 +483,8 @@ type TicketsConfig struct {
 
 // GuildConfig holds the configuration for a specific guild.
 type GuildConfig struct {
-	GuildID string `json:"guild_id"`
-	ConfigVersion int64 `json:"config_version"`
+	GuildID       string `json:"guild_id"`
+	ConfigVersion int64  `json:"config_version"`
 	// BotInstanceTokens maps an instance ID (e.g. "main", "companion") to its safely encrypted Discord API token for this guild.
 	BotInstanceTokens map[string]EncryptedString `json:"bot_instance_tokens,omitempty"`
 	MainBotInstanceID string                     `json:"main_bot_instance_id,omitempty"`
