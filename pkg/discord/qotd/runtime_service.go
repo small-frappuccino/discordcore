@@ -301,6 +301,17 @@ func (s *RuntimeService) configuredGuildIDs(requireEnabled bool) []string {
 		if guildID == "" {
 			continue
 		}
+
+		route := guild.FeatureRouting["qotd"]
+		if route == "" {
+			route = guild.MainBotInstanceID
+			if route == "" {
+				route = s.defaultBotID
+			}
+		}
+		if route != s.botInstanceID {
+			continue
+		}
 		if requireEnabled {
 			deck, ok := guild.QOTD.ActiveDeck()
 			if !ok || !deck.Enabled || strings.TrimSpace(deck.ChannelID) == "" {
