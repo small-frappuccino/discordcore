@@ -217,7 +217,7 @@ When a persisted config field changes shape:
 
 - Backend changes: `go test ./...` and `go vet ./...`
 - UI changes: `bun run test`, `bun run lint`, and `bun run build`
-- Formatting and line endings (any change touching tracked text files): `pwsh scripts/check-format.ps1` (or `bash scripts/check-format.sh`). The script gates `gofmt -l .` and CRLF residue against `.gitattributes`; both must be empty before reporting completion.
+- Formatting and line endings (any change touching tracked text files): `release validate`. This command natively gates `gofmt -l .` and CRLF residue against `.gitattributes`; both must be empty before reporting completion.
 - Route or embed contract changes: verify `ui/vite.config.ts`, `ui/src/app/routes.ts`, `pkg/control/http_routes.go`, `pkg/control/dashboard_handler.go`, and that `ui/dist/index.html` still exists.
 - Feature or settings contract changes: verify the Go route and workspace builders, `ui/src/api/control.ts`, and the adapters or pages consuming the changed fields.
 - Exported Go API, doc, or error-contract changes: update nearby tests and doc comments that pin the new behavior.
@@ -230,6 +230,7 @@ When a persisted config field changes shape:
 - `go vet ./...`
 - `go test -tags integration ./...`
 - From `ui/`: `bun run test`, `bun run lint`, `bun run build`
+- `release validate` (runs gofmt, EOL drift, go vet, and ui lint without committing)
 - Canonical release command: `release -m "<conventional commit subject>" -y --promote`
 
 ### Release rules
@@ -237,6 +238,7 @@ When a persisted config field changes shape:
 - Do not push to `main` directly.
 - Do not call `git tag` by hand.
 - Do not bundle unrelated changes into a single release commit.
+- The automated release orchestrator will automatically patch `pkg/files/version.go`; do not mutate version constants manually.
 - Restrict line-ending or encoding normalization commits to that scope so the diff stays trivial to audit; stylistic reformatting (e.g., gofmt-equivalent one-liner to multi-line conversions) goes in a separate `style:` or `refactor(style):` commit.
 - Treat the conventional-commit subject as the release message and changelog entry.
 

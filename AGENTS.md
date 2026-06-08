@@ -231,7 +231,7 @@ Validation expectations:
 
 - backend changes: `go test ./...` and `go vet ./...`
 - UI changes: `bun run test`, `bun run lint`, and `bun run build`
-- formatting and line endings (any change touching tracked text files): `pwsh scripts/check-format.ps1` (or `bash scripts/check-format.sh`). The script gates `gofmt -l .` and CRLF residue against `.gitattributes`; both must be empty before reporting completion. New files you create must be LF — `.editorconfig` and `.gitattributes` are the contract
+- formatting and line endings (any change touching tracked text files): `release validate`. This command natively gates `gofmt -l .` and CRLF residue against `.gitattributes`; both must be empty before reporting completion. New files you create must be LF — `.editorconfig` and `.gitattributes` are the contract
 - route or embed contract changes: verify `ui/vite.config.ts`, `ui/src/app/routes.ts`, `pkg/control/http_routes.go`, `pkg/control/dashboard_handler.go`, and that `ui/dist/index.html` still exists
 - feature or settings contract changes: verify the Go route and workspace builders, `ui/src/api/control.ts`, and the adapters or pages consuming the changed fields
 - exported Go API, doc, or error-contract changes: update nearby tests and doc comments that pin the new behavior
@@ -244,6 +244,7 @@ Build and release commands:
 - `go vet ./...`
 - `go test -tags integration ./...`
 - from `ui/`: `bun run test`, `bun run lint`, `bun run build`
+- `release validate` (runs gofmt, EOL drift, go vet, and ui lint without committing)
 - canonical release command: `release -m "<conventional commit subject>" -y --promote`
 
 Release rules:
@@ -251,6 +252,7 @@ Release rules:
 - do not push to `main` directly
 - do not call `git tag` by hand
 - do not bundle unrelated changes into a single release commit
+- the automated release orchestrator will automatically patch `pkg/files/version.go`; do not mutate version constants manually
 - restrict line-ending or encoding normalization commits to that scope so the diff stays trivial to audit; stylistic reformatting (e.g., gofmt-equivalent one-liner to multi-line conversions) goes in a separate `style:` or `refactor(style):` commit
 - treat the conventional-commit subject as the release message and changelog entry
 
