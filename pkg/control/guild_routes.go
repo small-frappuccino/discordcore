@@ -80,6 +80,13 @@ func (s *Server) handleGuildConfigRoutes(w http.ResponseWriter, r *http.Request)
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 		return
+	case len(tail) == 1 && tail[0] == "bot-profiles":
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		s.handleGuildBotProfilesGet(w, r, guildID)
+		return
 	case len(tail) >= 1 && tail[0] == "embeds":
 		s.handleGuildEmbedsRoutes(w, r, guildID, tail, auth)
 		return
