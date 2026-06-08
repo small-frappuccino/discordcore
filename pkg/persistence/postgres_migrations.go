@@ -711,4 +711,15 @@ var postgresMigrations = []migration{
 			`ALTER TABLE persistent_cache DROP COLUMN IF EXISTS guild_id`,
 		},
 	},
+	{
+		Version: 24,
+		UpSQL: []string{
+			`ALTER TABLE roles_current ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`,
+			`CREATE INDEX IF NOT EXISTS idx_roles_current_deleted ON roles_current(deleted_at) WHERE deleted_at IS NOT NULL`,
+		},
+		DownSQL: []string{
+			`DROP INDEX IF EXISTS idx_roles_current_deleted`,
+			`ALTER TABLE roles_current DROP COLUMN IF EXISTS deleted_at`,
+		},
+	},
 }

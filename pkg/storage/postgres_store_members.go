@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -36,7 +37,7 @@ type GuildMemberCurrentState struct {
 }
 
 // UpsertGuildMemberSnapshotsContext persists one page of guild member snapshots in a single transaction.
-func (s *Store) UpsertGuildMemberSnapshotsContext(ctx context.Context, guildID string, snapshots []GuildMemberSnapshot, updatedAt time.Time) error {
+func (s *Store) UpsertGuildMemberSnapshotsContext(ctx context.Context, guildID string, snapshots []GuildMemberSnapshot, updatedAt time.Time) (err error) {
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" || len(snapshots) == 0 {
 		return nil
@@ -56,7 +57,11 @@ func (s *Store) UpsertGuildMemberSnapshotsContext(ctx context.Context, guildID s
 	if err != nil {
 		return fmt.Errorf("Store.UpsertGuildMemberSnapshotsContext: %w", err)
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer func() {
+		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+			err = errors.Join(err, fmt.Errorf("rollback failed: %w", rerr))
+		}
+	}()
 
 	if err := upsertGuildMemberSnapshotBatch(ctx, tx, guildID, normalized, updatedAt); err != nil {
 		return fmt.Errorf("Store.UpsertGuildMemberSnapshotsContext: %w", err)
@@ -273,7 +278,8 @@ func upsertAvatarCurrentBatch(ctx context.Context, tx *sql.Tx, guildID string, s
 		_, err := tx.ExecContext(ctx,
 			`INSERT INTO avatars_current (guild_id, user_id, avatar_hash, updated_at)
              SELECT $1::text, * FROM UNNEST($2::text[], $3::text[], $4::timestamptz[])
-             ON CONFLICT(guild_id, user_id) DO UPDATE SET avatar_hash=excluded.avatar_hash, updated_at=excluded.updated_at`,
+             ON CONFLICT(guild_id, user_id) DO UPDATE SET avatar_hash=excluded.avatar_hash, updated_at=excluded.updated_at
+             WHERE avatars_current.updated_at < excluded.updated_at`,
 			guildID, userIDs, avatarHashes, updatedAts,
 		)
 		return err
@@ -287,7 +293,7 @@ func deleteRolesForUsersBatch(ctx context.Context, tx *sql.Tx, guildID string, u
 	}
 
 	_, err := tx.ExecContext(ctx,
-		`DELETE FROM roles_current WHERE guild_id=$1 AND user_id = ANY($2::text[]) AND updated_at < $3`,
+		`UPDATE roles_current SET deleted_at = $3, updated_at = $3 WHERE guild_id=$1 AND user_id = ANY($2::text[]) AND updated_at < $3`,
 		guildID, userIDs, updatedAt,
 	)
 	return err
@@ -317,7 +323,7 @@ func insertMemberRolesBatch(ctx context.Context, tx *sql.Tx, guildID string, sna
 	_, err := tx.ExecContext(ctx,
 		`INSERT INTO roles_current (guild_id, user_id, role_id, updated_at)
          SELECT $1::text, * FROM UNNEST($2::text[], $3::text[], $4::timestamptz[])
-         ON CONFLICT(guild_id, user_id, role_id) DO UPDATE SET updated_at=excluded.updated_at
+         ON CONFLICT(guild_id, user_id, role_id) DO UPDATE SET updated_at=excluded.updated_at, deleted_at=NULL
          WHERE roles_current.updated_at < excluded.updated_at`,
 		guildID, userIDs, roleIDs, updatedAts,
 	)
@@ -450,7 +456,7 @@ func (s *Store) UpsertMemberPresenceContext(ctx context.Context, input MemberPre
 }
 
 // MarkMemberLeftContext records that a member is no longer active in a guild and clears current roles.
-func (s *Store) MarkMemberLeftContext(ctx context.Context, guildID, userID string, leftAt time.Time) error {
+func (s *Store) MarkMemberLeftContext(ctx context.Context, guildID, userID string, leftAt time.Time) (err error) {
 	guildID = strings.TrimSpace(guildID)
 	userID = strings.TrimSpace(userID)
 	if guildID == "" || userID == "" {
@@ -466,7 +472,11 @@ func (s *Store) MarkMemberLeftContext(ctx context.Context, guildID, userID strin
 	if err != nil {
 		return fmt.Errorf("Store.MarkMemberLeftContext: %w", err)
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer func() {
+		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+			err = errors.Join(err, fmt.Errorf("rollback failed: %w", rerr))
+		}
+	}()
 
 	if _, err := txExecContext(
 		ctx,
@@ -485,7 +495,7 @@ func (s *Store) MarkMemberLeftContext(ctx context.Context, guildID, userID strin
 	); err != nil {
 		return err
 	}
-	if _, err := txExecContext(ctx, tx, `DELETE FROM roles_current WHERE guild_id=$1 AND user_id=$2`, guildID, userID); err != nil {
+	if _, err := txExecContext(ctx, tx, `UPDATE roles_current SET deleted_at = $3, updated_at = $3 WHERE guild_id=$1 AND user_id=$2 AND updated_at < $3`, guildID, userID, leftAt); err != nil {
 		return fmt.Errorf("Store.MarkMemberLeftContext: %w", err)
 	}
 	return tx.Commit()
@@ -517,6 +527,7 @@ func (s *Store) GetActiveGuildMemberStatesContext(ctx context.Context, guildID s
 		  LEFT JOIN roles_current rc
 		    ON rc.guild_id = mj.guild_id
 		   AND rc.user_id = mj.user_id
+		   AND rc.deleted_at IS NULL
 		 WHERE mj.guild_id = $1
 		   AND mj.left_at IS NULL
 		 ORDER BY mj.user_id, rc.role_id
@@ -570,7 +581,7 @@ func (s *Store) GetActiveGuildMemberStatesContext(ctx context.Context, guildID s
 // UpsertAvatar sets the current avatar hash for a member in a guild.
 // If the hash changed, it records a row in avatars_history.
 // Returns (changed, oldHash, err).
-func (s *Store) UpsertAvatar(guildID, userID, newHash string, updatedAt time.Time) (bool, string, error) {
+func (s *Store) UpsertAvatar(guildID, userID, newHash string, updatedAt time.Time) (changed bool, oldHash string, err error) {
 	if guildID == "" || userID == "" {
 		return false, "", nil
 	}
@@ -583,7 +594,9 @@ func (s *Store) UpsertAvatar(guildID, userID, newHash string, updatedAt time.Tim
 		return false, "", fmt.Errorf("Store.UpsertAvatar: %w", err)
 	}
 	defer func() {
-		_ = tx.Rollback()
+		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+			err = errors.Join(err, fmt.Errorf("rollback failed: %w", rerr))
+		}
 	}()
 
 	var curHash string
@@ -599,7 +612,7 @@ func (s *Store) UpsertAvatar(guildID, userID, newHash string, updatedAt time.Tim
 		hasCur = true
 	}
 
-	changed := !hasCur || curHash != newHash
+	changed = !hasCur || curHash != newHash
 	if changed && hasCur {
 		if _, err := txExec(tx,
 			`INSERT INTO avatars_history (guild_id, user_id, old_hash, new_hash, changed_at)

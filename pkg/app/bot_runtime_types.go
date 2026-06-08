@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	"github.com/bwmarrin/discordgo"
@@ -53,6 +54,27 @@ type botRuntimeResolver struct {
 	configManager        *files.ConfigManager
 	runtimes             atomic.Value // holds map[string]*botRuntime
 	defaultBotInstanceID string
+	readyCh              chan struct{}
+	readyOnce            sync.Once
+}
+
+func (r *botRuntimeResolver) markReady() {
+	if r == nil {
+		return
+	}
+	r.readyOnce.Do(func() { close(r.readyCh) })
+}
+
+func (r *botRuntimeResolver) waitForReady(ctx context.Context) error {
+	if r == nil {
+		return fmt.Errorf("resolver is nil")
+	}
+	select {
+	case <-r.readyCh:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (r *botRuntimeResolver) getRuntimes() map[string]*botRuntime {
@@ -106,6 +128,7 @@ func newBotRuntimeResolver(
 	resolver := &botRuntimeResolver{
 		configManager:        configManager,
 		defaultBotInstanceID: strings.TrimSpace(defaultBotInstanceID),
+		readyCh:              make(chan struct{}),
 	}
 	resolver.swapRuntimes(runtimes)
 	return resolver

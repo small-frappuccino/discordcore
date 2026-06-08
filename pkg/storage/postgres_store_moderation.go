@@ -7,9 +7,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/stdlib"
 )
 
 // ModerationWarning is a stored warning against a user in a guild. CaseNumber is
@@ -46,7 +43,7 @@ func (s *Store) NextModerationCaseNumber(guildID string) (int64, error) {
 }
 
 // CreateModerationWarning creates moderation warning.
-func (s *Store) CreateModerationWarning(guildID, userID, moderatorID, reason string, createdAt time.Time) (ModerationWarning, error) {
+func (s *Store) CreateModerationWarning(guildID, userID, moderatorID, reason string, createdAt time.Time) (warning ModerationWarning, err error) {
 
 	guildID = strings.TrimSpace(guildID)
 	userID = strings.TrimSpace(userID)
@@ -74,14 +71,18 @@ func (s *Store) CreateModerationWarning(guildID, userID, moderatorID, reason str
 	if err != nil {
 		return ModerationWarning{}, fmt.Errorf("Store.CreateModerationWarning: %w", err)
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer func() {
+		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+			err = errors.Join(err, fmt.Errorf("rollback failed: %w", rerr))
+		}
+	}()
 
 	caseNumber, err := nextModerationCaseNumberTx(tx, guildID)
 	if err != nil {
 		return ModerationWarning{}, fmt.Errorf("Store.CreateModerationWarning: %w", err)
 	}
 
-	warning := ModerationWarning{
+	warning = ModerationWarning{
 		GuildID:     guildID,
 		UserID:      userID,
 		CaseNumber:  caseNumber,
@@ -211,7 +212,7 @@ func (s *Store) GetGuildOwnerID(guildID string) (string, bool, error) {
 }
 
 // UpsertMemberRoles replaces the current set of roles for a member in a guild atomically.
-func (s *Store) UpsertMemberRoles(guildID, userID string, roles []string, updatedAt time.Time) error {
+func (s *Store) UpsertMemberRoles(guildID, userID string, roles []string, updatedAt time.Time) (err error) {
 	if guildID == "" || userID == "" {
 		return nil
 	}
@@ -219,54 +220,53 @@ func (s *Store) UpsertMemberRoles(guildID, userID string, roles []string, update
 		updatedAt = time.Now().UTC()
 	}
 
-	conn, err := s.db.Conn(context.Background())
+	tx, err := s.db.BeginTx(context.Background(), nil)
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer func() {
+		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+			err = errors.Join(err, fmt.Errorf("rollback failed: %w", rerr))
+		}
+	}()
 
-	return conn.Raw(func(driverConn any) error {
-		stdConn, ok := driverConn.(*stdlib.Conn)
-		if !ok {
-			return errors.New("underlying driver is not pgx stdlib")
+	if _, err = tx.ExecContext(context.Background(), `UPDATE roles_current SET deleted_at=$3, updated_at=$3 WHERE guild_id=$1 AND user_id=$2 AND updated_at < $3`, guildID, userID, updatedAt); err != nil {
+		return err
+	}
+
+	var validRoles []string
+	for _, rid := range roles {
+		if rid != "" {
+			validRoles = append(validRoles, rid)
+		}
+	}
+
+	if len(validRoles) > 0 {
+		userIDs := make([]string, len(validRoles))
+		for i := range userIDs {
+			userIDs[i] = userID
+		}
+		updatedAts := make([]time.Time, len(validRoles))
+		for i := range updatedAts {
+			updatedAts[i] = updatedAt
 		}
 
-		c := stdConn.Conn()
-		tx, err := c.Begin(context.Background())
-		if err != nil {
+		if _, err = tx.ExecContext(context.Background(), `
+			INSERT INTO roles_current (guild_id, user_id, role_id, updated_at)
+			SELECT $1::text, * FROM UNNEST($2::text[], $3::text[], $4::timestamptz[])
+			ON CONFLICT(guild_id, user_id, role_id) DO UPDATE SET updated_at=excluded.updated_at, deleted_at=NULL
+			WHERE roles_current.updated_at < excluded.updated_at`,
+			guildID, userIDs, validRoles, updatedAts,
+		); err != nil {
 			return err
 		}
-		defer tx.Rollback(context.Background())
+	}
 
-		if _, err := tx.Exec(context.Background(), `DELETE FROM roles_current WHERE guild_id=$1 AND user_id=$2`, guildID, userID); err != nil {
-			return err
-		}
-
-		var rows [][]any
-		for _, rid := range roles {
-			if rid != "" {
-				rows = append(rows, []any{guildID, userID, rid, updatedAt})
-			}
-		}
-
-		if len(rows) > 0 {
-			if _, err := tx.CopyFrom(
-				context.Background(),
-				pgx.Identifier{"roles_current"},
-				[]string{"guild_id", "user_id", "role_id", "updated_at"},
-				pgx.CopyFromRows(rows),
-			); err != nil {
-				return err
-			}
-		}
-
-		return tx.Commit(context.Background())
-	})
+	return tx.Commit()
 }
 
-// GetMemberRoles returns the current cached roles for a member in a guild.
 func (s *Store) GetMemberRoles(guildID, userID string) ([]string, error) {
-	rows, err := s.query(`SELECT role_id FROM roles_current WHERE guild_id=$1 AND user_id=$2`, guildID, userID)
+	rows, err := s.query(`SELECT role_id FROM roles_current WHERE guild_id=$1 AND user_id=$2 AND deleted_at IS NULL`, guildID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("Store.GetMemberRoles: %w", err)
 	}

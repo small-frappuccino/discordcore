@@ -290,6 +290,12 @@ func (uc *UnifiedCache) InvalidateMember(guildID, userID string) {
 		return
 	}
 	uc.members.Invalidate(key)
+
+	if uc.persistEnabled && uc.store != nil {
+		go func() {
+			_ = uc.store.DeleteCacheEntry(persistKey("member", key))
+		}()
+	}
 }
 
 // GetGuild retrieves a cached guild or returns nil if not found/expired
@@ -317,6 +323,13 @@ func (uc *UnifiedCache) InvalidateGuild(guildID string) {
 		return
 	}
 	uc.guilds.Invalidate(guildID)
+
+	if uc.persistEnabled && uc.store != nil {
+		go func() {
+			_ = uc.store.DeleteCacheEntry(guildID)
+			_ = uc.store.DeleteCacheEntry(persistKey("guild", guildID))
+		}()
+	}
 }
 
 // GetRoles retrieves cached roles for a guild or returns nil if not found/expired
@@ -344,6 +357,12 @@ func (uc *UnifiedCache) InvalidateRoles(guildID string) {
 		return
 	}
 	uc.roles.Invalidate(guildID)
+
+	if uc.persistEnabled && uc.store != nil {
+		go func() {
+			_ = uc.store.DeleteCacheEntry(persistKey("roles", guildID))
+		}()
+	}
 }
 
 // GetChannel retrieves a cached channel or returns nil if not found/expired
@@ -379,10 +398,24 @@ func (uc *UnifiedCache) InvalidateChannel(channelID string) {
 	if channelID == "" || uc.channels == nil {
 		return
 	}
+	uc.indices.mu.RLock()
+	guildID := uc.indices.channelToGuild[channelID]
+	uc.indices.mu.RUnlock()
+
 	// Update indices
 	uc.indices.removeChannel(channelID)
 
 	uc.channels.Invalidate(channelID)
+
+	if uc.persistEnabled && uc.store != nil {
+		go func() {
+			cacheKey := channelID
+			if guildID != "" {
+				cacheKey = guildID + ":" + channelID
+			}
+			_ = uc.store.DeleteCacheEntry(persistKey("channel", cacheKey))
+		}()
+	}
 }
 
 // MemberCount returns the number of entries in the member segment. Use

@@ -3,6 +3,7 @@ package persistence
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"sort"
 )
@@ -57,18 +58,27 @@ func (m *postgresMigrator) Up(ctx context.Context) error {
 			return fmt.Errorf("begin migration tx version %d: %w", mig.Version, err)
 		}
 		for _, sqlText := range mig.UpSQL {
-			if _, err := tx.ExecContext(ctx, sqlText); err != nil {
-				_ = tx.Rollback()
-				return fmt.Errorf("apply migration version %d: %w", mig.Version, err)
+			if _, execErr := tx.ExecContext(ctx, sqlText); execErr != nil {
+				retErr := fmt.Errorf("apply migration version %d: %w", mig.Version, execErr)
+				if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+					return errors.Join(retErr, fmt.Errorf("rollback failed: %w", rerr))
+				}
+				return retErr
 			}
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO schema_migrations (version) VALUES ($1)`, mig.Version); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("record migration version %d: %w", mig.Version, err)
+		if _, execErr := tx.ExecContext(ctx, `INSERT INTO schema_migrations (version) VALUES ($1)`, mig.Version); execErr != nil {
+			retErr := fmt.Errorf("record migration version %d: %w", mig.Version, execErr)
+			if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+				return errors.Join(retErr, fmt.Errorf("rollback failed: %w", rerr))
+			}
+			return retErr
 		}
-		if err := tx.Commit(); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("commit migration version %d: %w", mig.Version, err)
+		if execErr := tx.Commit(); execErr != nil {
+			retErr := fmt.Errorf("commit migration version %d: %w", mig.Version, execErr)
+			if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+				return errors.Join(retErr, fmt.Errorf("rollback failed: %w", rerr))
+			}
+			return retErr
 		}
 		current = mig.Version
 	}
@@ -115,18 +125,27 @@ func (m *postgresMigrator) Down(ctx context.Context, steps int) error {
 			return fmt.Errorf("begin rollback tx version %d: %w", mig.Version, err)
 		}
 		for _, sqlText := range mig.DownSQL {
-			if _, err := tx.ExecContext(ctx, sqlText); err != nil {
-				_ = tx.Rollback()
-				return fmt.Errorf("rollback migration version %d: %w", mig.Version, err)
+			if _, execErr := tx.ExecContext(ctx, sqlText); execErr != nil {
+				retErr := fmt.Errorf("rollback migration version %d: %w", mig.Version, execErr)
+				if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+					return errors.Join(retErr, fmt.Errorf("rollback failed: %w", rerr))
+				}
+				return retErr
 			}
 		}
-		if _, err := tx.ExecContext(ctx, `DELETE FROM schema_migrations WHERE version = $1`, mig.Version); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("delete migration record version %d: %w", mig.Version, err)
+		if _, execErr := tx.ExecContext(ctx, `DELETE FROM schema_migrations WHERE version = $1`, mig.Version); execErr != nil {
+			retErr := fmt.Errorf("delete migration record version %d: %w", mig.Version, execErr)
+			if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+				return errors.Join(retErr, fmt.Errorf("rollback failed: %w", rerr))
+			}
+			return retErr
 		}
-		if err := tx.Commit(); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("commit rollback version %d: %w", mig.Version, err)
+		if execErr := tx.Commit(); execErr != nil {
+			retErr := fmt.Errorf("commit rollback version %d: %w", mig.Version, execErr)
+			if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+				return errors.Join(retErr, fmt.Errorf("rollback failed: %w", rerr))
+			}
+			return retErr
 		}
 		remaining--
 	}
@@ -181,13 +200,19 @@ func (m *postgresMigrator) repairLegacySchemas(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("begin legacy schema repair tx: %w", err)
 	}
-	if err := repairQOTDLegacySchema(ctx, tx); err != nil {
-		_ = tx.Rollback()
-		return fmt.Errorf("postgresMigrator.repairLegacySchemas: %w", err)
+	if execErr := repairQOTDLegacySchema(ctx, tx); execErr != nil {
+		retErr := fmt.Errorf("postgresMigrator.repairLegacySchemas: %w", execErr)
+		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+			return errors.Join(retErr, fmt.Errorf("rollback failed: %w", rerr))
+		}
+		return retErr
 	}
-	if err := tx.Commit(); err != nil {
-		_ = tx.Rollback()
-		return fmt.Errorf("commit legacy schema repair: %w", err)
+	if execErr := tx.Commit(); execErr != nil {
+		retErr := fmt.Errorf("commit legacy schema repair: %w", execErr)
+		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+			return errors.Join(retErr, fmt.Errorf("rollback failed: %w", rerr))
+		}
+		return retErr
 	}
 	return nil
 }

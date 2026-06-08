@@ -176,6 +176,7 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 	}
 
 	// 4. Trigger Starts (with Stop barrier)
+	var startWG sync.WaitGroup
 	for id, token := range toStart {
 		var oldState *botInstanceState
 		if state, exists := s.instances[id]; exists {
@@ -197,11 +198,18 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 		}
 
 		s.bgWG.Add(1)
+		startWG.Add(1)
 		go func(id, token string, oldState *botInstanceState) {
 			defer s.bgWG.Done()
+			defer startWG.Done()
 			s.awaitStopAndStart(id, token, oldState)
 		}(id, token, oldState)
 	}
+
+	go func() {
+		startWG.Wait()
+		s.resolver.markReady()
+	}()
 }
 
 func (s *BotSupervisor) executeStopAndRemove(id string, state *botInstanceState, wgGlobal *sync.WaitGroup) {

@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -113,7 +114,11 @@ func (s *Store) UpdateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 	if err != nil {
 		return nil, fmt.Errorf("Store.UpdateQOTDQuestion: %w", err)
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer func() {
+		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+			err = errors.Join(err, fmt.Errorf("rollback failed: %w", rerr))
+		}
+	}()
 
 	var currentDeckID string
 	var currentQueuePosition int64
@@ -227,7 +232,11 @@ func (s *Store) DeleteQOTDQuestion(ctx context.Context, guildID string, question
 	if err != nil {
 		return fmt.Errorf("Store.DeleteQOTDQuestion: %w", err)
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer func() {
+		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+			err = errors.Join(err, fmt.Errorf("rollback failed: %w", rerr))
+		}
+	}()
 
 	var deckID string
 	if err := txQueryRow(tx,
@@ -273,7 +282,11 @@ func (s *Store) DeleteQOTDQuestionsByDecks(ctx context.Context, guildID string, 
 	if err != nil {
 		return fmt.Errorf("Store.DeleteQOTDQuestionsByDecks: %w", err)
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer func() {
+		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+			err = errors.Join(err, fmt.Errorf("rollback failed: %w", rerr))
+		}
+	}()
 
 	for _, deckID := range normalizedDeckIDs {
 		if _, err := txExecContext(ctx, tx,
@@ -407,7 +420,11 @@ func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID, deckID string
 	if err != nil {
 		return fmt.Errorf("Store.ReorderQOTDQuestions: %w", err)
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer func() {
+		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+			err = errors.Join(err, fmt.Errorf("rollback failed: %w", rerr))
+		}
+	}()
 
 	rows, err := txQueryContext(ctx, tx,
 		`SELECT id, queue_position
@@ -501,7 +518,11 @@ func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID, deckID str
 	if err != nil {
 		return nil, fmt.Errorf("Store.ReserveNextQOTDQuestion: %w", err)
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer func() {
+		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+			err = errors.Join(err, fmt.Errorf("rollback failed: %w", rerr))
+		}
+	}()
 
 	row := txQueryRow(tx,
 		`SELECT
@@ -592,7 +613,11 @@ func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID, deckI
 	if err != nil {
 		return nil, fmt.Errorf("Store.ReserveNextReadyQOTDQuestion: %w", err)
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer func() {
+		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+			err = errors.Join(err, fmt.Errorf("rollback failed: %w", rerr))
+		}
+	}()
 
 	row := txQueryRow(tx,
 		`SELECT

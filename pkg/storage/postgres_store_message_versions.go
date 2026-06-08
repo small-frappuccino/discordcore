@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -34,7 +35,7 @@ func (s *Store) InsertMessageVersionsBatchContext(ctx context.Context, versions 
 }
 
 // InsertMessageVersionsMixedBatchContext inserts a batch of message history rows, assigning versions for rows with Version <= 0.
-func (s *Store) InsertMessageVersionsMixedBatchContext(ctx context.Context, versions []MessageVersion) error {
+func (s *Store) InsertMessageVersionsMixedBatchContext(ctx context.Context, versions []MessageVersion) (err error) {
 
 	normalized := normalizeMessageVersions(versions)
 	if len(normalized) == 0 {
@@ -45,7 +46,11 @@ func (s *Store) InsertMessageVersionsMixedBatchContext(ctx context.Context, vers
 	if err != nil {
 		return fmt.Errorf("begin message versions tx: %w", err)
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer func() {
+		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+			err = errors.Join(err, fmt.Errorf("rollback failed: %w", rerr))
+		}
+	}()
 
 	assigned, err := reserveMessageVersionRangesTx(ctx, tx, normalized)
 	if err != nil {

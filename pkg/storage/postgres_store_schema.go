@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -31,7 +32,7 @@ var requiredSchemaColumns = map[string][]string{
 	"member_joins": {"last_seen_at", "is_bot", "left_at"},
 }
 
-func (s *Store) ensureMemberJoinColumns(ctx context.Context) error {
+func (s *Store) ensureMemberJoinColumns(ctx context.Context) (err error) {
 	missingColumns, err := s.missingColumns(ctx, "member_joins", requiredSchemaColumns["member_joins"])
 	if err != nil {
 		return fmt.Errorf("Store.ensureMemberJoinColumns: %w", err)
@@ -44,7 +45,11 @@ func (s *Store) ensureMemberJoinColumns(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("begin member_joins bootstrap tx: %w", err)
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer func() {
+		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+			err = errors.Join(err, fmt.Errorf("rollback failed: %w", rerr))
+		}
+	}()
 
 	if _, err := tx.ExecContext(ctx, `ALTER TABLE member_joins ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ`); err != nil {
 		return fmt.Errorf("add member_joins.last_seen_at column: %w", err)

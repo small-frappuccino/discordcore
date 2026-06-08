@@ -89,6 +89,7 @@ func (s *Server) handleGuildEmbedGet(w http.ResponseWriter, guildID, key string)
 }
 
 func (s *Server) handleGuildEmbedPut(w http.ResponseWriter, r *http.Request, guildID, key string) {
+	r.Body = http.MaxBytesReader(w, r.Body, defaultMaxBodyBytes)
 	var input files.CustomEmbedConfig
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		http.Error(w, "invalid json body", http.StatusBadRequest)

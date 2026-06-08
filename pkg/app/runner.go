@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/small-frappuccino/discordcore/pkg/control"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
@@ -153,14 +154,39 @@ func runWithOptions(appName string, opts RunOptions) error {
 		runtimeApplier.SetInitial(cfg.RuntimeConfig)
 	}
 
-	controlServerRegistry := &controlServerHolder{}
-	startupTasks := newStartupTaskOrchestrator(1) // dynamic
-	defer shutdownStartupServices(startupTasks, controlServerRegistry, "Startup background tasks did not finish cleanly")
-
 	defaultBotInstanceID := strings.TrimSpace(opts.DefaultOwnerBotInstanceID)
 	if defaultBotInstanceID == "" {
 		defaultBotInstanceID = DefaultBotInstanceID
 	}
+
+	allowedInstances := make(map[string]struct{})
+	for _, def := range opts.BotCatalog {
+		allowedInstances[def.ID] = struct{}{}
+	}
+	knownInstances := make(map[string]struct{})
+	if cfg := configManager.Config(); cfg != nil {
+		for _, guild := range cfg.Guilds {
+			for instanceID, token := range guild.BotInstanceTokens {
+				if string(token) != "" {
+					if len(allowedInstances) > 0 {
+						if _, allowed := allowedInstances[instanceID]; allowed {
+							knownInstances[instanceID] = struct{}{}
+						}
+					} else if instanceID == defaultBotInstanceID {
+						knownInstances[instanceID] = struct{}{}
+					}
+				}
+			}
+		}
+	}
+	runtimeCount := len(knownInstances)
+	if runtimeCount == 0 {
+		runtimeCount = 1
+	}
+
+	controlServerRegistry := &controlServerHolder{}
+	startupTasks := newStartupTaskOrchestrator(runtimeCount)
+	defer shutdownStartupServices(startupTasks, controlServerRegistry, "Startup background tasks did not finish cleanly")
 
 	// Wire the in-memory metrics sink so /v1/health/qotd has counters to
 	// expose. NopMetrics is a valid fallback (the service still works) but
@@ -191,7 +217,7 @@ func runWithOptions(appName string, opts RunOptions) error {
 
 	botOpts := botRuntimeOptions{
 		defaultBotInstanceID:     defaultBotInstanceID,
-		runtimeCount:             0, // dynamic
+		runtimeCount:             runtimeCount,
 		configManager:            configManager,
 		store:                    store,
 		botCatalog:               opts.BotCatalog,
@@ -228,41 +254,53 @@ func runWithOptions(appName string, opts RunOptions) error {
 
 	runtimeResolver := botSupervisor.GetResolver()
 
-	var defaultSession *discordgo.Session
-	var sessionErr error
-	defaultSession, sessionErr = runtimeResolver.sessionForGuild("")
-	if sessionErr != nil {
-		if stdErrors.Is(sessionErr, ErrSessionUnavailable) {
-			log.ApplicationLogger().Info(
-				"Default discord session is unavailable; startup webhooks will be disabled",
-				"operation", "startup.default_session.resolve",
-				"botInstanceID", DefaultBotInstanceID,
-			)
-		} else {
-			return fmt.Errorf("resolve default session for startup: %w", sessionErr)
-		}
-	}
+	eg, egCtx := errgroup.WithContext(context.Background())
 
-	if err := appServiceManager.StartAll(); err != nil {
-		return err
-	}
-
-	controlBearerToken := strings.TrimSpace(files.EnvString(controlBearerTokenEnv, ""))
-	scheduleStartupWebhookEmbedUpdates(startupTasks, configManager.Config(), defaultSession)
-	scheduleControlServerStartup(startupTasks, controlStartupTaskOptions{
-		runOptions:            opts,
-		configManager:         configManager,
-		runtimeApplier:        runtimeApplier,
-		controlBearerToken:    controlBearerToken,
-		defaultBotInstanceID:  defaultBotInstanceID,
-		runtimeResolver:       runtimeResolver,
-		store:                 store,
-		qotdService:           qotdService,
-		moderationMetrics:     moderationMetrics,
-		controlServerRegistry: controlServerRegistry,
+	eg.Go(func() error {
+		return appServiceManager.StartAll()
 	})
 
-	log.ApplicationLogger().Info("🔗 Slash commands sync completed")
+	eg.Go(func() error {
+		if err := runtimeResolver.waitForReady(egCtx); err != nil {
+			return err
+		}
+
+		var defaultSession *discordgo.Session
+		var sessionErr error
+		defaultSession, sessionErr = runtimeResolver.sessionForGuild("")
+		if sessionErr != nil {
+			if stdErrors.Is(sessionErr, ErrSessionUnavailable) {
+				log.ApplicationLogger().Info(
+					"Default discord session is unavailable; startup webhooks will be disabled",
+					"operation", "startup.default_session.resolve",
+					"botInstanceID", DefaultBotInstanceID,
+				)
+			} else {
+				return fmt.Errorf("resolve default session for startup: %w", sessionErr)
+			}
+		}
+
+		controlBearerToken := strings.TrimSpace(files.EnvString(controlBearerTokenEnv, ""))
+		scheduleStartupWebhookEmbedUpdates(startupTasks, configManager.Config(), defaultSession)
+		scheduleControlServerStartup(startupTasks, controlStartupTaskOptions{
+			runOptions:            opts,
+			configManager:         configManager,
+			runtimeApplier:        runtimeApplier,
+			controlBearerToken:    controlBearerToken,
+			defaultBotInstanceID:  defaultBotInstanceID,
+			runtimeResolver:       runtimeResolver,
+			store:                 store,
+			qotdService:           qotdService,
+			moderationMetrics:     moderationMetrics,
+			controlServerRegistry: controlServerRegistry,
+		})
+		log.ApplicationLogger().Info("🔗 Slash commands sync completed")
+		return nil
+	})
+
+	if err := eg.Wait(); err != nil {
+		return err
+	}
 	log.ApplicationLogger().Info(fmt.Sprintf("🎯 %s initialized successfully in %s", appName, time.Since(started).Round(time.Millisecond)))
 	log.ApplicationLogger().Info(fmt.Sprintf("🤖 %s running. Press Ctrl+C to stop...", appName))
 
