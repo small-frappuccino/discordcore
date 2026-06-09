@@ -1,13 +1,15 @@
-package cache
+package cache_test
 
 import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 )
 
 func TestSegmentGetSetAndExpire(t *testing.T) {
-	seg := newSegment[int](time.Minute, 0)
+	seg := cache.NewSegment[int](time.Minute, 0)
 	if _, ok := seg.Get("missing"); ok {
 		t.Fatalf("expected miss on empty segment")
 	}
@@ -25,7 +27,7 @@ func TestSegmentGetSetAndExpire(t *testing.T) {
 }
 
 func TestSegmentLRUEviction(t *testing.T) {
-	seg := newSegment[int](0, 2)
+	seg := cache.NewSegment[int](0, 2)
 	seg.Set("a", 1)
 	seg.Set("b", 2)
 	// Access a to make b LRU
@@ -46,7 +48,7 @@ func TestSegmentLRUEviction(t *testing.T) {
 }
 
 func TestSegmentConcurrentAccess(t *testing.T) {
-	seg := newSegment[int](0, 0)
+	seg := cache.NewSegment[int](0, 0)
 	var wg sync.WaitGroup
 	for i := 0; i < 50; i++ {
 		wg.Add(1)
@@ -65,7 +67,7 @@ func TestSegmentConcurrentAccess(t *testing.T) {
 }
 
 func TestSegmentTakeDirtySnapshotReturnsOnlyChangedEntries(t *testing.T) {
-	seg := newSegment[int](time.Minute, 0)
+	seg := cache.NewSegment[int](time.Minute, 0)
 	seg.Set("a", 1)
 	seg.Set("b", 2)
 
@@ -87,7 +89,7 @@ func TestSegmentTakeDirtySnapshotReturnsOnlyChangedEntries(t *testing.T) {
 }
 
 func TestSegmentSetCleanWithExpirationDoesNotMarkDirty(t *testing.T) {
-	seg := newSegment[int](time.Minute, 0)
+	seg := cache.NewSegment[int](time.Minute, 0)
 	seg.SetCleanWithExpiration("warm", 7, time.Now().Add(time.Minute))
 
 	if got := seg.TakeDirtySnapshot(time.Now()); len(got) != 0 {

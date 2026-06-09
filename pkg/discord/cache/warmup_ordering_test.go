@@ -1,7 +1,8 @@
-package cache
+package cache_test
 
 import (
 	"fmt"
+	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"sync"
 	"testing"
 	"time"
@@ -28,7 +29,7 @@ func TestIntelligentWarmupOrdering(t *testing.T) {
 		mu.Unlock()
 	}
 
-	session := warmupSession{
+	session := cache.WarmupSession{
 		StateGuilds: func() []*discordgo.Guild {
 			mu.Lock()
 			stateCalls++
@@ -68,12 +69,12 @@ func TestIntelligentWarmupOrdering(t *testing.T) {
 		},
 	}
 
-	old := newWarmupSession
-	newWarmupSession = func(_ *discordgo.Session) warmupSession { return session }
-	t.Cleanup(func() { newWarmupSession = old })
+	old := cache.NewWarmupSession
+	cache.NewWarmupSession = func(_ *discordgo.Session) cache.WarmupSession { return session }
+	t.Cleanup(func() { cache.NewWarmupSession = old })
 
-	cache := newTestCache(t)
-	cfg := WarmupConfig{
+	uc := newTestCache(t)
+	cfg := cache.WarmupConfig{
 		FetchMissingMembers:  true,
 		FetchMissingRoles:    true,
 		FetchMissingGuilds:   true,
@@ -82,7 +83,7 @@ func TestIntelligentWarmupOrdering(t *testing.T) {
 		GuildIDs:             []string{"g1", "g2"},
 	}
 
-	if err := IntelligentWarmup(&discordgo.Session{}, cache, nil, cfg); err != nil {
+	if err := cache.IntelligentWarmup(&discordgo.Session{}, uc, nil, cfg); err != nil {
 		t.Fatalf("IntelligentWarmup error: %v", err)
 	}
 

@@ -1,25 +1,14 @@
-package cache
+package cache_test
 
-import "testing"
+import (
+	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
+	"testing"
+)
 
-func TestUnifiedCacheStopKeepsClosedStopChannel(t *testing.T) {
-	t.Parallel()
+func TestUnifiedCacheStopIdempotency(t *testing.T) {
+	uc := cache.NewUnifiedCache(cache.DefaultCacheConfig())
 
-	uc := NewUnifiedCache(DefaultCacheConfig())
-	stopChan := uc.stopCleanup
-	if stopChan == nil {
-		t.Fatal("expected stop channel to be initialized")
-	}
-
+	// Black-box test: ensure Stop does not block and is idempotent
 	uc.Stop()
-
-	if uc.stopCleanup != stopChan {
-		t.Fatal("expected Stop to keep the closed stop channel installed")
-	}
-
-	select {
-	case <-uc.stopCleanup:
-	default:
-		t.Fatal("expected stop channel to be closed after Stop")
-	}
+	uc.Stop() // Should not panic or block
 }

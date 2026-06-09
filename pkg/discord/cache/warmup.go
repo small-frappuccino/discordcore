@@ -10,8 +10,8 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
-// warmupSession holds function closures to interact with Discord API, enabling easy mocking without interface bloat.
-type warmupSession struct {
+// WarmupSession holds function closures to interact with Discord API, enabling easy mocking without interface bloat.
+type WarmupSession struct {
 	StateGuilds   func() []*discordgo.Guild
 	Guild         func(id string, options ...discordgo.RequestOption) (*discordgo.Guild, error)
 	GuildRoles    func(id string, options ...discordgo.RequestOption) ([]*discordgo.Role, error)
@@ -19,8 +19,8 @@ type warmupSession struct {
 	GuildMembers  func(guildID, after string, limit int, options ...discordgo.RequestOption) ([]*discordgo.Member, error)
 }
 
-var newWarmupSession = func(s *discordgo.Session) warmupSession {
-	return warmupSession{
+var NewWarmupSession = func(s *discordgo.Session) WarmupSession {
+	return WarmupSession{
 		StateGuilds: func() []*discordgo.Guild {
 			if s == nil || s.State == nil {
 				return nil
@@ -79,7 +79,7 @@ func IntelligentWarmupContext(ctx context.Context, session *discordgo.Session, c
 	startTime := time.Now()
 	log.ApplicationLogger().Info("🚀 Starting cache warmup (persistent preload + Discord backfill)...")
 
-	ws := newWarmupSession(session)
+	ws := NewWarmupSession(session)
 
 	// Step 1: Load persisted cache entries from the persistent store
 	if err := cache.Warmup(); err != nil {
@@ -124,7 +124,7 @@ func IntelligentWarmupContext(ctx context.Context, session *discordgo.Session, c
 		}
 		// Fetch missing guild data
 		if config.FetchMissingGuilds {
-			if err := warmupGuild(ws, cache, guildID); err != nil {
+			if err := WarmupGuild(ws, cache, guildID); err != nil {
 				if ctx.Err() != nil {
 					return ctx.Err()
 				}
@@ -136,7 +136,7 @@ func IntelligentWarmupContext(ctx context.Context, session *discordgo.Session, c
 
 		// Fetch missing roles
 		if config.FetchMissingRoles {
-			rolesCount, err := warmupGuildRoles(ws, cache, store, guildID)
+			rolesCount, err := WarmupGuildRoles(ws, cache, store, guildID)
 			if err != nil {
 				if ctx.Err() != nil {
 					return ctx.Err()
@@ -149,7 +149,7 @@ func IntelligentWarmupContext(ctx context.Context, session *discordgo.Session, c
 
 		// Fetch missing channels
 		if config.FetchMissingChannels {
-			channelsCount, err := warmupGuildChannels(ws, cache, guildID)
+			channelsCount, err := WarmupGuildChannels(ws, cache, guildID)
 			if err != nil {
 				if ctx.Err() != nil {
 					return ctx.Err()
@@ -162,7 +162,7 @@ func IntelligentWarmupContext(ctx context.Context, session *discordgo.Session, c
 
 		// Fetch missing members (can be expensive, so we limit it)
 		if config.FetchMissingMembers {
-			membersCount, err := warmupGuildMembersContext(ctx, ws, cache, store, guildID, config.MaxMembersPerGuild)
+			membersCount, err := WarmupGuildMembersContext(ctx, ws, cache, store, guildID, config.MaxMembersPerGuild)
 			if err != nil {
 				if ctx.Err() != nil {
 					return ctx.Err()
@@ -181,8 +181,8 @@ func IntelligentWarmupContext(ctx context.Context, session *discordgo.Session, c
 	return nil
 }
 
-// warmupGuild fetches guild data if not in cache
-func warmupGuild(session warmupSession, cache *UnifiedCache, guildID string) error {
+// WarmupGuild fetches guild data if not in cache
+func WarmupGuild(session WarmupSession, cache *UnifiedCache, guildID string) error {
 	// Check if already cached
 	if _, ok := cache.GetGuild(guildID); ok {
 		return nil // Already cached
@@ -199,8 +199,8 @@ func warmupGuild(session warmupSession, cache *UnifiedCache, guildID string) err
 	return nil
 }
 
-// warmupGuildRoles fetches roles if not in cache and stores in persistent storage
-func warmupGuildRoles(session warmupSession, cache *UnifiedCache, store *storage.Store, guildID string) (int, error) {
+// WarmupGuildRoles fetches roles if not in cache and stores in persistent storage
+func WarmupGuildRoles(session WarmupSession, cache *UnifiedCache, store *storage.Store, guildID string) (int, error) {
 	// Check if already cached
 	if roles, ok := cache.GetRoles(guildID); ok && len(roles) > 0 {
 		return 0, nil // Already cached
@@ -223,8 +223,8 @@ func warmupGuildRoles(session warmupSession, cache *UnifiedCache, store *storage
 	return len(roles), nil
 }
 
-// warmupGuildChannels fetches channels if not in cache
-func warmupGuildChannels(session warmupSession, cache *UnifiedCache, guildID string) (int, error) {
+// WarmupGuildChannels fetches channels if not in cache
+func WarmupGuildChannels(session WarmupSession, cache *UnifiedCache, guildID string) (int, error) {
 	// Fetch from Discord (discordgo doesn't provide a simple cache check)
 	channels, err := session.GuildChannels(guildID)
 	if err != nil {
@@ -244,12 +244,12 @@ func warmupGuildChannels(session warmupSession, cache *UnifiedCache, guildID str
 	return cachedCount, nil
 }
 
-// warmupGuildMembers fetches members if missing from storage and caches them
-func warmupGuildMembers(session warmupSession, cache *UnifiedCache, store *storage.Store, guildID string, maxMembers int) (int, error) {
-	return warmupGuildMembersContext(context.Background(), session, cache, store, guildID, maxMembers)
+// WarmupGuildMembers fetches members if missing from storage and caches them
+func WarmupGuildMembers(session WarmupSession, cache *UnifiedCache, store *storage.Store, guildID string, maxMembers int) (int, error) {
+	return WarmupGuildMembersContext(context.Background(), session, cache, store, guildID, maxMembers)
 }
 
-func warmupGuildMembersContext(ctx context.Context, session warmupSession, cache *UnifiedCache, store *storage.Store, guildID string, maxMembers int) (int, error) {
+func WarmupGuildMembersContext(ctx context.Context, session WarmupSession, cache *UnifiedCache, store *storage.Store, guildID string, maxMembers int) (int, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}

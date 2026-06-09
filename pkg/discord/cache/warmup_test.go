@@ -1,7 +1,8 @@
-package cache
+package cache_test
 
 import (
 	"fmt"
+	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"sync"
 	"testing"
 	"time"
@@ -9,17 +10,17 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-func newTestCache(t *testing.T) *UnifiedCache {
+func newTestCache(t *testing.T) *cache.UnifiedCache {
 	t.Helper()
-	cache := NewUnifiedCache(CacheConfig{
+	uc := cache.NewUnifiedCache(cache.CacheConfig{
 		MemberTTL:       time.Hour,
 		GuildTTL:        time.Hour,
 		RolesTTL:        time.Hour,
 		ChannelTTL:      time.Hour,
 		CleanupInterval: time.Hour,
 	})
-	t.Cleanup(cache.Stop)
-	return cache
+	t.Cleanup(uc.Stop)
+	return uc
 }
 
 // Mock helpers have been replaced by inline closures on the warmupSession struct.
@@ -30,7 +31,7 @@ func TestIntelligentWarmupPopulatesCache(t *testing.T) {
 	channel := &discordgo.Channel{ID: "c1", GuildID: "g1", Name: "general"}
 	member := &discordgo.Member{User: &discordgo.User{ID: "u1"}, JoinedAt: time.Now().UTC()}
 
-	session := warmupSession{
+	session := cache.WarmupSession{
 		StateGuilds: func() []*discordgo.Guild { return []*discordgo.Guild{guild} },
 		Guild: func(id string, options ...discordgo.RequestOption) (*discordgo.Guild, error) {
 			if id == "g1" {
@@ -58,12 +59,12 @@ func TestIntelligentWarmupPopulatesCache(t *testing.T) {
 		},
 	}
 
-	old := newWarmupSession
-	newWarmupSession = func(_ *discordgo.Session) warmupSession { return session }
-	t.Cleanup(func() { newWarmupSession = old })
+	old := cache.NewWarmupSession
+	cache.NewWarmupSession = func(_ *discordgo.Session) cache.WarmupSession { return session }
+	t.Cleanup(func() { cache.NewWarmupSession = old })
 
-	cache := newTestCache(t)
-	cfg := WarmupConfig{
+	uc := newTestCache(t)
+	cfg := cache.WarmupConfig{
 		FetchMissingMembers:  true,
 		FetchMissingRoles:    true,
 		FetchMissingGuilds:   true,
@@ -71,23 +72,23 @@ func TestIntelligentWarmupPopulatesCache(t *testing.T) {
 		MaxMembersPerGuild:   1,
 	}
 
-	if err := IntelligentWarmup(&discordgo.Session{}, cache, nil, cfg); err != nil {
+	if err := cache.IntelligentWarmup(&discordgo.Session{}, uc, nil, cfg); err != nil {
 		t.Fatalf("IntelligentWarmup error: %v", err)
 	}
 
-	if got, ok := cache.GetGuild("g1"); !ok || got == nil || got.ID != "g1" {
+	if got, ok := uc.GetGuild("g1"); !ok || got == nil || got.ID != "g1" {
 		t.Fatalf("expected guild cached, got %v %v", got, ok)
 	}
-	if got, ok := cache.GetRoles("g1"); !ok || len(got) != 1 || got[0].ID != "r1" {
+	if got, ok := uc.GetRoles("g1"); !ok || len(got) != 1 || got[0].ID != "r1" {
 		t.Fatalf("expected roles cached, got %v %v", got, ok)
 	}
-	if got, ok := cache.GetChannel("c1"); !ok || got == nil || got.ID != "c1" {
+	if got, ok := uc.GetChannel("c1"); !ok || got == nil || got.ID != "c1" {
 		t.Fatalf("expected channel cached, got %v %v", got, ok)
 	}
-	if got, ok := cache.GetMember("g1", "u1"); !ok || got == nil || got.User.ID != "u1" {
+	if got, ok := uc.GetMember("g1", "u1"); !ok || got == nil || got.User.ID != "u1" {
 		t.Fatalf("expected member cached, got %v %v", got, ok)
 	}
-	if got, ok := cache.GetMember("g1", "missing"); ok || got != nil {
+	if got, ok := uc.GetMember("g1", "missing"); ok || got != nil {
 		t.Fatalf("expected cache miss for unknown member, got %v %v", got, ok)
 	}
 }
@@ -99,14 +100,14 @@ func TestWarmupGuildMembersConcurrentCalls(t *testing.T) {
 	release := make(chan struct{})
 	members := []*discordgo.Member{{User: &discordgo.User{ID: "u1"}}}
 
-	session := warmupSession{
+	session := cache.WarmupSession{
 		GuildMembers: func(guildID, after string, limit int, options ...discordgo.RequestOption) ([]*discordgo.Member, error) {
 			ready <- struct{}{}
 			<-release
 			return members, nil
 		},
 	}
-	cache := newTestCache(t)
+	uc := newTestCache(t)
 
 	var wg sync.WaitGroup
 	errs := make(chan error, 2)
@@ -114,7 +115,7 @@ func TestWarmupGuildMembersConcurrentCalls(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, err := warmupGuildMembers(session, cache, nil, "g1", 1)
+			_, err := cache.WarmupGuildMembers(session, uc, nil, "g1", 1)
 			errs <- err
 		}()
 	}
@@ -131,7 +132,7 @@ func TestWarmupGuildMembersConcurrentCalls(t *testing.T) {
 			t.Fatalf("warmupGuildMembers error: %v", err)
 		}
 	}
-	if got, ok := cache.GetMember("g1", "u1"); !ok || got == nil || got.User.ID != "u1" {
+	if got, ok := uc.GetMember("g1", "u1"); !ok || got == nil || got.User.ID != "u1" {
 		t.Fatalf("expected member cached after concurrent warmup, got %v %v", got, ok)
 	}
 }

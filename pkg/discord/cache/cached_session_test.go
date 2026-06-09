@@ -1,6 +1,7 @@
-package cache
+package cache_test
 
 import (
+	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"io"
 	"net/http"
 	"strings"
@@ -20,8 +21,8 @@ func TestCachedSessionGuildMemberUsesStateAndCaches(t *testing.T) {
 		t.Fatalf("guild add: %v", err)
 	}
 
-	cache := NewUnifiedCache(CacheConfig{MemberTTL: time.Minute, GuildTTL: time.Minute, RolesTTL: time.Minute, ChannelTTL: time.Minute, CleanupInterval: time.Hour})
-	cs := NewCachedSession(session, cache)
+	uc := cache.NewUnifiedCache(cache.CacheConfig{MemberTTL: time.Minute, GuildTTL: time.Minute, RolesTTL: time.Minute, ChannelTTL: time.Minute, CleanupInterval: time.Hour})
+	cs := cache.NewCachedSession(session, uc)
 
 	got, err := cs.GuildMember("guild", "user")
 	if err != nil {
@@ -30,7 +31,7 @@ func TestCachedSessionGuildMemberUsesStateAndCaches(t *testing.T) {
 	if got == nil || got.User.ID != "user" {
 		t.Fatalf("unexpected member: %+v", got)
 	}
-	if cached, ok := cache.GetMember("guild", "user"); !ok || cached.User.ID != "user" {
+	if cached, ok := uc.GetMember("guild", "user"); !ok || cached.User.ID != "user" {
 		t.Fatalf("expected member cached after state hit")
 	}
 }
@@ -40,10 +41,10 @@ func TestCachedSessionChannelUsesStateFallbackOrder(t *testing.T) {
 	ch := &discordgo.Channel{ID: "chan", GuildID: "g"}
 	_ = session.State.ChannelAdd(ch)
 
-	cache := NewUnifiedCache(CacheConfig{MemberTTL: time.Minute, GuildTTL: time.Minute, RolesTTL: time.Minute, ChannelTTL: time.Minute, CleanupInterval: time.Hour})
+	uc := cache.NewUnifiedCache(cache.CacheConfig{MemberTTL: time.Minute, GuildTTL: time.Minute, RolesTTL: time.Minute, ChannelTTL: time.Minute, CleanupInterval: time.Hour})
 	// Prime cache to avoid hitting REST.
-	cache.SetChannel("chan", ch)
-	cs := NewCachedSession(session, cache)
+	uc.SetChannel("chan", ch)
+	cs := cache.NewCachedSession(session, uc)
 
 	got, err := cs.Channel("chan")
 	if err != nil {
@@ -52,7 +53,7 @@ func TestCachedSessionChannelUsesStateFallbackOrder(t *testing.T) {
 	if got == nil || got.ID != "chan" {
 		t.Fatalf("unexpected channel: %+v", got)
 	}
-	if cached, ok := cache.GetChannel("chan"); !ok || cached.ID != "chan" {
+	if cached, ok := uc.GetChannel("chan"); !ok || cached.ID != "chan" {
 		t.Fatalf("expected channel cached after state hit")
 	}
 }
@@ -78,8 +79,8 @@ func TestCachedSessionSingleflightConcurrency(t *testing.T) {
 	rt := &mockRoundTripper{delay: 50 * time.Millisecond}
 	session.Client = &http.Client{Transport: rt}
 
-	cache := NewUnifiedCache(CacheConfig{MemberTTL: time.Minute})
-	cs := NewCachedSession(session, cache)
+	uc := cache.NewUnifiedCache(cache.CacheConfig{MemberTTL: time.Minute})
+	cs := cache.NewCachedSession(session, uc)
 
 	var wg sync.WaitGroup
 	const concurrentCallers = 100

@@ -1,7 +1,8 @@
-package cache
+package cache_test
 
 import (
 	"fmt"
+	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"sync"
 	"testing"
 
@@ -31,7 +32,7 @@ func TestWarmupGuildMembersPagingUsesAfterID(t *testing.T) {
 		secondPage,
 	}
 
-	session := warmupSession{
+	session := cache.WarmupSession{
 		GuildMembers: func(guildID, after string, limit int, options ...discordgo.RequestOption) ([]*discordgo.Member, error) {
 			mu.Lock()
 			idx := len(calls)
@@ -44,22 +45,22 @@ func TestWarmupGuildMembersPagingUsesAfterID(t *testing.T) {
 			return pages[idx], nil
 		},
 	}
-	cache := newTestCache(t)
+	uc := newTestCache(t)
 
-	gotCount, err := warmupGuildMembers(session, cache, nil, "g1", 0)
+	gotCount, err := cache.WarmupGuildMembers(session, uc, nil, "g1", 0)
 	if err != nil {
-		t.Fatalf("warmupGuildMembers error: %v", err)
+		t.Fatalf("cache.WarmupGuildMembers error: %v", err)
 	}
 	if gotCount != 1001 {
 		t.Fatalf("expected 1001 cached members, got %d", gotCount)
 	}
-	if _, ok := cache.GetMember("g1", "u0001"); !ok {
+	if _, ok := uc.GetMember("g1", "u0001"); !ok {
 		t.Fatalf("expected u0001 cached")
 	}
-	if _, ok := cache.GetMember("g1", "u1000"); !ok {
+	if _, ok := uc.GetMember("g1", "u1000"); !ok {
 		t.Fatalf("expected u1000 cached")
 	}
-	if _, ok := cache.GetMember("g1", "u1001"); !ok {
+	if _, ok := uc.GetMember("g1", "u1001"); !ok {
 		t.Fatalf("expected u1001 cached")
 	}
 

@@ -19,8 +19,8 @@ import (
 
 const defaultSegmentShardCount = 16
 
-// segment is a generic sharded LRU+TTL container.
-type segment[T any] struct {
+// Segment is a generic sharded LRU+TTL container.
+type Segment[T any] struct {
 	shards []segmentShard[T]
 
 	ttl        time.Duration
@@ -49,15 +49,15 @@ type entry[T any] struct {
 	elem      *list.Element
 }
 
-type segmentSnapshot[T any] struct {
+type DirtyEntry[T any] struct {
 	Key       string
 	Value     T
 	ExpiresAt time.Time
 }
 
-// newSegment creates a new segment with the given TTL and capacity limit.
+// NewSegment creates a new segment with the given TTL and capacity limit.
 // ttl <= 0 disables expiration. limit <= 0 means unbounded size (no LRU evictions).
-func newSegment[T any](ttl time.Duration, limit int) *segment[T] {
+func NewSegment[T any](ttl time.Duration, limit int) *Segment[T] {
 	shardCount := configuredSegmentShardCount(limit)
 	shards := make([]segmentShard[T], shardCount)
 	for i := range shards {
@@ -68,7 +68,7 @@ func newSegment[T any](ttl time.Duration, limit int) *segment[T] {
 		}
 	}
 
-	return &segment[T]{
+	return &Segment[T]{
 		shards:     shards,
 		ttl:        ttl,
 		limit:      limit,
@@ -78,7 +78,7 @@ func newSegment[T any](ttl time.Duration, limit int) *segment[T] {
 
 // Get returns the value for key if present and not expired.
 // Promotion to the front of the shard-local LRU is opportunistic and never blocks readers.
-func (s *segment[T]) Get(key string) (T, bool) {
+func (s *Segment[T]) Get(key string) (T, bool) {
 	var zero T
 	if key == "" {
 		s.misses.Add(1)
@@ -123,7 +123,7 @@ func (s *segment[T]) Get(key string) (T, bool) {
 }
 
 // Set stores the value for key, updating TTL and promoting to the front of the shard-local LRU.
-func (s *segment[T]) Set(key string, v T) {
+func (s *Segment[T]) Set(key string, v T) {
 	if key == "" {
 		return
 	}
@@ -137,11 +137,11 @@ func (s *segment[T]) Set(key string, v T) {
 
 // SetWithExpiration stores the value for key with a specific expiration time,
 // overriding the segment TTL for this entry.
-func (s *segment[T]) SetWithExpiration(key string, v T, expiresAt time.Time) {
+func (s *Segment[T]) SetWithExpiration(key string, v T, expiresAt time.Time) {
 	s.setWithExpiration(key, v, expiresAt, true)
 }
 
-func (s *segment[T]) setWithExpiration(key string, v T, expiresAt time.Time, markDirty bool) {
+func (s *Segment[T]) setWithExpiration(key string, v T, expiresAt time.Time, markDirty bool) {
 	if key == "" {
 		return
 	}
@@ -178,7 +178,7 @@ func (s *segment[T]) setWithExpiration(key string, v T, expiresAt time.Time, mar
 }
 
 // Invalidate removes the entry for key if it exists.
-func (s *segment[T]) Invalidate(key string) {
+func (s *Segment[T]) Invalidate(key string) {
 	if key == "" {
 		return
 	}
@@ -192,7 +192,7 @@ func (s *segment[T]) Invalidate(key string) {
 }
 
 // Clear removes all entries from the segment.
-func (s *segment[T]) Clear() {
+func (s *Segment[T]) Clear() {
 	for i := range s.shards {
 		shard := &s.shards[i]
 		shard.mu.Lock()
@@ -204,7 +204,7 @@ func (s *segment[T]) Clear() {
 }
 
 // CleanupExpired scans and removes all expired entries.
-func (s *segment[T]) CleanupExpired(now time.Time) {
+func (s *Segment[T]) CleanupExpired(now time.Time) {
 	for i := range s.shards {
 		shard := &s.shards[i]
 		shard.mu.Lock()
@@ -220,7 +220,7 @@ func (s *segment[T]) CleanupExpired(now time.Time) {
 
 // CleanupExpiredWithCallback removes expired entries and invokes onEvict for each removed entry.
 // If onEvict is nil, behaves like CleanupExpired.
-func (s *segment[T]) CleanupExpiredWithCallback(now time.Time, onEvict func(key string, value T)) {
+func (s *Segment[T]) CleanupExpiredWithCallback(now time.Time, onEvict func(key string, value T)) {
 	for i := range s.shards {
 		shard := &s.shards[i]
 		shard.mu.Lock()
@@ -253,7 +253,7 @@ func (s *segment[T]) CleanupExpiredWithCallback(now time.Time, onEvict func(key 
 }
 
 // Len returns the number of entries currently stored.
-func (s *segment[T]) Len() int {
+func (s *Segment[T]) Len() int {
 	total := 0
 	for i := range s.shards {
 		shard := &s.shards[i]
@@ -265,7 +265,7 @@ func (s *segment[T]) Len() int {
 }
 
 // Keys returns a copy of current keys. Use with caution on large segments.
-func (s *segment[T]) Keys() []string {
+func (s *Segment[T]) Keys() []string {
 	keys := make([]string, 0)
 	for i := range s.shards {
 		shard := &s.shards[i]
@@ -278,7 +278,7 @@ func (s *segment[T]) Keys() []string {
 
 // GetExpiration returns the expiration time for a key, if present.
 // When the key is not present or has no expiration, returns zero time and false.
-func (s *segment[T]) GetExpiration(key string) (time.Time, bool) {
+func (s *Segment[T]) GetExpiration(key string) (time.Time, bool) {
 	if key == "" {
 		return time.Time{}, false
 	}
@@ -293,7 +293,7 @@ func (s *segment[T]) GetExpiration(key string) (time.Time, bool) {
 }
 
 // SetTTL updates the TTL for subsequent insertions. Existing entries keep their current expiration.
-func (s *segment[T]) SetTTL(ttl time.Duration) {
+func (s *Segment[T]) SetTTL(ttl time.Duration) {
 	s.ttlMu.Lock()
 	s.ttl = ttl
 	s.ttlMu.Unlock()
@@ -301,7 +301,7 @@ func (s *segment[T]) SetTTL(ttl time.Duration) {
 
 // SetLimit updates the capacity limit for the segment. If the new limit is lower than the current size,
 // each shard evicts LRU entries to satisfy its local limit.
-func (s *segment[T]) SetLimit(limit int) {
+func (s *Segment[T]) SetLimit(limit int) {
 	shardLimit := shardScopedLimit(limit, len(s.shards))
 
 	s.limitMu.Lock()
@@ -324,8 +324,8 @@ func (s *segment[T]) SetLimit(limit int) {
 }
 
 // TakeDirtySnapshot drains the current dirty set and returns live entries for incremental persistence.
-func (s *segment[T]) TakeDirtySnapshot(now time.Time) []segmentSnapshot[T] {
-	snapshots := make([]segmentSnapshot[T], 0)
+func (s *Segment[T]) TakeDirtySnapshot(now time.Time) []DirtyEntry[T] {
+	snapshots := make([]DirtyEntry[T], 0)
 	for i := range s.shards {
 		shard := &s.shards[i]
 		shard.mu.Lock()
@@ -340,7 +340,7 @@ func (s *segment[T]) TakeDirtySnapshot(now time.Time) []segmentSnapshot[T] {
 				delete(shard.dirty, key)
 				continue
 			}
-			snapshots = append(snapshots, segmentSnapshot[T]{
+			snapshots = append(snapshots, DirtyEntry[T]{
 				Key:       key,
 				Value:     e.value,
 				ExpiresAt: e.expiresAt,
@@ -353,7 +353,7 @@ func (s *segment[T]) TakeDirtySnapshot(now time.Time) []segmentSnapshot[T] {
 }
 
 // MarkDirty re-adds keys to the dirty set when an incremental persist attempt fails.
-func (s *segment[T]) MarkDirty(keys []string) {
+func (s *Segment[T]) MarkDirty(keys []string) {
 	for _, key := range keys {
 		if key == "" {
 			continue
@@ -369,30 +369,30 @@ func (s *segment[T]) MarkDirty(keys []string) {
 
 // SetCleanWithExpiration stores the value without adding it to the dirty set.
 // Intended for warmup/reload paths that hydrate cache state from persistence.
-func (s *segment[T]) SetCleanWithExpiration(key string, v T, expiresAt time.Time) {
+func (s *Segment[T]) SetCleanWithExpiration(key string, v T, expiresAt time.Time) {
 	s.setWithExpiration(key, v, expiresAt, false)
 }
 
-func (s *segment[T]) currentTTL() time.Duration {
+func (s *Segment[T]) currentTTL() time.Duration {
 	s.ttlMu.RLock()
 	ttl := s.ttl
 	s.ttlMu.RUnlock()
 	return ttl
 }
 
-func (s *segment[T]) currentShardLimit() int {
+func (s *Segment[T]) currentShardLimit() int {
 	s.limitMu.RLock()
 	limit := s.shardLimit
 	s.limitMu.RUnlock()
 	return limit
 }
 
-func (s *segment[T]) shardFor(key string) *segmentShard[T] {
+func (s *Segment[T]) shardFor(key string) *segmentShard[T] {
 	return &s.shards[segmentShardIndex(key, len(s.shards))]
 }
 
 // evictLRU removes the least recently used entry from a shard. Caller must hold shard.mu.
-func (s *segment[T]) evictLRU(shard *segmentShard[T]) {
+func (s *Segment[T]) evictLRU(shard *segmentShard[T]) {
 	if shard == nil {
 		return
 	}
@@ -458,7 +458,7 @@ type segmentStats struct {
 }
 
 // Stats returns a snapshot of the segment's counters and configuration.
-func (s *segment[T]) Stats() segmentStats {
+func (s *Segment[T]) Stats() segmentStats {
 	h := s.hits.Load()
 	m := s.misses.Load()
 	e := s.evictions.Load()

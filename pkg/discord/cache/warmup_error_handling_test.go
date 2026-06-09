@@ -1,48 +1,49 @@
-package cache
+package cache_test
 
 import (
 	"errors"
+	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
 )
 
-// funcWarmupSession replaced with warmupSession inline closures
+// funcWarmupSession replaced with cache.WarmupSession inline closures
 
-func TestWarmupGuildErrorPropagation(t *testing.T) {
-	boom := errors.New("boom")
-	session := warmupSession{
-		Guild: func(id string, options ...discordgo.RequestOption) (*discordgo.Guild, error) { return nil, boom },
+func TestWarmupGuildReturnsErrorOnFailure(t *testing.T) {
+	session := cache.WarmupSession{
+		Guild: func(id string, options ...discordgo.RequestOption) (*discordgo.Guild, error) {
+			return nil, errors.New("network error")
+		},
 	}
-	cache := newTestCache(t)
-
-	err := warmupGuild(session, cache, "g1")
-	if err == nil || !errors.Is(err, boom) {
-		t.Fatalf("expected wrapped error, got %v", err)
+	err := cache.WarmupGuild(session, newTestCache(t), "g1")
+	if err == nil {
+		t.Fatalf("expected error from warmupGuild on API failure")
 	}
 }
 
-func TestWarmupGuildRolesErrorPropagation(t *testing.T) {
-	boom := errors.New("boom")
-	session := warmupSession{
-		GuildRoles: func(id string, options ...discordgo.RequestOption) ([]*discordgo.Role, error) { return nil, boom },
+func TestWarmupGuildRolesReturnsErrorOnFailure(t *testing.T) {
+	session := cache.WarmupSession{
+		GuildRoles: func(id string, options ...discordgo.RequestOption) ([]*discordgo.Role, error) {
+			return nil, errors.New("network error")
+		},
 	}
-	cache := newTestCache(t)
+	uc := newTestCache(t)
 
-	_, err := warmupGuildRoles(session, cache, nil, "g1")
-	if err == nil || !errors.Is(err, boom) {
-		t.Fatalf("expected wrapped error, got %v", err)
+	_, err := cache.WarmupGuildRoles(session, uc, nil, "g1")
+	if err == nil {
+		t.Fatalf("expected error from warmupGuildRoles on API failure")
 	}
 }
 
 func TestWarmupGuildChannelsErrorPropagation(t *testing.T) {
 	boom := errors.New("boom")
-	session := warmupSession{
+	session := cache.WarmupSession{
 		GuildChannels: func(id string, options ...discordgo.RequestOption) ([]*discordgo.Channel, error) { return nil, boom },
 	}
-	cache := newTestCache(t)
+	uc := newTestCache(t)
 
-	_, err := warmupGuildChannels(session, cache, "g1")
+	_, err := cache.WarmupGuildChannels(session, uc, "g1")
 	if err == nil || !errors.Is(err, boom) {
 		t.Fatalf("expected wrapped error, got %v", err)
 	}
@@ -50,14 +51,14 @@ func TestWarmupGuildChannelsErrorPropagation(t *testing.T) {
 
 func TestWarmupGuildMembersErrorPropagation(t *testing.T) {
 	boom := errors.New("boom")
-	session := warmupSession{
+	session := cache.WarmupSession{
 		GuildMembers: func(guildID, after string, limit int, options ...discordgo.RequestOption) ([]*discordgo.Member, error) {
 			return nil, boom
 		},
 	}
-	cache := newTestCache(t)
+	uc := newTestCache(t)
 
-	_, err := warmupGuildMembers(session, cache, nil, "g1", 1)
+	_, err := cache.WarmupGuildMembers(session, uc, nil, "g1", 1)
 	if err == nil || !errors.Is(err, boom) {
 		t.Fatalf("expected wrapped error, got %v", err)
 	}

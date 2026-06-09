@@ -22,16 +22,16 @@ const unifiedCachePersistTimeout = 30 * time.Second
 // and optional Postgres-backed persistence.
 type UnifiedCache struct {
 	// Member cache segment: guildID:userID -> *discordgo.Member
-	members *segment[*discordgo.Member]
+	members *Segment[*discordgo.Member]
 
 	// Guild cache segment: guildID -> *discordgo.Guild
-	guilds *segment[*discordgo.Guild]
+	guilds *Segment[*discordgo.Guild]
 
 	// Roles cache segment: guildID -> []*discordgo.Role
-	roles *segment[[]*discordgo.Role]
+	roles *Segment[[]*discordgo.Role]
 
 	// Channel cache segment: channelID -> *discordgo.Channel
-	channels *segment[*discordgo.Channel]
+	channels *Segment[*discordgo.Channel]
 
 	// Indices to relate channels and guilds for efficient guild-scoped operations
 	indices *cacheIndices
@@ -227,10 +227,10 @@ func NewUnifiedCache(cfg CacheConfig) *UnifiedCache {
 	}
 
 	uc := &UnifiedCache{
-		members:  newSegment[*discordgo.Member](cfg.MemberTTL, cfg.MaxMemberSize),
-		guilds:   newSegment[*discordgo.Guild](cfg.GuildTTL, cfg.MaxGuildSize),
-		roles:    newSegment[[]*discordgo.Role](cfg.RolesTTL, cfg.MaxRolesSize),
-		channels: newSegment[*discordgo.Channel](cfg.ChannelTTL, cfg.MaxChannelSize),
+		members:  NewSegment[*discordgo.Member](cfg.MemberTTL, cfg.MaxMemberSize),
+		guilds:   NewSegment[*discordgo.Guild](cfg.GuildTTL, cfg.MaxGuildSize),
+		roles:    NewSegment[[]*discordgo.Role](cfg.RolesTTL, cfg.MaxRolesSize),
+		channels: NewSegment[*discordgo.Channel](cfg.ChannelTTL, cfg.MaxChannelSize),
 		indices:  newCacheIndices(),
 
 		memberTTL:  cfg.MemberTTL,
@@ -653,7 +653,7 @@ func (uc *UnifiedCache) Persist() error {
 }
 
 func (uc *UnifiedCache) persistDirtyMembers(ctx context.Context, now time.Time) error {
-	return persistDirtySnapshots(ctx, uc.store, "members", uc.members, now, func(snapshot segmentSnapshot[*discordgo.Member]) (storage.CacheEntryRecord, error) {
+	return persistDirtySnapshots(ctx, uc.store, "members", uc.members, now, func(snapshot DirtyEntry[*discordgo.Member]) (storage.CacheEntryRecord, error) {
 		if snapshot.Value == nil {
 			return storage.CacheEntryRecord{}, nil
 		}
@@ -672,7 +672,7 @@ func (uc *UnifiedCache) persistDirtyMembers(ctx context.Context, now time.Time) 
 }
 
 func (uc *UnifiedCache) persistDirtyGuilds(ctx context.Context, now time.Time) error {
-	return persistDirtySnapshots(ctx, uc.store, "guilds", uc.guilds, now, func(snapshot segmentSnapshot[*discordgo.Guild]) (storage.CacheEntryRecord, error) {
+	return persistDirtySnapshots(ctx, uc.store, "guilds", uc.guilds, now, func(snapshot DirtyEntry[*discordgo.Guild]) (storage.CacheEntryRecord, error) {
 		if snapshot.Value == nil {
 			return storage.CacheEntryRecord{}, nil
 		}
@@ -691,7 +691,7 @@ func (uc *UnifiedCache) persistDirtyGuilds(ctx context.Context, now time.Time) e
 }
 
 func (uc *UnifiedCache) persistDirtyRoles(ctx context.Context, now time.Time) error {
-	return persistDirtySnapshots(ctx, uc.store, "roles", uc.roles, now, func(snapshot segmentSnapshot[[]*discordgo.Role]) (storage.CacheEntryRecord, error) {
+	return persistDirtySnapshots(ctx, uc.store, "roles", uc.roles, now, func(snapshot DirtyEntry[[]*discordgo.Role]) (storage.CacheEntryRecord, error) {
 		if snapshot.Value == nil {
 			return storage.CacheEntryRecord{}, nil
 		}
@@ -719,7 +719,7 @@ func (uc *UnifiedCache) persistDirtyRoles(ctx context.Context, now time.Time) er
 }
 
 func (uc *UnifiedCache) persistDirtyChannels(ctx context.Context, now time.Time) error {
-	return persistDirtySnapshots(ctx, uc.store, "channels", uc.channels, now, func(snapshot segmentSnapshot[*discordgo.Channel]) (storage.CacheEntryRecord, error) {
+	return persistDirtySnapshots(ctx, uc.store, "channels", uc.channels, now, func(snapshot DirtyEntry[*discordgo.Channel]) (storage.CacheEntryRecord, error) {
 		if snapshot.Value == nil {
 			return storage.CacheEntryRecord{}, nil
 		}
@@ -749,9 +749,9 @@ func persistDirtySnapshots[T any](
 	ctx context.Context,
 	store *storage.Store,
 	name string,
-	seg *segment[T],
+	seg *Segment[T],
 	now time.Time,
-	build func(segmentSnapshot[T]) (storage.CacheEntryRecord, error),
+	build func(DirtyEntry[T]) (storage.CacheEntryRecord, error),
 ) error {
 	if seg == nil || store == nil {
 		return nil

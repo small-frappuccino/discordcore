@@ -1,7 +1,8 @@
-package cache
+package cache_test
 
 import (
 	"fmt"
+	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"testing"
 	"time"
 
@@ -15,7 +16,7 @@ func TestIntelligentWarmupIdempotent(t *testing.T) {
 	member := &discordgo.Member{User: &discordgo.User{ID: "u1"}, JoinedAt: time.Now().UTC()}
 
 	var memberCalls int
-	session := warmupSession{
+	session := cache.WarmupSession{
 		StateGuilds: func() []*discordgo.Guild { return []*discordgo.Guild{guild} },
 		Guild: func(id string, options ...discordgo.RequestOption) (*discordgo.Guild, error) {
 			if id == "g1" {
@@ -45,12 +46,12 @@ func TestIntelligentWarmupIdempotent(t *testing.T) {
 		},
 	}
 
-	old := newWarmupSession
-	newWarmupSession = func(_ *discordgo.Session) warmupSession { return session }
-	t.Cleanup(func() { newWarmupSession = old })
+	old := cache.NewWarmupSession
+	cache.NewWarmupSession = func(_ *discordgo.Session) cache.WarmupSession { return session }
+	t.Cleanup(func() { cache.NewWarmupSession = old })
 
-	cache := newTestCache(t)
-	cfg := WarmupConfig{
+	uc := newTestCache(t)
+	cfg := cache.WarmupConfig{
 		FetchMissingMembers:  true,
 		FetchMissingRoles:    true,
 		FetchMissingGuilds:   true,
@@ -58,22 +59,22 @@ func TestIntelligentWarmupIdempotent(t *testing.T) {
 		MaxMembersPerGuild:   1,
 	}
 
-	if err := IntelligentWarmup(&discordgo.Session{}, cache, nil, cfg); err != nil {
+	if err := cache.IntelligentWarmup(&discordgo.Session{}, uc, nil, cfg); err != nil {
 		t.Fatalf("first warmup error: %v", err)
 	}
-	firstMembers := cache.MemberCount()
-	firstGuilds := cache.GuildCount()
-	firstRoles := cache.RolesCount()
-	firstChannels := cache.ChannelCount()
+	firstMembers := uc.MemberCount()
+	firstGuilds := uc.GuildCount()
+	firstRoles := uc.RolesCount()
+	firstChannels := uc.ChannelCount()
 
 	memberCalls = 0
-	if err := IntelligentWarmup(&discordgo.Session{}, cache, nil, cfg); err != nil {
+	if err := cache.IntelligentWarmup(&discordgo.Session{}, uc, nil, cfg); err != nil {
 		t.Fatalf("second warmup error: %v", err)
 	}
-	secondMembers := cache.MemberCount()
-	secondGuilds := cache.GuildCount()
-	secondRoles := cache.RolesCount()
-	secondChannels := cache.ChannelCount()
+	secondMembers := uc.MemberCount()
+	secondGuilds := uc.GuildCount()
+	secondRoles := uc.RolesCount()
+	secondChannels := uc.ChannelCount()
 
 	if firstMembers != secondMembers || firstGuilds != secondGuilds || firstRoles != secondRoles || firstChannels != secondChannels {
 		t.Fatalf("expected idempotent metrics, got first=%v/%v/%v/%v second=%v/%v/%v/%v",

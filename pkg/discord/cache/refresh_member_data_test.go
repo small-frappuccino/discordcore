@@ -1,8 +1,9 @@
-package cache
+package cache_test
 
 import (
 	"context"
 	"encoding/json"
+	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"net/http"
 	"net/http/httptest"
 	"path"
@@ -101,14 +102,14 @@ func TestRefreshMemberDataUpdatesCacheAndStore(t *testing.T) {
 	}
 	session.Client = srv.Client()
 
-	cache := newTestCache(t)
+	uc := newTestCache(t)
 	store := newTestStore(t)
 
-	if err := RefreshMemberData(session, cache, store, "g1", []string{"u1"}); err != nil {
-		t.Fatalf("RefreshMemberData error: %v", err)
+	if err := cache.RefreshMemberData(session, uc, store, "g1", []string{"u1"}); err != nil {
+		t.Fatalf("cache.RefreshMemberData error: %v", err)
 	}
 
-	if got, ok := cache.GetMember("g1", "u1"); !ok || got == nil || got.User.ID != "u1" {
+	if got, ok := uc.GetMember("g1", "u1"); !ok || got == nil || got.User.ID != "u1" {
 		t.Fatalf("expected cached member, got %v %v", got, ok)
 	}
 
@@ -157,31 +158,31 @@ func TestRefreshMemberDataSkipsFailures(t *testing.T) {
 	}
 	session.Client = srv.Client()
 
-	cache := newTestCache(t)
+	uc := newTestCache(t)
 	store := newTestStore(t)
 
-	if err := RefreshMemberData(session, cache, store, "g1", []string{"bad", "good"}); err != nil {
-		t.Fatalf("RefreshMemberData error: %v", err)
+	if err := cache.RefreshMemberData(session, uc, store, "g1", []string{"bad", "good"}); err != nil {
+		t.Fatalf("cache.RefreshMemberData error: %v", err)
 	}
 
-	if got, ok := cache.GetMember("g1", "bad"); ok || got != nil {
+	if got, ok := uc.GetMember("g1", "bad"); ok || got != nil {
 		t.Fatalf("expected bad member not cached, got %v %v", got, ok)
 	}
-	if got, ok := cache.GetMember("g1", "good"); !ok || got == nil || got.User.ID != "good" {
+	if got, ok := uc.GetMember("g1", "good"); !ok || got == nil || got.User.ID != "good" {
 		t.Fatalf("expected good member cached, got %v %v", got, ok)
 	}
 }
 
 func TestWarmupGuildMembersPreservesHistoricalJoin(t *testing.T) {
 	store := newTestStore(t)
-	cache := newTestCache(t)
+	uc := newTestCache(t)
 
 	historicalJoin := time.Date(2024, 6, 12, 15, 0, 0, 0, time.UTC)
 	if err := store.UpsertMemberJoin("g1", "u1", historicalJoin); err != nil {
 		t.Fatalf("seed historical join: %v", err)
 	}
 
-	session := warmupSession{
+	session := cache.WarmupSession{
 		GuildMembers: func(guildID, after string, limit int, options ...discordgo.RequestOption) ([]*discordgo.Member, error) {
 			return []*discordgo.Member{
 				{
@@ -192,9 +193,9 @@ func TestWarmupGuildMembersPreservesHistoricalJoin(t *testing.T) {
 		},
 	}
 
-	gotCount, err := warmupGuildMembers(session, cache, store, "g1", 1)
+	gotCount, err := cache.WarmupGuildMembers(session, uc, store, "g1", 1)
 	if err != nil {
-		t.Fatalf("warmupGuildMembers error: %v", err)
+		t.Fatalf("cache.WarmupGuildMembers error: %v", err)
 	}
 	if gotCount != 1 {
 		t.Fatalf("expected 1 cached member, got %d", gotCount)
@@ -217,8 +218,8 @@ func TestKeepMemberDataFreshPreservesHistoricalJoin(t *testing.T) {
 		t.Fatalf("seed historical join: %v", err)
 	}
 
-	if err := KeepMemberDataFresh(store, "g1", []string{"u1"}); err != nil {
-		t.Fatalf("KeepMemberDataFresh error: %v", err)
+	if err := cache.KeepMemberDataFresh(store, "g1", []string{"u1"}); err != nil {
+		t.Fatalf("cache.KeepMemberDataFresh error: %v", err)
 	}
 
 	gotJoin, ok, err := store.MemberJoin(context.Background(), "g1", "u1")
