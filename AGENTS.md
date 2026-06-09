@@ -69,6 +69,7 @@ Respect package ownership:
 - keep routine user workflows in Discord when a slash command is the natural surface
 - use the dashboard for setup, review, bulk edits, diagnostics, and cross-feature visibility rather than as a duplicate command console
 - keep router and provider entrypoints thin when a focused sibling file or service already exists
+- explicitly prohibit telemetry, operational logging, or asynchronous I/O side-effects within the `pkg/files/` namespace. Functions within this namespace must remain pure. State resolution must return deterministic values or sentinel errors to be evaluated and logged by the caller in `pkg/app/` or `pkg/discord/`
 
 ## Universal Working Style
 
@@ -202,7 +203,7 @@ If dashboard routing changes, update backend, frontend, tests, docs, and embed a
 
 - **Graceful Lifecycle Management**: Mandate context-aware cancellation pipelines utilizing `context.Context` and `sync.WaitGroup` to orchestrate isolated sub-service teardowns safely. Avoid serializing runtime states via `sync.RWMutex` which introduces write-starvation and deadlock vulnerabilities.
 - **TypeScript API Resiliency**: Enforce mandatory exponential backoff and randomized network jitter on all retry mechanisms for HTTP 502/504 errors to prevent thundering herd state collapses.
-- **Observability Accessors**: Mandate strict dependency validation during the application boot phase to ensure the metrics pipeline successfully attaches prior to the primary event loop, ensuring nil-safe accessors (`NopMetrics`) do not mask critical initialization failures.
+- **Observability Accessors**: Mandate strict dependency validation during the application boot phase to ensure the metrics pipeline successfully attaches prior to the primary event loop. A failure to attach the pipeline prior to the primary event loop must trigger a fatal runtime abort, ensuring nil-safe accessors (`NopMetrics`) do not mask deployment anomalies.
 
 ## Config Schema Evolution Pattern
 
@@ -213,6 +214,9 @@ When a persisted config field changes shape:
 3. migrate legacy to canonical at decode time; do not emit the legacy key on the write path
 4. update cloning, normalization, and `IsZero` logic together
 5. update all callers and tests in the same change; do not leave shim-then-cleanup work behind
+
+- state mutations must implement Optimistic Concurrency Control: payloads omitting `config_version` must be rejected, and UI clients must implement mandatory exponential backoff and state-refresh I/O loops specifically targeting HTTP 412 and 428 rejection codes to prevent thundering herd overwrites
+- cross-boundary synchronization mandates the integration of an AST parsing or schema generation step to mechanically guarantee API contract fidelity during schema evolution, replacing manual synchronization between `pkg/files/types.go` and `ui/src/api/control.ts` to eliminate structural drift vulnerability
 
 ## Testing And Validation
 
@@ -285,6 +289,11 @@ Additional caution:
 - do not widen already large pages unless the task is truly local to that page
 
 ## Load-Bearing Invariants
+
+### Bot Identity Resolution
+
+- runtime identity assignment must evaluate FeatureRouting from a single deterministic seam before executing a fallback to the primary bot ID, establishing the absolute source of truth in multi-bot deployments
+- context propagation must enforce this resolved identity strictly across all asynchronous execution boundaries
 
 ### QOTD subsystem
 
