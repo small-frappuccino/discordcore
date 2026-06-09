@@ -248,7 +248,8 @@ Build and release commands:
 - `go vet ./...`
 - `go test -tags integration ./...`
 - from `ui/`: `bun run test`, `bun run lint`, `bun run build`
-- `release validate` (runs gofmt, EOL drift, go vet, and ui lint without committing)
+- `release validate` (runs gofmt, EOL drift, go vet, ui lint, and fast unit tests like `go test ./...` without committing)
+- `release verify` (runs high-latency environment-dependent integration tests like `go test -tags integration ./...` and `govulncheck`)
 - canonical release command: `release -m "<conventional commit subject>" -y --promote`
 
 Release rules:
