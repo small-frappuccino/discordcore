@@ -76,7 +76,7 @@ export const DashboardLayout = memo(function DashboardLayout() {
 
         <nav className="shell-nav">
           <div className="shell-nav-section-title">Features</div>
-          {navigation.map((item) => {
+          {guildId && navigation.map((item) => {
             const fullPath = `/manage/${guildId}${item.to}`;
             const isActive = location.pathname.startsWith(fullPath);
             return (

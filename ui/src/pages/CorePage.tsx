@@ -3,6 +3,8 @@ import { SelectMenuMultiple, ToggleSwitch, SettingsGroup, SettingsRow, TextInput
 import { Stack } from "../components/layout";
 import { useCorePageLogic } from "./hooks/useCorePageLogic";
 import { useState } from "react";
+import { useParams } from "react-router-dom";
+import { useDashboardSession } from "../context/DashboardSessionContext";
 
 const BASE_FEATURE_OPTIONS = [
   { label: "QOTD", value: "qotd" },
@@ -14,6 +16,12 @@ const BASE_FEATURE_OPTIONS = [
 ];
 
 export function CorePage() {
+  const { guildId } = useParams<{ guildId: string }>();
+  const { accessibleGuilds, manageableGuilds } = useDashboardSession();
+  
+  const activeGuild = accessibleGuilds.find(g => g.id === guildId) || manageableGuilds.find(g => g.id === guildId);
+  const botPresent = activeGuild?.bot_present === true;
+
   const { 
     settings, 
     botProfiles, 
@@ -157,23 +165,31 @@ export function CorePage() {
                       {isEnabled && (
                         <>
                           {/* Token Section */}
-                          <SettingsRow 
-                            title={
-                              <div className="flex items-center gap-2">
-                                <span>Secure Token</span>
-                                <Badge variant="danger">Sensitive</Badge>
+                          {botPresent ? (
+                            <SettingsRow 
+                              title={
+                                <div className="flex items-center gap-2">
+                                  <span>Secure Token</span>
+                                  <Badge variant="danger">Sensitive</Badge>
+                                </div>
+                              }
+                              control={
+                                <TextInput 
+                                  type="password" 
+                                  className="w-full md:w-2/3 lg:w-1/2 border-white/20 pl-6"
+                                  placeholder={hasToken ? "•••••••• (Configured)" : "Enter bot token..."}
+                                  value={tokensState[instanceId] !== undefined ? tokensState[instanceId] : ""}
+                                  onChange={(e) => setTokensState(prev => ({ ...prev, [instanceId]: e.target.value }))}
+                                />
+                              }
+                            />
+                          ) : (
+                            <div className="p-4 bg-[var(--bg-surface-elevated)] border-b border-border-subtle">
+                              <div className="text-sm text-text-secondary">
+                                Bot is not actively present in this server. Please invite the bot before configuring secure tokens.
                               </div>
-                            }
-                            control={
-                              <TextInput 
-                                type="password" 
-                                className="w-full md:w-2/3 lg:w-1/2 border-white/20 pl-6"
-                                placeholder={hasToken ? "•••••••• (Configured)" : "Enter bot token..."}
-                                value={tokensState[instanceId] !== undefined ? tokensState[instanceId] : ""}
-                                onChange={(e) => setTokensState(prev => ({ ...prev, [instanceId]: e.target.value }))}
-                              />
-                            }
-                          />
+                            </div>
+                          )}
 
                           {/* Routing Section */}
                           <SettingsRow 

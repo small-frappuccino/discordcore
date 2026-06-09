@@ -22,6 +22,7 @@ import {
   isValidBaseUrl,
   normalizeBaseUrlInput,
 } from "../app/utils";
+import { useNavigate } from "react-router-dom";
 
 const defaultBaseUrl =
   import.meta.env.VITE_CONTROL_API_BASE_URL ?? window.location.origin;
@@ -59,6 +60,7 @@ export function DashboardSessionProvider({
 }: {
   children: ReactNode;
 }) {
+  const navigate = useNavigate();
   const [baseUrl, setBaseUrl] = useState(defaultBaseUrl);
   const [baseUrlDraft, setBaseUrlDraft] = useState(defaultBaseUrl);
   const [authState, setAuthState] = useState<DashboardAuthState>("checking");
@@ -299,6 +301,7 @@ export function DashboardSessionProvider({
         tone: "info",
         message: "Signed out.",
       });
+      navigate("/");
     } catch (error) {
       setNotice({
         tone: "error",
@@ -308,7 +311,7 @@ export function DashboardSessionProvider({
       setSessionLoading(false);
       setBusyLabel("");
     }
-  }, [client]);
+  }, [client, navigate]);
 
   const applyBaseUrl = useCallback(() => {
     const normalized = normalizeBaseUrlInput(baseUrlDraft);
