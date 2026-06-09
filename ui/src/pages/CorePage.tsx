@@ -177,36 +177,32 @@ export function CorePage() {
 
                           {/* Routing Section */}
                           <SettingsRow 
-                            title="Operational Routing"
+                            title="Primary Bot Status"
                             control={
-                              <div className="flex items-center flex-wrap gap-4">
-                                <div className="flex items-center gap-2">
-                                  <ToggleSwitch 
-                                    checked={isMain} 
-                                    onCheckedChange={(checked) => {
-                                      if (checked) setMainBotIdState(instanceId);
-                                    }} 
-                                  />
-                                  <span className="text-sm text-text-secondary whitespace-nowrap">Set as primary bot</span>
-                                </div>
-                                <div className="w-px h-4 bg-border-subtle hidden sm:block"></div>
-                                <div className="flex-1 flex items-center gap-3">
-                                  <span className="text-sm text-text-secondary whitespace-nowrap">Route features:</span>
-                                  <SelectMenuMultiple 
-                                    className="w-full sm:max-w-xs"
-                                    options={BASE_FEATURE_OPTIONS.map(opt => {
-                                      if (!profile || !opt.requiredPerms) return { label: opt.label, value: opt.value };
-                                      const perms = Number(profile.permissions || 0);
-                                      const isAdmin = (perms & 0x8) === 0x8;
-                                      const hasPerms = isAdmin || (perms & opt.requiredPerms) === opt.requiredPerms;
-                                      return { label: opt.label, value: opt.value, disabled: !hasPerms };
-                                    })}
-                                    value={routedFeatures}
-                                    onChange={(values) => handleFeatureChange(instanceId, values)}
-                                    placeholder="Select features..."
-                                  />
-                                </div>
-                              </div>
+                              <ToggleSwitch 
+                                checked={isMain} 
+                                onCheckedChange={(checked) => {
+                                  if (checked) setMainBotIdState(instanceId);
+                                }} 
+                              />
+                            }
+                          />
+                          <SettingsRow 
+                            title="Feature Routing"
+                            control={
+                              <SelectMenuMultiple 
+                                className="w-full"
+                                options={BASE_FEATURE_OPTIONS.map(opt => {
+                                  if (!profile || !opt.requiredPerms) return { label: opt.label, value: opt.value };
+                                  const perms = Number(profile.permissions || 0);
+                                  const isAdmin = (perms & 0x8) === 0x8;
+                                  const hasPerms = isAdmin || (perms & opt.requiredPerms) === opt.requiredPerms;
+                                  return { label: opt.label, value: opt.value, disabled: !hasPerms };
+                                })}
+                                value={routedFeatures}
+                                onChange={(values) => handleFeatureChange(instanceId, values)}
+                                placeholder="Select features..."
+                              />
                             }
                           />
                         </>
