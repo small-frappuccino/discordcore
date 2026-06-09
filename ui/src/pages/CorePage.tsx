@@ -2,7 +2,7 @@ import { PageHeader, Badge, PageContainer, SettingsGroupSkeleton, Button } from 
 import { SelectMenuMultiple, ToggleSwitch, SettingsGroup, SettingsRow, TextInput } from "../components/ui/tahoe";
 import { Stack } from "../components/layout";
 import { useCorePageLogic } from "./hooks/useCorePageLogic";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { useDashboardSession } from "../context/DashboardSessionContext";
 
@@ -46,11 +46,15 @@ export function CorePage() {
 
   // Dynamic profile list derived purely from existing tokens + currently enabled instances.
   // There are no hardcoded keys.
-  const allInstances = Array.from(new Set([
-    ...availableInstances, 
-    ...Object.keys(configuredTokens),
-    ...Object.keys(enabledInstances)
-  ]));
+  const allInstances = useMemo(() => {
+    // Stringify objects to use as stable dependency comparisons if needed, 
+    // but the object references update from the hook so we can depend on them directly.
+    return Array.from(new Set([
+      ...availableInstances, 
+      ...Object.keys(configuredTokens),
+      ...Object.keys(enabledInstances)
+    ]));
+  }, [availableInstances, configuredTokens, enabledInstances]);
 
   const [isCreatingProfile, setIsCreatingProfile] = useState(false);
   const [newProfileName, setNewProfileName] = useState("");

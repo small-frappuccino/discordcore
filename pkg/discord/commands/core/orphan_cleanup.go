@@ -28,15 +28,19 @@ func RegisterOrphanCleanupTask(router *task.TaskRouter, session *discordgo.Sessi
 }
 
 // scheduleOrphanCleanupTask dispatches the cleanup task cleanly into the background queue.
-func scheduleOrphanCleanupTask(router *task.TaskRouter) {
-	if router == nil {
+func scheduleOrphanCleanupTask(router *task.TaskRouter, session *discordgo.Session) {
+	if router == nil || session == nil || session.State == nil {
 		return
+	}
+	sessionID := session.State.SessionID
+	if sessionID == "" {
+		sessionID = "unknown"
 	}
 	t := task.Task{
 		Type:    TaskCommandOrphanCleanup,
 		Payload: task.EmptyPayload{},
 		Options: task.TaskOptions{
-			IdempotencyKey: "orphan_cleanup",
+			IdempotencyKey: "orphan_cleanup_" + sessionID,
 			IdempotencyTTL: 5 * time.Minute,
 		},
 	}
@@ -173,23 +177,30 @@ func cleanGuildCommands(ctx context.Context, session *discordgo.Session, appID, 
 		resp.Body.Close()
 
 		if statusCode == 429 {
+			delay := 5 * time.Second // Fallback delay to prevent zero-wait busy loops
 			if ra, parseErr := strconv.ParseFloat(retryAfter, 64); parseErr == nil {
-				delay := time.Duration(ra * float64(time.Second))
-				select {
-				case <-time.After(delay):
-				case <-ctx.Done():
-					return ctx.Err()
-				}
+				delay = time.Duration(ra * float64(time.Second))
 			}
+			timer := time.NewTimer(delay)
+			select {
+			case <-timer.C:
+			case <-ctx.Done():
+				timer.Stop()
+				return ctx.Err()
+			}
+			timer.Stop()
 			goto retryDelete
 		} else if remaining == "0" && resetAfter != "" {
 			if ra, parseErr := strconv.ParseFloat(resetAfter, 64); parseErr == nil {
 				delay := time.Duration(ra * float64(time.Second))
+				timer := time.NewTimer(delay)
 				select {
-				case <-time.After(delay):
+				case <-timer.C:
 				case <-ctx.Done():
+					timer.Stop()
 					return ctx.Err()
 				}
+				timer.Stop()
 			}
 		}
 

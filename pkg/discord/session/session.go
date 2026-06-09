@@ -10,9 +10,10 @@ import (
 
 // Injectable seams to allow testing without real network calls.
 var (
-	newSession   = discordgo.New
-	openSession  = func(s *discordgo.Session) error { return s.Open() }
-	closeSession = func(s *discordgo.Session) error { return s.Close() }
+	newSession     = discordgo.New
+	openSession    = func(s *discordgo.Session) error { return s.Open() }
+	closeSession   = func(s *discordgo.Session) error { return s.Close() }
+	addHandlerOnce = func(s *discordgo.Session, h interface{}) func() { return s.AddHandlerOnce(h) }
 )
 
 // OpenSession formally connects the discordgo.Session to the gateway,
@@ -23,7 +24,7 @@ func OpenSession(ctx context.Context, s *discordgo.Session) error {
 	}
 
 	readyCh := make(chan struct{})
-	removeHandler := s.AddHandlerOnce(func(s *discordgo.Session, r *discordgo.Ready) {
+	removeHandler := addHandlerOnce(s, func(s *discordgo.Session, r *discordgo.Ready) {
 		close(readyCh)
 	})
 

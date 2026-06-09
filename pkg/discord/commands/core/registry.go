@@ -225,7 +225,7 @@ func (cm *CommandManager) SetupCommands() error {
 	}
 
 	// Dispatch background sweep task strictly after READY completes
-	scheduleOrphanCleanupTask(cm.router.GetTaskRouter())
+	scheduleOrphanCleanupTask(cm.router.GetTaskRouter(), cm.session)
 
 	return nil
 }

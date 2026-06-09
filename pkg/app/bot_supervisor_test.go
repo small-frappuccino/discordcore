@@ -96,8 +96,9 @@ func TestSupervisorFaultIsolation(t *testing.T) {
 		supervisor.mu.Lock()
 		s1 := supervisor.instances["child1"]
 		s2 := supervisor.instances["child2"]
+		ready := s1 != nil && s1.Status == StatusRunning && s2 != nil && s2.Status == StatusStarting
 		supervisor.mu.Unlock()
-		if s1 != nil && s1.Status == StatusRunning && s2 != nil && s2.Status == StatusStarting {
+		if ready {
 			break
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -106,13 +107,20 @@ func TestSupervisorFaultIsolation(t *testing.T) {
 	supervisor.mu.Lock()
 	state1 := supervisor.instances["child1"]
 	state2 := supervisor.instances["child2"]
+	var status1, status2 InstanceStatus
+	if state1 != nil {
+		status1 = state1.Status
+	}
+	if state2 != nil {
+		status2 = state2.Status
+	}
 	supervisor.mu.Unlock()
 
-	if state1 == nil || state1.Status != StatusRunning {
-		t.Errorf("child1 should be running, got: %+v", state1)
+	if state1 == nil || status1 != StatusRunning {
+		t.Errorf("child1 should be running, got status: %v", status1)
 	}
-	if state2 == nil || state2.Status != StatusStarting {
-		t.Errorf("child2 should be retrying (starting) due to panic, got: %+v", state2)
+	if state2 == nil || status2 != StatusStarting {
+		t.Errorf("child2 should be retrying (starting) due to panic, got status: %v", status2)
 	}
 
 	// Stop supervisor gracefully
@@ -317,8 +325,9 @@ func TestSupervisorConfigChange(t *testing.T) {
 	for i := 0; i < 50; i++ {
 		supervisor.mu.Lock()
 		state1 := supervisor.instances["child1"]
+		ready := state1 != nil && state1.Status == StatusRunning
 		supervisor.mu.Unlock()
-		if state1 != nil && state1.Status == StatusRunning {
+		if ready {
 			break
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -342,8 +351,9 @@ func TestSupervisorConfigChange(t *testing.T) {
 	for i := 0; i < 50; i++ {
 		supervisor.mu.Lock()
 		state1 := supervisor.instances["child1"]
+		ready := state1 != nil && state1.Token == "token2" && state1.Status == StatusRunning
 		supervisor.mu.Unlock()
-		if state1 != nil && state1.Token == "token2" && state1.Status == StatusRunning {
+		if ready {
 			break
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -368,10 +378,14 @@ func TestSupervisorConfigChange(t *testing.T) {
 
 	supervisor.mu.Lock()
 	state1 := supervisor.instances["child1"]
+	var status InstanceStatus
+	if state1 != nil {
+		status = state1.Status
+	}
 	supervisor.mu.Unlock()
 
 	if state1 != nil {
-		t.Errorf("child1 should be stopped after config change, got: %+v", state1)
+		t.Errorf("child1 should be stopped after config change, got status: %v", status)
 	}
 
 	r := supervisor.GetResolver()
