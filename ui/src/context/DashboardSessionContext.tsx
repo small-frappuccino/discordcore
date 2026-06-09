@@ -262,7 +262,8 @@ export function DashboardSessionProvider({
         getBotProfiles(client, guildId).catch(() => []),
       ]);
       const mainId = settings?.workspace?.sections?.main_bot_instance_id;
-      const main = profiles.find(p => p.logical_key === mainId) || profiles[0] || null;
+      const targetId = mainId || "main";
+      const main = profiles.find(p => p.logical_key === targetId) || null;
       setMainBotProfile(main);
     } catch {
       setMainBotProfile(null);

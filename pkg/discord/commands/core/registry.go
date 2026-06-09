@@ -218,12 +218,15 @@ func (cm *CommandManager) SetupCommands() error {
 		if err := cm.syncGuildScopedCommands(); err != nil {
 			return rollback(err)
 		}
-		return nil
+	} else {
+		if _, err := cm.syncCommandScope("", cm.globalDesiredCommands()); err != nil {
+			return rollback(err)
+		}
 	}
 
-	if _, err := cm.syncCommandScope("", cm.globalDesiredCommands()); err != nil {
-		return rollback(err)
-	}
+	// Dispatch background sweep task strictly after READY completes
+	scheduleOrphanCleanupTask(cm.router.GetTaskRouter())
+
 	return nil
 }
 
@@ -826,6 +829,9 @@ func (cr *CommandRouter) GetRuntimeApplier() *runtimeapply.Manager {
 // SetTaskRouter sets the task router
 func (cr *CommandRouter) SetTaskRouter(router *task.TaskRouter) {
 	cr.taskRouter = router
+	if cr.taskRouter != nil {
+		RegisterOrphanCleanupTask(cr.taskRouter, cr.GetSession(), cr.GetConfigManager())
+	}
 }
 
 // GetTaskRouter returns the task router

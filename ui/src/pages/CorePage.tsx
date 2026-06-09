@@ -52,6 +52,9 @@ export function CorePage() {
     ...Object.keys(enabledInstances)
   ]));
 
+  const [isCreatingProfile, setIsCreatingProfile] = useState(false);
+  const [newProfileName, setNewProfileName] = useState("");
+
   const handleFeatureChange = (instanceId: string, features: string[]) => {
     const next = { ...featureRoutingState };
     for (const key of Object.keys(next)) {
@@ -65,8 +68,8 @@ export function CorePage() {
     setFeatureRoutingState(next);
   };
 
-  const handleAddProfile = () => {
-    const profileName = prompt("Enter a logical name for this profile (e.g., custom_qotd):");
+  const handleAddProfileSave = () => {
+    const profileName = newProfileName.trim();
     if (!profileName) return;
     
     const sanitized = profileName.toLowerCase().replace(/[^a-z0-9_]/g, '');
@@ -81,6 +84,14 @@ export function CorePage() {
     if (!mainBotIdState && allInstances.length === 0) {
       setMainBotIdState(sanitized);
     }
+
+    setIsCreatingProfile(false);
+    setNewProfileName("");
+  };
+
+  const handleAddProfileCancel = () => {
+    setIsCreatingProfile(false);
+    setNewProfileName("");
   };
 
   // Safe Hydration Check: Only default mainBotIdState if fully loaded and not already set
@@ -121,14 +132,27 @@ export function CorePage() {
                 <p className="text-sm text-text-secondary mb-2">
                   Manage bot identities, secure tokens, and operational feature routing for this guild.
                 </p>
-                <div className="p-3 mb-4 rounded-md border border-[var(--status-warning,#f59e0b)] bg-[var(--status-warning-bg,rgba(245,158,11,0.05))] text-sm">
+                <div className="p-3 mb-4 rounded-md bg-[var(--status-warning-bg,rgba(245,158,11,0.1))] text-sm">
                   <strong className="text-[var(--status-warning,#f59e0b)]">Getting Started:</strong> To add a bot to your server, you must first create a profile and provide its secure token. Once saved, you will be able to authorize it.
                 </div>
-                <div className="mt-2">
-                  <Button onClick={handleAddProfile} variant="secondary" size="sm">
-                    + Add Profile
-                  </Button>
-                </div>
+                {isCreatingProfile ? (
+                  <div className="mt-2 flex items-center gap-2">
+                    <TextInput 
+                      value={newProfileName} 
+                      onChange={e => setNewProfileName(e.target.value)} 
+                      placeholder="e.g., custom_qotd" 
+                      autoFocus 
+                    />
+                    <Button onClick={handleAddProfileSave} variant="primary" size="sm">Save</Button>
+                    <Button onClick={handleAddProfileCancel} variant="secondary" size="sm">Cancel</Button>
+                  </div>
+                ) : (
+                  <div className="mt-2">
+                    <Button onClick={() => setIsCreatingProfile(true)} variant="secondary" size="sm">
+                      + Add Profile
+                    </Button>
+                  </div>
+                )}
                 {saveError && (
                   <div className="mt-2 p-2 rounded bg-[var(--status-error-bg,rgba(239,68,68,0.1))] text-[var(--status-error,#ef4444)] text-sm flex items-center justify-between">
                     <span>{saveError}</span>
@@ -152,7 +176,7 @@ export function CorePage() {
                   return (
                     <SettingsGroup key={instanceId}>
                       {/* Identity Header */}
-                      <div className={`p-4 flex items-center gap-4 ${isEnabled ? "border-b border-border-subtle" : ""}`}>
+                      <div className={`p-4 flex items-center gap-4 ${isEnabled ? "border-b-[1px] border-b-[var(--border-subtle)]" : ""}`}>
                         <div className="w-12 h-12 rounded-full overflow-hidden bg-bg-surface-active flex items-center justify-center shrink-0 border border-border-subtle">
                           {profile?.avatar_url ? (
                             <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
@@ -212,7 +236,7 @@ export function CorePage() {
                               </div>
                             }
                             control={
-                              <div className="w-full md:w-2/3 lg:w-1/2 flex flex-col gap-2">
+                              <div className="w-full flex-1 flex flex-col gap-2">
                                 <TextInput 
                                   type="password" 
                                   className="w-full border-white/20 pl-6"
