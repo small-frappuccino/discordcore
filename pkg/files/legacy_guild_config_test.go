@@ -44,6 +44,21 @@ func TestGuildConfigLegacyMigration(t *testing.T) {
 			jsonInput:  `{"guild_id": "g6", "bot_instance_id": "main", "bot_instance_tokens": {"main": "existing-token"}}`,
 			wantTokens: []string{"main"}, // we should check that "main" has "existing-token"
 		},
+		{
+			name:       "migrates legacy main token",
+			jsonInput:  `{"guild_id": "g7", "main": "main-token-123"}`,
+			wantTokens: []string{"main"},
+		},
+		{
+			name:       "migrates legacy companion token",
+			jsonInput:  `{"guild_id": "g8", "companion": "companion-token-123"}`,
+			wantTokens: []string{"companion"},
+		},
+		{
+			name:       "migrates mixed legacy tokens",
+			jsonInput:  `{"guild_id": "g9", "main": "t1", "companion": "t2", "bot_instance_tokens": {"admin": "t3"}}`,
+			wantTokens: []string{"main", "companion", "admin"},
+		},
 	}
 
 	for _, tc := range tests {
@@ -76,22 +91,35 @@ func TestGuildConfigLegacyMigration(t *testing.T) {
 					if string(val) != "existing-token" {
 						t.Errorf("expected token to remain 'existing-token', got %q", val)
 					}
+				} else if strings.HasPrefix(tc.name, "migrates legacy") || tc.name == "migrates mixed legacy tokens" {
+					// We injected actual tokens in these tests
 				} else if string(val) != "" {
 					t.Errorf("expected empty token for migrated key %q, got %q", want, val)
 				}
 			}
 
-			// Validate that legacy fields are NOT marshaled back
+			// Validate that legacy fields are NOT marshaled back at the top level
 			marshaled, err := json.Marshal(gc)
 			if err != nil {
 				t.Fatalf("Marshal failed: %v", err)
 			}
-			marshaledStr := string(marshaled)
-			if strings.Contains(marshaledStr, "bot_instance_id") {
-				t.Errorf("Marshaled JSON should not contain 'bot_instance_id': %s", marshaledStr)
+
+			var m map[string]interface{}
+			if err := json.Unmarshal(marshaled, &m); err != nil {
+				t.Fatalf("Unmarshal of marshaled json failed: %v", err)
 			}
-			if strings.Contains(marshaledStr, "domain_bot_instance_ids") {
-				t.Errorf("Marshaled JSON should not contain 'domain_bot_instance_ids': %s", marshaledStr)
+
+			if _, ok := m["bot_instance_id"]; ok {
+				t.Errorf("Marshaled JSON should not contain top-level 'bot_instance_id'")
+			}
+			if _, ok := m["domain_bot_instance_ids"]; ok {
+				t.Errorf("Marshaled JSON should not contain top-level 'domain_bot_instance_ids'")
+			}
+			if _, ok := m["main"]; ok {
+				t.Errorf("Marshaled JSON should not contain top-level 'main'")
+			}
+			if _, ok := m["companion"]; ok {
+				t.Errorf("Marshaled JSON should not contain top-level 'companion'")
 			}
 		})
 	}

@@ -35,6 +35,8 @@ type botRuntimeOptions struct {
 	profile                  RunProfile
 }
 
+var openBotDiscordSession = session.OpenSession
+
 func openBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabilities) (*botRuntime, error) {
 	log.DiscordLogger().Info(
 		"Attempting to authenticate with Discord API...",
@@ -52,7 +54,7 @@ func openBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabil
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	if err := session.OpenSession(ctx, discordSession); err != nil {
+	if err := openBotDiscordSession(ctx, discordSession); err != nil {
 		return nil, fmt.Errorf("open discord session for %s: %w", instance.ID, err)
 	}
 

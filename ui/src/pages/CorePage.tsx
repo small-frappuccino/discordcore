@@ -17,7 +17,7 @@ const BASE_FEATURE_OPTIONS = [
 
 export function CorePage() {
   const { guildId } = useParams<{ guildId: string }>();
-  const { accessibleGuilds, manageableGuilds } = useDashboardSession();
+  const { accessibleGuilds, manageableGuilds, baseUrl } = useDashboardSession();
   
   const activeGuild = accessibleGuilds.find(g => g.id === guildId) || manageableGuilds.find(g => g.id === guildId);
   const botPresent = activeGuild?.bot_present === true;
@@ -118,9 +118,12 @@ export function CorePage() {
                     </Button>
                   )}
                 </div>
-                <p className="text-sm text-text-secondary">
+                <p className="text-sm text-text-secondary mb-2">
                   Manage bot identities, secure tokens, and operational feature routing for this guild.
                 </p>
+                <div className="p-3 mb-4 rounded-md border border-[var(--status-warning,#f59e0b)] bg-[var(--status-warning-bg,rgba(245,158,11,0.05))] text-sm">
+                  <strong className="text-[var(--status-warning,#f59e0b)]">Getting Started:</strong> To add a bot to your server, you must first create a profile and provide its secure token. Once saved, you will be able to authorize it.
+                </div>
                 <div className="mt-2">
                   <Button onClick={handleAddProfile} variant="secondary" size="sm">
                     + Add Profile
@@ -219,7 +222,7 @@ export function CorePage() {
                                 />
                                 {hasToken && !botPresent && profile && (
                                   <a
-                                    href={`https://discord.com/api/oauth2/authorize?client_id=${profile.id}&permissions=8&scope=bot%20applications.commands`}
+                                    href={`${baseUrl === "" ? "" : baseUrl}/v1/guilds/${guildId}/oauth/authorize?bot_instance_id=${instanceId}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="text-xs inline-flex items-center gap-1 text-[var(--status-warning,#f59e0b)] hover:underline self-start bg-[var(--status-warning-bg,rgba(245,158,11,0.1))] px-2 py-1 rounded"
