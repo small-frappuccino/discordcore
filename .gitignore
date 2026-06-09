@@ -22,6 +22,8 @@ tmp/
 /*.exe
 /*.ps1
 /*.js
+/*.out
+/c
 /bun.lock
 /bun.lockb
 /package.json
