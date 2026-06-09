@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ControlApiClient } from "../client";
-import { listGuildFeatures, getGuildFeature, patchGuildFeature, type FeaturePatchPayload } from "../domains/features";
+import { listGuildFeatures, getGuildFeature, patchGuildFeature, type FeaturePatchPayload, type FeatureRecord } from "../domains/features";
 
 export const guildFeaturesQueryKey = (baseUrl: string, guildId: string) => ["guildFeatures", baseUrl, guildId];
 export const guildFeatureQueryKey = (baseUrl: string, guildId: string, featureId: string) => ["guildFeature", baseUrl, guildId, featureId];
@@ -25,7 +25,7 @@ export function usePatchGuildFeatureMutation(client: ControlApiClient, guildId: 
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (payload: FeaturePatchPayload) => patchGuildFeature(client, guildId, featureId, payload),
+    mutationFn: (args: { originalFeature?: FeatureRecord; payload: FeaturePatchPayload }) => patchGuildFeature(client, guildId, featureId, args.originalFeature, args.payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: guildFeatureQueryKey(client.getBaseUrl(), guildId, featureId) });
       queryClient.invalidateQueries({ queryKey: guildFeaturesQueryKey(client.getBaseUrl(), guildId) });

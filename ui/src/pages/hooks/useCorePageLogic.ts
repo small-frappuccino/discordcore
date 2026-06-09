@@ -49,7 +49,7 @@ export function useCorePageLogic() {
       if (Object.keys(tokensState).length > 0) {
         payload.bot_instance_tokens = tokensState;
       }
-      await updateSettings(payload);
+      await updateSettings({ originalWorkspace: settings?.workspace, payload });
       setTokensState({});
     } catch (err) {
       const e = err as { status?: number; response?: { status?: number } };

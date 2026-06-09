@@ -17,6 +17,24 @@ func (e featurePatchBadRequestError) Error() string {
 	return e.message
 }
 
+type featurePatchPreconditionRequiredError struct {
+	message string
+}
+
+// Error errors.
+func (e featurePatchPreconditionRequiredError) Error() string {
+	return e.message
+}
+
+type featurePatchPreconditionFailedError struct {
+	message string
+}
+
+// Error errors.
+func (e featurePatchPreconditionFailedError) Error() string {
+	return e.message
+}
+
 type featureDefinition struct {
 	ID                    string
 	Category              string
@@ -60,6 +78,7 @@ type featureRecord struct {
 	OverrideState         string           `json:"override_state"`
 	EffectiveEnabled      bool             `json:"effective_enabled"`
 	EffectiveSource       string           `json:"effective_source"`
+	ConfigVersion         int64            `json:"config_version,omitempty"`
 	Readiness             string           `json:"readiness"`
 	Blockers              []featureBlocker `json:"blockers,omitempty"`
 	Details               *featureDetails  `json:"details,omitempty"`

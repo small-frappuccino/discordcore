@@ -331,7 +331,10 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 			http.Error(w, fmt.Sprintf("guild settings not found for %s and registration is unavailable", guildID), http.StatusBadRequest)
 			return
 		}
-	} else if payload.ConfigVersion != nil && *payload.ConfigVersion != guildDisk.ConfigVersion {
+	} else if payload.ConfigVersion == nil {
+		http.Error(w, "optimistic concurrency control: config_version required", http.StatusPreconditionRequired)
+		return
+	} else if *payload.ConfigVersion != guildDisk.ConfigVersion {
 		http.Error(w, "optimistic concurrency control: config_version mismatch", http.StatusPreconditionFailed)
 		return
 	}

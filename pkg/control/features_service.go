@@ -151,5 +151,15 @@ func statusForFeatureMutationError(err error) int {
 		return http.StatusBadRequest
 	}
 
+	var precondReq featurePatchPreconditionRequiredError
+	if errors.As(err, &precondReq) {
+		return http.StatusPreconditionRequired
+	}
+
+	var precondFail featurePatchPreconditionFailedError
+	if errors.As(err, &precondFail) {
+		return http.StatusPreconditionFailed
+	}
+
 	return statusForSettingsMutationError(err)
 }

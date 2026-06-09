@@ -38,8 +38,11 @@ func resolveBotRuntimeCapabilities(
 		features := cfg.ResolveFeatures(guild.GuildID)
 		runtimeConfig := cfg.ResolveRuntimeConfig(guild.GuildID)
 
-		if botRuntimeNeedsQOTDRuntime(guild) {
-			capabilities.qotdRuntime = true
+		if !guild.QOTD.IsZero() {
+			resolvedID, _ := guild.ResolveFeatureBotInstanceID("qotd", defaultBotInstanceID)
+			if resolvedID == botInstanceID {
+				capabilities.qotdRuntime = true
+			}
 		}
 
 		if features.Services.Commands {
@@ -125,10 +128,6 @@ func (p QOTDCapabilityPolicy) Modify(c botRuntimeCapabilities) botRuntimeCapabil
 		hasCommands: clone.hasCommands,
 		intents:     discordgo.IntentsGuilds,
 	}
-}
-
-func botRuntimeNeedsQOTDRuntime(guild files.GuildConfig) bool {
-	return !guild.QOTD.IsZero()
 }
 
 func botRuntimeNeedsMonitoring(

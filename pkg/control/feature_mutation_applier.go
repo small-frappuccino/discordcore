@@ -44,6 +44,17 @@ func (applier *featureMutationApplier) ApplyPatch(
 		return files.BotConfig{}, featurePatchBadRequestError{message: "payload must contain at least one field"}
 	}
 
+	var patchConfigVersion *int64
+	if guildID != "" {
+		if present, value, err := consumeInt64(payload, "config_version"); err != nil {
+			return files.BotConfig{}, fmt.Errorf("featureMutationApplier.ApplyPatch: %w", err)
+		} else if present {
+			patchConfigVersion = &value
+		} else {
+			return files.BotConfig{}, featurePatchPreconditionRequiredError{message: "optimistic concurrency control: config_version required"}
+		}
+	}
+
 	updated, err := applier.configManager.UpdateConfig(func(cfg *files.BotConfig) error {
 		if guildID == "" {
 			return applier.applyGlobalPatch(cfg, def, payload)
@@ -51,6 +62,12 @@ func (applier *featureMutationApplier) ApplyPatch(
 		guild, ok := findGuildSettingsMutable(cfg, guildID)
 		if !ok {
 			return fmt.Errorf("%w: register this guild first (guild_id=%s)", errGuildRegistrationRequired, guildID)
+		}
+		if patchConfigVersion != nil {
+			if *patchConfigVersion != guild.ConfigVersion {
+				return featurePatchPreconditionFailedError{message: "optimistic concurrency control: config_version mismatch"}
+			}
+			guild.ConfigVersion++
 		}
 		return applier.applyGuildPatch(cfg, guild, def, payload)
 	})
@@ -380,6 +397,19 @@ func consumeInt(payload map[string]json.RawMessage, key string) (bool, int, erro
 	var parsed int
 	if err := json.Unmarshal(raw, &parsed); err != nil {
 		return false, 0, featurePatchBadRequestError{message: fmt.Sprintf("%s must be an integer: %v", key, err)}
+	}
+	return true, parsed, nil
+}
+
+func consumeInt64(payload map[string]json.RawMessage, key string) (bool, int64, error) {
+	raw, ok := payload[key]
+	if !ok {
+		return false, 0, nil
+	}
+	delete(payload, key)
+	var parsed int64
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return false, 0, featurePatchBadRequestError{message: fmt.Sprintf("%s must be a 64-bit integer: %v", key, err)}
 	}
 	return true, parsed, nil
 }

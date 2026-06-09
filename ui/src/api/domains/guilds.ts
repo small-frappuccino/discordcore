@@ -145,6 +145,7 @@ export async function getGuildSettings(
 export async function updateGuildSettings(
   client: ControlApiClient,
   guildId: string,
+  originalWorkspace: GuildSettingsWorkspace | undefined,
   payload: {
     config_version: number;
     bot_instance_tokens?: Record<string, string>;
@@ -153,11 +154,60 @@ export async function updateGuildSettings(
     roles?: GuildRolesSettingsSection;
   },
 ): Promise<GuildSettingsWorkspaceResponse> {
-  return client.request<GuildSettingsWorkspaceResponse>(
-    "PUT",
-    `/v1/guilds/${encodeURIComponent(guildId)}/settings`,
-    payload,
-  );
+  const { delay } = await import("../client");
+  let attempt = 0;
+  const maxAttempts = 4;
+  const currentPayload = { ...payload };
+
+  while (true) {
+    try {
+      return await client.request<GuildSettingsWorkspaceResponse>(
+        "PUT",
+        `/v1/guilds/${encodeURIComponent(guildId)}/settings`,
+        currentPayload,
+      );
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      if (!err.message?.includes("412") && !err.message?.includes("428")) {
+        throw error;
+      }
+      if (attempt >= maxAttempts - 1) {
+        throw new Error(`Failed to save settings due to concurrent modifications after ${maxAttempts} attempts. Please refresh the page and try again.`);
+      }
+
+      attempt++;
+      // Exponential backoff and randomized network jitter
+      const delayMs = Math.pow(2, attempt) * 100 + Math.random() * 50;
+      await delay(delayMs);
+
+      // State-refresh I/O call
+      const latestResponse = await getGuildSettings(client, guildId);
+      const latestWorkspace = latestResponse.workspace;
+
+      // Explicitly check field-level mutation collisions
+      let collision = false;
+      if (originalWorkspace) {
+        if (currentPayload.main_bot_instance_id !== undefined && latestWorkspace.sections.main_bot_instance_id !== originalWorkspace.sections.main_bot_instance_id) {
+          collision = true;
+        }
+        if (currentPayload.bot_instance_tokens !== undefined && JSON.stringify(latestWorkspace.sections.bot_instance_tokens_configured) !== JSON.stringify(originalWorkspace.sections.bot_instance_tokens_configured)) {
+          collision = true;
+        }
+        if (currentPayload.feature_routing !== undefined && JSON.stringify(latestWorkspace.sections.feature_routing) !== JSON.stringify(originalWorkspace.sections.feature_routing)) {
+          collision = true;
+        }
+        if (currentPayload.roles !== undefined && JSON.stringify(latestWorkspace.sections.roles) !== JSON.stringify(originalWorkspace.sections.roles)) {
+          collision = true;
+        }
+      }
+
+      if (collision) {
+        throw new Error("Concurrent modification detected on the same fields. Please refresh and try again. (Lost Update)");
+      }
+
+      currentPayload.config_version = latestWorkspace.config_version;
+    }
+  }
 }
 
 export interface BotProfile {

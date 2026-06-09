@@ -138,6 +138,13 @@ func (builder *featureWorkspaceBuilder) buildFeatureRecord(
 		scope = "guild"
 	}
 
+	var configVersion int64
+	if guildID != "" {
+		if guild, ok := findGuildSettings(cfg, guildID); ok {
+			configVersion = guild.ConfigVersion
+		}
+	}
+
 	record := featureRecord{
 		ID:                    def.ID,
 		Category:              def.Category,
@@ -150,6 +157,7 @@ func (builder *featureWorkspaceBuilder) buildFeatureRecord(
 		OverrideState:         featureOverrideState(&cfg, guildID, def.ID),
 		EffectiveEnabled:      effectiveEnabled,
 		EffectiveSource:       featureEffectiveSource(&cfg, guildID, def.ID),
+		ConfigVersion:         configVersion,
 		Readiness:             readiness,
 		Blockers:              blockers,
 		Details:               builder.buildFeatureDetails(&cfg, guildID, def),

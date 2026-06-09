@@ -16,6 +16,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/service"
 )
 
@@ -197,20 +198,18 @@ func (r *botRuntimeResolver) runtimeForGuild(guildID string) (*botRuntime, strin
 		return nil, "", fmt.Errorf("guild %s is not configured", guildID)
 	}
 
-	var bestInstanceID string
-	var bestRuntime *botRuntime
-	runtimes := r.getRuntimes()
+	bestInstanceID, fallback := guild.ResolveFeatureBotInstanceID("dashboard", r.defaultBotInstanceID)
 
-	for instanceID, runtime := range runtimes {
-		token, ok := guild.BotInstanceTokens[instanceID]
-		if ok && token != "" {
-			bestInstanceID = instanceID
-			bestRuntime = runtime
-			if instanceID == r.defaultBotInstanceID {
-				break
-			}
-		}
+	if fallback && bestInstanceID == r.defaultBotInstanceID {
+		log.ApplicationLogger().Warn(
+			"Routing degraded to default bot instance due to missing or invalid token for designated route",
+			"guildID", guildID,
+			"fallbackBotInstanceID", bestInstanceID,
+		)
 	}
+
+	runtimes := r.getRuntimes()
+	bestRuntime := runtimes[bestInstanceID]
 
 	if bestRuntime == nil {
 		if r.defaultBotInstanceID != "" && runtimes[r.defaultBotInstanceID] != nil {

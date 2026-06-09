@@ -41,16 +41,19 @@ export function useRolesPage(selectedGuildID: string | null) {
     if (!selectedGuildID) return;
     try {
       await updateSettingsMutation.mutateAsync({
-        config_version: settingsData?.workspace.config_version ?? 0,
-        roles: {
-          dashboard_read: dashboardRead,
-          dashboard_write: dashboardWrite,
-          booster_role: boosterRole,
-          mute_role: muteRole,
-          auto_assignment: {
-            enabled: autoAssignEnabled,
-            target_role: autoAssignTarget,
-            required_roles: autoAssignRequired
+        originalWorkspace: settingsData?.workspace,
+        payload: {
+          config_version: settingsData?.workspace.config_version ?? 0,
+          roles: {
+            dashboard_read: dashboardRead,
+            dashboard_write: dashboardWrite,
+            booster_role: boosterRole,
+            mute_role: muteRole,
+            auto_assignment: {
+              enabled: autoAssignEnabled,
+              target_role: autoAssignTarget,
+              required_roles: autoAssignRequired
+            }
           }
         }
       });

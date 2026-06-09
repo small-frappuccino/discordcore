@@ -43,28 +43,31 @@ export function useModerationPageLogic() {
 
   const handleToggleAutomod = useCallback(() => {
     if (!selectedGuildID) return;
-    automodMutation.mutate({ enabled: !automodEnabled }, {
+    automodMutation.mutate({ originalFeature: automodRes?.feature, payload: { enabled: !automodEnabled } }, {
       onSuccess: () => toast.success("Automod settings updated"),
       onError: (e) => toast.error(`Failed to update automod: ${formatError(e)}`)
     });
-  }, [selectedGuildID, automodEnabled, automodMutation]);
+  }, [selectedGuildID, automodEnabled, automodMutation, automodRes]);
 
   const handleToggleLogging = useCallback(() => {
     if (!selectedGuildID) return;
-    loggingMutation.mutate({ enabled: !loggingEnabled }, {
+    loggingMutation.mutate({ originalFeature: loggingRes?.feature, payload: { enabled: !loggingEnabled } }, {
       onSuccess: () => toast.success("Logging settings updated"),
       onError: (e) => toast.error(`Failed to update logging: ${formatError(e)}`)
     });
-  }, [selectedGuildID, loggingEnabled, loggingMutation]);
+  }, [selectedGuildID, loggingEnabled, loggingMutation, loggingRes]);
 
   const onSubmit = form.handleSubmit((data) => {
     if (!selectedGuildID) return;
     settingsMutation.mutate({
-      config_version: settingsRes?.workspace?.config_version ?? 0,
-      roles: {
-        ...(settingsRes?.workspace?.sections?.roles || {}),
-        mute_role: data.mute_role,
-      },
+      originalWorkspace: settingsRes?.workspace,
+      payload: {
+        config_version: settingsRes?.workspace?.config_version ?? 0,
+        roles: {
+          ...(settingsRes?.workspace?.sections?.roles || {}),
+          mute_role: data.mute_role,
+        },
+      }
     }, {
       onSuccess: () => toast.success("Mute role saved"),
       onError: (e) => toast.error(`Failed to save mute role: ${formatError(e)}`)

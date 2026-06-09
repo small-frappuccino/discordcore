@@ -77,6 +77,7 @@ export interface FeatureRecord {
   override_state: string;
   effective_enabled: boolean;
   effective_source: string;
+  config_version?: number;
   readiness: string;
   blockers?: FeatureBlocker[];
   details?: FeatureDetails;
@@ -106,6 +107,7 @@ export interface FeatureResponse {
 }
 
 export interface FeaturePatchPayload {
+  config_version?: number;
   enabled?: boolean | null;
   channel_id?: string;
   role_id?: string;
@@ -177,11 +179,64 @@ export async function patchGuildFeature(
   client: ControlApiClient,
   guildId: string,
   featureId: string,
+  originalFeature: FeatureRecord | undefined,
   payload: FeaturePatchPayload,
 ): Promise<FeatureResponse> {
-  return client.request<FeatureResponse>(
-    "PATCH",
-    `/v1/guilds/${encodeURIComponent(guildId)}/features/${encodeURIComponent(featureId)}`,
-    payload,
-  );
+  const { delay } = await import("../client");
+  let attempt = 0;
+  const maxAttempts = 4;
+  const currentPayload = { ...payload };
+
+  while (true) {
+    try {
+      return await client.request<FeatureResponse>(
+        "PATCH",
+        `/v1/guilds/${encodeURIComponent(guildId)}/features/${encodeURIComponent(featureId)}`,
+        currentPayload,
+      );
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      if (!err.message?.includes("412") && !err.message?.includes("428")) {
+        throw error;
+      }
+      if (attempt >= maxAttempts - 1) {
+        throw new Error(`Failed to save feature due to concurrent modifications after ${maxAttempts} attempts. Please refresh the page and try again.`);
+      }
+
+      attempt++;
+      // Exponential backoff and randomized network jitter
+      const delayMs = Math.pow(2, attempt) * 100 + Math.random() * 50;
+      await delay(delayMs);
+
+      // State-refresh I/O call
+      const latestResponse = await getGuildFeature(client, guildId, featureId);
+      const latestFeature = latestResponse.feature;
+
+      // Explicitly check field-level mutation collisions
+      let collision = false;
+      if (originalFeature) {
+        if (currentPayload.enabled !== undefined && latestFeature.effective_enabled !== originalFeature.effective_enabled) {
+          collision = true;
+        }
+        if (currentPayload.channel_id !== undefined && latestFeature.details?.channel_id !== originalFeature.details?.channel_id) {
+          collision = true;
+        }
+        if (currentPayload.role_id !== undefined && latestFeature.details?.role_id !== originalFeature.details?.role_id) {
+          collision = true;
+        }
+        if (currentPayload.allowed_role_ids !== undefined && JSON.stringify(latestFeature.details?.allowed_role_ids) !== JSON.stringify(originalFeature.details?.allowed_role_ids)) {
+          collision = true;
+        }
+        // ... (we can add more fields if needed, but enabled, channel_id, role_id, allowed_role_ids are the main ones)
+      }
+
+      if (collision) {
+        throw new Error("Concurrent modification detected on the same fields. Please refresh and try again. (Lost Update)");
+      }
+
+      if (latestFeature.config_version !== undefined) {
+        currentPayload.config_version = latestFeature.config_version;
+      }
+    }
+  }
 }

@@ -194,7 +194,11 @@ func (ch *CommandHandler) handlesGuild(guildID string) bool {
 }
 
 func (ch *CommandHandler) handlesGuildRoute(guildID string, routeKey core.InteractionRouteKey) bool {
-	if !ch.matchesGuildBotInstance(guildID) {
+	feature := "commands"
+	if strings.HasPrefix(routeKey.Path, "qotd") {
+		feature = "qotd"
+	}
+	if !ch.matchesGuildBotInstance(guildID, feature) {
 		return false
 	}
 	cfg := ch.configManager.Config()
@@ -207,7 +211,7 @@ func (ch *CommandHandler) handlesGuildRoute(guildID string, routeKey core.Intera
 	return false
 }
 
-func (ch *CommandHandler) matchesGuildBotInstance(guildID string) bool {
+func (ch *CommandHandler) matchesGuildBotInstance(guildID string, feature string) bool {
 	if ch == nil {
 		return false
 	}
@@ -233,6 +237,16 @@ func (ch *CommandHandler) matchesGuildBotInstance(guildID string) bool {
 	if len(guild.BotInstanceTokens) == 0 {
 		return botInstanceID == ch.defaultBotInstanceID
 	}
-	token, ok := guild.BotInstanceTokens[botInstanceID]
-	return ok && token != ""
+
+	resolvedID, fallback := guild.ResolveFeatureBotInstanceID(feature, ch.defaultBotInstanceID)
+	if fallback && resolvedID == ch.defaultBotInstanceID {
+		log.ApplicationLogger().Warn(
+			"Command routing degraded to default bot instance due to missing or invalid token for designated route",
+			"guildID", guildID,
+			"feature", feature,
+			"fallbackBotInstanceID", resolvedID,
+		)
+	}
+
+	return botInstanceID == resolvedID
 }
