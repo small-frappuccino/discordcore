@@ -59,6 +59,7 @@ func TestFeatureAPIContractShapesRemainStable(t *testing.T) {
 		"override_state",
 		"effective_enabled",
 		"effective_source",
+		"config_version",
 		"readiness",
 		"blockers",
 		"details",

@@ -680,7 +680,7 @@ func TestGuildRoutesRequireCSRFForOAuthSessionMutations(t *testing.T) {
 	}))
 	defer discordAPI.Close()
 
-	srv, _ := newControlTestServer(t)
+	srv, cm := newControlTestServer(t)
 	srv.SetBotGuildIDsProvider(func(_ context.Context) ([]string, error) {
 		return []string{"g1"}, nil
 	})
@@ -726,6 +726,15 @@ func TestGuildRoutesRequireCSRFForOAuthSessionMutations(t *testing.T) {
 		t.Fatalf("expected %q cookie after callback", defaultDiscordOAuthSessionCookie)
 	}
 
+	getCV := func(guildID string) int64 {
+		for _, g := range cm.SnapshotConfig().Guilds {
+			if g.GuildID == guildID {
+				return g.ConfigVersion
+			}
+		}
+		return 0
+	}
+
 	tests := []struct {
 		name   string
 		method string
@@ -736,13 +745,13 @@ func TestGuildRoutesRequireCSRFForOAuthSessionMutations(t *testing.T) {
 			name:   "guild settings put",
 			method: http.MethodPut,
 			path:   "/v1/guilds/g1/settings",
-			body:   `{"roles":{"dashboard_read":[]}}`,
+			body:   fmt.Sprintf(`{"roles":{"dashboard_read":[]},"config_version":%d}`, getCV("g1")),
 		},
 		{
 			name:   "guild feature patch",
 			method: http.MethodPatch,
 			path:   "/v1/guilds/g1/features/services.monitoring",
-			body:   `{"enabled":false}`,
+			body:   fmt.Sprintf(`{"enabled":false,"config_version":%d}`, getCV("g1")),
 		},
 	}
 
@@ -1093,7 +1102,7 @@ func TestGuildAccessRoleUpdatesInvalidateAccessibleGuildCache(t *testing.T) {
 	}))
 	defer discordAPI.Close()
 
-	srv, _ := newControlTestServer(t)
+	srv, cm := newControlTestServer(t)
 	srv.SetBotGuildIDsProvider(func(_ context.Context) ([]string, error) {
 		return []string{"g1"}, nil
 	})
@@ -1158,7 +1167,18 @@ func TestGuildAccessRoleUpdatesInvalidateAccessibleGuildCache(t *testing.T) {
 		t.Fatalf("expected one guild lookup before cache invalidation, got %d", got)
 	}
 
+	getCV := func(guildID string) *int64 {
+		for _, g := range cm.SnapshotConfig().Guilds {
+			if g.GuildID == guildID {
+				v := g.ConfigVersion
+				return &v
+			}
+		}
+		return nil
+	}
+
 	updateRec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodPut, "/v1/guilds/g1/settings", updateGuildSettingsRequest{
+		ConfigVersion: getCV("g1"),
 		Roles: &files.RolesConfig{
 			DashboardRead: []string{"reader-role"},
 		},
@@ -1217,7 +1237,7 @@ func TestGuildWriteAuthorizationUsesAccessibleGuildCache(t *testing.T) {
 	}))
 	defer discordAPI.Close()
 
-	srv, _ := newControlTestServer(t)
+	srv, cm := newControlTestServer(t)
 	srv.SetBotGuildIDsProvider(func(_ context.Context) ([]string, error) {
 		return []string{"g1"}, nil
 	})
@@ -1272,10 +1292,19 @@ func TestGuildWriteAuthorizationUsesAccessibleGuildCache(t *testing.T) {
 
 	guildVisible.Store(false)
 
+	getCV := func(guildID string) int64 {
+		for _, g := range cm.SnapshotConfig().Guilds {
+			if g.GuildID == guildID {
+				return g.ConfigVersion
+			}
+		}
+		return 0
+	}
+
 	patchReq := httptest.NewRequest(
 		http.MethodPatch,
 		"/v1/guilds/g1/features/services.monitoring",
-		strings.NewReader(`{"enabled":false}`),
+		strings.NewReader(fmt.Sprintf(`{"enabled":false,"config_version":%d}`, getCV("g1"))),
 	)
 	patchReq.AddCookie(sessionCookie)
 	patchReq.Header.Set("Content-Type", "application/json")

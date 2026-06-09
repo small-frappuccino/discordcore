@@ -133,8 +133,17 @@ func slicesIndexBy[T any](items []T, match func(T) bool) (T, bool) {
 func TestFeaturePatchInheritanceAndClears(t *testing.T) {
 	t.Parallel()
 
-	srv, _ := newControlTestServer(t)
+	srv, cm := newControlTestServer(t)
 	handler := srv.httpServer.Handler
+
+	getCV := func(guildID string) int64 {
+		for _, g := range cm.SnapshotConfig().Guilds {
+			if g.GuildID == guildID {
+				return g.ConfigVersion
+			}
+		}
+		return 0
+	}
 
 	globalDisable := performHandlerJSONRequest(t, handler, http.MethodPatch, "/v1/features/services.monitoring", map[string]any{
 		"enabled": false,
@@ -149,7 +158,8 @@ func TestFeaturePatchInheritanceAndClears(t *testing.T) {
 	}
 
 	guildEnable := performHandlerJSONRequest(t, handler, http.MethodPatch, "/v1/guilds/g1/features/services.monitoring", map[string]any{
-		"enabled": true,
+		"enabled":        true,
+		"config_version": getCV("g1"),
 	})
 	if guildEnable.Code != http.StatusOK {
 		t.Fatalf("PATCH guild enable status=%d body=%q", guildEnable.Code, guildEnable.Body.String())
@@ -161,7 +171,8 @@ func TestFeaturePatchInheritanceAndClears(t *testing.T) {
 	}
 
 	guildClear := performHandlerJSONRequest(t, handler, http.MethodPatch, "/v1/guilds/g1/features/services.monitoring", map[string]any{
-		"enabled": nil,
+		"enabled":        nil,
+		"config_version": getCV("g1"),
 	})
 	if guildClear.Code != http.StatusOK {
 		t.Fatalf("PATCH guild clear status=%d body=%q", guildClear.Code, guildClear.Body.String())
@@ -214,9 +225,19 @@ func TestGuildFeaturePatchPersistsConfigDetails(t *testing.T) {
 		{path: "/v1/guilds/g1/features/user_prune", payload: map[string]any{"config_enabled": true}},
 	}
 
+	getCV := func(guildID string) int64 {
+		for _, g := range cm.SnapshotConfig().Guilds {
+			if g.GuildID == guildID {
+				return g.ConfigVersion
+			}
+		}
+		return 0
+	}
+
 	for _, req := range requests {
 		req := req
 		t.Run(req.path, func(t *testing.T) {
+			req.payload["config_version"] = getCV("g1")
 			rec := performHandlerJSONRequest(t, handler, http.MethodPatch, req.path, req.payload)
 			if rec.Code != http.StatusOK {
 				t.Fatalf("PATCH %s status=%d body=%q", req.path, rec.Code, rec.Body.String())
@@ -303,7 +324,7 @@ func TestFeaturePatchRejectsMissingAuthBadPayloadAndUnregisteredGuild(t *testing
 		t.Fatalf("expected 400 for unsupported field, got status=%d body=%q", unsupportedField.Code, unsupportedField.Body.String())
 	}
 
-	missingGuild := performHandlerJSONRequest(t, handler, http.MethodPatch, "/v1/guilds/g-missing/features/services.monitoring", map[string]any{"enabled": false})
+	missingGuild := performHandlerJSONRequest(t, handler, http.MethodPatch, "/v1/guilds/g-missing/features/services.monitoring", map[string]any{"enabled": false, "config_version": 0})
 	if missingGuild.Code != http.StatusConflict {
 		t.Fatalf("expected 409 for unregistered guild, got status=%d body=%q", missingGuild.Code, missingGuild.Body.String())
 	}

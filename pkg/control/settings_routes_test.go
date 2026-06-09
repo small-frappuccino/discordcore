@@ -204,7 +204,18 @@ func TestGuildSettingsPutGetListAndDelete(t *testing.T) {
 		t.Fatalf("seed second guild: %v", err)
 	}
 
+	getCV := func(guildID string) *int64 {
+		for _, g := range cm.SnapshotConfig().Guilds {
+			if g.GuildID == guildID {
+				v := g.ConfigVersion
+				return &v
+			}
+		}
+		return nil
+	}
+
 	payload := updateGuildSettingsRequest{
+		ConfigVersion: getCV("g2"),
 		Channels: &files.ChannelsConfig{
 			Commands:       "100",
 			AutomodAction:  "200",
@@ -342,8 +353,21 @@ func TestGuildSettingsPutSavesBotInstanceTokenForUndiscoveredGuild(t *testing.T)
 		t.Fatalf("seed guild g2: %v", err)
 	}
 
+	getCV := func(guildID string) *int64 {
+		for _, g := range cm.SnapshotConfig().Guilds {
+			if g.GuildID == guildID {
+				v := g.ConfigVersion
+				return &v
+			}
+		}
+		return nil
+	}
+
 	tokens := map[string]string{"main": "bootstrap-token"}
-	payload := updateGuildSettingsRequest{BotInstanceTokens: &tokens}
+	payload := updateGuildSettingsRequest{
+		ConfigVersion:     getCV("g2"),
+		BotInstanceTokens: &tokens,
+	}
 
 	rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodPut, "/v1/guilds/g2/settings", payload)
 	if rec.Code != http.StatusOK {
@@ -548,10 +572,21 @@ func TestGuildRegistryWorkspaceIncludesAvailableGuilds(t *testing.T) {
 func TestGuildSettingsPutRejectsInvalidAutoAssignmentOrdering(t *testing.T) {
 	t.Parallel()
 
-	srv, _ := newControlTestServer(t)
+	srv, cm := newControlTestServer(t)
 	setTestBotGuildBindings(srv, BotGuildBinding{GuildID: "g1"})
 
+	getCV := func(guildID string) *int64 {
+		for _, g := range cm.SnapshotConfig().Guilds {
+			if g.GuildID == guildID {
+				v := g.ConfigVersion
+				return &v
+			}
+		}
+		return nil
+	}
+
 	payload := updateGuildSettingsRequest{
+		ConfigVersion: getCV("g1"),
 		Roles: &files.RolesConfig{
 			AutoAssignment: files.AutoAssignmentConfig{
 				Enabled:       true,
@@ -630,8 +665,21 @@ func TestGuildSettingsPutScrubsDanglingFeatureRouting(t *testing.T) {
 		t.Fatalf("seed config: %v", err)
 	}
 
+	getCV := func(guildID string) *int64 {
+		for _, g := range cm.SnapshotConfig().Guilds {
+			if g.GuildID == guildID {
+				v := g.ConfigVersion
+				return &v
+			}
+		}
+		return nil
+	}
+
 	tokens := map[string]string{"bot-2": ""}
-	payload := updateGuildSettingsRequest{BotInstanceTokens: &tokens}
+	payload := updateGuildSettingsRequest{
+		ConfigVersion:     getCV("g1"),
+		BotInstanceTokens: &tokens,
+	}
 
 	rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodPut, "/v1/guilds/g1/settings", payload)
 	if rec.Code != http.StatusOK {
@@ -648,7 +696,10 @@ func TestGuildSettingsPutScrubsDanglingFeatureRouting(t *testing.T) {
 	}
 
 	tokens2 := map[string]string{"bot-1": ""}
-	payload2 := updateGuildSettingsRequest{BotInstanceTokens: &tokens2}
+	payload2 := updateGuildSettingsRequest{
+		ConfigVersion:     getCV("g1"),
+		BotInstanceTokens: &tokens2,
+	}
 	rec2 := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodPut, "/v1/guilds/g1/settings", payload2)
 	if rec2.Code != http.StatusOK {
 		t.Fatalf("PUT 2 status=%d body=%q", rec2.Code, rec2.Body.String())

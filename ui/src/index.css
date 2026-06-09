@@ -664,7 +664,7 @@ select[multiple].form-select {
   background-color: var(--bg-surface-active);
   border: 1px solid var(--border-strong);
   border-radius: 4px;
-  padding: 2px 8px;
+  padding: 3px 12px;
   font-size: 0.85rem;
   color: var(--text-primary);
 }

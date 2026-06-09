@@ -108,7 +108,7 @@ export function CorePage() {
                     .map(([f]) => f);
 
                   return (
-                    <SurfaceCard key={instanceId}>
+                    <SurfaceCard key={instanceId} className="bg-transparent border-white/10">
                       {/* Identity Header */}
                       <div className="p-4 flex items-center gap-4">
                         <div className="w-12 h-12 rounded-full overflow-hidden bg-bg-surface-active flex items-center justify-center shrink-0 border border-border-subtle">
@@ -161,11 +161,11 @@ export function CorePage() {
                             <div>
                               <div className="flex items-center gap-2 mb-2">
                                 <label className="text-sm font-medium text-text-primary">Secure Token</label>
-                                <span className="text-xs text-status-warning bg-[var(--status-warning-bg)] px-1.5 py-0.5 rounded">Sensitive</span>
+                                <Badge variant="danger">Sensitive</Badge>
                               </div>
                               <input 
                                 type="password" 
-                                className="tahoe-text-input w-full md:w-2/3 lg:w-1/2"
+                                className="tahoe-text-input w-full md:w-2/3 lg:w-1/2 border-white/20 pl-4"
                                 placeholder={hasToken ? "•••••••• (Configured)" : "Enter bot token..."}
                                 value={tokensState[instanceId] !== undefined ? tokensState[instanceId] : ""}
                                 onChange={(e) => setTokensState(prev => ({ ...prev, [instanceId]: e.target.value }))}
@@ -173,7 +173,7 @@ export function CorePage() {
                             </div>
 
                             {/* Routing Section */}
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-4 mt-2">
+                            <div className="flex items-center flex-wrap gap-4 mt-2">
                               <div className="flex items-center gap-2">
                                 <ToggleSwitch 
                                   checked={isMain} 
