@@ -419,11 +419,6 @@ func resolveRuntimeCapabilities(configSnapshot *files.BotConfig, botInstances []
 			defaultBotInstanceID,
 		)
 
-		if profile == RunProfileDiscordQOTD {
-			var policy CapabilityModifier = QOTDCapabilityPolicy{}
-			cap = policy.Modify(cap)
-		}
-
 		capabilities[instance.ID] = cap
 	}
 	return capabilities

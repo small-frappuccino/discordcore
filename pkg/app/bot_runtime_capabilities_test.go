@@ -1,7 +1,6 @@
 package app
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
@@ -205,45 +204,5 @@ func TestResolveBotRuntimeCapabilitiesAggregatesAllGuildsForSameBotInstance(t *t
 	}
 	if capabilities.intents&discordgo.IntentsGuildMessageReactions == 0 {
 		t.Fatalf("expected reaction intents from guild aggregation, got %d", capabilities.intents)
-	}
-}
-
-func TestQOTDCapabilityPolicy_Modify_DeepCopyAndIsolation(t *testing.T) {
-	t.Parallel()
-
-	// 1. Arrange: Create a capability struct with many privileged intents and flags
-	original := botRuntimeCapabilities{
-		monitoring:  true,
-		admin:       true,
-		automod:     true,
-		userPrune:   true,
-		qotdRuntime: true,
-		warmup:      true,
-		intents:     discordgo.IntentsGuilds | discordgo.IntentsGuildMembers | discordgo.IntentsGuildMessages,
-		hasCommands: true,
-	}
-
-	// 2. Act: Apply the QOTD policy modifier
-	var policy CapabilityModifier = QOTDCapabilityPolicy{}
-	masked := policy.Modify(original)
-
-	// 3. Assert: Verify the memory addresses are completely different (Deep Copy contract)
-	addrOriginal := fmt.Sprintf("%p", &original)
-	addrMasked := fmt.Sprintf("%p", &masked)
-	if addrOriginal == addrMasked {
-		t.Fatalf("CapabilityModifier returned the same struct reference (%s). OCP requires deep copy to prevent side effects", addrOriginal)
-	}
-
-	// 4. Assert: Validate the mask logic stripped privileged access
-	if masked.monitoring || masked.admin || masked.automod || masked.userPrune || masked.warmup {
-		t.Fatalf("QOTD policy failed to strip privileged flags: %+v", masked)
-	}
-
-	if !masked.qotdRuntime || !masked.hasCommands {
-		t.Fatalf("QOTD policy incorrectly stripped essential QOTD flags: %+v", masked)
-	}
-
-	if masked.intents != discordgo.IntentsGuilds {
-		t.Fatalf("QOTD policy should only allow IntentsGuilds, got %d", masked.intents)
 	}
 }

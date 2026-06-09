@@ -107,29 +107,6 @@ func (c botRuntimeCapabilities) Clone() botRuntimeCapabilities {
 	}
 }
 
-// CapabilityModifier defines a policy for restricting or altering runtime capabilities
-// based on the execution profile, preserving OCP (Open/Closed Principle).
-type CapabilityModifier interface {
-	Modify(c botRuntimeCapabilities) botRuntimeCapabilities
-}
-
-// QOTDCapabilityPolicy implements CapabilityModifier for the QOTD runtime profile.
-type QOTDCapabilityPolicy struct{}
-
-// Modify applies the QOTD restriction mask, returning a new isolated copy.
-func (p QOTDCapabilityPolicy) Modify(c botRuntimeCapabilities) botRuntimeCapabilities {
-	// 1. Force structural memory isolation (Deep Copy)
-	clone := c.Clone()
-
-	// 2. The QOTD binary is strictly for QOTD commands and scheduled posting.
-	// It should never attempt to claim privileged intents or run monitoring workloads.
-	return botRuntimeCapabilities{
-		qotdRuntime: clone.qotdRuntime,
-		hasCommands: clone.hasCommands,
-		intents:     discordgo.IntentsGuilds,
-	}
-}
-
 func botRuntimeNeedsMonitoring(
 	features files.ResolvedFeatureToggles,
 	runtimeConfig files.RuntimeConfig,

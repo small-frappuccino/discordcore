@@ -268,11 +268,6 @@ func (s *BotSupervisor) awaitStopAndStart(id, token string, oldState *botInstanc
 func (s *BotSupervisor) startBotInstanceBackground(instanceID, token string, state *botInstanceState) {
 	capabilities := resolveBotRuntimeCapabilities(s.configManager.Config(), instanceID, s.opts.defaultBotInstanceID)
 
-	if s.opts.profile == RunProfileDiscordQOTD {
-		var policy CapabilityModifier = QOTDCapabilityPolicy{}
-		capabilities = policy.Modify(capabilities)
-	}
-
 	var runtime *botRuntime
 	var err error
 

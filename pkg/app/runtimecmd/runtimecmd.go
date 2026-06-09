@@ -12,15 +12,11 @@ import (
 	discordcommands "github.com/small-frappuccino/discordcore/pkg/discord/commands"
 )
 
-// QOTDRuntimeAppName defines qotdruntime app name.
 // MainRuntimeAppName defines main runtime app name.
-// QOTDBotInstanceID defines qotdbot instance id.
 // MainBotInstanceID defines main bot instance id.
 const (
 	MainBotInstanceID  = "main"
-	QOTDBotInstanceID  = "companion"
 	MainRuntimeAppName = "discordmain"
-	QOTDRuntimeAppName = "discordqotd"
 )
 
 // Spec describes a runtime entrypoint command: its name, and a factory that
@@ -70,15 +66,6 @@ func MainSpec(commandName string) Spec {
 	}
 }
 
-// QOTDSpec qotdspecs.
-func QOTDSpec(commandName string) Spec {
-	return Spec{
-		CommandName:     commandName,
-		RuntimeAppName:  QOTDRuntimeAppName,
-		BuildRunOptions: buildQOTDRunOptions,
-	}
-}
-
 func buildMainRunOptions() discordcoreapp.RunOptions {
 	return discordcoreapp.RunOptions{
 		Profile: discordcoreapp.RunProfileDiscordMain,
@@ -93,18 +80,7 @@ func buildMainRunOptions() discordcoreapp.RunOptions {
 		CommandCatalogRegistrars: []discordcommands.CommandCatalogRegistrar{
 			discordcommands.BaseCommandCatalogRegistrar(),
 			discordcommands.AdminCommandCatalogRegistrar(),
-		},
-	}
-}
-
-func buildQOTDRunOptions() discordcoreapp.RunOptions {
-	return discordcoreapp.RunOptions{
-		Profile:                   discordcoreapp.RunProfileDiscordQOTD,
-		DefaultOwnerBotInstanceID: MainBotInstanceID,
-
-		CommandCatalogRegistrars: []discordcommands.CommandCatalogRegistrar{
 			discordcommands.QOTDCommandCatalogRegistrar(),
 		},
-		DisableControl: true,
 	}
 }

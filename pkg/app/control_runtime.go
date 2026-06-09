@@ -29,11 +29,9 @@ var errControlLocalTLSUnavailable = errors.New("control local tls unavailable")
 // or the QOTD-specialized runtime. See the RunProfile* constants.
 type RunProfile string
 
-// RunProfileDiscordQOTD defines run profile discord qotd.
 // RunProfileDiscordMain defines run profile discord main.
 const (
 	RunProfileDiscordMain RunProfile = "discordmain"
-	RunProfileDiscordQOTD RunProfile = "discordqotd"
 )
 
 // RunOptions is the full configuration for a runtime process: which profile it
@@ -83,8 +81,6 @@ func normalizeRunProfile(profile RunProfile) RunProfile {
 	switch strings.TrimSpace(string(profile)) {
 	case string(RunProfileDiscordMain):
 		return RunProfileDiscordMain
-	case string(RunProfileDiscordQOTD):
-		return RunProfileDiscordQOTD
 	default:
 		return ""
 	}
@@ -94,8 +90,6 @@ func defaultLocalHTTPSPublicOriginForProfile(profile RunProfile) string {
 	switch normalizeRunProfile(profile) {
 	case RunProfileDiscordMain:
 		return "https://discordmain.localhost:8443"
-	case RunProfileDiscordQOTD:
-		return "https://discordqotd.localhost:8443"
 	default:
 		return defaultLocalHTTPSPublicOrigin
 	}
@@ -105,8 +99,6 @@ func defaultLocalTLSCommonNameForProfile(profile RunProfile) string {
 	switch normalizeRunProfile(profile) {
 	case RunProfileDiscordMain:
 		return "discordmain.localhost"
-	case RunProfileDiscordQOTD:
-		return "discordqotd.localhost"
 	default:
 		return defaultLocalTLSCommonName
 	}
