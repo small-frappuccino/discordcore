@@ -2,7 +2,7 @@ import { PageHeader, Badge, PageContainer, SettingsGroupSkeleton, Button } from 
 import { SelectMenuMultiple, ToggleSwitch, SettingsGroup, SettingsRow, TextInput } from "../components/ui/tahoe";
 import { Stack } from "../components/layout";
 import { useCorePageLogic } from "./hooks/useCorePageLogic";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { useDashboardSession } from "../context/DashboardSessionContext";
 
@@ -44,28 +44,54 @@ export function CorePage() {
   
   const [enabledInstances, setEnabledInstances] = useState<Record<string, boolean>>({});
 
-  const secondaryInstances = Array.from(new Set([
-    "companion",
+  // Dynamic profile list derived purely from existing tokens + currently enabled instances.
+  // There are no hardcoded keys.
+  const allInstances = Array.from(new Set([
     ...availableInstances, 
-    ...Object.keys(configuredTokens)
-  ])).filter(id => id !== "main");
-  
-  const allInstances = ["main", ...secondaryInstances];
+    ...Object.keys(configuredTokens),
+    ...Object.keys(enabledInstances)
+  ]));
 
   const handleFeatureChange = (instanceId: string, features: string[]) => {
     const next = { ...featureRoutingState };
-    // Remove features currently mapped to this instance
     for (const key of Object.keys(next)) {
       if (next[key] === instanceId) {
         delete next[key];
       }
     }
-    // Re-add selected features mapped to this instance
     for (const f of features) {
       next[f] = instanceId;
     }
     setFeatureRoutingState(next);
   };
+
+  const handleAddProfile = () => {
+    const profileName = prompt("Enter a logical name for this profile (e.g., custom_qotd):");
+    if (!profileName) return;
+    
+    const sanitized = profileName.toLowerCase().replace(/[^a-z0-9_]/g, '');
+    if (!sanitized) {
+      alert("Invalid name. Use only letters, numbers, and underscores.");
+      return;
+    }
+
+    setEnabledInstances(prev => ({ ...prev, [sanitized]: true }));
+    
+    // Auto-select as primary if it's the very first profile created
+    if (!mainBotIdState && allInstances.length === 0) {
+      setMainBotIdState(sanitized);
+    }
+  };
+
+  // Safe Hydration Check: Only default mainBotIdState if fully loaded and not already set
+  useEffect(() => {
+    if (!isLoading && settings && !mainBotIdState) {
+      const persistedMain = settings.workspace.sections.main_bot_instance_id;
+      if (persistedMain) {
+        setMainBotIdState(persistedMain);
+      }
+    }
+  }, [isLoading, settings, mainBotIdState, setMainBotIdState]);
 
   return (
     <PageContainer>
@@ -95,6 +121,11 @@ export function CorePage() {
                 <p className="text-sm text-text-secondary">
                   Manage bot identities, secure tokens, and operational feature routing for this guild.
                 </p>
+                <div className="mt-2">
+                  <Button onClick={handleAddProfile} variant="secondary" size="sm">
+                    + Add Profile
+                  </Button>
+                </div>
                 {saveError && (
                   <div className="mt-2 p-2 rounded bg-[var(--status-error-bg,rgba(239,68,68,0.1))] text-[var(--status-error,#ef4444)] text-sm flex items-center justify-between">
                     <span>{saveError}</span>
@@ -131,7 +162,7 @@ export function CorePage() {
                         <div className="flex flex-col">
                           <div className="flex items-center gap-2">
                             <span className="font-semibold text-text-primary">
-                              {profile ? profile.username : instanceId === "main" ? "Main Instance" : `Instance: ${instanceId}`}
+                              {profile ? profile.username : `Instance: ${instanceId}`}
                             </span>
                             {profile?.discriminator && profile.discriminator !== "0" && (
                               <span className="text-sm text-text-muted">#{profile.discriminator}</span>
@@ -139,57 +170,66 @@ export function CorePage() {
                             {isMain && <Badge variant="neutral">Primary</Badge>}
                           </div>
                           <span className="text-sm text-text-secondary">
-                            {instanceId === "main" ? "Default bot handler" : `Companion (${instanceId})`}
+                            Logical ID: {instanceId}
                           </span>
                         </div>
-                        {instanceId !== "main" && (
-                          <div className="ml-auto">
-                            <ToggleSwitch 
-                              checked={isEnabled} 
-                              onCheckedChange={(checked) => {
-                                setEnabledInstances(prev => ({ ...prev, [instanceId]: checked }));
-                                if (!checked && !hasToken) {
-                                  setTokensState(prev => {
-                                    const next = { ...prev };
-                                    delete next[instanceId];
-                                    return next;
-                                  });
-                                }
-                              }} 
-                            />
-                          </div>
-                        )}
+                        <div className="ml-auto">
+                          <ToggleSwitch 
+                            checked={isEnabled} 
+                            onCheckedChange={(checked) => {
+                              setEnabledInstances(prev => ({ ...prev, [instanceId]: checked }));
+                              if (!checked && !hasToken) {
+                                setTokensState(prev => {
+                                  const next = { ...prev };
+                                  delete next[instanceId];
+                                  return next;
+                                });
+                              }
+                            }} 
+                          />
+                        </div>
                       </div>
 
                       {/* Config Area - Hidden if secondary and disabled */}
                       {isEnabled && (
                         <>
                           {/* Token Section */}
-                          {botPresent ? (
-                            <SettingsRow 
-                              title={
+                          <SettingsRow 
+                            title={
+                              <div className="flex flex-col gap-1">
                                 <div className="flex items-center gap-2">
                                   <span>Secure Token</span>
                                   <Badge variant="danger">Sensitive</Badge>
                                 </div>
-                              }
-                              control={
+                                {hasToken && !botPresent && profile && (
+                                  <div className="text-xs text-[var(--status-warning,#f59e0b)] font-medium mt-1">
+                                    ⚠️ Bot is not in server
+                                  </div>
+                                )}
+                              </div>
+                            }
+                            control={
+                              <div className="w-full md:w-2/3 lg:w-1/2 flex flex-col gap-2">
                                 <TextInput 
                                   type="password" 
-                                  className="w-full md:w-2/3 lg:w-1/2 border-white/20 pl-6"
+                                  className="w-full border-white/20 pl-6"
                                   placeholder={hasToken ? "•••••••• (Configured)" : "Enter bot token..."}
                                   value={tokensState[instanceId] !== undefined ? tokensState[instanceId] : ""}
                                   onChange={(e) => setTokensState(prev => ({ ...prev, [instanceId]: e.target.value }))}
                                 />
-                              }
-                            />
-                          ) : (
-                            <div className="p-4 bg-[var(--bg-surface-elevated)] border-b border-border-subtle">
-                              <div className="text-sm text-text-secondary">
-                                Bot is not actively present in this server. Please invite the bot before configuring secure tokens.
+                                {hasToken && !botPresent && profile && (
+                                  <a
+                                    href={`https://discord.com/api/oauth2/authorize?client_id=${profile.id}&permissions=8&scope=bot%20applications.commands`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs inline-flex items-center gap-1 text-[var(--status-warning,#f59e0b)] hover:underline self-start bg-[var(--status-warning-bg,rgba(245,158,11,0.1))] px-2 py-1 rounded"
+                                  >
+                                    Authorize {profile.username} Now →
+                                  </a>
+                                )}
                               </div>
-                            </div>
-                          )}
+                            }
+                          />
 
                           {/* Routing Section */}
                           <SettingsRow 

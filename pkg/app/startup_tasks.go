@@ -203,7 +203,7 @@ func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskO
 	if opts.runtimeResolver != nil {
 		controlServer.SetKnownBotInstanceIDs(
 			knownBotInstanceCatalogSlice(
-				knownBotInstanceCatalog(opts.runtimeResolver.getRuntimes(), opts.runOptions.KnownBotInstanceIDs),
+				knownBotInstanceCatalog(opts.runtimeResolver.getRuntimes(), nil),
 			),
 		)
 	}

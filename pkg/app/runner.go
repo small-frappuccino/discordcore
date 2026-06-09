@@ -159,22 +159,12 @@ func runWithOptions(appName string, opts RunOptions) error {
 		defaultBotInstanceID = DefaultBotInstanceID
 	}
 
-	allowedInstances := make(map[string]struct{})
-	for _, def := range opts.BotCatalog {
-		allowedInstances[def.ID] = struct{}{}
-	}
 	knownInstances := make(map[string]struct{})
 	if cfg := configManager.Config(); cfg != nil {
 		for _, guild := range cfg.Guilds {
 			for instanceID, token := range guild.BotInstanceTokens {
 				if string(token) != "" {
-					if len(allowedInstances) > 0 {
-						if _, allowed := allowedInstances[instanceID]; allowed {
-							knownInstances[instanceID] = struct{}{}
-						}
-					} else if instanceID == defaultBotInstanceID {
-						knownInstances[instanceID] = struct{}{}
-					}
+					knownInstances[instanceID] = struct{}{}
 				}
 			}
 		}
@@ -220,7 +210,6 @@ func runWithOptions(appName string, opts RunOptions) error {
 		runtimeCount:             runtimeCount,
 		configManager:            configManager,
 		store:                    store,
-		botCatalog:               opts.BotCatalog,
 		commandCatalogRegistrars: opts.CommandCatalogRegistrars,
 		runtimeApplier:           runtimeApplier,
 		qotdCommandService:       qotdService,
@@ -244,7 +233,7 @@ func runWithOptions(appName string, opts RunOptions) error {
 			return botSupervisor.Start()
 		},
 		Stop: func(ctx context.Context) error {
-			return botSupervisor.Stop()
+			return botSupervisor.Stop(ctx)
 		},
 	})
 
@@ -357,7 +346,7 @@ func runWithOptions(appName string, opts RunOptions) error {
 
 			case os.Interrupt, syscall.SIGTERM:
 				log.ApplicationLogger().Info("Sinal de encerramento interceptado. Iniciando teardown gracioso...")
-				botSupervisor.Stop()
+				botSupervisor.Stop(context.Background())
 				goto shutdown
 			}
 		}

@@ -29,13 +29,6 @@ var ErrNoBotTokensConfigured = errors.New("no bot instances have a configured to
 // ErrSessionUnavailable defines err when a bot session is not available for a guild or globally.
 var ErrSessionUnavailable = errors.New("discord session is unavailable")
 
-// BotInstanceDefinition describes one Discord bot instance managed by the host
-// runtime.
-type BotInstanceDefinition struct {
-	ID       string
-	Optional bool
-}
-
 // resolvedBotInstance describes a loaded bot ready for startup.
 type resolvedBotInstance struct {
 	ID    string
@@ -286,30 +279,4 @@ func listBotGuildBindingsFromSessionState(botInstanceID string, session *discord
 		})
 	}
 	return out, nil
-}
-
-func validateConfiguredBotInstances(
-	cfg *files.BotConfig,
-	knownBotInstanceIDs map[string]struct{},
-	defaultBotInstanceID string,
-) error {
-	if cfg == nil {
-		return nil
-	}
-	for _, guild := range cfg.Guilds {
-		if len(guild.BotInstanceTokens) == 0 {
-			if defaultBotInstanceID == "" {
-				return fmt.Errorf("guild %s does not resolve to a bot instance", guild.GuildID)
-			}
-			if _, ok := knownBotInstanceIDs[defaultBotInstanceID]; !ok {
-				return fmt.Errorf("guild %s references unknown default bot instance %q", guild.GuildID, defaultBotInstanceID)
-			}
-		}
-		for botInstanceID := range guild.BotInstanceTokens {
-			if _, ok := knownBotInstanceIDs[botInstanceID]; !ok {
-				return fmt.Errorf("guild %s references unknown bot instance %q", guild.GuildID, botInstanceID)
-			}
-		}
-	}
-	return nil
 }

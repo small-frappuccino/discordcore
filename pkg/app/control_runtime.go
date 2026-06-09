@@ -45,13 +45,8 @@ type RunOptions struct {
 	Profile RunProfile
 	// Control configures the optional local control plane served by this process.
 	Control ControlOptions
-	// BotCatalog is the set of bot instances whose tokens are hosted locally.
-	BotCatalog []BotInstanceDefinition
 	// DefaultOwnerBotInstanceID is the fallback owner used by legacy guild bindings.
 	DefaultOwnerBotInstanceID string
-	// KnownBotInstanceIDs are valid owner IDs referenced by shared config even when
-	// this process does not host their tokens locally.
-	KnownBotInstanceIDs []string
 	// CommandCatalogRegistrars optionally override the default slash command
 	// catalog composition for handlers started by this process.
 	CommandCatalogRegistrars []commands.CommandCatalogRegistrar

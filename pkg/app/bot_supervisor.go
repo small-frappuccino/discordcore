@@ -77,7 +77,7 @@ func (s *BotSupervisor) Start() error {
 	return nil
 }
 
-func (s *BotSupervisor) Stop() error {
+func (s *BotSupervisor) Stop(ctx context.Context) error {
 	s.cancel() // signal background goroutines to abort
 
 	var globalWG sync.WaitGroup
@@ -91,7 +91,7 @@ func (s *BotSupervisor) Stop() error {
 			s.bgWG.Add(1)
 			go func(id string, state *botInstanceState) {
 				defer s.bgWG.Done()
-				s.executeStopAndRemove(id, state, &globalWG)
+				s.executeStopAndRemove(ctx, id, state, &globalWG)
 			}(id, state)
 		}
 	}
@@ -120,25 +120,11 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 	// 1. Gather all tokens from all guilds
 	currentTokens := make(map[string]string)
 
-	allowedInstances := make(map[string]struct{})
-	for _, def := range s.opts.botCatalog {
-		allowedInstances[def.ID] = struct{}{}
-	}
-
 	for _, guild := range newCfg.Guilds {
 		for instanceID, encryptedToken := range guild.BotInstanceTokens {
 			token := string(encryptedToken)
 			if token == "" {
 				continue
-			}
-			if len(allowedInstances) > 0 {
-				if _, allowed := allowedInstances[instanceID]; !allowed {
-					continue
-				}
-			} else {
-				if instanceID != s.opts.defaultBotInstanceID {
-					continue
-				}
 			}
 			currentTokens[instanceID] = token
 		}
@@ -170,7 +156,7 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 			s.bgWG.Add(1)
 			go func(id string, state *botInstanceState) {
 				defer s.bgWG.Done()
-				s.executeStopAndRemove(id, state, nil)
+				s.executeStopAndRemove(context.Background(), id, state, nil)
 			}(id, state)
 		}
 	}
@@ -188,7 +174,7 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 					s.bgWG.Add(1)
 					go func(id string, state *botInstanceState) {
 						defer s.bgWG.Done()
-						s.executeStopAndRemove(id, state, nil)
+						s.executeStopAndRemove(context.Background(), id, state, nil)
 					}(id, state)
 				}
 				oldState = state
@@ -212,16 +198,16 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 	}()
 }
 
-func (s *BotSupervisor) executeStopAndRemove(id string, state *botInstanceState, wgGlobal *sync.WaitGroup) {
+func (s *BotSupervisor) executeStopAndRemove(ctx context.Context, id string, state *botInstanceState, wgGlobal *sync.WaitGroup) {
 	if wgGlobal != nil {
 		defer wgGlobal.Done()
 	}
 	defer state.StopWG.Done()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	stopCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	err := s.serviceManager.StopAndRemove(ctx, "bot-runtime-"+id)
+	err := s.serviceManager.StopAndRemove(stopCtx, "bot-runtime-"+id)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()

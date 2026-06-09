@@ -88,12 +88,7 @@ func buildMainRunOptions() discordcoreapp.RunOptions {
 				AutoTrust: true,
 			},
 		},
-		BotCatalog: []discordcoreapp.BotInstanceDefinition{{
-			ID:       MainBotInstanceID,
-			Optional: true,
-		}},
 		DefaultOwnerBotInstanceID: MainBotInstanceID,
-		KnownBotInstanceIDs:       []string{QOTDBotInstanceID},
 
 		CommandCatalogRegistrars: []discordcommands.CommandCatalogRegistrar{
 			discordcommands.BaseCommandCatalogRegistrar(),
@@ -104,14 +99,8 @@ func buildMainRunOptions() discordcoreapp.RunOptions {
 
 func buildQOTDRunOptions() discordcoreapp.RunOptions {
 	return discordcoreapp.RunOptions{
-		Profile: discordcoreapp.RunProfileDiscordQOTD,
-		// The persisted QOTD owner still uses the legacy companion instance id.
-		BotCatalog: []discordcoreapp.BotInstanceDefinition{{
-			ID:       QOTDBotInstanceID,
-			Optional: true,
-		}},
+		Profile:                   discordcoreapp.RunProfileDiscordQOTD,
 		DefaultOwnerBotInstanceID: MainBotInstanceID,
-		KnownBotInstanceIDs:       []string{MainBotInstanceID},
 
 		CommandCatalogRegistrars: []discordcommands.CommandCatalogRegistrar{
 			discordcommands.QOTDCommandCatalogRegistrar(),

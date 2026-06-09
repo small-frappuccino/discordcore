@@ -26,7 +26,6 @@ type botRuntimeOptions struct {
 	runtimeCount             int
 	configManager            *files.ConfigManager
 	store                    *storage.Store
-	botCatalog               []BotInstanceDefinition
 	commandCatalogRegistrars []commands.CommandCatalogRegistrar
 	runtimeApplier           *runtimeapply.Manager
 	qotdCommandService       *applicationqotd.Service

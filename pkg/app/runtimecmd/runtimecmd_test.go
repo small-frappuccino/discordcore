@@ -40,12 +40,6 @@ func TestRunUsesMainProfileOptions(t *testing.T) {
 	if called.opts.DisableControl {
 		t.Fatalf("expected control plane to stay enabled for main runtime, got %+v", called.opts)
 	}
-	if len(called.opts.BotCatalog) != 1 || called.opts.BotCatalog[0].ID != MainBotInstanceID || !called.opts.BotCatalog[0].Optional {
-		t.Fatalf("unexpected main bot catalog: %+v", called.opts.BotCatalog)
-	}
-	if len(called.opts.KnownBotInstanceIDs) != 1 || called.opts.KnownBotInstanceIDs[0] != QOTDBotInstanceID {
-		t.Fatalf("unexpected known bot ids: %+v", called.opts.KnownBotInstanceIDs)
-	}
 
 	if len(called.opts.CommandCatalogRegistrars) != 2 {
 		t.Fatalf("unexpected main command registrars: %+v", called.opts.CommandCatalogRegistrars)
@@ -91,12 +85,6 @@ func TestRunUsesQOTDProfileOptions(t *testing.T) {
 	}
 	if !called.opts.DisableControl {
 		t.Fatalf("expected qotd runtime to keep control disabled, got %+v", called.opts)
-	}
-	if len(called.opts.BotCatalog) != 1 || called.opts.BotCatalog[0].ID != QOTDBotInstanceID || !called.opts.BotCatalog[0].Optional {
-		t.Fatalf("unexpected qotd bot catalog: %+v", called.opts.BotCatalog)
-	}
-	if len(called.opts.KnownBotInstanceIDs) != 1 || called.opts.KnownBotInstanceIDs[0] != MainBotInstanceID {
-		t.Fatalf("unexpected known bot ids: %+v", called.opts.KnownBotInstanceIDs)
 	}
 
 	if len(called.opts.CommandCatalogRegistrars) != 1 {
