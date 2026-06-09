@@ -1,5 +1,5 @@
-import { PageHeader, Badge, PageContainer, SettingsGroupSkeleton, Button, SurfaceCard } from "../components/ui";
-import { SelectMenuMultiple, ToggleSwitch } from "../components/ui/tahoe";
+import { PageHeader, Badge, PageContainer, SettingsGroupSkeleton, Button } from "../components/ui";
+import { SelectMenuMultiple, ToggleSwitch, SettingsGroup, SettingsRow, TextInput } from "../components/ui/tahoe";
 import { Stack } from "../components/layout";
 import { useCorePageLogic } from "./hooks/useCorePageLogic";
 import { useState } from "react";
@@ -108,9 +108,9 @@ export function CorePage() {
                     .map(([f]) => f);
 
                   return (
-                    <SurfaceCard key={instanceId} className="bg-transparent border-white/10">
+                    <SettingsGroup key={instanceId}>
                       {/* Identity Header */}
-                      <div className="p-4 flex items-center gap-4">
+                      <div className={`p-4 flex items-center gap-4 ${isEnabled ? "border-b border-border-subtle" : ""}`}>
                         <div className="w-12 h-12 rounded-full overflow-hidden bg-bg-surface-active flex items-center justify-center shrink-0 border border-border-subtle">
                           {profile?.avatar_url ? (
                             <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
@@ -156,55 +156,62 @@ export function CorePage() {
                       {/* Config Area - Hidden if secondary and disabled */}
                       {isEnabled && (
                         <>
-                          <div className="border-t border-border-subtle p-4 flex flex-col gap-4">
-                            {/* Token Section */}
-                            <div>
-                              <div className="flex items-center gap-2 mb-2">
-                                <label className="text-sm font-medium text-text-primary">Secure Token</label>
+                          {/* Token Section */}
+                          <SettingsRow 
+                            title={
+                              <div className="flex items-center gap-2">
+                                <span>Secure Token</span>
                                 <Badge variant="danger">Sensitive</Badge>
                               </div>
-                              <input 
+                            }
+                            control={
+                              <TextInput 
                                 type="password" 
-                                className="tahoe-text-input w-full md:w-2/3 lg:w-1/2 border-white/20 pl-4"
+                                className="w-full md:w-2/3 lg:w-1/2 border-white/20 pl-6"
                                 placeholder={hasToken ? "•••••••• (Configured)" : "Enter bot token..."}
                                 value={tokensState[instanceId] !== undefined ? tokensState[instanceId] : ""}
                                 onChange={(e) => setTokensState(prev => ({ ...prev, [instanceId]: e.target.value }))}
                               />
-                            </div>
+                            }
+                          />
 
-                            {/* Routing Section */}
-                            <div className="flex items-center flex-wrap gap-4 mt-2">
-                              <div className="flex items-center gap-2">
-                                <ToggleSwitch 
-                                  checked={isMain} 
-                                  onCheckedChange={(checked) => {
-                                    if (checked) setMainBotIdState(instanceId);
-                                  }} 
-                                />
-                                <span className="text-sm text-text-secondary">Set as primary bot</span>
+                          {/* Routing Section */}
+                          <SettingsRow 
+                            title="Operational Routing"
+                            control={
+                              <div className="flex items-center flex-wrap gap-4">
+                                <div className="flex items-center gap-2">
+                                  <ToggleSwitch 
+                                    checked={isMain} 
+                                    onCheckedChange={(checked) => {
+                                      if (checked) setMainBotIdState(instanceId);
+                                    }} 
+                                  />
+                                  <span className="text-sm text-text-secondary whitespace-nowrap">Set as primary bot</span>
+                                </div>
+                                <div className="w-px h-4 bg-border-subtle hidden sm:block"></div>
+                                <div className="flex-1 flex items-center gap-3">
+                                  <span className="text-sm text-text-secondary whitespace-nowrap">Route features:</span>
+                                  <SelectMenuMultiple 
+                                    className="w-full sm:max-w-xs"
+                                    options={BASE_FEATURE_OPTIONS.map(opt => {
+                                      if (!profile || !opt.requiredPerms) return { label: opt.label, value: opt.value };
+                                      const perms = Number(profile.permissions || 0);
+                                      const isAdmin = (perms & 0x8) === 0x8;
+                                      const hasPerms = isAdmin || (perms & opt.requiredPerms) === opt.requiredPerms;
+                                      return { label: opt.label, value: opt.value, disabled: !hasPerms };
+                                    })}
+                                    value={routedFeatures}
+                                    onChange={(values) => handleFeatureChange(instanceId, values)}
+                                    placeholder="Select features..."
+                                  />
+                                </div>
                               </div>
-                              <div className="w-px h-4 bg-border-subtle hidden sm:block"></div>
-                              <div className="flex-1 flex items-center gap-3">
-                                <span className="text-sm text-text-secondary whitespace-nowrap">Route features:</span>
-                                <SelectMenuMultiple 
-                                  className="w-full sm:max-w-xs"
-                                  options={BASE_FEATURE_OPTIONS.map(opt => {
-                                    if (!profile || !opt.requiredPerms) return { label: opt.label, value: opt.value };
-                                    const perms = Number(profile.permissions || 0);
-                                    const isAdmin = (perms & 0x8) === 0x8;
-                                    const hasPerms = isAdmin || (perms & opt.requiredPerms) === opt.requiredPerms;
-                                    return { label: opt.label, value: opt.value, disabled: !hasPerms };
-                                  })}
-                                  value={routedFeatures}
-                                  onChange={(values) => handleFeatureChange(instanceId, values)}
-                                  placeholder="Select features..."
-                                />
-                              </div>
-                            </div>
-                          </div>
+                            }
+                          />
                         </>
                       )}
-                    </SurfaceCard>
+                    </SettingsGroup>
                   );
                 })}
               </Stack>
