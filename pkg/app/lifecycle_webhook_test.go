@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
@@ -145,5 +146,50 @@ func TestBuildLifecycleContentFallsBackWhenIdentityUnset(t *testing.T) {
 	}
 	if strings.Contains(got, "``") {
 		t.Fatalf("empty bot name produced empty backticks: %q", got)
+	}
+}
+
+// TestNotifyLifecycleEventHandles5xx proves that HTTP 500 errors from the webhook
+// endpoint do not bubble up or panic, and are instead cleanly handled.
+func TestNotifyLifecycleEventHandles5xx(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	t.Setenv(lifecycleWebhookEnv, server.URL)
+
+	// This should not panic or hang
+	notifyLifecycleEvent("fatal", "simulated 500 error")
+}
+
+// TestNotifyLifecycleEventTimeoutContext proves that latency spikes from the
+// discord webhook API are bounded by the context timeout, preventing the shutdown
+// process from hanging indefinitely.
+func TestNotifyLifecycleEventTimeoutContext(t *testing.T) {
+	var handlerCalled sync.WaitGroup
+	handlerCalled.Add(1)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled.Done()
+		// Sleep longer than the 3s timeout defined in lifecycleWebhookTimeout
+		time.Sleep(5 * time.Second)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	t.Setenv(lifecycleWebhookEnv, server.URL)
+
+	start := time.Now()
+	// This will block until context cancellation if the server hangs
+	notifyLifecycleEvent("stopping", "simulated timeout")
+	elapsed := time.Since(start)
+
+	// Ensure the handler was actually hit
+	handlerCalled.Wait()
+
+	// Given lifecycleWebhookTimeout is 3 seconds, elapsed should be around 3s, not 5s.
+	if elapsed >= 5*time.Second {
+		t.Fatalf("expected timeout near 3s, but request took %v", elapsed)
 	}
 }
