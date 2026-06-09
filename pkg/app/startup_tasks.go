@@ -69,7 +69,7 @@ func scheduleRuntimeConfiguredGuildLogging(
 	runtime *botRuntime,
 	configManager *files.ConfigManager,
 	defaultBotInstanceID string,
-	startupTasks *startupTaskOrchestrator,
+	startupTasks *StartupTaskOrchestrator,
 ) {
 	if runtime == nil || runtime.session == nil || configManager == nil {
 		return
@@ -98,7 +98,7 @@ func scheduleRuntimeConfiguredGuildLogging(
 }
 
 func scheduleStartupWebhookEmbedUpdates(
-	startupTasks *startupTaskOrchestrator,
+	startupTasks *StartupTaskOrchestrator,
 	cfg *files.BotConfig,
 	defaultSession *discordgo.Session,
 ) {
@@ -151,7 +151,7 @@ func scheduleStartupWebhookEmbedUpdates(
 	startupTasks.GoLight("startup_webhook_embed_updates", run)
 }
 
-func scheduleControlServerStartup(startupTasks *startupTaskOrchestrator, opts controlStartupTaskOptions) {
+func scheduleControlServerStartup(startupTasks *StartupTaskOrchestrator, opts controlStartupTaskOptions) {
 	if opts.runOptions.DisableControl {
 		log.ApplicationLogger().Info("Control server startup skipped; disabled by run options")
 		return

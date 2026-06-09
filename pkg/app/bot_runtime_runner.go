@@ -31,7 +31,7 @@ type botRuntimeOptions struct {
 	qotdCommandService       *applicationqotd.Service
 	qotdLifecycleService     discordqotd.GuildLifecycleService
 	moderationMetrics        moderation.Metrics
-	startupTasks             *startupTaskOrchestrator
+	startupTasks             *StartupTaskOrchestrator
 	profile                  RunProfile
 }
 
@@ -334,7 +334,7 @@ var scheduleStartupMemberWarmupFn = func(ms *logging.MonitoringService, config c
 	return ms.ScheduleStartupMemberWarmup(config)
 }
 
-func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *storage.Store, startupTasks *startupTaskOrchestrator) {
+func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *storage.Store, startupTasks *StartupTaskOrchestrator) {
 	if runtime == nil || runtime.session == nil || !runtime.capabilities.warmup || runtime.monitoringService == nil {
 		return
 	}

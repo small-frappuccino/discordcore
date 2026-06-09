@@ -16,7 +16,7 @@ var (
 	shutdownBotRuntimeFn   = shutdownBotRuntime
 )
 
-func resolveRuntimeStartupParallelism(runtimeCount int) int {
+func ResolveRuntimeStartupParallelism(runtimeCount int) int {
 	switch {
 	case runtimeCount <= 1:
 		return 1
@@ -27,7 +27,7 @@ func resolveRuntimeStartupParallelism(runtimeCount int) int {
 	}
 }
 
-func resolveRuntimeBackgroundParallelism(runtimeCount int) int {
+func ResolveRuntimeBackgroundParallelism(runtimeCount int) int {
 	switch {
 	case runtimeCount <= 1:
 		return 1
@@ -36,7 +36,7 @@ func resolveRuntimeBackgroundParallelism(runtimeCount int) int {
 	}
 }
 
-func resolveStartupLightParallelism(runtimeCount int) int {
+func ResolveStartupLightParallelism(runtimeCount int) int {
 	switch {
 	case runtimeCount <= 1:
 		return 2
@@ -47,7 +47,7 @@ func resolveStartupLightParallelism(runtimeCount int) int {
 	}
 }
 
-func resolveStartupLightQueueSize(runtimeCount int) int {
+func ResolveStartupLightQueueSize(runtimeCount int) int {
 	switch {
 	case runtimeCount <= 1:
 		return 4
@@ -58,7 +58,7 @@ func resolveStartupLightQueueSize(runtimeCount int) int {
 	}
 }
 
-type runtimeStartupBackgroundWorker struct {
+type RuntimeStartupBackgroundWorker struct {
 	ctx          context.Context
 	cancel       context.CancelFunc
 	group        *errgroup.Group
@@ -69,14 +69,14 @@ type runtimeStartupBackgroundWorker struct {
 	waitErr      error
 }
 
-func newRuntimeStartupBackgroundWorker(runtimeCount int) *runtimeStartupBackgroundWorker {
-	return newRuntimeStartupBackgroundWorkerWithLimits(
-		resolveRuntimeBackgroundParallelism(runtimeCount),
+func NewRuntimeStartupBackgroundWorker(runtimeCount int) *RuntimeStartupBackgroundWorker {
+	return NewRuntimeStartupBackgroundWorkerWithLimits(
+		ResolveRuntimeBackgroundParallelism(runtimeCount),
 		runtimeCount,
 	)
 }
 
-func newRuntimeStartupBackgroundWorkerWithLimits(parallelism, queueSize int) *runtimeStartupBackgroundWorker {
+func NewRuntimeStartupBackgroundWorkerWithLimits(parallelism, queueSize int) *RuntimeStartupBackgroundWorker {
 	ctx, cancel := context.WithCancel(context.Background())
 	group, groupCtx := errgroup.WithContext(ctx)
 	if parallelism <= 0 {
@@ -88,7 +88,7 @@ func newRuntimeStartupBackgroundWorkerWithLimits(parallelism, queueSize int) *ru
 		queueSize = 1
 	}
 
-	worker := &runtimeStartupBackgroundWorker{
+	worker := &RuntimeStartupBackgroundWorker{
 		ctx:          groupCtx,
 		cancel:       cancel,
 		group:        group,
@@ -100,32 +100,38 @@ func newRuntimeStartupBackgroundWorkerWithLimits(parallelism, queueSize int) *ru
 	return worker
 }
 
-type startupTaskOrchestrator struct {
-	light *runtimeStartupBackgroundWorker
-	heavy *runtimeStartupBackgroundWorker
+type StartupTaskOrchestrator struct {
+	light *RuntimeStartupBackgroundWorker
+	heavy *RuntimeStartupBackgroundWorker
 }
 
-func newStartupTaskOrchestrator(runtimeCount int) *startupTaskOrchestrator {
-	return &startupTaskOrchestrator{
-		light: newRuntimeStartupBackgroundWorkerWithLimits(
-			resolveStartupLightParallelism(runtimeCount),
-			resolveStartupLightQueueSize(runtimeCount),
+func NewStartupTaskOrchestrator(runtimeCount int) *StartupTaskOrchestrator {
+	return &StartupTaskOrchestrator{
+		light: NewRuntimeStartupBackgroundWorkerWithLimits(
+			ResolveStartupLightParallelism(runtimeCount),
+			ResolveStartupLightQueueSize(runtimeCount),
 		),
-		heavy: newRuntimeStartupBackgroundWorker(runtimeCount),
+		heavy: NewRuntimeStartupBackgroundWorker(runtimeCount),
 	}
 }
 
 // GoLight gos light.
-func (o *startupTaskOrchestrator) GoLight(name string, fn func(context.Context) error) {
+func (o *StartupTaskOrchestrator) GoLight(name string, fn func(context.Context) error) {
+	if o == nil {
+		return
+	}
 	o.goTask(o.light, name, "light", fn)
 }
 
 // GoHeavy gos heavy.
-func (o *startupTaskOrchestrator) GoHeavy(name string, fn func(context.Context) error) {
+func (o *StartupTaskOrchestrator) GoHeavy(name string, fn func(context.Context) error) {
+	if o == nil {
+		return
+	}
 	o.goTask(o.heavy, name, "heavy", fn)
 }
 
-func (o *startupTaskOrchestrator) goTask(worker *runtimeStartupBackgroundWorker, name, kind string, fn func(context.Context) error) {
+func (o *StartupTaskOrchestrator) goTask(worker *RuntimeStartupBackgroundWorker, name, kind string, fn func(context.Context) error) {
 	if o == nil || worker == nil || fn == nil {
 		return
 	}
@@ -147,7 +153,7 @@ func (o *startupTaskOrchestrator) goTask(worker *runtimeStartupBackgroundWorker,
 }
 
 // Shutdown shutdowns.
-func (o *startupTaskOrchestrator) Shutdown(ctx context.Context) error {
+func (o *StartupTaskOrchestrator) Shutdown(ctx context.Context) error {
 	if o == nil {
 		return nil
 	}
@@ -167,7 +173,7 @@ func (o *startupTaskOrchestrator) Shutdown(ctx context.Context) error {
 }
 
 // Go gos.
-func (w *runtimeStartupBackgroundWorker) Go(fn func(context.Context) error) {
+func (w *RuntimeStartupBackgroundWorker) Go(fn func(context.Context) error) {
 	if w == nil || fn == nil {
 		return
 	}
@@ -179,7 +185,7 @@ func (w *runtimeStartupBackgroundWorker) Go(fn func(context.Context) error) {
 }
 
 // Shutdown shutdowns.
-func (w *runtimeStartupBackgroundWorker) Shutdown(ctx context.Context) error {
+func (w *RuntimeStartupBackgroundWorker) Shutdown(ctx context.Context) error {
 	if w == nil {
 		return nil
 	}
@@ -205,7 +211,7 @@ func (w *runtimeStartupBackgroundWorker) Shutdown(ctx context.Context) error {
 	}
 }
 
-func (w *runtimeStartupBackgroundWorker) dispatch() {
+func (w *RuntimeStartupBackgroundWorker) dispatch() {
 	defer close(w.dispatchDone)
 
 	for {
@@ -224,7 +230,7 @@ func (w *runtimeStartupBackgroundWorker) dispatch() {
 					if w.ctx.Err() != nil {
 						return nil
 					}
-					return fmt.Errorf("runtimeStartupBackgroundWorker.dispatch: %w", err)
+					return fmt.Errorf("RuntimeStartupBackgroundWorker.dispatch: %w", err)
 				}
 				return nil
 			})

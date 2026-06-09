@@ -175,7 +175,7 @@ func runWithOptions(appName string, opts RunOptions) error {
 	}
 
 	controlServerRegistry := &controlServerHolder{}
-	startupTasks := newStartupTaskOrchestrator(runtimeCount)
+	startupTasks := NewStartupTaskOrchestrator(runtimeCount)
 	defer shutdownStartupServices(startupTasks, controlServerRegistry, "Startup background tasks did not finish cleanly")
 
 	// Wire the in-memory metrics sink so /v1/health/qotd has counters to
@@ -469,7 +469,7 @@ func rollbackDiscordSessions(enabled bool, runtimeOrder []*botRuntime) {
 
 // shutdownStartupServices stops the background startup tasks and the control server
 // under a bounded timeout. tasksWarn is logged when the tasks do not finish in time.
-func shutdownStartupServices(startupTasks *startupTaskOrchestrator, controlServerRegistry *controlServerHolder, tasksWarn string) {
+func shutdownStartupServices(startupTasks *StartupTaskOrchestrator, controlServerRegistry *controlServerHolder, tasksWarn string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := startupTasks.Shutdown(ctx); err != nil && !stdErrors.Is(err, context.DeadlineExceeded) {

@@ -106,8 +106,8 @@ func TestScheduleRuntimeWarmupQueuesMemberPhaseAfterBasePhase(t *testing.T) {
 		monitoringService: &logging.MonitoringService{},
 	}
 
-	worker := newRuntimeStartupBackgroundWorker(1)
-	startupTasks := &startupTaskOrchestrator{heavy: worker}
+	worker := NewRuntimeStartupBackgroundWorker(1)
+	startupTasks := &StartupTaskOrchestrator{heavy: worker}
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
