@@ -359,9 +359,14 @@ func buildBotInstanceTokensSection(tokens map[string]files.EncryptedString) map[
 	if len(tokens) == 0 {
 		return nil
 	}
-	out := make(map[string]bool, len(tokens))
-	for k := range tokens {
-		out[k] = true
+	out := make(map[string]bool)
+	for k, v := range tokens {
+		if len(v) > 0 {
+			out[k] = true
+		}
+	}
+	if len(out) == 0 {
+		return nil
 	}
 	return out
 }
