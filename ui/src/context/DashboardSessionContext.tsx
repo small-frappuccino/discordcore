@@ -129,10 +129,11 @@ export function DashboardSessionProvider({
           return;
         }
 
-        const guildsResponse = await listAccessibleGuilds(activeClient, {
-          fresh: freshGuilds,
-        });
-        const manageableGuildsResponse = await listManageableGuilds(activeClient);
+        const [guildsResponse, manageableGuildsResponse] = await Promise.all([
+          listAccessibleGuilds(activeClient, { fresh: freshGuilds }),
+          listManageableGuilds(activeClient)
+        ]);
+
         setAuthState("signed_in");
         setSession(probe.session);
         setAccessibleGuilds(guildsResponse.guilds);

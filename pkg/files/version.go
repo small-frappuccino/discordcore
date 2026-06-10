@@ -2,7 +2,7 @@ package files
 
 // DiscordCoreVersion is the current version of the discordcore package.
 // This value is automatically updated by the release CLI tool.
-const DiscordCoreVersion = "v0.669.0"
+const DiscordCoreVersion = "v0.670.0"
 
 // AppVersion is the version of the application using discordcore.
 var AppVersion string

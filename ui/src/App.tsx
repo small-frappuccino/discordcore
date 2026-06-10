@@ -5,6 +5,8 @@ import { ErrorBoundary } from "react-error-boundary";
 import { AppRoutes } from "./app/AppRoutes";
 import { DashboardSessionProvider } from "./context/DashboardSessionContext";
 import { ErrorFallback } from "./components/ui/ErrorFallback/ErrorFallback";
+import { logger } from "./lib/logger";
+import { initPerformanceTelemetry } from "./lib/telemetry";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -16,9 +18,29 @@ const queryClient = new QueryClient({
   },
 });
 
+initPerformanceTelemetry();
+
+if (typeof window !== "undefined") {
+  window.addEventListener("unhandledrejection", (event) => {
+    logger.error("Unhandled Promise Rejection", {
+      reason: event.reason instanceof Error ? event.reason.message : event.reason,
+      stack: event.reason instanceof Error ? event.reason.stack : undefined,
+    });
+  });
+}
+
 export default function App() {
   return (
-    <ErrorBoundary FallbackComponent={ErrorFallback}>
+    <ErrorBoundary 
+      FallbackComponent={ErrorFallback}
+      onError={(error, info) => {
+        logger.error("React ErrorBoundary caught an error", {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          componentStack: info.componentStack,
+        });
+      }}
+    >
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <DashboardSessionProvider>
