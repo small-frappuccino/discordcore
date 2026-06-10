@@ -114,7 +114,7 @@ export function CorePage() {
                 <div className="flex items-center justify-between mb-1">
                   <h3 className="text-base font-semibold text-text-primary">Bot Profiles</h3>
                   {isDirty && (
-                    <Button onClick={handleUpdateTokens} variant="primary" size="sm" isLoading={isSaving} disabled={isSaving}>
+                    <Button onClick={handleUpdateTokens} variant="primary" isLoading={isSaving} disabled={isSaving}>
                       Save Changes
                     </Button>
                   )}
@@ -122,24 +122,6 @@ export function CorePage() {
                 <p className="text-sm text-text-secondary mb-2">
                   Manage bot identities, secure tokens, and operational feature routing for this guild.
                 </p>
-                {isCreatingProfile ? (
-                  <div className="mt-2 flex items-center gap-2">
-                    <TextInput
-                      value={newProfileName}
-                      onChange={e => setNewProfileName(e.target.value)}
-                      placeholder="e.g., custom_qotd"
-                      autoFocus
-                    />
-                    <Button onClick={handleAddProfileSave} variant="primary" size="sm">Save</Button>
-                    <Button onClick={handleAddProfileCancel} variant="secondary" size="sm">Cancel</Button>
-                  </div>
-                ) : (
-                  <div className="mt-2">
-                    <Button onClick={() => setIsCreatingProfile(true)} variant="secondary" size="sm">
-                      + Add Profile
-                    </Button>
-                  </div>
-                )}
                 {saveError && (
                   <div className="mt-2 p-2 rounded bg-[var(--status-error-bg,rgba(239,68,68,0.1))] text-[var(--status-error,#ef4444)] text-sm flex items-center justify-between">
                     <span>{saveError}</span>
@@ -292,6 +274,26 @@ export function CorePage() {
                     </SettingsGroup>
                   );
                 })}
+
+                {isCreatingProfile ? (
+                  <div className="flex items-center gap-2 mt-2">
+                    <TextInput
+                      value={newProfileName}
+                      onChange={e => setNewProfileName(e.target.value)}
+                      placeholder="e.g., custom_qotd"
+                      autoFocus
+                    />
+                    <Button onClick={handleAddProfileSave} variant="primary">Save</Button>
+                    <Button onClick={handleAddProfileCancel} variant="secondary">Cancel</Button>
+                  </div>
+                ) : (
+                  <div className="mt-2">
+                    <Button onClick={() => setIsCreatingProfile(true)} variant="secondary">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>
+                      Add Profile
+                    </Button>
+                  </div>
+                )}
               </Stack>
             </Stack>
           )}
