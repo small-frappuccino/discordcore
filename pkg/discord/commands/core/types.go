@@ -1,6 +1,8 @@
 package core
 
 import (
+	"context"
+
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
@@ -105,7 +107,6 @@ type DefaultMemberPermissionsProvider interface {
 	DefaultMemberPermissions() int64
 }
 
-// Context provides a unified context for command execution
 type Context struct {
 	Session     *discordgo.Session
 	Interaction *discordgo.InteractionCreate
@@ -126,6 +127,16 @@ type Context struct {
 	// follow-up writes can preserve the visibility chosen at defer time.
 	AckEphemeral bool
 	router       *CommandRouter
+	ctx          context.Context
+}
+
+// Context returns the context.Context associated with this request context.
+// If no context was provided, it returns context.Background().
+func (ctx *Context) Context() context.Context {
+	if ctx == nil || ctx.ctx == nil {
+		return context.Background()
+	}
+	return ctx.ctx
 }
 
 // SetRouter sets the router in the context
