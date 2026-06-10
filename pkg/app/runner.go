@@ -304,15 +304,17 @@ func runWithOptions(appName string, opts RunOptions) error {
 	}()
 
 	// Loop principal de multiplexação no runner
+	var runErr error
 	for {
 		select {
 		case err := <-fatalErrCh:
 			if err != nil {
 				log.ApplicationLogger().Error("Fatal background error encountered, initiating shutdown", "error", err)
-				return err
+				runErr = err
+				goto shutdown
 			}
 			// if nil, services stopped cleanly somehow without OS signal. We exit cleanly.
-			return nil
+			goto shutdown
 
 		case sig := <-sigCh:
 			switch sig {
@@ -362,9 +364,12 @@ shutdown:
 	// rollback defers so resources are not closed twice.
 	closeStoreOnReturn = false
 	if err := appServiceManager.StopAll(); err != nil {
+		if runErr != nil {
+			return stdErrors.Join(runErr, fmt.Errorf("shutdown: %w", err))
+		}
 		return fmt.Errorf("shutdown: %w", err)
 	}
-	return nil
+	return runErr
 }
 
 // applyConfiguredTheme applies the persisted bot_theme, falling back to the default
@@ -431,39 +436,6 @@ func rollbackStoreClose(enabled bool, store *storage.Store) {
 	}
 	if err := closeStore(store); err != nil {
 		log.ErrorLoggerRaw().Error("Store close failed during startup cleanup", "err", err)
-	}
-}
-
-// rollbackBotRuntimes shuts down already-started runtimes (reverse order) during a
-// failed-startup rollback when enabled.
-func rollbackBotRuntimes(enabled bool, runtimeOrder []*botRuntime) {
-	if !enabled {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	for i := len(runtimeOrder) - 1; i >= 0; i-- {
-		runtime := runtimeOrder[i]
-		for _, err := range shutdownBotRuntimeFn(runtime, ctx) {
-			log.ErrorLoggerRaw().Error("Bot runtime cleanup failed during startup rollback", "botInstanceID", runtime.instanceID, "err", err)
-		}
-	}
-}
-
-// rollbackDiscordSessions closes runtime Discord sessions (reverse order) during a
-// failed-startup rollback when enabled.
-func rollbackDiscordSessions(enabled bool, runtimeOrder []*botRuntime) {
-	if !enabled {
-		return
-	}
-	for i := len(runtimeOrder) - 1; i >= 0; i-- {
-		runtime := runtimeOrder[i]
-		if runtime == nil || runtime.session == nil {
-			continue
-		}
-		if err := closeDiscordSession(runtime.session); err != nil {
-			log.ErrorLoggerRaw().Error("Discord session close failed during startup cleanup", "botInstanceID", runtime.instanceID, "err", err)
-		}
 	}
 }
 
