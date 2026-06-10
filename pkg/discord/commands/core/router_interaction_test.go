@@ -1,115 +1,147 @@
-package core
+package core_test
 
 import (
+	"bytes"
 	"context"
-	"encoding/json"
+	"io"
 	"net/http"
-	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
-func TestInteractionGatewayFailures(t *testing.T) {
-	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusBadGateway} {
-		t.Run(http.StatusText(status), func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(status)
-			}))
-			defer server.Close()
+type mockRoundTripper struct {
+	roundTripFunc func(req *http.Request) (*http.Response, error)
+}
 
-			oldAPI := discordgo.EndpointAPI
-			oldWebhooks := discordgo.EndpointWebhooks
-			discordgo.EndpointAPI = server.URL + "/"
-			discordgo.EndpointWebhooks = server.URL + "/webhooks/"
-			defer func() {
-				discordgo.EndpointAPI = oldAPI
-				discordgo.EndpointWebhooks = oldWebhooks
-			}()
+func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	if m.roundTripFunc != nil {
+		return m.roundTripFunc(req)
+	}
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(bytes.NewReader([]byte(`{}`))),
+		Header:     make(http.Header),
+	}, nil
+}
 
+type testCommand struct {
+	name                string
+	requiresGuild       bool
+	requiresPermissions bool
+	handler             func(*core.Context) error
+	autocomplete        core.AutocompleteHandler
+	ackPolicy           core.InteractionAckPolicy
+}
+
+func (tc testCommand) Name() string        { return tc.name }
+func (tc testCommand) Description() string { return tc.name }
+func (tc testCommand) Options() []*discordgo.ApplicationCommandOption {
+	return nil
+}
+func (tc testCommand) Handle(ctx *core.Context) error {
+	if tc.handler != nil {
+		return tc.handler(ctx)
+	}
+	return nil
+}
+func (tc testCommand) AutocompleteRouteHandler() core.AutocompleteHandler { return tc.autocomplete }
+func (tc testCommand) InteractionAckPolicy() core.InteractionAckPolicy    { return tc.ackPolicy }
+func (tc testCommand) RequiresGuild() bool                                { return tc.requiresGuild }
+func (tc testCommand) RequiresPermissions() bool                          { return tc.requiresPermissions }
+func buildInteraction(command, guildID, userID string) *discordgo.InteractionCreate {
+	data := discordgo.ApplicationCommandInteractionData{
+		ID:      "cmd-" + command,
+		Name:    command,
+		Options: []*discordgo.ApplicationCommandInteractionDataOption{},
+	}
+	return &discordgo.InteractionCreate{
+		Interaction: &discordgo.Interaction{
+			ID:      "interaction-" + command,
+			AppID:   "app",
+			Token:   "token",
+			Type:    discordgo.InteractionApplicationCommand,
+			GuildID: guildID,
+			Member:  &discordgo.Member{User: &discordgo.User{ID: userID}},
+			Data:    data,
+		},
+	}
+}
+func TestHandleInteraction(t *testing.T) {
+	tests := []struct {
+		name       string
+		status     int
+		delay      time.Duration
+		cancelCtx  bool
+		expectHung bool
+	}{
+		{name: "Unauthorized", status: http.StatusUnauthorized},
+		{name: "Forbidden", status: http.StatusForbidden},
+		{name: "BadGateway", status: http.StatusBadGateway},
+		{name: "ContextCancel", status: http.StatusOK, delay: 1 * time.Second, cancelCtx: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			session, err := discordgo.New("Bot test-token")
 			if err != nil {
 				t.Fatalf("failed to create session: %v", err)
 			}
-			session.Client = server.Client() // Inject the test client explicitly if necessary, though URL usually suffices
-
+			rt := &mockRoundTripper{
+				roundTripFunc: func(req *http.Request) (*http.Response, error) {
+					if tt.delay > 0 && strings.Contains(req.URL.Path, "/callback") {
+						select {
+						case <-time.After(tt.delay):
+						case <-req.Context().Done():
+							return nil, req.Context().Err()
+						}
+					}
+					return &http.Response{
+						StatusCode: tt.status,
+						Body:       io.NopCloser(bytes.NewReader([]byte(`{}`))),
+						Header:     make(http.Header),
+					}, nil
+				},
+			}
+			session.Client = &http.Client{Transport: rt}
 			config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
-			router := NewCommandRouter(session, config)
-
+			router := core.NewCommandRouter(session, config)
 			router.RegisterCommand(testCommand{
 				name:      "gatewaytest",
-				ackPolicy: InteractionAckPolicy{Mode: InteractionAckModeDefer, Ephemeral: true},
-				handler: func(ctx *Context) error {
+				ackPolicy: core.InteractionAckPolicy{Mode: core.InteractionAckModeDefer, Ephemeral: true},
+				handler: func(ctx *core.Context) error {
 					return nil
 				},
 			})
-
 			interaction := buildInteraction("gatewaytest", "guild", "user")
-
 			done := make(chan struct{})
+			var ctx context.Context
+			var cancel context.CancelFunc
+			if tt.cancelCtx {
+				ctx, cancel = context.WithTimeout(context.Background(), 50*time.Millisecond)
+				defer cancel()
+			} else {
+				ctx = context.Background()
+			}
+			start := time.Now()
 			go func() {
-				router.HandleInteractionWithContext(context.Background(), session, interaction)
+				router.HandleInteractionWithContext(ctx, session, interaction)
 				close(done)
 			}()
-
 			select {
 			case <-done:
-				// success, didn't hang and didn't crash
+				duration := time.Since(start)
+				if tt.cancelCtx && duration >= 500*time.Millisecond {
+					t.Fatalf("HandleInteractionWithContext did not respect context cancellation, took %v", duration)
+				}
 			case <-time.After(2 * time.Second):
-				t.Fatal("HandleInteractionWithContext hung on gateway failure")
+				if !tt.expectHung {
+					t.Fatal("HandleInteractionWithContext hung on gateway failure")
+				}
 			}
 		})
-	}
-}
-
-func TestInteractionContextCancellation(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Sleep longer than the context deadline
-		time.Sleep(1 * time.Second)
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(discordgo.Message{})
-	}))
-	defer server.Close()
-
-	oldAPI := discordgo.EndpointAPI
-	oldWebhooks := discordgo.EndpointWebhooks
-	discordgo.EndpointAPI = server.URL + "/"
-	discordgo.EndpointWebhooks = server.URL + "/webhooks/"
-	defer func() {
-		discordgo.EndpointAPI = oldAPI
-		discordgo.EndpointWebhooks = oldWebhooks
-	}()
-
-	session, err := discordgo.New("Bot test-token")
-	if err != nil {
-		t.Fatalf("failed to create session: %v", err)
-	}
-
-	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
-	router := NewCommandRouter(session, config)
-
-	router.RegisterCommand(testCommand{
-		name:      "contexttest",
-		ackPolicy: InteractionAckPolicy{Mode: InteractionAckModeDefer, Ephemeral: true},
-		handler: func(ctx *Context) error {
-			return nil
-		},
-	})
-
-	interaction := buildInteraction("contexttest", "guild", "user")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
-
-	start := time.Now()
-	router.HandleInteractionWithContext(ctx, session, interaction)
-	duration := time.Since(start)
-
-	// The router should abandon the request when context cancels, taking ~50ms
-	// instead of the 1s sleep in the server.
-	if duration >= 500*time.Millisecond {
-		t.Fatalf("HandleInteractionWithContext did not respect context cancellation, took %v", duration)
 	}
 }
