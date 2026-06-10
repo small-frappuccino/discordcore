@@ -1,5 +1,7 @@
 import { BrowserRouter } from "react-router-dom";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import { Toaster } from "react-hot-toast";
 import { ErrorBoundary } from "react-error-boundary";
 import { AppRoutes } from "./app/AppRoutes";
@@ -14,8 +16,14 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: true,
       retry: 1,
       staleTime: 5 * 60 * 1000, // 5 minutes by default
+      gcTime: 24 * 60 * 60 * 1000, // 24 hours
     },
   },
+});
+
+const persister = createSyncStoragePersister({
+  storage: typeof window !== "undefined" ? window.localStorage : undefined,
+  key: "discordcore_query_cache",
 });
 
 initPerformanceTelemetry();
@@ -41,14 +49,14 @@ export default function App() {
         });
       }}
     >
-      <QueryClientProvider client={queryClient}>
+      <PersistQueryClientProvider client={queryClient} persistOptions={{ persister }}>
         <BrowserRouter>
           <DashboardSessionProvider>
             <AppRoutes />
             <Toaster position="bottom-right" />
           </DashboardSessionProvider>
         </BrowserRouter>
-      </QueryClientProvider>
+      </PersistQueryClientProvider>
     </ErrorBoundary>
   );
 }

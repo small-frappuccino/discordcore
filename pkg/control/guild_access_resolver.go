@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"golang.org/x/sync/singleflight"
 )
 
 type accessibleGuildResolver struct {
@@ -13,6 +15,7 @@ type accessibleGuildResolver struct {
 	bindings       *botGuildBindingSource
 	cache          *accessibleGuildCache
 	evaluator      *guildAccessEvaluator
+	sfg            singleflight.Group
 }
 
 func newAccessibleGuildResolver(
@@ -90,40 +93,49 @@ func (resolver *accessibleGuildResolver) resolveWithOptions(
 		}
 	}
 
-	botGuildSet, err := resolver.resolveBotGuildIDSet(ctx)
-	if err != nil {
-		if !errors.Is(err, errBotGuildIDsProviderUnavailable) {
-			return nil, fmt.Errorf("accessibleGuildResolver.resolveWithOptions: %w", err)
+	v, err, _ := resolver.sfg.Do(session.User.ID, func() (any, error) {
+		botGuildSet, resolveErr := resolver.resolveBotGuildIDSet(ctx)
+		if resolveErr != nil {
+			if !errors.Is(resolveErr, errBotGuildIDsProviderUnavailable) {
+				return nil, fmt.Errorf("accessibleGuildResolver.resolveWithOptions: %w", resolveErr)
+			}
+			botGuildSet = map[string]struct{}{}
 		}
-		botGuildSet = map[string]struct{}{}
-	}
 
-	freshSession, err := provider.ensureFreshSessionAccessToken(ctx, session)
-	if err != nil {
-		return nil, fmt.Errorf("resolve accessible guilds: refresh oauth access token: %w", err)
-	}
-
-	userGuilds, err := provider.fetchUserGuilds(ctx, freshSession.AccessToken, freshSession.TokenType)
-	if err != nil {
-		return nil, fmt.Errorf("resolve accessible guilds: fetch user guilds: %w", err)
-	}
-
-	cachedGuilds := make([]cachedAccessibleGuild, 0, len(userGuilds))
-	for _, guild := range userGuilds {
-		guildID := strings.TrimSpace(guild.ID)
-		if guildID == "" {
-			continue
+		freshSession, refreshErr := provider.ensureFreshSessionAccessToken(ctx, session)
+		if refreshErr != nil {
+			return nil, fmt.Errorf("resolve accessible guilds: refresh oauth access token: %w", refreshErr)
 		}
-		_, botPresent := botGuildSet[guildID]
-		cachedGuilds = append(cachedGuilds, cachedAccessibleGuild{
-			guild:      guild,
-			botPresent: botPresent,
-		})
+
+		userGuilds, fetchErr := provider.fetchUserGuilds(ctx, freshSession.AccessToken, freshSession.TokenType)
+		if fetchErr != nil {
+			return nil, fmt.Errorf("resolve accessible guilds: fetch user guilds: %w", fetchErr)
+		}
+
+		cachedGuilds := make([]cachedAccessibleGuild, 0, len(userGuilds))
+		for _, guild := range userGuilds {
+			guildID := strings.TrimSpace(guild.ID)
+			if guildID == "" {
+				continue
+			}
+			_, botPresent := botGuildSet[guildID]
+			cachedGuilds = append(cachedGuilds, cachedAccessibleGuild{
+				guild:      guild,
+				botPresent: botPresent,
+			})
+		}
+
+		if (useCache || storeCache) && resolver.cache != nil {
+			resolver.cache.Put(session, cachedGuilds)
+		}
+		return cachedGuilds, nil
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
-	if (useCache || storeCache) && resolver.cache != nil {
-		resolver.cache.Put(session, cachedGuilds)
-	}
+	cachedGuilds := v.([]cachedAccessibleGuild)
 	return resolver.materializeAccessibleGuilds(cachedGuilds, session.User.ID), nil
 }
 
