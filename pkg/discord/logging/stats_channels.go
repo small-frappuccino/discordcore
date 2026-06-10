@@ -3,15 +3,16 @@ package logging
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
-	"log/slog"
 )
 
 const (
@@ -21,10 +22,8 @@ const (
 	statsSeedMetadataPrefix       = "stats_channels.seeded:"
 )
 
-// statsCoordinator owns the stats-channel actor goroutine and the state it
-// serializes. guilds and lastRun are mutated only from within funcs delivered
-// on actorCh and executed by loop, so they require no additional locking.
-// Construct with newStatsCoordinator; the zero value has nil maps and channel.
+// StatsService manages the stats-channel state. guilds and lastRun are protected by mu.
+// Construct with NewStatsService; the zero value has nil maps.
 type StatsService struct {
 	session              *discordgo.Session
 	configManager        *files.ConfigManager
@@ -33,7 +32,7 @@ type StatsService struct {
 	botInstanceID        string
 	defaultBotInstanceID string
 
-	actorCh chan func()
+	mu      sync.RWMutex
 	guilds  map[string]*statsGuildState
 	lastRun map[string]time.Time
 
@@ -61,7 +60,6 @@ func NewStatsService(
 		logger:               logger,
 		botInstanceID:        botInstanceID,
 		defaultBotInstanceID: defaultBotInstanceID,
-		actorCh:              make(chan func(), 1024),
 		guilds:               make(map[string]*statsGuildState),
 		lastRun:              make(map[string]time.Time),
 		currentRunCtx:        currentRunCtx,
@@ -72,7 +70,6 @@ func NewStatsService(
 
 // Start starts.
 func (s *StatsService) Start(ctx context.Context) error {
-	go s.loop(ctx)
 	return nil
 }
 
@@ -111,19 +108,6 @@ func (s *StatsService) scopedConfig() *files.BotConfig {
 	scoped := *cfg
 	scoped.Guilds = scopedGuilds
 	return &scoped
-}
-
-// loop runs the stats actor until ctx is canceled, executing each enqueued
-// closure serially so the maps above are only ever touched by one goroutine.
-func (s *StatsService) loop(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case fn := <-s.actorCh:
-			fn()
-		}
-	}
 }
 
 type statsCounterBucket struct {
@@ -361,20 +345,19 @@ func (s *StatsService) shouldRunStatsUpdate(guildID string, interval time.Durati
 		interval = defaultStatsInterval
 	}
 	now := time.Now()
-	replyCh := make(chan bool, 1)
-	s.actorCh <- func() {
-		if s.lastRun == nil {
-			s.lastRun = make(map[string]time.Time)
-		}
-		last, ok := s.lastRun[guildID]
-		if ok && now.Sub(last) < interval {
-			replyCh <- false
-			return
-		}
-		s.lastRun[guildID] = now
-		replyCh <- true
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.lastRun == nil {
+		s.lastRun = make(map[string]time.Time)
 	}
-	return <-replyCh
+	last, ok := s.lastRun[guildID]
+	if ok && now.Sub(last) < interval {
+		return false
+	}
+	s.lastRun[guildID] = now
+	return true
 }
 
 func (s *StatsService) reconcileStatsForGuild(ctx context.Context, gcfg files.GuildConfig) error {
@@ -422,32 +405,19 @@ func (s *StatsService) reconcileStatsForGuild(ctx context.Context, gcfg files.Gu
 func (s *StatsService) prepareStatsState(ctx context.Context, gcfg files.GuildConfig) (bool, error) {
 	_, trackedRolesKey := statsTrackedRoles(gcfg.Stats.Channels)
 
-	replyCh := make(chan struct {
-		needsReconcile bool
-		skipRest       bool
-	}, 1)
-	s.actorCh <- func() {
-		state := s.ensureStatsGuildState(gcfg.GuildID)
-		keysMatch := state.trackedRolesKey == trackedRolesKey
-		if state.initialized && keysMatch && !state.dirty {
-			lastReconciled := state.lastReconciled
-			replyCh <- struct {
-				needsReconcile bool
-				skipRest       bool
-			}{
-				needsReconcile: time.Since(lastReconciled) >= statsReconcileInterval(gcfg.Stats),
-				skipRest:       true,
-			}
-			return
-		}
-		replyCh <- struct {
-			needsReconcile bool
-			skipRest       bool
-		}{false, false}
+	s.mu.Lock()
+	state := s.ensureStatsGuildStateLocked(gcfg.GuildID)
+	keysMatch := state.trackedRolesKey == trackedRolesKey
+	var needsReconcile, skipRest bool
+	if state.initialized && keysMatch && !state.dirty {
+		lastReconciled := state.lastReconciled
+		needsReconcile = time.Since(lastReconciled) >= statsReconcileInterval(gcfg.Stats)
+		skipRest = true
 	}
-	res := <-replyCh
-	if res.skipRest {
-		return res.needsReconcile, nil
+	s.mu.Unlock()
+
+	if skipRest {
+		return needsReconcile, nil
 	}
 
 	hydrated, err := s.hydrateStatsForGuildFromStore(ctx, gcfg)
@@ -749,7 +719,7 @@ func (s *StatsService) updateStatsChannelName(ctx context.Context, guildID strin
 		return nil
 	}
 
-	if _, err := monitoringRunWithTimeout(ctx, monitoringDependencyTimeout, func() (*discordgo.Channel, error) {
+	if _, err := runWithTimeout(ctx, monitoringDependencyTimeout, func() (*discordgo.Channel, error) {
 		return s.session.ChannelEdit(channelID, &discordgo.ChannelEdit{Name: newName})
 	}); err != nil {
 		return fmt.Errorf("channel edit: %w", err)
@@ -780,7 +750,7 @@ func (s *StatsService) resolveChannel(ctx context.Context, channelID string) (*d
 			return ch, nil
 		}
 	}
-	return monitoringRunWithTimeout(ctx, monitoringDependencyTimeout, func() (*discordgo.Channel, error) {
+	return runWithTimeout(ctx, monitoringDependencyTimeout, func() (*discordgo.Channel, error) {
 		return s.session.Channel(channelID)
 	})
 }
@@ -841,15 +811,16 @@ func (s *StatsService) applyStatsMemberAdd(member *discordgo.Member) {
 		trackedRoles: filterTrackedRoles(member.Roles, trackedRoles),
 	}
 
-	s.actorCh <- func() {
-		state := s.ensureStatsGuildState(guildID)
-		if !state.initialized || state.trackedRolesKey != trackedRolesKey {
-			state.dirty = true
-			return
-		}
-		if !state.applyAdd(userID, snapshot) {
-			state.dirty = true
-		}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	state := s.ensureStatsGuildStateLocked(guildID)
+	if !state.initialized || state.trackedRolesKey != trackedRolesKey {
+		state.dirty = true
+		return
+	}
+	if !state.applyAdd(userID, snapshot) {
+		state.dirty = true
 	}
 }
 
@@ -871,15 +842,16 @@ func (s *StatsService) ApplyStatsMemberUpdate(guildID, userID string, isBot bool
 		trackedRoles: filterTrackedRoles(roles, trackedRoles),
 	}
 
-	s.actorCh <- func() {
-		state := s.ensureStatsGuildState(guildID)
-		if !state.initialized || state.trackedRolesKey != trackedRolesKey {
-			state.dirty = true
-			return
-		}
-		if !state.applyUpdate(userID, snapshot) {
-			state.dirty = true
-		}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	state := s.ensureStatsGuildStateLocked(guildID)
+	if !state.initialized || state.trackedRolesKey != trackedRolesKey {
+		state.dirty = true
+		return
+	}
+	if !state.applyUpdate(userID, snapshot) {
+		state.dirty = true
 	}
 }
 
@@ -896,15 +868,16 @@ func (s *StatsService) applyStatsMemberRemove(guildID, userID string) {
 	}
 	s.persistStatsMemberLeft(guildID, userID)
 
-	s.actorCh <- func() {
-		state := s.ensureStatsGuildState(guildID)
-		if !state.initialized || state.trackedRolesKey != trackedRolesKey {
-			state.dirty = true
-			return
-		}
-		if !state.applyRemove(userID) {
-			state.dirty = true
-		}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	state := s.ensureStatsGuildStateLocked(guildID)
+	if !state.initialized || state.trackedRolesKey != trackedRolesKey {
+		state.dirty = true
+		return
+	}
+	if !state.applyRemove(userID) {
+		state.dirty = true
 	}
 }
 
@@ -918,7 +891,7 @@ func (s *StatsService) persistStatsMemberActive(guildID, userID string, joinedAt
 		return
 	}
 
-	err := monitoringRunErrWithTimeoutContext(s.currentRunCtx(), monitoringPersistenceTimeout, func(runCtx context.Context) error {
+	err := runErrWithTimeoutContext(s.currentRunCtx(), monitoringPersistenceTimeout, func(runCtx context.Context) error {
 		if err := s.store.UpsertMemberPresenceContext(runCtx, storage.MemberPresenceInput{GuildID: guildID, UserID: userID, JoinedAt: joinedAt, SeenAt: time.Now().UTC(), IsBot: isBot}); err != nil {
 			return fmt.Errorf("upsert member presence: %w", err)
 		}
@@ -948,7 +921,7 @@ func (s *StatsService) persistStatsMemberLeft(guildID, userID string) {
 		return
 	}
 
-	err := monitoringRunErrWithTimeoutContext(s.currentRunCtx(), monitoringPersistenceTimeout, func(runCtx context.Context) error {
+	err := runErrWithTimeoutContext(s.currentRunCtx(), monitoringPersistenceTimeout, func(runCtx context.Context) error {
 		return s.store.MarkMemberLeftContext(runCtx, guildID, userID, time.Now().UTC())
 	})
 	if err != nil {
@@ -981,7 +954,7 @@ func (s *StatsService) statsGuildConfig(guildID string) (files.GuildConfig, map[
 	return files.GuildConfig{}, nil, "", false
 }
 
-func (s *StatsService) ensureStatsGuildState(guildID string) *statsGuildState {
+func (s *StatsService) ensureStatsGuildStateLocked(guildID string) *statsGuildState {
 	if s.guilds == nil {
 		s.guilds = make(map[string]*statsGuildState)
 	}
@@ -995,126 +968,85 @@ func (s *StatsService) ensureStatsGuildState(guildID string) *statsGuildState {
 }
 
 func (s *StatsService) replaceStatsGuildState(guildID string, state *statsGuildState) {
-	s.actorCh <- func() {
-		if s.guilds == nil {
-			s.guilds = make(map[string]*statsGuildState)
-		}
-		s.guilds[guildID] = state
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.guilds == nil {
+		s.guilds = make(map[string]*statsGuildState)
 	}
+	s.guilds[guildID] = state
 }
 
 func (s *StatsService) statsPublishedChannels(guildID string) map[string]statsPublishedChannel {
-	replyCh := make(chan map[string]statsPublishedChannel, 1)
-	s.actorCh <- func() {
-		if s.guilds == nil {
-			replyCh <- nil
-			return
-		}
-		state := s.guilds[guildID]
-		if state == nil {
-			replyCh <- nil
-			return
-		}
-		replyCh <- cloneStatsPublishedChannels(state.published)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.guilds == nil {
+		return nil
 	}
-	return <-replyCh
+	state := s.guilds[guildID]
+	if state == nil {
+		return nil
+	}
+	return cloneStatsPublishedChannels(state.published)
 }
 
 func (s *StatsService) statsPublishedChannel(guildID, channelID string) (statsPublishedChannel, bool) {
-	replyCh := make(chan struct {
-		published statsPublishedChannel
-		ok        bool
-	}, 1)
-	s.actorCh <- func() {
-		if s.guilds == nil {
-			replyCh <- struct {
-				published statsPublishedChannel
-				ok        bool
-			}{statsPublishedChannel{}, false}
-			return
-		}
-		state := s.guilds[guildID]
-		if state == nil || state.published == nil {
-			replyCh <- struct {
-				published statsPublishedChannel
-				ok        bool
-			}{statsPublishedChannel{}, false}
-			return
-		}
-		published, ok := state.published[channelID]
-		replyCh <- struct {
-			published statsPublishedChannel
-			ok        bool
-		}{published, ok}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.guilds == nil {
+		return statsPublishedChannel{}, false
 	}
-	res := <-replyCh
-	return res.published, res.ok
+	state := s.guilds[guildID]
+	if state == nil || state.published == nil {
+		return statsPublishedChannel{}, false
+	}
+	published, ok := state.published[channelID]
+	return published, ok
 }
 
 func (s *StatsService) recordStatsPublishedChannel(guildID, channelID string, published statsPublishedChannel) {
-	s.actorCh <- func() {
-		state := s.ensureStatsGuildState(guildID)
-		if state.published == nil {
-			state.published = make(map[string]statsPublishedChannel)
-		}
-		state.published[channelID] = published
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	state := s.ensureStatsGuildStateLocked(guildID)
+	if state.published == nil {
+		state.published = make(map[string]statsPublishedChannel)
 	}
+	state.published[channelID] = published
 }
 
 func (s *StatsService) statsSnapshot(guildID string) (statsGuildSnapshot, bool) {
-	replyCh := make(chan struct {
-		snapshot statsGuildSnapshot
-		ok       bool
-	}, 1)
-	s.actorCh <- func() {
-		if s.guilds == nil {
-			replyCh <- struct {
-				snapshot statsGuildSnapshot
-				ok       bool
-			}{statsGuildSnapshot{}, false}
-			return
-		}
-		state := s.guilds[guildID]
-		if state == nil || !state.initialized {
-			replyCh <- struct {
-				snapshot statsGuildSnapshot
-				ok       bool
-			}{statsGuildSnapshot{}, false}
-			return
-		}
-
-		roleTotals := make(map[string]statsCounterBucket, len(state.roleTotals))
-		for roleID, bucket := range state.roleTotals {
-			roleTotals[roleID] = bucket
-		}
-		replyCh <- struct {
-			snapshot statsGuildSnapshot
-			ok       bool
-		}{
-			snapshot: statsGuildSnapshot{
-				totals:     state.totals,
-				roleTotals: roleTotals,
-			},
-			ok: true,
-		}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.guilds == nil {
+		return statsGuildSnapshot{}, false
 	}
-	res := <-replyCh
-	return res.snapshot, res.ok
+	state := s.guilds[guildID]
+	if state == nil || !state.initialized {
+		return statsGuildSnapshot{}, false
+	}
+
+	roleTotals := make(map[string]statsCounterBucket, len(state.roleTotals))
+	for roleID, bucket := range state.roleTotals {
+		roleTotals[roleID] = bucket
+	}
+	return statsGuildSnapshot{
+		totals:     state.totals,
+		roleTotals: roleTotals,
+	}, true
 }
 
 func (s *StatsService) pruneStatsGuildState(activeGuilds map[string]struct{}) {
-	s.actorCh <- func() {
-		for guildID := range s.lastRun {
-			if _, ok := activeGuilds[guildID]; ok {
-				continue
-			}
-			delete(s.lastRun, guildID)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for guildID := range s.lastRun {
+		if _, ok := activeGuilds[guildID]; ok {
+			continue
 		}
-		for guildID := range s.guilds {
-			if _, ok := activeGuilds[guildID]; ok {
-				continue
-			}
-			delete(s.guilds, guildID)
+		delete(s.lastRun, guildID)
+	}
+	for guildID := range s.guilds {
+		if _, ok := activeGuilds[guildID]; ok {
+			continue
 		}
+		delete(s.guilds, guildID)
 	}
 }

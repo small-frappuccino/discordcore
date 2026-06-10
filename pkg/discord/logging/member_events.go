@@ -118,33 +118,9 @@ func (mes *MemberEventService) Start(ctx context.Context) error {
 
 	mes.handlerCancels = mes.handlerCancels[:0]
 	mes.handlerCancels = append(mes.handlerCancels,
-		mes.session.AddHandler(func(s *discordgo.Session, m *discordgo.GuildMemberAdd) {
-			runCtx, done, ok := mes.lifecycle.Begin()
-			if !ok {
-				return
-			}
-			defer done()
-
-			mes.handleGuildMemberAdd(runCtx, s, m)
-		}),
-		mes.session.AddHandler(func(s *discordgo.Session, m *discordgo.GuildMemberUpdate) {
-			runCtx, done, ok := mes.lifecycle.Begin()
-			if !ok {
-				return
-			}
-			defer done()
-
-			mes.handleGuildMemberUpdate(runCtx, s, m)
-		}),
-		mes.session.AddHandler(func(s *discordgo.Session, m *discordgo.GuildMemberRemove) {
-			runCtx, done, ok := mes.lifecycle.Begin()
-			if !ok {
-				return
-			}
-			defer done()
-
-			mes.handleGuildMemberRemove(runCtx, s, m)
-		}),
+		mes.session.AddHandler(guardedHandler(&mes.lifecycle, mes.handleGuildMemberAdd)),
+		mes.session.AddHandler(guardedHandler(&mes.lifecycle, mes.handleGuildMemberUpdate)),
+		mes.session.AddHandler(guardedHandler(&mes.lifecycle, mes.handleGuildMemberRemove)),
 	)
 
 	cleanupCtx, done, ok := mes.lifecycle.Begin()

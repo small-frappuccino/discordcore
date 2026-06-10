@@ -138,7 +138,7 @@ func (ms *MonitoringService) runEntryExitBackfill(serviceCtx context.Context, ch
 		if err := serviceCtx.Err(); err != nil {
 			return fmt.Errorf("MonitoringService.runEntryExitBackfill: %w", err)
 		}
-		msgs, err := monitoringRunWithTimeout(serviceCtx, monitoringDependencyTimeout, func() ([]*discordgo.Message, error) {
+		msgs, err := runWithTimeout(serviceCtx, monitoringDependencyTimeout, func() ([]*discordgo.Message, error) {
 			return ms.session.ChannelMessages(channelID, 100, before, "", "")
 		})
 		if err != nil {
@@ -262,7 +262,7 @@ func (ms *MonitoringService) memberStillInGuild(serviceCtx context.Context, guil
 	if ms.session == nil {
 		return false
 	}
-	mem, err := monitoringRunWithTimeout(serviceCtx, monitoringDependencyTimeout, func() (*discordgo.Member, error) {
+	mem, err := runWithTimeout(serviceCtx, monitoringDependencyTimeout, func() (*discordgo.Member, error) {
 		return ms.session.GuildMember(guildID, userID)
 	})
 	return err == nil && mem != nil

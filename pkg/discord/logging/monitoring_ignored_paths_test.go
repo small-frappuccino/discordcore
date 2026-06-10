@@ -232,7 +232,7 @@ func TestMonitoringService_StartHeartbeatTickerPersistsPeriodicUpdates(t *testin
 
 	ticks := newTickRecorder(t, 2)
 	activity := newRuntimeActivity(store, runtimeActivityOptions{
-		RunErr:           monitoringRunErrWithTimeoutContext,
+		RunErr:           runErrWithTimeoutContext,
 		EventTimeout:     monitoringPersistenceTimeout,
 		HeartbeatTimeout: monitoringPersistenceTimeout,
 		Warn:             log.ApplicationLogger().Warn,

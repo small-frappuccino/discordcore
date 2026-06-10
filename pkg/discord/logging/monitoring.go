@@ -31,7 +31,7 @@ func stopMonitoringSubService(ctx context.Context, operation, serviceName string
 	if stopFn == nil {
 		return nil
 	}
-	if err := monitoringRunErrWithTimeout(ctx, monitoringDependencyTimeout, stopFn); err != nil {
+	if err := runErrWithTimeout(ctx, monitoringDependencyTimeout, stopFn); err != nil {
 		log.ErrorLoggerRaw().Error(
 			"Monitoring sub-service stop failed",
 			"operation", operation,
@@ -47,7 +47,7 @@ func startMonitoringSubService(ctx context.Context, operation, serviceName strin
 	if startFn == nil {
 		return nil
 	}
-	if err := monitoringRunErrWithTimeout(ctx, monitoringDependencyTimeout, startFn); err != nil {
+	if err := runErrWithTimeout(ctx, monitoringDependencyTimeout, startFn); err != nil {
 		return fmt.Errorf("%s (%s): %w", operation, serviceName, err)
 	}
 	return nil
@@ -268,68 +268,6 @@ func (ms *MonitoringService) recordLifecycleErrorLocked() {
 	ms.run.lastErrorAt = &now
 }
 
-func monitoringRunWithTimeout[T any](ctx context.Context, timeout time.Duration, fn func() (T, error)) (T, error) {
-	var zero T
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, timeout)
-		defer cancel()
-	}
-
-	type result struct {
-		value T
-		err   error
-	}
-	resultCh := make(chan result, 1)
-	go func() {
-		value, err := fn()
-		resultCh <- result{value: value, err: err}
-	}()
-
-	select {
-	case res := <-resultCh:
-		return res.value, res.err
-	case <-ctx.Done():
-		return zero, ctx.Err()
-	}
-}
-
-func monitoringRunErrWithTimeout(ctx context.Context, timeout time.Duration, fn func() error) error {
-	_, err := monitoringRunWithTimeout(ctx, timeout, func() (struct{}, error) {
-		return struct{}{}, fn()
-	})
-	return err
-}
-
-func monitoringRunWithTimeoutContext[T any](ctx context.Context, timeout time.Duration, fn func(context.Context) (T, error)) (T, error) {
-	var zero T
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, timeout)
-		defer cancel()
-	}
-	if fn == nil {
-		return zero, nil
-	}
-	return fn(ctx)
-}
-
-func monitoringRunErrWithTimeoutContext(ctx context.Context, timeout time.Duration, fn func(context.Context) error) error {
-	_, err := monitoringRunWithTimeoutContext(ctx, timeout, func(runCtx context.Context) (struct{}, error) {
-		if fn == nil {
-			return struct{}{}, nil
-		}
-		return struct{}{}, fn(runCtx)
-	})
-	return err
-}
-
 // NewMonitoringService creates the multi-guild monitoring service. Returns error if any dependency is nil.
 func NewMonitoringService(session *discordgo.Session, configManager *files.ConfigManager, store *storage.Store, logger *slog.Logger) (*MonitoringService, error) {
 	return NewMonitoringServiceForBot(session, configManager, store, "", "", logger)
@@ -487,96 +425,26 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 	}
 	workload := ms.workloadState(globalRC)
 
-	// Start member/message services (member events are needed for entry/exit logs and auto-role assignment).
-	// Note: these services are currently global, so we use global config for startup.
-	// Per-guild toggles would need these services to be guild-aware or filtered.
+	// Start member/message/reaction services in dependency order
 	if !workload.memberEventService {
 		log.ApplicationLogger().Info("🛑 Entry/exit logs and auto-role assignment are disabled; MemberEventService will not start")
-	} else {
-		if err := startMonitoringSubService(ctx, "monitoring.start.member", "member_event_service", func() error {
-			return ms.memberEventService.Start(ctx)
-		}); err != nil {
-			cancelLifecycle()
-			ms.removeEventHandlers()
-			ms.recordLifecycleErrorLocked()
-			return fmt.Errorf("failed to start member event service: %w", err)
-		}
 	}
 	// Optionally honor DisableAutomodLogs here (Automod service is started elsewhere)
 	if globalRC.DisableAutomodLogs || !globalFeatures.Logging.AutomodAction {
 		log.ApplicationLogger().Info("🛑 Automod logs disabled by runtime config/features")
 	}
-
-	// Gate message logging behind runtime config
 	if !workload.messageEventService {
 		log.ApplicationLogger().Info("🛑 Message logging disabled by runtime config/features; MessageEventService will not start")
-	} else {
-		if err := startMonitoringSubService(ctx, "monitoring.start.message", "message_event_service", func() error {
-			return ms.messageEventService.Start(ctx)
-		}); err != nil {
-			startErrs := []error{err}
-			// Stop the member event service if start failed
-			if ms.memberEventService != nil && ms.memberEventService.IsRunning() {
-				if stopErr := stopMonitoringSubService(
-					ctx,
-					"monitoring.start.cleanup.stop_member_after_message_start_failure",
-					"member_event_service",
-					func() error { return ms.memberEventService.Stop(ctx) },
-				); stopErr != nil {
-					startErrs = append(startErrs, stopErr)
-				}
-			}
-			cancelLifecycle()
-			ms.removeEventHandlers()
-			ms.recordLifecycleErrorLocked()
-			if len(startErrs) > 1 {
-				return fmt.Errorf("failed to start message event service: %w", errors.Join(startErrs...))
-			}
-			return fmt.Errorf("failed to start message event service: %w", err)
-		}
 	}
-
-	// Gate reaction event handling behind runtime config and guild needs.
 	if !workload.reactionEventService {
 		log.ApplicationLogger().Info("🛑 Reaction event handling disabled by runtime config/features; ReactionEventService will not start")
-	} else {
-		// Lazily initialize service if not yet created
-		if ms.reactionEventService == nil {
-			ms.reactionEventService = NewReactionEventServiceForBot(ms.session, ms.configManager, ms.store, ms.botInstanceID, ms.defaultBotInstanceID, ms.logger)
-		}
-		if err := startMonitoringSubService(ctx, "monitoring.start.reaction", "reaction_event_service", func() error {
-			return ms.reactionEventService.Start(ctx)
-		}); err != nil {
-			startErrs := []error{err}
-			// Stop previously started services on failure
-			if ms.messageEventService != nil && ms.messageEventService.IsRunning() {
-				if stopErr := stopMonitoringSubService(
-					ctx,
-					"monitoring.start.cleanup.stop_message_after_reaction_start_failure",
-					"message_event_service",
-					func() error { return ms.messageEventService.Stop(ctx) },
-				); stopErr != nil {
-					startErrs = append(startErrs, stopErr)
-				}
-			}
-			if ms.memberEventService != nil && ms.memberEventService.IsRunning() {
-				if stopErr := stopMonitoringSubService(
-					ctx,
-					"monitoring.start.cleanup.stop_member_after_reaction_start_failure",
-					"member_event_service",
-					func() error { return ms.memberEventService.Stop(ctx) },
-				); stopErr != nil {
-					startErrs = append(startErrs, stopErr)
-				}
-			}
-			cancelLifecycle()
-			ms.removeEventHandlers()
-			ms.recordLifecycleErrorLocked()
-			if len(startErrs) > 1 {
-				return fmt.Errorf("failed to start reaction event service: %w", errors.Join(startErrs...))
-			}
-			return fmt.Errorf("failed to start reaction event service: %w", err)
-		}
+	}
+
+	if err := ms.startSubServices(ctx, workload); err != nil {
+		cancelLifecycle()
+		ms.removeEventHandlers()
+		ms.recordLifecycleErrorLocked()
+		return err
 	}
 
 	ms.startHeartbeat(lifecycleCtx)
@@ -754,7 +622,7 @@ func (ms *MonitoringService) Stop(ctx context.Context) error {
 	// cleanly. Close also cancels the router lifecycle context so handlers that
 	// honor it abort promptly.
 	if router != nil {
-		if err := monitoringRunErrWithTimeout(ctx, monitoringRouterCloseTimeout, func() error {
+		if err := runErrWithTimeout(ctx, monitoringRouterCloseTimeout, func() error {
 			router.Close()
 			return nil
 		}); err != nil {
@@ -782,27 +650,7 @@ func (ms *MonitoringService) Stop(ctx context.Context) error {
 	}
 
 	ms.removeEventHandlers()
-	if ms.memberEventService != nil && ms.memberEventService.IsRunning() {
-		if err := stopMonitoringSubService(ctx, "monitoring.stop.member", "member_event_service", func() error {
-			return ms.memberEventService.Stop(ctx)
-		}); err != nil {
-			stopErrs = append(stopErrs, err)
-		}
-	}
-	if ms.messageEventService != nil && ms.messageEventService.IsRunning() {
-		if err := stopMonitoringSubService(ctx, "monitoring.stop.message", "message_event_service", func() error {
-			return ms.messageEventService.Stop(ctx)
-		}); err != nil {
-			stopErrs = append(stopErrs, err)
-		}
-	}
-	if ms.reactionEventService != nil && ms.reactionEventService.IsRunning() {
-		if err := stopMonitoringSubService(ctx, "monitoring.stop.reaction", "reaction_event_service", func() error {
-			return ms.reactionEventService.Stop(ctx)
-		}); err != nil {
-			stopErrs = append(stopErrs, err)
-		}
-	}
+	stopErrs = append(stopErrs, ms.stopSubServices(ctx)...)
 
 	if err := ms.waitForOwnedWorkers(ctx); err != nil {
 		stopErrs = append(stopErrs, fmt.Errorf("wait for monitoring workers: %w", err))
@@ -810,7 +658,7 @@ func (ms *MonitoringService) Stop(ctx context.Context) error {
 
 	if ms.unifiedCache != nil {
 		log.ApplicationLogger().Info("💾 Persisting cache to storage...")
-		if err := monitoringRunErrWithTimeout(ctx, monitoringPersistenceTimeout, ms.unifiedCache.Persist); err != nil {
+		if err := runErrWithTimeout(ctx, monitoringPersistenceTimeout, ms.unifiedCache.Persist); err != nil {
 			log.ErrorLoggerRaw().Error("Failed to persist cache", "err", err)
 			stopErrs = append(stopErrs, fmt.Errorf("persist unified cache: %w", err))
 		} else {
@@ -978,72 +826,12 @@ func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.R
 	workload := ms.workloadState(rc)
 	var stopErrs []error
 
-	// Entry/Exit logs and auto-role assignment -> MemberEventService
-	if !workload.memberEventService {
-		if ms.memberEventService != nil && ms.memberEventService.IsRunning() {
-			if err := stopMonitoringSubService(
-				ctx,
-				"monitoring.apply_runtime_toggles.stop_member",
-				"member_event_service",
-				func() error { return ms.memberEventService.Stop(ctx) },
-			); err != nil {
-				stopErrs = append(stopErrs, err)
+	if errs := ms.applySubServiceToggles(ctx, workload); len(errs) > 0 {
+		for _, err := range errs {
+			if strings.HasPrefix(err.Error(), "start ") {
+				return err
 			}
-		}
-	} else {
-		if ms.memberEventService != nil && !ms.memberEventService.IsRunning() {
-			if err := startMonitoringSubService(ctx, "monitoring.apply_runtime_toggles.start_member", "member_event_service", func() error {
-				return ms.memberEventService.Start(ctx)
-			}); err != nil {
-				return fmt.Errorf("start MemberEventService: %w", err)
-			}
-		}
-	}
-
-	// Message logs -> MessageEventService
-	if !workload.messageEventService {
-		if ms.messageEventService != nil && ms.messageEventService.IsRunning() {
-			if err := stopMonitoringSubService(
-				ctx,
-				"monitoring.apply_runtime_toggles.stop_message",
-				"message_event_service",
-				func() error { return ms.messageEventService.Stop(ctx) },
-			); err != nil {
-				stopErrs = append(stopErrs, err)
-			}
-		}
-	} else {
-		if ms.messageEventService != nil && !ms.messageEventService.IsRunning() {
-			if err := startMonitoringSubService(ctx, "monitoring.apply_runtime_toggles.start_message", "message_event_service", func() error {
-				return ms.messageEventService.Start(ctx)
-			}); err != nil {
-				return fmt.Errorf("start MessageEventService: %w", err)
-			}
-		}
-	}
-
-	// Reaction event handling -> ReactionEventService
-	if !workload.reactionEventService {
-		if ms.reactionEventService != nil && ms.reactionEventService.IsRunning() {
-			if err := stopMonitoringSubService(
-				ctx,
-				"monitoring.apply_runtime_toggles.stop_reaction",
-				"reaction_event_service",
-				func() error { return ms.reactionEventService.Stop(ctx) },
-			); err != nil {
-				stopErrs = append(stopErrs, err)
-			}
-		}
-	} else {
-		if ms.reactionEventService == nil {
-			ms.reactionEventService = NewReactionEventServiceForBot(ms.session, ms.configManager, ms.store, ms.botInstanceID, ms.defaultBotInstanceID, ms.logger)
-		}
-		if !ms.reactionEventService.IsRunning() {
-			if err := startMonitoringSubService(ctx, "monitoring.apply_runtime_toggles.start_reaction", "reaction_event_service", func() error {
-				return ms.reactionEventService.Start(ctx)
-			}); err != nil {
-				return fmt.Errorf("start ReactionEventService: %w", err)
-			}
+			stopErrs = append(stopErrs, err)
 		}
 	}
 
@@ -1086,7 +874,7 @@ func (ms *MonitoringService) scheduleEnsureGuildsListed(runCtx context.Context) 
 	}
 
 	ms.startOwnedWorker(runCtx, func(ctx context.Context) {
-		if err := monitoringRunErrWithTimeout(ctx, monitoringPersistenceTimeout, func() error {
+		if err := runErrWithTimeout(ctx, monitoringPersistenceTimeout, func() error {
 			ms.ensureGuildsListed()
 			return nil
 		}); err != nil && ctx.Err() == nil {

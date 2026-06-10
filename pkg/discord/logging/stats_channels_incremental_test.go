@@ -145,9 +145,6 @@ func TestMonitoringServiceUpdateStatsChannelsUsesIncrementalState(t *testing.T) 
 		configManager: cfgMgr,
 	}
 	ms.statsService = NewStatsService(session, cfgMgr, nil, nil, "", "", nil, nil, ms.forEachGuildMemberPageContext)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go ms.statsService.loop(ctx)
 
 	if err := ms.statsService.UpdateStatsChannels(context.Background()); err != nil {
 		t.Fatalf("first updateStatsChannels error: %v", err)
@@ -162,14 +159,11 @@ func TestMonitoringServiceUpdateStatsChannelsUsesIncrementalState(t *testing.T) 
 		t.Fatalf("expected one channel edit on first publish, got %d", got)
 	}
 
-	// Reset through the actor so the write is serialized with the loop's own
+	// Reset under the lock so the write is serialized with the service's own
 	// access to lastRun instead of racing it.
-	resetDone := make(chan struct{})
-	ms.statsService.actorCh <- func() {
-		ms.statsService.lastRun[guildID] = time.Time{}
-		close(resetDone)
-	}
-	<-resetDone
+	ms.statsService.mu.Lock()
+	ms.statsService.lastRun[guildID] = time.Time{}
+	ms.statsService.mu.Unlock()
 	if err := ms.statsService.UpdateStatsChannels(context.Background()); err != nil {
 		t.Fatalf("second updateStatsChannels error: %v", err)
 	}
@@ -232,16 +226,12 @@ func TestMonitoringServiceHandleMemberUpdateUpdatesStatsWhenRoleLogSuppressed(t 
 			},
 		},
 		statsService: &StatsService{configManager: cfgMgr,
-			actorCh: make(chan func(), 1024),
 			guilds: map[string]*statsGuildState{
 				guildID: state,
 			},
 			lastRun: make(map[string]time.Time),
 		},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go ms.statsService.loop(ctx)
 
 	ms.handleMemberUpdate(ms.session, &discordgo.GuildMemberUpdate{
 		Member: &discordgo.Member{
@@ -253,10 +243,6 @@ func TestMonitoringServiceHandleMemberUpdateUpdatesStatsWhenRoleLogSuppressed(t 
 			Roles: []string{roleID},
 		},
 	})
-
-	waitCh := make(chan struct{})
-	ms.statsService.actorCh <- func() { close(waitCh) }
-	<-waitCh
 
 	bucket := ms.statsService.guilds[guildID].roleTotals[roleID]
 	if got := bucket.total("all"); got != 1 {
@@ -347,9 +333,7 @@ func TestMonitoringServiceUpdateStatsChannelsHydratesFromStore(t *testing.T) {
 		store:         store,
 	}
 	ms.statsService = NewStatsService(session, cfgMgr, store, nil, "", "", nil, ms.getHeartbeat, ms.forEachGuildMemberPageContext)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go ms.statsService.loop(ctx)
+
 	now := time.Now().UTC()
 	if err := store.SetHeartbeat(context.Background(), now); err != nil {
 		t.Fatalf("set heartbeat: %v", err)

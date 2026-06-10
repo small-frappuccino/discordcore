@@ -326,7 +326,7 @@ func (ms *MonitoringService) getGuildMemberContext(ctx context.Context, guildID,
 	}
 
 	ms.observability().RecordGuildMemberCall()
-	member, err := monitoringRunWithTimeout(ctx, monitoringDependencyTimeout, func() (*discordgo.Member, error) {
+	member, err := runWithTimeout(ctx, monitoringDependencyTimeout, func() (*discordgo.Member, error) {
 		return ms.session.GuildMember(guildID, userID)
 	})
 	if err != nil {
@@ -360,7 +360,7 @@ func (ms *MonitoringService) getGuildContext(ctx context.Context, guildID string
 		}
 	}
 
-	guild, err := monitoringRunWithTimeout(ctx, monitoringDependencyTimeout, func() (*discordgo.Guild, error) {
+	guild, err := runWithTimeout(ctx, monitoringDependencyTimeout, func() (*discordgo.Guild, error) {
 		return ms.session.Guild(guildID)
 	})
 	if err != nil {

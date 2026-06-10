@@ -80,7 +80,7 @@ func newMonitoringRuntimeActivity(store *storage.Store, botInstanceID ...string)
 		scopedBotInstanceID = botInstanceID[0]
 	}
 	return newRuntimeActivity(store, runtimeActivityOptions{
-		RunErr:           monitoringRunErrWithTimeoutContext,
+		RunErr:           runErrWithTimeoutContext,
 		EventTimeout:     monitoringPersistenceTimeout,
 		HeartbeatTimeout: monitoringPersistenceTimeout,
 		BotInstanceID:    scopedBotInstanceID,

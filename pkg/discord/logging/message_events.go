@@ -231,33 +231,9 @@ func (mes *MessageEventService) Start(ctx context.Context) error {
 
 	mes.handlerCancels = mes.handlerCancels[:0]
 	mes.handlerCancels = append(mes.handlerCancels,
-		mes.session.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
-			runCtx, done, ok := mes.lifecycle.Begin()
-			if !ok {
-				return
-			}
-			defer done()
-
-			mes.handleMessageCreate(runCtx, s, m)
-		}),
-		mes.session.AddHandler(func(s *discordgo.Session, m *discordgo.MessageUpdate) {
-			runCtx, done, ok := mes.lifecycle.Begin()
-			if !ok {
-				return
-			}
-			defer done()
-
-			mes.handleMessageUpdate(runCtx, s, m)
-		}),
-		mes.session.AddHandler(func(s *discordgo.Session, m *discordgo.MessageDelete) {
-			runCtx, done, ok := mes.lifecycle.Begin()
-			if !ok {
-				return
-			}
-			defer done()
-
-			mes.handleMessageDelete(runCtx, s, m)
-		}),
+		mes.session.AddHandler(guardedHandler(&mes.lifecycle, mes.handleMessageCreate)),
+		mes.session.AddHandler(guardedHandler(&mes.lifecycle, mes.handleMessageUpdate)),
+		mes.session.AddHandler(guardedHandler(&mes.lifecycle, mes.handleMessageDelete)),
 	)
 
 	if mes.taskRouter != nil {

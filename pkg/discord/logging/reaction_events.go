@@ -78,15 +78,7 @@ func (rs *ReactionEventService) Start(ctx context.Context) error {
 
 	// Register only the add handler for now (count "reactions added").
 	// If you want to also track removals, add another counter/table or logic accordingly.
-	unsubAdd := rs.session.AddHandler(func(s *discordgo.Session, e *discordgo.MessageReactionAdd) {
-		runCtx, done, ok := rs.lifecycle.Begin()
-		if !ok {
-			return
-		}
-		defer done()
-
-		rs.handleReactionAdd(runCtx, s, e)
-	})
+	unsubAdd := rs.session.AddHandler(guardedHandler(&rs.lifecycle, rs.handleReactionAdd))
 	rs.handlerCancels = append(rs.handlerCancels, unsubAdd)
 
 	rs.logger.Info("Reaction event service started")

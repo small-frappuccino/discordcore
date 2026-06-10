@@ -125,7 +125,7 @@ func (ms *MonitoringService) handleStartupDowntimeAndMaybeRefresh(ctx context.Co
 		at time.Time
 		ok bool
 	}
-	hb, err := monitoringRunWithTimeout(ctx, monitoringPersistenceTimeout, func() (heartbeatState, error) {
+	hb, err := runWithTimeout(ctx, monitoringPersistenceTimeout, func() (heartbeatState, error) {
 		at, ok, err := ms.getHeartbeat(ctx)
 		return heartbeatState{at: at, ok: ok}, err
 	})
@@ -210,7 +210,7 @@ func (ms *MonitoringService) fetchGuildMemberPageContext(ctx context.Context, gu
 	if limit <= 0 {
 		limit = monitoringGuildMembersPageSize
 	}
-	return monitoringRunWithTimeout(ctx, monitoringDependencyTimeout, func() ([]*discordgo.Member, error) {
+	return runWithTimeout(ctx, monitoringDependencyTimeout, func() ([]*discordgo.Member, error) {
 		return ms.session.GuildMembers(guildID, after, limit)
 	})
 }
