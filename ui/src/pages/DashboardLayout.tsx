@@ -15,6 +15,13 @@ import { PartnersIcon } from "../components/icons/PartnersIcon";
 import { EmbedsIcon } from "../components/icons/EmbedsIcon";
 import { TicketsIcon } from "../components/icons/TicketsIcon";
 
+import { useQueryClient } from "@tanstack/react-query";
+import { guildFeatureQueryKey } from "../api/hooks/useGuildFeatures";
+import { getGuildFeature } from "../api/domains/features";
+import { partnerBoardQueryKey } from "../api/hooks/usePartners";
+import { getPartnerBoard } from "../api/domains/partners";
+import { getTicketsConfig } from "../api/domains/tickets";
+
 type NavItem = {
   id: string;
   label: string;
@@ -35,7 +42,8 @@ const navigation: NavItem[] = [
 export const DashboardLayout = memo(function DashboardLayout() {
   const location = useLocation();
   const { guildId } = useParams<{ guildId: string }>();
-  const { fetchDisplayBotProfile, displayBotProfile } = useDashboardSession();
+  const { fetchDisplayBotProfile, displayBotProfile, client } = useDashboardSession();
+  const queryClient = useQueryClient();
   const [brandIconError, setBrandIconError] = useState(false);
 
   useEffect(() => {
@@ -84,6 +92,17 @@ export const DashboardLayout = memo(function DashboardLayout() {
                 key={item.id}
                 to={fullPath}
                 className={`shell-nav-link ${isActive ? "is-active" : ""}`}
+                onMouseEnter={() => {
+                  if (!client || !guildId) return;
+                  if (item.id === "moderation") {
+                    queryClient.prefetchQuery({ queryKey: guildFeatureQueryKey(client.getBaseUrl(), guildId, "automod"), queryFn: () => getGuildFeature(client, guildId, "automod") });
+                    queryClient.prefetchQuery({ queryKey: guildFeatureQueryKey(client.getBaseUrl(), guildId, "logging"), queryFn: () => getGuildFeature(client, guildId, "logging") });
+                  } else if (item.id === "partners") {
+                    queryClient.prefetchQuery({ queryKey: partnerBoardQueryKey(client.getBaseUrl(), guildId), queryFn: () => getPartnerBoard(client, guildId) });
+                  } else if (item.id === "tickets") {
+                    queryClient.prefetchQuery({ queryKey: ["tickets-config", guildId], queryFn: () => getTicketsConfig(client, guildId) });
+                  }
+                }}
               >
                 {item.icon && <item.icon className="shell-nav-icon" />}
                 <span>{item.label}</span>
