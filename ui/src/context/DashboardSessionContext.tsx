@@ -63,14 +63,43 @@ export function DashboardSessionProvider({
   const navigate = useNavigate();
   const [baseUrl, setBaseUrl] = useState(defaultBaseUrl);
   const [baseUrlDraft, setBaseUrlDraft] = useState(defaultBaseUrl);
-  const [authState, setAuthState] = useState<DashboardAuthState>("checking");
-  const [session, setSession] = useState<AuthSessionResponse | null>(null);
-  const [accessibleGuilds, setAccessibleGuilds] = useState<AccessibleGuild[]>(
-    [],
-  );
-  const [manageableGuilds, setManageableGuilds] = useState<AccessibleGuild[]>(
-    [],
-  );
+  const [authState, setAuthState] = useState<DashboardAuthState>(() => {
+    try {
+      return localStorage.getItem("discordcore_session_cache") ? "signed_in" : "checking";
+    } catch {
+      return "checking";
+    }
+  });
+  
+  const [session, setSession] = useState<AuthSessionResponse | null>(() => {
+    try {
+      const cached = localStorage.getItem("discordcore_session_cache");
+      return cached ? JSON.parse(cached).session : null;
+    } catch {
+      return null;
+    }
+  });
+  
+  const [accessibleGuilds, setAccessibleGuilds] = useState<AccessibleGuild[]>(() => {
+    try {
+      const cached = localStorage.getItem("discordcore_session_cache");
+      return cached ? JSON.parse(cached).accessibleGuilds : [];
+    } catch {
+      return [];
+    }
+  });
+  
+  const [manageableGuilds, setManageableGuilds] = useState<AccessibleGuild[]>(() => {
+    try {
+      const cached = localStorage.getItem("discordcore_session_cache");
+      if (!cached) return [];
+      const guilds: AccessibleGuild[] = JSON.parse(cached).accessibleGuilds || [];
+      return guilds.filter((g) => g.access_level === "write");
+    } catch {
+      return [];
+    }
+  });
+
   const [notice, setNotice] = useState<Notice | null>(null);
   const [sessionLoading, setSessionLoading] = useState(false);
   const [busyLabel, setBusyLabel] = useState("");
@@ -95,6 +124,11 @@ export function DashboardSessionProvider({
     setSession(null);
     setAccessibleGuilds([]);
     setManageableGuilds([]);
+    try {
+      localStorage.removeItem("discordcore_session_cache");
+    } catch {
+      // ignore
+    }
   }
 
   const performSessionRefresh = useEffectEvent(
@@ -136,13 +170,26 @@ export function DashboardSessionProvider({
         setAccessibleGuilds(guildsResponse.guilds);
         setManageableGuilds(guildsResponse.guilds.filter(g => g.access_level === "write"));
         setNotice(null);
+        
+        try {
+          localStorage.setItem("discordcore_session_cache", JSON.stringify({
+            session: probe.session,
+            accessibleGuilds: guildsResponse.guilds
+          }));
+        } catch {
+          // ignore
+        }
       } catch (error) {
-        setAuthState("signed_out");
-        clearSessionState();
-        setNotice({
-          tone: "error",
-          message: formatError(error),
-        });
+        // Only clear session on explicit auth errors, not transient network errors
+        const errMessage = formatError(error).toLowerCase();
+        if (errMessage.includes("unauthorized") || errMessage.includes("forbidden") || errMessage.includes("401") || errMessage.includes("403")) {
+          setAuthState("signed_out");
+          clearSessionState();
+          setNotice({
+            tone: "error",
+            message: "Session expired. Please sign in again.",
+          });
+        }
       } finally {
         setSessionLoading(false);
         setBusyLabel("");
