@@ -417,10 +417,11 @@ select[multiple].form-select {
 
 .tahoe-settings-row {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 12px;
-  padding: 16px 20px;
+  flex-wrap: wrap;
+  column-gap: 24px;
+  row-gap: 12px;
+  align-items: center;
+  padding: 12px 20px;
   border-bottom: 1px solid var(--border-subtle);
   background-color: transparent;
   transition: background-color var(--transition-fast);
@@ -448,13 +449,15 @@ select[multiple].form-select {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  width: 100%;
+  flex: 1 1 250px;
+  min-width: 0;
 }
 
 .tahoe-settings-row-control {
-  width: 100%;
+  flex: 2 1 300px;
   display: flex;
   align-items: center;
+  min-width: 0;
 }
 
 .tahoe-settings-row-title {
