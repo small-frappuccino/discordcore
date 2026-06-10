@@ -13,7 +13,7 @@ import {
 import { ControlApiClient } from "../api/client";
 import type { AccessibleGuild } from "../api/domains/guilds";
 import type { AuthSessionResponse } from "../api/domains/auth";
-import { listAccessibleGuilds, listManageableGuilds, getBotProfiles, type BotProfile } from "../api/domains/guilds";
+import { listAccessibleGuilds, getBotProfiles, type BotProfile } from "../api/domains/guilds";
 import { appRoutes } from "../app/routes";
 import type { DashboardAuthState, Notice } from "../app/types";
 import {
@@ -129,15 +129,12 @@ export function DashboardSessionProvider({
           return;
         }
 
-        const [guildsResponse, manageableGuildsResponse] = await Promise.all([
-          listAccessibleGuilds(activeClient, { fresh: freshGuilds }),
-          listManageableGuilds(activeClient)
-        ]);
+        const guildsResponse = await listAccessibleGuilds(activeClient, { fresh: freshGuilds });
 
         setAuthState("signed_in");
         setSession(probe.session);
         setAccessibleGuilds(guildsResponse.guilds);
-        setManageableGuilds(manageableGuildsResponse.guilds);
+        setManageableGuilds(guildsResponse.guilds.filter(g => g.access_level === "write"));
         setNotice(null);
       } catch (error) {
         setAuthState("signed_out");
