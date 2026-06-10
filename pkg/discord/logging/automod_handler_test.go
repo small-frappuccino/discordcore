@@ -150,7 +150,7 @@ func TestAutomodHandleRawEvent_DedupsSecondEventWithSameSequence(t *testing.T) {
 		return nil
 	})
 
-	svc := NewAutomodService(session, cm)
+	svc := NewAutomodService(session, cm, "", "")
 	svc.SetAdapters(&task.NotificationAdapters{Router: router})
 
 	payload := &discordgo.AutoModerationActionExecution{
@@ -232,7 +232,7 @@ func TestAutomodHandleRawEvent_CoalescesPerActionStream(t *testing.T) {
 		return nil
 	})
 
-	svc := NewAutomodService(session, cm)
+	svc := NewAutomodService(session, cm, "", "")
 	svc.SetAdapters(&task.NotificationAdapters{Router: router})
 
 	// Two per-action events for the same message violation: same MessageID,
@@ -324,7 +324,7 @@ func TestAutomodHandleRawEvent_DistinctViolationsBothRun(t *testing.T) {
 		return nil
 	})
 
-	svc := NewAutomodService(session, cm)
+	svc := NewAutomodService(session, cm, "", "")
 	svc.SetAdapters(&task.NotificationAdapters{Router: router})
 
 	violationA := &discordgo.AutoModerationActionExecution{
@@ -411,7 +411,7 @@ func TestAutomodHandleRawEvent_DropsSendAlertMessageEvents(t *testing.T) {
 		return nil
 	})
 
-	svc := NewAutomodService(session, cm)
+	svc := NewAutomodService(session, cm, "", "")
 	svc.SetAdapters(&task.NotificationAdapters{Router: router})
 
 	alertEvent := &discordgo.AutoModerationActionExecution{

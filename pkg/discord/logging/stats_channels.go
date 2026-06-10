@@ -89,7 +89,11 @@ func (s *StatsService) handlesGuild(guildID string) bool {
 	if cfg == nil {
 		return false
 	}
-	return cfg.BelongsToBotInstance(s.botInstanceID)
+	if !cfg.BelongsToBotInstance(s.botInstanceID) {
+		return false
+	}
+	resolvedID, _ := cfg.ResolveFeatureBotInstanceID("monitoring", s.defaultBotInstanceID)
+	return resolvedID == s.botInstanceID
 }
 
 func (s *StatsService) scopedConfig() *files.BotConfig {

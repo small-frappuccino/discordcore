@@ -86,7 +86,6 @@ export interface GuildSettingsWorkspace {
   available_bot_instance_ids?: string[];
   sections: {
     bot_instance_tokens_configured: Record<string, boolean>;
-    main_bot_instance_id?: string;
     feature_routing?: Record<string, string>;
     roles: GuildRolesSettingsSection;
   };
@@ -149,7 +148,6 @@ export async function updateGuildSettings(
   payload: {
     config_version: number;
     bot_instance_tokens?: Record<string, string>;
-    main_bot_instance_id?: string;
     feature_routing?: Record<string, string>;
     roles?: GuildRolesSettingsSection;
   },
@@ -187,11 +185,10 @@ export async function updateGuildSettings(
       // Explicitly check field-level mutation collisions
       let collision = false;
       if (originalWorkspace) {
-        if (currentPayload.main_bot_instance_id !== undefined && latestWorkspace.sections.main_bot_instance_id !== originalWorkspace.sections.main_bot_instance_id) {
-          collision = true;
-        }
+        // Check if any specific tokens changed. We consider it dirty if payload keys
+        // don't match the workspace configured state boolean values (true=configured, false=removed)
         if (currentPayload.bot_instance_tokens !== undefined && JSON.stringify(latestWorkspace.sections.bot_instance_tokens_configured) !== JSON.stringify(originalWorkspace.sections.bot_instance_tokens_configured)) {
-          collision = true;
+            collision = true;
         }
         if (currentPayload.feature_routing !== undefined && JSON.stringify(latestWorkspace.sections.feature_routing) !== JSON.stringify(originalWorkspace.sections.feature_routing)) {
           collision = true;

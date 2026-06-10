@@ -660,7 +660,7 @@ func (ms *MonitoringService) scopedConfig() *files.BotConfig {
 	if cfg == nil {
 		return nil
 	}
-	scopedGuilds := cfg.GuildsForBotInstance(ms.botInstanceID)
+	scopedGuilds := cfg.GuildsForBotInstanceFeature(ms.botInstanceID, "monitoring", ms.defaultBotInstanceID)
 	if len(scopedGuilds) == len(cfg.Guilds) {
 		return cfg
 	}
@@ -670,14 +670,11 @@ func (ms *MonitoringService) scopedConfig() *files.BotConfig {
 }
 
 func (ms *MonitoringService) handlesGuild(guildID string) bool {
-	if ms == nil {
+	if ms == nil || ms.configManager == nil {
 		return false
 	}
 	if files.NormalizeBotInstanceID(ms.botInstanceID) == "" && files.NormalizeBotInstanceID(ms.defaultBotInstanceID) == "" {
 		return true
-	}
-	if ms.configManager == nil {
-		return false
 	}
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
@@ -687,7 +684,11 @@ func (ms *MonitoringService) handlesGuild(guildID string) bool {
 	if guild == nil {
 		return false
 	}
-	return guild.BelongsToBotInstance(ms.botInstanceID)
+	if !guild.BelongsToBotInstance(ms.botInstanceID) {
+		return false
+	}
+	resolvedID, _ := guild.ResolveFeatureBotInstanceID("monitoring", ms.defaultBotInstanceID)
+	return resolvedID == ms.botInstanceID
 }
 
 func (ms *MonitoringService) getLastEvent(ctx context.Context) (time.Time, bool, error) {

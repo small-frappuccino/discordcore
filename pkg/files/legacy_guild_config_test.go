@@ -44,21 +44,6 @@ func TestGuildConfigLegacyMigration(t *testing.T) {
 			jsonInput:  `{"guild_id": "g6", "bot_instance_id": "main", "bot_instance_tokens": {"main": "existing-token"}}`,
 			wantTokens: []string{"main"}, // we should check that "main" has "existing-token"
 		},
-		{
-			name:       "migrates legacy main token",
-			jsonInput:  `{"guild_id": "g7", "main": "main-token-123"}`,
-			wantTokens: []string{"main"},
-		},
-		{
-			name:       "migrates legacy companion token",
-			jsonInput:  `{"guild_id": "g8", "companion": "companion-token-123"}`,
-			wantTokens: []string{"companion"},
-		},
-		{
-			name:       "migrates mixed legacy tokens",
-			jsonInput:  `{"guild_id": "g9", "main": "t1", "companion": "t2", "bot_instance_tokens": {"admin": "t3"}}`,
-			wantTokens: []string{"main", "companion", "admin"},
-		},
 	}
 
 	for _, tc := range tests {

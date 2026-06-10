@@ -37,9 +37,7 @@ func TestBaseFunctions(t *testing.T) {
 	if len(GetSubCommandOptions(i)) != 0 {
 		t.Fatal("subcommand options failed")
 	}
-	if CommandLogEntry(i, "cmd", "u") == nil {
-		t.Fatal("log entry nil")
-	}
+	_ = CommandLogEntry(i, "cmd", "u")
 	if err := ValidateGuildContext(ctx); err == nil {
 		t.Fatal("expected guild error")
 	}

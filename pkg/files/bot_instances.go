@@ -41,6 +41,33 @@ func (cfg *BotConfig) GuildsForBotInstance(botInstanceID string) []GuildConfig {
 	return out
 }
 
+// GuildsForBotInstanceFeature returns the guild subset assigned to the provided bot instance for a specific feature,
+// preserving config order.
+func (cfg *BotConfig) GuildsForBotInstanceFeature(botInstanceID string, feature string, defaultBotInstanceID string) []GuildConfig {
+	if cfg == nil || len(cfg.Guilds) == 0 {
+		return nil
+	}
+
+	target := NormalizeBotInstanceID(botInstanceID)
+	if target == "" {
+		out := make([]GuildConfig, len(cfg.Guilds))
+		copy(out, cfg.Guilds)
+		return out
+	}
+
+	out := make([]GuildConfig, 0, len(cfg.Guilds))
+	for _, guild := range cfg.Guilds {
+		if !guild.BelongsToBotInstance(target) {
+			continue
+		}
+		resolvedID, _ := guild.ResolveFeatureBotInstanceID(feature, defaultBotInstanceID)
+		if resolvedID == target {
+			out = append(out, guild)
+		}
+	}
+	return out
+}
+
 // ResolveFeatureBotInstanceID returns the designated bot instance for a given feature.
 // It explicitly parses FeatureRouting and falls back to defaultBotInstanceID.
 // It returns the resolved instance ID and a boolean fallbackFlag

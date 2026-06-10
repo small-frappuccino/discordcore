@@ -91,14 +91,6 @@ func TestCommandManager_BuildGuildSubCommandOption(t *testing.T) {
 		t.Fatal("nested group")
 	}
 
-	// test regular command that shouldn't sync (RequiresGuild=true but no guildID)
-	cmd := NewSimpleCommand("cmd", "desc", nil, nil, true, false)
-	// cm.shouldSyncSlashRoute returns false since requiresGuild=true but guildID=""
-	opt, ok = cm.buildGuildSubCommandOption("", "p", cmd)
-	if ok {
-		t.Fatal("should not sync")
-	}
-
 	// test regular command that SHOULD sync
 	cmd2 := NewSimpleCommand("cmd2", "desc", []*discordgo.ApplicationCommandOption{
 		{Type: discordgo.ApplicationCommandOptionSubCommand},

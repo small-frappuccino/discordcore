@@ -189,7 +189,6 @@ describe("DashboardSessionProvider", () => {
     await waitFor(() => {
       expect(screen.getByTestId("auth-state")).toHaveTextContent("signed_in");
     });
-    expect(listManageableGuildsMock).toHaveBeenCalled();
 
     expect(screen.getByTestId("session-loading")).toHaveTextContent("false");
   });

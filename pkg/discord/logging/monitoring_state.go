@@ -139,25 +139,14 @@ func (ms *MonitoringService) handleStartupDowntimeAndMaybeRefresh(ctx context.Co
 			if okHB {
 				downtimeDuration = time.Since(lastHB).Round(time.Second).String()
 			}
-			log.ApplicationLogger().Info("⏱️ Detected downtime; performing silent avatar refresh before enabling notifications", "downtime", downtimeDuration, "threshold", downtimeThreshold.String())
+			log.ApplicationLogger().Info("⏱️ Detected downtime; relying on background cache warmup and Gateway events for hydration", "downtime", downtimeDuration, "threshold", downtimeThreshold.String())
 			cfg := ms.scopedConfig()
 			if cfg == nil || len(cfg.Guilds) == 0 {
 				log.ApplicationLogger().Info("No configured guilds for startup silent refresh")
 				return nil
 			}
-			startTime := time.Now()
-			guildIDs := make([]string, 0, len(cfg.Guilds))
-			for _, gcfg := range cfg.Guilds {
-				if gid := strings.TrimSpace(gcfg.GuildID); gid != "" {
-					guildIDs = append(guildIDs, gid)
-				}
-			}
-			if err := runGuildTasksWithLimit(ctx, guildIDs, monitoringMaxConcurrentGuildScan, func(runCtx context.Context, guildID string) error {
-				return ms.initializeGuildCacheContext(runCtx, guildID)
-			}); err != nil {
-				return err
-			}
-			log.ApplicationLogger().Info("✅ Silent avatar refresh completed", "duration", time.Since(startTime).Round(time.Millisecond))
+			// Background cache warmup worker and live Gateway events handle hydration dynamically.
+			// Removed heavy inline pagination to eliminate startup blocking.
 			return nil
 		}
 	}

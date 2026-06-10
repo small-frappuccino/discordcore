@@ -66,7 +66,13 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 			{
 				GuildID:           "companion-guild",
 				BotInstanceTokens: map[string]files.EncryptedString{"companion": "a"},
-				FeatureRouting:    map[string]string{"qotd": "companion"},
+				FeatureRouting: map[string]string{
+					"qotd":           "companion",
+					"monitoring":     "companion",
+					"commands":       "companion",
+					"admin_commands": "companion",
+					"user_prune":     "companion",
+				},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
 						Monitoring:    boolPtr(true),

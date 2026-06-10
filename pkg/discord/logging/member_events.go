@@ -634,5 +634,9 @@ func (mes *MemberEventService) handlesGuild(guildID string) bool {
 	if guild == nil {
 		return false
 	}
-	return guild.BelongsToBotInstance(mes.botInstanceID)
+	if !guild.BelongsToBotInstance(mes.botInstanceID) {
+		return false
+	}
+	resolvedID, _ := guild.ResolveFeatureBotInstanceID("monitoring", mes.defaultBotID)
+	return resolvedID == mes.botInstanceID
 }

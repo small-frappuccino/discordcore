@@ -182,7 +182,7 @@ func buildAutomodWrapper(runtime *botRuntime, opts botRuntimeOptions, routerConf
 		return nil
 	}
 
-	automodService := logging.NewAutomodService(runtime.session, opts.configManager)
+	automodService := logging.NewAutomodService(runtime.session, opts.configManager, runtime.instanceID, opts.defaultBotInstanceID)
 	automodRouter := task.NewRouter(routerConfig)
 	notifier := logging.NewNotificationSender(runtime.session, log.DiscordLogger())
 	if monitoringService != nil {

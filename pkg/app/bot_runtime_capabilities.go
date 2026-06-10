@@ -46,24 +46,38 @@ func resolveBotRuntimeCapabilities(
 		}
 
 		if features.Services.Commands {
-			capabilities.hasCommands = true
-			if features.Services.AdminCommands {
-				capabilities.admin = true
+			resolvedID, _ := guild.ResolveFeatureBotInstanceID("commands", defaultBotInstanceID)
+			if resolvedID == botInstanceID {
+				capabilities.hasCommands = true
+				if features.Services.AdminCommands {
+					capabilities.admin = true
+				}
 			}
 		}
 
 		if features.Services.Automod && features.Logging.AutomodAction && !runtimeConfig.DisableAutomodLogs {
-			capabilities.automod = true
-			capabilities.intents |= discordgo.IntentAutoModerationExecution
+			resolvedID, _ := guild.ResolveFeatureBotInstanceID("automod", defaultBotInstanceID)
+			if resolvedID == botInstanceID {
+				capabilities.automod = true
+				capabilities.intents |= discordgo.IntentAutoModerationExecution
+			}
 		}
 
 		if features.UserPrune && guild.UserPrune.Enabled {
-			capabilities.userPrune = true
-			capabilities.intents |= discordgo.IntentsGuildMembers
-			capabilities.warmup = true
+			resolvedID, _ := guild.ResolveFeatureBotInstanceID("user_prune", defaultBotInstanceID)
+			if resolvedID == botInstanceID {
+				capabilities.userPrune = true
+				capabilities.intents |= discordgo.IntentsGuildMembers
+				capabilities.warmup = true
+			}
 		}
 
 		if !features.Services.Monitoring {
+			continue
+		}
+
+		monitoringResolvedID, _ := guild.ResolveFeatureBotInstanceID("monitoring", defaultBotInstanceID)
+		if monitoringResolvedID != botInstanceID {
 			continue
 		}
 

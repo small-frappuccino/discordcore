@@ -518,8 +518,6 @@ func (gc *GuildConfig) UnmarshalJSON(data []byte) error {
 		alias
 		BotInstanceID        string            `json:"bot_instance_id,omitempty"`
 		DomainBotInstanceIDs map[string]string `json:"domain_bot_instance_ids,omitempty"`
-		LegacyMainToken      EncryptedString   `json:"main,omitempty"`
-		LegacyCompanionToken EncryptedString   `json:"companion,omitempty"`
 	}
 
 	var raw rawGuildConfig
@@ -527,7 +525,7 @@ func (gc *GuildConfig) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("GuildConfig.UnmarshalJSON: %w", err)
 	}
 
-	if raw.BotInstanceID != "" || len(raw.DomainBotInstanceIDs) > 0 || raw.LegacyMainToken != "" || raw.LegacyCompanionToken != "" {
+	if raw.BotInstanceID != "" || len(raw.DomainBotInstanceIDs) > 0 {
 		if raw.BotInstanceTokens == nil {
 			raw.BotInstanceTokens = make(map[string]EncryptedString)
 		}
@@ -547,18 +545,6 @@ func (gc *GuildConfig) UnmarshalJSON(data []byte) error {
 				if _, exists := raw.BotInstanceTokens[normalized]; !exists {
 					raw.BotInstanceTokens[normalized] = ""
 				}
-			}
-		}
-
-		if raw.LegacyMainToken != "" {
-			if _, exists := raw.BotInstanceTokens["main"]; !exists {
-				raw.BotInstanceTokens["main"] = raw.LegacyMainToken
-			}
-		}
-
-		if raw.LegacyCompanionToken != "" {
-			if _, exists := raw.BotInstanceTokens["companion"]; !exists {
-				raw.BotInstanceTokens["companion"] = raw.LegacyCompanionToken
 			}
 		}
 	}

@@ -109,11 +109,13 @@ type AutomodService struct {
 	configManager *files.ConfigManager
 	adapters      *task.NotificationAdapters
 	isRunning     bool
-
-	// unsubscribe function for the registered handler
 	handlerCancel func()
 
-	// dedupChan routes fallback-dedup queries to the actor loop.
+	botInstanceID        string
+	defaultBotInstanceID string
+
+	// Fallback dedup channels for synchronous sends when adapters are unwired
+	// or task enqueue fails.
 	dedupChan chan fallbackDedupReq
 	dedupStop chan struct{}
 	dedupDone chan struct{}
@@ -126,10 +128,12 @@ type fallbackDedupReq struct {
 }
 
 // NewAutomodService news automod service.
-func NewAutomodService(session *discordgo.Session, configManager *files.ConfigManager) *AutomodService {
+func NewAutomodService(session *discordgo.Session, configManager *files.ConfigManager, botInstanceID string, defaultBotInstanceID string) *AutomodService {
 	return &AutomodService{
-		session:       session,
-		configManager: configManager,
+		session:              session,
+		configManager:        configManager,
+		botInstanceID:        files.NormalizeBotInstanceID(botInstanceID),
+		defaultBotInstanceID: files.NormalizeBotInstanceID(defaultBotInstanceID),
 	}
 }
 
@@ -227,6 +231,21 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 
 	if int(e.Action.Type) == automodActionSendAlert {
 		log.ApplicationLogger().Debug("Dropping SEND_ALERT_MESSAGE automod event; Discord posts its own native alert", "guildID", e.GuildID, "ruleID", e.RuleID, "userID", e.UserID, "seq", sequence)
+		return
+	}
+
+	if as.configManager == nil {
+		return
+	}
+	guildConfig := as.configManager.GuildConfig(e.GuildID)
+	if guildConfig == nil {
+		return
+	}
+	if !guildConfig.BelongsToBotInstance(as.botInstanceID) {
+		return
+	}
+	resolvedID, _ := guildConfig.ResolveFeatureBotInstanceID("automod", as.defaultBotInstanceID)
+	if resolvedID != as.botInstanceID {
 		return
 	}
 
