@@ -5,7 +5,7 @@ import { useDashboardSession } from "../../context/DashboardSessionContext";
 export const ServerSelector = memo(function ServerSelector() {
   const navigate = useNavigate();
   const { guildId } = useParams<{ guildId: string }>();
-  const { accessibleGuilds, manageableGuilds } = useDashboardSession();
+  const { accessibleGuilds, manageableGuilds, authState } = useDashboardSession();
 
   const [isServerMenuOpen, setIsServerMenuOpen] = useState(false);
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
@@ -32,6 +32,20 @@ export const ServerSelector = memo(function ServerSelector() {
     manageableGuilds?.forEach(g => allGuildsMap.set(g.id, g));
     return Array.from(allGuildsMap.values());
   }, [accessibleGuilds, manageableGuilds]);
+
+  if (authState === "checking") {
+    return (
+      <div className="relative">
+        <button className="shell-trigger-btn opacity-50 cursor-wait">
+          <div className="shell-trigger-avatar animate-pulse bg-border-subtle" />
+          <div className="shell-trigger-info animate-pulse flex flex-col gap-2 justify-center">
+            <div className="h-3 bg-border-subtle rounded w-24"></div>
+            <div className="h-2.5 bg-border-subtle rounded w-16"></div>
+          </div>
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="relative" ref={serverMenuRef}>

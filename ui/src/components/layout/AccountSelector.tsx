@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, memo } from "react";
 import { useDashboardSession } from "../../context/DashboardSessionContext";
 
 export const AccountSelector = memo(function AccountSelector() {
-  const { session, sessionAvatarURL, logout } = useDashboardSession();
+  const { session, sessionAvatarURL, logout, authState } = useDashboardSession();
 
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement>(null);
@@ -16,6 +16,20 @@ export const AccountSelector = memo(function AccountSelector() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  if (authState === "checking") {
+    return (
+      <div className="relative">
+        <button className="shell-trigger-btn opacity-50 cursor-wait">
+          <div className="shell-trigger-avatar animate-pulse bg-border-subtle" />
+          <div className="shell-trigger-info animate-pulse flex flex-col gap-2 justify-center">
+            <div className="h-3 bg-border-subtle rounded w-24"></div>
+            <div className="h-2.5 bg-border-subtle rounded w-16"></div>
+          </div>
+        </button>
+      </div>
+    );
+  }
 
   const accountTitle = session?.user?.username || "Unknown User";
   const avatarUrl = sessionAvatarURL || "https://cdn.discordapp.com/embed/avatars/0.png";
