@@ -3,9 +3,12 @@ package task
 import (
 	"context"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/small-frappuccino/discordcore/pkg/clock"
 )
 
 func newTestConfig() RouterConfig {
@@ -385,7 +388,8 @@ func TestDispatchDoesNotSerializeUnrelatedGroupsWhenOneGroupBufferIsFull(t *test
 	<-hotStarted
 	router.mu.Unlock()
 
-	time.Sleep(20 * time.Millisecond)
+	// Yield for hot dispatch to start
+	time.Sleep(5 * time.Millisecond)
 
 	coolCtx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
@@ -502,6 +506,8 @@ func TestCleanupOnceKeepsGroupWithActiveHandler(t *testing.T) {
 	cfg := newTestConfig()
 	cfg.CleanupInterval = time.Hour
 	cfg.GroupIdleTTL = 10 * time.Millisecond
+	mockClock := clock.NewMockClock(time.Now())
+	cfg.Clock = mockClock
 
 	router := NewRouter(cfg)
 	t.Cleanup(router.Close)
@@ -532,7 +538,7 @@ func TestCleanupOnceKeepsGroupWithActiveHandler(t *testing.T) {
 		t.Fatalf("handler did not start in time")
 	}
 
-	time.Sleep(2 * cfg.GroupIdleTTL)
+	mockClock.Advance(2 * cfg.GroupIdleTTL)
 	router.cleanupOnce()
 
 	router.mu.RLock()
@@ -558,6 +564,8 @@ func TestCleanupOnceClosesIdleGroupAfterHandlerCompletes(t *testing.T) {
 	cfg := newTestConfig()
 	cfg.CleanupInterval = time.Hour
 	cfg.GroupIdleTTL = 10 * time.Millisecond
+	mockClock := clock.NewMockClock(time.Now())
+	cfg.Clock = mockClock
 
 	router := NewRouter(cfg)
 	t.Cleanup(router.Close)
@@ -605,7 +613,7 @@ func TestCleanupOnceClosesIdleGroupAfterHandlerCompletes(t *testing.T) {
 		t.Fatalf("expected group to remain before idle TTL elapses")
 	}
 
-	time.Sleep(2 * cfg.GroupIdleTTL)
+	mockClock.Advance(2 * cfg.GroupIdleTTL)
 	router.cleanupOnce()
 
 	router.mu.RLock()
@@ -653,5 +661,77 @@ func TestCloseWaitsForInFlightSenderWithoutPanicking(t *testing.T) {
 
 	if got := gw.queueState(); got != queueStateClosed {
 		t.Fatalf("expected group queue to be closed after router shutdown, got %v", got)
+	}
+}
+
+func TestIdempotencyTTLBoundary(t *testing.T) {
+	cfg := newTestConfig()
+	mockClock := clock.NewMockClock(time.Now())
+	cfg.Clock = mockClock
+	router := NewRouter(cfg)
+	t.Cleanup(router.Close)
+
+	router.RegisterHandler("idem", func(ctx context.Context, payload any) error { return nil })
+
+	task := Task{Type: "idem", Options: TaskOptions{IdempotencyKey: "test", IdempotencyTTL: 100 * time.Millisecond}}
+
+	if err := router.Dispatch(context.Background(), task); err != nil {
+		t.Fatalf("first dispatch failed: %v", err)
+	}
+
+	mockClock.Advance(99 * time.Millisecond)
+
+	if err := router.Dispatch(context.Background(), task); !errors.Is(err, ErrDuplicateTask) {
+		t.Fatalf("expected duplicate error, got: %v", err)
+	}
+
+	mockClock.Advance(2 * time.Millisecond) // Now at +101ms
+
+	if err := router.Dispatch(context.Background(), task); err != nil {
+		t.Fatalf("third dispatch failed: %v", err)
+	}
+}
+
+func TestIdempotencyConcurrencyCollision(t *testing.T) {
+	router := NewRouter(newTestConfig())
+	t.Cleanup(router.Close)
+
+	var calls int32
+	router.RegisterHandler("concurrent", func(ctx context.Context, payload any) error {
+		atomic.AddInt32(&calls, 1)
+		return nil
+	})
+
+	task := Task{Type: "concurrent", Options: TaskOptions{IdempotencyKey: "stress", IdempotencyTTL: time.Minute}}
+
+	var wg sync.WaitGroup
+	var successes int32
+	var duplicates int32
+
+	const numGoroutines = 5000
+
+	start := make(chan struct{})
+	for i := 0; i < numGoroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			err := router.Dispatch(context.Background(), task)
+			if err == nil {
+				atomic.AddInt32(&successes, 1)
+			} else if errors.Is(err, ErrDuplicateTask) {
+				atomic.AddInt32(&duplicates, 1)
+			}
+		}()
+	}
+
+	close(start)
+	wg.Wait()
+
+	if successes != 1 {
+		t.Fatalf("expected exactly 1 successful dispatch, got %d", successes)
+	}
+	if expectedDups := int32(numGoroutines - 1); duplicates != expectedDups {
+		t.Fatalf("expected exactly %d duplicate errors, got %d", expectedDups, duplicates)
 	}
 }

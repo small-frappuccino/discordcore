@@ -74,7 +74,7 @@ func (tr *TaskRouter) ScheduleEveryNDaysAtUTCWithSeconds(n int, hour, minute, se
 	go func() {
 		defer tr.wg.Done()
 		// Compute next target at UTC
-		now := time.Now().UTC()
+		now := tr.cfg.Clock.Now().UTC()
 		target := nextUTCTimestamp(now, hour, minute, second)
 		if !now.Before(target) {
 			// If now is equal or after target, schedule for the next N-day boundary anchored on today's target

@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/small-frappuccino/discordcore/pkg/clock"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
@@ -87,6 +88,9 @@ type RouterConfig struct {
 	// GroupMaxParallel limits how many workers a single group has.
 	// Minimum is 1 (default), which preserves serialized execution per group.
 	GroupMaxParallel int
+
+	// Clock provides a mockable time interface. If nil, RealClock is used.
+	Clock clock.Clock
 }
 
 // Defaults returns a RouterConfig with sensible defaults.
@@ -101,6 +105,7 @@ func Defaults() RouterConfig {
 		CleanupInterval:    2 * time.Minute,
 		GlobalMaxWorkers:   0, // unlimited by default
 		GroupMaxParallel:   1, // serialized per group by default
+		Clock:              clock.RealClock{},
 	}
 }
 
@@ -315,13 +320,16 @@ func NewRouter(cfg RouterConfig) *TaskRouter {
 	if cfg.GroupMaxParallel <= 0 {
 		cfg.GroupMaxParallel = def.GroupMaxParallel
 	}
+	if cfg.Clock == nil {
+		cfg.Clock = def.Clock
+	}
 
 	tr := &TaskRouter{
 		handlers:    make(map[string]TaskHandler),
 		groups:      make(map[string]*groupWorker),
 		inflight:    make(map[string]time.Time),
 		cfg:         cfg,
-		startedAt:   time.Now(),
+		startedAt:   cfg.Clock.Now(),
 		stopCh:      make(chan struct{}),
 		retryWakeCh: make(chan struct{}, 1),
 	}
@@ -402,10 +410,10 @@ func (tr *TaskRouter) prepareDispatch(t Task) (string, TaskOptions, error) {
 
 	// Idempotency: reject duplicates within TTL window
 	if eff.IdempotencyKey != "" {
-		if expiry, exists := tr.inflight[eff.IdempotencyKey]; exists && time.Now().Before(expiry) {
+		if expiry, exists := tr.inflight[eff.IdempotencyKey]; exists && tr.cfg.Clock.Now().Before(expiry) {
 			return "", TaskOptions{}, ErrDuplicateTask
 		}
-		tr.inflight[eff.IdempotencyKey] = time.Now().Add(eff.IdempotencyTTL)
+		tr.inflight[eff.IdempotencyKey] = tr.cfg.Clock.Now().Add(eff.IdempotencyTTL)
 	}
 
 	groupKey := eff.GroupKey
@@ -537,7 +545,7 @@ func newGroupWorker(key string, buffer int, nowNs int64) *groupWorker {
 
 func (tr *TaskRouter) nowNs() int64 {
 	// Keep zero reserved for "never marked active".
-	return time.Since(tr.startedAt).Nanoseconds() + 1
+	return tr.cfg.Clock.Now().Sub(tr.startedAt).Nanoseconds() + 1
 }
 
 func (gw *groupWorker) queueState() queueState {
@@ -747,7 +755,7 @@ func (tr *TaskRouter) scheduleRetry(groupKey string, et *enqueuedTask, delay tim
 	}
 
 	item := &scheduledRetry{
-		at:       time.Now().Add(delay),
+		at:       tr.cfg.Clock.Now().Add(delay),
 		groupKey: groupKey,
 		task:     et,
 	}
@@ -804,7 +812,7 @@ func (tr *TaskRouter) retryLoop() {
 			}
 		}
 
-		for _, item := range tr.popDueRetries(time.Now()) {
+		for _, item := range tr.popDueRetries(tr.cfg.Clock.Now()) {
 			switch tr.tryEnqueueRetry(item.groupKey, item.task) {
 			case groupSendEnqueued:
 				continue
@@ -831,7 +839,7 @@ func (tr *TaskRouter) nextRetryDelay() (time.Duration, bool) {
 		return 0, false
 	}
 
-	delay := time.Until(tr.retryQueue[0].at)
+	delay := tr.retryQueue[0].at.Sub(tr.cfg.Clock.Now())
 	if delay < 0 {
 		delay = 0
 	}
@@ -1020,7 +1028,7 @@ func (tr *TaskRouter) backgroundLoop() {
 }
 
 func (tr *TaskRouter) cleanupOnce() {
-	now := time.Now()
+	now := tr.cfg.Clock.Now()
 	nowNs := tr.nowNs()
 	toClose := make([]*groupWorker, 0)
 
@@ -1054,7 +1062,7 @@ func (tr *TaskRouter) cleanupOnce() {
 }
 
 func (tr *TaskRouter) runCronOnce() {
-	now := time.Now()
+	now := tr.cfg.Clock.Now()
 	tr.cronMu.Lock()
 	for _, job := range tr.cronJobs {
 		if job == nil || job.stopped {
