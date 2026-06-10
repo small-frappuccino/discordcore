@@ -42,17 +42,14 @@ func (cfg *BotConfig) GuildsForBotInstance(botInstanceID string) []GuildConfig {
 }
 
 // ResolveFeatureBotInstanceID returns the designated bot instance for a given feature.
-// It explicitly parses FeatureRouting, evaluates MainBotInstanceID, and falls back to
-// defaultBotInstanceID. It returns the resolved instance ID and a boolean fallbackFlag
+// It explicitly parses FeatureRouting and falls back to defaultBotInstanceID.
+// It returns the resolved instance ID and a boolean fallbackFlag
 // indicating if the designated bot token was revoked, invalid, or missing, necessitating
 // a degradation to the default bot.
 func (gc GuildConfig) ResolveFeatureBotInstanceID(feature string, defaultBotInstanceID string) (resolvedID string, fallback bool) {
 	route := gc.FeatureRouting[feature]
 	if route == "" {
-		route = gc.MainBotInstanceID
-		if route == "" {
-			route = defaultBotInstanceID
-		}
+		route = defaultBotInstanceID
 	}
 
 	if route == "" {

@@ -35,17 +35,17 @@ const navigation: NavItem[] = [
 export const DashboardLayout = memo(function DashboardLayout() {
   const location = useLocation();
   const { guildId } = useParams<{ guildId: string }>();
-  const { fetchMainBotProfile, mainBotProfile } = useDashboardSession();
+  const { fetchDisplayBotProfile, displayBotProfile } = useDashboardSession();
   const [brandIconError, setBrandIconError] = useState(false);
 
   useEffect(() => {
     if (guildId) {
-      fetchMainBotProfile(guildId);
+      fetchDisplayBotProfile(guildId);
     }
-  }, [guildId, fetchMainBotProfile]);
+  }, [guildId, fetchDisplayBotProfile]);
 
-  const botName = mainBotProfile ? mainBotProfile.username : null;
-  const botAvatar = mainBotProfile ? mainBotProfile.avatar_url : null;
+  const botName = displayBotProfile ? displayBotProfile.username : null;
+  const botAvatar = displayBotProfile ? displayBotProfile.avatar_url : null;
 
   return (
     <div className="dashboard-layout">

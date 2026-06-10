@@ -1,5 +1,5 @@
 import { PageHeader, Badge, PageContainer, SettingsGroupSkeleton, Button } from "../components/ui";
-import { SelectMenuMultiple, ToggleSwitch, SettingsGroup, SettingsRow, TextInput } from "../components/ui/tahoe";
+import { SelectMenuMultiple, SettingsGroup, SettingsRow, TextInput } from "../components/ui/tahoe";
 import { Stack } from "../components/layout";
 import { useCorePageLogic } from "./hooks/useCorePageLogic";
 import { useState, useEffect, useMemo } from "react";
@@ -28,8 +28,6 @@ export function CorePage() {
     isLoading,
     tokensState,
     setTokensState,
-    mainBotIdState,
-    setMainBotIdState,
     featureRoutingState,
     setFeatureRoutingState,
     handleUpdateTokens,
@@ -39,22 +37,25 @@ export function CorePage() {
     isDirty
   } = useCorePageLogic();
 
-  const availableInstances = settings?.workspace?.available_bot_instance_ids || [];
-  const configuredTokens = settings?.workspace?.sections?.bot_instance_tokens_configured || {};
+  const availableInstances = useMemo(() => settings?.workspace?.available_bot_instance_ids || [], [settings?.workspace?.available_bot_instance_ids]);
+  const configuredTokens = useMemo(() => settings?.workspace?.sections?.bot_instance_tokens_configured || {}, [settings?.workspace?.sections?.bot_instance_tokens_configured]);
 
-  const [enabledInstances, setEnabledInstances] = useState<Record<string, boolean>>({});
+  const [addedProfiles, setAddedProfiles] = useState<string[]>([]);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
-  // Dynamic profile list derived purely from existing tokens + currently enabled instances.
-  // There are no hardcoded keys.
+  useEffect(() => {
+    const handleClickOutside = () => setOpenMenuId(null);
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, []);
+
   const allInstances = useMemo(() => {
-    // Stringify objects to use as stable dependency comparisons if needed, 
-    // but the object references update from the hook so we can depend on them directly.
     return Array.from(new Set([
       ...availableInstances,
       ...Object.keys(configuredTokens),
-      ...Object.keys(enabledInstances)
+      ...addedProfiles
     ]));
-  }, [availableInstances, configuredTokens, enabledInstances]);
+  }, [availableInstances, configuredTokens, addedProfiles]);
 
   const [isCreatingProfile, setIsCreatingProfile] = useState(false);
   const [newProfileName, setNewProfileName] = useState("");
@@ -82,12 +83,7 @@ export function CorePage() {
       return;
     }
 
-    setEnabledInstances(prev => ({ ...prev, [sanitized]: true }));
-
-    // Auto-select as primary if it's the very first profile created
-    if (!mainBotIdState && allInstances.length === 0) {
-      setMainBotIdState(sanitized);
-    }
+    setAddedProfiles(prev => Array.from(new Set([...prev, sanitized])));
 
     setIsCreatingProfile(false);
     setNewProfileName("");
@@ -97,16 +93,6 @@ export function CorePage() {
     setIsCreatingProfile(false);
     setNewProfileName("");
   };
-
-  // Safe Hydration Check: Only default mainBotIdState if fully loaded and not already set
-  useEffect(() => {
-    if (!isLoading && settings && !mainBotIdState) {
-      const persistedMain = settings.workspace.sections.main_bot_instance_id;
-      if (persistedMain) {
-        setMainBotIdState(persistedMain);
-      }
-    }
-  }, [isLoading, settings, mainBotIdState, setMainBotIdState]);
 
   return (
     <PageContainer>
@@ -136,9 +122,6 @@ export function CorePage() {
                 <p className="text-sm text-text-secondary mb-2">
                   Manage bot identities, secure tokens, and operational feature routing for this guild.
                 </p>
-                <div className="p-3 mb-4 rounded-md bg-[var(--status-warning-bg,rgba(245,158,11,0.1))] text-sm">
-                  <strong className="text-[var(--status-warning,#f59e0b)]">Getting Started:</strong> To add a bot to your server, you must first create a profile and provide its secure token. Once saved, you will be able to authorize it.
-                </div>
                 {isCreatingProfile ? (
                   <div className="mt-2 flex items-center gap-2">
                     <TextInput
@@ -168,8 +151,6 @@ export function CorePage() {
               <Stack spacing="md">
                 {allInstances.map((instanceId) => {
                   const hasToken = !!configuredTokens[instanceId];
-                  const isEnabled = instanceId === "main" || enabledInstances[instanceId] || hasToken;
-                  const isMain = mainBotIdState === instanceId || (instanceId === "main" && !mainBotIdState);
                   const profile = botProfiles?.find(p => p.logical_key === instanceId);
 
                   // Collect features routed to this instance
@@ -177,10 +158,13 @@ export function CorePage() {
                     .filter(([, mappedId]) => mappedId === instanceId)
                     .map(([f]) => f);
 
+                  // Don't show instances that were marked for deletion but haven't saved yet
+                  if (tokensState[instanceId] === "") return null;
+
                   return (
                     <SettingsGroup key={instanceId}>
                       {/* Identity Header */}
-                      <div className={`p-4 flex items-center gap-4 ${isEnabled ? "border-b-[1px] border-b-[var(--border-subtle)]" : ""}`}>
+                      <div className="p-4 flex items-center gap-4 border-b-[1px] border-b-[var(--border-subtle)]">
                         <div className="w-12 h-12 rounded-full overflow-hidden bg-bg-surface-active flex items-center justify-center shrink-0 border border-border-subtle">
                           {profile?.avatar_url ? (
                             <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
@@ -198,39 +182,59 @@ export function CorePage() {
                             {profile?.discriminator && profile.discriminator !== "0" && (
                               <span className="text-sm text-text-muted">#{profile.discriminator}</span>
                             )}
-                            {isMain && <Badge variant="neutral">Primary</Badge>}
                           </div>
                           <span className="text-sm text-text-secondary">
                             Logical ID: {instanceId}
                           </span>
                         </div>
-                        <div className="ml-auto">
-                          <ToggleSwitch
-                            checked={isEnabled}
-                            onCheckedChange={(checked) => {
-                              setEnabledInstances(prev => ({ ...prev, [instanceId]: checked }));
-                              if (!checked && !hasToken) {
-                                setTokensState(prev => {
-                                  const next = { ...prev };
-                                  delete next[instanceId];
-                                  return next;
-                                });
-                              }
+                        <div className="ml-auto relative">
+                          <button 
+                            className="p-1 rounded hover:bg-bg-surface-active text-text-muted hover:text-text-primary transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenMenuId(openMenuId === instanceId ? null : instanceId);
                             }}
-                          />
+                          >
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="12" r="1"></circle>
+                              <circle cx="12" cy="5" r="1"></circle>
+                              <circle cx="12" cy="19" r="1"></circle>
+                            </svg>
+                          </button>
+                          {openMenuId === instanceId && (
+                            <div className="absolute right-0 mt-1 w-48 bg-bg-surface-active border border-border-subtle rounded-md shadow-lg z-10 overflow-hidden flex flex-col py-1">
+                              <button 
+                                className="w-full text-left px-4 py-2 text-sm text-[var(--status-error,#ef4444)] hover:bg-[var(--status-error-bg,rgba(239,68,68,0.1))] transition-colors"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenMenuId(null);
+                                  if (confirm(`Are you sure you want to delete profile ${instanceId}?`)) {
+                                    setTokensState(prev => ({ ...prev, [instanceId]: "" }));
+                                    setAddedProfiles(prev => prev.filter(id => id !== instanceId));
+                                    const nextRouting = { ...featureRoutingState };
+                                    for (const key of Object.keys(nextRouting)) {
+                                      if (nextRouting[key] === instanceId) {
+                                        delete nextRouting[key];
+                                      }
+                                    }
+                                    setFeatureRoutingState(nextRouting);
+                                  }
+                                }}
+                              >
+                                Delete Profile
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
 
                       {/* Config Area - Hidden if secondary and disabled */}
-                      {isEnabled && (
-                        <>
                           {/* Token Section */}
                           <SettingsRow
                             title={
                               <div className="flex flex-col gap-1">
                                 <div className="flex items-center gap-2">
-                                  <span>Secure Token</span>
-                                  <Badge variant="danger">Sensitive</Badge>
+                                  <span>Token</span>
                                 </div>
                                 {hasToken && !botPresent && profile && (
                                   <div className="text-xs text-[var(--status-warning,#f59e0b)] font-medium mt-1">
@@ -264,17 +268,6 @@ export function CorePage() {
 
                           {/* Routing Section */}
                           <SettingsRow
-                            title="Primary Bot Status"
-                            control={
-                              <ToggleSwitch
-                                checked={isMain}
-                                onCheckedChange={(checked) => {
-                                  if (checked) setMainBotIdState(instanceId);
-                                }}
-                              />
-                            }
-                          />
-                          <SettingsRow
                             title="Feature Routing"
                             control={
                               <SelectMenuMultiple
@@ -292,8 +285,6 @@ export function CorePage() {
                               />
                             }
                           />
-                        </>
-                      )}
                     </SettingsGroup>
                   );
                 })}

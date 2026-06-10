@@ -654,7 +654,6 @@ func TestGuildSettingsPutScrubsDanglingFeatureRouting(t *testing.T) {
 			"bot-1": "token-1",
 			"bot-2": "token-2",
 		}
-		guild.MainBotInstanceID = "bot-1"
 		guild.FeatureRouting = map[string]string{
 			"qotd":  "bot-2",
 			"music": "bot-1",
@@ -709,8 +708,5 @@ func TestGuildSettingsPutScrubsDanglingFeatureRouting(t *testing.T) {
 	guild, _ = findGuildSettings(cfg, "g1")
 	if _, ok := guild.FeatureRouting["music"]; ok {
 		t.Fatalf("expected music routing to be scrubbed")
-	}
-	if guild.MainBotInstanceID != "" {
-		t.Fatalf("expected main bot instance to be scrubbed, got %q", guild.MainBotInstanceID)
 	}
 }

@@ -304,10 +304,7 @@ func (s *RuntimeService) configuredGuildIDs(requireEnabled bool) []string {
 
 		route := guild.FeatureRouting["qotd"]
 		if route == "" {
-			route = guild.MainBotInstanceID
-			if route == "" {
-				route = s.defaultBotID
-			}
+			route = s.defaultBotID
 		}
 		if route != s.botInstanceID {
 			continue

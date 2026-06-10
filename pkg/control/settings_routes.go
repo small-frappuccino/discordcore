@@ -359,9 +359,6 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 				}
 			}
 		}
-		if payload.MainBotInstanceID != nil {
-			guild.MainBotInstanceID = *payload.MainBotInstanceID
-		}
 		if payload.FeatureRouting != nil {
 			guild.FeatureRouting = *payload.FeatureRouting
 		}
@@ -405,11 +402,6 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 		for feature, instanceID := range guild.FeatureRouting {
 			if _, ok := guild.BotInstanceTokens[instanceID]; !ok {
 				delete(guild.FeatureRouting, feature)
-			}
-		}
-		if guild.MainBotInstanceID != "" {
-			if _, ok := guild.BotInstanceTokens[guild.MainBotInstanceID]; !ok {
-				guild.MainBotInstanceID = ""
 			}
 		}
 
@@ -536,7 +528,6 @@ func normalizeSettingsRoutePath(path string) string {
 
 func guildPayloadEmpty(payload updateGuildSettingsRequest) bool {
 	return payload.BotInstanceTokens == nil &&
-		payload.MainBotInstanceID == nil &&
 		payload.FeatureRouting == nil &&
 		payload.Features == nil &&
 		payload.Channels == nil &&

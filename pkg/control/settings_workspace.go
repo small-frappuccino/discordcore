@@ -100,7 +100,6 @@ type guildSettingsWorkspace struct {
 
 type guildSettingsSections struct {
 	BotInstanceTokensConfigured map[string]bool           `json:"bot_instance_tokens_configured"`
-	MainBotInstanceID           string                    `json:"main_bot_instance_id,omitempty"`
 	FeatureRouting              map[string]string         `json:"feature_routing,omitempty"`
 	Features                    files.FeatureToggles      `json:"features"`
 	Channels                    files.ChannelsConfig      `json:"channels"`
@@ -190,7 +189,6 @@ type updateGlobalSettingsRequest struct {
 type updateGuildSettingsRequest struct {
 	ConfigVersion     *int64                     `json:"config_version,omitempty"`
 	BotInstanceTokens *map[string]string         `json:"bot_instance_tokens,omitempty"`
-	MainBotInstanceID *string                    `json:"main_bot_instance_id,omitempty"`
 	FeatureRouting    *map[string]string         `json:"feature_routing,omitempty"`
 	Features          *files.FeatureToggles      `json:"features,omitempty"`
 	Channels          *files.ChannelsConfig      `json:"channels,omitempty"`
@@ -332,7 +330,6 @@ func buildGuildSettingsWorkspaceWithBindings(
 		AvailableBotInstanceIDs: slices.Clone(availableBotInstanceIDs),
 		Sections: guildSettingsSections{
 			BotInstanceTokensConfigured: buildBotInstanceTokensSection(guild.BotInstanceTokens),
-			MainBotInstanceID:           guild.MainBotInstanceID,
 			FeatureRouting:              guild.FeatureRouting,
 			Features:                    guild.Features,
 			Channels:                    guild.Channels,
