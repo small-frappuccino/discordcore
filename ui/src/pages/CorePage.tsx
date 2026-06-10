@@ -18,30 +18,30 @@ const BASE_FEATURE_OPTIONS = [
 export function CorePage() {
   const { guildId } = useParams<{ guildId: string }>();
   const { accessibleGuilds, manageableGuilds, baseUrl } = useDashboardSession();
-  
+
   const activeGuild = accessibleGuilds.find(g => g.id === guildId) || manageableGuilds.find(g => g.id === guildId);
   const botPresent = activeGuild?.bot_present === true;
 
-  const { 
-    settings, 
-    botProfiles, 
-    isLoading, 
-    tokensState, 
-    setTokensState, 
-    mainBotIdState, 
-    setMainBotIdState, 
-    featureRoutingState, 
-    setFeatureRoutingState, 
-    handleUpdateTokens, 
-    isSaving, 
-    saveError, 
-    clearSaveError, 
-    isDirty 
+  const {
+    settings,
+    botProfiles,
+    isLoading,
+    tokensState,
+    setTokensState,
+    mainBotIdState,
+    setMainBotIdState,
+    featureRoutingState,
+    setFeatureRoutingState,
+    handleUpdateTokens,
+    isSaving,
+    saveError,
+    clearSaveError,
+    isDirty
   } = useCorePageLogic();
-  
+
   const availableInstances = settings?.workspace?.available_bot_instance_ids || [];
   const configuredTokens = settings?.workspace?.sections?.bot_instance_tokens_configured || {};
-  
+
   const [enabledInstances, setEnabledInstances] = useState<Record<string, boolean>>({});
 
   // Dynamic profile list derived purely from existing tokens + currently enabled instances.
@@ -50,7 +50,7 @@ export function CorePage() {
     // Stringify objects to use as stable dependency comparisons if needed, 
     // but the object references update from the hook so we can depend on them directly.
     return Array.from(new Set([
-      ...availableInstances, 
+      ...availableInstances,
       ...Object.keys(configuredTokens),
       ...Object.keys(enabledInstances)
     ]));
@@ -75,7 +75,7 @@ export function CorePage() {
   const handleAddProfileSave = () => {
     const profileName = newProfileName.trim();
     if (!profileName) return;
-    
+
     const sanitized = profileName.toLowerCase().replace(/[^a-z0-9_]/g, '');
     if (!sanitized) {
       alert("Invalid name. Use only letters, numbers, and underscores.");
@@ -83,7 +83,7 @@ export function CorePage() {
     }
 
     setEnabledInstances(prev => ({ ...prev, [sanitized]: true }));
-    
+
     // Auto-select as primary if it's the very first profile created
     if (!mainBotIdState && allInstances.length === 0) {
       setMainBotIdState(sanitized);
@@ -127,25 +127,20 @@ export function CorePage() {
               <div className="mb-6">
                 <div className="flex items-center justify-between mb-1">
                   <h3 className="text-base font-semibold text-text-primary">Bot Profiles</h3>
-                  {isDirty && (
-                    <Button onClick={handleUpdateTokens} variant="primary" size="sm" isLoading={isSaving} disabled={isSaving}>
-                      Save Changes
-                    </Button>
-                  )}
                 </div>
                 <p className="text-sm text-text-secondary mb-2">
                   Manage bot identities, secure tokens, and operational feature routing for this guild.
                 </p>
-                <div className="p-3 mb-4 rounded-md bg-[var(--status-warning-bg,rgba(245,158,11,0.1))] text-sm">
-                  <strong className="text-[var(--status-warning,#f59e0b)]">Getting Started:</strong> To add a bot to your server, you must first create a profile and provide its secure token. Once saved, you will be able to authorize it.
+                <div className="p-3 mb-4 rounded-md bg-[#3f2005] text-[#fde68a] text-sm">
+                  <strong className="text-[#fef3c7]">Getting Started:</strong> To add a bot to your server, you must first create a profile and provide its secure token. Once saved, you will be able to authorize it.
                 </div>
                 {isCreatingProfile ? (
                   <div className="mt-2 flex items-center gap-2">
-                    <TextInput 
-                      value={newProfileName} 
-                      onChange={e => setNewProfileName(e.target.value)} 
-                      placeholder="e.g., custom_qotd" 
-                      autoFocus 
+                    <TextInput
+                      value={newProfileName}
+                      onChange={e => setNewProfileName(e.target.value)}
+                      placeholder="e.g., custom_qotd"
+                      autoFocus
                     />
                     <Button onClick={handleAddProfileSave} variant="primary" size="sm">Save</Button>
                     <Button onClick={handleAddProfileCancel} variant="secondary" size="sm">Cancel</Button>
@@ -164,14 +159,14 @@ export function CorePage() {
                   </div>
                 )}
               </div>
-              
+
               <Stack spacing="md">
                 {allInstances.map((instanceId) => {
                   const hasToken = !!configuredTokens[instanceId];
                   const isEnabled = instanceId === "main" || enabledInstances[instanceId] || hasToken;
                   const isMain = mainBotIdState === instanceId || (instanceId === "main" && !mainBotIdState);
                   const profile = botProfiles?.find(p => p.logical_key === instanceId);
-                  
+
                   // Collect features routed to this instance
                   const routedFeatures = Object.entries(featureRoutingState)
                     .filter(([, mappedId]) => mappedId === instanceId)
@@ -205,8 +200,8 @@ export function CorePage() {
                           </span>
                         </div>
                         <div className="ml-auto">
-                          <ToggleSwitch 
-                            checked={isEnabled} 
+                          <ToggleSwitch
+                            checked={isEnabled}
                             onCheckedChange={(checked) => {
                               setEnabledInstances(prev => ({ ...prev, [instanceId]: checked }));
                               if (!checked && !hasToken) {
@@ -216,7 +211,7 @@ export function CorePage() {
                                   return next;
                                 });
                               }
-                            }} 
+                            }}
                           />
                         </div>
                       </div>
@@ -225,7 +220,7 @@ export function CorePage() {
                       {isEnabled && (
                         <>
                           {/* Token Section */}
-                          <SettingsRow 
+                          <SettingsRow
                             title={
                               <div className="flex flex-col gap-1">
                                 <div className="flex items-center gap-2">
@@ -241,8 +236,8 @@ export function CorePage() {
                             }
                             control={
                               <div className="w-full flex-1 flex flex-col gap-2">
-                                <TextInput 
-                                  type="password" 
+                                <TextInput
+                                  type="password"
                                   className="w-full border-white/20 pl-6"
                                   placeholder={hasToken ? "•••••••• (Configured)" : "Enter bot token..."}
                                   value={tokensState[instanceId] !== undefined ? tokensState[instanceId] : ""}
@@ -263,21 +258,21 @@ export function CorePage() {
                           />
 
                           {/* Routing Section */}
-                          <SettingsRow 
+                          <SettingsRow
                             title="Primary Bot Status"
                             control={
-                              <ToggleSwitch 
-                                checked={isMain} 
+                              <ToggleSwitch
+                                checked={isMain}
                                 onCheckedChange={(checked) => {
                                   if (checked) setMainBotIdState(instanceId);
-                                }} 
+                                }}
                               />
                             }
                           />
-                          <SettingsRow 
+                          <SettingsRow
                             title="Feature Routing"
                             control={
-                              <SelectMenuMultiple 
+                              <SelectMenuMultiple
                                 className="w-full"
                                 options={BASE_FEATURE_OPTIONS.map(opt => {
                                   if (!profile || !opt.requiredPerms) return { label: opt.label, value: opt.value };
@@ -298,6 +293,13 @@ export function CorePage() {
                   );
                 })}
               </Stack>
+              {isDirty && (
+                <div className="sticky bottom-0 z-50 p-4 mt-8 bg-bg-surface border-t border-border-strong rounded-t-lg shadow-lg flex justify-end">
+                  <Button onClick={handleUpdateTokens} variant="primary" size="md" isLoading={isSaving} disabled={isSaving}>
+                    Save Changes
+                  </Button>
+                </div>
+              )}
             </Stack>
           )}
         </Stack>
