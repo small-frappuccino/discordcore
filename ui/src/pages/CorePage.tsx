@@ -289,7 +289,7 @@ export function CorePage() {
                 ) : (
                   <div className="mt-2">
                     <Button onClick={() => setIsCreatingProfile(true)} variant="secondary">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>
                       Add Profile
                     </Button>
                   </div>

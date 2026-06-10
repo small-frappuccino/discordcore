@@ -70,7 +70,9 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
             </svg>
           </div>
         </div>
-        {children}
+        <span className="inline-flex items-center justify-center gap-2">
+          {children}
+        </span>
       </button>
     );
   }

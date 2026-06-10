@@ -145,7 +145,6 @@ ol {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  @apply gap-2;
   border-radius: var(--radius-md);
   font-weight: 500;
   transition: all var(--transition-fast);
