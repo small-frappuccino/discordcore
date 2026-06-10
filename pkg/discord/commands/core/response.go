@@ -112,7 +112,7 @@ func (rm *ResponseManager) Custom(i *discordgo.InteractionCreate, content string
 	return rm.session.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: data,
-	})
+	}, rm.requestOptions()...)
 }
 
 // editAckedResponse edits the original deferred response. Used when the
@@ -132,8 +132,15 @@ func (rm *ResponseManager) editAckedResponse(i *discordgo.InteractionCreate, con
 	if len(rm.config.Attachments) > 0 {
 		edit.Files = rm.config.Attachments
 	}
-	_, err := rm.session.InteractionResponseEdit(i.Interaction, edit)
+	_, err := rm.session.InteractionResponseEdit(i.Interaction, edit, rm.requestOptions()...)
 	return err
+}
+
+func (rm *ResponseManager) requestOptions() []discordgo.RequestOption {
+	if rm.ctx != nil {
+		return []discordgo.RequestOption{discordgo.WithContext(rm.ctx.Context())}
+	}
+	return nil
 }
 
 // buildResponseData builds InteractionResponseData honoring ResponseConfig
@@ -259,7 +266,7 @@ func (rm *ResponseManager) Autocomplete(i *discordgo.InteractionCreate, choices 
 	return rm.session.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionApplicationCommandAutocompleteResult,
 		Data: &discordgo.InteractionResponseData{Choices: choices},
-	})
+	}, rm.requestOptions()...)
 }
 
 // DeferResponse defers the response (for long processing)
@@ -269,14 +276,14 @@ func (rm *ResponseManager) DeferResponse(i *discordgo.InteractionCreate, ephemer
 		Data: &discordgo.InteractionResponseData{
 			Flags: rm.buildFlags(ephemeral),
 		},
-	})
+	}, rm.requestOptions()...)
 }
 
 // EditResponse edits an already sent response
 func (rm *ResponseManager) EditResponse(i *discordgo.InteractionCreate, content string) error {
 	_, err := rm.session.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 		Content: &content,
-	})
+	}, rm.requestOptions()...)
 	return err
 }
 
@@ -284,7 +291,7 @@ func (rm *ResponseManager) EditResponse(i *discordgo.InteractionCreate, content 
 func (rm *ResponseManager) EditResponseWithEmbed(i *discordgo.InteractionCreate, embed *discordgo.MessageEmbed) error {
 	_, err := rm.session.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 		Embeds: &[]*discordgo.MessageEmbed{embed},
-	})
+	}, rm.requestOptions()...)
 	return err
 }
 
@@ -298,7 +305,7 @@ func (rm *ResponseManager) FollowUp(i *discordgo.InteractionCreate, content stri
 	_, err := rm.session.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 		Content: content,
 		Flags:   flags,
-	})
+	}, rm.requestOptions()...)
 	return err
 }
 
@@ -312,13 +319,13 @@ func (rm *ResponseManager) FollowUpWithEmbed(i *discordgo.InteractionCreate, emb
 	_, err := rm.session.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 		Embeds: []*discordgo.MessageEmbed{embed},
 		Flags:  flags,
-	})
+	}, rm.requestOptions()...)
 	return err
 }
 
 // DeleteResponse deletes the original response
 func (rm *ResponseManager) DeleteResponse(i *discordgo.InteractionCreate) error {
-	return rm.session.InteractionResponseDelete(i.Interaction)
+	return rm.session.InteractionResponseDelete(i.Interaction, rm.requestOptions()...)
 }
 
 // Builder pattern for fluent response construction

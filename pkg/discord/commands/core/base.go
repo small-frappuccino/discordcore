@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -25,8 +26,13 @@ func NewContextBuilder(session *discordgo.Session, configManager *files.ConfigMa
 	}
 }
 
-// BuildContext creates a complete context for command execution
+// BuildContext creates a complete context for command execution using a background context
 func (cb *ContextBuilder) BuildContext(i *discordgo.InteractionCreate) *Context {
+	return cb.BuildContextWithContext(context.Background(), i)
+}
+
+// BuildContextWithContext creates a complete context for command execution with a specific context
+func (cb *ContextBuilder) BuildContextWithContext(goCtx context.Context, i *discordgo.InteractionCreate) *Context {
 	userID := extractUserID(i)
 	guildID := i.GuildID
 
@@ -57,6 +63,7 @@ func (cb *ContextBuilder) BuildContext(i *discordgo.InteractionCreate) *Context 
 		UserID:      userID,
 		IsOwner:     isOwner,
 		GuildConfig: guildConfig,
+		ctx:         goCtx,
 	}
 
 	return ctx

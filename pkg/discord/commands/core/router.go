@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"log/slog"
 
 	"github.com/bwmarrin/discordgo"
@@ -12,6 +13,11 @@ import (
 // dispatch entrypoint out of registry.go so later work can add component and
 // modal routing without regrowing the command sync hotspot.
 func (cr *CommandRouter) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	cr.HandleInteractionWithContext(context.Background(), s, i)
+}
+
+// HandleInteractionWithContext routes interactions using a specific context.
+func (cr *CommandRouter) HandleInteractionWithContext(goCtx context.Context, s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if i == nil {
 		return
 	}
@@ -22,13 +28,13 @@ func (cr *CommandRouter) HandleInteraction(s *discordgo.Session, i *discordgo.In
 
 	switch routeKey.Kind {
 	case InteractionKindAutocomplete:
-		cr.handleAutocompleteRoute(i, routeKey)
+		cr.handleAutocompleteRoute(goCtx, i, routeKey)
 	case InteractionKindSlash:
-		cr.handleSlashCommandRoute(i, routeKey)
+		cr.handleSlashCommandRoute(goCtx, i, routeKey)
 	case InteractionKindComponent:
-		cr.handleComponentRoute(i, routeKey)
+		cr.handleComponentRoute(goCtx, i, routeKey)
 	case InteractionKindModal:
-		cr.handleModalRoute(i, routeKey)
+		cr.handleModalRoute(goCtx, i, routeKey)
 	default:
 		return
 	}
@@ -37,18 +43,18 @@ func (cr *CommandRouter) HandleInteraction(s *discordgo.Session, i *discordgo.In
 // handleSlashCommand processes slash commands.
 // Kept as a compatibility wrapper for existing tests and call sites.
 func (cr *CommandRouter) handleSlashCommand(i *discordgo.InteractionCreate) {
-	cr.handleSlashCommandRoute(i, InteractionRouteKey{
+	cr.handleSlashCommandRoute(context.Background(), i, InteractionRouteKey{
 		Kind: InteractionKindSlash,
 		Path: commandRoutePath(i),
 	})
 }
 
-func (cr *CommandRouter) handleSlashCommandRoute(i *discordgo.InteractionCreate, routeKey InteractionRouteKey) {
+func (cr *CommandRouter) handleSlashCommandRoute(goCtx context.Context, i *discordgo.InteractionCreate, routeKey InteractionRouteKey) {
 	if routeKey.Path == "" {
 		routeKey.Path = commandRoutePath(i)
 	}
 
-	ctx := cr.contextBuilder.BuildContext(i)
+	ctx := cr.contextBuilder.BuildContextWithContext(goCtx, i)
 	err := cr.executeRoute(ctx, routeKey, func(ctx *Context) error {
 		handler, exists := cr.lookupSlashHandler(ctx.RouteKey)
 		if !exists {
@@ -65,14 +71,14 @@ func (cr *CommandRouter) handleSlashCommandRoute(i *discordgo.InteractionCreate,
 // handleAutocomplete processes autocomplete interactions.
 // Kept as a compatibility wrapper for existing tests and call sites.
 func (cr *CommandRouter) handleAutocomplete(i *discordgo.InteractionCreate) {
-	cr.handleAutocompleteRoute(i, InteractionRouteKey{
+	cr.handleAutocompleteRoute(context.Background(), i, InteractionRouteKey{
 		Kind:          InteractionKindAutocomplete,
 		Path:          commandRoutePath(i),
 		FocusedOption: focusedOptionName(i),
 	})
 }
 
-func (cr *CommandRouter) handleAutocompleteRoute(i *discordgo.InteractionCreate, routeKey InteractionRouteKey) {
+func (cr *CommandRouter) handleAutocompleteRoute(goCtx context.Context, i *discordgo.InteractionCreate, routeKey InteractionRouteKey) {
 	if routeKey.Path == "" {
 		routeKey.Path = commandRoutePath(i)
 	}
@@ -80,7 +86,7 @@ func (cr *CommandRouter) handleAutocompleteRoute(i *discordgo.InteractionCreate,
 		routeKey.FocusedOption = focusedOptionName(i)
 	}
 
-	ctx := cr.contextBuilder.BuildContext(i)
+	ctx := cr.contextBuilder.BuildContextWithContext(goCtx, i)
 	choices := []*discordgo.ApplicationCommandOptionChoice{}
 	err := cr.executeRoute(ctx, routeKey, func(ctx *Context) error {
 		handler, exists := cr.lookupAutocompleteHandler(ctx.RouteKey)
@@ -100,7 +106,7 @@ func (cr *CommandRouter) handleAutocompleteRoute(i *discordgo.InteractionCreate,
 	NewResponseBuilder(ctx.Session).Build().Autocomplete(i, choices)
 }
 
-func (cr *CommandRouter) handleComponentRoute(i *discordgo.InteractionCreate, routeKey InteractionRouteKey) {
+func (cr *CommandRouter) handleComponentRoute(goCtx context.Context, i *discordgo.InteractionCreate, routeKey InteractionRouteKey) {
 	if routeKey.Path == "" {
 		routeKey.Path = interactionCustomRouteID(interactionCustomID(i))
 	}
@@ -108,7 +114,7 @@ func (cr *CommandRouter) handleComponentRoute(i *discordgo.InteractionCreate, ro
 		routeKey.CustomID = interactionCustomID(i)
 	}
 
-	ctx := cr.contextBuilder.BuildContext(i)
+	ctx := cr.contextBuilder.BuildContextWithContext(goCtx, i)
 	err := cr.executeRoute(ctx, routeKey, func(ctx *Context) error {
 		handler, exists := cr.lookupComponentHandler(ctx.RouteKey)
 		if !exists {
@@ -121,7 +127,7 @@ func (cr *CommandRouter) handleComponentRoute(i *discordgo.InteractionCreate, ro
 	}
 }
 
-func (cr *CommandRouter) handleModalRoute(i *discordgo.InteractionCreate, routeKey InteractionRouteKey) {
+func (cr *CommandRouter) handleModalRoute(goCtx context.Context, i *discordgo.InteractionCreate, routeKey InteractionRouteKey) {
 	if routeKey.Path == "" {
 		routeKey.Path = interactionCustomRouteID(interactionCustomID(i))
 	}
@@ -129,7 +135,7 @@ func (cr *CommandRouter) handleModalRoute(i *discordgo.InteractionCreate, routeK
 		routeKey.CustomID = interactionCustomID(i)
 	}
 
-	ctx := cr.contextBuilder.BuildContext(i)
+	ctx := cr.contextBuilder.BuildContextWithContext(goCtx, i)
 	err := cr.executeRoute(ctx, routeKey, func(ctx *Context) error {
 		handler, exists := cr.lookupModalHandler(ctx.RouteKey)
 		if !exists {

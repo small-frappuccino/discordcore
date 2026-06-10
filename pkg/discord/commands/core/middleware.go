@@ -102,6 +102,15 @@ func (cr *CommandRouter) errorMappingMiddleware() InteractionMiddleware {
 				return nil
 			}
 
+			var restErr *discordgo.RESTError
+			if errors.As(err, &restErr) && restErr.Response != nil {
+				status := restErr.Response.StatusCode
+				if status == 401 || status == 403 || status == 502 || status >= 500 {
+					slog.Error("Discord API gateway error during interaction", "commandPath", ctx.RouteKey.Path, "status", status, "err", err)
+					return nil
+				}
+			}
+
 			slog.Error("Slash route failed", "commandPath", ctx.RouteKey.Path, "err", err)
 			respondToSlashError(ctx, err)
 			return nil
@@ -133,7 +142,7 @@ func applyInteractionAckPolicy(ctx *Context, routeKey InteractionRouteKey, polic
 
 	switch routeKey.Kind {
 	case InteractionKindSlash:
-		if err := NewResponseManager(ctx.Session).DeferResponse(ctx.Interaction, policy.Ephemeral); err != nil {
+		if err := NewResponseManager(ctx.Session).WithContext(ctx).DeferResponse(ctx.Interaction, policy.Ephemeral); err != nil {
 			return fmt.Errorf("applyInteractionAckPolicy: %w", err)
 		}
 		ctx.Acknowledged = true
@@ -142,7 +151,7 @@ func applyInteractionAckPolicy(ctx *Context, routeKey InteractionRouteKey, polic
 	case InteractionKindComponent, InteractionKindModal:
 		if err := ctx.Session.InteractionRespond(ctx.Interaction.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseDeferredMessageUpdate,
-		}); err != nil {
+		}, discordgo.WithContext(ctx.Context())); err != nil {
 			return err
 		}
 		ctx.Acknowledged = true
