@@ -172,9 +172,12 @@ func TestUpsertMemberPresenceAndMarkMemberLeftTracksActiveState(t *testing.T) {
 		t.Fatalf("UpsertMemberRoles() failed: %v", err)
 	}
 
-	states, err := store.GetActiveGuildMemberStatesContext(context.Background(), guildID)
-	if err != nil {
-		t.Fatalf("GetActiveGuildMemberStatesContext() failed: %v", err)
+	var states []GuildMemberCurrentState
+	for state, err := range store.GetActiveGuildMemberStatesContext(context.Background(), guildID) {
+		if err != nil {
+			t.Fatalf("GetActiveGuildMemberStatesContext() failed: %v", err)
+		}
+		states = append(states, state)
 	}
 	if len(states) != 1 {
 		t.Fatalf("expected one active member state, got %d", len(states))
@@ -191,9 +194,12 @@ func TestUpsertMemberPresenceAndMarkMemberLeftTracksActiveState(t *testing.T) {
 		t.Fatalf("MarkMemberLeftContext() failed: %v", err)
 	}
 
-	states, err = store.GetActiveGuildMemberStatesContext(context.Background(), guildID)
-	if err != nil {
-		t.Fatalf("GetActiveGuildMemberStatesContext(after leave) failed: %v", err)
+	states = nil
+	for state, err := range store.GetActiveGuildMemberStatesContext(context.Background(), guildID) {
+		if err != nil {
+			t.Fatalf("GetActiveGuildMemberStatesContext(after leave) failed: %v", err)
+		}
+		states = append(states, state)
 	}
 	if len(states) != 0 {
 		t.Fatalf("expected no active members after leave, got %d", len(states))
@@ -249,9 +255,12 @@ func TestUpsertGuildMemberSnapshotsContextPersistsBotFlagsAndReactivatesMembers(
 		t.Fatalf("UpsertGuildMemberSnapshotsContext() failed: %v", err)
 	}
 
-	states, err := store.GetActiveGuildMemberStatesContext(context.Background(), guildID)
-	if err != nil {
-		t.Fatalf("GetActiveGuildMemberStatesContext() failed: %v", err)
+	var states []GuildMemberCurrentState
+	for state, err := range store.GetActiveGuildMemberStatesContext(context.Background(), guildID) {
+		if err != nil {
+			t.Fatalf("GetActiveGuildMemberStatesContext() failed: %v", err)
+		}
+		states = append(states, state)
 	}
 	if len(states) != 1 {
 		t.Fatalf("expected one active state after snapshot upsert, got %d", len(states))

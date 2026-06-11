@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"iter"
 	"strings"
 	"time"
 )
@@ -515,67 +516,81 @@ func (s *Store) MemberJoin(ctx context.Context, guildID, userID string) (time.Ti
 }
 
 // GetActiveGuildMemberStatesContext returns the persisted current member state for all active members in a guild.
-func (s *Store) GetActiveGuildMemberStatesContext(ctx context.Context, guildID string) ([]GuildMemberCurrentState, error) {
-	guildID = strings.TrimSpace(guildID)
-	if guildID == "" {
-		return nil, nil
-	}
+func (s *Store) GetActiveGuildMemberStatesContext(ctx context.Context, guildID string) iter.Seq2[GuildMemberCurrentState, error] {
+	return func(yield func(GuildMemberCurrentState, error) bool) {
+		guildID = strings.TrimSpace(guildID)
+		if guildID == "" {
+			return
+		}
 
-	rows, err := s.queryContext(ctx, `
-		SELECT mj.user_id, mj.joined_at, mj.last_seen_at, mj.is_bot, rc.role_id
-		  FROM member_joins mj
-		  LEFT JOIN roles_current rc
-		    ON rc.guild_id = mj.guild_id
-		   AND rc.user_id = mj.user_id
-		   AND rc.deleted_at IS NULL
-		 WHERE mj.guild_id = $1
-		   AND mj.left_at IS NULL
-		 ORDER BY mj.user_id, rc.role_id
-	`, guildID)
-	if err != nil {
-		return nil, fmt.Errorf("Store.GetActiveGuildMemberStatesContext: %w", err)
-	}
-	defer rows.Close()
+		rows, err := s.queryContext(ctx, `
+			SELECT mj.user_id, mj.joined_at, mj.last_seen_at, mj.is_bot, rc.role_id
+			  FROM member_joins mj
+			  LEFT JOIN roles_current rc
+			    ON rc.guild_id = mj.guild_id
+			   AND rc.user_id = mj.user_id
+			   AND rc.deleted_at IS NULL
+			 WHERE mj.guild_id = $1
+			   AND mj.left_at IS NULL
+			 ORDER BY mj.user_id, rc.role_id
+		`, guildID)
+		if err != nil {
+			yield(GuildMemberCurrentState{}, fmt.Errorf("Store.GetActiveGuildMemberStatesContext: %w", err))
+			return
+		}
+		defer rows.Close()
 
-	states := make([]GuildMemberCurrentState, 0)
-	indexByUser := make(map[string]int)
-	for rows.Next() {
-		var (
-			userID     string
-			joinedAt   time.Time
-			lastSeenAt sql.NullTime
-			isBot      sql.NullBool
-			roleID     sql.NullString
-		)
-		if err := rows.Scan(&userID, &joinedAt, &lastSeenAt, &isBot, &roleID); err != nil {
-			return nil, fmt.Errorf("Store.GetActiveGuildMemberStatesContext: %w", err)
+		var currentState *GuildMemberCurrentState
+
+		for rows.Next() {
+			var (
+				userID     string
+				joinedAt   time.Time
+				lastSeenAt sql.NullTime
+				isBot      sql.NullBool
+				roleID     sql.NullString
+			)
+			if err := rows.Scan(&userID, &joinedAt, &lastSeenAt, &isBot, &roleID); err != nil {
+				yield(GuildMemberCurrentState{}, fmt.Errorf("Store.GetActiveGuildMemberStatesContext: %w", err))
+				return
+			}
+
+			if currentState != nil && currentState.UserID != userID {
+				if !yield(*currentState, nil) {
+					return
+				}
+				currentState = nil
+			}
+
+			if currentState == nil {
+				currentState = &GuildMemberCurrentState{
+					UserID:   userID,
+					JoinedAt: joinedAt.UTC(),
+					Active:   true,
+				}
+				if lastSeenAt.Valid {
+					currentState.LastSeenAt = lastSeenAt.Time.UTC()
+				}
+				if isBot.Valid {
+					currentState.HasBot = true
+					currentState.IsBot = isBot.Bool
+				}
+			}
+
+			if roleID.Valid && strings.TrimSpace(roleID.String) != "" {
+				currentState.Roles = append(currentState.Roles, roleID.String)
+			}
 		}
-		idx, ok := indexByUser[userID]
-		if !ok {
-			state := GuildMemberCurrentState{
-				UserID:   userID,
-				JoinedAt: joinedAt.UTC(),
-				Active:   true,
-			}
-			if lastSeenAt.Valid {
-				state.LastSeenAt = lastSeenAt.Time.UTC()
-			}
-			if isBot.Valid {
-				state.HasBot = true
-				state.IsBot = isBot.Bool
-			}
-			states = append(states, state)
-			idx = len(states) - 1
-			indexByUser[userID] = idx
+
+		if err := rows.Err(); err != nil {
+			yield(GuildMemberCurrentState{}, fmt.Errorf("Store.GetActiveGuildMemberStatesContext: %w", err))
+			return
 		}
-		if roleID.Valid && strings.TrimSpace(roleID.String) != "" {
-			states[idx].Roles = append(states[idx].Roles, roleID.String)
+
+		if currentState != nil {
+			yield(*currentState, nil)
 		}
 	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("Store.GetActiveGuildMemberStatesContext: %w", err)
-	}
-	return states, nil
 }
 
 // UpsertAvatar sets the current avatar hash for a member in a guild.

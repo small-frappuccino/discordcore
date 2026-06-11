@@ -518,7 +518,7 @@ func (uc *UnifiedCache) ClearGuild(guildID string) error {
 	// Clear all members for this guild (scan all member keys with guildID prefix)
 	if uc.members != nil {
 		prefix := uc.memberPrefix(guildID)
-		for _, key := range uc.members.Keys() {
+		for key := range uc.members.Keys() {
 			if strings.HasPrefix(key, prefix) {
 				uc.members.Invalidate(key)
 			}
@@ -757,16 +757,11 @@ func persistDirtySnapshots[T any](
 		return nil
 	}
 
-	snapshots := seg.TakeDirtySnapshot(now)
-	if len(snapshots) == 0 {
-		return nil
-	}
-
-	entries := make([]storage.CacheEntryRecord, 0, len(snapshots))
-	keys := make([]string, 0, len(snapshots))
+	entries := make([]storage.CacheEntryRecord, 0)
+	keys := make([]string, 0)
 	var errs []error
 
-	for _, snapshot := range snapshots {
+	for snapshot := range seg.TakeDirtySnapshot(now) {
 		record, err := build(snapshot)
 		if err != nil {
 			seg.MarkDirty([]string{snapshot.Key})

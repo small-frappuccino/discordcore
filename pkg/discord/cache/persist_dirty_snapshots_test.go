@@ -25,7 +25,10 @@ func TestPersistDirtySnapshots_RollbackOnFailure(t *testing.T) {
 	uc.SetMember("guild-1", "user-1", member)
 
 	// Verify the member is dirty.
-	snapshots := uc.members.TakeDirtySnapshot(time.Now().Add(1 * time.Second))
+	var snapshots []DirtyEntry[*discordgo.Member]
+	for snapshot := range uc.members.TakeDirtySnapshot(time.Now().Add(1 * time.Second)) {
+		snapshots = append(snapshots, snapshot)
+	}
 	if len(snapshots) == 0 {
 		t.Fatal("expected member to be dirty after UpdateMember")
 	}
@@ -40,7 +43,10 @@ func TestPersistDirtySnapshots_RollbackOnFailure(t *testing.T) {
 	}
 
 	// Verify that the member is still dirty (MarkDirty was re-invoked in the rollback path).
-	snapshots = uc.members.TakeDirtySnapshot(time.Now().Add(1 * time.Second))
+	snapshots = nil
+	for snapshot := range uc.members.TakeDirtySnapshot(time.Now().Add(1 * time.Second)) {
+		snapshots = append(snapshots, snapshot)
+	}
 	if len(snapshots) == 0 {
 		t.Fatal("expected member to remain dirty after failed persist due to atomic rollback re-invoking MarkDirty")
 	}

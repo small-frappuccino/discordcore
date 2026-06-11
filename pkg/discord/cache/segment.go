@@ -10,8 +10,7 @@ package cache
 
 import (
 	"container/list"
-	"maps"
-	"slices"
+	"iter"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -264,16 +263,21 @@ func (s *Segment[T]) Len() int {
 	return total
 }
 
-// Keys returns a copy of current keys. Use with caution on large segments.
-func (s *Segment[T]) Keys() []string {
-	keys := make([]string, 0)
-	for i := range s.shards {
-		shard := &s.shards[i]
-		shard.mu.RLock()
-		keys = append(keys, slices.Collect(maps.Keys(shard.data))...)
-		shard.mu.RUnlock()
+// Keys returns an iterator of current keys. Use with caution on large segments.
+func (s *Segment[T]) Keys() iter.Seq[string] {
+	return func(yield func(string) bool) {
+		for i := range s.shards {
+			shard := &s.shards[i]
+			shard.mu.RLock()
+			for k := range shard.data {
+				if !yield(k) {
+					shard.mu.RUnlock()
+					return
+				}
+			}
+			shard.mu.RUnlock()
+		}
 	}
-	return keys
 }
 
 // GetExpiration returns the expiration time for a key, if present.
@@ -323,33 +327,37 @@ func (s *Segment[T]) SetLimit(limit int) {
 	}
 }
 
-// TakeDirtySnapshot drains the current dirty set and returns live entries for incremental persistence.
-func (s *Segment[T]) TakeDirtySnapshot(now time.Time) []DirtyEntry[T] {
-	snapshots := make([]DirtyEntry[T], 0)
-	for i := range s.shards {
-		shard := &s.shards[i]
-		shard.mu.Lock()
-		for key := range shard.dirty {
-			e, ok := shard.data[key]
-			if !ok {
+// TakeDirtySnapshot drains the current dirty set and returns live entries for incremental persistence via an iterator.
+func (s *Segment[T]) TakeDirtySnapshot(now time.Time) iter.Seq[DirtyEntry[T]] {
+	return func(yield func(DirtyEntry[T]) bool) {
+		for i := range s.shards {
+			shard := &s.shards[i]
+			shard.mu.Lock()
+			for key := range shard.dirty {
+				e, ok := shard.data[key]
+				if !ok {
+					delete(shard.dirty, key)
+					continue
+				}
+				if !e.expiresAt.IsZero() && now.After(e.expiresAt) {
+					shard.removeEntry(e)
+					delete(shard.dirty, key)
+					continue
+				}
+				entry := DirtyEntry[T]{
+					Key:       key,
+					Value:     e.value,
+					ExpiresAt: e.expiresAt,
+				}
 				delete(shard.dirty, key)
-				continue
+				if !yield(entry) {
+					shard.mu.Unlock()
+					return
+				}
 			}
-			if !e.expiresAt.IsZero() && now.After(e.expiresAt) {
-				shard.removeEntry(e)
-				delete(shard.dirty, key)
-				continue
-			}
-			snapshots = append(snapshots, DirtyEntry[T]{
-				Key:       key,
-				Value:     e.value,
-				ExpiresAt: e.expiresAt,
-			})
-			delete(shard.dirty, key)
+			shard.mu.Unlock()
 		}
-		shard.mu.Unlock()
 	}
-	return snapshots
 }
 
 // MarkDirty re-adds keys to the dirty set when an incremental persist attempt fails.

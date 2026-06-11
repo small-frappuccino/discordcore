@@ -441,28 +441,24 @@ func (s *StatsService) hydrateStatsForGuildFromStore(ctx context.Context, gcfg f
 		return false, nil
 	}
 
-	storedMembers, err := s.store.GetActiveGuildMemberStatesContext(ctx, gcfg.GuildID)
-	if err != nil {
-		return false, fmt.Errorf("load active member state: %w", err)
-	}
-
 	trackedRoles, trackedRolesKey := statsTrackedRoles(gcfg.Stats.Channels)
-	if statsRequiresBotClassification(gcfg.Stats.Channels) {
-		for _, member := range storedMembers {
-			if !member.HasBot {
-				return false, nil
-			}
-		}
-	}
+	requiresBotClass := statsRequiresBotClassification(gcfg.Stats.Channels)
 
 	state := newStatsGuildState(trackedRolesKey, s.statsPublishedChannels(gcfg.GuildID))
-	for _, member := range storedMembers {
+	for member, err := range s.store.GetActiveGuildMemberStatesContext(ctx, gcfg.GuildID) {
+		if err != nil {
+			return false, fmt.Errorf("load active member state: %w", err)
+		}
+		if requiresBotClass && !member.HasBot {
+			return false, nil
+		}
 		userID, snapshot, ok := statsSnapshotFromStoredState(member, trackedRoles)
 		if !ok {
 			continue
 		}
 		_ = state.applyAdd(userID, snapshot)
 	}
+
 	state.initialized = true
 	state.dirty = false
 	state.lastReconciled = time.Now().UTC()
