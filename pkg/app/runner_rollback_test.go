@@ -26,7 +26,6 @@ func TestRun_MidBootSabotageTriggersTeardown(t *testing.T) {
 	})
 	t.Setenv("APPDATA", appDataDir)
 
-	boolPtr := func(v bool) *bool { return &v }
 	dbCfg, configStore := openRunnerConfigStore(t)
 	setRunnerDatabaseBootstrapEnv(t, dbCfg)
 	cfg := files.BotConfig{
@@ -35,13 +34,13 @@ func TestRun_MidBootSabotageTriggersTeardown(t *testing.T) {
 		},
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
-				Monitoring:    boolPtr(false),
-				Automod:       boolPtr(false),
-				Commands:      boolPtr(true),
-				AdminCommands: boolPtr(false),
+				Monitoring:    Ptr(false),
+				Automod:       Ptr(false),
+				Commands:      Ptr(true),
+				AdminCommands: Ptr(false),
 			},
 			Maintenance: files.FeatureMaintenanceToggles{
-				DBCleanup: boolPtr(false),
+				DBCleanup: Ptr(false),
 			},
 		},
 		Guilds: []files.GuildConfig{{
@@ -159,7 +158,6 @@ func TestRun_CascadingRollbackFailures(t *testing.T) {
 	})
 	t.Setenv("APPDATA", appDataDir)
 
-	boolPtr := func(v bool) *bool { return &v }
 	dbCfg, configStore := openRunnerConfigStore(t)
 	setRunnerDatabaseBootstrapEnv(t, dbCfg)
 	cfg := files.BotConfig{
@@ -168,13 +166,13 @@ func TestRun_CascadingRollbackFailures(t *testing.T) {
 		},
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
-				Monitoring:    boolPtr(false),
-				Automod:       boolPtr(false),
-				Commands:      boolPtr(true),
-				AdminCommands: boolPtr(false),
+				Monitoring:    Ptr(false),
+				Automod:       Ptr(false),
+				Commands:      Ptr(true),
+				AdminCommands: Ptr(false),
 			},
 			Maintenance: files.FeatureMaintenanceToggles{
-				DBCleanup: boolPtr(false),
+				DBCleanup: Ptr(false),
 			},
 		},
 		Guilds: []files.GuildConfig{{

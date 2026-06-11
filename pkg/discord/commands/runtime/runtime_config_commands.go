@@ -546,7 +546,7 @@ func setBool(rc files.RuntimeConfig, k runtimeKey, v bool) (files.RuntimeConfig,
 	case runtimeKeyDisableUserLogs:
 		rc.DisableUserLogs = v
 	case runtimeKeyModerationLogging:
-		rc.ModerationLogging = boolPtr(v)
+		rc.ModerationLogging = Ptr(v)
 	case runtimeKeyPresenceWatchBot:
 		rc.PresenceWatchBot = v
 	case runtimeKeyMessageDeleteOnLog:
@@ -1078,8 +1078,4 @@ func fmtBool(b bool) string {
 		return "true"
 	}
 	return "false"
-}
-
-func boolPtr(v bool) *bool {
-	return &v
 }

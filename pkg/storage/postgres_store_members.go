@@ -672,24 +672,24 @@ func (s *Store) GetAvatar(guildID, userID string) (hash string, updatedAt time.T
 	return h, t, true, nil
 }
 
-// GetAllMemberJoins retrieves all member join records for a guild
-func (s *Store) GetAllMemberJoins(guildID string) (map[string]time.Time, error) {
+// StreamAllMemberJoins retrieves all member join records for a guild sequentially, eliding map allocations.
+func (s *Store) StreamAllMemberJoins(guildID string) (iter.Seq2[string, time.Time], error) {
 	rows, err := s.query(`SELECT user_id, joined_at FROM member_joins WHERE guild_id=$1`, guildID)
 	if err != nil {
-		return nil, fmt.Errorf("Store.GetAllMemberJoins: %w", err)
+		return nil, fmt.Errorf("Store.StreamAllMemberJoins: %w", err)
 	}
-	defer rows.Close()
-
-	members := make(map[string]time.Time)
-	for rows.Next() {
-		var userID string
-		var joinedAt time.Time
-		if err := rows.Scan(&userID, &joinedAt); err != nil {
-			return nil, fmt.Errorf("Store.GetAllMemberJoins: %w", err)
+	return func(yield func(string, time.Time) bool) {
+		defer rows.Close()
+		for rows.Next() {
+			var userID string
+			var joinedAt time.Time
+			if err := rows.Scan(&userID, &joinedAt); err == nil {
+				if !yield(userID, joinedAt) {
+					return
+				}
+			}
 		}
-		members[userID] = joinedAt
-	}
-	return members, rows.Err()
+	}, nil
 }
 
 // StreamAllGuildMemberRoles retrieves all member roles for a guild sequentially, eliding map allocations.

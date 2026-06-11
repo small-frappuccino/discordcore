@@ -78,7 +78,6 @@ func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 	})
 	t.Setenv("APPDATA", appDataDir)
 
-	boolPtr := func(v bool) *bool { return &v }
 	dbCfg, configStore := openRunnerConfigStore(t)
 	setRunnerDatabaseBootstrapEnv(t, dbCfg)
 	cfg := files.BotConfig{
@@ -87,13 +86,13 @@ func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 		},
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
-				Monitoring:    boolPtr(false),
-				Automod:       boolPtr(false),
-				Commands:      boolPtr(true),
-				AdminCommands: boolPtr(false),
+				Monitoring:    Ptr(false),
+				Automod:       Ptr(false),
+				Commands:      Ptr(true),
+				AdminCommands: Ptr(false),
 			},
 			Maintenance: files.FeatureMaintenanceToggles{
-				DBCleanup: boolPtr(false),
+				DBCleanup: Ptr(false),
 			},
 		},
 		Guilds: []files.GuildConfig{{
@@ -189,7 +188,6 @@ func TestRun_ShutdownAggregatesStoreAndSessionCloseErrors(t *testing.T) {
 	t.Setenv("APPDATA", appDataDir)
 	t.Setenv(tokenEnv, "test-token")
 
-	boolPtr := func(v bool) *bool { return &v }
 	dbCfg, configStore := openRunnerConfigStore(t)
 	setRunnerDatabaseBootstrapEnv(t, dbCfg)
 	cfg := files.BotConfig{
@@ -198,13 +196,13 @@ func TestRun_ShutdownAggregatesStoreAndSessionCloseErrors(t *testing.T) {
 		},
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
-				Monitoring:    boolPtr(false),
-				Automod:       boolPtr(false),
-				Commands:      boolPtr(false),
-				AdminCommands: boolPtr(false),
+				Monitoring:    Ptr(false),
+				Automod:       Ptr(false),
+				Commands:      Ptr(false),
+				AdminCommands: Ptr(false),
 			},
 			Maintenance: files.FeatureMaintenanceToggles{
-				DBCleanup: boolPtr(false),
+				DBCleanup: Ptr(false),
 			},
 		},
 		Guilds: []files.GuildConfig{{
@@ -301,7 +299,6 @@ func TestRun_ControlServerBindFailureIsNonFatal(t *testing.T) {
 	})
 	t.Setenv("APPDATA", appDataDir)
 
-	boolPtr := func(v bool) *bool { return &v }
 	dbCfg, configStore := openRunnerConfigStore(t)
 	setRunnerDatabaseBootstrapEnv(t, dbCfg)
 	cfg := files.BotConfig{
@@ -310,13 +307,13 @@ func TestRun_ControlServerBindFailureIsNonFatal(t *testing.T) {
 		},
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
-				Monitoring:    boolPtr(false),
-				Automod:       boolPtr(false),
-				Commands:      boolPtr(false),
-				AdminCommands: boolPtr(false),
+				Monitoring:    Ptr(false),
+				Automod:       Ptr(false),
+				Commands:      Ptr(false),
+				AdminCommands: Ptr(false),
 			},
 			Maintenance: files.FeatureMaintenanceToggles{
-				DBCleanup: boolPtr(false),
+				DBCleanup: Ptr(false),
 			},
 		},
 		Guilds: []files.GuildConfig{},

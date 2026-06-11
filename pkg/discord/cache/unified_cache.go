@@ -263,9 +263,6 @@ func (uc *UnifiedCache) SetMember(guildID, userID string, member *discordgo.Memb
 	uc.members.Set(key, member)
 }
 
-// evictMemberLRU removes the least recently used member (must hold lock)
-func (uc *UnifiedCache) evictMemberLRU() {}
-
 // InvalidateMember removes a member from the cache
 func (uc *UnifiedCache) InvalidateMember(guildID, userID string) {
 	key := uc.memberKey(guildID, userID)
@@ -297,9 +294,6 @@ func (uc *UnifiedCache) SetGuild(guildID string, guild *discordgo.Guild) {
 	uc.guilds.Set(guildID, guild)
 }
 
-// evictGuildLRU removes the least recently used guild (must hold lock)
-func (uc *UnifiedCache) evictGuildLRU() {}
-
 // InvalidateGuild removes a guild from the cache
 func (uc *UnifiedCache) InvalidateGuild(guildID string) {
 	if guildID == "" || uc.guilds == nil {
@@ -330,9 +324,6 @@ func (uc *UnifiedCache) SetRoles(guildID string, roles []*discordgo.Role) {
 	}
 	uc.roles.Set(guildID, roles)
 }
-
-// evictRolesLRU removes the least recently used roles (must hold lock)
-func (uc *UnifiedCache) evictRolesLRU() {}
 
 // InvalidateRoles removes guild roles from the cache
 func (uc *UnifiedCache) InvalidateRoles(guildID string) {
@@ -376,9 +367,6 @@ func (uc *UnifiedCache) SetChannel(channelID string, channel *discordgo.Channel)
 
 	uc.channels.Set(channelID, channel)
 }
-
-// evictChannelLRU removes the least recently used channel (must hold lock)
-func (uc *UnifiedCache) evictChannelLRU() {}
 
 // InvalidateChannel removes a channel from the cache
 func (uc *UnifiedCache) InvalidateChannel(channelID string) {

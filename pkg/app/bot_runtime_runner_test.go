@@ -20,7 +20,7 @@ func TestInitializeBotRuntimeSkipsCommandHandlerWhenCommandsDisabled(t *testing.
 	}
 
 	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
-	boolPtr := func(v bool) *bool { return &v }
+
 	if _, err := cfgMgr.UpdateConfig(func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
 			{
@@ -28,7 +28,7 @@ func TestInitializeBotRuntimeSkipsCommandHandlerWhenCommandsDisabled(t *testing.
 				BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
-						Commands: boolPtr(false),
+						Commands: Ptr(false),
 					},
 				},
 				QOTD: files.QOTDConfig{

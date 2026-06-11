@@ -10,39 +10,38 @@ import (
 func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testing.T) {
 	t.Parallel()
 
-	boolPtr := func(v bool) *bool { return &v }
 	cfg := &files.BotConfig{
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
-				Monitoring:    boolPtr(false),
-				Automod:       boolPtr(false),
-				Commands:      boolPtr(false),
-				AdminCommands: boolPtr(false),
+				Monitoring:    Ptr(false),
+				Automod:       Ptr(false),
+				Commands:      Ptr(false),
+				AdminCommands: Ptr(false),
 			},
 			Logging: files.FeatureLoggingToggles{
-				AvatarLogging:  boolPtr(false),
-				RoleUpdate:     boolPtr(false),
-				MemberJoin:     boolPtr(false),
-				MemberLeave:    boolPtr(false),
-				MessageProcess: boolPtr(false),
-				MessageEdit:    boolPtr(false),
-				MessageDelete:  boolPtr(false),
-				ReactionMetric: boolPtr(false),
-				AutomodAction:  boolPtr(false),
+				AvatarLogging:  Ptr(false),
+				RoleUpdate:     Ptr(false),
+				MemberJoin:     Ptr(false),
+				MemberLeave:    Ptr(false),
+				MessageProcess: Ptr(false),
+				MessageEdit:    Ptr(false),
+				MessageDelete:  Ptr(false),
+				ReactionMetric: Ptr(false),
+				AutomodAction:  Ptr(false),
 			},
 			PresenceWatch: files.FeaturePresenceWatchToggles{
-				Bot:  boolPtr(false),
-				User: boolPtr(false),
+				Bot:  Ptr(false),
+				User: Ptr(false),
 			},
 			Safety: files.FeatureSafetyToggles{
-				BotRolePermMirror: boolPtr(false),
+				BotRolePermMirror: Ptr(false),
 			},
 			Backfill: files.FeatureBackfillToggles{
-				Enabled: boolPtr(false),
+				Enabled: Ptr(false),
 			},
-			StatsChannels:  boolPtr(false),
-			AutoRoleAssign: boolPtr(false),
-			UserPrune:      boolPtr(false),
+			StatsChannels:  Ptr(false),
+			AutoRoleAssign: Ptr(false),
+			UserPrune:      Ptr(false),
 		},
 		Guilds: []files.GuildConfig{
 			{
@@ -50,7 +49,7 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 				BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
-						Commands: boolPtr(true),
+						Commands: Ptr(true),
 					},
 				},
 				QOTD: files.QOTDConfig{
@@ -75,14 +74,14 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 				},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
-						Monitoring:    boolPtr(true),
-						Commands:      boolPtr(true),
-						AdminCommands: boolPtr(true),
+						Monitoring:    Ptr(true),
+						Commands:      Ptr(true),
+						AdminCommands: Ptr(true),
 					},
 					Logging: files.FeatureLoggingToggles{
-						ReactionMetric: boolPtr(true),
+						ReactionMetric: Ptr(true),
 					},
-					UserPrune: boolPtr(true),
+					UserPrune: Ptr(true),
 				},
 				UserPrune: files.UserPruneConfig{Enabled: true},
 				QOTD: files.QOTDConfig{
@@ -145,15 +144,14 @@ func TestResolveBotRuntimeCapabilitiesWithoutGuildBindingsIsIdle(t *testing.T) {
 func TestResolveBotRuntimeCapabilitiesAggregatesAllGuildsForSameBotInstance(t *testing.T) {
 	t.Parallel()
 
-	boolPtr := func(v bool) *bool { return &v }
 	cfg := &files.BotConfig{
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
-				Monitoring: boolPtr(false),
-				Commands:   boolPtr(false),
+				Monitoring: Ptr(false),
+				Commands:   Ptr(false),
 			},
 			Logging: files.FeatureLoggingToggles{
-				ReactionMetric: boolPtr(false),
+				ReactionMetric: Ptr(false),
 			},
 		},
 		Guilds: []files.GuildConfig{
@@ -162,7 +160,7 @@ func TestResolveBotRuntimeCapabilitiesAggregatesAllGuildsForSameBotInstance(t *t
 				BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
-						Commands: boolPtr(true),
+						Commands: Ptr(true),
 					},
 				},
 				QOTD: files.QOTDConfig{
@@ -180,10 +178,10 @@ func TestResolveBotRuntimeCapabilitiesAggregatesAllGuildsForSameBotInstance(t *t
 				BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
-						Monitoring: boolPtr(true),
+						Monitoring: Ptr(true),
 					},
 					Logging: files.FeatureLoggingToggles{
-						ReactionMetric: boolPtr(true),
+						ReactionMetric: Ptr(true),
 					},
 				},
 				QOTD: files.QOTDConfig{

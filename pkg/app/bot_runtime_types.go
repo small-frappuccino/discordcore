@@ -280,3 +280,6 @@ func listBotGuildBindingsFromSessionState(botInstanceID string, session *discord
 	}
 	return out, nil
 }
+
+// Ptr is a generic helper for inline pointer allocations.
+func Ptr[T any](v T) *T { return &v }
