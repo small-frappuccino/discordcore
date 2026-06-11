@@ -134,71 +134,38 @@ type Service struct {
 	unmanageableThreadLogs sync.Map
 
 	guildActorsMu sync.Mutex
-	guildActors   map[string]chan func()
+	guildActors   map[string]*sync.Mutex
+}
+
+func (s *Service) getGuildMutex(guildID string) *sync.Mutex {
+	guildID = strings.TrimSpace(guildID)
+	s.guildActorsMu.Lock()
+	defer s.guildActorsMu.Unlock()
+	if s.guildActors == nil {
+		s.guildActors = make(map[string]*sync.Mutex)
+	}
+	mu, ok := s.guildActors[guildID]
+	if !ok {
+		mu = &sync.Mutex{}
+		s.guildActors[guildID] = mu
+	}
+	return mu
 }
 
 // ExecuteInGuildActor executes in guild actor.
 func (s *Service) ExecuteInGuildActor(guildID string, fn func()) {
-	s.ExecuteInGuildActorWithResult(guildID, func() (any, error) {
-		fn()
-		return nil, nil
-	})
+	mu := s.getGuildMutex(guildID)
+	mu.Lock()
+	defer mu.Unlock()
+	fn()
 }
 
 // ExecuteInGuildActorWithResult executes in guild actor with result.
 func (s *Service) ExecuteInGuildActorWithResult(guildID string, fn func() (any, error)) (any, error) {
-	guildID = strings.TrimSpace(guildID)
-	type result struct {
-		val any
-		err error
-	}
-	done := make(chan result, 1)
-
-	wrapper := func() {
-		val, err := fn()
-		done <- result{val, err}
-		close(done)
-	}
-
-	s.guildActorsMu.Lock()
-	if s.guildActors == nil {
-		s.guildActors = make(map[string]chan func())
-	}
-	ch, ok := s.guildActors[guildID]
-	if !ok {
-		ch = make(chan func(), 10)
-		s.guildActors[guildID] = ch
-		go s.runGuildActor(guildID, ch)
-	}
-	ch <- wrapper
-	s.guildActorsMu.Unlock()
-
-	res := <-done
-	return res.val, res.err
-}
-
-func (s *Service) runGuildActor(guildID string, ch chan func()) {
-	idleTimer := time.NewTimer(5 * time.Minute)
-	defer idleTimer.Stop()
-
-	for {
-		select {
-		case fn := <-ch:
-			idleTimer.Stop()
-			fn()
-			idleTimer.Reset(5 * time.Minute)
-		case <-idleTimer.C:
-			s.guildActorsMu.Lock()
-			if len(ch) > 0 {
-				s.guildActorsMu.Unlock()
-				idleTimer.Reset(5 * time.Minute)
-				continue
-			}
-			delete(s.guildActors, guildID)
-			s.guildActorsMu.Unlock()
-			return
-		}
-	}
+	mu := s.getGuildMutex(guildID)
+	mu.Lock()
+	defer mu.Unlock()
+	return fn()
 }
 
 // NewService constructs the QOTD service with no metrics wired (defaults
