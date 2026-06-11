@@ -259,6 +259,18 @@ func (cm *CommandManager) usesGuildScopedSync() bool {
 	return false
 }
 
+// SyncGuildCommands triggers a surgical Discord API sync for a single guild.
+// It returns nil if the manager is configured for global sync.
+func (cm *CommandManager) SyncGuildCommands(guildID string) error {
+	if !cm.usesGuildScopedSync() {
+		return nil
+	}
+
+	desired := cm.guildDesiredCommands(guildID)
+	_, err := cm.syncCommandScope(guildID, desired)
+	return err
+}
+
 func (cm *CommandManager) syncGuildScopedCommands() error {
 	if cm == nil || cm.router == nil {
 		return nil

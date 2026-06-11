@@ -773,6 +773,9 @@ func (rc RuntimeConfig) ModerationLoggingEnabled() bool {
 	return true
 }
 
+// ConfigSubscriber receives notifications when the bot configuration changes.
+type ConfigSubscriber func(oldCfg, newCfg *BotConfig)
+
 // ConfigManager handles bot configuration management.
 //
 // Concurrency: ConfigManager is safe for concurrent use by multiple goroutines.
@@ -788,6 +791,7 @@ type ConfigManager struct {
 	indexRebuilds   atomic.Uint64
 	indexMisses     atomic.Uint64
 	indexDuplicates atomic.Uint64
+	subscribers     []ConfigSubscriber
 	mu              sync.RWMutex
 }
 

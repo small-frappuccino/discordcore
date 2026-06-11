@@ -220,6 +220,7 @@ func runWithOptions(appName string, opts RunOptions) error {
 	}
 
 	botSupervisor := NewBotSupervisor(configManager, botOpts)
+	configManager.AddSubscriber(botSupervisor.onConfigChanged)
 
 	botSupervisor.SetFatalCallback(func(err error) {
 		appServiceManager.Fatal(err)
@@ -335,12 +336,8 @@ func runWithOptions(appName string, opts RunOptions) error {
 					continue // Aborta a recarga, preserva o estado estável em uso
 				}
 
-				// 2. Extração estrita do snapshot anterior via Read Lock
-				oldCfg := configManager.Config()
-
-				// 3. Orquestração: o supervisor deve receber ambos os estados para
-				// calcular o delta exato de conexões antes da rotação global
-				botSupervisor.onConfigChanged(oldCfg, newCfg)
+				// 2. Rotação atômica do ponteiro global sob Write Lock (sync.RWMutex)
+				// Isso automaticamente dispara os subscribers (incluindo o BotSupervisor)
 
 				// 4. Rotação atômica do ponteiro global sob Write Lock (sync.RWMutex)
 				dupCount := configManager.ApplyConfig(newCfg)

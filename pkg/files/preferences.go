@@ -52,6 +52,7 @@ func (mgr *ConfigManager) ApplyConfig(cfg *BotConfig) int {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
 
+	oldCfg := mgr.config
 	mgr.config = cfg
 
 	if len(mgr.config.Guilds) == 0 {
@@ -64,6 +65,7 @@ func (mgr *ConfigManager) ApplyConfig(cfg *BotConfig) int {
 	}
 
 	mgr.publishSnapshotLocked()
+	mgr.notifySubscribersLocked(oldCfg, cfg)
 	return dupCount
 }
 

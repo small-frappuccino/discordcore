@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"math/rand/v2"
+	"reflect"
 	"sync"
 	"time"
 
@@ -208,6 +209,44 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 			defer startWG.Done()
 			s.awaitStopAndStart(id, token, status, oldState)
 		}(id, token, currentStatuses[id], oldState)
+	}
+
+	// 5. Trigger dynamic command syncs for feature changes
+	if oldCfg != nil {
+		for _, newGuild := range newCfg.Guilds {
+			var oldGuild *files.GuildConfig
+			for i := range oldCfg.Guilds {
+				if oldCfg.Guilds[i].GuildID == newGuild.GuildID {
+					oldGuild = &oldCfg.Guilds[i]
+					break
+				}
+			}
+			if oldGuild == nil {
+				continue
+			}
+			if !reflect.DeepEqual(oldGuild.FeatureRouting, newGuild.FeatureRouting) ||
+				!reflect.DeepEqual(oldGuild.Features, newGuild.Features) {
+
+				guildID := newGuild.GuildID
+				s.bgWG.Add(1)
+				go func(gID string) {
+					defer s.bgWG.Done()
+					// Small debounce jitter
+					time.Sleep(time.Duration(rand.Float64()*500) * time.Millisecond)
+
+					runtime, _, err := s.resolver.runtimeForGuild(gID)
+					if err == nil && runtime != nil && runtime.commandHandler != nil {
+						if cm := runtime.commandHandler.GetCommandManager(); cm != nil {
+							if syncErr := cm.SyncGuildCommands(gID); syncErr != nil {
+								log.ApplicationLogger().Error("failed dynamic guild command sync", "guildID", gID, "error", syncErr)
+							} else {
+								log.ApplicationLogger().Info("Completed dynamic guild command sync", "guildID", gID)
+							}
+						}
+					}
+				}(guildID)
+			}
+		}
 	}
 
 	go func() {

@@ -119,10 +119,36 @@ func (mgr *ConfigManager) UpdateConfig(fn func(*BotConfig) error) (BotConfig, er
 
 	snapshot := mgr.publishSnapshotLocked()
 
+	// Notify subscribers asynchronously
+	mgr.notifySubscribersLocked(previous, snapshot.config)
+
 	if snapshot == nil || snapshot.config == nil {
 		return BotConfig{Guilds: []GuildConfig{}}, nil
 	}
 	return cloneBotConfig(*snapshot.config), nil
+}
+
+// AddSubscriber registers a callback to be invoked when the configuration changes.
+func (mgr *ConfigManager) AddSubscriber(sub ConfigSubscriber) {
+	if mgr == nil {
+		return
+	}
+	mgr.mu.Lock()
+	defer mgr.mu.Unlock()
+	mgr.subscribers = append(mgr.subscribers, sub)
+}
+
+func (mgr *ConfigManager) notifySubscribersLocked(oldCfg, newCfg *BotConfig) {
+	if len(mgr.subscribers) == 0 {
+		return
+	}
+	// Copy to avoid holding the lock during execution or referencing it unsafely
+	subs := make([]ConfigSubscriber, len(mgr.subscribers))
+	copy(subs, mgr.subscribers)
+
+	for _, sub := range subs {
+		go sub(oldCfg, newCfg)
+	}
 }
 
 func cloneBotConfigPtr(in *BotConfig) *BotConfig {
