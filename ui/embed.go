@@ -8,6 +8,7 @@ import (
 
 // rawDist keeps the dashboard assets available for embedding into the final host binary.
 //
+//go:generate bun run build
 //go:embed all:dist
 var rawDist embed.FS
 
