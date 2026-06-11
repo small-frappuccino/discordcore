@@ -260,14 +260,15 @@ export function CorePage() {
                             }
                           />
 
-                          {hasToken && profile && profile.bot_present === false && (
+                          {hasToken && profile && (
                             <SettingsRow
                               title=""
                               control={
                                 <div className="w-full flex justify-end">
                                   <ActionTrigger
                                     onClick={() => window.open(`${baseUrl === "" ? "" : baseUrl}/v1/guilds/${guildId}/oauth/authorize?bot_instance_id=${instanceId}`, "_blank", "noopener,noreferrer")}
-                                    className="flex items-center gap-2 px-3 py-1.5"
+                                    disabled={profile.bot_present}
+                                    className={`flex items-center gap-2 px-3 py-1.5 ${profile.bot_present ? "opacity-50 !cursor-default" : ""}`}
                                   >
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                       <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
