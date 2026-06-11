@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"iter"
 	"strconv"
 	"strings"
 	"sync"
@@ -156,90 +157,54 @@ func (ms *MonitoringService) handleStartupDowntimeAndMaybeRefresh(ctx context.Co
 
 type guildMemberPageFetcher func(ctx context.Context, guildID, after string, limit int) ([]*discordgo.Member, error)
 
-func paginateGuildMembersContext(
-	ctx context.Context,
-	guildID string,
-	pageSize int,
-	fetch guildMemberPageFetcher,
-	handle func([]*discordgo.Member) error,
-) (int, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if pageSize <= 0 {
-		pageSize = monitoringGuildMembersPageSize
-	}
-	if fetch == nil {
-		return 0, fmt.Errorf("guild member fetcher is nil")
-	}
+// StreamGuildMembersContext returns an iterator yielding pages of guild members.
+// The backing slice of []*discordgo.Member is allocated freshly per page by the discord client,
+// allowing consumers to process safely without array reuse corruption.
+func (ms *MonitoringService) StreamGuildMembersContext(ctx context.Context, guildID string) iter.Seq2[[]*discordgo.Member, error] {
+	return func(yield func([]*discordgo.Member, error) bool) {
+		if ms == nil || ms.session == nil {
+			yield(nil, fmt.Errorf("discord session is unavailable"))
+			return
+		}
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		pageSize := monitoringGuildMembersPageSize
 
-	total := 0
-	after := ""
-	for {
-		if err := ctx.Err(); err != nil {
-			return total, fmt.Errorf("paginateGuildMembersContext: %w", err)
-		}
-		members, err := fetch(ctx, guildID, after, pageSize)
-		if err != nil {
-			return total, fmt.Errorf("paginateGuildMembersContext: %w", err)
-		}
-		if len(members) == 0 {
-			return total, nil
-		}
-		if handle != nil {
-			if err := handle(members); err != nil {
-				return total, fmt.Errorf("paginateGuildMembersContext: %w", err)
+		after := ""
+		total := 0
+		for {
+			if err := ctx.Err(); err != nil {
+				yield(nil, fmt.Errorf("StreamGuildMembersContext: %w", err))
+				return
 			}
+			members, err := runWithTimeout(ctx, monitoringDependencyTimeout, func() ([]*discordgo.Member, error) {
+				return ms.session.GuildMembers(guildID, after, pageSize)
+			})
+			if err != nil {
+				yield(nil, fmt.Errorf("StreamGuildMembersContext: %w", err))
+				return
+			}
+			if len(members) == 0 {
+				log.ApplicationLogger().Info("Pagination completed successfully", "guildID", guildID, "total_members_fetched", total)
+				return
+			}
+			total += len(members)
+			if !yield(members, nil) {
+				return
+			}
+			if len(members) < pageSize {
+				log.ApplicationLogger().Info("Pagination completed successfully", "guildID", guildID, "total_members_fetched", total)
+				return
+			}
+			last := members[len(members)-1]
+			if last == nil || last.User == nil || strings.TrimSpace(last.User.ID) == "" {
+				yield(nil, fmt.Errorf("stream guild members: invalid page tail for guild %s", guildID))
+				return
+			}
+			after = last.User.ID
 		}
-		total += len(members)
-		if len(members) < pageSize {
-			return total, nil
-		}
-		last := members[len(members)-1]
-		if last == nil || last.User == nil || strings.TrimSpace(last.User.ID) == "" {
-			return total, fmt.Errorf("paginate guild members: invalid page tail for guild %s", guildID)
-		}
-		after = last.User.ID
 	}
-}
-
-func (ms *MonitoringService) fetchGuildMemberPageContext(ctx context.Context, guildID, after string, limit int) ([]*discordgo.Member, error) {
-	if ms == nil || ms.session == nil {
-		return nil, fmt.Errorf("discord session is unavailable")
-	}
-	if limit <= 0 {
-		limit = monitoringGuildMembersPageSize
-	}
-	return runWithTimeout(ctx, monitoringDependencyTimeout, func() ([]*discordgo.Member, error) {
-		return ms.session.GuildMembers(guildID, after, limit)
-	})
-}
-
-func (ms *MonitoringService) forEachGuildMemberPageContext(ctx context.Context, guildID string, handle func([]*discordgo.Member) error) (int, error) {
-	total, err := paginateGuildMembersContext(ctx, guildID, monitoringGuildMembersPageSize, ms.fetchGuildMemberPageContext, handle)
-	if err != nil {
-		log.ErrorLoggerRaw().Error("Failed to paginate guild members", "guildID", guildID, "fetched_so_far", total, "err", err)
-		return total, fmt.Errorf("MonitoringService.forEachGuildMemberPageContext: %w", err)
-	}
-	log.ApplicationLogger().Info("Pagination completed successfully", "guildID", guildID, "total_members_fetched", total)
-	return total, nil
-}
-
-// fetchAllGuildMembers paginates through all guild members until exhaustion and materializes them in memory.
-func (ms *MonitoringService) fetchAllGuildMembers(guildID string) ([]*discordgo.Member, error) {
-	return ms.fetchAllGuildMembersContext(context.Background(), guildID)
-}
-
-func (ms *MonitoringService) fetchAllGuildMembersContext(ctx context.Context, guildID string) ([]*discordgo.Member, error) {
-	all := make([]*discordgo.Member, 0)
-	_, err := ms.forEachGuildMemberPageContext(ctx, guildID, func(members []*discordgo.Member) error {
-		all = append(all, members...)
-		return nil
-	})
-	if err != nil {
-		return all, fmt.Errorf("MonitoringService.fetchAllGuildMembersContext: %w", err)
-	}
-	return all, nil
 }
 
 func (ms *MonitoringService) performPeriodicCheck(ctx context.Context) error {
@@ -253,7 +218,11 @@ func (ms *MonitoringService) performPeriodicCheck(ctx context.Context) error {
 		if err := ctx.Err(); err != nil {
 			return fmt.Errorf("MonitoringService.performPeriodicCheck: %w", err)
 		}
-		_, err := ms.forEachGuildMemberPageContext(ctx, gcfg.GuildID, func(members []*discordgo.Member) error {
+		for members, err := range ms.StreamGuildMembersContext(ctx, gcfg.GuildID) {
+			if err != nil {
+				log.ErrorLoggerRaw().Error("Error getting members for guild", "guildID", gcfg.GuildID, "err", err)
+				continue
+			}
 			joinSnapshots := make([]storage.GuildMemberSnapshot, 0, len(members))
 			for _, member := range members {
 				if err := ctx.Err(); err != nil {
@@ -297,11 +266,6 @@ func (ms *MonitoringService) performPeriodicCheck(ctx context.Context) error {
 				}
 				ms.checkAvatarChange(gcfg.GuildID, member.User.ID, avatarHash, member.User.Username)
 			}
-			return nil
-		})
-		if err != nil {
-			log.ErrorLoggerRaw().Error("Error getting members for guild", "guildID", gcfg.GuildID, "err", err)
-			continue
 		}
 	}
 	return nil

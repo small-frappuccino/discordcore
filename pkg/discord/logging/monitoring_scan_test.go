@@ -2,8 +2,9 @@ package logging
 
 import (
 	"context"
-	"errors"
-	"slices"
+	"encoding/json"
+	"fmt"
+	"net/http"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -17,65 +18,75 @@ func testGuildMember(id string) *discordgo.Member {
 	}
 }
 
-func TestPaginateGuildMembersContext_ProcessesPagesInOrder(t *testing.T) {
-	t.Parallel()
+func TestStreamGuildMembersContext_ProcessesPagesInOrder(t *testing.T) {
 
+	page1 := make([]*discordgo.Member, 1000)
+	for i := 0; i < 1000; i++ {
+		page1[i] = testGuildMember(fmt.Sprintf("u%d", i+1))
+	}
+	page2 := []*discordgo.Member{testGuildMember("u1001")}
 	pages := map[string][]*discordgo.Member{
-		"":   {testGuildMember("u1"), testGuildMember("u2")},
-		"u2": {testGuildMember("u3")},
+		"":      page1,
+		"u1000": page2,
+	}
+
+	session := newDiscordSessionWithAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		after := r.URL.Query().Get("after")
+		_ = json.NewEncoder(w).Encode(pages[after])
+	})
+
+	ms := &MonitoringService{
+		session: session,
 	}
 
 	var got []string
-	total, err := paginateGuildMembersContext(
-		context.Background(),
-		"g1",
-		2,
-		func(ctx context.Context, guildID, after string, limit int) ([]*discordgo.Member, error) {
-			if guildID != "g1" {
-				t.Fatalf("unexpected guild id: %s", guildID)
-			}
-			if limit != 2 {
-				t.Fatalf("unexpected page size: %d", limit)
-			}
-			return pages[after], nil
-		},
-		func(members []*discordgo.Member) error {
-			for _, member := range members {
-				got = append(got, member.User.ID)
-			}
-			return nil
-		},
-	)
-	if err != nil {
-		t.Fatalf("paginateGuildMembersContext returned error: %v", err)
-	}
-	if total != 3 {
-		t.Fatalf("unexpected total count: got %d want 3", total)
+	total := 0
+	for members, err := range ms.StreamGuildMembersContext(context.Background(), "g1") {
+		if err != nil {
+			t.Fatalf("StreamGuildMembersContext returned error: %v", err)
+		}
+		for _, member := range members {
+			got = append(got, member.User.ID)
+		}
+		total += len(members)
 	}
 
-	want := []string{"u1", "u2", "u3"}
-	if !slices.Equal(got, want) {
-		t.Fatalf("unexpected member order: got %v want %v", got, want)
+	if total != 1001 {
+		t.Fatalf("unexpected total count: got %d want 1001", total)
+	}
+
+	if len(got) != 1001 {
+		t.Fatalf("unexpected member count: got %d want 1001", len(got))
+	}
+	if got[0] != "u1" || got[999] != "u1000" || got[1000] != "u1001" {
+		t.Fatalf("unexpected member order")
 	}
 }
 
-func TestPaginateGuildMembersContext_StopsOnHandlerError(t *testing.T) {
-	t.Parallel()
+func TestStreamGuildMembersContext_StopsOnError(t *testing.T) {
 
-	wantErr := errors.New("stop")
-	total, err := paginateGuildMembersContext(
-		context.Background(),
-		"g1",
-		2,
-		func(ctx context.Context, guildID, after string, limit int) ([]*discordgo.Member, error) {
-			return []*discordgo.Member{testGuildMember("u1"), testGuildMember("u2")}, nil
-		},
-		func(members []*discordgo.Member) error {
-			return wantErr
-		},
-	)
-	if !errors.Is(err, wantErr) {
-		t.Fatalf("expected handler error, got %v", err)
+	session := newDiscordSessionWithAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"message": "Internal Server Error"}`))
+	})
+
+	ms := &MonitoringService{
+		session: session,
+	}
+
+	total := 0
+	var outErr error
+	for members, err := range ms.StreamGuildMembersContext(context.Background(), "g1") {
+		if err != nil {
+			outErr = err
+			break
+		}
+		total += len(members)
+	}
+
+	if outErr == nil {
+		t.Fatalf("expected handler error, got nil")
 	}
 	if total != 0 {
 		t.Fatalf("expected zero committed total on handler failure, got %d", total)

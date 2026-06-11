@@ -144,7 +144,7 @@ func TestMonitoringServiceUpdateStatsChannelsUsesIncrementalState(t *testing.T) 
 		session:       session,
 		configManager: cfgMgr,
 	}
-	ms.statsService = NewStatsService(session, cfgMgr, nil, nil, "", "", nil, nil, ms.forEachGuildMemberPageContext)
+	ms.statsService = NewStatsService(session, cfgMgr, nil, nil, "", "", nil, nil, ms.StreamGuildMembersContext)
 
 	if err := ms.statsService.UpdateStatsChannels(context.Background()); err != nil {
 		t.Fatalf("first updateStatsChannels error: %v", err)
@@ -332,7 +332,7 @@ func TestMonitoringServiceUpdateStatsChannelsHydratesFromStore(t *testing.T) {
 		configManager: cfgMgr,
 		store:         store,
 	}
-	ms.statsService = NewStatsService(session, cfgMgr, store, nil, "", "", nil, ms.getHeartbeat, ms.forEachGuildMemberPageContext)
+	ms.statsService = NewStatsService(session, cfgMgr, store, nil, "", "", nil, ms.getHeartbeat, ms.StreamGuildMembersContext)
 
 	now := time.Now().UTC()
 	if err := store.SetHeartbeat(context.Background(), now); err != nil {
