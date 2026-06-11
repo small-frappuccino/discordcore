@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -114,17 +115,9 @@ type AutomodService struct {
 	botInstanceID        string
 	defaultBotInstanceID string
 
-	// Fallback dedup channels for synchronous sends when adapters are unwired
-	// or task enqueue fails.
-	dedupChan chan fallbackDedupReq
-	dedupStop chan struct{}
-	dedupDone chan struct{}
-}
-
-type fallbackDedupReq struct {
-	key   string
-	now   time.Time
-	reply chan bool
+	// Fallback dedup cache
+	dedupMu    sync.Mutex
+	dedupCache map[string]time.Time
 }
 
 // NewAutomodService news automod service.
@@ -149,10 +142,7 @@ func (as *AutomodService) Start() {
 	}
 	as.isRunning = true
 
-	as.dedupChan = make(chan fallbackDedupReq)
-	as.dedupStop = make(chan struct{})
-	as.dedupDone = make(chan struct{})
-	go as.runDedupActor()
+	as.dedupCache = make(map[string]time.Time)
 
 	if as.session != nil {
 		as.handlerCancel = as.session.AddHandler(as.handleRawEvent)
@@ -168,8 +158,6 @@ func (as *AutomodService) Stop() {
 		as.handlerCancel()
 		as.handlerCancel = nil
 	}
-	close(as.dedupStop)
-	<-as.dedupDone
 	as.isRunning = false
 }
 
@@ -290,49 +278,31 @@ func (as *AutomodService) fallbackShouldDedup(key string) bool {
 }
 
 func (as *AutomodService) fallbackShouldDedupAt(key string, now time.Time) bool {
-	if !as.isRunning {
+	if !as.isRunning || key == "" {
 		return false
 	}
-	reply := make(chan bool, 1)
-	req := fallbackDedupReq{key: key, now: now, reply: reply}
-	select {
-	case as.dedupChan <- req:
-		return <-reply
-	case <-as.dedupStop:
-		return false
+
+	as.dedupMu.Lock()
+	defer as.dedupMu.Unlock()
+
+	if as.dedupCache == nil {
+		as.dedupCache = make(map[string]time.Time)
 	}
-}
 
-func (as *AutomodService) runDedupActor() {
-	defer close(as.dedupDone)
-	cache := make(map[string]time.Time)
-
-	for {
-		select {
-		case <-as.dedupStop:
-			return
-		case req := <-as.dedupChan:
-			if req.key == "" {
-				req.reply <- false
-				continue
-			}
-
-			if len(cache) > automodFallbackDedupCleanupThreshold {
-				for k, expiry := range cache {
-					if req.now.After(expiry) {
-						delete(cache, k)
-					}
-				}
-			}
-
-			if expiry, exists := cache[req.key]; exists && req.now.Before(expiry) {
-				req.reply <- true
-			} else {
-				cache[req.key] = req.now.Add(automodFallbackDedupTTL)
-				req.reply <- false
+	if len(as.dedupCache) > automodFallbackDedupCleanupThreshold {
+		for k, expiry := range as.dedupCache {
+			if now.After(expiry) {
+				delete(as.dedupCache, k)
 			}
 		}
 	}
+
+	if expiry, exists := as.dedupCache[key]; exists && now.Before(expiry) {
+		return true
+	}
+
+	as.dedupCache[key] = now.Add(automodFallbackDedupTTL)
+	return false
 }
 
 // buildAutomodEmbed dispatches to the trigger-specific embed builder.
