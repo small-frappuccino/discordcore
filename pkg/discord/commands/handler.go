@@ -9,6 +9,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	qotdcmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/qotd"
+	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/service"
@@ -24,6 +25,7 @@ type CommandHandler struct {
 	catalogRegistrars    []CommandCatalogRegistrar
 	commandManager       *core.CommandManager
 	qotdService          qotdcmd.QuestionCatalogService
+	statsService         *logging.StatsService
 	moderationMetrics    moderation.Metrics
 	adminServiceManager  *service.ServiceManager
 }
@@ -100,6 +102,11 @@ func (ch *CommandHandler) SetQOTDService(service qotdcmd.QuestionCatalogService)
 	ch.qotdService = service
 }
 
+// SetStatsService injects the StatsService for immediate channel updates from the /stats command tree.
+func (ch *CommandHandler) SetStatsService(service *logging.StatsService) {
+	ch.statsService = service
+}
+
 // SetModerationMetrics injects the moderation observability sink so the
 // /clean command records attempts, outcomes, and per-message delete failures.
 // Nil falls back to NopMetrics inside the moderation registrar.
@@ -164,6 +171,9 @@ func (ch *CommandHandler) commandCatalogRegistrarsForSetup() []CommandCatalogReg
 
 func (ch *CommandHandler) supportsCatalogCapabilities(required CommandCatalogCapabilities) bool {
 	if required.Admin && !ch.catalogCapabilities.Admin {
+		return false
+	}
+	if required.Stats && !ch.catalogCapabilities.Stats {
 		return false
 	}
 	return true

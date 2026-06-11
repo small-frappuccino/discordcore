@@ -10,12 +10,14 @@ import (
 	qotdcmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/roles"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/runtime"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/stats"
 )
 
 // CommandCatalogCapabilities captures runtime capabilities that can gate
 // catalog registration.
 type CommandCatalogCapabilities struct {
 	Admin bool
+	Stats bool
 }
 
 // CommandCatalogRegistrar applies one domain-scoped command catalog fragment to
@@ -31,6 +33,7 @@ func DefaultCommandCatalogRegistrars() []CommandCatalogRegistrar {
 	return []CommandCatalogRegistrar{
 		BaseCommandCatalogRegistrar(),
 		QOTDCommandCatalogRegistrar(),
+		StatsCommandCatalogRegistrar(),
 	}
 }
 
@@ -70,6 +73,18 @@ func AdminCommandCatalogRegistrar() CommandCatalogRegistrar {
 				return
 			}
 			admin.NewAdminCommands(ch.adminServiceManager).RegisterCommands(router)
+		},
+	}
+}
+
+// StatsCommandCatalogRegistrar registers the stats domain slash command surface.
+func StatsCommandCatalogRegistrar() CommandCatalogRegistrar {
+	return CommandCatalogRegistrar{
+		RequiredCapabilities: CommandCatalogCapabilities{
+			Stats: true,
+		},
+		Register: func(ch *CommandHandler, router *core.CommandRouter) {
+			stats.NewStatsCommands(ch.configManager).RegisterCommands(router)
 		},
 	}
 }

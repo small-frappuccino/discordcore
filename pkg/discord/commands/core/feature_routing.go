@@ -32,6 +32,8 @@ func ResolveFeatureForCommandPath(path string) string {
 		return "embeds"
 	case strings.HasPrefix(path, "ticket"):
 		return "tickets"
+	case strings.HasPrefix(path, "stats"):
+		return "stats"
 	default:
 		return "commands"
 	}

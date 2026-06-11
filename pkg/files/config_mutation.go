@@ -16,6 +16,11 @@ func (mgr *ConfigManager) updateGuildConfig(guildID string, fn func(*GuildConfig
 	return err
 }
 
+// UpdateGuildConfig provides an exported way to modify a guild's config
+func (mgr *ConfigManager) UpdateGuildConfig(guildID string, fn func(*GuildConfig) error) error {
+	return mgr.updateGuildConfig(guildID, fn)
+}
+
 func (mgr *ConfigManager) updateRuntimeConfigScope(scopeGuildID string, fn func(*RuntimeConfig) error) error {
 	_, err := mgr.UpdateConfig(func(cfg *BotConfig) error {
 		runtimeConfig, err := runtimeConfigForScope(cfg, scopeGuildID)

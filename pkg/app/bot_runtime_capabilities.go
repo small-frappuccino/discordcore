@@ -13,6 +13,7 @@ type botRuntimeCapabilities struct {
 	automod     bool
 	userPrune   bool
 	qotdRuntime bool
+	stats       bool
 	warmup      bool
 	intents     discordgo.Intent
 	hasCommands bool
@@ -42,6 +43,14 @@ func resolveBotRuntimeCapabilities(
 			resolvedID, _ := guild.ResolveFeatureBotInstanceID("qotd", defaultBotInstanceID)
 			if resolvedID == botInstanceID {
 				capabilities.qotdRuntime = true
+			}
+		}
+
+		if features.StatsChannels {
+			resolvedID, _ := guild.ResolveFeatureBotInstanceID("stats", defaultBotInstanceID)
+			if resolvedID == botInstanceID {
+				capabilities.stats = true
+				capabilities.hasCommands = true
 			}
 		}
 
