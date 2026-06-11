@@ -241,9 +241,12 @@ func TestCreateAndListModerationWarnings(t *testing.T) {
 		t.Fatalf("expected shared guild case sequence, got %+v", otherUser)
 	}
 
-	warnings, err := store.ListModerationWarnings("g1", "user-1", 10)
-	if err != nil {
-		t.Fatalf("ListModerationWarnings() failed: %v", err)
+	var warnings []ModerationWarning
+	for warning, err := range store.ListModerationWarnings("g1", "user-1", 10) {
+		if err != nil {
+			t.Fatalf("ListModerationWarnings() failed: %v", err)
+		}
+		warnings = append(warnings, warning)
 	}
 	if len(warnings) != 2 {
 		t.Fatalf("expected 2 warnings, got %+v", warnings)

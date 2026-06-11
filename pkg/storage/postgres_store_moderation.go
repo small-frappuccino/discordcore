@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"iter"
 	"strings"
 	"time"
 )
@@ -112,56 +113,59 @@ func (s *Store) CreateModerationWarning(guildID, userID, moderatorID, reason str
 }
 
 // ListModerationWarnings lists moderation warnings.
-func (s *Store) ListModerationWarnings(guildID, userID string, limit int) ([]ModerationWarning, error) {
-
-	guildID = strings.TrimSpace(guildID)
-	userID = strings.TrimSpace(userID)
-	if guildID == "" || userID == "" {
-		return nil, nil
-	}
-	if limit <= 0 {
-		limit = 5
-	}
-	if limit > 25 {
-		limit = 25
-	}
-
-	rows, err := s.query(
-		`SELECT id, guild_id, user_id, case_number, moderator_id, reason, created_at
-         FROM moderation_warnings
-         WHERE guild_id=$1 AND user_id=$2
-         ORDER BY case_number DESC
-         LIMIT $3`,
-		guildID,
-		userID,
-		limit,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("Store.ListModerationWarnings: %w", err)
-	}
-	defer rows.Close()
-
-	warnings := make([]ModerationWarning, 0, limit)
-	for rows.Next() {
-		var warning ModerationWarning
-		if err := rows.Scan(
-			&warning.ID,
-			&warning.GuildID,
-			&warning.UserID,
-			&warning.CaseNumber,
-			&warning.ModeratorID,
-			&warning.Reason,
-			&warning.CreatedAt,
-		); err != nil {
-			return nil, err
+func (s *Store) ListModerationWarnings(guildID, userID string, limit int) iter.Seq2[ModerationWarning, error] {
+	return func(yield func(ModerationWarning, error) bool) {
+		guildID = strings.TrimSpace(guildID)
+		userID = strings.TrimSpace(userID)
+		if guildID == "" || userID == "" {
+			return
 		}
-		warning.CreatedAt = warning.CreatedAt.UTC()
-		warnings = append(warnings, warning)
+		if limit <= 0 {
+			limit = 5
+		}
+		if limit > 25 {
+			limit = 25
+		}
+
+		rows, err := s.query(
+			`SELECT id, guild_id, user_id, case_number, moderator_id, reason, created_at
+	         FROM moderation_warnings
+	         WHERE guild_id=$1 AND user_id=$2
+	         ORDER BY case_number DESC
+	         LIMIT $3`,
+			guildID,
+			userID,
+			limit,
+		)
+		if err != nil {
+			yield(ModerationWarning{}, fmt.Errorf("Store.ListModerationWarnings: %w", err))
+			return
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var warning ModerationWarning
+			if err := rows.Scan(
+				&warning.ID,
+				&warning.GuildID,
+				&warning.UserID,
+				&warning.CaseNumber,
+				&warning.ModeratorID,
+				&warning.Reason,
+				&warning.CreatedAt,
+			); err != nil {
+				yield(ModerationWarning{}, err)
+				return
+			}
+			warning.CreatedAt = warning.CreatedAt.UTC()
+			if !yield(warning, nil) {
+				return
+			}
+		}
+		if err := rows.Err(); err != nil {
+			yield(ModerationWarning{}, fmt.Errorf("Store.ListModerationWarnings: %w", err))
+		}
 	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("Store.ListModerationWarnings: %w", err)
-	}
-	return warnings, nil
 }
 
 func nextModerationCaseNumberTx(tx *sql.Tx, guildID string) (int64, error) {

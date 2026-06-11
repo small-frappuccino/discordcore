@@ -11,9 +11,11 @@ package cache
 import (
 	"container/list"
 	"iter"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
+	"weak"
 )
 
 const defaultSegmentShardCount = 16
@@ -43,16 +45,18 @@ type segmentShard[T any] struct {
 
 type entry[T any] struct {
 	key       string
-	value     T
+	weakValue weak.Pointer[T]
 	expiresAt time.Time // zero means no expiration
 	elem      *list.Element
 }
 
-type DirtyEntry[T any] struct {
+type CoreDirtyPayload[T any] struct {
 	Key       string
 	Value     T
 	ExpiresAt time.Time
 }
+
+type DirtyEntry[T any] = CoreDirtyPayload[T]
 
 // NewSegment creates a new segment with the given TTL and capacity limit.
 // ttl <= 0 disables expiration. limit <= 0 means unbounded size (no LRU evictions).
@@ -94,7 +98,14 @@ func (s *Segment[T]) Get(key string) (T, bool) {
 		s.misses.Add(1)
 		return zero, false
 	}
-	value := e.value
+	ptr := e.weakValue.Value()
+	if ptr == nil {
+		shard.mu.RUnlock()
+		s.Invalidate(key)
+		s.misses.Add(1)
+		return zero, false
+	}
+	value := *ptr
 	expiresAt := e.expiresAt
 	shard.mu.RUnlock()
 
@@ -149,8 +160,16 @@ func (s *Segment[T]) setWithExpiration(key string, v T, expiresAt time.Time, mar
 	shard.mu.Lock()
 	defer shard.mu.Unlock()
 
+	valPtr := new(T)
+	*valPtr = v
+	weakPtr := weak.Make(valPtr)
+
+	runtime.AddCleanup(valPtr, func(k string) {
+		s.Invalidate(k)
+	}, key)
+
 	if e, ok := shard.data[key]; ok {
-		e.value = v
+		e.weakValue = weakPtr
 		e.expiresAt = expiresAt
 		shard.lru.MoveToFront(e.elem)
 		if markDirty {
@@ -167,7 +186,7 @@ func (s *Segment[T]) setWithExpiration(key string, v T, expiresAt time.Time, mar
 	elem := shard.lru.PushFront(key)
 	shard.data[key] = &entry[T]{
 		key:       key,
-		value:     v,
+		weakValue: weakPtr,
 		expiresAt: expiresAt,
 		elem:      elem,
 	}
@@ -246,7 +265,9 @@ func (s *Segment[T]) CleanupExpiredWithCallback(now time.Time, onEvict func(key 
 		shard.mu.Unlock()
 
 		for _, e := range evicted {
-			onEvict(e.key, e.value)
+			if ptr := e.weakValue.Value(); ptr != nil {
+				onEvict(e.key, *ptr)
+			}
 		}
 	}
 }
@@ -344,9 +365,15 @@ func (s *Segment[T]) TakeDirtySnapshot(now time.Time) iter.Seq[DirtyEntry[T]] {
 					delete(shard.dirty, key)
 					continue
 				}
-				entry := DirtyEntry[T]{
+				ptr := e.weakValue.Value()
+				if ptr == nil {
+					shard.removeEntry(e)
+					delete(shard.dirty, key)
+					continue
+				}
+				entry := CoreDirtyPayload[T]{
 					Key:       key,
-					Value:     e.value,
+					Value:     *ptr,
 					ExpiresAt: e.expiresAt,
 				}
 				delete(shard.dirty, key)

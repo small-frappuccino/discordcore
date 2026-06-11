@@ -5,6 +5,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
 type warningsCommand struct{}
@@ -85,9 +86,12 @@ func (c *warningsCommand) Handle(ctx *core.Context) error {
 	}
 
 	targetUsername := resolveUserDisplayName(ctx, userID)
-	warnings, err := store.ListModerationWarnings(ctx.GuildID, userID, limit)
-	if err != nil {
-		return &core.CommandError{Message: fmt.Sprintf("Failed to load warnings for %s: %v", userID, err), Ephemeral: true}
+	var warnings []storage.ModerationWarning
+	for warning, err := range store.ListModerationWarnings(ctx.GuildID, userID, limit) {
+		if err != nil {
+			return &core.CommandError{Message: fmt.Sprintf("Failed to load warnings for %s: %v", userID, err), Ephemeral: true}
+		}
+		warnings = append(warnings, warning)
 	}
 
 	return core.NewResponseBuilder(ctx.Session).Ephemeral().Info(ctx.Interaction, buildWarningsCommandMessage(targetUsername, warnings))

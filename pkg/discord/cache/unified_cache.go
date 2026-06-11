@@ -54,11 +54,6 @@ type UnifiedCache struct {
 	store          *storage.Store
 	persistEnabled bool
 
-	// Cleanup
-	stopCleanup chan struct{}
-	cleanupOnce sync.Once
-	wg          sync.WaitGroup
-
 	// Last cleanup timestamp for stats reporting
 	lastCleanup time.Time
 	// Last warmup timestamp for recency checks
@@ -245,16 +240,7 @@ func NewUnifiedCache(cfg CacheConfig) *UnifiedCache {
 
 		store:          cfg.Store,
 		persistEnabled: cfg.PersistEnabled && cfg.Store != nil,
-
-		stopCleanup: make(chan struct{}),
 	}
-
-	// Start background cleanup goroutine
-	uc.wg.Add(1)
-	go func() {
-		defer uc.wg.Done()
-		uc.cleanupLoop(cfg.CleanupInterval)
-	}()
 
 	return uc
 }
@@ -562,34 +548,11 @@ func (uc *UnifiedCache) ClearGuild(guildID string) error {
 	return nil
 }
 
-// Stop stops the background cleanup goroutine and waits for it to exit
-func (uc *UnifiedCache) Stop() {
-	uc.cleanupOnce.Do(func() {
-		if uc.stopCleanup != nil {
-			close(uc.stopCleanup)
-		}
-	})
-	uc.wg.Wait()
-}
+// Stop is a no-op as the background cleanup goroutine is removed
+func (uc *UnifiedCache) Stop() {}
 
-// cleanupLoop periodically removes expired entries
-func (uc *UnifiedCache) cleanupLoop(interval time.Duration) {
-	if interval <= 0 {
-		return
-	}
-
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			uc.cleanupExpired()
-		case <-uc.stopCleanup:
-			return
-		}
-	}
-}
+// cleanupLoop is removed due to deterministic weak.Pointer eviction.
+func (uc *UnifiedCache) cleanupLoop(interval time.Duration) {}
 
 // cleanupExpired removes all expired entries from all caches
 func (uc *UnifiedCache) cleanupExpired() {
@@ -946,9 +909,7 @@ func (uc *UnifiedCache) SetPersistInterval(interval time.Duration) chan struct{}
 
 	stopChan := make(chan struct{})
 
-	uc.wg.Add(1)
 	go func() {
-		defer uc.wg.Done()
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 
@@ -959,8 +920,6 @@ func (uc *UnifiedCache) SetPersistInterval(interval time.Duration) chan struct{}
 					// Log error but continue
 				}
 			case <-stopChan:
-				return
-			case <-uc.stopCleanup:
 				return
 			}
 		}
