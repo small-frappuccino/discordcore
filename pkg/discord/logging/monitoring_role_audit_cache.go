@@ -1,8 +1,10 @@
 package logging
 
 import (
+	"runtime"
 	"sync"
 	"time"
+	"weak"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -18,13 +20,13 @@ type cachedRoleUpdateAudit struct {
 // is ready to use: the maps are created lazily by ensureLocked.
 type roleUpdateAuditStore struct {
 	mu       sync.Mutex
-	cache    map[string]cachedRoleUpdateAudit
+	cache    map[string]weak.Pointer[cachedRoleUpdateAudit]
 	debounce map[string]time.Time
 }
 
 func (s *roleUpdateAuditStore) ensureLocked() {
 	if s.cache == nil {
-		s.cache = make(map[string]cachedRoleUpdateAudit)
+		s.cache = make(map[string]weak.Pointer[cachedRoleUpdateAudit])
 	}
 	if s.debounce == nil {
 		s.debounce = make(map[string]time.Time)
@@ -38,29 +40,35 @@ func (s *roleUpdateAuditStore) cachedEntries(guildID string, now time.Time) ([]*
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.ensureLocked()
-	if entry, ok := s.cache[guildID]; ok && now.Sub(entry.fetchedAt) < monitoringRoleAuditCacheTTL {
-		return append([]*discordgo.AuditLogEntry(nil), entry.entries...), true
+	if weakPtr, ok := s.cache[guildID]; ok {
+		if entry := weakPtr.Value(); entry != nil {
+			if now.Sub(entry.fetchedAt) < monitoringRoleAuditCacheTTL {
+				return append([]*discordgo.AuditLogEntry(nil), entry.entries...), true
+			}
+		}
 	}
 	return nil, false
 }
 
 // storeEntries records entries for guildID stamped at now, copying the slice.
-// Once the cache grows past 100 guilds it evicts entries older than 5 minutes.
+// Map eviction is tied to the lifecycle of the pointer utilizing runtime.AddCleanup.
 func (s *roleUpdateAuditStore) storeEntries(guildID string, now time.Time, entries []*discordgo.AuditLogEntry) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.ensureLocked()
-	s.cache[guildID] = cachedRoleUpdateAudit{
+
+	entry := &cachedRoleUpdateAudit{
 		fetchedAt: now,
 		entries:   append([]*discordgo.AuditLogEntry(nil), entries...),
 	}
-	if len(s.cache) > 100 {
-		for key, entry := range s.cache {
-			if now.Sub(entry.fetchedAt) > 5*time.Minute {
-				delete(s.cache, key)
-			}
-		}
-	}
+
+	s.cache[guildID] = weak.Make(entry)
+
+	runtime.AddCleanup(entry, func(k string) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		delete(s.cache, k)
+	}, guildID)
 }
 
 // shouldDebounce reports whether a refresh for (guildID,userID) occurred within

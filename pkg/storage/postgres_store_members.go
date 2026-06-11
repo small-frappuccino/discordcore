@@ -692,23 +692,37 @@ func (s *Store) GetAllMemberJoins(guildID string) (map[string]time.Time, error) 
 	return members, rows.Err()
 }
 
-// GetAllGuildMemberRoles retrieves all member roles for a guild
-func (s *Store) GetAllGuildMemberRoles(guildID string) (map[string][]string, error) {
-	rows, err := s.query(`SELECT user_id, role_id FROM roles_current WHERE guild_id=$1`, guildID)
+// StreamAllGuildMemberRoles retrieves all member roles for a guild sequentially, eliding map allocations.
+func (s *Store) StreamAllGuildMemberRoles(guildID string) (iter.Seq2[string, []string], error) {
+	rows, err := s.query(`SELECT user_id, role_id FROM roles_current WHERE guild_id=$1 ORDER BY user_id`, guildID)
 	if err != nil {
-		return nil, fmt.Errorf("Store.GetAllGuildMemberRoles: %w", err)
+		return nil, fmt.Errorf("Store.StreamAllGuildMemberRoles: %w", err)
 	}
-	defer rows.Close()
 
-	memberRoles := make(map[string][]string)
-	for rows.Next() {
-		var userID, roleID string
-		if err := rows.Scan(&userID, &roleID); err != nil {
-			return nil, fmt.Errorf("Store.GetAllGuildMemberRoles: %w", err)
+	return func(yield func(string, []string) bool) {
+		defer rows.Close()
+
+		var currentUser string
+		var currentRoles []string
+
+		for rows.Next() {
+			var userID, roleID string
+			if err := rows.Scan(&userID, &roleID); err != nil {
+				return
+			}
+			if currentUser != "" && currentUser != userID {
+				if !yield(currentUser, currentRoles) {
+					return
+				}
+				currentRoles = currentRoles[:0] // Reuse slice backing array
+			}
+			currentUser = userID
+			currentRoles = append(currentRoles, roleID)
 		}
-		memberRoles[userID] = append(memberRoles[userID], roleID)
-	}
-	return memberRoles, rows.Err()
+		if currentUser != "" {
+			yield(currentUser, currentRoles)
+		}
+	}, nil
 }
 
 // TouchMemberJoin refreshes member presence freshness without mutating joined_at.

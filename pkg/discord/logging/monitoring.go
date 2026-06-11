@@ -1060,13 +1060,13 @@ func (ms *MonitoringService) runRolesRefreshTask(runCtx context.Context) error {
 			}
 			targetRoleID := gcfg.Roles.AutoAssignment.TargetRoleID
 			requiredRoles := gcfg.Roles.AutoAssignment.RequiredRoles
-			memberRoles, err := ms.store.GetAllGuildMemberRoles(gcfg.GuildID)
+			memberRolesStream, err := ms.store.StreamAllGuildMemberRoles(gcfg.GuildID)
 			if err != nil {
 				log.ApplicationLogger().Warn("Failed to load member roles from DB for reconciliation", "guildID", gcfg.GuildID, "err", err)
 				continue
 			}
 			botUsers := botUsersByGuild[gcfg.GuildID]
-			for userID, roles := range memberRoles {
+			for userID, roles := range memberRolesStream {
 				if _, isBot := botUsers[userID]; isBot {
 					continue
 				}

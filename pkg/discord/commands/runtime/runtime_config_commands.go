@@ -16,7 +16,8 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
 
-func ptrInt(v int) *int { return &v }
+// Ptr is a generic helper for inline pointer allocations.
+func Ptr[T any](v T) *T { return &v }
 
 const (
 	groupName   = "config"
@@ -811,7 +812,7 @@ func renderGroupSelectRow(st panelState) discordgo.ActionsRow {
 				CustomID:    cidSelectGroup,
 				Placeholder: "Filter by group…",
 				Options:     opts,
-				MinValues:   ptrInt(1),
+				MinValues:   Ptr(1),
 				MaxValues:   1,
 			},
 		},
@@ -868,7 +869,7 @@ func renderKeySelectRow(st panelState) discordgo.ActionsRow {
 				CustomID:    cidSelectKey,
 				Placeholder: placeholder,
 				Options:     opts,
-				MinValues:   ptrInt(1),
+				MinValues:   Ptr(1),
 				MaxValues:   1,
 			},
 		},
