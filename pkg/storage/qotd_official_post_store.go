@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"iter"
 	"strings"
 	"time"
 )
@@ -311,7 +312,7 @@ func (s *Store) GetQOTDOfficialPostByDate(ctx context.Context, guildID string, p
 }
 
 // ListQOTDOfficialPostsByDate lists qotdofficial posts by date.
-func (s *Store) ListQOTDOfficialPostsByDate(ctx context.Context, guildID string, publishDateUTC time.Time) (_ []QOTDOfficialPostRecord, err error) {
+func (s *Store) ListQOTDOfficialPostsByDate(ctx context.Context, guildID string, publishDateUTC time.Time) (_ iter.Seq[QOTDOfficialPostRecord], err error) {
 	defer func() {
 		if err != nil {
 			err = fmt.Errorf("list qotd official posts by date: %w", err)
@@ -320,7 +321,7 @@ func (s *Store) ListQOTDOfficialPostsByDate(ctx context.Context, guildID string,
 	guildID = strings.TrimSpace(guildID)
 	publishDateUTC = normalizeQOTDDateUTC(publishDateUTC)
 	if guildID == "" || publishDateUTC.IsZero() {
-		return nil, nil
+		return func(yield func(QOTDOfficialPostRecord) bool) {}, nil
 	}
 
 	rows, err := s.queryContext(ctx,
@@ -373,20 +374,19 @@ func (s *Store) ListQOTDOfficialPostsByDate(ctx context.Context, guildID string,
 	if err != nil {
 		return nil, fmt.Errorf("Store.ListQOTDOfficialPostsByDate: %w", err)
 	}
-	defer rows.Close()
 
-	records := make([]QOTDOfficialPostRecord, 0, 2)
-	for rows.Next() {
-		record, err := scanQOTDOfficialPostRecord(rows)
-		if err != nil {
-			return nil, fmt.Errorf("Store.ListQOTDOfficialPostsByDate: %w", err)
+	return func(yield func(QOTDOfficialPostRecord) bool) {
+		defer rows.Close()
+		for rows.Next() {
+			record, err := scanQOTDOfficialPostRecord(rows)
+			if err != nil {
+				return
+			}
+			if !yield(*record) {
+				return
+			}
 		}
-		records = append(records, *record)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("Store.ListQOTDOfficialPostsByDate: %w", err)
-	}
-	return records, nil
+	}, nil
 }
 
 // GetAutomaticSlotQOTDOfficialPostByDate gets automatic slot qotdofficial post by date.

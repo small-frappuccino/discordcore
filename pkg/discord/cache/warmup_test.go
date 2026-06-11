@@ -13,11 +13,10 @@ import (
 func newTestCache(t *testing.T) *cache.UnifiedCache {
 	t.Helper()
 	uc := cache.NewUnifiedCache(cache.CacheConfig{
-		MemberTTL:       time.Hour,
-		GuildTTL:        time.Hour,
-		RolesTTL:        time.Hour,
-		ChannelTTL:      time.Hour,
-		CleanupInterval: time.Hour,
+		MemberTTL:  time.Hour,
+		GuildTTL:   time.Hour,
+		RolesTTL:   time.Hour,
+		ChannelTTL: time.Hour,
 	})
 	t.Cleanup(uc.Stop)
 	return uc

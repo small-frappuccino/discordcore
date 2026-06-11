@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -54,8 +55,6 @@ type UnifiedCache struct {
 	store          *storage.Store
 	persistEnabled bool
 
-	// Last cleanup timestamp for stats reporting
-	lastCleanup time.Time
 	// Last warmup timestamp for recency checks
 	lastWarmup time.Time
 }
@@ -178,11 +177,10 @@ type persistentCacheEntry struct {
 
 // CacheConfig holds configuration for the unified cache
 type CacheConfig struct {
-	MemberTTL       time.Duration
-	GuildTTL        time.Duration
-	RolesTTL        time.Duration
-	ChannelTTL      time.Duration
-	CleanupInterval time.Duration
+	MemberTTL  time.Duration
+	GuildTTL   time.Duration
+	RolesTTL   time.Duration
+	ChannelTTL time.Duration
 
 	// LRU size limits (0 = unlimited)
 	MaxMemberSize  int
@@ -198,11 +196,10 @@ type CacheConfig struct {
 // DefaultCacheConfig returns sensible defaults for the cache
 func DefaultCacheConfig() CacheConfig {
 	return CacheConfig{
-		MemberTTL:       5 * time.Minute,
-		GuildTTL:        15 * time.Minute,
-		RolesTTL:        10 * time.Minute,
-		ChannelTTL:      15 * time.Minute,
-		CleanupInterval: 5 * time.Minute,
+		MemberTTL:  5 * time.Minute,
+		GuildTTL:   15 * time.Minute,
+		RolesTTL:   10 * time.Minute,
+		ChannelTTL: 15 * time.Minute,
 
 		// LRU limits (0 = unlimited)
 		MaxMemberSize:  10000, // ~10k members per bot instance
@@ -372,6 +369,10 @@ func (uc *UnifiedCache) SetChannel(channelID string, channel *discordgo.Channel)
 		// No guild association
 		uc.indices.removeChannel(channelID)
 	}
+
+	runtime.AddCleanup(channel, func(cid string) {
+		uc.indices.removeChannel(cid)
+	}, channelID)
 
 	uc.channels.Set(channelID, channel)
 }
@@ -550,34 +551,6 @@ func (uc *UnifiedCache) ClearGuild(guildID string) error {
 
 // Stop is a no-op as the background cleanup goroutine is removed
 func (uc *UnifiedCache) Stop() {}
-
-// cleanupLoop is removed due to deterministic weak.Pointer eviction.
-func (uc *UnifiedCache) cleanupLoop(interval time.Duration) {}
-
-// cleanupExpired removes all expired entries from all caches
-func (uc *UnifiedCache) cleanupExpired() {
-	now := time.Now()
-
-	// Cleanup segments
-	if uc.members != nil {
-		uc.members.CleanupExpired(now)
-	}
-	if uc.guilds != nil {
-		uc.guilds.CleanupExpired(now)
-	}
-	if uc.roles != nil {
-		uc.roles.CleanupExpired(now)
-	}
-	if uc.channels != nil {
-		uc.channels.CleanupExpiredWithCallback(now, func(key string, _ *discordgo.Channel) {
-			// Cleanup indices for channels
-			uc.indices.removeChannel(key)
-		})
-	}
-
-	// Track last cleanup time for stats
-	uc.lastCleanup = now
-}
 
 // Persist saves current cache state to the persistent store (if enabled)
 // Persist writes only dirty, non-expired in-memory entries to the persistent store.
@@ -865,6 +838,10 @@ func (uc *UnifiedCache) setChannelInternal(key string, channel *discordgo.Channe
 	} else {
 		uc.indices.removeChannel(key)
 	}
+
+	runtime.AddCleanup(channel, func(cid string) {
+		uc.indices.removeChannel(cid)
+	}, key)
 
 	uc.channels.SetCleanWithExpiration(key, channel, expiresAt)
 }

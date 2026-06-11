@@ -21,7 +21,7 @@ func TestCachedSessionGuildMemberUsesStateAndCaches(t *testing.T) {
 		t.Fatalf("guild add: %v", err)
 	}
 
-	uc := cache.NewUnifiedCache(cache.CacheConfig{MemberTTL: time.Minute, GuildTTL: time.Minute, RolesTTL: time.Minute, ChannelTTL: time.Minute, CleanupInterval: time.Hour})
+	uc := cache.NewUnifiedCache(cache.CacheConfig{MemberTTL: time.Minute, GuildTTL: time.Minute, RolesTTL: time.Minute, ChannelTTL: time.Minute})
 	cs := cache.NewCachedSession(session, uc)
 
 	got, err := cs.GuildMember("guild", "user")
@@ -41,7 +41,7 @@ func TestCachedSessionChannelUsesStateFallbackOrder(t *testing.T) {
 	ch := &discordgo.Channel{ID: "chan", GuildID: "g"}
 	_ = session.State.ChannelAdd(ch)
 
-	uc := cache.NewUnifiedCache(cache.CacheConfig{MemberTTL: time.Minute, GuildTTL: time.Minute, RolesTTL: time.Minute, ChannelTTL: time.Minute, CleanupInterval: time.Hour})
+	uc := cache.NewUnifiedCache(cache.CacheConfig{MemberTTL: time.Minute, GuildTTL: time.Minute, RolesTTL: time.Minute, ChannelTTL: time.Minute})
 	// Prime cache to avoid hitting REST.
 	uc.SetChannel("chan", ch)
 	cs := cache.NewCachedSession(session, uc)

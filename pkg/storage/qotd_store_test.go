@@ -5,6 +5,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 )
@@ -1296,10 +1297,11 @@ func TestListQOTDOfficialPostsByDateReturnsAllMatchingRecords(t *testing.T) {
 		t.Fatalf("CreateQOTDOfficialPostProvisioning(second) failed: %v", err)
 	}
 
-	posts, err := store.ListQOTDOfficialPostsByDate(ctx, "g1", publishDate)
+	postsIter, err := store.ListQOTDOfficialPostsByDate(ctx, "g1", publishDate)
 	if err != nil {
 		t.Fatalf("ListQOTDOfficialPostsByDate() failed: %v", err)
 	}
+	posts := slices.Collect(postsIter)
 	if len(posts) != 2 {
 		t.Fatalf("expected two official posts for the same date, got %+v", posts)
 	}
