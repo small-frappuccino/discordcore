@@ -227,42 +227,15 @@ export function CorePage() {
 
                           {/* Token Section */}
                           <SettingsRow
-                            title={
-                              <div className="flex flex-col gap-1">
-                                <div className="flex items-center gap-2">
-                                  <span>Token</span>
-                                </div>
-                                {hasToken && profile && profile.bot_present === false && (
-                                  <div className="text-xs text-[var(--status-warning,#f59e0b)] font-medium mt-1">
-                                    ⚠️ Bot is not in server
-                                  </div>
-                                )}
-                              </div>
-                            }
+                            title="Token"
                             control={
-                              <div className="w-full flex-1 flex flex-col gap-2">
-                                <TextInput
-                                  type="password"
-                                  className="w-full border-white/20 pl-6"
-                                  placeholder={hasToken ? "•••••••• (Configured)" : "Enter bot token..."}
-                                  value={tokensState[instanceId] !== undefined ? tokensState[instanceId] : ""}
-                                  onChange={(e) => setTokensState(prev => ({ ...prev, [instanceId]: e.target.value }))}
-                                />
-                                {hasToken && profile && profile.bot_present === false && (
-                                  <ActionTrigger
-                                    onClick={() => window.open(`${baseUrl === "" ? "" : baseUrl}/v1/guilds/${guildId}/oauth/authorize?bot_instance_id=${instanceId}`, "_blank", "noopener,noreferrer")}
-                                    className="mt-2 self-start flex items-center gap-2 px-3 py-1.5"
-                                  >
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                      <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                                      <circle cx="8.5" cy="7" r="4" />
-                                      <line x1="20" y1="8" x2="20" y2="14" />
-                                      <line x1="23" y1="11" x2="17" y2="11" />
-                                    </svg>
-                                    {profile ? `Authorize ${profile.username}` : "Authorize Bot"}
-                                  </ActionTrigger>
-                                )}
-                              </div>
+                              <TextInput
+                                type="password"
+                                className="w-full border-white/20 pl-6"
+                                placeholder={hasToken ? "•••••••• (Configured)" : "Enter bot token..."}
+                                value={tokensState[instanceId] !== undefined ? tokensState[instanceId] : ""}
+                                onChange={(e) => setTokensState(prev => ({ ...prev, [instanceId]: e.target.value }))}
+                              />
                             }
                           />
 
@@ -286,6 +259,28 @@ export function CorePage() {
                               />
                             }
                           />
+
+                          {hasToken && profile && profile.bot_present === false && (
+                            <SettingsRow
+                              title=""
+                              control={
+                                <div className="w-full flex justify-end">
+                                  <ActionTrigger
+                                    onClick={() => window.open(`${baseUrl === "" ? "" : baseUrl}/v1/guilds/${guildId}/oauth/authorize?bot_instance_id=${instanceId}`, "_blank", "noopener,noreferrer")}
+                                    className="flex items-center gap-2 px-3 py-1.5"
+                                  >
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                      <circle cx="8.5" cy="7" r="4" />
+                                      <line x1="20" y1="8" x2="20" y2="14" />
+                                      <line x1="23" y1="11" x2="17" y2="11" />
+                                    </svg>
+                                    {profile ? `Authorize ${profile.username}` : "Authorize Bot"}
+                                  </ActionTrigger>
+                                </div>
+                              }
+                            />
+                          )}
                     </SettingsGroup>
                   );
                 })}

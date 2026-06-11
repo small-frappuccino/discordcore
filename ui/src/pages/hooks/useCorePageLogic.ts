@@ -16,6 +16,7 @@ export function useCorePageLogic() {
     queryKey: ["botProfiles", client.getBaseUrl(), selectedGuildID],
     queryFn: () => getBotProfiles(client, selectedGuildID),
     enabled: !!selectedGuildID,
+    refetchInterval: 5000,
   });
 
   const [tokensState, setTokensState] = useState<Record<string, string>>({});

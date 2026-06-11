@@ -3,7 +3,9 @@ package control
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"io/fs"
+	"mime"
 	"net/http"
 	"path"
 	"strings"
@@ -117,6 +119,42 @@ func (h *dashboardHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *dashboardHandler) serveAsset(w http.ResponseWriter, r *http.Request, assetPath string) {
+	accept := r.Header.Get("Accept-Encoding")
+
+	if strings.Contains(accept, "br") {
+		brPath := assetPath + ".br"
+		if _, ok := h.knownFiles[brPath]; ok {
+			if f, err := h.assets.Open(brPath); err == nil {
+				defer f.Close()
+				if stat, err := f.Stat(); err == nil {
+					w.Header().Set("Content-Encoding", "br")
+					if t := mime.TypeByExtension(path.Ext(assetPath)); t != "" {
+						w.Header().Set("Content-Type", t)
+					}
+					http.ServeContent(w, r, stat.Name(), stat.ModTime(), f.(io.ReadSeeker))
+					return
+				}
+			}
+		}
+	}
+
+	if strings.Contains(accept, "gzip") {
+		gzPath := assetPath + ".gz"
+		if _, ok := h.knownFiles[gzPath]; ok {
+			if f, err := h.assets.Open(gzPath); err == nil {
+				defer f.Close()
+				if stat, err := f.Stat(); err == nil {
+					w.Header().Set("Content-Encoding", "gzip")
+					if t := mime.TypeByExtension(path.Ext(assetPath)); t != "" {
+						w.Header().Set("Content-Type", t)
+					}
+					http.ServeContent(w, r, stat.Name(), stat.ModTime(), f.(io.ReadSeeker))
+					return
+				}
+			}
+		}
+	}
+
 	assetReq := r.Clone(r.Context())
 	assetURL := *r.URL
 	assetURL.Path = "/" + strings.TrimPrefix(assetPath, "/")
@@ -125,6 +163,32 @@ func (h *dashboardHandler) serveAsset(w http.ResponseWriter, r *http.Request, as
 }
 
 func (h *dashboardHandler) serveIndex(w http.ResponseWriter, r *http.Request) {
+	accept := r.Header.Get("Accept-Encoding")
+
+	if strings.Contains(accept, "br") {
+		if _, ok := h.knownFiles["index.html.br"]; ok {
+			content, err := fs.ReadFile(h.assets, "index.html.br")
+			if err == nil {
+				w.Header().Set("Content-Encoding", "br")
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(content))
+				return
+			}
+		}
+	}
+
+	if strings.Contains(accept, "gzip") {
+		if _, ok := h.knownFiles["index.html.gz"]; ok {
+			content, err := fs.ReadFile(h.assets, "index.html.gz")
+			if err == nil {
+				w.Header().Set("Content-Encoding", "gzip")
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(content))
+				return
+			}
+		}
+	}
+
 	content, err := fs.ReadFile(h.assets, "index.html")
 	if err != nil {
 		http.Error(w, "dashboard index unavailable", http.StatusServiceUnavailable)

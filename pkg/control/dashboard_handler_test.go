@@ -39,6 +39,92 @@ func TestDashboardHandlerServesStaticAssetUnderCanonicalAndLegacyPrefixes(t *tes
 	}
 }
 
+func TestDashboardHandlerServesCompressedAsset(t *testing.T) {
+	t.Parallel()
+
+	handler := mustNewDashboardTestHandler(t, fstest.MapFS{
+		"index.html":       &fstest.MapFile{Data: []byte("index")},
+		"assets/app.js":    &fstest.MapFile{Data: []byte("uncompressed")},
+		"assets/app.js.gz": &fstest.MapFile{Data: []byte("gzip-compressed")},
+		"assets/app.js.br": &fstest.MapFile{Data: []byte("br-compressed")},
+	})
+
+	testCases := []struct {
+		acceptEncoding string
+		wantBody       string
+		wantEncoding   string
+	}{
+		{"", "uncompressed", ""},
+		{"gzip", "gzip-compressed", "gzip"},
+		{"br", "br-compressed", "br"},
+		{"gzip, br", "br-compressed", "br"},
+	}
+
+	for _, tc := range testCases {
+		req := httptest.NewRequest(http.MethodGet, "/manage/assets/app.js", nil)
+		if tc.acceptEncoding != "" {
+			req.Header.Set("Accept-Encoding", tc.acceptEncoding)
+		}
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d", rec.Code)
+		}
+		if body := rec.Body.String(); body != tc.wantBody {
+			t.Fatalf("expected body %q, got %q", tc.wantBody, body)
+		}
+		if enc := rec.Header().Get("Content-Encoding"); enc != tc.wantEncoding {
+			t.Fatalf("expected Content-Encoding %q, got %q", tc.wantEncoding, enc)
+		}
+		if ctype := rec.Header().Get("Content-Type"); !strings.Contains(ctype, "javascript") {
+			t.Fatalf("expected javascript content type, got %q", ctype)
+		}
+	}
+}
+
+func TestDashboardHandlerServesCompressedIndex(t *testing.T) {
+	t.Parallel()
+
+	handler := mustNewDashboardTestHandler(t, fstest.MapFS{
+		"index.html":    &fstest.MapFile{Data: []byte("uncompressed")},
+		"index.html.gz": &fstest.MapFile{Data: []byte("gzip-compressed")},
+		"index.html.br": &fstest.MapFile{Data: []byte("br-compressed")},
+	})
+
+	testCases := []struct {
+		acceptEncoding string
+		wantBody       string
+		wantEncoding   string
+	}{
+		{"", "uncompressed", ""},
+		{"gzip", "gzip-compressed", "gzip"},
+		{"br", "br-compressed", "br"},
+		{"gzip, br", "br-compressed", "br"},
+	}
+
+	for _, tc := range testCases {
+		req := httptest.NewRequest(http.MethodGet, "/manage/", nil)
+		if tc.acceptEncoding != "" {
+			req.Header.Set("Accept-Encoding", tc.acceptEncoding)
+		}
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d", rec.Code)
+		}
+		if body := rec.Body.String(); body != tc.wantBody {
+			t.Fatalf("expected body %q, got %q", tc.wantBody, body)
+		}
+		if enc := rec.Header().Get("Content-Encoding"); enc != tc.wantEncoding {
+			t.Fatalf("expected Content-Encoding %q, got %q", tc.wantEncoding, enc)
+		}
+		if ctype := rec.Header().Get("Content-Type"); !strings.Contains(ctype, "text/html") {
+			t.Fatalf("expected text/html, got %q", ctype)
+		}
+	}
+}
 func TestDashboardHandlerFallsBackToIndexForCanonicalAndLegacySPARoutes(t *testing.T) {
 	t.Parallel()
 
