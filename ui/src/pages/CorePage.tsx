@@ -13,6 +13,7 @@ const BASE_FEATURE_OPTIONS = [
   { label: "Partners", value: "partners" },
   { label: "Embeds", value: "embeds" },
   { label: "Tickets", value: "tickets" },
+  { label: "Stats", value: "stats" },
 ];
 
 export function CorePage() {

@@ -289,7 +289,10 @@ func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg
 	if len(opts.commandCatalogRegistrars) > 0 {
 		commandHandler.SetCommandCatalogRegistrars(opts.commandCatalogRegistrars...)
 	}
-	commandHandler.SetCommandCatalogCapabilities(commands.CommandCatalogCapabilities{Admin: runtime.capabilities.admin})
+	commandHandler.SetCommandCatalogCapabilities(commands.CommandCatalogCapabilities{
+		Admin: runtime.capabilities.admin,
+		Stats: runtime.capabilities.stats,
+	})
 	commandHandler.SetQOTDService(opts.qotdCommandService)
 	commandHandler.SetModerationMetrics(opts.moderationMetrics)
 	// Cache observability flows through /v1/health/cache via the control server's
