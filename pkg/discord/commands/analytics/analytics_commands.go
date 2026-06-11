@@ -14,6 +14,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/task"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
+	"golang.org/x/sync/errgroup"
 )
 
 // RegisterAnalyticsCommands registers slash commands under the /analytics group.
@@ -162,51 +163,80 @@ func handleActivity(ctx *core.Context) error {
 	includeChannels := scope == "both" || scope == "channels"
 	includeUsers := scope == "both" || scope == "users"
 
+	var msgChannelVal, msgUserVal, reactChannelVal, reactUserVal string
+	eg := new(errgroup.Group)
+
 	if includeMessages && includeChannels {
-		val, err := renderTop(msgTotalsByChannel, topN, func(id string) string { return channelMention(id) })
-		if err != nil {
-			log.ApplicationLogger().Error("Failed to stream analytic items", "guildID", ctx.GuildID, "channelID", channelID, "cutoffDay", cutoff, "err", err)
-			return respondError(s, i, "The analytics store couldn't be reached, so this reply stays private.")
-		}
+		eg.Go(func() error {
+			val, err := renderTop(msgTotalsByChannel, topN, func(id string) string { return channelMention(id) })
+			if err != nil {
+				return err
+			}
+			msgChannelVal = val
+			return nil
+		})
+	}
+	if includeMessages && includeUsers {
+		eg.Go(func() error {
+			val, err := renderTop(msgTotalsByUser, topN, func(id string) string { return userMention(id) })
+			if err != nil {
+				return err
+			}
+			msgUserVal = val
+			return nil
+		})
+	}
+	if includeReactions && includeChannels {
+		eg.Go(func() error {
+			val, err := renderTop(reactTotalsByChannel, topN, func(id string) string { return channelMention(id) })
+			if err != nil {
+				return err
+			}
+			reactChannelVal = val
+			return nil
+		})
+	}
+	if includeReactions && includeUsers {
+		eg.Go(func() error {
+			val, err := renderTop(reactTotalsByUser, topN, func(id string) string { return userMention(id) })
+			if err != nil {
+				return err
+			}
+			reactUserVal = val
+			return nil
+		})
+	}
+
+	if err := eg.Wait(); err != nil {
+		log.ApplicationLogger().Error("Failed to stream analytic items", "guildID", ctx.GuildID, "channelID", channelID, "cutoffDay", cutoff, "err", err)
+		return respondError(s, i, "The analytics store couldn't be reached, so this reply stays private.")
+	}
+
+	if includeMessages && includeChannels {
 		fields = append(fields, &discordgo.MessageEmbedField{
 			Name:   "Messages - Top Channels",
-			Value:  val,
+			Value:  msgChannelVal,
 			Inline: true,
 		})
 	}
 	if includeMessages && includeUsers {
-		val, err := renderTop(msgTotalsByUser, topN, func(id string) string { return userMention(id) })
-		if err != nil {
-			log.ApplicationLogger().Error("Failed to stream analytic items", "guildID", ctx.GuildID, "channelID", channelID, "cutoffDay", cutoff, "err", err)
-			return respondError(s, i, "The analytics store couldn't be reached, so this reply stays private.")
-		}
 		fields = append(fields, &discordgo.MessageEmbedField{
 			Name:   "Messages - Top Users",
-			Value:  val,
+			Value:  msgUserVal,
 			Inline: true,
 		})
 	}
 	if includeReactions && includeChannels {
-		val, err := renderTop(reactTotalsByChannel, topN, func(id string) string { return channelMention(id) })
-		if err != nil {
-			log.ApplicationLogger().Error("Failed to stream analytic items", "guildID", ctx.GuildID, "channelID", channelID, "cutoffDay", cutoff, "err", err)
-			return respondError(s, i, "The analytics store couldn't be reached, so this reply stays private.")
-		}
 		fields = append(fields, &discordgo.MessageEmbedField{
 			Name:   "Reactions - Top Channels",
-			Value:  val,
+			Value:  reactChannelVal,
 			Inline: true,
 		})
 	}
 	if includeReactions && includeUsers {
-		val, err := renderTop(reactTotalsByUser, topN, func(id string) string { return userMention(id) })
-		if err != nil {
-			log.ApplicationLogger().Error("Failed to stream analytic items", "guildID", ctx.GuildID, "channelID", channelID, "cutoffDay", cutoff, "err", err)
-			return respondError(s, i, "The analytics store couldn't be reached, so this reply stays private.")
-		}
 		fields = append(fields, &discordgo.MessageEmbedField{
 			Name:   "Reactions - Top Users",
-			Value:  val,
+			Value:  reactUserVal,
 			Inline: true,
 		})
 	}
