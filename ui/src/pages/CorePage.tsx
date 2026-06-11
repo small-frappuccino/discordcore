@@ -17,11 +17,7 @@ const BASE_FEATURE_OPTIONS = [
 
 export function CorePage() {
   const { guildId } = useParams<{ guildId: string }>();
-  const { accessibleGuilds, manageableGuilds, baseUrl } = useDashboardSession();
-
-  const activeGuild = accessibleGuilds.find(g => g.id === guildId) || manageableGuilds.find(g => g.id === guildId);
-  const botPresent = activeGuild?.bot_present === true;
-
+  const { baseUrl } = useDashboardSession();
   const {
     settings,
     botProfiles,
@@ -236,7 +232,7 @@ export function CorePage() {
                                 <div className="flex items-center gap-2">
                                   <span>Token</span>
                                 </div>
-                                {hasToken && !botPresent && (
+                                {hasToken && profile && profile.bot_present === false && (
                                   <div className="text-xs text-[var(--status-warning,#f59e0b)] font-medium mt-1">
                                     ⚠️ Bot is not in server
                                   </div>
@@ -252,7 +248,7 @@ export function CorePage() {
                                   value={tokensState[instanceId] !== undefined ? tokensState[instanceId] : ""}
                                   onChange={(e) => setTokensState(prev => ({ ...prev, [instanceId]: e.target.value }))}
                                 />
-                                {hasToken && !botPresent && (
+                                {hasToken && profile && profile.bot_present === false && (
                                   <ActionTrigger
                                     onClick={() => window.open(`${baseUrl === "" ? "" : baseUrl}/v1/guilds/${guildId}/oauth/authorize?bot_instance_id=${instanceId}`, "_blank", "noopener,noreferrer")}
                                     className="mt-2 self-start flex items-center gap-2 px-3 py-1.5"

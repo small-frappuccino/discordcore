@@ -19,6 +19,7 @@ type BotProfileResponse struct {
 	Discriminator string `json:"discriminator"`
 	AvatarURL     string `json:"avatar_url"`
 	Permissions   int64  `json:"permissions"`
+	BotPresent    bool   `json:"bot_present"`
 }
 
 type botProfilesResponse struct {
@@ -129,6 +130,7 @@ func getBotProfileCached(ctx context.Context, guildID, logicalKey, token string)
 			Discriminator: user.Discriminator,
 			AvatarURL:     user.AvatarURL(""),
 			Permissions:   perms,
+			BotPresent:    memberErr == nil,
 		}
 
 		botProfileCacheMu.Lock()

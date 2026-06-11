@@ -219,6 +219,7 @@ export interface BotProfile {
   discriminator: string;
   avatar_url: string;
   permissions: number;
+  bot_present?: boolean;
 }
 
 export interface BotProfilesResponse {
