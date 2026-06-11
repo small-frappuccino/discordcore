@@ -21,6 +21,8 @@ const (
 type dashboardHandler struct {
 	assets     fs.FS
 	fileServer http.Handler
+	knownFiles map[string]struct{}
+	knownDirs  map[string]struct{}
 }
 
 func newEmbeddedDashboardHandler() http.Handler {
@@ -47,9 +49,33 @@ func newDashboardHandler(assets fs.FS) (http.Handler, error) {
 		return nil, fmt.Errorf("dashboard assets fs is nil")
 	}
 
+	knownFiles := make(map[string]struct{})
+	knownDirs := make(map[string]struct{})
+
+	err := fs.WalkDir(assets, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if path == "." {
+			knownDirs["."] = struct{}{}
+			return nil
+		}
+		if d.IsDir() {
+			knownDirs[path] = struct{}{}
+		} else {
+			knownFiles[path] = struct{}{}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to pre-compute embedded assets: %w", err)
+	}
+
 	return &dashboardHandler{
 		assets:     assets,
 		fileServer: http.FileServer(http.FS(assets)),
+		knownFiles: knownFiles,
+		knownDirs:  knownDirs,
 	}, nil
 }
 
@@ -78,7 +104,7 @@ func (h *dashboardHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	case dashboardAssetMissing:
-		if path.Ext(assetPath) != "" {
+		if path.Ext(assetPath) != "" || strings.HasPrefix(assetPath, "assets/") {
 			http.NotFound(w, r)
 			return
 		}
@@ -117,14 +143,13 @@ const (
 )
 
 func (h *dashboardHandler) assetKind(assetPath string) dashboardAssetKind {
-	info, err := fs.Stat(h.assets, assetPath)
-	if err != nil {
-		return dashboardAssetMissing
+	if _, ok := h.knownFiles[assetPath]; ok {
+		return dashboardAssetFile
 	}
-	if info.IsDir() {
+	if _, ok := h.knownDirs[assetPath]; ok {
 		return dashboardAssetDirectory
 	}
-	return dashboardAssetFile
+	return dashboardAssetMissing
 }
 
 func normalizeDashboardAssetPath(requestPath string) (string, bool) {

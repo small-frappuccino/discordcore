@@ -70,7 +70,7 @@ func TestDashboardHandlerFallsBackToIndexForCanonicalAndLegacySPARoutes(t *testi
 	}
 }
 
-func TestDashboardHandlerMissingAssetWithExtensionReturnsNotFound(t *testing.T) {
+func TestDashboardHandlerMissingAssetReturnsNotFound(t *testing.T) {
 	t.Parallel()
 
 	handler := mustNewDashboardTestHandler(t, fstest.MapFS{
@@ -80,6 +80,8 @@ func TestDashboardHandlerMissingAssetWithExtensionReturnsNotFound(t *testing.T) 
 	for _, route := range []string{
 		"/manage/assets/missing.js",
 		"/dashboard/assets/missing.js",
+		"/manage/assets/missing-extensionless",
+		"/dashboard/assets/missing-extensionless",
 	} {
 		req := httptest.NewRequest(http.MethodGet, route, nil)
 		rec := httptest.NewRecorder()
