@@ -225,6 +225,45 @@ export function CorePage() {
                             />
                           )}
 
+                          {/* Presence Section */}
+                          {hasToken && (
+                            <SettingsRow
+                              title="Display Status"
+                              description="Set the bot's online presence in the server."
+                              className={statusesState[instanceId] === "disabled" ? "opacity-50 pointer-events-none" : ""}
+                              control={
+                                <div className="flex items-center gap-5">
+                                  {[
+                                    { id: "online", label: "Online" },
+                                    { id: "idle", label: "Idle" },
+                                    { id: "dnd", label: "Do Not Disturb" }
+                                  ].map(opt => {
+                                    const val = statusesState[instanceId] || "online";
+                                    const currentVal = val === "disabled" ? "online" : val;
+                                    const isActive = currentVal === opt.id;
+                                    
+                                    return (
+                                      <label key={opt.id} className="flex items-center gap-2 cursor-pointer group">
+                                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors ${isActive ? 'border-[var(--accent-primary)] bg-[var(--accent-primary)]' : 'border-border-strong group-hover:border-[var(--text-muted)]'}`}>
+                                          {isActive && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                        </div>
+                                        <span className={`text-sm font-medium ${isActive ? 'text-text-primary' : 'text-text-secondary'}`}>{opt.label}</span>
+                                        <input 
+                                          type="radio" 
+                                          name={`presence-${instanceId}`} 
+                                          value={opt.id} 
+                                          checked={isActive} 
+                                          onChange={() => setStatusesState(prev => ({ ...prev, [instanceId]: opt.id === "online" ? "" : opt.id }))} 
+                                          className="sr-only" 
+                                        />
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              }
+                            />
+                          )}
+
                           {/* Token Section */}
                           <SettingsRow
                             title="Token"

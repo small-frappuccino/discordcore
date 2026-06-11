@@ -119,6 +119,11 @@ func (h *dashboardHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *dashboardHandler) serveAsset(w http.ResponseWriter, r *http.Request, assetPath string) {
+	w.Header().Add("Vary", "Accept-Encoding")
+	if strings.HasPrefix(assetPath, "assets/") {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	}
+
 	accept := r.Header.Get("Accept-Encoding")
 
 	if strings.Contains(accept, "br") {
@@ -163,6 +168,9 @@ func (h *dashboardHandler) serveAsset(w http.ResponseWriter, r *http.Request, as
 }
 
 func (h *dashboardHandler) serveIndex(w http.ResponseWriter, r *http.Request) {
+	w.Header().Add("Vary", "Accept-Encoding")
+	w.Header().Set("Cache-Control", "no-cache")
+
 	accept := r.Header.Get("Accept-Encoding")
 
 	if strings.Contains(accept, "br") {

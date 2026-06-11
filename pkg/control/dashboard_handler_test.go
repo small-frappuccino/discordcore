@@ -33,6 +33,12 @@ func TestDashboardHandlerServesStaticAssetUnderCanonicalAndLegacyPrefixes(t *tes
 		if rec.Code != http.StatusOK {
 			t.Fatalf("expected asset request %q to succeed, got %d body=%q", route, rec.Code, rec.Body.String())
 		}
+		if vary := rec.Header().Get("Vary"); vary != "Accept-Encoding" {
+			t.Fatalf("expected Vary: Accept-Encoding, got %q", vary)
+		}
+		if cc := rec.Header().Get("Cache-Control"); cc != "public, max-age=31536000, immutable" {
+			t.Fatalf("expected Cache-Control for assets, got %q", cc)
+		}
 		if body := rec.Body.String(); body != "console.log('dashboard');" {
 			t.Fatalf("unexpected asset body for %q: %q", route, body)
 		}
@@ -77,6 +83,12 @@ func TestDashboardHandlerServesCompressedAsset(t *testing.T) {
 		if enc := rec.Header().Get("Content-Encoding"); enc != tc.wantEncoding {
 			t.Fatalf("expected Content-Encoding %q, got %q", tc.wantEncoding, enc)
 		}
+		if vary := rec.Header().Get("Vary"); vary != "Accept-Encoding" {
+			t.Fatalf("expected Vary: Accept-Encoding, got %q", vary)
+		}
+		if cc := rec.Header().Get("Cache-Control"); cc != "public, max-age=31536000, immutable" {
+			t.Fatalf("expected Cache-Control for assets, got %q", cc)
+		}
 		if ctype := rec.Header().Get("Content-Type"); !strings.Contains(ctype, "javascript") {
 			t.Fatalf("expected javascript content type, got %q", ctype)
 		}
@@ -120,6 +132,12 @@ func TestDashboardHandlerServesCompressedIndex(t *testing.T) {
 		if enc := rec.Header().Get("Content-Encoding"); enc != tc.wantEncoding {
 			t.Fatalf("expected Content-Encoding %q, got %q", tc.wantEncoding, enc)
 		}
+		if vary := rec.Header().Get("Vary"); vary != "Accept-Encoding" {
+			t.Fatalf("expected Vary: Accept-Encoding, got %q", vary)
+		}
+		if cc := rec.Header().Get("Cache-Control"); cc != "no-cache" {
+			t.Fatalf("expected Cache-Control: no-cache, got %q", cc)
+		}
 		if ctype := rec.Header().Get("Content-Type"); !strings.Contains(ctype, "text/html") {
 			t.Fatalf("expected text/html, got %q", ctype)
 		}
@@ -149,6 +167,12 @@ func TestDashboardHandlerFallsBackToIndexForCanonicalAndLegacySPARoutes(t *testi
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("expected SPA fallback for %q to succeed, got %d body=%q", route, rec.Code, rec.Body.String())
+		}
+		if vary := rec.Header().Get("Vary"); vary != "Accept-Encoding" {
+			t.Fatalf("expected Vary: Accept-Encoding, got %q", vary)
+		}
+		if cc := rec.Header().Get("Cache-Control"); cc != "no-cache" {
+			t.Fatalf("expected Cache-Control: no-cache, got %q", cc)
 		}
 		if body := rec.Body.String(); !strings.Contains(body, "spa index") {
 			t.Fatalf("expected SPA fallback for %q to serve index, got %q", route, body)

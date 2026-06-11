@@ -580,7 +580,7 @@ select[multiple].form-select {
   transition: background-color var(--transition-fast);
 }
 
-.tahoe-action-trigger:hover {
+.tahoe-action-trigger:not(:disabled):hover {
   background-color: rgba(255, 255, 255, 0.15);
 }
 
@@ -745,7 +745,7 @@ select[multiple].form-select {
   color: var(--text-primary);
 }
 
-.tahoe-action-trigger--primary:hover {
+.tahoe-action-trigger--primary:not(:disabled):hover {
   background-color: rgba(255, 255, 255, 0.15);
 }
 
@@ -754,6 +754,6 @@ select[multiple].form-select {
   color: white;
 }
 
-.tahoe-action-trigger--danger:hover {
+.tahoe-action-trigger--danger:not(:disabled):hover {
   background-color: #bd2a2e;
 }
