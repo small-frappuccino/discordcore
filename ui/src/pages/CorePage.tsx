@@ -1,5 +1,5 @@
 import { PageHeader, Badge, PageContainer, SettingsGroupSkeleton, Button } from "../components/ui";
-import { SelectMenuMultiple, SettingsGroup, SettingsRow, TextInput } from "../components/ui/tahoe";
+import { SelectMenuMultiple, SettingsGroup, SettingsRow, TextInput, ToggleSwitch, ActionTrigger } from "../components/ui/tahoe";
 import { Stack } from "../components/layout";
 import { useCorePageLogic } from "./hooks/useCorePageLogic";
 import { useState, useEffect, useMemo } from "react";
@@ -28,6 +28,8 @@ export function CorePage() {
     isLoading,
     tokensState,
     setTokensState,
+    statusesState,
+    setStatusesState,
     featureRoutingState,
     setFeatureRoutingState,
     handleUpdateTokens,
@@ -213,6 +215,25 @@ export function CorePage() {
                       </div>
 
                       {/* Config Area - Hidden if secondary and disabled */}
+                          {/* Status Section */}
+                          {hasToken && (
+                            <SettingsRow
+                              title="Bot Status"
+                              description="Control whether this bot is active and online in the server."
+                              control={
+                                <div className="flex items-center gap-3">
+                                  <ToggleSwitch
+                                    checked={statusesState[instanceId] !== "disabled"}
+                                    onCheckedChange={(checked) => setStatusesState(prev => ({ ...prev, [instanceId]: checked ? "" : "disabled" }))}
+                                  />
+                                  <span className="text-sm font-medium">
+                                    {statusesState[instanceId] !== "disabled" ? "Enabled" : "Disabled"}
+                                  </span>
+                                </div>
+                              }
+                            />
+                          )}
+
                           {/* Token Section */}
                           <SettingsRow
                             title={
@@ -237,18 +258,23 @@ export function CorePage() {
                                   onChange={(e) => setTokensState(prev => ({ ...prev, [instanceId]: e.target.value }))}
                                 />
                                 {hasToken && !botPresent && profile && (
-                                  <a
-                                    href={`${baseUrl === "" ? "" : baseUrl}/v1/guilds/${guildId}/oauth/authorize?bot_instance_id=${instanceId}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-xs inline-flex items-center gap-1 text-[var(--status-warning,#f59e0b)] hover:underline self-start bg-[var(--status-warning-bg,rgba(245,158,11,0.1))] px-2 py-1 rounded"
+                                  <ActionTrigger
+                                    onClick={() => window.open(`${baseUrl === "" ? "" : baseUrl}/v1/guilds/${guildId}/oauth/authorize?bot_instance_id=${instanceId}`, "_blank", "noopener,noreferrer")}
+                                    className="mt-2 self-start flex items-center gap-2 px-3 py-1.5"
                                   >
-                                    Authorize {profile.username} Now →
-                                  </a>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                      <circle cx="8.5" cy="7" r="4" />
+                                      <line x1="20" y1="8" x2="20" y2="14" />
+                                      <line x1="23" y1="11" x2="17" y2="11" />
+                                    </svg>
+                                    Authorize {profile.username}
+                                  </ActionTrigger>
                                 )}
                               </div>
                             }
                           />
+
 
                           {/* Routing Section */}
                           <SettingsRow

@@ -86,6 +86,7 @@ export interface GuildSettingsWorkspace {
   available_bot_instance_ids?: string[];
   sections: {
     bot_instance_tokens_configured: Record<string, boolean>;
+    bot_instance_statuses?: Record<string, string>;
     feature_routing?: Record<string, string>;
     roles: GuildRolesSettingsSection;
   };
@@ -148,6 +149,7 @@ export async function updateGuildSettings(
   payload: {
     config_version: number;
     bot_instance_tokens?: Record<string, string>;
+    bot_instance_statuses?: Record<string, string>;
     feature_routing?: Record<string, string>;
     roles?: GuildRolesSettingsSection;
   },
@@ -188,6 +190,9 @@ export async function updateGuildSettings(
         // Check if any specific tokens changed. We consider it dirty if payload keys
         // don't match the workspace configured state boolean values (true=configured, false=removed)
         if (currentPayload.bot_instance_tokens !== undefined && JSON.stringify(latestWorkspace.sections.bot_instance_tokens_configured) !== JSON.stringify(originalWorkspace.sections.bot_instance_tokens_configured)) {
+            collision = true;
+        }
+        if (currentPayload.bot_instance_statuses !== undefined && JSON.stringify(latestWorkspace.sections.bot_instance_statuses) !== JSON.stringify(originalWorkspace.sections.bot_instance_statuses)) {
             collision = true;
         }
         if (currentPayload.feature_routing !== undefined && JSON.stringify(latestWorkspace.sections.feature_routing) !== JSON.stringify(originalWorkspace.sections.feature_routing)) {

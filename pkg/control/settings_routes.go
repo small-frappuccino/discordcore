@@ -371,6 +371,18 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 				}
 			}
 		}
+		if payload.BotInstanceStatuses != nil {
+			if guild.BotInstanceStatuses == nil {
+				guild.BotInstanceStatuses = make(map[string]string)
+			}
+			for k, v := range *payload.BotInstanceStatuses {
+				if v == "" {
+					delete(guild.BotInstanceStatuses, k)
+				} else {
+					guild.BotInstanceStatuses[k] = v
+				}
+			}
+		}
 		if payload.FeatureRouting != nil {
 			guild.FeatureRouting = *payload.FeatureRouting
 		}
@@ -540,6 +552,7 @@ func normalizeSettingsRoutePath(path string) string {
 
 func guildPayloadEmpty(payload updateGuildSettingsRequest) bool {
 	return payload.BotInstanceTokens == nil &&
+		payload.BotInstanceStatuses == nil &&
 		payload.FeatureRouting == nil &&
 		payload.Features == nil &&
 		payload.Channels == nil &&

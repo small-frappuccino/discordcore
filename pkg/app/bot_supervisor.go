@@ -125,6 +125,9 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 			if token == "" {
 				continue
 			}
+			if guild.BotInstanceStatuses[instanceID] == "disabled" {
+				continue
+			}
 			currentTokens[instanceID] = token
 		}
 	}

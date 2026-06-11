@@ -483,14 +483,15 @@ type TicketsConfig struct {
 
 // GuildConfig holds the configuration for a specific guild.
 type GuildConfig struct {
-	GuildID           string                     `json:"guild_id"`
-	ConfigVersion     int64                      `json:"config_version"`
-	BotInstanceTokens map[string]EncryptedString `json:"bot_instance_tokens,omitempty"`
-	FeatureRouting    map[string]string          `json:"feature_routing,omitempty"`
-	Features          FeatureToggles             `json:"features,omitempty"`
-	Channels          ChannelsConfig             `json:"channels,omitempty"`
-	Roles             RolesConfig                `json:"roles,omitempty"`
-	Stats             StatsConfig                `json:"stats,omitempty"`
+	GuildID             string                     `json:"guild_id"`
+	ConfigVersion       int64                      `json:"config_version"`
+	BotInstanceTokens   map[string]EncryptedString `json:"bot_instance_tokens,omitempty"`
+	BotInstanceStatuses map[string]string          `json:"bot_instance_statuses,omitempty"`
+	FeatureRouting      map[string]string          `json:"feature_routing,omitempty"`
+	Features            FeatureToggles             `json:"features,omitempty"`
+	Channels            ChannelsConfig             `json:"channels,omitempty"`
+	Roles               RolesConfig                `json:"roles,omitempty"`
+	Stats               StatsConfig                `json:"stats,omitempty"`
 
 	// Cache TTL configuration (per-guild tuning)
 	RolesCacheTTL   string `json:"roles_cache_ttl,omitempty"`   // e.g.: "5m", "1h" (default: "5m")

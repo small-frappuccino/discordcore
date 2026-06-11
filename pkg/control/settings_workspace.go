@@ -101,6 +101,7 @@ type guildSettingsWorkspace struct {
 
 type guildSettingsSections struct {
 	BotInstanceTokensConfigured map[string]bool           `json:"bot_instance_tokens_configured"`
+	BotInstanceStatuses         map[string]string         `json:"bot_instance_statuses,omitempty"`
 	FeatureRouting              map[string]string         `json:"feature_routing,omitempty"`
 	Features                    files.FeatureToggles      `json:"features"`
 	Channels                    files.ChannelsConfig      `json:"channels"`
@@ -189,17 +190,18 @@ type updateGlobalSettingsRequest struct {
 }
 
 type updateGuildSettingsRequest struct {
-	ConfigVersion     *int64                     `json:"config_version,omitempty"`
-	BotInstanceTokens *map[string]string         `json:"bot_instance_tokens,omitempty"`
-	FeatureRouting    *map[string]string         `json:"feature_routing,omitempty"`
-	Features          *files.FeatureToggles      `json:"features,omitempty"`
-	Channels          *files.ChannelsConfig      `json:"channels,omitempty"`
-	Roles             *files.RolesConfig         `json:"roles,omitempty"`
-	Stats             *files.StatsConfig         `json:"stats,omitempty"`
-	Cache             *guildCacheSettingsSection `json:"cache,omitempty"`
-	UserPrune         *files.UserPruneConfig     `json:"user_prune,omitempty"`
-	PartnerBoard      *files.PartnerBoardConfig  `json:"partner_board,omitempty"`
-	Runtime           *runtimeSettingsSections   `json:"runtime,omitempty"`
+	ConfigVersion       *int64                     `json:"config_version,omitempty"`
+	BotInstanceTokens   *map[string]string         `json:"bot_instance_tokens,omitempty"`
+	BotInstanceStatuses *map[string]string         `json:"bot_instance_statuses,omitempty"`
+	FeatureRouting      *map[string]string         `json:"feature_routing,omitempty"`
+	Features            *files.FeatureToggles      `json:"features,omitempty"`
+	Channels            *files.ChannelsConfig      `json:"channels,omitempty"`
+	Roles               *files.RolesConfig         `json:"roles,omitempty"`
+	Stats               *files.StatsConfig         `json:"stats,omitempty"`
+	Cache               *guildCacheSettingsSection `json:"cache,omitempty"`
+	UserPrune           *files.UserPruneConfig     `json:"user_prune,omitempty"`
+	PartnerBoard        *files.PartnerBoardConfig  `json:"partner_board,omitempty"`
+	Runtime             *runtimeSettingsSections   `json:"runtime,omitempty"`
 }
 
 func buildSettingsCatalog() settingsCatalog {
@@ -333,6 +335,7 @@ func buildGuildSettingsWorkspaceWithBindings(
 		AvailableBotInstanceIDs: slices.Clone(availableBotInstanceIDs),
 		Sections: guildSettingsSections{
 			BotInstanceTokensConfigured: buildBotInstanceTokensSection(guild.BotInstanceTokens),
+			BotInstanceStatuses:         guild.BotInstanceStatuses,
 			FeatureRouting:              guild.FeatureRouting,
 			Features:                    guild.Features,
 			Channels:                    guild.Channels,
