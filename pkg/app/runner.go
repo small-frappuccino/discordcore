@@ -243,6 +243,15 @@ func runWithOptions(appName string, opts RunOptions) error {
 
 	runtimeResolver := botSupervisor.GetResolver()
 
+	attachCtx, attachCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer attachCancel()
+	if err := qotdMetrics.Attach(attachCtx); err != nil {
+		return fmt.Errorf("fatal abort: qotd metrics pipeline failed to attach: %w", err)
+	}
+	if err := moderationMetrics.Attach(attachCtx); err != nil {
+		return fmt.Errorf("fatal abort: moderation metrics pipeline failed to attach: %w", err)
+	}
+
 	eg, egCtx := errgroup.WithContext(context.Background())
 
 	eg.Go(func() error {

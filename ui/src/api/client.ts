@@ -127,12 +127,32 @@ export class ControlApiClient {
       headers.set("X-CSRF-Token", csrfToken);
     }
 
-    const response = await fetch(url, {
-      method,
-      headers,
-      credentials: "include",
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
+    let response: Response;
+    let retries = 0;
+    const maxRetries = 5;
+    const occRetryDelaysMs = [250, 500, 1000, 2000, 4000];
+
+    while (true) {
+      response = await fetch(url, {
+        method,
+        headers,
+        credentials: "include",
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+
+      if (
+        (response.status === 412 || response.status === 428) &&
+        method !== "GET"
+      ) {
+        if (retries < maxRetries) {
+          const delay = occRetryDelaysMs[retries] * (1 + Math.random() * 0.2);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          retries++;
+          continue;
+        }
+      }
+      break;
+    }
     const resolvedResponse =
       method === "GET" && transientGetRetryStatuses.has(response.status)
         ? await this.retryTransientGetRequest(

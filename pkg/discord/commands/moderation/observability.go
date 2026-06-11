@@ -1,6 +1,7 @@
 package moderation
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -64,6 +65,10 @@ type CleanDetailMetrics interface {
 type Metrics interface {
 	CleanLifecycleMetrics
 	CleanDetailMetrics
+
+	// Attach ensures the metrics pipeline is successfully bound prior to
+	// the primary event loop. A failure to attach triggers a fatal abort.
+	Attach(ctx context.Context) error
 }
 
 // SnapshotProvider is the optional capability the /v1/health/moderation
@@ -161,6 +166,9 @@ func FailureClassToken(class cleanup.FailureClass) string {
 // this lets command code call m.RecordX(...) without nil checks.
 type NopMetrics struct{}
 
+// Attach returns nil for NopMetrics.
+func (NopMetrics) Attach(context.Context) error { return nil }
+
 // RecordCleanAttempt records clean attempt.
 func (NopMetrics) RecordCleanAttempt() {}
 
@@ -199,6 +207,9 @@ type InMemoryMetrics struct {
 	auditLogFailure atomic.Int64
 	duration        observability.Summary
 }
+
+// Attach returns nil for InMemoryMetrics.
+func (m *InMemoryMetrics) Attach(context.Context) error { return nil }
 
 // RecordCleanAttempt records clean attempt.
 func (m *InMemoryMetrics) RecordCleanAttempt() {

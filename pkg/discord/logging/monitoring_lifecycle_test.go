@@ -102,7 +102,7 @@ func TestMonitoringServiceRestartRebuildsTaskPipeline(t *testing.T) {
 		t.Fatalf("restart monitoring service: %v", err)
 	}
 	t.Cleanup(func() {
-		if ms.run.running {
+		if ms.IsRunning() {
 			_ = ms.Stop(context.Background())
 		}
 	})

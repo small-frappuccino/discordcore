@@ -2,7 +2,6 @@ package logging
 
 import (
 	"context"
-	"sync"
 	"time"
 )
 
@@ -23,16 +22,4 @@ type monitoringRunState struct {
 	errorCount   int
 	lastErrorAt  *time.Time
 	ctx          context.Context
-	cancel       context.CancelFunc
-	stopChan     chan struct{}
-	stopOnce     sync.Once
-	wg           sync.WaitGroup
-
-	// Cancel handles for the scheduled monitor jobs. They are set while the
-	// service runs (during Start/syncSchedulesLocked and the runtime toggle)
-	// and cleared on Stop.
-	cronCancel             func()
-	statsCronCancel        func()
-	rolesRefreshCronCancel func()
-	persistStop            chan struct{}
 }

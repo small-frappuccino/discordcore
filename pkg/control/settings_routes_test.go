@@ -111,8 +111,10 @@ func TestGlobalSettingsPutPersistsGroupedRuntimeAndFeatures(t *testing.T) {
 	t.Parallel()
 
 	srv, cm := newControlTestServer(t)
+	cv := cm.SnapshotConfig().ConfigVersion
 
 	payload := updateGlobalSettingsRequest{
+		ConfigVersion: &cv,
 		Features: &files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
 				Monitoring: testBoolPtr(false),
@@ -167,9 +169,11 @@ func TestGlobalSettingsPutPersistsGroupedRuntimeAndFeatures(t *testing.T) {
 func TestGlobalSettingsPutRejectsDuplicateWebhookEmbedUpdates(t *testing.T) {
 	t.Parallel()
 
-	srv, _ := newControlTestServer(t)
+	srv, cm := newControlTestServer(t)
+	cv := cm.SnapshotConfig().ConfigVersion
 
 	payload := updateGlobalSettingsRequest{
+		ConfigVersion: &cv,
 		Runtime: &runtimeSettingsSections{
 			Webhook: runtimeWebhookSection{
 				Updates: []files.WebhookEmbedUpdateConfig{

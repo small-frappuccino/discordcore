@@ -1,6 +1,7 @@
 package qotd
 
 import (
+	"context"
 	"errors"
 	"sort"
 	"sync"
@@ -84,6 +85,10 @@ type Metrics interface {
 	PublishMetrics
 	ReconcileMetrics
 	StateMetrics
+
+	// Attach ensures the metrics pipeline is successfully bound prior to
+	// the primary event loop. A failure to attach triggers a fatal abort.
+	Attach(ctx context.Context) error
 }
 
 // SnapshotProvider is the optional capability the /v1/health/qotd handler
@@ -135,6 +140,9 @@ type MetricsSnapshot struct {
 // without explicit metrics wiring. Every method is a no-op; this lets
 // library code call s.metrics.RecordX(...) without nil checks.
 type NopMetrics struct{}
+
+// Attach returns nil for NopMetrics.
+func (NopMetrics) Attach(context.Context) error { return nil }
 
 // RecordPublishAttempt records publish attempt.
 func (NopMetrics) RecordPublishAttempt(PublishMode) {}
@@ -192,6 +200,9 @@ type InMemoryMetrics struct {
 	orphanReclaim      atomic.Int64
 	suppressionCleared atomic.Int64
 }
+
+// Attach returns nil for InMemoryMetrics.
+func (m *InMemoryMetrics) Attach(context.Context) error { return nil }
 
 // RecordPublishAttempt records publish attempt.
 func (m *InMemoryMetrics) RecordPublishAttempt(mode PublishMode) {

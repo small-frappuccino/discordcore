@@ -28,12 +28,15 @@ func TestScheduleStartupMemberWarmupDispatchesToTaskRouter(t *testing.T) {
 	t.Cleanup(router.Close)
 
 	ms := &MonitoringService{
-		router:       router,
-		run:          monitoringRunState{ctx: context.Background(), running: true},
+		router:    router,
+		controlCh: make(chan func()), stopChan: make(chan struct{}),
 		unifiedCache: &cache.UnifiedCache{},
 		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 	}
-	ms.registerStartupWarmupHandler(ms.run.ctx)
+	ms.runState.Store(&monitoringRunState{running: true, ctx: context.Background()})
+	go ms.serveControl()
+	t.Cleanup(func() { close(ms.stopChan) })
+	ms.registerStartupWarmupHandler(ms.currentRunCtx())
 
 	config := cache.WarmupConfig{
 		FetchMissingMembers:  true,

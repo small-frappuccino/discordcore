@@ -170,7 +170,19 @@ func (s *Server) handleGlobalSettingsPut(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	current := s.configManager.SnapshotConfig()
+	if payload.ConfigVersion == nil {
+		http.Error(w, "optimistic concurrency control: config_version required", http.StatusPreconditionRequired)
+		return
+	} else if *payload.ConfigVersion != current.ConfigVersion {
+		http.Error(w, "optimistic concurrency control: config_version mismatch", http.StatusPreconditionFailed)
+		return
+	}
+
 	updated, err := s.configManager.UpdateConfig(func(cfg *files.BotConfig) error {
+		if payload.ConfigVersion != nil {
+			cfg.ConfigVersion++
+		}
 		if payload.Features != nil {
 			cfg.Features = *payload.Features
 		}

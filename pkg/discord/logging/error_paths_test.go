@@ -67,8 +67,8 @@ func TestEventTimestampPersistenceErrorBranches(t *testing.T) {
 func TestMonitoringServiceStartHeartbeatPersistenceErrorBranch(t *testing.T) {
 	failingStore := storagetest.NewFailingStore()
 	ms := &MonitoringService{
-		store:        failingStore,
-		run:          monitoringRunState{stopChan: make(chan struct{})},
+		store:     failingStore,
+		controlCh: make(chan func()), stopChan: make(chan struct{}),
 		activity:     newMonitoringRuntimeActivity(failingStore),
 		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 	}
@@ -83,7 +83,7 @@ func TestMonitoringServiceStartHeartbeatPersistenceErrorBranch(t *testing.T) {
 	if ms.activity.hbDone == nil {
 		t.Fatalf("expected heartbeat done channel to be initialized")
 	}
-	close(ms.run.stopChan)
+	close(ms.stopChan)
 	if err := ms.stopHeartbeat(context.Background()); err != nil {
 		t.Fatalf("stop heartbeat: %v", err)
 	}

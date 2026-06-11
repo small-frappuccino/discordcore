@@ -555,7 +555,8 @@ func (gc *GuildConfig) UnmarshalJSON(data []byte) error {
 
 // BotConfig holds the configuration for the bot.
 type BotConfig struct {
-	Guilds []GuildConfig `json:"guilds"`
+	ConfigVersion int64         `json:"config_version"`
+	Guilds        []GuildConfig `json:"guilds"`
 
 	// Features holds optional toggles for runtime behavior overrides.
 	Features FeatureToggles `json:"features,omitempty"`

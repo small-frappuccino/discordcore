@@ -54,8 +54,6 @@ func TestMonitoringService_ApplyRuntimeTogglesStartsAndStopsServices(t *testing.
 	cfgMgr := newMonitoringTestConfigManager(t)
 	router := task.NewRouter(task.Defaults())
 	t.Cleanup(router.Close)
-	runCtx, cancelRun := context.WithCancel(context.Background())
-	t.Cleanup(cancelRun)
 
 	ms := &MonitoringService{
 		session:              session,
@@ -64,10 +62,13 @@ func TestMonitoringService_ApplyRuntimeTogglesStartsAndStopsServices(t *testing.
 		messageEventService:  NewMessageEventService(session, cfgMgr, nil, nil, slog.Default()),
 		reactionEventService: NewReactionEventService(session, cfgMgr, nil, slog.Default()),
 		router:               router,
-		run:                  monitoringRunState{running: true, ctx: runCtx},
-		eventHandlers:        make([]func(), 0),
-		statsService:         NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
+		controlCh:            make(chan func()), stopChan: make(chan struct{}),
+		eventHandlers: make([]func(), 0),
+		statsService:  NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 	}
+	ms.runState.Store(&monitoringRunState{running: true, ctx: context.Background()})
+	go ms.serveControl()
+	t.Cleanup(func() { close(ms.stopChan) })
 
 	if err := ms.memberEventService.Start(context.Background()); err != nil {
 		t.Fatalf("start member service: %v", err)
@@ -98,10 +99,10 @@ func TestMonitoringService_ApplyRuntimeTogglesStartsAndStopsServices(t *testing.
 	if ms.reactionEventService.IsRunning() {
 		t.Fatalf("reaction service should be stopped after disable toggles")
 	}
-	if ms.run.cronCancel != nil {
+	if ms.cronCancel != nil {
 		t.Fatalf("avatar scan schedule should be stopped after disable toggles")
 	}
-	if ms.run.rolesRefreshCronCancel != nil {
+	if ms.rolesRefreshCronCancel != nil {
 		t.Fatalf("roles refresh schedule should be stopped after disable toggles")
 	}
 	if got := len(ms.eventHandlers); got != 4 {
@@ -121,13 +122,13 @@ func TestMonitoringService_ApplyRuntimeTogglesStartsAndStopsServices(t *testing.
 	if !ms.reactionEventService.IsRunning() {
 		t.Fatalf("reaction service should be running after enable toggles")
 	}
-	if ms.run.cronCancel == nil {
+	if ms.cronCancel == nil {
 		t.Fatalf("avatar scan schedule should be active after enable toggles")
 	}
-	if ms.run.rolesRefreshCronCancel == nil {
+	if ms.rolesRefreshCronCancel == nil {
 		t.Fatalf("roles refresh schedule should be active after enable toggles")
 	}
-	if ms.run.statsCronCancel != nil {
+	if ms.statsCronCancel != nil {
 		t.Fatalf("stats schedule should remain inactive without stats config")
 	}
 	if got := len(ms.eventHandlers); got != 7 {
@@ -181,9 +182,13 @@ func TestMonitoringService_SyncSchedulesLockedReactivatesSchedules(t *testing.T)
 		session:       session,
 		configManager: cfgMgr,
 		router:        router,
-		run:           monitoringRunState{ctx: runCtx},
-		statsService:  NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
+		controlCh:     make(chan func()), stopChan: make(chan struct{}),
+		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
 	}
+	ms.runState.Store(&monitoringRunState{running: true, ctx: context.Background()})
+	// Note: syncSchedulesLocked runs synchronously without doControl, so serveControl isn't strictly necessary here, but added for safety
+	go ms.serveControl()
+	t.Cleanup(func() { close(ms.stopChan) })
 
 	state := monitoringWorkloadState{
 		avatarScan:   true,
@@ -192,13 +197,13 @@ func TestMonitoringService_SyncSchedulesLockedReactivatesSchedules(t *testing.T)
 	}
 
 	ms.syncSchedulesLocked(runCtx, state)
-	if ms.run.cronCancel == nil {
+	if ms.cronCancel == nil {
 		t.Fatalf("avatar scan schedule should be created")
 	}
-	if ms.run.statsCronCancel == nil {
+	if ms.statsCronCancel == nil {
 		t.Fatalf("stats schedule should be created")
 	}
-	if ms.run.rolesRefreshCronCancel == nil {
+	if ms.rolesRefreshCronCancel == nil {
 		t.Fatalf("roles refresh schedule should be created")
 	}
 	if got := router.Stats().RegisteredTypes; got != 3 {
@@ -206,24 +211,24 @@ func TestMonitoringService_SyncSchedulesLockedReactivatesSchedules(t *testing.T)
 	}
 
 	ms.syncSchedulesLocked(runCtx, monitoringWorkloadState{})
-	if ms.run.cronCancel != nil {
+	if ms.cronCancel != nil {
 		t.Fatalf("avatar scan schedule should be removed")
 	}
-	if ms.run.statsCronCancel != nil {
+	if ms.statsCronCancel != nil {
 		t.Fatalf("stats schedule should be removed")
 	}
-	if ms.run.rolesRefreshCronCancel != nil {
+	if ms.rolesRefreshCronCancel != nil {
 		t.Fatalf("roles refresh schedule should be removed")
 	}
 
 	ms.syncSchedulesLocked(runCtx, state)
-	if ms.run.cronCancel == nil {
+	if ms.cronCancel == nil {
 		t.Fatalf("avatar scan schedule should be recreated")
 	}
-	if ms.run.statsCronCancel == nil {
+	if ms.statsCronCancel == nil {
 		t.Fatalf("stats schedule should be recreated")
 	}
-	if ms.run.rolesRefreshCronCancel == nil {
+	if ms.rolesRefreshCronCancel == nil {
 		t.Fatalf("roles refresh schedule should be recreated")
 	}
 

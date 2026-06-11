@@ -74,9 +74,10 @@ type guildRegistrySource struct {
 }
 
 type globalSettingsWorkspace struct {
-	Scope     string                  `json:"scope"`
-	Sections  globalSettingsSections  `json:"sections"`
-	Effective globalSettingsEffective `json:"effective"`
+	Scope         string                  `json:"scope"`
+	ConfigVersion int64                   `json:"config_version"`
+	Sections      globalSettingsSections  `json:"sections"`
+	Effective     globalSettingsEffective `json:"effective"`
 }
 
 type globalSettingsSections struct {
@@ -182,8 +183,9 @@ type runtimeAdvancedSection struct {
 }
 
 type updateGlobalSettingsRequest struct {
-	Features *files.FeatureToggles    `json:"features,omitempty"`
-	Runtime  *runtimeSettingsSections `json:"runtime,omitempty"`
+	ConfigVersion *int64                   `json:"config_version,omitempty"`
+	Features      *files.FeatureToggles    `json:"features,omitempty"`
+	Runtime       *runtimeSettingsSections `json:"runtime,omitempty"`
 }
 
 type updateGuildSettingsRequest struct {
@@ -306,7 +308,8 @@ func buildSettingsOverview(
 
 func buildGlobalSettingsWorkspace(cfg files.BotConfig) globalSettingsWorkspace {
 	return globalSettingsWorkspace{
-		Scope: "global",
+		Scope:         "global",
+		ConfigVersion: cfg.ConfigVersion,
 		Sections: globalSettingsSections{
 			Features: cfg.Features,
 			Runtime:  groupRuntimeSettings(cfg.RuntimeConfig),

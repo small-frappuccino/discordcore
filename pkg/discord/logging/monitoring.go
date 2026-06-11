@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -85,10 +86,20 @@ type MonitoringService struct {
 	memberEventService   *MemberEventService   // Service for member events
 	messageEventService  *MessageEventService  // Service for message events
 	reactionEventService *ReactionEventService // Service for reaction event handling
-	runMu                sync.RWMutex          // serializes Start/Stop and guards run
-	run                  monitoringRunState
-	changeDebounce       changeDebouncer
-	logger               *slog.Logger
+	controlCh            chan func()
+	runState             atomic.Pointer[monitoringRunState]
+
+	// Control loop exclusive fields
+	cancel                 context.CancelFunc
+	stopChan               chan struct{}
+	stopOnce               sync.Once
+	wg                     sync.WaitGroup
+	cronCancel             func()
+	statsCronCancel        func()
+	rolesRefreshCronCancel func()
+	persistStop            chan struct{}
+	changeDebounce         changeDebouncer
+	logger                 *slog.Logger
 
 	// Unified cache for Discord API data (members, guilds, roles, channels)
 	unifiedCache *cache.UnifiedCache
@@ -137,6 +148,20 @@ func (ms *MonitoringService) observability() Metrics {
 	return ms.metrics
 }
 
+func (ms *MonitoringService) serveControl() {
+	for fn := range ms.controlCh {
+		fn()
+	}
+}
+
+func (ms *MonitoringService) doControl(fn func() error) error {
+	errCh := make(chan error, 1)
+	ms.controlCh <- func() {
+		errCh <- fn()
+	}
+	return <-errCh
+}
+
 // Name names.
 func (ms *MonitoringService) Name() string {
 	return "monitoring"
@@ -159,9 +184,10 @@ func (ms *MonitoringService) Dependencies() []string {
 
 // IsRunning is running.
 func (ms *MonitoringService) IsRunning() bool {
-	ms.runMu.RLock()
-	defer ms.runMu.RUnlock()
-	return ms.run.running
+	if state := ms.runState.Load(); state != nil {
+		return state.running
+	}
+	return false
 }
 
 // currentRunCtx returns a snapshot of ms.run.ctx taken under runMu. It returns
@@ -171,17 +197,20 @@ func (ms *MonitoringService) currentRunCtx() context.Context {
 	if ms == nil {
 		return nil
 	}
-	ms.runMu.RLock()
-	defer ms.runMu.RUnlock()
-	return ms.run.ctx
+	if state := ms.runState.Load(); state != nil {
+		return state.ctx
+	}
+	return nil
 }
 
 // HealthCheck healths check.
 func (ms *MonitoringService) HealthCheck(ctx context.Context) svc.HealthStatus {
-	ms.runMu.RLock()
-	isRunning := ms.run.running
-	runCtx := ms.run.ctx
-	ms.runMu.RUnlock()
+	state := ms.runState.Load()
+	if state == nil {
+		state = &monitoringRunState{}
+	}
+	isRunning := state.running
+	runCtx := state.ctx
 
 	message := "Monitoring service is stopped"
 	if isRunning {
@@ -203,13 +232,15 @@ func (ms *MonitoringService) HealthCheck(ctx context.Context) svc.HealthStatus {
 
 // Stats stats.
 func (ms *MonitoringService) Stats() svc.ServiceStats {
-	ms.runMu.RLock()
-	startTime := ms.run.startTime
-	stopTime := ms.run.stopTime
-	restartCount := ms.run.restartCount
-	errorCount := ms.run.errorCount
-	lastErrorAt := ms.run.lastErrorAt
-	ms.runMu.RUnlock()
+	state := ms.runState.Load()
+	if state == nil {
+		state = &monitoringRunState{}
+	}
+	startTime := state.startTime
+	stopTime := state.stopTime
+	restartCount := state.restartCount
+	errorCount := state.errorCount
+	lastErrorAt := state.lastErrorAt
 
 	stats := svc.ServiceStats{
 		RestartCount: restartCount,
@@ -240,9 +271,9 @@ func (ms *MonitoringService) startLifecycle(ctx context.Context) (context.Contex
 }
 
 func (ms *MonitoringService) startOwnedWorker(ctx context.Context, fn func(context.Context)) {
-	ms.run.wg.Add(1)
+	ms.wg.Add(1)
 	go func() {
-		defer ms.run.wg.Done()
+		defer ms.wg.Done()
 		fn(ctx)
 	}()
 }
@@ -251,7 +282,7 @@ func (ms *MonitoringService) waitForOwnedWorkers(ctx context.Context) error {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		ms.run.wg.Wait()
+		ms.wg.Wait()
 	}()
 
 	select {
@@ -264,8 +295,13 @@ func (ms *MonitoringService) waitForOwnedWorkers(ctx context.Context) error {
 
 func (ms *MonitoringService) recordLifecycleErrorLocked() {
 	now := time.Now()
-	ms.run.errorCount++
-	ms.run.lastErrorAt = &now
+	if state := ms.runState.Load(); state != nil {
+		newState := *state
+		newState.errorCount++
+		newState.lastErrorAt = &now
+		ms.runState.Store(&newState)
+	}
+
 }
 
 // NewMonitoringService creates the multi-guild monitoring service. Returns error if any dependency is nil.
@@ -334,7 +370,8 @@ func NewMonitoringServiceForBotWithMetrics(
 		userWatcher:          NewUserWatcher(session, configManager, store, n, unifiedCache),
 		memberEventService:   NewMemberEventServiceForBot(eventServiceDeps{Session: session, ConfigManager: configManager, Notifier: n, Store: store, BotInstanceID: botInstanceID, DefaultBotInstanceID: defaultBotInstanceID, Logger: logger}),
 		messageEventService:  NewMessageEventServiceForBot(eventServiceDeps{Session: session, ConfigManager: configManager, Notifier: n, Store: store, BotInstanceID: botInstanceID, DefaultBotInstanceID: defaultBotInstanceID, Logger: logger}),
-		run:                  monitoringRunState{stopChan: make(chan struct{})},
+		controlCh:            make(chan func()),
+		stopChan:             make(chan struct{}),
 		rolesCacheService:    NewRolesCacheService(configManager),
 		eventHandlers:        make([]func(), 0),
 		statsService:         NewStatsService(session, configManager, store, logger, botInstanceID, defaultBotInstanceID, nil, nil, nil),
@@ -344,6 +381,8 @@ func NewMonitoringServiceForBotWithMetrics(
 	ms.statsService.currentRunCtx = ms.currentRunCtx
 	ms.statsService.getHeartbeat = ms.getHeartbeat
 	ms.statsService.fetchMembers = ms.forEachGuildMemberPageContext
+	ms.runState.Store(&monitoringRunState{})
+	go ms.serveControl()
 	ms.rebuildTaskPipeline()
 	return ms, nil
 }
@@ -393,103 +432,107 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 		ctx = context.Background()
 	}
 
-	ms.runMu.Lock()
-	defer ms.runMu.Unlock()
-	if ms.run.running {
-		log.ErrorLoggerRaw().Error("Monitoring service is already running")
-		return fmt.Errorf("monitoring service is already running")
-	}
+	return ms.doControl(func() error {
+		state := ms.runState.Load()
+		if state != nil && state.running {
+			log.ErrorLoggerRaw().Error("Monitoring service is already running")
+			return fmt.Errorf("monitoring service is already running")
+		}
 
-	lifecycleCtx, cancelLifecycle := ms.startLifecycle(ctx)
-	ms.run.stopChan = make(chan struct{})
-	ms.run.stopOnce = sync.Once{}
-	if ms.router == nil {
-		ms.rebuildTaskPipeline()
-	}
+		lifecycleCtx, cancelLifecycle := ms.startLifecycle(ctx)
+		ms.stopChan = make(chan struct{})
+		ms.stopOnce = sync.Once{}
+		if ms.router == nil {
+			ms.rebuildTaskPipeline()
+		}
 
-	if err := ms.handleStartupDowntimeAndMaybeRefresh(ctx); err != nil {
-		cancelLifecycle()
-		ms.recordLifecycleErrorLocked()
-		return fmt.Errorf("handle startup downtime: %w", err)
-	}
-	ms.setupEventHandlers()
+		if err := ms.handleStartupDowntimeAndMaybeRefresh(ctx); err != nil {
+			cancelLifecycle()
+			ms.recordLifecycleErrorLocked()
+			return fmt.Errorf("handle startup downtime: %w", err)
+		}
+		ms.setupEventHandlers()
 
-	// Global check for services
-	globalRC := files.RuntimeConfig{}
-	if scopedCfg := ms.scopedConfig(); scopedCfg != nil {
-		globalRC = scopedCfg.RuntimeConfig
-	}
-	globalFeatures := (&files.BotConfig{}).ResolveFeatures("")
-	if scopedCfg := ms.scopedConfig(); scopedCfg != nil {
-		globalFeatures = scopedCfg.ResolveFeatures("")
-	}
-	workload := ms.workloadState(globalRC)
+		globalRC := files.RuntimeConfig{}
+		if scopedCfg := ms.scopedConfig(); scopedCfg != nil {
+			globalRC = scopedCfg.RuntimeConfig
+		}
+		globalFeatures := (&files.BotConfig{}).ResolveFeatures("")
+		if scopedCfg := ms.scopedConfig(); scopedCfg != nil {
+			globalFeatures = scopedCfg.ResolveFeatures("")
+		}
+		workload := ms.workloadState(globalRC)
 
-	// Start member/message/reaction services in dependency order
-	if !workload.memberEventService {
-		log.ApplicationLogger().Info("🛑 Entry/exit logs and auto-role assignment are disabled; MemberEventService will not start")
-	}
-	// Optionally honor DisableAutomodLogs here (Automod service is started elsewhere)
-	if globalRC.DisableAutomodLogs || !globalFeatures.Logging.AutomodAction {
-		log.ApplicationLogger().Info("🛑 Automod logs disabled by runtime config/features")
-	}
-	if !workload.messageEventService {
-		log.ApplicationLogger().Info("🛑 Message logging disabled by runtime config/features; MessageEventService will not start")
-	}
-	if !workload.reactionEventService {
-		log.ApplicationLogger().Info("🛑 Reaction event handling disabled by runtime config/features; ReactionEventService will not start")
-	}
+		if !workload.memberEventService {
+			log.ApplicationLogger().Info("🛑 Entry/exit logs and auto-role assignment are disabled; MemberEventService will not start")
+		}
+		if globalRC.DisableAutomodLogs || !globalFeatures.Logging.AutomodAction {
+			log.ApplicationLogger().Info("🛑 Automod logs disabled by runtime config/features")
+		}
+		if !workload.messageEventService {
+			log.ApplicationLogger().Info("🛑 Message logging disabled by runtime config/features; MessageEventService will not start")
+		}
+		if !workload.reactionEventService {
+			log.ApplicationLogger().Info("🛑 Reaction event handling disabled by runtime config/features; ReactionEventService will not start")
+		}
 
-	if err := ms.startSubServices(ctx, workload); err != nil {
-		cancelLifecycle()
-		ms.removeEventHandlers()
-		ms.recordLifecycleErrorLocked()
-		return err
-	}
+		if err := ms.startSubServices(ctx, workload); err != nil {
+			cancelLifecycle()
+			ms.removeEventHandlers()
+			ms.recordLifecycleErrorLocked()
+			return err
+		}
 
-	ms.startHeartbeat(lifecycleCtx)
-	if err := startMonitoringSubService(lifecycleCtx, "monitoring.start.roles_cache", "roles_cache_service", func() error {
-		return ms.rolesCacheService.Start(lifecycleCtx)
-	}); err != nil {
-		cancelLifecycle()
-		ms.removeEventHandlers()
-		ms.recordLifecycleErrorLocked()
-		return fmt.Errorf("failed to start roles cache service: %w", err)
-	}
+		ms.startHeartbeat(lifecycleCtx)
+		if err := startMonitoringSubService(lifecycleCtx, "monitoring.start.roles_cache", "roles_cache_service", func() error {
+			return ms.rolesCacheService.Start(lifecycleCtx)
+		}); err != nil {
+			cancelLifecycle()
+			ms.removeEventHandlers()
+			ms.recordLifecycleErrorLocked()
+			return fmt.Errorf("failed to start roles cache service: %w", err)
+		}
 
-	if err := startMonitoringSubService(lifecycleCtx, "monitoring.start.stats", "stats_service", func() error {
-		return ms.statsService.Start(lifecycleCtx)
-	}); err != nil {
-		cancelLifecycle()
-		ms.removeEventHandlers()
-		ms.recordLifecycleErrorLocked()
-		return fmt.Errorf("failed to start stats service: %w", err)
-	}
+		if err := startMonitoringSubService(lifecycleCtx, "monitoring.start.stats", "stats_service", func() error {
+			return ms.statsService.Start(lifecycleCtx)
+		}); err != nil {
+			cancelLifecycle()
+			ms.removeEventHandlers()
+			ms.recordLifecycleErrorLocked()
+			return fmt.Errorf("failed to start stats service: %w", err)
+		}
 
-	serviceCtx := lifecycleCtx
+		serviceCtx := lifecycleCtx
 
-	ms.registerStartupWarmupHandler(serviceCtx)
-	ms.syncSchedulesLocked(serviceCtx, workload)
+		ms.registerStartupWarmupHandler(serviceCtx)
+		ms.syncSchedulesLocked(serviceCtx, workload)
 
-	ms.registerBackfillHandlers(serviceCtx, workload)
+		ms.registerBackfillHandlers(serviceCtx, workload)
 
-	now := time.Now()
-	if ms.run.startTime != nil {
-		ms.run.restartCount++
-	}
-	ms.run.ctx = serviceCtx
-	ms.run.cancel = cancelLifecycle
-	ms.run.running = true
-	ms.run.startTime = &now
-	ms.run.stopTime = nil
+		now := time.Now()
+		newState := monitoringRunState{}
+		if state != nil {
+			newState = *state
+		}
+		if newState.startTime != nil {
+			newState.restartCount++
+		}
+		newState.ctx = serviceCtx
+		ms.cancel = cancelLifecycle
+		newState.running = true
+		newState.startTime = &now
+		newState.stopTime = nil
 
-	if ms.unifiedCache != nil {
-		ms.run.persistStop = ms.unifiedCache.SetPersistInterval(time.Hour)
-	}
+		if ms.unifiedCache != nil {
+			ms.persistStop = ms.unifiedCache.SetPersistInterval(time.Hour)
+		}
 
-	ms.scheduleEnsureGuildsListed(serviceCtx)
-	log.ApplicationLogger().Info("All monitoring services started successfully")
-	return nil
+		ms.runState.Store(&newState)
+
+		ms.scheduleEnsureGuildsListed(serviceCtx)
+		log.ApplicationLogger().Info("All monitoring services started successfully")
+		return nil
+	})
 }
 
 func shouldRunMemberEventService(cfg *files.BotConfig, globalRC files.RuntimeConfig) bool {
@@ -585,113 +628,118 @@ func (ms *MonitoringService) Stop(ctx context.Context) error {
 		ctx = context.Background()
 	}
 
-	ms.runMu.Lock()
-	if !ms.run.running {
-		ms.runMu.Unlock()
-		log.ErrorLoggerRaw().Error("Monitoring service is not running")
-		return fmt.Errorf("monitoring service is not running")
-	}
+	return ms.doControl(func() error {
+		state := ms.runState.Load()
+		if state == nil || !state.running {
+			log.ErrorLoggerRaw().Error("Monitoring service is not running")
+			return fmt.Errorf("monitoring service is not running")
+		}
 
-	cancelLifecycle := ms.run.cancel
-	ms.run.cancel = nil
-	ms.run.ctx = nil
-	ms.run.running = false
-	ms.run.stopOnce.Do(func() {
-		close(ms.run.stopChan)
+		cancelLifecycle := ms.cancel
+		ms.cancel = nil
+
+		newState := *state
+		newState.ctx = nil
+		newState.running = false
+		ms.runState.Store(&newState)
+
+		ms.stopOnce.Do(func() {
+			close(ms.stopChan)
+		})
+		cronCancel := ms.cronCancel
+		ms.cronCancel = nil
+		statsCronCancel := ms.statsCronCancel
+		ms.statsCronCancel = nil
+		rolesRefreshCronCancel := ms.rolesRefreshCronCancel
+		ms.rolesRefreshCronCancel = nil
+		persistStop := ms.persistStop
+		ms.persistStop = nil
+		router := ms.router
+		ms.router = nil
+		ms.adapters = nil
+
+		var stopErrs []error
+
+		if router != nil {
+			if err := runErrWithTimeout(ctx, monitoringRouterCloseTimeout, func() error {
+				router.Close()
+				return nil
+			}); err != nil {
+				stopErrs = append(stopErrs, fmt.Errorf("close task router: %w", err))
+			}
+		}
+
+		if cancelLifecycle != nil {
+			cancelLifecycle()
+		}
+		if err := ms.stopHeartbeat(ctx); err != nil {
+			stopErrs = append(stopErrs, fmt.Errorf("stop heartbeat: %w", err))
+		}
+		if cronCancel != nil {
+			cronCancel()
+		}
+		if statsCronCancel != nil {
+			statsCronCancel()
+		}
+		if rolesRefreshCronCancel != nil {
+			rolesRefreshCronCancel()
+		}
+		if persistStop != nil {
+			close(persistStop)
+		}
+
+		ms.removeEventHandlers()
+		stopErrs = append(stopErrs, ms.stopSubServices(ctx)...)
+
+		if err := ms.waitForOwnedWorkers(ctx); err != nil {
+			stopErrs = append(stopErrs, fmt.Errorf("wait for monitoring workers: %w", err))
+		}
+
+		if ms.unifiedCache != nil {
+			log.ApplicationLogger().Info("💾 Persisting cache to storage...")
+			if err := runErrWithTimeout(ctx, monitoringPersistenceTimeout, ms.unifiedCache.Persist); err != nil {
+				log.ErrorLoggerRaw().Error("Failed to persist cache", "err", err)
+				stopErrs = append(stopErrs, fmt.Errorf("persist unified cache: %w", err))
+			} else {
+				members := ms.unifiedCache.MemberCount()
+				guilds := ms.unifiedCache.GuildCount()
+				roles := ms.unifiedCache.RolesCount()
+				channels := ms.unifiedCache.ChannelCount()
+				total := members + guilds + roles + channels
+				log.ApplicationLogger().Info("✅ Cache persisted", "entries_saved", total)
+			}
+			ms.unifiedCache.Stop()
+		}
+
+		if ms.messageEventService != nil {
+			ms.messageEventService.SetTaskRouter(nil)
+			ms.messageEventService.SetAdapters(nil)
+		}
+		if ms.memberEventService != nil {
+			ms.memberEventService.SetAdapters(nil)
+		}
+
+		now := time.Now()
+		finalState := ms.runState.Load()
+		if finalState != nil {
+			fs := *finalState
+			fs.stopTime = &now
+			ms.runState.Store(&fs)
+		}
+
+		if len(stopErrs) > 0 {
+			if state := ms.runState.Load(); state != nil {
+				fs := *state
+				fs.errorCount++
+				fs.lastErrorAt = &now
+				ms.runState.Store(&fs)
+			}
+			return errors.Join(stopErrs...)
+		}
+
+		log.ApplicationLogger().Info("Monitoring service cleanly stopped")
+		return nil
 	})
-	cronCancel := ms.run.cronCancel
-	ms.run.cronCancel = nil
-	statsCronCancel := ms.run.statsCronCancel
-	ms.run.statsCronCancel = nil
-	rolesRefreshCronCancel := ms.run.rolesRefreshCronCancel
-	ms.run.rolesRefreshCronCancel = nil
-	persistStop := ms.run.persistStop
-	ms.run.persistStop = nil
-	router := ms.router
-	ms.router = nil
-	ms.adapters = nil
-	ms.runMu.Unlock()
-
-	var stopErrs []error
-
-	// Drain the task router before canceling the lifecycle context. In-flight
-	// handlers depend on lifecycle-scoped collaborators — notably the stats
-	// actor goroutine, which serves request/reply round-trips. Canceling the
-	// lifecycle first would stop that actor while a handler is mid-round-trip,
-	// stranding it until the close timeout; draining first lets handlers finish
-	// cleanly. Close also cancels the router lifecycle context so handlers that
-	// honor it abort promptly.
-	if router != nil {
-		if err := runErrWithTimeout(ctx, monitoringRouterCloseTimeout, func() error {
-			router.Close()
-			return nil
-		}); err != nil {
-			stopErrs = append(stopErrs, fmt.Errorf("close task router: %w", err))
-		}
-	}
-
-	if cancelLifecycle != nil {
-		cancelLifecycle()
-	}
-	if err := ms.stopHeartbeat(ctx); err != nil {
-		stopErrs = append(stopErrs, fmt.Errorf("stop heartbeat: %w", err))
-	}
-	if cronCancel != nil {
-		cronCancel()
-	}
-	if statsCronCancel != nil {
-		statsCronCancel()
-	}
-	if rolesRefreshCronCancel != nil {
-		rolesRefreshCronCancel()
-	}
-	if persistStop != nil {
-		close(persistStop)
-	}
-
-	ms.removeEventHandlers()
-	stopErrs = append(stopErrs, ms.stopSubServices(ctx)...)
-
-	if err := ms.waitForOwnedWorkers(ctx); err != nil {
-		stopErrs = append(stopErrs, fmt.Errorf("wait for monitoring workers: %w", err))
-	}
-
-	if ms.unifiedCache != nil {
-		log.ApplicationLogger().Info("💾 Persisting cache to storage...")
-		if err := runErrWithTimeout(ctx, monitoringPersistenceTimeout, ms.unifiedCache.Persist); err != nil {
-			log.ErrorLoggerRaw().Error("Failed to persist cache", "err", err)
-			stopErrs = append(stopErrs, fmt.Errorf("persist unified cache: %w", err))
-		} else {
-			members := ms.unifiedCache.MemberCount()
-			guilds := ms.unifiedCache.GuildCount()
-			roles := ms.unifiedCache.RolesCount()
-			channels := ms.unifiedCache.ChannelCount()
-			total := members + guilds + roles + channels
-			log.ApplicationLogger().Info("✅ Cache persisted", "entries_saved", total)
-		}
-		ms.unifiedCache.Stop()
-	}
-
-	if ms.messageEventService != nil {
-		ms.messageEventService.SetTaskRouter(nil)
-		ms.messageEventService.SetAdapters(nil)
-	}
-	if ms.memberEventService != nil {
-		ms.memberEventService.SetAdapters(nil)
-	}
-
-	ms.runMu.Lock()
-	now := time.Now()
-	ms.run.stopTime = &now
-	if len(stopErrs) > 0 {
-		ms.recordLifecycleErrorLocked()
-		ms.runMu.Unlock()
-		return errors.Join(stopErrs...)
-	}
-	ms.runMu.Unlock()
-
-	log.ApplicationLogger().Info("Monitoring service stopped")
-	return nil
 }
 
 // initializeGuildCache initializes the current avatars of members in a specific guild.
@@ -816,34 +864,34 @@ func (ms *MonitoringService) initializeGuildCacheContext(ctx context.Context, gu
 // - Backfill settings are intentionally not handled here.
 // - This is safe to call even if MonitoringService is not running; it will no-op.
 func (ms *MonitoringService) ApplyRuntimeToggles(ctx context.Context, rc files.RuntimeConfig) error {
-	ms.runMu.Lock()
-	defer ms.runMu.Unlock()
-
-	if !ms.run.running {
-		return nil
-	}
-
-	workload := ms.workloadState(rc)
-	var stopErrs []error
-
-	if errs := ms.applySubServiceToggles(ctx, workload); len(errs) > 0 {
-		for _, err := range errs {
-			if strings.HasPrefix(err.Error(), "start ") {
-				return err
-			}
-			stopErrs = append(stopErrs, err)
+	return ms.doControl(func() error {
+		state := ms.runState.Load()
+		if state == nil || !state.running {
+			return nil
 		}
-	}
 
-	// User logs -> re-register handlers (presence/member/user updates)
-	ms.removeEventHandlers()
-	ms.setupEventHandlersFromRuntimeConfig(rc)
-	ms.syncSchedulesLocked(ms.run.ctx, workload)
+		workload := ms.workloadState(rc)
+		var stopErrs []error
 
-	if len(stopErrs) > 0 {
-		return fmt.Errorf("apply runtime toggles: %w", errors.Join(stopErrs...))
-	}
-	return nil
+		if errs := ms.applySubServiceToggles(ctx, workload); len(errs) > 0 {
+			for _, err := range errs {
+				if strings.HasPrefix(err.Error(), "start ") {
+					return err
+				}
+				stopErrs = append(stopErrs, err)
+			}
+		}
+
+		// User logs -> re-register handlers (presence/member/user updates)
+		ms.removeEventHandlers()
+		ms.setupEventHandlersFromRuntimeConfig(rc)
+		ms.syncSchedulesLocked(state.ctx, workload)
+
+		if len(stopErrs) > 0 {
+			return fmt.Errorf("apply runtime toggles: %w", errors.Join(stopErrs...))
+		}
+		return nil
+	})
 }
 
 func (ms *MonitoringService) registerStartupWarmupHandler(runCtx context.Context) {
