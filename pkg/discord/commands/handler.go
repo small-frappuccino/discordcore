@@ -194,10 +194,7 @@ func (ch *CommandHandler) handlesGuild(guildID string) bool {
 }
 
 func (ch *CommandHandler) handlesGuildRoute(guildID string, routeKey core.InteractionRouteKey) bool {
-	feature := "commands"
-	if strings.HasPrefix(routeKey.Path, "qotd") {
-		feature = "qotd"
-	}
+	feature := core.ResolveFeatureForCommandPath(routeKey.Path)
 	if !ch.matchesGuildBotInstance(guildID, feature) {
 		return false
 	}

@@ -158,6 +158,9 @@ func (ms *MonitoringService) handlePresenceUpdate(s *discordgo.Session, m *disco
 	if !ms.handlesGuild(m.GuildID) {
 		return
 	}
+	if !ms.isFeatureBot(m.GuildID, "moderation") {
+		return
+	}
 	if m.User.Username == "" {
 		log.ApplicationLogger().Debug("PresenceUpdate ignored (empty username)", "userID", m.User.ID, "guildID", m.GuildID)
 		ms.handlePresenceWatch(m)

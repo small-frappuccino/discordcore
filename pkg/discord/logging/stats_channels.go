@@ -90,7 +90,7 @@ func (s *StatsService) handlesGuild(guildID string) bool {
 	if !cfg.BelongsToBotInstance(s.botInstanceID) {
 		return false
 	}
-	resolvedID, _ := cfg.ResolveFeatureBotInstanceID("monitoring", s.defaultBotInstanceID)
+	resolvedID, _ := cfg.ResolveFeatureBotInstanceID("roles", s.defaultBotInstanceID)
 	return resolvedID == s.botInstanceID
 }
 

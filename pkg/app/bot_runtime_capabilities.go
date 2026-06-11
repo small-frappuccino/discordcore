@@ -46,17 +46,47 @@ func resolveBotRuntimeCapabilities(
 		}
 
 		if features.Services.Commands {
-			resolvedID, _ := guild.ResolveFeatureBotInstanceID("commands", defaultBotInstanceID)
-			if resolvedID == botInstanceID {
+			cmdResolvedID, _ := guild.ResolveFeatureBotInstanceID("commands", defaultBotInstanceID)
+			if cmdResolvedID == botInstanceID {
 				capabilities.hasCommands = true
 				if features.Services.AdminCommands {
 					capabilities.admin = true
 				}
 			}
+
+			// Sub-domain feature routing grants command capability to the assigned bot.
+			// If a sub-domain route is not explicitly configured, it falls back to the
+			// base "commands" route (which itself falls back to the default bot).
+			rolesResolvedID, _ := guild.ResolveFeatureBotInstanceID("roles", cmdResolvedID)
+			if rolesResolvedID == botInstanceID {
+				capabilities.hasCommands = true
+				capabilities.intents |= discordgo.IntentsGuildMembers
+				capabilities.warmup = true
+			}
+
+			modResolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation", cmdResolvedID)
+			if modResolvedID == botInstanceID {
+				capabilities.hasCommands = true
+			}
+
+			partnersResolvedID, _ := guild.ResolveFeatureBotInstanceID("partners", cmdResolvedID)
+			if partnersResolvedID == botInstanceID {
+				capabilities.hasCommands = true
+			}
+
+			embedsResolvedID, _ := guild.ResolveFeatureBotInstanceID("embeds", cmdResolvedID)
+			if embedsResolvedID == botInstanceID {
+				capabilities.hasCommands = true
+			}
+
+			ticketsResolvedID, _ := guild.ResolveFeatureBotInstanceID("tickets", cmdResolvedID)
+			if ticketsResolvedID == botInstanceID {
+				capabilities.hasCommands = true
+			}
 		}
 
 		if features.Services.Automod && features.Logging.AutomodAction && !runtimeConfig.DisableAutomodLogs {
-			resolvedID, _ := guild.ResolveFeatureBotInstanceID("automod", defaultBotInstanceID)
+			resolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation", defaultBotInstanceID)
 			if resolvedID == botInstanceID {
 				capabilities.automod = true
 				capabilities.intents |= discordgo.IntentAutoModerationExecution
@@ -64,7 +94,7 @@ func resolveBotRuntimeCapabilities(
 		}
 
 		if features.UserPrune && guild.UserPrune.Enabled {
-			resolvedID, _ := guild.ResolveFeatureBotInstanceID("user_prune", defaultBotInstanceID)
+			resolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation", defaultBotInstanceID)
 			if resolvedID == botInstanceID {
 				capabilities.userPrune = true
 				capabilities.intents |= discordgo.IntentsGuildMembers
@@ -76,27 +106,38 @@ func resolveBotRuntimeCapabilities(
 			continue
 		}
 
-		monitoringResolvedID, _ := guild.ResolveFeatureBotInstanceID("monitoring", defaultBotInstanceID)
-		if monitoringResolvedID != botInstanceID {
+		rolesResolvedID, _ := guild.ResolveFeatureBotInstanceID("roles", defaultBotInstanceID)
+		modResolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation", defaultBotInstanceID)
+
+		isRolesBot := rolesResolvedID == botInstanceID
+		isModBot := modResolvedID == botInstanceID
+
+		if !isRolesBot && !isModBot {
 			continue
 		}
 
 		if botRuntimeNeedsMonitoring(features, runtimeConfig, guild) {
 			capabilities.monitoring = true
 		}
-		if botRuntimeNeedsMemberData(features, runtimeConfig, guild) {
-			capabilities.intents |= discordgo.IntentsGuildMembers
-			capabilities.warmup = true
+
+		if isRolesBot {
+			if botRuntimeNeedsMemberData(features, runtimeConfig, guild) {
+				capabilities.intents |= discordgo.IntentsGuildMembers
+				capabilities.warmup = true
+			}
 		}
-		if botRuntimeNeedsPresence(features, runtimeConfig) {
-			capabilities.intents |= discordgo.IntentsGuildPresences
-			capabilities.warmup = true
-		}
-		if botRuntimeNeedsMessages(features, runtimeConfig) {
-			capabilities.intents |= discordgo.IntentsGuildMessages | discordgo.IntentMessageContent
-		}
-		if botRuntimeNeedsReactions(features, runtimeConfig) {
-			capabilities.intents |= discordgo.IntentsGuildMessageReactions
+
+		if isModBot {
+			if botRuntimeNeedsPresence(features, runtimeConfig) {
+				capabilities.intents |= discordgo.IntentsGuildPresences
+				capabilities.warmup = true
+			}
+			if botRuntimeNeedsMessages(features, runtimeConfig) {
+				capabilities.intents |= discordgo.IntentsGuildMessages | discordgo.IntentMessageContent
+			}
+			if botRuntimeNeedsReactions(features, runtimeConfig) {
+				capabilities.intents |= discordgo.IntentsGuildMessageReactions
+			}
 		}
 	}
 

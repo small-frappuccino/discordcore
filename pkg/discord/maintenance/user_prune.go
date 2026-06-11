@@ -143,6 +143,10 @@ func (s *UserPruneService) runIfDue(now time.Time) {
 		if !gcfg.UserPrune.Enabled {
 			continue
 		}
+		resolvedID, _ := gcfg.ResolveFeatureBotInstanceID("moderation", s.defaultBotID)
+		if resolvedID != s.botInstanceID {
+			continue
+		}
 		if s.didRunGuildPruneThisMonth(runCtx, gcfg.GuildID, now) {
 			continue
 		}

@@ -277,6 +277,9 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 	if !ms.handlesGuild(m.GuildID) {
 		return
 	}
+	if !ms.isFeatureBot(m.GuildID, "roles") {
+		return
+	}
 
 	done := perf.StartGatewayEvent(
 		"guild_member_update.monitoring",

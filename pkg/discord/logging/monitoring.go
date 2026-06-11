@@ -598,7 +598,30 @@ func (ms *MonitoringService) handlesGuild(guildID string) bool {
 	if !guild.BelongsToBotInstance(ms.botInstanceID) {
 		return false
 	}
-	resolvedID, _ := guild.ResolveFeatureBotInstanceID("monitoring", ms.defaultBotInstanceID)
+	rolesResolvedID, _ := guild.ResolveFeatureBotInstanceID("roles", ms.defaultBotInstanceID)
+	modResolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation", ms.defaultBotInstanceID)
+	return rolesResolvedID == ms.botInstanceID || modResolvedID == ms.botInstanceID
+}
+
+func (ms *MonitoringService) isFeatureBot(guildID string, feature string) bool {
+	if ms == nil || ms.configManager == nil {
+		return false
+	}
+	if files.NormalizeBotInstanceID(ms.botInstanceID) == "" && files.NormalizeBotInstanceID(ms.defaultBotInstanceID) == "" {
+		return true
+	}
+	guildID = strings.TrimSpace(guildID)
+	if guildID == "" {
+		return false
+	}
+	guild := ms.configManager.GuildConfig(guildID)
+	if guild == nil {
+		return false
+	}
+	if !guild.BelongsToBotInstance(ms.botInstanceID) {
+		return false
+	}
+	resolvedID, _ := guild.ResolveFeatureBotInstanceID(feature, ms.defaultBotInstanceID)
 	return resolvedID == ms.botInstanceID
 }
 

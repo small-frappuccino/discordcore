@@ -232,7 +232,7 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 	if !guildConfig.BelongsToBotInstance(as.botInstanceID) {
 		return
 	}
-	resolvedID, _ := guildConfig.ResolveFeatureBotInstanceID("automod", as.defaultBotInstanceID)
+	resolvedID, _ := guildConfig.ResolveFeatureBotInstanceID("moderation", as.defaultBotInstanceID)
 	if resolvedID != as.botInstanceID {
 		return
 	}
