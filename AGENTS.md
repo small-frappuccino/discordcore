@@ -120,7 +120,7 @@ Across both:
 
 Do exactly what the user requested. Nothing more, nothing less.
 
-- treat the user’s message as the contract; the deliverable is the smallest safe change that satisfies it
+- treat the user's message as the contract; the deliverable is the smallest safe change that satisfies it
 - expect direct, task-focused instructions, occasionally in Portuguese (e.g., "Execute task M3", "Como isso fica..."). Acknowledge and proceed without conversational filler
 - leverage artifacts (`implementation_plan.md`, `task.md`) when a plan is required for complex tasks, but execute straightforward fixes immediately
 - **No Silent Placeholders**: All code must be complete, executable, with proper error handling. No `// ... existing code ...` shortcuts unless explicitly permitted
@@ -128,8 +128,9 @@ Do exactly what the user requested. Nothing more, nothing less.
 - **Binary Certainty**: No hedging or probabilistic language. Assert facts with conviction or provide a concrete verification path. Zero fabrication
 - **Context Integration**: Seamlessly apply provided context. Do not restate or summarize the provided architecture back to the user
 - **Audits & Analysis**: Focus on race conditions, I/O bottlenecks, transactional regressions, trade-offs, and failure modes instead of surface-level syntax or generic best practices. Contrast options side-by-side explicitly defining victory conditions
-- do not bundle adjacent improvements, cleanup, renames, or reformatting with the requested change
-- do not refactor surrounding code unless the requested change cannot land safely without it
+- do not bundle adjacent improvements, cleanup, renames, or reformatting with a non-refactor change
+- do not refactor surrounding code unless the requested change cannot land safely without it, OR unless the surrounding code qualifies as an authorized refactor target (see Authorized Refactor Classes below)
+- when an authorized refactor is warranted but not requested, surface it as a separate explicit proposal after completing the requested work; do not execute it silently
 - do not add features, options, flags, configuration, logging, telemetry, metrics, or hooks the user did not ask for
 - do not anticipate future requirements; if a broader change would be required, surface that explicitly instead of silently widening scope
 - if you notice an unrelated issue while working, mention it separately after the requested work is complete
@@ -209,6 +210,46 @@ If dashboard routing changes, update backend, frontend, tests, docs, and embed a
 - transition boundary-crossing wrapper structs to generic type aliases (`type Alias[T any] = OriginalType[T]`, Go 1.24) to eradicate redundant allocation layers.
 - replace `runtime.SetFinalizer` with `runtime.AddCleanup` (Go 1.24) to enforce deterministic memory reclamation.
 - consolidate multi-line primitive pointer assignments into single-line initializations (e.g., `new(int64(300))`, Go 1.26).
+When executing any modernization item above, update all affected callers, tests, and doc comments
+in the same atomic change. Do not leave the repo in a partial migration state. If the scope exceeds
+what can be validated in one `go test ./...` pass, split by subsystem (e.g., `pkg/storage/` first,
+then `pkg/discord/`), each split must be independently buildable and passing.
+
+## Authorized Refactor Classes
+
+These categories of change may have high diff counts and cross package boundaries. Each must
+be proposed explicitly before execution unless the user's message directly requests it. Once
+approved, execute atomically — do not leave callers, tests, or shims in an intermediate state.
+
+Qualifying criteria (ALL must hold):
+- the result is strictly better than the current code by at least one of: correctness, allocations, 
+  error handling completeness, or removal of technical debt
+- no speculative abstractions, future-proofing layers, or behavioral changes are introduced
+- the pattern already exists in the repo or is explicitly listed in Go Modernization below
+- every affected caller, test, and doc comment is updated in the same change
+
+Authorized classes:
+- **iter.Seq / iter.Seq2 migration**: batch-returning functions in `pkg/storage/` and `pkg/discord/`
+  that allocate intermediate slices may be rewritten to return `iter.Seq` / `iter.Seq2` with 
+  streaming `sql.Rows` iteration. All callers must be migrated in the same commit.
+- **Dead code removal**: unexported functions, types, or constants with no live callers (confirmed
+  by `grep` + `gopls references`, not assumed) may be removed together with their tests.
+- **Pointer helper consolidation**: `varOf`-style helpers matching the `func f(x T) *T { return &x }`
+  pattern may be replaced with `new(expr)` (Go 1.26) at all call sites in one pass.
+- **SetFinalizer → AddCleanup**: `runtime.SetFinalizer` calls replaced with `runtime.AddCleanup`
+  (Go 1.24). Each replacement must preserve the original lifecycle semantics exactly.
+- **Generic type alias consolidation**: wrapper structs that exist solely to carry a generic type 
+  across a package boundary may be replaced with parameterized aliases where the types package
+  already has the definition.
+- **sync.Map → sync.Map (1.24 HAMT)**: no code change needed; but if code works around the 
+  old dual-map contention profile (explicit sharding, manual dirty-map patterns), those workarounds
+  may be removed if benchmarks confirm the 1.24 implementation makes them redundant.
+
+Prohibited regardless of class:
+- changes that alter observable behavior at API or Discord-facing boundaries
+- changes that touch `pkg/files/types.go` field shapes without following Config Schema Evolution Pattern
+- changes that widen hotspot files listed in Hotspots And Cautions
+- changes motivated by "this would be cleaner" without a concrete measurable improvement
 
 ## Config Schema Evolution Pattern
 
@@ -235,6 +276,10 @@ Testing style:
 - prefer pure unit tests for math, lifecycle calculations, and error classification
 - keep failures in the current test or subtest when practical; helpers should return errors or diffs instead of failing the test themselves
 - never call `t.Fatal`, `t.FailNow`, or similar methods from spawned goroutines
+- authorized refactor commits use `refactor(<scope>): <description>` subject; if the refactor
+  spans multiple packages, list the primary owning package as scope
+- a refactor commit must not mix behavioral changes with structural ones; if a behavior fix is
+  needed as part of the refactor, it goes in a preceding `fix:` commit
 
 Validation expectations:
 
