@@ -131,3 +131,89 @@ func TestApplySubServiceTogglesStateTransitions(t *testing.T) {
 		t.Errorf("s1 should not have been stopped")
 	}
 }
+
+func TestStopSubServicesTeardownOrder(t *testing.T) {
+	var stopOrder []string
+
+	entries := []subServiceEntry{
+		{
+			name:      "member_event_service",
+			isRunning: func() bool { return true },
+			stop: func() error {
+				stopOrder = append(stopOrder, "member_event_service")
+				return nil
+			},
+		},
+		{
+			name:      "message_event_service",
+			isRunning: func() bool { return true },
+			stop: func() error {
+				stopOrder = append(stopOrder, "message_event_service")
+				return nil
+			},
+		},
+		{
+			name:      "reaction_event_service",
+			isRunning: func() bool { return true },
+			stop: func() error {
+				stopOrder = append(stopOrder, "reaction_event_service")
+				return nil
+			},
+		},
+	}
+
+	errs := executeStopSubServices(context.Background(), entries)
+	if len(errs) > 0 {
+		t.Fatalf("unexpected errors: %v", errs)
+	}
+
+	if len(stopOrder) != 3 {
+		t.Fatalf("expected 3 services to stop, got %d", len(stopOrder))
+	}
+	if stopOrder[0] != "reaction_event_service" || stopOrder[1] != "message_event_service" || stopOrder[2] != "member_event_service" {
+		t.Errorf("incorrect teardown order: %v", stopOrder)
+	}
+}
+
+func TestBuildSubServiceEntriesClosures(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("nil pointers yield safe bools", func(t *testing.T) {
+		ms := &MonitoringService{}
+
+		workload := monitoringWorkloadState{
+			memberEventService:   true,
+			messageEventService:  true,
+			reactionEventService: true,
+		}
+
+		entries := ms.buildSubServiceEntries(ctx, workload)
+		for _, entry := range entries {
+			if entry.isRunning() {
+				t.Errorf("expected %s isRunning to be false on nil pointer", entry.name)
+			}
+			if err := entry.stop(); err != nil {
+				t.Errorf("expected %s stop to be safe on nil pointer, got %v", entry.name, err)
+			}
+		}
+	})
+
+	t.Run("instantiated struct branches", func(t *testing.T) {
+		ms := &MonitoringService{
+			memberEventService:   &MemberEventService{},
+			messageEventService:  &MessageEventService{},
+			reactionEventService: &ReactionEventService{},
+		}
+
+		entries := ms.buildSubServiceEntries(ctx, monitoringWorkloadState{})
+		for _, entry := range entries {
+			if entry.isRunning() {
+				t.Errorf("expected %s isRunning to default to false on zero struct", entry.name)
+			}
+			// Safe stop with IsRunning() == false check in closure
+			if err := entry.stop(); err != nil {
+				t.Errorf("expected stop to be a no-op when not running, got err: %v", err)
+			}
+		}
+	})
+}

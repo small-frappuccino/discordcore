@@ -118,9 +118,13 @@ func executeStartSubServices(ctx context.Context, entries []subServiceEntry) err
 // stopSubServices stops member, message, and reaction event services in
 // reverse dependency order, collecting errors.
 func (ms *MonitoringService) stopSubServices(ctx context.Context) []error {
-	var stopErrs []error
 	// empty workload because we're just stopping
 	entries := ms.buildSubServiceEntries(ctx, monitoringWorkloadState{})
+	return executeStopSubServices(ctx, entries)
+}
+
+func executeStopSubServices(ctx context.Context, entries []subServiceEntry) []error {
+	var stopErrs []error
 	for i := len(entries) - 1; i >= 0; i-- {
 		entry := entries[i]
 		if entry.isRunning() {
