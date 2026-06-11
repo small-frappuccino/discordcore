@@ -448,14 +448,15 @@ select[multiple].form-select {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  flex: 1 1 250px;
+  flex: 1 1 300px;
   min-width: 0;
 }
 
 .tahoe-settings-row-control {
-  flex: 2 1 300px;
+  flex: 1 1 200px;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   min-width: 0;
 }
 
@@ -466,7 +467,7 @@ select[multiple].form-select {
 }
 
 .tahoe-settings-row-desc {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   color: var(--text-secondary);
 }
 

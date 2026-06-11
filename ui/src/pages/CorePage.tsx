@@ -221,15 +221,10 @@ export function CorePage() {
                               title="Bot Status"
                               description="Control whether this bot is active and online in the server."
                               control={
-                                <div className="flex items-center gap-3">
-                                  <ToggleSwitch
-                                    checked={statusesState[instanceId] !== "disabled"}
-                                    onCheckedChange={(checked) => setStatusesState(prev => ({ ...prev, [instanceId]: checked ? "" : "disabled" }))}
-                                  />
-                                  <span className="text-sm font-medium">
-                                    {statusesState[instanceId] !== "disabled" ? "Enabled" : "Disabled"}
-                                  </span>
-                                </div>
+                                <ToggleSwitch
+                                  checked={statusesState[instanceId] !== "disabled"}
+                                  onCheckedChange={(checked) => setStatusesState(prev => ({ ...prev, [instanceId]: checked ? "" : "disabled" }))}
+                                />
                               }
                             />
                           )}
@@ -241,7 +236,7 @@ export function CorePage() {
                                 <div className="flex items-center gap-2">
                                   <span>Token</span>
                                 </div>
-                                {hasToken && !botPresent && profile && (
+                                {hasToken && !botPresent && (
                                   <div className="text-xs text-[var(--status-warning,#f59e0b)] font-medium mt-1">
                                     ⚠️ Bot is not in server
                                   </div>
@@ -257,7 +252,7 @@ export function CorePage() {
                                   value={tokensState[instanceId] !== undefined ? tokensState[instanceId] : ""}
                                   onChange={(e) => setTokensState(prev => ({ ...prev, [instanceId]: e.target.value }))}
                                 />
-                                {hasToken && !botPresent && profile && (
+                                {hasToken && !botPresent && (
                                   <ActionTrigger
                                     onClick={() => window.open(`${baseUrl === "" ? "" : baseUrl}/v1/guilds/${guildId}/oauth/authorize?bot_instance_id=${instanceId}`, "_blank", "noopener,noreferrer")}
                                     className="mt-2 self-start flex items-center gap-2 px-3 py-1.5"
@@ -268,7 +263,7 @@ export function CorePage() {
                                       <line x1="20" y1="8" x2="20" y2="14" />
                                       <line x1="23" y1="11" x2="17" y2="11" />
                                     </svg>
-                                    Authorize {profile.username}
+                                    {profile ? `Authorize ${profile.username}` : "Authorize Bot"}
                                   </ActionTrigger>
                                 )}
                               </div>
