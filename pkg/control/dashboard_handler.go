@@ -73,6 +73,17 @@ func newDashboardHandler(assets fs.FS) (http.Handler, error) {
 		return nil, fmt.Errorf("failed to pre-compute embedded assets: %w", err)
 	}
 
+	go func() {
+		// Eagerly pre-fault critical assets into the OS page cache to eliminate cold-start latency.
+		for p := range knownFiles {
+			if p == "index.html" || strings.HasSuffix(p, ".js") || strings.HasSuffix(p, ".css") || strings.HasSuffix(p, ".br") || strings.HasSuffix(p, ".gz") {
+				if content, err := fs.ReadFile(assets, p); err == nil {
+					_ = content
+				}
+			}
+		}
+	}()
+
 	return &dashboardHandler{
 		assets:     assets,
 		fileServer: http.FileServer(http.FS(assets)),
@@ -120,9 +131,7 @@ func (h *dashboardHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (h *dashboardHandler) serveAsset(w http.ResponseWriter, r *http.Request, assetPath string) {
 	w.Header().Add("Vary", "Accept-Encoding")
-	if strings.HasPrefix(assetPath, "assets/") {
-		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-	}
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 
 	accept := r.Header.Get("Accept-Encoding")
 
