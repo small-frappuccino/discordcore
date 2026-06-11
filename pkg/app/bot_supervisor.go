@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"fmt"
 	"math/rand/v2"
 	"sync"
 	"time"
@@ -324,9 +323,6 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token string, sta
 		}
 		s.mu.Unlock()
 
-		if s.fatalCallback != nil {
-			s.fatalCallback(fmt.Errorf("fatal: failed to open bot runtime for instance %s after %d retries: %w", instanceID, maxRetries, err))
-		}
 		return
 	}
 
@@ -338,9 +334,6 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token string, sta
 		}
 		s.mu.Unlock()
 
-		if s.fatalCallback != nil {
-			s.fatalCallback(fmt.Errorf("fatal: failed to initialize bot runtime for instance %s: %w", instanceID, err))
-		}
 		return
 	}
 
