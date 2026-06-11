@@ -204,6 +204,12 @@ If dashboard routing changes, update backend, frontend, tests, docs, and embed a
 - **TypeScript API Resiliency**: Enforce mandatory exponential backoff and randomized network jitter on all retry mechanisms for HTTP 502/504 errors to prevent thundering herd state collapses.
 - **Observability Accessors**: Mandate strict dependency validation during the application boot phase to ensure the metrics pipeline successfully attaches prior to the primary event loop. A failure to attach the pipeline prior to the primary event loop must trigger a fatal runtime abort, ensuring nil-safe accessors (`NopMetrics`) do not mask deployment anomalies.
 
+### Go Modernization (up to 1.26)
+- replace custom stateful iterators, channel-based generators, and slice-allocating batch retrievals with `iter.Seq` and `iter.Seq2` (Go 1.23) using native `for ... range` loops to eliminate intermediate heap allocations. Specifically, transition Postgres batch fetches in `pkg/storage/` (e.g., returning `[]Event`) to stream directly from `sql.Rows` iteration, eliding the intermediate slice allocation.
+- transition boundary-crossing wrapper structs to generic type aliases (`type Alias[T any] = OriginalType[T]`, Go 1.24) to eradicate redundant allocation layers.
+- replace `runtime.SetFinalizer` with `runtime.AddCleanup` (Go 1.24) to enforce deterministic memory reclamation.
+- consolidate multi-line primitive pointer assignments into single-line initializations (e.g., `new(int64(300))`, Go 1.26).
+
 ## Config Schema Evolution Pattern
 
 When a persisted config field changes shape:
