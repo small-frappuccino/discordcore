@@ -3,6 +3,7 @@ package analytics
 import (
 	"context"
 	"fmt"
+	"iter"
 	"strings"
 	"time"
 
@@ -136,57 +137,17 @@ func handleActivity(ctx *core.Context) error {
 	defer cancel()
 
 	// Collect activity
-	msgTotalsByChannel, err := store.MessageTotalsByChannel(ctxTimeout, ctx.GuildID, cutoff, channelID)
-	if err != nil {
-		log.ErrorLoggerRaw().Error(
-			"Analytics activity query failed",
-			"operation", "analytics.activity.query.message_totals_by_channel",
-			"guildID", ctx.GuildID,
-			"channelID", channelID,
-			"cutoffDay", cutoff,
-			"err", err,
-		)
-		return respondError(s, i, "The activity metrics couldn't be loaded from the database right now, so this reply stays private. Try again shortly.")
-	}
+	var msgTotalsByChannel iter.Seq2[storage.MetricTotal, error]
+	msgTotalsByChannel = store.MessageTotalsByChannel(ctxTimeout, ctx.GuildID, cutoff, channelID)
 
-	msgTotalsByUser, err := store.MessageTotalsByUser(ctxTimeout, ctx.GuildID, cutoff, channelID)
-	if err != nil {
-		log.ErrorLoggerRaw().Error(
-			"Analytics activity query failed",
-			"operation", "analytics.activity.query.message_totals_by_user",
-			"guildID", ctx.GuildID,
-			"channelID", channelID,
-			"cutoffDay", cutoff,
-			"err", err,
-		)
-		return respondError(s, i, "The activity metrics couldn't be loaded from the database right now, so this reply stays private. Try again shortly.")
-	}
+	var msgTotalsByUser iter.Seq2[storage.MetricTotal, error]
+	msgTotalsByUser = store.MessageTotalsByUser(ctxTimeout, ctx.GuildID, cutoff, channelID)
 
-	reactTotalsByChannel, err := store.ReactionTotalsByChannel(ctxTimeout, ctx.GuildID, cutoff, channelID)
-	if err != nil {
-		log.ErrorLoggerRaw().Error(
-			"Analytics activity query failed",
-			"operation", "analytics.activity.query.reaction_totals_by_channel",
-			"guildID", ctx.GuildID,
-			"channelID", channelID,
-			"cutoffDay", cutoff,
-			"err", err,
-		)
-		return respondError(s, i, "The activity metrics couldn't be loaded from the database right now, so this reply stays private. Try again shortly.")
-	}
+	var reactTotalsByChannel iter.Seq2[storage.MetricTotal, error]
+	reactTotalsByChannel = store.ReactionTotalsByChannel(ctxTimeout, ctx.GuildID, cutoff, channelID)
 
-	reactTotalsByUser, err := store.ReactionTotalsByUser(ctxTimeout, ctx.GuildID, cutoff, channelID)
-	if err != nil {
-		log.ErrorLoggerRaw().Error(
-			"Analytics activity query failed",
-			"operation", "analytics.activity.query.reaction_totals_by_user",
-			"guildID", ctx.GuildID,
-			"channelID", channelID,
-			"cutoffDay", cutoff,
-			"err", err,
-		)
-		return respondError(s, i, "The activity metrics couldn't be loaded from the database right now, so this reply stays private. Try again shortly.")
-	}
+	var reactTotalsByUser iter.Seq2[storage.MetricTotal, error]
+	reactTotalsByUser = store.ReactionTotalsByUser(ctxTimeout, ctx.GuildID, cutoff, channelID)
 
 	// Build embed
 	chFilterStr := ""
@@ -533,17 +494,22 @@ func clampInt(v, min, max int) int {
 	return v
 }
 
-func renderTop(items []storage.MetricTotal, n int, display func(id string) string) string {
-	if len(items) == 0 {
-		return "_no data_"
-	}
-	if n > len(items) {
-		n = len(items)
-	}
+func renderTop(items iter.Seq2[storage.MetricTotal, error], n int, display func(id string) string) string {
 	var b strings.Builder
-	for idx := 0; idx < n; idx++ {
-		it := items[idx]
+	idx := 0
+	for it, err := range items {
+		if err != nil {
+			log.ApplicationLogger().Warn("Failed to stream analytic items", "err", err)
+			break
+		}
+		if idx >= n {
+			break
+		}
 		fmt.Fprintf(&b, "%d) %s — **%d**\n", idx+1, display(it.Key), it.Total)
+		idx++
+	}
+	if idx == 0 {
+		return "_no data_"
 	}
 	return b.String()
 }

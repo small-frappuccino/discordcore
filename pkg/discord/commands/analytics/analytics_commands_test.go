@@ -78,10 +78,11 @@ func TestServerStatsAggregationsUsePostgresStore(t *testing.T) {
 }
 
 func TestRenderTopWithMetricsTotals(t *testing.T) {
-	got := renderTop([]storage.MetricTotal{
-		{Key: "c1", Total: 10},
-		{Key: "c2", Total: 3},
-	}, 2, func(id string) string { return "#" + id })
+	seq := func(yield func(storage.MetricTotal, error) bool) {
+		yield(storage.MetricTotal{Key: "c1", Total: 10}, nil)
+		yield(storage.MetricTotal{Key: "c2", Total: 3}, nil)
+	}
+	got := renderTop(seq, 2, func(id string) string { return "#" + id })
 
 	want := "1) #c1 — **10**\n2) #c2 — **3**\n"
 	if got != want {

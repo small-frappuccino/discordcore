@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"sort"
+	"iter"
 	"strings"
 	"time"
 )
@@ -142,39 +142,41 @@ func (s *Store) GetCacheEntry(key string) (cacheType, data string, expiresAt tim
 	return cacheType, data, expiresAt, true, nil
 }
 
-// GetCacheEntriesByType retrieves all cache entries of a specific type
-func (s *Store) GetCacheEntriesByType(cacheType string) ([]struct {
+// CacheEntry represents a fetched cache entry
+type CacheEntry struct {
 	Key       string
 	Data      string
 	ExpiresAt time.Time
-}, error) {
-	rows, err := s.query(
-		`SELECT cache_key, data, expires_at FROM persistent_cache
-         WHERE cache_type=$1 AND expires_at > $2`,
-		cacheType, time.Now().UTC(),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("Store.GetCacheEntriesByType: %w", err)
-	}
-	defer rows.Close()
+}
 
-	var entries []struct {
-		Key       string
-		Data      string
-		ExpiresAt time.Time
-	}
-	for rows.Next() {
-		var entry struct {
-			Key       string
-			Data      string
-			ExpiresAt time.Time
+// GetCacheEntriesByType retrieves all cache entries of a specific type
+func (s *Store) GetCacheEntriesByType(cacheType string) iter.Seq2[CacheEntry, error] {
+	return func(yield func(CacheEntry, error) bool) {
+		rows, err := s.query(
+			`SELECT cache_key, data, expires_at FROM persistent_cache
+         WHERE cache_type=$1 AND expires_at > $2`,
+			cacheType, time.Now().UTC(),
+		)
+		if err != nil {
+			yield(CacheEntry{}, fmt.Errorf("Store.GetCacheEntriesByType: %w", err))
+			return
 		}
-		if err := rows.Scan(&entry.Key, &entry.Data, &entry.ExpiresAt); err != nil {
-			return nil, fmt.Errorf("Store.GetCacheEntriesByType: %w", err)
+		defer rows.Close()
+
+		for rows.Next() {
+			var entry CacheEntry
+			if err := rows.Scan(&entry.Key, &entry.Data, &entry.ExpiresAt); err != nil {
+				yield(CacheEntry{}, fmt.Errorf("Store.GetCacheEntriesByType: %w", err))
+				return
+			}
+			if !yield(entry, nil) {
+				return
+			}
 		}
-		entries = append(entries, entry)
+		if err := rows.Err(); err != nil {
+			yield(CacheEntry{}, fmt.Errorf("Store.GetCacheEntriesByType: %w", err))
+		}
 	}
-	return entries, rows.Err()
 }
 
 // DeleteCacheEntry removes a cache entry from persistent storage
@@ -408,63 +410,66 @@ type MetricTotal struct {
 	Total int64
 }
 
-func (s *Store) metricTotalsByDimension(ctx context.Context, tableName, dimension, guildID, cutoffDay, channelID string) ([]MetricTotal, error) {
-	if guildID == "" || cutoffDay == "" {
-		return nil, nil
-	}
-	baseSQL := fmt.Sprintf(
-		"SELECT %s, SUM(count) FROM %s WHERE guild_id=$1 AND day>=$2",
-		dimension, tableName,
-	)
-	args := []any{guildID, cutoffDay}
-	if channelID != "" {
-		baseSQL += " AND channel_id=$1"
-		args = append(args, channelID)
-	}
-	baseSQL += fmt.Sprintf(" GROUP BY %s", dimension)
-
-	rows, err := s.db.QueryContext(ctx, baseSQL, args...)
-	if err != nil {
-		return nil, fmt.Errorf("Store.metricTotalsByDimension: %w", err)
-	}
-	defer rows.Close()
-
-	out := make([]MetricTotal, 0, 16)
-	for rows.Next() {
-		var key string
-		var total sql.NullInt64
-		if err := rows.Scan(&key, &total); err != nil {
-			return nil, fmt.Errorf("Store.metricTotalsByDimension: %w", err)
+func (s *Store) metricTotalsByDimension(ctx context.Context, tableName, dimension, guildID, cutoffDay, channelID string) iter.Seq2[MetricTotal, error] {
+	return func(yield func(MetricTotal, error) bool) {
+		if guildID == "" || cutoffDay == "" {
+			return
 		}
-		if total.Valid {
-			out = append(out, MetricTotal{Key: key, Total: total.Int64})
+		baseSQL := fmt.Sprintf(
+			"SELECT %s, SUM(count) FROM %s WHERE guild_id=$1 AND day>=$2",
+			dimension, tableName,
+		)
+		args := []any{guildID, cutoffDay}
+		if channelID != "" {
+			baseSQL += " AND channel_id=$1"
+			args = append(args, channelID)
+		}
+		baseSQL += fmt.Sprintf(" GROUP BY %s ORDER BY 2 DESC", dimension)
+
+		rows, err := s.db.QueryContext(ctx, baseSQL, args...)
+		if err != nil {
+			yield(MetricTotal{}, fmt.Errorf("Store.metricTotalsByDimension: %w", err))
+			return
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var key string
+			var total sql.NullInt64
+			if err := rows.Scan(&key, &total); err != nil {
+				yield(MetricTotal{}, fmt.Errorf("Store.metricTotalsByDimension: %w", err))
+				return
+			}
+			if total.Valid {
+				if !yield(MetricTotal{Key: key, Total: total.Int64}, nil) {
+					return
+				}
+			}
+		}
+		if err := rows.Err(); err != nil {
+			yield(MetricTotal{}, fmt.Errorf("Store.metricTotalsByDimension: %w", err))
 		}
 	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("Store.metricTotalsByDimension: %w", err)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Total > out[j].Total })
-	return out, nil
 }
 
 // MessageTotalsByChannel messages totals by channel.
-func (s *Store) MessageTotalsByChannel(ctx context.Context, guildID, cutoffDay, channelID string) ([]MetricTotal, error) {
-	return s.metricTotalsByDimension(ctx, "daily_message_metrics", "channel_id", guildID, cutoffDay, channelID)
+func (s *Store) MessageTotalsByChannel(ctx context.Context, guildID, cutoffDay, channelID string) iter.Seq2[MetricTotal, error] {
+	return s.metricTotalsByDimension(ctx, "daily_message_counts", "channel_id", guildID, cutoffDay, channelID)
 }
 
 // MessageTotalsByUser messages totals by user.
-func (s *Store) MessageTotalsByUser(ctx context.Context, guildID, cutoffDay, channelID string) ([]MetricTotal, error) {
-	return s.metricTotalsByDimension(ctx, "daily_message_metrics", "user_id", guildID, cutoffDay, channelID)
+func (s *Store) MessageTotalsByUser(ctx context.Context, guildID, cutoffDay, channelID string) iter.Seq2[MetricTotal, error] {
+	return s.metricTotalsByDimension(ctx, "daily_message_counts", "user_id", guildID, cutoffDay, channelID)
 }
 
 // ReactionTotalsByChannel reactions totals by channel.
-func (s *Store) ReactionTotalsByChannel(ctx context.Context, guildID, cutoffDay, channelID string) ([]MetricTotal, error) {
-	return s.metricTotalsByDimension(ctx, "daily_reaction_metrics", "channel_id", guildID, cutoffDay, channelID)
+func (s *Store) ReactionTotalsByChannel(ctx context.Context, guildID, cutoffDay, channelID string) iter.Seq2[MetricTotal, error] {
+	return s.metricTotalsByDimension(ctx, "daily_reaction_counts", "channel_id", guildID, cutoffDay, channelID)
 }
 
 // ReactionTotalsByUser reactions totals by user.
-func (s *Store) ReactionTotalsByUser(ctx context.Context, guildID, cutoffDay, channelID string) ([]MetricTotal, error) {
-	return s.metricTotalsByDimension(ctx, "daily_reaction_metrics", "user_id", guildID, cutoffDay, channelID)
+func (s *Store) ReactionTotalsByUser(ctx context.Context, guildID, cutoffDay, channelID string) iter.Seq2[MetricTotal, error] {
+	return s.metricTotalsByDimension(ctx, "daily_reaction_counts", "user_id", guildID, cutoffDay, channelID)
 }
 
 // CountDistinctMemberJoins counts distinct member joins.

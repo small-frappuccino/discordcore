@@ -729,11 +729,10 @@ func (uc *UnifiedCache) Warmup() error {
 	var totalLoaded int
 
 	// Warmup members
-	memberEntries, err := uc.store.GetCacheEntriesByType("member")
-	if err != nil {
-		return fmt.Errorf("warmup members: %w", err)
-	}
-	for _, entry := range memberEntries {
+	for entry, err := range uc.store.GetCacheEntriesByType("member") {
+		if err != nil {
+			return fmt.Errorf("warmup members: %w", err)
+		}
 		var member discordgo.Member
 		if err := decodeEntity(entry.Data, &member); err != nil {
 			continue // Skip corrupted entries
@@ -745,11 +744,10 @@ func (uc *UnifiedCache) Warmup() error {
 	}
 
 	// Warmup guilds
-	guildEntries, err := uc.store.GetCacheEntriesByType("guild")
-	if err != nil {
-		return fmt.Errorf("warmup guilds: %w", err)
-	}
-	for _, entry := range guildEntries {
+	for entry, err := range uc.store.GetCacheEntriesByType("guild") {
+		if err != nil {
+			return fmt.Errorf("warmup guilds: %w", err)
+		}
 		var guild discordgo.Guild
 		if err := decodeEntity(entry.Data, &guild); err != nil {
 			continue
@@ -760,11 +758,10 @@ func (uc *UnifiedCache) Warmup() error {
 	}
 
 	// Warmup roles
-	rolesEntries, err := uc.store.GetCacheEntriesByType("roles")
-	if err != nil {
-		return fmt.Errorf("warmup roles: %w", err)
-	}
-	for _, entry := range rolesEntries {
+	for entry, err := range uc.store.GetCacheEntriesByType("roles") {
+		if err != nil {
+			return fmt.Errorf("warmup roles: %w", err)
+		}
 		var roles []*discordgo.Role
 		if err := decodeEntity(entry.Data, &roles); err != nil {
 			continue
@@ -775,11 +772,10 @@ func (uc *UnifiedCache) Warmup() error {
 	}
 
 	// Warmup channels
-	channelEntries, err := uc.store.GetCacheEntriesByType("channel")
-	if err != nil {
-		return fmt.Errorf("warmup channels: %w", err)
-	}
-	for _, entry := range channelEntries {
+	for entry, err := range uc.store.GetCacheEntriesByType("channel") {
+		if err != nil {
+			return fmt.Errorf("warmup channels: %w", err)
+		}
 		var channel discordgo.Channel
 		if err := decodeEntity(entry.Data, &channel); err != nil {
 			continue
