@@ -83,8 +83,10 @@ func (ms *MonitoringService) buildSubServiceEntries(ctx context.Context, workloa
 // dependency order. On failure, it rolls back all previously started services
 // in reverse order, returning the combined error.
 func (ms *MonitoringService) startSubServices(ctx context.Context, workload monitoringWorkloadState) error {
-	entries := ms.buildSubServiceEntries(ctx, workload)
+	return executeStartSubServices(ctx, ms.buildSubServiceEntries(ctx, workload))
+}
 
+func executeStartSubServices(ctx context.Context, entries []subServiceEntry) error {
 	var startErrs []error
 	var startedIdx = -1
 
@@ -132,8 +134,11 @@ func (ms *MonitoringService) stopSubServices(ctx context.Context) []error {
 }
 
 func (ms *MonitoringService) applySubServiceToggles(ctx context.Context, workload monitoringWorkloadState) []error {
+	return executeApplySubServiceToggles(ctx, ms.buildSubServiceEntries(ctx, workload))
+}
+
+func executeApplySubServiceToggles(ctx context.Context, entries []subServiceEntry) []error {
 	var errs []error
-	entries := ms.buildSubServiceEntries(ctx, workload)
 
 	// Stop services that should no longer run
 	for i := len(entries) - 1; i >= 0; i-- {
