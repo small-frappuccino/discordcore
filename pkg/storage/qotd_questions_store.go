@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"iter"
 	"sort"
 	"strings"
 	"time"
@@ -305,7 +306,7 @@ func (s *Store) DeleteQOTDQuestionsByDecks(ctx context.Context, guildID string, 
 }
 
 // ListQOTDQuestions lists qotdquestions.
-func (s *Store) ListQOTDQuestions(ctx context.Context, guildID, deckID string) (_ []QOTDQuestionRecord, err error) {
+func (s *Store) ListQOTDQuestions(ctx context.Context, guildID, deckID string) (_ iter.Seq[QOTDQuestionRecord], err error) {
 	defer func() {
 		if err != nil {
 			err = fmt.Errorf("list qotd questions: %w", err)
@@ -343,20 +344,20 @@ func (s *Store) ListQOTDQuestions(ctx context.Context, guildID, deckID string) (
 	if err != nil {
 		return nil, fmt.Errorf("Store.ListQOTDQuestions: %w", err)
 	}
-	defer rows.Close()
+	return func(yield func(QOTDQuestionRecord) bool) {
+		defer rows.Close()
 
-	records := make([]QOTDQuestionRecord, 0, 16)
-	for rows.Next() {
-		record, err := scanQOTDQuestionRecord(rows)
-		if err != nil {
-			return nil, fmt.Errorf("Store.ListQOTDQuestions: %w", err)
+		for rows.Next() {
+			record, err := scanQOTDQuestionRecord(rows)
+			if err != nil {
+				return
+			}
+			if !yield(*record) {
+				return
+			}
 		}
-		records = append(records, *record)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("Store.ListQOTDQuestions: %w", err)
-	}
-	return records, nil
+	}, nil
+
 }
 
 // GetQOTDQuestion gets qotdquestion.

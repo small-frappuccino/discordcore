@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"iter"
 	"strings"
 	"time"
 )
@@ -254,7 +255,7 @@ func (s *Store) GetQOTDAnswerMessageByOfficialPostAndUser(ctx context.Context, o
 }
 
 // ListQOTDAnswerMessagesByOfficialPost lists qotdanswer messages by official post.
-func (s *Store) ListQOTDAnswerMessagesByOfficialPost(ctx context.Context, officialPostID int64) (_ []QOTDAnswerMessageRecord, err error) {
+func (s *Store) ListQOTDAnswerMessagesByOfficialPost(ctx context.Context, officialPostID int64) (_ iter.Seq[QOTDAnswerMessageRecord], err error) {
 	defer func() {
 		if err != nil {
 			err = fmt.Errorf("list qotd answer messages by official post: %w", err)
@@ -286,20 +287,20 @@ func (s *Store) ListQOTDAnswerMessagesByOfficialPost(ctx context.Context, offici
 	if err != nil {
 		return nil, fmt.Errorf("Store.ListQOTDAnswerMessagesByOfficialPost: %w", err)
 	}
-	defer rows.Close()
+	return func(yield func(QOTDAnswerMessageRecord) bool) {
+		defer rows.Close()
 
-	records := make([]QOTDAnswerMessageRecord, 0, 16)
-	for rows.Next() {
-		record, err := scanQOTDAnswerMessageRecord(rows)
-		if err != nil {
-			return nil, fmt.Errorf("Store.ListQOTDAnswerMessagesByOfficialPost: %w", err)
+		for rows.Next() {
+			record, err := scanQOTDAnswerMessageRecord(rows)
+			if err != nil {
+				return
+			}
+			if !yield(*record) {
+				return
+			}
 		}
-		records = append(records, *record)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("Store.ListQOTDAnswerMessagesByOfficialPost: %w", err)
-	}
-	return records, nil
+	}, nil
+
 }
 
 // UpdateQOTDAnswerMessageState updates qotdanswer message state.

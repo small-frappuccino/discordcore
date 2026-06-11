@@ -20,7 +20,11 @@ func (s *Service) ListQuestions(ctx context.Context, guildID, deckID string) ([]
 	if err != nil {
 		return nil, fmt.Errorf("Service.ListQuestions: %w", err)
 	}
-	return s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
+	seq, err := s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
+	if err != nil {
+		return nil, err
+	}
+	return slices.Collect(seq), nil
 }
 
 // CreateQuestion creates question.
@@ -148,10 +152,11 @@ func (s *Service) GetAutomaticQueueState(ctx context.Context, guildID, deckID st
 
 		state := AutomaticQueueState{Deck: deck}
 		now := s.clock()
-		questions, err := s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
+		seq, err := s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
 		if err != nil {
 			return nil, fmt.Errorf("Service.GetAutomaticQueueState: %w", err)
 		}
+		questions := slices.Collect(seq)
 		state.NextReadyQuestion = firstReadyUnscheduledQuestion(questions)
 
 		settings, err := s.configManager.QOTDConfig(guildID)
@@ -223,10 +228,11 @@ func (s *Service) RestoreUsedQuestion(ctx context.Context, guildID, deckID strin
 			return nil, fmt.Errorf("Service.RestoreUsedQuestion: %w", err)
 		}
 
-		questions, err := s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
+		seq, err := s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
 		if err != nil {
 			return nil, fmt.Errorf("Service.RestoreUsedQuestion: %w", err)
 		}
+		questions := slices.Collect(seq)
 		if len(questions) == 0 {
 			return nil, ErrQuestionNotFound
 		}
@@ -370,10 +376,11 @@ func (s *Service) ReorderQuestions(ctx context.Context, guildID, deckID string, 
 			return nil, fmt.Errorf("Service.ReorderQuestions: %w", err)
 		}
 
-		questions, err := s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
+		seq, err := s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
 		if err != nil {
 			return nil, fmt.Errorf("Service.ReorderQuestions: %w", err)
 		}
+		questions := slices.Collect(seq)
 		if len(questions) == 0 {
 			return nil, nil
 		}
@@ -385,7 +392,11 @@ func (s *Service) ReorderQuestions(ctx context.Context, guildID, deckID string, 
 		if err := s.store.ReorderQOTDQuestions(ctx, guildID, deck.ID, fullOrder); err != nil {
 			return nil, fmt.Errorf("Service.ReorderQuestions: %w", err)
 		}
-		return s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
+		outSeq, err := s.store.ListQOTDQuestions(ctx, guildID, deck.ID)
+		if err != nil {
+			return nil, err
+		}
+		return slices.Collect(outSeq), nil
 	})
 
 	if err != nil {
@@ -410,10 +421,11 @@ func (s *Service) GetSummary(ctx context.Context, guildID string) (Summary, erro
 	}
 	displaySettings := files.DashboardQOTDConfig(settings)
 	_, scheduleErr := resolvePublishSchedule(displaySettings)
-	questions, err := s.store.ListQOTDQuestions(ctx, guildID, "")
+	seq, err := s.store.ListQOTDQuestions(ctx, guildID, "")
 	if err != nil {
 		return Summary{}, fmt.Errorf("Service.GetSummary: %w", err)
 	}
+	questions := slices.Collect(seq)
 	posts, err := s.store.GetCurrentAndPreviousQOTDPosts(ctx, guildID, now)
 	if err != nil {
 		return Summary{}, fmt.Errorf("Service.GetSummary: %w", err)
@@ -593,11 +605,11 @@ func (s *Service) availableQuestionCount(ctx context.Context, guildID, deckID st
 // questions, including legacy/imported ones marked Used outside the
 // official_posts pipeline).
 func (s *Service) deckQuestionCounts(ctx context.Context, guildID, deckID string) (QuestionCounts, error) {
-	questions, err := s.store.ListQOTDQuestions(ctx, guildID, deckID)
+	seq, err := s.store.ListQOTDQuestions(ctx, guildID, deckID)
 	if err != nil {
 		return QuestionCounts{}, fmt.Errorf("Service.deckQuestionCounts: %w", err)
 	}
-	return countQuestions(questions), nil
+	return countQuestions(slices.Collect(seq)), nil
 }
 
 func summarizeActiveDeckQuestions(settings files.QOTDConfig, questions []storage.QOTDQuestionRecord) QuestionCounts {
