@@ -79,10 +79,17 @@ func TestServerStatsAggregationsUsePostgresStore(t *testing.T) {
 
 func TestRenderTopWithMetricsTotals(t *testing.T) {
 	seq := func(yield func(storage.MetricTotal, error) bool) {
-		yield(storage.MetricTotal{Key: "c1", Total: 10}, nil)
-		yield(storage.MetricTotal{Key: "c2", Total: 3}, nil)
+		if !yield(storage.MetricTotal{Key: "c1", Total: 10}, nil) {
+			return
+		}
+		if !yield(storage.MetricTotal{Key: "c2", Total: 3}, nil) {
+			return
+		}
 	}
-	got := renderTop(seq, 2, func(id string) string { return "#" + id })
+	got, err := renderTop(seq, 2, func(id string) string { return "#" + id })
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	want := "1) #c1 — **10**\n2) #c2 — **3**\n"
 	if got != want {

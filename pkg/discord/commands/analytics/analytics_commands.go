@@ -163,30 +163,50 @@ func handleActivity(ctx *core.Context) error {
 	includeUsers := scope == "both" || scope == "users"
 
 	if includeMessages && includeChannels {
+		val, err := renderTop(msgTotalsByChannel, topN, func(id string) string { return channelMention(id) })
+		if err != nil {
+			log.ApplicationLogger().Error("Failed to stream analytic items", "guildID", ctx.GuildID, "channelID", channelID, "cutoffDay", cutoff, "err", err)
+			return respondError(s, i, "The analytics store couldn't be reached, so this reply stays private.")
+		}
 		fields = append(fields, &discordgo.MessageEmbedField{
 			Name:   "Messages - Top Channels",
-			Value:  renderTop(msgTotalsByChannel, topN, func(id string) string { return channelMention(id) }),
+			Value:  val,
 			Inline: true,
 		})
 	}
 	if includeMessages && includeUsers {
+		val, err := renderTop(msgTotalsByUser, topN, func(id string) string { return userMention(id) })
+		if err != nil {
+			log.ApplicationLogger().Error("Failed to stream analytic items", "guildID", ctx.GuildID, "channelID", channelID, "cutoffDay", cutoff, "err", err)
+			return respondError(s, i, "The analytics store couldn't be reached, so this reply stays private.")
+		}
 		fields = append(fields, &discordgo.MessageEmbedField{
 			Name:   "Messages - Top Users",
-			Value:  renderTop(msgTotalsByUser, topN, func(id string) string { return userMention(id) }),
+			Value:  val,
 			Inline: true,
 		})
 	}
 	if includeReactions && includeChannels {
+		val, err := renderTop(reactTotalsByChannel, topN, func(id string) string { return channelMention(id) })
+		if err != nil {
+			log.ApplicationLogger().Error("Failed to stream analytic items", "guildID", ctx.GuildID, "channelID", channelID, "cutoffDay", cutoff, "err", err)
+			return respondError(s, i, "The analytics store couldn't be reached, so this reply stays private.")
+		}
 		fields = append(fields, &discordgo.MessageEmbedField{
 			Name:   "Reactions - Top Channels",
-			Value:  renderTop(reactTotalsByChannel, topN, func(id string) string { return channelMention(id) }),
+			Value:  val,
 			Inline: true,
 		})
 	}
 	if includeReactions && includeUsers {
+		val, err := renderTop(reactTotalsByUser, topN, func(id string) string { return userMention(id) })
+		if err != nil {
+			log.ApplicationLogger().Error("Failed to stream analytic items", "guildID", ctx.GuildID, "channelID", channelID, "cutoffDay", cutoff, "err", err)
+			return respondError(s, i, "The analytics store couldn't be reached, so this reply stays private.")
+		}
 		fields = append(fields, &discordgo.MessageEmbedField{
 			Name:   "Reactions - Top Users",
-			Value:  renderTop(reactTotalsByUser, topN, func(id string) string { return userMention(id) }),
+			Value:  val,
 			Inline: true,
 		})
 	}
@@ -494,13 +514,12 @@ func clampInt(v, min, max int) int {
 	return v
 }
 
-func renderTop(items iter.Seq2[storage.MetricTotal, error], n int, display func(id string) string) string {
+func renderTop(items iter.Seq2[storage.MetricTotal, error], n int, display func(id string) string) (string, error) {
 	var b strings.Builder
 	idx := 0
 	for it, err := range items {
 		if err != nil {
-			log.ApplicationLogger().Warn("Failed to stream analytic items", "err", err)
-			break
+			return "", err
 		}
 		if idx >= n {
 			break
@@ -509,9 +528,9 @@ func renderTop(items iter.Seq2[storage.MetricTotal, error], n int, display func(
 		idx++
 	}
 	if idx == 0 {
-		return "_no data_"
+		return "_no data_", nil
 	}
-	return b.String()
+	return b.String(), nil
 }
 
 func channelMention(id string) string {
