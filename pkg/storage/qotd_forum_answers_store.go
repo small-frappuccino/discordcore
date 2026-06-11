@@ -255,7 +255,7 @@ func (s *Store) GetQOTDAnswerMessageByOfficialPostAndUser(ctx context.Context, o
 }
 
 // ListQOTDAnswerMessagesByOfficialPost lists qotdanswer messages by official post.
-func (s *Store) ListQOTDAnswerMessagesByOfficialPost(ctx context.Context, officialPostID int64) (_ iter.Seq[QOTDAnswerMessageRecord], err error) {
+func (s *Store) ListQOTDAnswerMessagesByOfficialPost(ctx context.Context, officialPostID int64) (_ iter.Seq2[QOTDAnswerMessageRecord, error], err error) {
 	defer func() {
 		if err != nil {
 			err = fmt.Errorf("list qotd answer messages by official post: %w", err)
@@ -265,39 +265,44 @@ func (s *Store) ListQOTDAnswerMessagesByOfficialPost(ctx context.Context, offici
 		return nil, nil
 	}
 
-	rows, err := s.queryContext(ctx,
-		`SELECT
-			id,
-			guild_id,
-			official_post_id,
-			user_id,
-			state,
-			answer_channel_id,
-			discord_message_id,
-			created_via_interaction_id,
-			created_at,
-			updated_at,
-			closed_at,
-			archived_at
-		FROM qotd_answer_messages
-		WHERE official_post_id = $1
-		ORDER BY id ASC`,
-		officialPostID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("Store.ListQOTDAnswerMessagesByOfficialPost: %w", err)
-	}
-	return func(yield func(QOTDAnswerMessageRecord) bool) {
+	return func(yield func(QOTDAnswerMessageRecord, error) bool) {
+		rows, err := s.queryContext(ctx,
+			`SELECT
+				id,
+				guild_id,
+				official_post_id,
+				user_id,
+				state,
+				answer_channel_id,
+				discord_message_id,
+				created_via_interaction_id,
+				created_at,
+				updated_at,
+				closed_at,
+				archived_at
+			FROM qotd_answer_messages
+			WHERE official_post_id = $1
+			ORDER BY id ASC`,
+			officialPostID,
+		)
+		if err != nil {
+			yield(QOTDAnswerMessageRecord{}, fmt.Errorf("Store.ListQOTDAnswerMessagesByOfficialPost: %w", err))
+			return
+		}
 		defer rows.Close()
 
 		for rows.Next() {
 			record, err := scanQOTDAnswerMessageRecord(rows)
 			if err != nil {
+				yield(QOTDAnswerMessageRecord{}, fmt.Errorf("Store.ListQOTDAnswerMessagesByOfficialPost: %w", err))
 				return
 			}
-			if !yield(*record) {
+			if !yield(*record, nil) {
 				return
 			}
+		}
+		if err := rows.Err(); err != nil {
+			yield(QOTDAnswerMessageRecord{}, fmt.Errorf("Store.ListQOTDAnswerMessagesByOfficialPost: %w", err))
 		}
 	}, nil
 

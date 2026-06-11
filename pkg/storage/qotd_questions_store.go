@@ -306,7 +306,7 @@ func (s *Store) DeleteQOTDQuestionsByDecks(ctx context.Context, guildID string, 
 }
 
 // ListQOTDQuestions lists qotdquestions.
-func (s *Store) ListQOTDQuestions(ctx context.Context, guildID, deckID string) (_ iter.Seq[QOTDQuestionRecord], err error) {
+func (s *Store) ListQOTDQuestions(ctx context.Context, guildID, deckID string) (_ iter.Seq2[QOTDQuestionRecord, error], err error) {
 	defer func() {
 		if err != nil {
 			err = fmt.Errorf("list qotd questions: %w", err)
@@ -318,43 +318,48 @@ func (s *Store) ListQOTDQuestions(ctx context.Context, guildID, deckID string) (
 		return nil, nil
 	}
 
-	rows, err := s.queryContext(ctx,
-		`SELECT
-			id,
-			display_id,
-			guild_id,
-			deck_id,
-			body,
-			status,
-			queue_position,
-			created_by,
-			scheduled_for_date_utc,
-			used_at,
-			published_once_at,
-			created_at,
-			updated_at
-		FROM qotd_questions
-		WHERE guild_id = $1
-		  AND ($2 = '' OR deck_id = $3)
-		ORDER BY queue_position ASC, id ASC`,
-		guildID,
-		deckID,
-		deckID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("Store.ListQOTDQuestions: %w", err)
-	}
-	return func(yield func(QOTDQuestionRecord) bool) {
+	return func(yield func(QOTDQuestionRecord, error) bool) {
+		rows, err := s.queryContext(ctx,
+			`SELECT
+				id,
+				display_id,
+				guild_id,
+				deck_id,
+				body,
+				status,
+				queue_position,
+				created_by,
+				scheduled_for_date_utc,
+				used_at,
+				published_once_at,
+				created_at,
+				updated_at
+			FROM qotd_questions
+			WHERE guild_id = $1
+			  AND ($2 = '' OR deck_id = $3)
+			ORDER BY queue_position ASC, id ASC`,
+			guildID,
+			deckID,
+			deckID,
+		)
+		if err != nil {
+			yield(QOTDQuestionRecord{}, fmt.Errorf("Store.ListQOTDQuestions: %w", err))
+			return
+		}
 		defer rows.Close()
 
 		for rows.Next() {
 			record, err := scanQOTDQuestionRecord(rows)
 			if err != nil {
+				yield(QOTDQuestionRecord{}, fmt.Errorf("Store.ListQOTDQuestions: %w", err))
 				return
 			}
-			if !yield(*record) {
+			if !yield(*record, nil) {
 				return
 			}
+		}
+		if err := rows.Err(); err != nil {
+			yield(QOTDQuestionRecord{}, fmt.Errorf("Store.ListQOTDQuestions: %w", err))
 		}
 	}, nil
 

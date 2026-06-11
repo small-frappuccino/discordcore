@@ -24,7 +24,14 @@ func (s *Service) ListQuestions(ctx context.Context, guildID, deckID string) ([]
 	if err != nil {
 		return nil, err
 	}
-	return slices.Collect(seq), nil
+	var questions []storage.QOTDQuestionRecord
+	for record, yieldErr := range seq {
+		if yieldErr != nil {
+			return nil, yieldErr
+		}
+		questions = append(questions, record)
+	}
+	return questions, nil
 }
 
 // CreateQuestion creates question.
@@ -156,7 +163,13 @@ func (s *Service) GetAutomaticQueueState(ctx context.Context, guildID, deckID st
 		if err != nil {
 			return nil, fmt.Errorf("Service.GetAutomaticQueueState: %w", err)
 		}
-		questions := slices.Collect(seq)
+		var questions []storage.QOTDQuestionRecord
+		for record, yieldErr := range seq {
+			if yieldErr != nil {
+				return nil, fmt.Errorf("Service.GetAutomaticQueueState: %w", yieldErr)
+			}
+			questions = append(questions, record)
+		}
 		state.NextReadyQuestion = firstReadyUnscheduledQuestion(questions)
 
 		settings, err := s.configManager.QOTDConfig(guildID)
@@ -232,7 +245,13 @@ func (s *Service) RestoreUsedQuestion(ctx context.Context, guildID, deckID strin
 		if err != nil {
 			return nil, fmt.Errorf("Service.RestoreUsedQuestion: %w", err)
 		}
-		questions := slices.Collect(seq)
+		var questions []storage.QOTDQuestionRecord
+		for record, yieldErr := range seq {
+			if yieldErr != nil {
+				return nil, fmt.Errorf("Service.RestoreUsedQuestion: %w", yieldErr)
+			}
+			questions = append(questions, record)
+		}
 		if len(questions) == 0 {
 			return nil, ErrQuestionNotFound
 		}
@@ -380,7 +399,13 @@ func (s *Service) ReorderQuestions(ctx context.Context, guildID, deckID string, 
 		if err != nil {
 			return nil, fmt.Errorf("Service.ReorderQuestions: %w", err)
 		}
-		questions := slices.Collect(seq)
+		var questions []storage.QOTDQuestionRecord
+		for record, yieldErr := range seq {
+			if yieldErr != nil {
+				return nil, fmt.Errorf("Service.ReorderQuestions: %w", yieldErr)
+			}
+			questions = append(questions, record)
+		}
 		if len(questions) == 0 {
 			return nil, nil
 		}
@@ -396,7 +421,14 @@ func (s *Service) ReorderQuestions(ctx context.Context, guildID, deckID string, 
 		if err != nil {
 			return nil, err
 		}
-		return slices.Collect(outSeq), nil
+		var outQuestions []storage.QOTDQuestionRecord
+		for record, yieldErr := range outSeq {
+			if yieldErr != nil {
+				return nil, yieldErr
+			}
+			outQuestions = append(outQuestions, record)
+		}
+		return outQuestions, nil
 	})
 
 	if err != nil {
@@ -425,7 +457,13 @@ func (s *Service) GetSummary(ctx context.Context, guildID string) (Summary, erro
 	if err != nil {
 		return Summary{}, fmt.Errorf("Service.GetSummary: %w", err)
 	}
-	questions := slices.Collect(seq)
+	var questions []storage.QOTDQuestionRecord
+	for record, yieldErr := range seq {
+		if yieldErr != nil {
+			return Summary{}, fmt.Errorf("Service.GetSummary: %w", yieldErr)
+		}
+		questions = append(questions, record)
+	}
 	posts, err := s.store.GetCurrentAndPreviousQOTDPosts(ctx, guildID, now)
 	if err != nil {
 		return Summary{}, fmt.Errorf("Service.GetSummary: %w", err)
@@ -609,7 +647,14 @@ func (s *Service) deckQuestionCounts(ctx context.Context, guildID, deckID string
 	if err != nil {
 		return QuestionCounts{}, fmt.Errorf("Service.deckQuestionCounts: %w", err)
 	}
-	return countQuestions(slices.Collect(seq)), nil
+	var questions []storage.QOTDQuestionRecord
+	for record, yieldErr := range seq {
+		if yieldErr != nil {
+			return QuestionCounts{}, fmt.Errorf("Service.deckQuestionCounts: %w", yieldErr)
+		}
+		questions = append(questions, record)
+	}
+	return countQuestions(questions), nil
 }
 
 func summarizeActiveDeckQuestions(settings files.QOTDConfig, questions []storage.QOTDQuestionRecord) QuestionCounts {

@@ -412,7 +412,10 @@ func (s *Service) archiveOfficialPost(ctx context.Context, session *discordgo.Se
 	if err != nil {
 		return fmt.Errorf("Service.archiveOfficialPost: %w", err)
 	}
-	for answerRecord := range answerRecords {
+	for answerRecord, yieldErr := range answerRecords {
+		if yieldErr != nil {
+			return fmt.Errorf("Service.archiveOfficialPost: %w", yieldErr)
+		}
 		if err := s.archiveAnswerRecord(ctx, answerRecord, archivedAt); err != nil {
 			return fmt.Errorf("Service.archiveOfficialPost: %w", err)
 		}
