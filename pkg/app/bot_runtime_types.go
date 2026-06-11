@@ -31,8 +31,9 @@ var ErrSessionUnavailable = errors.New("discord session is unavailable")
 
 // resolvedBotInstance describes a loaded bot ready for startup.
 type resolvedBotInstance struct {
-	ID    string
-	Token string
+	ID            string
+	Token         string
+	DiscordStatus string
 }
 
 type botRuntime struct {

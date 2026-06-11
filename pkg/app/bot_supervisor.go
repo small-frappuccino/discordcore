@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bwmarrin/discordgo"
+
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/service"
@@ -24,9 +26,10 @@ const (
 )
 
 type botInstanceState struct {
-	Token  string
-	Status InstanceStatus
-	StopWG *sync.WaitGroup
+	Token         string
+	DiscordStatus string
+	Status        InstanceStatus
+	StopWG        *sync.WaitGroup
 }
 
 type BotSupervisor struct {
@@ -118,6 +121,7 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 
 	// 1. Gather all tokens from all guilds
 	currentTokens := make(map[string]string)
+	currentStatuses := make(map[string]string)
 
 	for _, guild := range newCfg.Guilds {
 		for instanceID, encryptedToken := range guild.BotInstanceTokens {
@@ -125,10 +129,15 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 			if token == "" {
 				continue
 			}
-			if guild.BotInstanceStatuses[instanceID] == "disabled" {
+			status := guild.BotInstanceStatuses[instanceID]
+			if status == "disabled" {
 				continue
 			}
 			currentTokens[instanceID] = token
+			if status == "" {
+				status = "online"
+			}
+			currentStatuses[instanceID] = status
 		}
 	}
 
@@ -140,6 +149,13 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 		oldState, exists := s.instances[id]
 		if !exists || oldState.Token != token {
 			toStart[id] = token
+		} else if oldState.DiscordStatus != currentStatuses[id] {
+			oldState.DiscordStatus = currentStatuses[id]
+			if runtime, ok := s.resolver.getRuntimes()[id]; ok && runtime.session != nil {
+				_ = runtime.session.UpdateStatusComplex(discordgo.UpdateStatusData{
+					Status: currentStatuses[id],
+				})
+			}
 		}
 	}
 
@@ -187,11 +203,11 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 
 		s.bgWG.Add(1)
 		startWG.Add(1)
-		go func(id, token string, oldState *botInstanceState) {
+		go func(id, token, status string, oldState *botInstanceState) {
 			defer s.bgWG.Done()
 			defer startWG.Done()
-			s.awaitStopAndStart(id, token, oldState)
-		}(id, token, oldState)
+			s.awaitStopAndStart(id, token, status, oldState)
+		}(id, token, currentStatuses[id], oldState)
 	}
 
 	go func() {
@@ -237,7 +253,7 @@ func (s *BotSupervisor) executeStopAndRemove(ctx context.Context, id string, sta
 	s.resolver.swapRuntimes(newRuntimes)
 }
 
-func (s *BotSupervisor) awaitStopAndStart(id, token string, oldState *botInstanceState) {
+func (s *BotSupervisor) awaitStopAndStart(id, token, status string, oldState *botInstanceState) {
 	if oldState != nil {
 		waitCh := make(chan struct{})
 		go func() {
@@ -257,17 +273,18 @@ func (s *BotSupervisor) awaitStopAndStart(id, token string, oldState *botInstanc
 
 	s.mu.Lock()
 	newState := &botInstanceState{
-		Token:  token,
-		Status: StatusStarting,
-		StopWG: &sync.WaitGroup{},
+		Token:         token,
+		DiscordStatus: status,
+		Status:        StatusStarting,
+		StopWG:        &sync.WaitGroup{},
 	}
 	s.instances[id] = newState
 	s.mu.Unlock()
 
-	s.startBotInstanceBackground(id, token, newState)
+	s.startBotInstanceBackground(id, token, status, newState)
 }
 
-func (s *BotSupervisor) startBotInstanceBackground(instanceID, token string, state *botInstanceState) {
+func (s *BotSupervisor) startBotInstanceBackground(instanceID, token, status string, state *botInstanceState) {
 	capabilities := resolveBotRuntimeCapabilities(s.configManager.Config(), instanceID, s.opts.defaultBotInstanceID)
 
 	var runtime *botRuntime
@@ -293,7 +310,7 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token string, sta
 		case <-time.After(identifyStaggerDelay):
 		}
 
-		runtime, err = openBotRuntime(resolvedBotInstance{ID: instanceID, Token: token}, capabilities)
+		runtime, err = openBotRuntime(resolvedBotInstance{ID: instanceID, Token: token, DiscordStatus: status}, capabilities)
 
 		s.identifySemaphore.Release(1)
 

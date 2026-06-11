@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/bwmarrin/discordgo"
+
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
@@ -47,6 +49,12 @@ func openBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabil
 	discordSession, err := newDiscordSessionWithIntents(instance.Token, capabilities.intents)
 	if err != nil {
 		return nil, fmt.Errorf("create discord session for %s: %w", instance.ID, err)
+	}
+
+	if instance.DiscordStatus != "" {
+		discordSession.Identify.Presence = discordgo.GatewayStatusUpdate{
+			Status: instance.DiscordStatus,
+		}
 	}
 
 	// Estabelecer o handshake com o Discord respeitando o timeout do supervisor (implícito no loop de retry,
