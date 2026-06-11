@@ -21,6 +21,7 @@ export function useUpdateGuildSettingsMutation(client: ControlApiClient, guildId
       updateGuildSettings(client, guildId, args.originalWorkspace, args.payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: guildSettingsQueryKey(client.getBaseUrl(), guildId) });
+      queryClient.invalidateQueries({ queryKey: ["botProfiles", client.getBaseUrl(), guildId] });
     },
   });
 }
