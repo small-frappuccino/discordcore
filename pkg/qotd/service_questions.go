@@ -464,9 +464,13 @@ func (s *Service) GetSummary(ctx context.Context, guildID string) (Summary, erro
 		}
 		questions = append(questions, record)
 	}
-	posts, err := s.store.GetCurrentAndPreviousQOTDPosts(ctx, guildID, now)
-	if err != nil {
-		return Summary{}, fmt.Errorf("Service.GetSummary: %w", err)
+	postsSeq := s.store.GetCurrentAndPreviousQOTDPosts(ctx, guildID, now)
+	var posts []storage.QOTDOfficialPostRecord
+	for record, yieldErr := range postsSeq {
+		if yieldErr != nil {
+			return Summary{}, fmt.Errorf("Service.GetSummary: %w", yieldErr)
+		}
+		posts = append(posts, record)
 	}
 	slotState, err := s.loadCurrentSlotState(ctx, guildID, displaySettings, now)
 	if err != nil {

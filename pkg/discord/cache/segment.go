@@ -160,7 +160,8 @@ func (s *Segment[T]) setWithExpiration(key string, v T, expiresAt time.Time, mar
 	shard.mu.Lock()
 	defer shard.mu.Unlock()
 
-	valPtr := Ptr(v)
+	valPtr := new(T)
+	*valPtr = v
 	weakPtr := weak.Make(valPtr)
 
 	runtime.AddCleanup(valPtr, func(k string) {
@@ -474,11 +475,6 @@ func configuredSegmentShardCount(limit int) int {
 		return 1
 	}
 	return defaultSegmentShardCount
-}
-
-// Ptr returns a pointer to the provided value.
-func Ptr[T any](v T) *T {
-	return &v
 }
 
 // segmentStats summarizes a segment's state and counters.

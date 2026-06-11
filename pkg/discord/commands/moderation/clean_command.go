@@ -91,7 +91,7 @@ func (c *cleanCommand) Options() []*discordgo.ApplicationCommandOption {
 			Name:        cleanCountOptionName,
 			Description: "How many matching messages to remove (max 100)",
 			Required:    true,
-			MinValue:    floatPtr(1),
+			MinValue:    new(float64(1)),
 			MaxValue:    cleanMaxDeleteCount,
 		},
 		{

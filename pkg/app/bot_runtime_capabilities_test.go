@@ -13,35 +13,35 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 	cfg := &files.BotConfig{
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
-				Monitoring:    Ptr(false),
-				Automod:       Ptr(false),
-				Commands:      Ptr(false),
-				AdminCommands: Ptr(false),
+				Monitoring:    new(bool(false)),
+				Automod:       new(bool(false)),
+				Commands:      new(bool(false)),
+				AdminCommands: new(bool(false)),
 			},
 			Logging: files.FeatureLoggingToggles{
-				AvatarLogging:  Ptr(false),
-				RoleUpdate:     Ptr(false),
-				MemberJoin:     Ptr(false),
-				MemberLeave:    Ptr(false),
-				MessageProcess: Ptr(false),
-				MessageEdit:    Ptr(false),
-				MessageDelete:  Ptr(false),
-				ReactionMetric: Ptr(false),
-				AutomodAction:  Ptr(false),
+				AvatarLogging:  new(bool(false)),
+				RoleUpdate:     new(bool(false)),
+				MemberJoin:     new(bool(false)),
+				MemberLeave:    new(bool(false)),
+				MessageProcess: new(bool(false)),
+				MessageEdit:    new(bool(false)),
+				MessageDelete:  new(bool(false)),
+				ReactionMetric: new(bool(false)),
+				AutomodAction:  new(bool(false)),
 			},
 			PresenceWatch: files.FeaturePresenceWatchToggles{
-				Bot:  Ptr(false),
-				User: Ptr(false),
+				Bot:  new(bool(false)),
+				User: new(bool(false)),
 			},
 			Safety: files.FeatureSafetyToggles{
-				BotRolePermMirror: Ptr(false),
+				BotRolePermMirror: new(bool(false)),
 			},
 			Backfill: files.FeatureBackfillToggles{
-				Enabled: Ptr(false),
+				Enabled: new(bool(false)),
 			},
-			StatsChannels:  Ptr(false),
-			AutoRoleAssign: Ptr(false),
-			UserPrune:      Ptr(false),
+			StatsChannels:  new(bool(false)),
+			AutoRoleAssign: new(bool(false)),
+			UserPrune:      new(bool(false)),
 		},
 		Guilds: []files.GuildConfig{
 			{
@@ -49,7 +49,7 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 				BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
-						Commands: Ptr(true),
+						Commands: new(bool(true)),
 					},
 				},
 				QOTD: files.QOTDConfig{
@@ -74,14 +74,14 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 				},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
-						Monitoring:    Ptr(true),
-						Commands:      Ptr(true),
-						AdminCommands: Ptr(true),
+						Monitoring:    new(bool(true)),
+						Commands:      new(bool(true)),
+						AdminCommands: new(bool(true)),
 					},
 					Logging: files.FeatureLoggingToggles{
-						ReactionMetric: Ptr(true),
+						ReactionMetric: new(bool(true)),
 					},
-					UserPrune: Ptr(true),
+					UserPrune: new(bool(true)),
 				},
 				UserPrune: files.UserPruneConfig{Enabled: true},
 				QOTD: files.QOTDConfig{
@@ -147,11 +147,11 @@ func TestResolveBotRuntimeCapabilitiesAggregatesAllGuildsForSameBotInstance(t *t
 	cfg := &files.BotConfig{
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
-				Monitoring: Ptr(false),
-				Commands:   Ptr(false),
+				Monitoring: new(bool(false)),
+				Commands:   new(bool(false)),
 			},
 			Logging: files.FeatureLoggingToggles{
-				ReactionMetric: Ptr(false),
+				ReactionMetric: new(bool(false)),
 			},
 		},
 		Guilds: []files.GuildConfig{
@@ -160,7 +160,7 @@ func TestResolveBotRuntimeCapabilitiesAggregatesAllGuildsForSameBotInstance(t *t
 				BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
-						Commands: Ptr(true),
+						Commands: new(bool(true)),
 					},
 				},
 				QOTD: files.QOTDConfig{
@@ -178,10 +178,10 @@ func TestResolveBotRuntimeCapabilitiesAggregatesAllGuildsForSameBotInstance(t *t
 				BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
-						Monitoring: Ptr(true),
+						Monitoring: new(bool(true)),
 					},
 					Logging: files.FeatureLoggingToggles{
-						ReactionMetric: Ptr(true),
+						ReactionMetric: new(bool(true)),
 					},
 				},
 				QOTD: files.QOTDConfig{

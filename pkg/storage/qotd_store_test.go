@@ -894,9 +894,12 @@ func TestReclaimOrphanReservedQOTDQuestionsReleasesPastReservationsWithoutPosts(
 		t.Fatalf("ReserveNextQOTDQuestion(orphan) failed: %v", err)
 	}
 
-	freed, err := store.ReclaimOrphanReservedQOTDQuestions(ctx, "g1", todayUTC)
-	if err != nil {
-		t.Fatalf("ReclaimOrphanReservedQOTDQuestions() failed: %v", err)
+	var freed []int64
+	for id, err := range store.ReclaimOrphanReservedQOTDQuestions(ctx, "g1", todayUTC) {
+		if err != nil {
+			t.Fatalf("ReclaimOrphanReservedQOTDQuestions() failed: %v", err)
+		}
+		freed = append(freed, id)
 	}
 	if len(freed) != 1 || freed[0] != orphan.ID {
 		t.Fatalf("expected orphan reservation to be released, got %+v", freed)
@@ -934,9 +937,12 @@ func TestReclaimOrphanReservedQOTDQuestionsKeepsTodayReservation(t *testing.T) {
 		t.Fatalf("ReserveNextQOTDQuestion() failed: %v", err)
 	}
 
-	freed, err := store.ReclaimOrphanReservedQOTDQuestions(ctx, "g1", todayUTC)
-	if err != nil {
-		t.Fatalf("ReclaimOrphanReservedQOTDQuestions() failed: %v", err)
+	var freed []int64
+	for id, err := range store.ReclaimOrphanReservedQOTDQuestions(ctx, "g1", todayUTC) {
+		if err != nil {
+			t.Fatalf("ReclaimOrphanReservedQOTDQuestions() failed: %v", err)
+		}
+		freed = append(freed, id)
 	}
 	if len(freed) != 0 {
 		t.Fatalf("expected today's reservation to stay in place (publish may be in flight), got freed=%+v", freed)
@@ -988,9 +994,12 @@ func TestReclaimOrphanReservedQOTDQuestionsLeavesQuestionsWithLinkedPosts(t *tes
 		t.Fatalf("CreateQOTDOfficialPostProvisioning() failed: %v", err)
 	}
 
-	freed, err := store.ReclaimOrphanReservedQOTDQuestions(ctx, "g1", todayUTC)
-	if err != nil {
-		t.Fatalf("ReclaimOrphanReservedQOTDQuestions() failed: %v", err)
+	var freed []int64
+	for id, err := range store.ReclaimOrphanReservedQOTDQuestions(ctx, "g1", todayUTC) {
+		if err != nil {
+			t.Fatalf("ReclaimOrphanReservedQOTDQuestions() failed: %v", err)
+		}
+		freed = append(freed, id)
 	}
 	if len(freed) != 0 {
 		t.Fatalf("expected reservations linked to a publish record to be left alone, got %+v", freed)
@@ -1056,9 +1065,12 @@ func TestQOTDOfficialPostProgressAndPendingRecoveryLifecycle(t *testing.T) {
 		t.Fatalf("UpdateQOTDOfficialPostState(failed) failed: %v", err)
 	}
 
-	pending, err := store.ListQOTDOfficialPostsPendingRecovery(ctx, "g1")
-	if err != nil {
-		t.Fatalf("ListQOTDOfficialPostsPendingRecovery() failed: %v", err)
+	var pending []QOTDOfficialPostRecord
+	for post, err := range store.ListQOTDOfficialPostsPendingRecovery(ctx, "g1") {
+		if err != nil {
+			t.Fatalf("ListQOTDOfficialPostsPendingRecovery() failed: %v", err)
+		}
+		pending = append(pending, post)
 	}
 	if len(pending) != 1 || pending[0].ID != official.ID {
 		t.Fatalf("expected failed provisioning record to be listed for recovery, got %+v", pending)
@@ -1084,9 +1096,12 @@ func TestQOTDOfficialPostProgressAndPendingRecoveryLifecycle(t *testing.T) {
 	if _, err := store.UpdateQOTDOfficialPostState(ctx, official.ID, "current", nil, nil); err != nil {
 		t.Fatalf("UpdateQOTDOfficialPostState(current) failed: %v", err)
 	}
-	pending, err = store.ListQOTDOfficialPostsPendingRecovery(ctx, "g1")
-	if err != nil {
-		t.Fatalf("ListQOTDOfficialPostsPendingRecovery(after finalize) failed: %v", err)
+	pending = nil
+	for post, err := range store.ListQOTDOfficialPostsPendingRecovery(ctx, "g1") {
+		if err != nil {
+			t.Fatalf("ListQOTDOfficialPostsPendingRecovery(after finalize) failed: %v", err)
+		}
+		pending = append(pending, post)
 	}
 	if len(pending) != 0 {
 		t.Fatalf("expected finalized post to disappear from pending recovery list, got %+v", pending)

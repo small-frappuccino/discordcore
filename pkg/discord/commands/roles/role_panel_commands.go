@@ -381,7 +381,7 @@ func (c *rolePanelSetSubCommand) Options() []*discordgo.ApplicationCommandOption
 		rolePanelKeyOption(true),
 		{Type: discordgo.ApplicationCommandOptionString, Name: rolePanelOptionTitle, Description: "Embed title (omit to keep current, pass empty string to clear)", Required: false},
 		{Type: discordgo.ApplicationCommandOptionString, Name: rolePanelOptionDescription, Description: "Embed description (omit to keep current, pass empty string to clear)", Required: false},
-		{Type: discordgo.ApplicationCommandOptionInteger, Name: rolePanelOptionColor, Description: "Embed color as a decimal RGB integer (e.g. 16753104). 0 to clear.", Required: false, MinValue: floatPtr(0), MaxValue: float64(files.RolePanelColorMax)},
+		{Type: discordgo.ApplicationCommandOptionInteger, Name: rolePanelOptionColor, Description: "Embed color as a decimal RGB integer (e.g. 16753104). 0 to clear.", Required: false, MinValue: new(float64(0)), MaxValue: float64(files.RolePanelColorMax)},
 		{Type: discordgo.ApplicationCommandOptionString, Name: rolePanelOptionAuthorName, Description: "Embed author name (omit to keep current, pass empty string to clear)", Required: false},
 		{Type: discordgo.ApplicationCommandOptionString, Name: rolePanelOptionAuthorIcon, Description: "Embed author icon URL (omit to keep current, pass empty string to clear)", Required: false},
 		{Type: discordgo.ApplicationCommandOptionString, Name: rolePanelOptionFooterText, Description: "Embed footer text (omit to keep current, pass empty string to clear)", Required: false},
@@ -1370,8 +1370,6 @@ func ensureRolePanelEnabled(ctx *core.Context) error {
 	}
 	return nil
 }
-
-func floatPtr(v float64) *float64 { return &v }
 
 func parseRolePanelWebhookURL(rawURL string) (webhookID, webhookToken string, err error) {
 	rawURL = strings.TrimSpace(rawURL)

@@ -17,7 +17,6 @@ import (
 )
 
 // Ptr is a generic helper for inline pointer allocations.
-func Ptr[T any](v T) *T { return &v }
 
 const (
 	groupName   = "config"
@@ -546,7 +545,7 @@ func setBool(rc files.RuntimeConfig, k runtimeKey, v bool) (files.RuntimeConfig,
 	case runtimeKeyDisableUserLogs:
 		rc.DisableUserLogs = v
 	case runtimeKeyModerationLogging:
-		rc.ModerationLogging = Ptr(v)
+		rc.ModerationLogging = new(bool(v))
 	case runtimeKeyPresenceWatchBot:
 		rc.PresenceWatchBot = v
 	case runtimeKeyMessageDeleteOnLog:
@@ -812,7 +811,7 @@ func renderGroupSelectRow(st panelState) discordgo.ActionsRow {
 				CustomID:    cidSelectGroup,
 				Placeholder: "Filter by group…",
 				Options:     opts,
-				MinValues:   Ptr(1),
+				MinValues:   new(int(1)),
 				MaxValues:   1,
 			},
 		},
@@ -869,7 +868,7 @@ func renderKeySelectRow(st panelState) discordgo.ActionsRow {
 				CustomID:    cidSelectKey,
 				Placeholder: placeholder,
 				Options:     opts,
-				MinValues:   Ptr(1),
+				MinValues:   new(int(1)),
 				MaxValues:   1,
 			},
 		},

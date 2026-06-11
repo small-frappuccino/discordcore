@@ -311,22 +311,20 @@ func (s *Service) resumeOfficialPostProvisioning(ctx context.Context, session *d
 }
 
 func (s *Service) resumeOldestPendingOfficialPost(ctx context.Context, guildID string, session *discordgo.Session, now time.Time) (*PublishResult, error) {
-	pending, err := s.store.ListQOTDOfficialPostsPendingRecovery(ctx, guildID)
-	if err != nil {
-		return nil, fmt.Errorf("Service.resumeOldestPendingOfficialPost: %w", err)
+	for post, err := range s.store.ListQOTDOfficialPostsPendingRecovery(ctx, guildID) {
+		if err != nil {
+			return nil, fmt.Errorf("Service.resumeOldestPendingOfficialPost: %w", err)
+		}
+		return s.resumeOfficialPostProvisioning(ctx, session, post, now)
 	}
-	if len(pending) == 0 {
-		return nil, nil
-	}
-	return s.resumeOfficialPostProvisioning(ctx, session, pending[0], now)
+	return nil, nil
 }
 
 func (s *Service) reconcilePendingOfficialPosts(ctx context.Context, guildID string, session *discordgo.Session, now time.Time) error {
-	pending, err := s.store.ListQOTDOfficialPostsPendingRecovery(ctx, guildID)
-	if err != nil {
-		return fmt.Errorf("Service.reconcilePendingOfficialPosts: %w", err)
-	}
-	for _, post := range pending {
+	for post, err := range s.store.ListQOTDOfficialPostsPendingRecovery(ctx, guildID) {
+		if err != nil {
+			return fmt.Errorf("Service.reconcilePendingOfficialPosts: %w", err)
+		}
 		if _, err := s.resumeOfficialPostProvisioning(ctx, session, post, now); err != nil {
 			return fmt.Errorf("Service.reconcilePendingOfficialPosts: %w", err)
 		}

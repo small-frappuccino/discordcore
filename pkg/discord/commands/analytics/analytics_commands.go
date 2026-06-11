@@ -63,7 +63,7 @@ func newActivityCommand() core.Command {
 			Name:        "top",
 			Description: "How many items to show per section (default 5, max 10)",
 			Required:    false,
-			MinValue:    floatPtr(1),
+			MinValue:    new(float64(1)),
 		},
 		{
 			Type:        discordgo.ApplicationCommandOptionString,
@@ -313,21 +313,20 @@ func handleServerStatsHealth(ctx *core.Context) error {
 	stillPresentCount := int64(0)
 	hasStillPresent := hasHistoricJoins
 	if hasHistoricJoins && totalHistoricJoins > 0 {
-		joinedUserIDs, err := store.ListDistinctMemberJoinUserIDs(ctxTimeout, ctx.GuildID)
-		if err != nil {
-			hasStillPresent = false
-			log.ErrorLoggerRaw().Error(
-				"Analytics health retention query failed",
-				"operation", "analytics.serverstats.health.retention_query",
-				"guildID", ctx.GuildID,
-				"err", err,
-			)
-		} else {
-			for _, userID := range joinedUserIDs {
-				// Check if the user is present in the bot state cache.
-				if _, err := s.State.Member(ctx.GuildID, userID); err == nil {
-					stillPresentCount++
-				}
+		for userID, err := range store.ListDistinctMemberJoinUserIDs(ctxTimeout, ctx.GuildID) {
+			if err != nil {
+				hasStillPresent = false
+				log.ErrorLoggerRaw().Error(
+					"Analytics health retention query failed",
+					"operation", "analytics.serverstats.health.retention_query",
+					"guildID", ctx.GuildID,
+					"err", err,
+				)
+				break
+			}
+			// Check if the user is present in the bot state cache.
+			if _, err := s.State.Member(ctx.GuildID, userID); err == nil {
+				stillPresentCount++
 			}
 		}
 	}
@@ -455,8 +454,6 @@ func respondEmbed(s *discordgo.Session, i *discordgo.InteractionCreate, embed *d
 		},
 	})
 }
-
-func floatPtr(v float64) *float64 { return &v }
 
 func getStringOpt(i *discordgo.InteractionCreate, name, def string) string {
 	for _, opt := range i.ApplicationCommandData().Options {

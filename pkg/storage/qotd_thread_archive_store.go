@@ -3,149 +3,148 @@ package storage
 import (
 	"context"
 	"fmt"
+	"iter"
 	"strings"
 	"time"
 )
 
 // GetCurrentAndPreviousQOTDPosts gets current and previous qotdposts.
-func (s *Store) GetCurrentAndPreviousQOTDPosts(ctx context.Context, guildID string, now time.Time) (_ []QOTDOfficialPostRecord, err error) {
-	defer func() {
-		if err != nil {
-			err = fmt.Errorf("list current and previous qotd posts: %w", err)
+func (s *Store) GetCurrentAndPreviousQOTDPosts(ctx context.Context, guildID string, now time.Time) iter.Seq2[QOTDOfficialPostRecord, error] {
+	return func(yield func(QOTDOfficialPostRecord, error) bool) {
+		guildID = strings.TrimSpace(guildID)
+		if guildID == "" {
+			return
 		}
-	}()
-	guildID = strings.TrimSpace(guildID)
-	if guildID == "" {
-		return nil, nil
-	}
-	if now.IsZero() {
-		now = time.Now().UTC()
-	} else {
-		now = now.UTC()
-	}
-
-	rows, err := s.queryContext(ctx,
-		`SELECT
-			id,
-			guild_id,
-			deck_id,
-			deck_name_snapshot,
-			question_id,
-			publish_mode,
-			consume_automatic_slot,
-			publish_date_utc,
-			state,
-			channel_id,
-			question_list_thread_id,
-			question_list_entry_message_id,
-			discord_thread_id,
-			discord_starter_message_id,
-			answer_channel_id,
-			question_text_snapshot,
-			nonce,
-			publish_ordinal,
-			published_at,
-			grace_until,
-			archive_at,
-			closed_at,
-			archived_at,
-			last_reconciled_at,
-			created_at,
-			updated_at
-		FROM qotd_official_posts
-		WHERE guild_id = $1
-		  AND published_at IS NOT NULL
-		  AND archived_at IS NULL
-		  AND archive_at > $2
-		ORDER BY publish_date_utc DESC, published_at DESC, id DESC
-		LIMIT 2`,
-		guildID,
-		now,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("Store.GetCurrentAndPreviousQOTDPosts: %w", err)
-	}
-	defer rows.Close()
-
-	records := make([]QOTDOfficialPostRecord, 0, 2)
-	for rows.Next() {
-		record, err := scanQOTDOfficialPostRecord(rows)
-		if err != nil {
-			return nil, fmt.Errorf("Store.GetCurrentAndPreviousQOTDPosts: %w", err)
+		if now.IsZero() {
+			now = time.Now().UTC()
+		} else {
+			now = now.UTC()
 		}
-		records = append(records, *record)
+
+		rows, err := s.queryContext(ctx,
+			`SELECT
+				id,
+				guild_id,
+				deck_id,
+				deck_name_snapshot,
+				question_id,
+				publish_mode,
+				consume_automatic_slot,
+				publish_date_utc,
+				state,
+				channel_id,
+				question_list_thread_id,
+				question_list_entry_message_id,
+				discord_thread_id,
+				discord_starter_message_id,
+				answer_channel_id,
+				question_text_snapshot,
+				nonce,
+				publish_ordinal,
+				published_at,
+				grace_until,
+				archive_at,
+				closed_at,
+				archived_at,
+				last_reconciled_at,
+				created_at,
+				updated_at
+			FROM qotd_official_posts
+			WHERE guild_id = $1
+			  AND published_at IS NOT NULL
+			  AND archived_at IS NULL
+			  AND archive_at > $2
+			ORDER BY publish_date_utc DESC, published_at DESC, id DESC
+			LIMIT 2`,
+			guildID,
+			now,
+		)
+		if err != nil {
+			yield(QOTDOfficialPostRecord{}, fmt.Errorf("Store.GetCurrentAndPreviousQOTDPosts: %w", err))
+			return
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			record, err := scanQOTDOfficialPostRecord(rows)
+			if err != nil {
+				yield(QOTDOfficialPostRecord{}, fmt.Errorf("Store.GetCurrentAndPreviousQOTDPosts: %w", err))
+				return
+			}
+			if !yield(*record, nil) {
+				return
+			}
+		}
+		if err := rows.Err(); err != nil {
+			yield(QOTDOfficialPostRecord{}, fmt.Errorf("Store.GetCurrentAndPreviousQOTDPosts: %w", err))
+		}
 	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("Store.GetCurrentAndPreviousQOTDPosts: %w", err)
-	}
-	return records, nil
 }
 
 // ListQOTDOfficialPostsNeedingArchive lists qotdofficial posts needing archive.
-func (s *Store) ListQOTDOfficialPostsNeedingArchive(ctx context.Context, now time.Time) (_ []QOTDOfficialPostRecord, err error) {
-	defer func() {
-		if err != nil {
-			err = fmt.Errorf("list qotd official posts needing archive: %w", err)
+func (s *Store) ListQOTDOfficialPostsNeedingArchive(ctx context.Context, now time.Time) iter.Seq2[QOTDOfficialPostRecord, error] {
+	return func(yield func(QOTDOfficialPostRecord, error) bool) {
+		if now.IsZero() {
+			now = time.Now().UTC()
+		} else {
+			now = now.UTC()
 		}
-	}()
-	if now.IsZero() {
-		now = time.Now().UTC()
-	} else {
-		now = now.UTC()
-	}
 
-	rows, err := s.queryContext(ctx,
-		`SELECT
-			id,
-			guild_id,
-			deck_id,
-			deck_name_snapshot,
-			question_id,
-			publish_mode,
-			consume_automatic_slot,
-			publish_date_utc,
-			state,
-			channel_id,
-			question_list_thread_id,
-			question_list_entry_message_id,
-			discord_thread_id,
-			discord_starter_message_id,
-			answer_channel_id,
-			question_text_snapshot,
-			nonce,
-			publish_ordinal,
-			published_at,
-			grace_until,
-			archive_at,
-			closed_at,
-			archived_at,
-			last_reconciled_at,
-			created_at,
-			updated_at
-		FROM qotd_official_posts
-		WHERE published_at IS NOT NULL
-		  AND archived_at IS NULL
-		  AND archive_at <= $1
-		ORDER BY archive_at ASC, id ASC`,
-		now,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("Store.ListQOTDOfficialPostsNeedingArchive: %w", err)
-	}
-	defer rows.Close()
-
-	records := make([]QOTDOfficialPostRecord, 0, 8)
-	for rows.Next() {
-		record, err := scanQOTDOfficialPostRecord(rows)
+		rows, err := s.queryContext(ctx,
+			`SELECT
+				id,
+				guild_id,
+				deck_id,
+				deck_name_snapshot,
+				question_id,
+				publish_mode,
+				consume_automatic_slot,
+				publish_date_utc,
+				state,
+				channel_id,
+				question_list_thread_id,
+				question_list_entry_message_id,
+				discord_thread_id,
+				discord_starter_message_id,
+				answer_channel_id,
+				question_text_snapshot,
+				nonce,
+				publish_ordinal,
+				published_at,
+				grace_until,
+				archive_at,
+				closed_at,
+				archived_at,
+				last_reconciled_at,
+				created_at,
+				updated_at
+			FROM qotd_official_posts
+			WHERE published_at IS NOT NULL
+			  AND archived_at IS NULL
+			  AND archive_at <= $1
+			ORDER BY archive_at ASC, id ASC`,
+			now,
+		)
 		if err != nil {
-			return nil, fmt.Errorf("Store.ListQOTDOfficialPostsNeedingArchive: %w", err)
+			yield(QOTDOfficialPostRecord{}, fmt.Errorf("Store.ListQOTDOfficialPostsNeedingArchive: %w", err))
+			return
 		}
-		records = append(records, *record)
+		defer rows.Close()
+
+		for rows.Next() {
+			record, err := scanQOTDOfficialPostRecord(rows)
+			if err != nil {
+				yield(QOTDOfficialPostRecord{}, fmt.Errorf("Store.ListQOTDOfficialPostsNeedingArchive: %w", err))
+				return
+			}
+			if !yield(*record, nil) {
+				return
+			}
+		}
+		if err := rows.Err(); err != nil {
+			yield(QOTDOfficialPostRecord{}, fmt.Errorf("Store.ListQOTDOfficialPostsNeedingArchive: %w", err))
+		}
 	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("Store.ListQOTDOfficialPostsNeedingArchive: %w", err)
-	}
-	return records, nil
 }
 
 // UpdateQOTDOfficialPostState updates qotdofficial post state.

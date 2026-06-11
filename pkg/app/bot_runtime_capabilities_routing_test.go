@@ -18,7 +18,7 @@ func TestResolveBotRuntimeCapabilitiesResolvesGranularFeatures(t *testing.T) {
 				},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
-						Commands: Ptr(true),
+						Commands: new(bool(true)),
 					},
 				},
 			},

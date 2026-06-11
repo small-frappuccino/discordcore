@@ -144,24 +144,6 @@ func resolveBotRuntimeCapabilities(
 	return capabilities
 }
 
-// Clone creates a deep copy of the botRuntimeCapabilities.
-// While currently composed of primitive types (where pass-by-value is naturally a deep copy),
-// this method establishes the architectural contract for memory isolation, ensuring that
-// any future reference types (like slices or maps) added to this struct are properly
-// decoupled from the original array backing.
-func (c botRuntimeCapabilities) Clone() botRuntimeCapabilities {
-	return botRuntimeCapabilities{
-		monitoring:  c.monitoring,
-		admin:       c.admin,
-		automod:     c.automod,
-		userPrune:   c.userPrune,
-		qotdRuntime: c.qotdRuntime,
-		warmup:      c.warmup,
-		intents:     c.intents,
-		hasCommands: c.hasCommands,
-	}
-}
-
 func botRuntimeNeedsMonitoring(
 	features files.ResolvedFeatureToggles,
 	runtimeConfig files.RuntimeConfig,

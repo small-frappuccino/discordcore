@@ -32,7 +32,7 @@ func (c *warningsCommand) Options() []*discordgo.ApplicationCommandOption {
 			Name:        "limit",
 			Description: "How many recent warnings to show (default 5, max 25)",
 			Required:    false,
-			MinValue:    floatPtr(1),
+			MinValue:    new(float64(1)),
 			MaxValue:    25,
 		},
 	}

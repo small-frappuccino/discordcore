@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/rand/v2"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,7 +13,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/service"
-	"golang.org/x/sync/semaphore"
 )
 
 var identifyStaggerDelay = 5 * time.Second
@@ -39,15 +39,13 @@ type BotSupervisor struct {
 	serviceManager *service.Manager
 	opts           botRuntimeOptions
 
-	// identifySemaphore limits concurrent Discord Identify calls
-	identifySemaphore *semaphore.Weighted
-
 	ctx    context.Context
 	cancel context.CancelFunc
 	bgWG   sync.WaitGroup
 
-	mu        sync.Mutex
-	instances map[string]*botInstanceState // botInstanceID -> state
+	mu           sync.Mutex
+	instances    map[string]*botInstanceState // botInstanceID -> state
+	nextIdentify time.Time
 
 	fatalCallback func(error)
 }
@@ -55,14 +53,13 @@ type BotSupervisor struct {
 func NewBotSupervisor(configManager *files.ConfigManager, opts botRuntimeOptions) *BotSupervisor {
 	ctx, cancel := context.WithCancel(context.Background())
 	supervisor := &BotSupervisor{
-		configManager:     configManager,
-		resolver:          newBotRuntimeResolver(configManager, make(map[string]*botRuntime), opts.defaultBotInstanceID),
-		serviceManager:    service.NewManager(),
-		opts:              opts,
-		identifySemaphore: semaphore.NewWeighted(1), // Rate limit Identify
-		ctx:               ctx,
-		cancel:            cancel,
-		instances:         make(map[string]*botInstanceState),
+		configManager:  configManager,
+		resolver:       newBotRuntimeResolver(configManager, make(map[string]*botRuntime), opts.defaultBotInstanceID),
+		serviceManager: service.NewManager(),
+		opts:           opts,
+		ctx:            ctx,
+		cancel:         cancel,
+		instances:      make(map[string]*botInstanceState),
 	}
 
 	return supervisor
@@ -228,23 +225,38 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 				!reflect.DeepEqual(oldGuild.Features, newGuild.Features) {
 
 				guildID := newGuild.GuildID
+				var activeInstances []string
+				for instanceID, token := range newGuild.BotInstanceTokens {
+					if string(token) != "" {
+						activeInstances = append(activeInstances, instanceID)
+					}
+				}
+
 				s.bgWG.Add(1)
-				go func(gID string) {
+				go func(gID string, instances []string) {
 					defer s.bgWG.Done()
 					// Small debounce jitter
 					time.Sleep(time.Duration(rand.Float64()*500) * time.Millisecond)
 
-					runtime, _, err := s.resolver.runtimeForGuild(gID)
-					if err == nil && runtime != nil && runtime.commandHandler != nil {
+					currentRuntimes := s.resolver.getRuntimes()
+					for _, instanceID := range instances {
+						runtime, ok := currentRuntimes[instanceID]
+						if !ok || runtime == nil || runtime.commandHandler == nil {
+							continue
+						}
 						if cm := runtime.commandHandler.GetCommandManager(); cm != nil {
 							if syncErr := cm.SyncGuildCommands(gID); syncErr != nil {
-								log.ApplicationLogger().Error("failed dynamic guild command sync", "guildID", gID, "error", syncErr)
+								if strings.Contains(syncErr.Error(), "403") {
+									log.ApplicationLogger().Warn("dynamic command sync forbidden (missing scope?)", "guildID", gID, "botInstanceID", instanceID, "error", syncErr)
+								} else {
+									log.ApplicationLogger().Error("failed dynamic guild command sync", "guildID", gID, "botInstanceID", instanceID, "error", syncErr)
+								}
 							} else {
-								log.ApplicationLogger().Info("Completed dynamic guild command sync", "guildID", gID)
+								log.ApplicationLogger().Info("Completed dynamic guild command sync", "guildID", gID, "botInstanceID", instanceID)
 							}
 						}
 					}
-				}(guildID)
+				}(guildID, activeInstances)
 			}
 		}
 	}
@@ -334,24 +346,26 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token, status str
 	maxRetries := 5
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
-		log.ApplicationLogger().Info("Acquiring Discord Identify semaphore", "botInstanceID", instanceID)
-
-		if acqErr := s.identifySemaphore.Acquire(s.ctx, 1); acqErr != nil {
-			log.ApplicationLogger().Error("identify semaphore error", "botInstanceID", instanceID, "error", acqErr)
-			return
+		s.mu.Lock()
+		now := time.Now()
+		var sleepDur time.Duration
+		if s.nextIdentify.After(now) {
+			sleepDur = s.nextIdentify.Sub(now)
+			s.nextIdentify = s.nextIdentify.Add(identifyStaggerDelay)
+		} else {
+			s.nextIdentify = now.Add(identifyStaggerDelay)
 		}
+		s.mu.Unlock()
 
-		// Small delay to ensure we don't spam identify even after acquiring semaphore
-		select {
-		case <-s.ctx.Done():
-			s.identifySemaphore.Release(1)
-			return
-		case <-time.After(identifyStaggerDelay):
+		if sleepDur > 0 {
+			select {
+			case <-s.ctx.Done():
+				return
+			case <-time.After(sleepDur):
+			}
 		}
 
 		runtime, err = openBotRuntime(resolvedBotInstance{ID: instanceID, Token: token, DiscordStatus: status}, capabilities)
-
-		s.identifySemaphore.Release(1)
 
 		if err == nil {
 			break

@@ -699,58 +699,58 @@ func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID, deckI
 // reservations may belong to an in-flight publish that another goroutine is
 // currently running. Returns the freed question IDs in queue order so callers
 // can log or test the cleanup deterministically.
-func (s *Store) ReclaimOrphanReservedQOTDQuestions(ctx context.Context, guildID string, todayUTC time.Time) (_ []int64, err error) {
-	defer func() {
+func (s *Store) ReclaimOrphanReservedQOTDQuestions(ctx context.Context, guildID string, todayUTC time.Time) iter.Seq2[int64, error] {
+	return func(yield func(int64, error) bool) {
+		guildID = strings.TrimSpace(guildID)
+		if guildID == "" {
+			return
+		}
+		todayUTC = normalizeQOTDDateUTC(todayUTC)
+		if todayUTC.IsZero() {
+			yield(0, fmt.Errorf("reclaim orphan qotd reservations: today_utc is required"))
+			return
+		}
+
+		rows, err := s.queryContext(ctx,
+			`UPDATE qotd_questions q
+			 SET
+				status = 'ready',
+				scheduled_for_date_utc = NULL,
+				updated_at = NOW()
+			 WHERE q.guild_id = $1
+			   AND q.status = 'reserved'
+			   AND q.scheduled_for_date_utc IS NOT NULL
+			   AND q.scheduled_for_date_utc < $2
+			   AND NOT EXISTS (
+				 SELECT 1
+				 FROM qotd_official_posts p
+				 WHERE p.guild_id = q.guild_id
+				   AND p.question_id = q.id
+			   )
+			 RETURNING q.id`,
+			guildID,
+			todayUTC,
+		)
 		if err != nil {
-			err = fmt.Errorf("reclaim orphan qotd reservations: %w", err)
+			yield(0, fmt.Errorf("reclaim orphan qotd reservations: Store.ReclaimOrphanReservedQOTDQuestions: %w", err))
+			return
 		}
-	}()
-	guildID = strings.TrimSpace(guildID)
-	if guildID == "" {
-		return nil, nil
-	}
-	todayUTC = normalizeQOTDDateUTC(todayUTC)
-	if todayUTC.IsZero() {
-		return nil, fmt.Errorf("today_utc is required")
-	}
+		defer rows.Close()
 
-	rows, err := s.queryContext(ctx,
-		`UPDATE qotd_questions q
-		 SET
-			status = 'ready',
-			scheduled_for_date_utc = NULL,
-			updated_at = NOW()
-		 WHERE q.guild_id = $1
-		   AND q.status = 'reserved'
-		   AND q.scheduled_for_date_utc IS NOT NULL
-		   AND q.scheduled_for_date_utc < $2
-		   AND NOT EXISTS (
-		     SELECT 1
-		     FROM qotd_official_posts p
-		     WHERE p.guild_id = q.guild_id
-		       AND p.question_id = q.id
-		   )
-		 RETURNING q.id`,
-		guildID,
-		todayUTC,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("Store.ReclaimOrphanReservedQOTDQuestions: %w", err)
-	}
-	defer rows.Close()
-
-	ids := make([]int64, 0, 4)
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("Store.ReclaimOrphanReservedQOTDQuestions: %w", err)
+		for rows.Next() {
+			var id int64
+			if err := rows.Scan(&id); err != nil {
+				yield(0, fmt.Errorf("reclaim orphan qotd reservations: Store.ReclaimOrphanReservedQOTDQuestions: %w", err))
+				return
+			}
+			if !yield(id, nil) {
+				return
+			}
 		}
-		ids = append(ids, id)
+		if err := rows.Err(); err != nil {
+			yield(0, fmt.Errorf("reclaim orphan qotd reservations: Store.ReclaimOrphanReservedQOTDQuestions: %w", err))
+		}
 	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("Store.ReclaimOrphanReservedQOTDQuestions: %w", err)
-	}
-	return ids, nil
 }
 
 func normalizeQOTDQuestionRecord(rec QOTDQuestionRecord) (QOTDQuestionRecord, error) {

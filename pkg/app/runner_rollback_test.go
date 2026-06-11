@@ -34,13 +34,13 @@ func TestRun_MidBootSabotageTriggersTeardown(t *testing.T) {
 		},
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
-				Monitoring:    Ptr(false),
-				Automod:       Ptr(false),
-				Commands:      Ptr(true),
-				AdminCommands: Ptr(false),
+				Monitoring:    new(bool(false)),
+				Automod:       new(bool(false)),
+				Commands:      new(bool(true)),
+				AdminCommands: new(bool(false)),
 			},
 			Maintenance: files.FeatureMaintenanceToggles{
-				DBCleanup: Ptr(false),
+				DBCleanup: new(bool(false)),
 			},
 		},
 		Guilds: []files.GuildConfig{{
@@ -166,13 +166,13 @@ func TestRun_CascadingRollbackFailures(t *testing.T) {
 		},
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
-				Monitoring:    Ptr(false),
-				Automod:       Ptr(false),
-				Commands:      Ptr(true),
-				AdminCommands: Ptr(false),
+				Monitoring:    new(bool(false)),
+				Automod:       new(bool(false)),
+				Commands:      new(bool(true)),
+				AdminCommands: new(bool(false)),
 			},
 			Maintenance: files.FeatureMaintenanceToggles{
-				DBCleanup: Ptr(false),
+				DBCleanup: new(bool(false)),
 			},
 		},
 		Guilds: []files.GuildConfig{{

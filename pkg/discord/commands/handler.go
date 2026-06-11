@@ -237,7 +237,7 @@ func (ch *CommandHandler) matchesGuildBotInstance(guildID string, feature string
 
 	resolvedID, fallback := guild.ResolveFeatureBotInstanceID(feature, ch.defaultBotInstanceID)
 	if fallback && resolvedID == ch.defaultBotInstanceID {
-		log.ApplicationLogger().Warn(
+		log.ApplicationLogger().Debug(
 			"Command routing degraded to default bot instance due to missing or invalid token for designated route",
 			"guildID", guildID,
 			"feature", feature,

@@ -262,7 +262,7 @@ func (c *embedSetSubCommand) Options() []*discordgo.ApplicationCommandOption {
 		embedKeyOption(true),
 		{Type: discordgo.ApplicationCommandOptionString, Name: embedOptionTitle, Description: "Embed title (omit to keep current, pass empty string to clear)", Required: false},
 		{Type: discordgo.ApplicationCommandOptionString, Name: embedOptionDescription, Description: "Embed description (omit to keep current, pass empty string to clear)", Required: false},
-		{Type: discordgo.ApplicationCommandOptionInteger, Name: embedOptionColor, Description: "Embed color as a decimal RGB integer. 0 to clear.", Required: false, MinValue: floatPtr(0), MaxValue: float64(files.CustomEmbedColorMax)},
+		{Type: discordgo.ApplicationCommandOptionInteger, Name: embedOptionColor, Description: "Embed color as a decimal RGB integer. 0 to clear.", Required: false, MinValue: new(float64(0)), MaxValue: float64(files.CustomEmbedColorMax)},
 		{Type: discordgo.ApplicationCommandOptionString, Name: embedOptionAuthorName, Description: "Embed author name (omit to keep current, pass empty string to clear)", Required: false},
 		{Type: discordgo.ApplicationCommandOptionString, Name: embedOptionAuthorIcon, Description: "Embed author icon URL (omit to keep current, pass empty string to clear)", Required: false},
 		{Type: discordgo.ApplicationCommandOptionString, Name: embedOptionFooterText, Description: "Embed footer text (omit to keep current, pass empty string to clear)", Required: false},
@@ -891,8 +891,6 @@ func customEmbedDetailedCommandError(message string) error {
 func customEmbedResponseBuilder(session *discordgo.Session) *core.ResponseBuilder {
 	return core.NewResponseBuilder(session).Ephemeral()
 }
-
-func floatPtr(v float64) *float64 { return &v }
 
 type embedImportSubCommand struct {
 	configManager *files.ConfigManager

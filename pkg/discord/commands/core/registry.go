@@ -377,8 +377,7 @@ func commandDefaultMemberPermissions(cmd Command) *int64 {
 	if !ok {
 		return nil
 	}
-	perms := provider.DefaultMemberPermissions()
-	return &perms
+	return new(int64(provider.DefaultMemberPermissions()))
 }
 
 func (cm *CommandManager) buildGuildGroupOptions(guildID, parentPath string, group *GroupCommand) []*discordgo.ApplicationCommandOption {

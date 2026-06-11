@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"iter"
 	"strings"
 )
 
@@ -72,67 +73,66 @@ func (s *Store) UpdateQOTDOfficialPostProgress(ctx context.Context, id int64, pr
 }
 
 // ListQOTDOfficialPostsPendingRecovery lists qotdofficial posts pending recovery.
-func (s *Store) ListQOTDOfficialPostsPendingRecovery(ctx context.Context, guildID string) (_ []QOTDOfficialPostRecord, err error) {
-	defer func() {
-		if err != nil {
-			err = fmt.Errorf("list qotd official posts pending recovery: %w", err)
+func (s *Store) ListQOTDOfficialPostsPendingRecovery(ctx context.Context, guildID string) iter.Seq2[QOTDOfficialPostRecord, error] {
+	return func(yield func(QOTDOfficialPostRecord, error) bool) {
+		guildID = strings.TrimSpace(guildID)
+		if guildID == "" {
+			return
 		}
-	}()
-	guildID = strings.TrimSpace(guildID)
-	if guildID == "" {
-		return nil, nil
-	}
 
-	rows, err := s.queryContext(ctx,
-		`SELECT
-			id,
-			guild_id,
-			deck_id,
-			deck_name_snapshot,
-			question_id,
-			publish_mode,
-			consume_automatic_slot,
-			publish_date_utc,
-			state,
-			channel_id,
-			question_list_thread_id,
-			question_list_entry_message_id,
-			discord_thread_id,
-			discord_starter_message_id,
-			answer_channel_id,
-			question_text_snapshot,
-			nonce,
-			publish_ordinal,
-			published_at,
-			grace_until,
-			archive_at,
-			closed_at,
-			archived_at,
-			last_reconciled_at,
-			created_at,
-			updated_at
-		FROM qotd_official_posts
-		WHERE guild_id = $1
-		  AND archived_at IS NULL
-		  AND state IN ('provisioning', 'failed')
-		ORDER BY updated_at ASC, id ASC`,
-		guildID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("Store.ListQOTDOfficialPostsPendingRecovery: %w", err)
-	}
-	defer rows.Close()
-
-	records := make([]QOTDOfficialPostRecord, 0, 8)
-	for rows.Next() {
-		record, err := scanQOTDOfficialPostRecord(rows)
+		rows, err := s.queryContext(ctx,
+			`SELECT
+				id,
+				guild_id,
+				deck_id,
+				deck_name_snapshot,
+				question_id,
+				publish_mode,
+				consume_automatic_slot,
+				publish_date_utc,
+				state,
+				channel_id,
+				question_list_thread_id,
+				question_list_entry_message_id,
+				discord_thread_id,
+				discord_starter_message_id,
+				answer_channel_id,
+				question_text_snapshot,
+				nonce,
+				publish_ordinal,
+				published_at,
+				grace_until,
+				archive_at,
+				closed_at,
+				archived_at,
+				last_reconciled_at,
+				created_at,
+				updated_at
+			FROM qotd_official_posts
+			WHERE guild_id = $1
+			  AND archived_at IS NULL
+			  AND state IN ('provisioning', 'failed')
+			ORDER BY updated_at ASC, id ASC`,
+			guildID,
+		)
 		if err != nil {
-			return nil, fmt.Errorf("Store.ListQOTDOfficialPostsPendingRecovery: %w", err)
+			yield(QOTDOfficialPostRecord{}, fmt.Errorf("Store.ListQOTDOfficialPostsPendingRecovery: %w", err))
+			return
 		}
-		records = append(records, *record)
+		defer rows.Close()
+
+		for rows.Next() {
+			record, err := scanQOTDOfficialPostRecord(rows)
+			if err != nil {
+				yield(QOTDOfficialPostRecord{}, fmt.Errorf("Store.ListQOTDOfficialPostsPendingRecovery: %w", err))
+				return
+			}
+			if !yield(*record, nil) {
+				return
+			}
+		}
+		if err := rows.Err(); err != nil {
+			yield(QOTDOfficialPostRecord{}, fmt.Errorf("Store.ListQOTDOfficialPostsPendingRecovery: %w", err))
+		}
 	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("Store.ListQOTDOfficialPostsPendingRecovery: %w", err)
-	}
-	return records, nil
 }

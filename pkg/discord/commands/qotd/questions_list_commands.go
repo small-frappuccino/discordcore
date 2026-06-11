@@ -49,12 +49,27 @@ const (
 // below holds the narrower role it actually exercises so tests can mock
 // the smaller surface; the top-level Commands constructor still takes one
 // argument so callers don't have to wire two interfaces by hand. Anything
-// that satisfies applicationqotd.QuestionCatalog AND
-// applicationqotd.PublishCoordinator (which the monolithic *Service does)
+// that satisfies QuestionCatalog AND
+// PublishCoordinator (which the monolithic *Service does)
 // fits.
+type QuestionCatalog interface {
+	Settings(guildID string) (files.QOTDConfig, error)
+	ListQuestions(ctx context.Context, guildID, deckID string) ([]storage.QOTDQuestionRecord, error)
+	CreateQuestion(ctx context.Context, guildID, actorID string, mutation applicationqotd.QuestionMutation) (*storage.QOTDQuestionRecord, error)
+	DeleteQuestion(ctx context.Context, guildID string, questionID int64) error
+	RestoreUsedQuestion(ctx context.Context, guildID, deckID string, questionID int64) (*storage.QOTDQuestionRecord, error)
+	MarkQuestionPublished(ctx context.Context, guildID, deckID string, questionID int64) (*storage.QOTDQuestionRecord, error)
+}
+
+type PublishCoordinator interface {
+	GetAutomaticQueueState(ctx context.Context, guildID, deckID string) (applicationqotd.AutomaticQueueState, error)
+	PublishNowWithParams(ctx context.Context, guildID string, session *discordgo.Session, params applicationqotd.PublishNowParams) (*applicationqotd.PublishResult, error)
+	ReplaceCurrentPublish(ctx context.Context, guildID string, session *discordgo.Session) (*applicationqotd.PublishResult, error)
+}
+
 type QuestionCatalogService interface {
-	applicationqotd.QuestionCatalog
-	applicationqotd.PublishCoordinator
+	QuestionCatalog
+	PublishCoordinator
 }
 
 // Commands registers and backs the QOTD question-management slash commands,
@@ -77,8 +92,8 @@ func (c *Commands) RegisterCommands(router *core.CommandRouter) {
 	checker := core.NewPermissionChecker(router.GetSession(), router.GetConfigManager())
 	// The composed c.service satisfies both narrow roles; each command
 	// receives only the role it uses so the test surface stays minimal.
-	catalog := applicationqotd.QuestionCatalog(c.service)
-	publisher := applicationqotd.PublishCoordinator(c.service)
+	catalog := QuestionCatalog(c.service)
+	publisher := PublishCoordinator(c.service)
 	addCommand := &questionsAddCommand{service: catalog}
 	listCommand := &questionsListCommand{service: catalog}
 	queueCommand := &questionsQueueCommand{catalog: catalog, publish: publisher}
@@ -129,7 +144,7 @@ func (c *Commands) RegisterCommands(router *core.CommandRouter) {
 // callers no longer carry the union dependency.
 
 type questionsListCommand struct {
-	service        applicationqotd.QuestionCatalog
+	service        QuestionCatalog
 	controlsMu     sync.Mutex
 	controlTimers  map[string]questionsListControlTimer
 	idleTimeout    time.Duration
@@ -137,39 +152,39 @@ type questionsListCommand struct {
 }
 
 type questionsAddCommand struct {
-	service applicationqotd.QuestionCatalog
+	service QuestionCatalog
 }
 
 type questionsMarkPublishedCommand struct {
-	service applicationqotd.QuestionCatalog
+	service QuestionCatalog
 }
 
 type questionsQueueCommand struct {
 	// queue needs both roles: Settings() (catalog) to resolve the deck
 	// the user named, and GetAutomaticQueueState (publish coordinator)
 	// to inspect the scheduler.
-	catalog applicationqotd.QuestionCatalog
-	publish applicationqotd.PublishCoordinator
+	catalog QuestionCatalog
+	publish PublishCoordinator
 }
 
 type questionsRecoverCommand struct {
-	service applicationqotd.QuestionCatalog
+	service QuestionCatalog
 }
 
 type questionsRemoveCommand struct {
-	service applicationqotd.QuestionCatalog
+	service QuestionCatalog
 }
 
 type qotdPublishCommand struct {
 	// publishCoordinator runs the manual publish. catalog is held
 	// separately because the command needs to resolve the active deck
 	// (Settings) before deciding whether the publish is allowed.
-	publishCoordinator applicationqotd.PublishCoordinator
-	catalog            applicationqotd.QuestionCatalog
+	publishCoordinator PublishCoordinator
+	catalog            QuestionCatalog
 }
 
 type qotdSkipCommand struct {
-	publishCoordinator applicationqotd.PublishCoordinator
+	publishCoordinator PublishCoordinator
 }
 
 type questionsListState struct {
@@ -731,7 +746,7 @@ func requireQuestionsGuild(ctx *core.Context) error {
 // loadCommandDeck only needs Settings(), so it takes the narrow catalog
 // role. Both PublishCoordinator-only and QuestionCatalog-only command
 // structs can pass their dependency in without widening to the union.
-func loadCommandDeck(ctx *core.Context, catalog applicationqotd.QuestionCatalog, requestedDeck string) (files.QOTDDeckConfig, error) {
+func loadCommandDeck(ctx *core.Context, catalog QuestionCatalog, requestedDeck string) (files.QOTDDeckConfig, error) {
 	settings, err := catalog.Settings(ctx.GuildID)
 	if err != nil {
 		return files.QOTDDeckConfig{}, fmt.Errorf("loadCommandDeck: %w", err)

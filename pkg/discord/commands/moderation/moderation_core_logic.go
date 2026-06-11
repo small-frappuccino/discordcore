@@ -185,8 +185,6 @@ func permissionCheckerForContext(ctx *core.Context) *core.PermissionChecker {
 	return core.NewPermissionChecker(ctx.Session, ctx.Config)
 }
 
-func floatPtr(v float64) *float64 { return &v }
-
 type banContext struct {
 	rolesByID    map[string]*discordgo.Role
 	ownerID      string

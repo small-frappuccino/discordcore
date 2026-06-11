@@ -32,7 +32,7 @@ func (c *timeoutCommand) Options() []*discordgo.ApplicationCommandOption {
 			Name:        "minutes",
 			Description: "Timeout duration in minutes (max 40320)",
 			Required:    true,
-			MinValue:    floatPtr(1),
+			MinValue:    new(float64(1)),
 			MaxValue:    float64(timeoutMaxMinutes),
 		},
 		{

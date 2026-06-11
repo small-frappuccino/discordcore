@@ -359,9 +359,12 @@ func (s *Service) reclaimOrphanReservedQuestions(ctx context.Context, guildID st
 	if todayUTC.IsZero() {
 		return nil
 	}
-	ids, err := s.store.ReclaimOrphanReservedQOTDQuestions(ctx, guildID, todayUTC)
-	if err != nil {
-		return fmt.Errorf("Service.reclaimOrphanReservedQuestions: %w", err)
+	var ids []int64
+	for id, err := range s.store.ReclaimOrphanReservedQOTDQuestions(ctx, guildID, todayUTC) {
+		if err != nil {
+			return fmt.Errorf("Service.reclaimOrphanReservedQuestions: %w", err)
+		}
+		ids = append(ids, id)
 	}
 	if len(ids) > 0 {
 		s.observability().RecordOrphanReclaim(len(ids))

@@ -488,26 +488,33 @@ func (s *Store) CountDistinctMemberJoins(ctx context.Context, guildID string) (i
 }
 
 // ListDistinctMemberJoinUserIDs lists distinct member join user ids.
-func (s *Store) ListDistinctMemberJoinUserIDs(ctx context.Context, guildID string) ([]string, error) {
-	if guildID == "" {
-		return nil, nil
-	}
-	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT user_id FROM member_joins WHERE guild_id=$1`, guildID)
-	if err != nil {
-		return nil, fmt.Errorf("Store.ListDistinctMemberJoinUserIDs: %w", err)
-	}
-	defer rows.Close()
-	out := make([]string, 0, 128)
-	for rows.Next() {
-		var userID string
-		if err := rows.Scan(&userID); err != nil {
-			return nil, fmt.Errorf("Store.ListDistinctMemberJoinUserIDs: %w", err)
+func (s *Store) ListDistinctMemberJoinUserIDs(ctx context.Context, guildID string) iter.Seq2[string, error] {
+	return func(yield func(string, error) bool) {
+		if guildID == "" {
+			return
 		}
-		if strings.TrimSpace(userID) != "" {
-			out = append(out, userID)
+		rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT user_id FROM member_joins WHERE guild_id=$1`, guildID)
+		if err != nil {
+			yield("", fmt.Errorf("Store.ListDistinctMemberJoinUserIDs: %w", err))
+			return
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var userID string
+			if err := rows.Scan(&userID); err != nil {
+				yield("", fmt.Errorf("Store.ListDistinctMemberJoinUserIDs: %w", err))
+				return
+			}
+			if strings.TrimSpace(userID) != "" {
+				if !yield(userID, nil) {
+					return
+				}
+			}
+		}
+		if err := rows.Err(); err != nil {
+			yield("", fmt.Errorf("Store.ListDistinctMemberJoinUserIDs: %w", err))
 		}
 	}
-	return out, rows.Err()
 }
 
 // SumDailyMemberJoinsSince sums daily member joins since.

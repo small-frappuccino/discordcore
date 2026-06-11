@@ -28,7 +28,7 @@ func TestInitializeBotRuntimeSkipsCommandHandlerWhenCommandsDisabled(t *testing.
 				BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
-						Commands: Ptr(false),
+						Commands: new(bool(false)),
 					},
 				},
 				QOTD: files.QOTDConfig{

@@ -86,13 +86,13 @@ func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 		},
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
-				Monitoring:    Ptr(false),
-				Automod:       Ptr(false),
-				Commands:      Ptr(true),
-				AdminCommands: Ptr(false),
+				Monitoring:    new(bool(false)),
+				Automod:       new(bool(false)),
+				Commands:      new(bool(true)),
+				AdminCommands: new(bool(false)),
 			},
 			Maintenance: files.FeatureMaintenanceToggles{
-				DBCleanup: Ptr(false),
+				DBCleanup: new(bool(false)),
 			},
 		},
 		Guilds: []files.GuildConfig{{
@@ -196,13 +196,13 @@ func TestRun_ShutdownAggregatesStoreAndSessionCloseErrors(t *testing.T) {
 		},
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
-				Monitoring:    Ptr(false),
-				Automod:       Ptr(false),
-				Commands:      Ptr(false),
-				AdminCommands: Ptr(false),
+				Monitoring:    new(bool(false)),
+				Automod:       new(bool(false)),
+				Commands:      new(bool(false)),
+				AdminCommands: new(bool(false)),
 			},
 			Maintenance: files.FeatureMaintenanceToggles{
-				DBCleanup: Ptr(false),
+				DBCleanup: new(bool(false)),
 			},
 		},
 		Guilds: []files.GuildConfig{{
@@ -307,13 +307,13 @@ func TestRun_ControlServerBindFailureIsNonFatal(t *testing.T) {
 		},
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
-				Monitoring:    Ptr(false),
-				Automod:       Ptr(false),
-				Commands:      Ptr(false),
-				AdminCommands: Ptr(false),
+				Monitoring:    new(bool(false)),
+				Automod:       new(bool(false)),
+				Commands:      new(bool(false)),
+				AdminCommands: new(bool(false)),
 			},
 			Maintenance: files.FeatureMaintenanceToggles{
-				DBCleanup: Ptr(false),
+				DBCleanup: new(bool(false)),
 			},
 		},
 		Guilds: []files.GuildConfig{},
