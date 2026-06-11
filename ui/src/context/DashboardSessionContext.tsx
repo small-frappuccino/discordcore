@@ -303,9 +303,9 @@ export function DashboardSessionProvider({
     }
     try {
       const profiles = await getBotProfiles(client, guildId).catch(() => []);
-      const targetId = profiles[0]?.logical_key || "main";
-      const main = profiles.find(p => p.logical_key === targetId) || null;
-      setDisplayBotProfile(main);
+      const targetId = profiles[0]?.logical_key || "";
+      const profile = targetId ? profiles.find(p => p.logical_key === targetId) || null : null;
+      setDisplayBotProfile(profile);
     } catch {
       setDisplayBotProfile(null);
     }

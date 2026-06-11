@@ -37,7 +37,6 @@ export function CorePage() {
     isDirty
   } = useCorePageLogic();
 
-  const availableInstances = useMemo(() => settings?.workspace?.available_bot_instance_ids || [], [settings?.workspace?.available_bot_instance_ids]);
   const configuredTokens = useMemo(() => settings?.workspace?.sections?.bot_instance_tokens_configured || {}, [settings?.workspace?.sections?.bot_instance_tokens_configured]);
 
   const [addedProfiles, setAddedProfiles] = useState<string[]>([]);
@@ -51,11 +50,10 @@ export function CorePage() {
 
   const allInstances = useMemo(() => {
     return Array.from(new Set([
-      ...availableInstances,
       ...Object.keys(configuredTokens),
       ...addedProfiles
     ]));
-  }, [availableInstances, configuredTokens, addedProfiles]);
+  }, [configuredTokens, addedProfiles]);
 
   const [isCreatingProfile, setIsCreatingProfile] = useState(false);
   const [newProfileName, setNewProfileName] = useState("");
