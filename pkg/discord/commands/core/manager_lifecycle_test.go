@@ -2,7 +2,6 @@ package core
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sort"
@@ -150,7 +149,7 @@ func TestCommandManagerSetupCommandsRollbackOnCreateError(t *testing.T) {
 		switch {
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/applications/app-id/commands"):
 			_ = json.NewEncoder(w).Encode([]map[string]any{})
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/applications/app-id/commands"):
+		case r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/applications/app-id/commands"):
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = w.Write([]byte(`{"message":"forced create failure"}`))
 		default:
@@ -167,7 +166,7 @@ func TestCommandManagerSetupCommandsRollbackOnCreateError(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected setup error when command create fails")
 	}
-	if !strings.Contains(err.Error(), fmt.Sprintf("error creating command '%s'", "ping")) {
+	if !strings.Contains(err.Error(), "error bulk overwriting commands in global scope") {
 		t.Fatalf("unexpected setup error: %v", err)
 	}
 	if cm.interactionHandlerCancel != nil {
@@ -184,13 +183,15 @@ func TestCommandManagerSetupCommandsUsesGlobalSyncWithoutDomainOverrides(t *test
 		switch {
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/applications/app-id/commands"):
 			_ = json.NewEncoder(w).Encode([]map[string]any{})
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/applications/app-id/commands"):
-			var posted discordgo.ApplicationCommand
+		case r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/applications/app-id/commands"):
+			var posted []discordgo.ApplicationCommand
 			if err := json.NewDecoder(r.Body).Decode(&posted); err != nil {
 				t.Fatalf("decode posted global command: %v", err)
 			}
-			if posted.ID == "" {
-				posted.ID = "created-id"
+			for i := range posted {
+				if posted[i].ID == "" {
+					posted[i].ID = "created-id"
+				}
 			}
 			_ = json.NewEncoder(w).Encode(&posted)
 		default:
@@ -258,20 +259,25 @@ func TestCommandManagerSetupCommandsUsesGuildSyncWhenBotInstanceTokensExist(t *t
 						"name":        "legacy-global",
 						"description": "legacy global command",
 					}})
-				case r.Method == http.MethodDelete && strings.Contains(r.URL.Path, "/applications/app-id/commands/legacy-global"):
-					globalDeletes++
-					w.WriteHeader(http.StatusNoContent)
+				case r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/applications/app-id/commands"):
+					var posted []discordgo.ApplicationCommand
+					if err := json.NewDecoder(r.Body).Decode(&posted); err == nil && len(posted) == 0 {
+						globalDeletes++
+						_ = json.NewEncoder(w).Encode(posted)
+					}
 				case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/applications/app-id/guilds/g1/commands"):
 					guildFetches++
 					_ = json.NewEncoder(w).Encode([]map[string]any{})
-				case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/applications/app-id/guilds/g1/commands"):
-					var posted discordgo.ApplicationCommand
+				case r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/applications/app-id/guilds/g1/commands"):
+					var posted []discordgo.ApplicationCommand
 					if err := json.NewDecoder(r.Body).Decode(&posted); err != nil {
 						t.Fatalf("decode posted guild command: %v", err)
 					}
-					postedGuildCommands = append(postedGuildCommands, posted)
-					if posted.ID == "" {
-						posted.ID = posted.Name + "-id"
+					for i := range posted {
+						postedGuildCommands = append(postedGuildCommands, posted[i])
+						if posted[i].ID == "" {
+							posted[i].ID = posted[i].Name + "-id"
+						}
 					}
 					_ = json.NewEncoder(w).Encode(&posted)
 				default:
@@ -357,19 +363,24 @@ func TestCommandManagerSetupCommandsSkipsConfiguredGuildsMissingFromSessionState
 				"name":        "legacy-global",
 				"description": "legacy global command",
 			}})
-		case r.Method == http.MethodDelete && strings.Contains(r.URL.Path, "/applications/app-id/commands/legacy-global"):
-			globalDeletes++
-			w.WriteHeader(http.StatusNoContent)
+		case r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/applications/app-id/commands"):
+			var posted []discordgo.ApplicationCommand
+			if err := json.NewDecoder(r.Body).Decode(&posted); err == nil && len(posted) == 0 {
+				globalDeletes++
+				_ = json.NewEncoder(w).Encode(posted)
+			}
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/applications/app-id/guilds/g1/commands"):
 			guildFetches = append(guildFetches, "g1")
 			_ = json.NewEncoder(w).Encode([]map[string]any{})
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/applications/app-id/guilds/g1/commands"):
-			var posted discordgo.ApplicationCommand
+		case r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/applications/app-id/guilds/g1/commands"):
+			var posted []discordgo.ApplicationCommand
 			if err := json.NewDecoder(r.Body).Decode(&posted); err != nil {
 				t.Fatalf("decode posted guild command: %v", err)
 			}
-			if posted.ID == "" {
-				posted.ID = posted.Name + "-id"
+			for i := range posted {
+				if posted[i].ID == "" {
+					posted[i].ID = posted[i].Name + "-id"
+				}
 			}
 			_ = json.NewEncoder(w).Encode(&posted)
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/applications/app-id/guilds/g2/commands"):

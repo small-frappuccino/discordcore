@@ -38,15 +38,16 @@ func TestCommandManager_GuildScopedSync(t *testing.T) {
 						{ID: "old-id", Name: "obsolete", Description: "old command to be deleted"},
 						{ID: "keep-id", Name: "unchanged", Description: "unchanged"},
 					}), nil
-				} else if req.Method == http.MethodPost || req.Method == http.MethodPatch {
-					var cmd discordgo.ApplicationCommand
-					_ = json.NewDecoder(req.Body).Decode(&cmd)
-					if cmd.ID == "" {
-						cmd.ID = "new-id-" + cmd.Name
+				} else if req.Method == http.MethodPut {
+					var commands []discordgo.ApplicationCommand
+					_ = json.NewDecoder(req.Body).Decode(&commands)
+					for i := range commands {
+						if commands[i].ID == "" {
+							commands[i].ID = "new-id-" + commands[i].Name
+						}
 					}
-					return mockJSONResponse(http.StatusOK, cmd), nil
-				} else if req.Method == http.MethodDelete {
-					return mockJSONResponse(http.StatusNoContent, nil), nil
+					return mockJSONResponse(http.StatusOK, commands), nil
+
 				}
 			}
 			return mockJSONResponse(http.StatusOK, nil), nil
@@ -87,11 +88,13 @@ func TestCommandManager_GlobalSync(t *testing.T) {
 			if strings.Contains(req.URL.Path, "/commands") {
 				if req.Method == http.MethodGet {
 					return mockJSONResponse(http.StatusOK, []*discordgo.ApplicationCommand{}), nil
-				} else {
-					var cmd discordgo.ApplicationCommand
-					_ = json.NewDecoder(req.Body).Decode(&cmd)
-					cmd.ID = "new-id-" + cmd.Name
-					return mockJSONResponse(http.StatusOK, cmd), nil
+				} else if req.Method == http.MethodPut {
+					var commands []discordgo.ApplicationCommand
+					_ = json.NewDecoder(req.Body).Decode(&commands)
+					for i := range commands {
+						commands[i].ID = "new-id-" + commands[i].Name
+					}
+					return mockJSONResponse(http.StatusOK, commands), nil
 				}
 			}
 			return mockJSONResponse(http.StatusOK, nil), nil
@@ -125,21 +128,18 @@ func TestCommandManager_SyncErrors(t *testing.T) {
 						{Name: "updatecmd", ID: "id1"},
 						{Name: "orphancmd", ID: "id2"},
 					}), nil
-				} else if req.Method == http.MethodPost || req.Method == http.MethodPatch {
-					if postShouldFail {
+				} else if req.Method == http.MethodPut {
+					if postShouldFail || deleteShouldFail {
 						return mockJSONResponse(http.StatusInternalServerError, nil), nil
 					}
-					var cmd discordgo.ApplicationCommand
-					_ = json.NewDecoder(req.Body).Decode(&cmd)
-					if cmd.ID == "" {
-						cmd.ID = "new-id-" + cmd.Name
+					var commands []discordgo.ApplicationCommand
+					_ = json.NewDecoder(req.Body).Decode(&commands)
+					for i := range commands {
+						if commands[i].ID == "" {
+							commands[i].ID = "new-id-" + commands[i].Name
+						}
 					}
-					return mockJSONResponse(http.StatusOK, cmd), nil
-				} else if req.Method == http.MethodDelete {
-					if deleteShouldFail {
-						return mockJSONResponse(http.StatusInternalServerError, nil), nil
-					}
-					return mockJSONResponse(http.StatusNoContent, nil), nil
+					return mockJSONResponse(http.StatusOK, commands), nil
 				}
 			}
 			return mockJSONResponse(http.StatusOK, nil), nil
@@ -179,10 +179,9 @@ func TestCommandManager_SyncErrors(t *testing.T) {
 	postShouldFail = false
 	// 3. Test DELETE error
 	deleteShouldFail = true
-	// desired is empty, so it will try to delete "orphancmd"
+	// desired is empty, so it will try to delete all by bulk overwriting empty array
 	_, err = manager.syncCommandScope("g1", map[string]*discordgo.ApplicationCommand{})
-	// delete errors only log and continue, they don't return err!
-	if err != nil {
-		t.Fatalf("delete error should not fail sync: %v", err)
+	if err == nil {
+		t.Fatalf("delete error should fail bulk overwrite")
 	}
 }

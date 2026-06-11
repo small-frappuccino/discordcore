@@ -518,6 +518,7 @@ func (cm *CommandManager) syncCommandScope(guildID string, desired map[string]*d
 	}
 
 	summary := commandSyncSummary{total: len(desired)}
+	needsSync := false
 	for _, name := range sortedDesiredCommandNames(desired) {
 		desiredCommand := desired[name]
 		if existing, ok := regByName[name]; ok {
@@ -527,31 +528,34 @@ func (cm *CommandManager) syncCommandScope(guildID string, desired map[string]*d
 				continue
 			}
 
-			if _, err := cm.session.ApplicationCommandEdit(cm.session.State.User.ID, guildID, existing.ID, desiredCommand); err != nil {
-				return commandSyncSummary{}, fmt.Errorf("error updating command '%s' in %s scope: %w", name, commandSyncScopeLabel(guildID), err)
-			}
 			slog.Info(fmt.Sprintf("Command updated (%s scope): /%s %s - %s", commandSyncScopeLabel(guildID), name, formatOptions(desiredCommand.Options), desiredCommand.Description))
 			summary.updated++
+			needsSync = true
 			continue
 		}
 
-		if _, err := cm.session.ApplicationCommandCreate(cm.session.State.User.ID, guildID, desiredCommand); err != nil {
-			return commandSyncSummary{}, fmt.Errorf("error creating command '%s' in %s scope: %w", name, commandSyncScopeLabel(guildID), err)
-		}
 		slog.Info(fmt.Sprintf("Command created (%s scope): /%s %s - %s", commandSyncScopeLabel(guildID), name, formatOptions(desiredCommand.Options), desiredCommand.Description))
 		summary.created++
+		needsSync = true
 	}
 
 	for _, rc := range registered {
 		if _, exists := desired[rc.Name]; exists {
 			continue
 		}
-		if err := cm.session.ApplicationCommandDelete(cm.session.State.User.ID, guildID, rc.ID); err != nil {
-			slog.Warn(fmt.Sprintf("Error removing orphan command from %s scope: %s, error: %v", commandSyncScopeLabel(guildID), rc.Name, err))
-			continue
-		}
 		slog.Info(fmt.Sprintf("Orphan command removed (%s scope): /%s %s - %s", commandSyncScopeLabel(guildID), rc.Name, formatOptions(rc.Options), rc.Description))
 		summary.deleted++
+		needsSync = true
+	}
+
+	if needsSync {
+		overwrite := make([]*discordgo.ApplicationCommand, 0, len(desired))
+		for _, name := range sortedDesiredCommandNames(desired) {
+			overwrite = append(overwrite, desired[name])
+		}
+		if _, err := cm.session.ApplicationCommandBulkOverwrite(cm.session.State.User.ID, guildID, overwrite); err != nil {
+			return commandSyncSummary{}, fmt.Errorf("error bulk overwriting commands in %s scope: %w", commandSyncScopeLabel(guildID), err)
+		}
 	}
 
 	return summary, nil

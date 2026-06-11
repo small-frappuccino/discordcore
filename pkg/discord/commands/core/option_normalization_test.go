@@ -131,14 +131,19 @@ func TestCommandManagerSetupCommands_NormalizesOptionOrderBeforeSync(t *testing.
 		switch {
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/applications/app-id/commands"):
 			_ = json.NewEncoder(w).Encode([]map[string]any{})
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/applications/app-id/commands"):
-			if err := json.NewDecoder(r.Body).Decode(&posted); err != nil {
+		case r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/applications/app-id/commands"):
+			var postedArray []discordgo.ApplicationCommand
+			if err := json.NewDecoder(r.Body).Decode(&postedArray); err != nil {
 				t.Fatalf("decode posted command: %v", err)
 			}
-			if posted.ID == "" {
-				posted.ID = "created-id"
+			if len(postedArray) > 0 {
+				posted = postedArray[0]
+				if posted.ID == "" {
+					posted.ID = "created-id"
+				}
+				postedArray[0] = posted
 			}
-			_ = json.NewEncoder(w).Encode(&posted)
+			_ = json.NewEncoder(w).Encode(&postedArray)
 		default:
 			_ = json.NewEncoder(w).Encode(map[string]any{})
 		}
