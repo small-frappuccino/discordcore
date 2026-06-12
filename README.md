@@ -15,6 +15,8 @@ Discordcore is the core Discord bot library and service layer used by Discordcor
 
 ## Repository layout
 
+For a complete and canonical domain map, dependency graph, and strictly enforced architectural boundaries, refer to [ARCHITECTURE.md](ARCHITECTURE.md).
+
 ```
 cmd/discordmain/      # Primary main runtime entrypoint
 cmd/discordqotd/      # QOTD-specialized runtime entrypoint
@@ -45,7 +47,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/persistence"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/app"
-	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 func main() {

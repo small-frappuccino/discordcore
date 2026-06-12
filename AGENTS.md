@@ -39,6 +39,13 @@ Default product split:
 - when shaping a feature, define the slash-command workflow first, then add only the UI needed to support it cleanly
 - if a page mainly mirrors command usage, command output, or routine action buttons, compress it, move it behind diagnostics, or remove it
 
+## Architecture & Mapping
+
+- **Canonical Source**: Treat `ARCHITECTURE.md` as the absolute truth for domain boundaries, package constraints, and cross-service dependencies.
+- **Diagrams**: Always use Mermaid syntax for architecture visualization. Mandate strict node quoting (e.g., `id["Label (Extra)"]`) and avoid HTML tags to guarantee rendering.
+- **Synthesis**: When synthesizing implementation plans, map proposed changes directly to the affected domains listed in `ARCHITECTURE.md`.
+- **Boundary Enforcement**: Do not silently introduce cross-domain dependencies in code without first proposing the structural shift in `ARCHITECTURE.md`.
+
 ## Boundaries And Ownership
 
 Use this map before editing:
@@ -109,32 +116,16 @@ Across both:
 - do not add or rewrite comments on code that was not changed in the current task; comment churn pollutes blame
 - do not embed history references ("added for ticket X", "renamed in 2024") — those belong in commit messages
 
-## Agent Dynamic And Communication
+## Agent Dynamic & Scope Fidelity
 
-- **Tone & Style**: Adopt a strictly neutral, dense, technical tone. Remove pleasantries, emojis, preambles, and summaries. Do not reiterate prompts.
-- **Verbosity**: Scale response length to complexity; answer trivial questions in ≤3 lines.
-- **Emphasis & Language**: Bold only vital technical identifiers (metrics, flags, IDs). Keep technical terminology in English.
-- **Objectivity & Bias**: Retain directives unmodified. Enforce steelmanning of competing frameworks/design patterns in architectural disputes to evaluate trade-offs without subjective endorsement. Restrict personal opinions to labeled non-political ethical/philosophical debates.
-
-## Scope Fidelity
-
-Do exactly what the user requested. Nothing more, nothing less.
-
-- treat the user's message as the contract; the deliverable is the smallest safe change that satisfies it
-- expect direct, task-focused instructions, occasionally in Portuguese (e.g., "Execute task M3", "Como isso fica..."). Acknowledge and proceed without conversational filler
-- leverage artifacts (`implementation_plan.md`, `task.md`) when a plan is required for complex tasks, but execute straightforward fixes immediately
-- **No Silent Placeholders**: All code must be complete, executable, with proper error handling. No `// ... existing code ...` shortcuts unless explicitly permitted
-- **Course Correction (Pushback)**: Explicitly object to flawed premises or suboptimal architectural paths before executing. Guide to the optimal path
-- **Binary Certainty**: No hedging or probabilistic language. Assert facts with conviction or provide a concrete verification path. Zero fabrication
-- **Context Integration**: Seamlessly apply provided context. Do not restate or summarize the provided architecture back to the user
-- **Audits & Analysis**: Focus on race conditions, I/O bottlenecks, transactional regressions, trade-offs, and failure modes instead of surface-level syntax or generic best practices. Contrast options side-by-side explicitly defining victory conditions
-- do not bundle adjacent improvements, cleanup, renames, or reformatting with a non-refactor change
-- do not refactor surrounding code unless the requested change cannot land safely without it, OR unless the surrounding code qualifies as an authorized refactor target (see Authorized Refactor Classes below)
-- when an authorized refactor is warranted but not requested, surface it as a separate explicit proposal after completing the requested work; do not execute it silently
-- do not add features, options, flags, configuration, logging, telemetry, metrics, or hooks the user did not ask for
-- do not anticipate future requirements; if a broader change would be required, surface that explicitly instead of silently widening scope
-- if you notice an unrelated issue while working, mention it separately after the requested work is complete
-- when the request is ambiguous, pick the smallest defensible interpretation and state the assumption briefly
+- **Tone**: Strictly neutral, dense, technical. Zero pleasantries, emojis, or preambles.
+- **Language**: Acknowledge Portuguese commands seamlessly. Keep technical identifiers in English.
+- **Contract**: The user's prompt is absolute. Output the minimal safe change. 
+- **Binary Certainty**: No hedging. Assert facts or provide verification paths. Zero fabrication.
+- **Pushback**: Explicitly object to flawed premises before execution. Guide to the optimal path.
+- **Artifacts**: Leverage `implementation_plan.md` and `task.md` for complex architecture; execute straightforward fixes immediately. No `// ... existing code ...` shortcuts.
+- **Isolation**: Do not bundle unrelated refactors, logging, or config changes unless explicitly authorized.
+- **Audits**: Focus exclusively on race conditions, I/O bottlenecks, and failure modes over generic syntax debates.
 
 ## Design And Implementation Rules
 
@@ -369,12 +360,8 @@ Additional caution:
 - `resolveMonitoringWorkloadState` must keep `reactionEventService` enabled when any guild has non-empty `GuildConfig.ReactionBlocks`, even if reaction logs are disabled
 - blocked reaction removal uses `discordgo.Session.MessageReactionRemove` with unicode emoji names for built-ins and custom emoji IDs for guild emoji
 
-## Reporting And Handoffs
+## Reporting & Handoffs
 
-Keep reports factual and load-bearing.
-
-- lead with what changed and why when the work is substantial
-- use `walkthrough.md` to document changes and validation results instead of narrating edit history in the chat
-- include validation run and any skipped validation
-- mention remaining risk or follow-up drift only when it is real
-- keep unrelated findings separate from the requested work
+- **Artifacts over Chat**: Document changes and validation in `walkthrough.md`. Do not narrate edit history in chat.
+- **Factual & Load-Bearing**: Report only what changed, why, and the exact validation commands run. 
+- **Drift**: State remaining risk or follow-up drift only if concrete. Keep unrelated findings completely separate.

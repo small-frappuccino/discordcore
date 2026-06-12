@@ -6,69 +6,80 @@ This document provides a high-level overview of the `discordcore` system archite
 
 ```mermaid
 flowchart TD
-    %% External APIs & Gateways (Top Level)
-    DiscordGateway((Discord Gateway))
-    DiscordAPI((Discord API))
+    subgraph External["External Services"]
+        DiscordGateway((Discord Gateway))
+        DiscordAPI((Discord API))
+    end
 
-    %% SDKs
-    DiscordGo(("DiscordGo SDK"))
-    Arikawa(("Arikawa SDK"))
+    subgraph SDKs["SDK Layer"]
+        DiscordGo(("DiscordGo SDK"))
+        Arikawa(("Arikawa SDK"))
+    end
     
-    %% Entrypoints
-    CmdMain["cmd/discordcore"]
-    CmdClean["cmd/clean-config"]
+    subgraph Entrypoints["Entrypoints"]
+        CmdMain["cmd/discordcore"]
+        CmdClean["cmd/clean-config"]
+    end
     
-    %% Application Bootstrapper
-    App["pkg/app (Bootstrapper)"]
-    DualSDK["pkg/app (dual_sdk_publisher.go)"]
+    subgraph Bootstrapper["Application Bootstrapper"]
+        App["pkg/app (Bootstrapper)"]
+        DualSDK["pkg/app (dual_sdk_publisher.go)"]
+    end
 
-    %% Dashboard (UI)
-    UI["ui (React/Vite Dashboard)"]
+    subgraph UI_Layer["Dashboard (UI)"]
+        UI["ui (React/Vite Dashboard)"]
+    end
     
-    %% Discord Sub-domains & Adapters
-    Session["pkg/discord/session"]
-    Commands["pkg/discord/commands"]
-    Cache["pkg/discord/cache"]
-    Control["pkg/control (HTTP API)"]
-    Task["pkg/task (Background Jobs)"]
-    RPC["pkg/discordrpc (Local IPC)"]
-    Webhook["pkg/discord/webhook"]
-    Perf["pkg/discord/perf"]
-    Cleanup["pkg/discord/cleanup"]
-    Maintenance["pkg/discord/maintenance"]
-    MessageUpdate["pkg/discord/messageupdate"]
-    AdapterQOTD["pkg/discord/qotd"]
-    AdapterTickets["pkg/discord/tickets"]
+    subgraph Adapters["Discord Sub-domains & Adapters"]
+        Session["pkg/discord/session"]
+        Commands["pkg/discord/commands"]
+        Cache["pkg/discord/cache"]
+        Logging["pkg/discord/logging"]
+        Control["pkg/control (HTTP API)"]
+        Task["pkg/task (Background Jobs)"]
+        RPC["pkg/discordrpc (Local IPC)"]
+        Webhook["pkg/discord/webhook"]
+        Perf["pkg/discord/perf"]
+        Cleanup["pkg/discord/cleanup"]
+        Maintenance["pkg/discord/maintenance"]
+        MessageUpdate["pkg/discord/messageupdate"]
+        AdapterQOTD["pkg/discord/qotd"]
+        AdapterTickets["pkg/discord/tickets"]
+    end
 
-    %% Vertical Features (Domain)
-    QOTD["pkg/qotd"]
-    Roles["pkg/roles"]
-    Embeds["pkg/embeds"]
-    Partners["pkg/partners"]
-    Tickets["pkg/tickets"]
-    Stats["pkg/stats"]
-    Automod["pkg/automod"]
-    Monitoring["pkg/monitoring"]
-    Messages["pkg/messages"]
-    Members["pkg/members"]
-    Reactions["pkg/reactions"]
-    Notifications["pkg/notifications"]
+    subgraph Features["Vertical Features (Domain)"]
+        QOTD["pkg/qotd"]
+        Roles["pkg/roles"]
+        Embeds["pkg/embeds"]
+        Partners["pkg/partners"]
+        Tickets["pkg/tickets"]
+        Stats["pkg/stats"]
+        Automod["pkg/automod"]
+        Monitoring["pkg/monitoring"]
+        Messages["pkg/messages"]
+        Members["pkg/members"]
+        Reactions["pkg/reactions"]
+        Notifications["pkg/notifications"]
+    end
     
-    %% Core Domain
-    Files["pkg/files (Config & State)"]
-    Storage["pkg/storage (Postgres)"]
-    Persistence["pkg/persistence"]
-    RuntimeApply["pkg/runtimeapply"]
+    subgraph Core["Core Domain"]
+        Files["pkg/files (Config & State)"]
+        Storage["pkg/storage (Postgres)"]
+        Persistence["pkg/persistence"]
+        RuntimeApply["pkg/runtimeapply"]
+    end
 
-    %% Infrastructure & Observability
-    Service["pkg/service (Lifecycle)"]
-    Log["pkg/log"]
-    LogPolicy["pkg/logpolicy"]
-    Observability["pkg/observability"]
-    Clock["pkg/clock"]
-    Theme["pkg/theme"]
-    TestDB["pkg/testdb"]
+    subgraph Infra["Infrastructure & Observability"]
+        Service["pkg/service (Lifecycle)"]
+        Log["pkg/log"]
+        LogPolicy["pkg/logpolicy"]
+        Observability["pkg/observability"]
+        Clock["pkg/clock"]
+        Theme["pkg/theme"]
+        TestDB["pkg/testdb"]
+    end
 
+    %% Edge Definitions
     %% SDK & API Flow
     DiscordGateway -. WebSocket .-> DiscordGo
     DiscordGo -. REST Calls .-> DiscordAPI
@@ -174,6 +185,9 @@ flowchart TD
     Stats --> Files
     Stats --> Storage
     Automod --> Files
+    Members --> Storage
+    Reactions --> Storage
+    Notifications --> Storage
     
     Persistence --> Storage
     RuntimeApply --> Files
@@ -189,7 +203,7 @@ flowchart TD
     
     class Files,Storage,Persistence,RuntimeApply core;
     class Control,Task,RPC,Commands,Logging,Cache,Session,DualSDK,Webhook,Perf,Cleanup,Maintenance,MessageUpdate,AdapterQOTD,AdapterTickets adapter;
-    class QOTD,Roles,Embeds,Partners,Tickets,Stats,Automod feature;
+    class QOTD,Roles,Embeds,Partners,Tickets,Stats,Automod,Monitoring,Messages,Members,Reactions,Notifications feature;
     class Service,Log,LogPolicy,Observability,Clock,Theme,TestDB infra;
     class DiscordGo,Arikawa,DiscordAPI,DiscordGateway external;
     class UI ui;

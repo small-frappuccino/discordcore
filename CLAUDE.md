@@ -6,22 +6,16 @@ This is the repository-wide contract for Claude working in `discordcore`. It def
 
 `discordcore` is a production Go + React monorepo powering a Discord bot. It owns the Go runtime and orchestration for Discord-facing behavior (slash-commands-first), a control API with a complementary React dashboard, canonical config and runtime state, Postgres-backed persistence and migrations, and the `//go:embed` React dashboard payload under `ui/`.
 
-## Non-Negotiables
+## Non-Negotiables & Scope Fidelity
 
-- Maintain this repo like a production system. Optimize for correctness, operational reliability, maintainability, observability, and low-drift changes that match local patterns.
-- Prefer narrow, source-backed changes over broad rewrites. Do not treat this repo like a greenfield project.
-- Do exactly what the user requested — nothing more, nothing less. The user's message is the contract; the deliverable is the smallest safe change that satisfies it.
-- **No Silent Placeholders**: All code must be complete, executable, with proper error handling. No `// ... existing code ...` shortcuts unless explicitly permitted.
-- **Course Correction (Pushback)**: Explicitly object to flawed premises or suboptimal architectural paths before executing. Guide to the optimal path.
-- **Binary Certainty**: No hedging or probabilistic language. Assert facts with conviction or provide a concrete verification path. Zero fabrication.
-- **Context Integration**: Seamlessly apply provided context. Do not restate or summarize the provided architecture back to the user.
-- **Audits & Analysis**: Focus on race conditions, I/O bottlenecks, transactional regressions, trade-offs, and failure modes instead of surface-level syntax or generic best practices. Contrast options side-by-side explicitly defining victory conditions.
-- Do not bundle adjacent improvements, cleanup, renames, or reformatting with the requested change.
-- Do not add features, options, flags, configuration, logging, telemetry, metrics, or hooks the user did not ask for.
-- Do not anticipate future requirements; if a broader change seems warranted, surface it explicitly instead of silently widening scope.
-- When the request is ambiguous, pick the smallest defensible interpretation and state the assumption briefly.
-- Expect direct, task-focused instructions, occasionally in Portuguese (e.g., "Execute task M3", "Como isso fica..."). Acknowledge and proceed without conversational filler.
-- New files must use LF line endings — `.editorconfig` and `.gitattributes` are the contract.
+- **Contract**: The user's prompt is absolute. Output the minimal safe change. 
+- **Binary Certainty**: No hedging. Assert facts or provide verification paths. Zero fabrication.
+- **Pushback**: Explicitly object to flawed premises before execution. Guide to the optimal path.
+- **Artifacts**: Leverage artifacts for complex architecture; execute straightforward fixes immediately. No `// ... existing code ...` placeholders.
+- **Isolation**: Do not bundle unrelated refactors, logging, or config changes unless explicitly authorized.
+- **Audits**: Focus exclusively on race conditions, I/O bottlenecks, and failure modes over generic syntax debates.
+- Maintain this repo like a production system. Optimize for correctness and low-drift changes.
+- New files must use LF line endings (`.editorconfig` and `.gitattributes` are the contract).
 
 ## Product Interaction Model
 
@@ -32,6 +26,13 @@ This is the repository-wide contract for Claude working in `discordcore`. It def
 - Do not make a dashboard page the canonical or exclusive path for routine bot actions unless the product owner explicitly asks for that tradeoff.
 - When shaping a feature, define the slash-command workflow first, then add only the UI needed to support it cleanly.
 - If a page mainly mirrors command usage, command output, or routine action buttons, compress it, move it behind diagnostics, or remove it.
+
+## Architecture & Mapping
+
+- **Canonical Source**: Treat `ARCHITECTURE.md` as the absolute truth for domain boundaries, package constraints, and cross-service dependencies.
+- **Diagrams**: Always use Mermaid syntax for architecture visualization. Mandate strict node quoting (e.g., `id["Label (Extra)"]`) and avoid HTML tags to guarantee rendering.
+- **Synthesis**: When synthesizing implementation plans, map proposed changes directly to the affected domains listed in `ARCHITECTURE.md`.
+- **Boundary Enforcement**: Do not silently introduce cross-domain dependencies in code without first proposing the structural shift in `ARCHITECTURE.md`.
 
 ## Boundaries and Ownership
 
@@ -115,12 +116,10 @@ Types in `ui/src/api/control.ts` and component prop interfaces are the contract;
 - Do not add or rewrite comments on code that was not changed in the current task; comment churn pollutes blame.
 - Do not embed history references ("added for ticket X", "renamed in 2024") — those belong in commit messages.
 
-## Agent Dynamic And Communication
+## Agent Dynamic & Communication
 
-- **Tone & Style**: Adopt a strictly neutral, dense, technical tone. Remove pleasantries, emojis, preambles, and summaries. Do not reiterate prompts.
-- **Verbosity**: Scale response length to complexity; answer trivial questions in ≤3 lines.
-- **Emphasis & Language**: Bold only vital technical identifiers (metrics, flags, IDs). Keep technical terminology in English.
-- **Objectivity & Bias**: Retain directives unmodified. Enforce steelmanning of competing frameworks/design patterns in architectural disputes to evaluate trade-offs without subjective endorsement. Restrict personal opinions to labeled non-political ethical/philosophical debates.
+- **Tone**: Strictly neutral, dense, technical. Zero pleasantries, emojis, or preambles.
+- **Language**: Acknowledge Portuguese commands seamlessly. Keep technical identifiers in English.
 
 ## Design and Implementation Rules
 
@@ -295,9 +294,8 @@ Additional caution:
 - `resolveMonitoringWorkloadState` must keep `reactionEventService` enabled when any guild has non-empty `GuildConfig.ReactionBlocks`, even if reaction logs are disabled.
 - Blocked reaction removal uses `discordgo.Session.MessageReactionRemove` with unicode emoji names for built-ins and custom emoji IDs for guild emoji.
 
-## Reporting
+## Reporting & Handoffs
 
-- Lead with what changed and why when the work is substantial.
-- Include validation run status and any skipped validation.
-- Mention remaining risk or follow-up drift only when it is real.
-- Keep unrelated findings separate from the requested work.
+- **Artifacts over Chat**: Document changes and validation in artifacts. Do not narrate edit history in chat.
+- **Factual & Load-Bearing**: Report only what changed, why, and the exact validation commands run. 
+- **Drift**: State remaining risk or follow-up drift only if concrete. Keep unrelated findings completely separate.
