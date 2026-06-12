@@ -42,14 +42,12 @@ func TestStreamGuildMembersContext_ProcessesPagesInOrder(t *testing.T) {
 
 	var got []string
 	total := 0
-	for members, err := range ms.StreamGuildMembersContext(context.Background(), "g1") {
+	for member, err := range ms.StreamGuildMembersContext(context.Background(), "g1") {
 		if err != nil {
 			t.Fatalf("StreamGuildMembersContext returned error: %v", err)
 		}
-		for _, member := range members {
-			got = append(got, member.User.ID)
-		}
-		total += len(members)
+		got = append(got, member.User.ID)
+		total++
 	}
 
 	if total != 1001 {
@@ -77,12 +75,14 @@ func TestStreamGuildMembersContext_StopsOnError(t *testing.T) {
 
 	total := 0
 	var outErr error
-	for members, err := range ms.StreamGuildMembersContext(context.Background(), "g1") {
+	for member, err := range ms.StreamGuildMembersContext(context.Background(), "g1") {
 		if err != nil {
 			outErr = err
 			break
 		}
-		total += len(members)
+		if member != nil {
+			total++
+		}
 	}
 
 	if outErr == nil {

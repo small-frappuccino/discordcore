@@ -661,21 +661,27 @@ func TestUpsertGuildMemberSnapshotsContext_BatchesAvatarRolesAndJoins(t *testing
 		t.Fatalf("unexpected avatar history: count=%d old=%q new=%q", historyCount, oldHash, newHash)
 	}
 
-	roles, err := store.GetMemberRoles(guildID, "u1")
-	if err != nil {
-		t.Fatalf("GetMemberRoles(u1) failed: %v", err)
+	var rolesU1 []string
+	for r, err := range store.GetMemberRoles(guildID, "u1") {
+		if err != nil {
+			t.Fatalf("GetMemberRoles(u1) failed: %v", err)
+		}
+		rolesU1 = append(rolesU1, r)
 	}
-	sort.Strings(roles)
-	if len(roles) != 1 || roles[0] != "r3" {
-		t.Fatalf("unexpected roles for u1: %v", roles)
+	sort.Strings(rolesU1)
+	if len(rolesU1) != 1 || rolesU1[0] != "r3" {
+		t.Fatalf("unexpected roles for u1: %v", rolesU1)
 	}
 
-	roles, err = store.GetMemberRoles(guildID, "u2")
-	if err != nil {
-		t.Fatalf("GetMemberRoles(u2) failed: %v", err)
+	var rolesU2 []string
+	for r, err := range store.GetMemberRoles(guildID, "u2") {
+		if err != nil {
+			t.Fatalf("GetMemberRoles(u2) failed: %v", err)
+		}
+		rolesU2 = append(rolesU2, r)
 	}
-	if len(roles) != 0 {
-		t.Fatalf("expected cleared roles for u2, got %v", roles)
+	if len(rolesU2) != 0 {
+		t.Fatalf("expected cleared roles for u2, got %v", rolesU2)
 	}
 
 	joinedAt, ok, err := store.MemberJoin(context.Background(), guildID, "u1")
@@ -732,9 +738,12 @@ func TestUpsertGuildMemberSnapshotsContext_OptionalFieldsDoNotOverwriteExistingD
 		t.Fatalf("expected avatar hash to remain unchanged, got hash=%q ok=%v", avatarHash, ok)
 	}
 
-	roles, err := store.GetMemberRoles(guildID, "u1")
-	if err != nil {
-		t.Fatalf("GetMemberRoles() failed: %v", err)
+	var roles []string
+	for r, err := range store.GetMemberRoles(guildID, "u1") {
+		if err != nil {
+			t.Fatalf("GetMemberRoles() failed: %v", err)
+		}
+		roles = append(roles, r)
 	}
 	sort.Strings(roles)
 	if len(roles) != 1 || roles[0] != "r1" {

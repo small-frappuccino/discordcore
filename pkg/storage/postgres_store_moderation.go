@@ -269,44 +269,49 @@ func (s *Store) UpsertMemberRoles(guildID, userID string, roles []string, update
 	return tx.Commit()
 }
 
-func (s *Store) GetMemberRoles(guildID, userID string) ([]string, error) {
-	rows, err := s.query(`SELECT role_id FROM roles_current WHERE guild_id=$1 AND user_id=$2 AND deleted_at IS NULL`, guildID, userID)
-	if err != nil {
-		return nil, fmt.Errorf("Store.GetMemberRoles: %w", err)
-	}
-	defer rows.Close()
+func (s *Store) GetMemberRoles(guildID, userID string) iter.Seq2[string, error] {
+	return func(yield func(string, error) bool) {
+		rows, err := s.query(`SELECT role_id FROM roles_current WHERE guild_id=$1 AND user_id=$2 AND deleted_at IS NULL`, guildID, userID)
+		if err != nil {
+			yield("", fmt.Errorf("Store.GetMemberRoles: %w", err))
+			return
+		}
+		defer rows.Close()
 
-	var roles []string
-	for rows.Next() {
-		var rid string
-		if err := rows.Scan(&rid); err != nil {
-			return nil, fmt.Errorf("Store.GetMemberRoles: %w", err)
+		for rows.Next() {
+			var rid string
+			if err := rows.Scan(&rid); err != nil {
+				yield("", fmt.Errorf("Store.GetMemberRoles: %w", err))
+				return
+			}
+			if rid != "" {
+				if !yield(rid, nil) {
+					return
+				}
+			}
 		}
-		if rid != "" {
-			roles = append(roles, rid)
+		if err := rows.Err(); err != nil {
+			yield("", fmt.Errorf("Store.GetMemberRoles: %w", err))
 		}
 	}
-	return roles, rows.Err()
 }
 
 // DiffMemberRoles compares the cached set of roles with the provided current set and returns deltas.
 func (s *Store) DiffMemberRoles(guildID, userID string, current []string) (added []string, removed []string, err error) {
-	cached, err := s.GetMemberRoles(guildID, userID)
-	if err != nil {
-		return nil, nil, fmt.Errorf("Store.DiffMemberRoles: %w", err)
-	}
 	curSet := make(map[string]struct{}, len(current))
 	for _, r := range current {
 		if r != "" {
 			curSet[r] = struct{}{}
 		}
 	}
-	cacheSet := make(map[string]struct{}, len(cached))
-	for _, r := range cached {
-		if r != "" {
-			cacheSet[r] = struct{}{}
+	cacheSet := make(map[string]struct{})
+	for r, err := range s.GetMemberRoles(guildID, userID) {
+		if err != nil {
+			return nil, nil, fmt.Errorf("Store.DiffMemberRoles: %w", err)
 		}
+		cacheSet[r] = struct{}{}
 	}
+
 	for r := range curSet {
 		if _, ok := cacheSet[r]; !ok {
 			added = append(added, r)

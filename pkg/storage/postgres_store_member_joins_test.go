@@ -205,9 +205,12 @@ func TestUpsertMemberPresenceAndMarkMemberLeftTracksActiveState(t *testing.T) {
 		t.Fatalf("expected no active members after leave, got %d", len(states))
 	}
 
-	roles, err := store.GetMemberRoles(guildID, userID)
-	if err != nil {
-		t.Fatalf("GetMemberRoles(after leave) failed: %v", err)
+	var roles []string
+	for r, err := range store.GetMemberRoles(guildID, userID) {
+		if err != nil {
+			t.Fatalf("GetMemberRoles(after leave) failed: %v", err)
+		}
+		roles = append(roles, r)
 	}
 	if len(roles) != 0 {
 		t.Fatalf("expected roles to be cleared on leave, got %v", roles)

@@ -132,9 +132,12 @@ func TestMonitoringService_HandleMemberUpdateFallbackHandlesEmptyRoleSet(t *test
 		},
 	})
 
-	roles, err := store.GetMemberRoles(guildID, userID)
-	if err != nil {
-		t.Fatalf("get role snapshot after empty update: %v", err)
+	var roles []string
+	for r, err := range store.GetMemberRoles(guildID, userID) {
+		if err != nil {
+			t.Fatalf("get role snapshot after empty update: %v", err)
+		}
+		roles = append(roles, r)
 	}
 	if len(roles) != 0 {
 		t.Fatalf("expected role snapshot to be cleared after empty role update, got=%v", roles)
@@ -335,9 +338,12 @@ func TestMonitoringService_HandleMemberUpdateDebouncesAuditRefreshByUser(t *test
 		},
 	})
 
-	roles, err := store.GetMemberRoles(guildID, userID)
-	if err != nil {
-		t.Fatalf("get final role snapshot: %v", err)
+	var roles []string
+	for r, err := range store.GetMemberRoles(guildID, userID) {
+		if err != nil {
+			t.Fatalf("get final role snapshot: %v", err)
+		}
+		roles = append(roles, r)
 	}
 	if !sameStringSet(roles, []string{"role-new"}) {
 		t.Fatalf("expected final role snapshot to reflect second event, got=%v", roles)

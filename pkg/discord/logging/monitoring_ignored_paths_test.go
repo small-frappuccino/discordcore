@@ -132,9 +132,12 @@ func TestMonitoringService_HandleMemberUpdate_AuditPathUpdatesRoleSnapshot(t *te
 		},
 	})
 
-	roles, err := store.GetMemberRoles(guildID, userID)
-	if err != nil {
-		t.Fatalf("get role snapshot: %v", err)
+	var roles []string
+	for r, err := range store.GetMemberRoles(guildID, userID) {
+		if err != nil {
+			t.Fatalf("get role snapshot: %v", err)
+		}
+		roles = append(roles, r)
 	}
 	if !sameStringSet(roles, []string{"role-new"}) {
 		t.Fatalf("expected updated role snapshot, got %v", roles)
@@ -203,9 +206,12 @@ func TestMonitoringService_HandleMemberUpdate_FallbackPathUpdatesRoleSnapshot(t 
 		},
 	})
 
-	roles, err := store.GetMemberRoles(guildID, userID)
-	if err != nil {
-		t.Fatalf("get role snapshot: %v", err)
+	var roles []string
+	for r, err := range store.GetMemberRoles(guildID, userID) {
+		if err != nil {
+			t.Fatalf("get role snapshot: %v", err)
+		}
+		roles = append(roles, r)
 	}
 	if !sameStringSet(roles, []string{"role-new"}) {
 		t.Fatalf("expected updated role snapshot in fallback path, got %v", roles)

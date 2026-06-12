@@ -91,9 +91,18 @@ func (ms *MonitoringService) computeMemberRoleDiff(guildID, userID string, propo
 		ms.observability().RecordRolesCacheMemoryHit()
 		prev = p
 	} else if ms.store != nil {
-		if r, err := ms.store.GetMemberRoles(guildID, userID); err == nil {
+		var fetched []string
+		var fetchErr error
+		for r, err := range ms.store.GetMemberRoles(guildID, userID) {
+			if err != nil {
+				fetchErr = err
+				break
+			}
+			fetched = append(fetched, r)
+		}
+		if fetchErr == nil {
 			ms.observability().RecordRolesCacheStoreHit()
-			prev = r
+			prev = fetched
 		}
 	}
 

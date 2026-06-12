@@ -39,7 +39,7 @@ type StatsService struct {
 
 	currentRunCtx func() context.Context
 	getHeartbeat  func(context.Context) (time.Time, bool, error)
-	fetchMembers  func(context.Context, string) iter.Seq2[[]*discordgo.Member, error]
+	fetchMembers  func(context.Context, string) iter.Seq2[*discordgo.Member, error]
 }
 
 // NewStatsService news stats service.
@@ -52,7 +52,7 @@ func NewStatsService(
 	defaultBotInstanceID string,
 	currentRunCtx func() context.Context,
 	getHeartbeat func(context.Context) (time.Time, bool, error),
-	fetchMembers func(context.Context, string) iter.Seq2[[]*discordgo.Member, error],
+	fetchMembers func(context.Context, string) iter.Seq2[*discordgo.Member, error],
 ) *StatsService {
 	return &StatsService{
 		session:              session,
@@ -372,20 +372,18 @@ func (s *StatsService) reconcileStatsForGuild(ctx context.Context, gcfg files.Gu
 	trackedRoles, trackedRolesKey := statsTrackedRoles(gcfg.Stats.Channels)
 	state := newStatsGuildState(trackedRolesKey, s.statsPublishedChannels(gcfg.GuildID))
 
-	for members, err := range s.fetchMembers(ctx, gcfg.GuildID) {
+	for member, err := range s.fetchMembers(ctx, gcfg.GuildID) {
 		if err != nil {
 			return fmt.Errorf("fetch guild members: %w", err)
 		}
-		for _, member := range members {
-			if err := ctx.Err(); err != nil {
-				return fmt.Errorf("MonitoringService.reconcileStatsForGuild: %w", err)
-			}
-			userID, snapshot, ok := statsSnapshotFromMember(member, trackedRoles)
-			if !ok {
-				continue
-			}
-			_ = state.applyAdd(userID, snapshot)
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("MonitoringService.reconcileStatsForGuild: %w", err)
 		}
+		userID, snapshot, ok := statsSnapshotFromMember(member, trackedRoles)
+		if !ok {
+			continue
+		}
+		_ = state.applyAdd(userID, snapshot)
 	}
 
 	state.initialized = true

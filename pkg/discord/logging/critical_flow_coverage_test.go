@@ -312,9 +312,12 @@ func TestMonitoringService_InitializeGuildCachePersistsOwnerBotAndRoles(t *testi
 		t.Fatalf("unexpected avatar snapshot: hash=%q ok=%v", avatarHash, ok)
 	}
 
-	roles, err := store.GetMemberRoles(guildID, userID)
-	if err != nil {
-		t.Fatalf("get roles snapshot: %v", err)
+	var roles []string
+	for r, err := range store.GetMemberRoles(guildID, userID) {
+		if err != nil {
+			t.Fatalf("get roles snapshot: %v", err)
+		}
+		roles = append(roles, r)
 	}
 	if !sameStringSet(roles, []string{"role-a", "role-b"}) {
 		t.Fatalf("unexpected persisted roles: got=%v", roles)
@@ -406,9 +409,12 @@ func TestMonitoringService_HandleMemberUpdateUpdatesSnapshotWhenAuditDeltaFilter
 		},
 	})
 
-	roles, err := store.GetMemberRoles(guildID, userID)
-	if err != nil {
-		t.Fatalf("get updated role snapshot: %v", err)
+	var roles []string
+	for r, err := range store.GetMemberRoles(guildID, userID) {
+		if err != nil {
+			t.Fatalf("get updated role snapshot: %v", err)
+		}
+		roles = append(roles, r)
 	}
 	if !sameStringSet(roles, []string{"role-new"}) {
 		t.Fatalf("expected role snapshot to be updated to current state, got=%v", roles)

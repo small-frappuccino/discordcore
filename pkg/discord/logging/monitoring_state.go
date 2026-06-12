@@ -157,11 +157,11 @@ func (ms *MonitoringService) handleStartupDowntimeAndMaybeRefresh(ctx context.Co
 
 type guildMemberPageFetcher func(ctx context.Context, guildID, after string, limit int) ([]*discordgo.Member, error)
 
-// StreamGuildMembersContext returns an iterator yielding pages of guild members.
+// StreamGuildMembersContext returns an iterator yielding individual guild members.
 // The backing slice of []*discordgo.Member is allocated freshly per page by the discord client,
-// allowing consumers to process safely without array reuse corruption.
-func (ms *MonitoringService) StreamGuildMembersContext(ctx context.Context, guildID string) iter.Seq2[[]*discordgo.Member, error] {
-	return func(yield func([]*discordgo.Member, error) bool) {
+// and this wrapper yields them incrementally to eliminate inner loop nesting for consumers.
+func (ms *MonitoringService) StreamGuildMembersContext(ctx context.Context, guildID string) iter.Seq2[*discordgo.Member, error] {
+	return func(yield func(*discordgo.Member, error) bool) {
 		if ms == nil || ms.session == nil {
 			yield(nil, fmt.Errorf("discord session is unavailable"))
 			return
@@ -190,8 +190,10 @@ func (ms *MonitoringService) StreamGuildMembersContext(ctx context.Context, guil
 				return
 			}
 			total += len(members)
-			if !yield(members, nil) {
-				return
+			for _, m := range members {
+				if !yield(m, nil) {
+					return
+				}
 			}
 			if len(members) < pageSize {
 				log.ApplicationLogger().Info("Pagination completed successfully", "guildID", guildID, "total_members_fetched", total)
@@ -218,28 +220,8 @@ func (ms *MonitoringService) performPeriodicCheck(ctx context.Context) error {
 		if err := ctx.Err(); err != nil {
 			return fmt.Errorf("MonitoringService.performPeriodicCheck: %w", err)
 		}
-		for members, err := range ms.StreamGuildMembersContext(ctx, gcfg.GuildID) {
-			if err != nil {
-				log.ErrorLoggerRaw().Error("Error getting members for guild", "guildID", gcfg.GuildID, "err", err)
-				continue
-			}
-			joinSnapshots := make([]storage.GuildMemberSnapshot, 0, len(members))
-			for _, member := range members {
-				if err := ctx.Err(); err != nil {
-					return fmt.Errorf("MonitoringService.performPeriodicCheck: %w", err)
-				}
-				if member == nil || member.User == nil {
-					continue
-				}
-				if ms.store != nil && !member.JoinedAt.IsZero() {
-					joinSnapshots = append(joinSnapshots, storage.GuildMemberSnapshot{
-						UserID:   member.User.ID,
-						JoinedAt: member.JoinedAt,
-						IsBot:    member.User.Bot,
-						HasBot:   true,
-					})
-				}
-			}
+		var joinSnapshots []storage.GuildMemberSnapshot
+		flush := func() {
 			if ms.store != nil && len(joinSnapshots) > 0 {
 				if err := ms.store.UpsertGuildMemberSnapshotsContext(ctx, gcfg.GuildID, joinSnapshots, time.Now().UTC()); err != nil {
 					log.ApplicationLogger().Warn(
@@ -251,22 +233,38 @@ func (ms *MonitoringService) performPeriodicCheck(ctx context.Context) error {
 					)
 				}
 			}
+			joinSnapshots = joinSnapshots[:0]
+		}
 
-			for _, member := range members {
-				if err := ctx.Err(); err != nil {
-					return fmt.Errorf("MonitoringService.performPeriodicCheck: %w", err)
-				}
-				if member == nil || member.User == nil {
-					continue
-				}
+		for member, err := range ms.StreamGuildMembersContext(ctx, gcfg.GuildID) {
+			if err != nil {
+				log.ErrorLoggerRaw().Error("Error getting members for guild", "guildID", gcfg.GuildID, "err", err)
+				continue
+			}
+			if member == nil || member.User == nil {
+				continue
+			}
 
-				avatarHash := member.User.Avatar
-				if avatarHash == "" {
-					avatarHash = "default"
-				}
-				ms.checkAvatarChange(gcfg.GuildID, member.User.ID, avatarHash, member.User.Username)
+			if ms.store != nil && !member.JoinedAt.IsZero() {
+				joinSnapshots = append(joinSnapshots, storage.GuildMemberSnapshot{
+					UserID:   member.User.ID,
+					JoinedAt: member.JoinedAt,
+					IsBot:    member.User.Bot,
+					HasBot:   true,
+				})
+			}
+
+			avatarHash := member.User.Avatar
+			if avatarHash == "" {
+				avatarHash = "default"
+			}
+			ms.checkAvatarChange(gcfg.GuildID, member.User.ID, avatarHash, member.User.Username)
+
+			if len(joinSnapshots) >= monitoringGuildMembersPageSize {
+				flush()
 			}
 		}
+		flush()
 	}
 	return nil
 }

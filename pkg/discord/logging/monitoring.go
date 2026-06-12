@@ -823,38 +823,12 @@ func (ms *MonitoringService) initializeGuildCacheContext(ctx context.Context, gu
 		}
 	}
 	totalMembers := 0
-	for members, err := range ms.StreamGuildMembersContext(ctx, guildID) {
-		if err != nil {
-			log.ErrorLoggerRaw().Error("Error getting members for guild", "guildID", guildID, "err", err)
-			return fmt.Errorf("MonitoringService.initializeGuildCacheContext: %w", err)
-		}
-		totalMembers += len(members)
-		snapshotAt := time.Now().UTC()
-		snapshots := make([]storage.GuildMemberSnapshot, 0, len(members))
-		for _, member := range members {
-			if err := ctx.Err(); err != nil {
-				return fmt.Errorf("MonitoringService.initializeGuildCacheContext: %w", err)
-			}
-			if member == nil || member.User == nil {
-				continue
-			}
-			avatarHash := member.User.Avatar
-			if avatarHash == "" {
-				avatarHash = "default"
-			}
-			snapshots = append(snapshots, storage.GuildMemberSnapshot{
-				UserID:     member.User.ID,
-				AvatarHash: avatarHash,
-				HasAvatar:  true,
-				Roles:      member.Roles,
-				HasRoles:   true,
-				JoinedAt:   member.JoinedAt,
-				IsBot:      member.User.Bot,
-				HasBot:     true,
-			})
-		}
+	snapshotAt := time.Now().UTC()
+	var snapshots []storage.GuildMemberSnapshot
+
+	flush := func() error {
 		if len(snapshots) == 0 {
-			continue
+			return nil
 		}
 		if err := ms.store.UpsertGuildMemberSnapshotsContext(ctx, guildID, snapshots, snapshotAt); err != nil {
 			log.ApplicationLogger().Warn(
@@ -864,12 +838,44 @@ func (ms *MonitoringService) initializeGuildCacheContext(ctx context.Context, gu
 				"members", len(snapshots),
 				"err", err,
 			)
-			continue
+			return err
 		}
 		for _, snapshot := range snapshots {
 			ms.rolesCacheService.CacheRolesSet(guildID, snapshot.UserID, snapshot.Roles)
 		}
+		snapshots = snapshots[:0]
+		return nil
 	}
+
+	for member, err := range ms.StreamGuildMembersContext(ctx, guildID) {
+		if err != nil {
+			log.ErrorLoggerRaw().Error("Error getting members for guild", "guildID", guildID, "err", err)
+			return fmt.Errorf("MonitoringService.initializeGuildCacheContext: %w", err)
+		}
+		totalMembers++
+		if member == nil || member.User == nil {
+			continue
+		}
+		avatarHash := member.User.Avatar
+		if avatarHash == "" {
+			avatarHash = "default"
+		}
+		snapshots = append(snapshots, storage.GuildMemberSnapshot{
+			UserID:     member.User.ID,
+			AvatarHash: avatarHash,
+			HasAvatar:  true,
+			Roles:      member.Roles,
+			HasRoles:   true,
+			JoinedAt:   member.JoinedAt,
+			IsBot:      member.User.Bot,
+			HasBot:     true,
+		})
+
+		if len(snapshots) >= monitoringGuildMembersPageSize {
+			_ = flush()
+		}
+	}
+	_ = flush()
 	log.ApplicationLogger().Info("Guild cache initialization member scan completed", "guildID", guildID, "members", totalMembers)
 	return nil
 }
@@ -1028,31 +1034,12 @@ func (ms *MonitoringService) runRolesRefreshTask(runCtx context.Context) error {
 		}
 		botUsers := make(map[string]struct{})
 		guildUpdates := 0
-		for members, err := range ms.StreamGuildMembersContext(runCtx, gcfg.GuildID) {
-			if err != nil {
-				log.ErrorLoggerRaw().Error("Error refreshing roles for guild", "guildID", gcfg.GuildID, "err", err)
-				break
-			}
-			snapshotAt := time.Now().UTC()
-			snapshots := make([]storage.GuildMemberSnapshot, 0, len(members))
-			for _, member := range members {
-				if member == nil || member.User == nil {
-					continue
-				}
-				if member.User.Bot {
-					botUsers[member.User.ID] = struct{}{}
-				}
-				snapshots = append(snapshots, storage.GuildMemberSnapshot{
-					UserID:   member.User.ID,
-					Roles:    member.Roles,
-					HasRoles: true,
-					JoinedAt: member.JoinedAt,
-					IsBot:    member.User.Bot,
-					HasBot:   true,
-				})
-			}
+		snapshotAt := time.Now().UTC()
+		var snapshots []storage.GuildMemberSnapshot
+
+		flush := func() {
 			if len(snapshots) == 0 {
-				continue
+				return
 			}
 			if err := ms.store.UpsertGuildMemberSnapshotsContext(runCtx, gcfg.GuildID, snapshots, snapshotAt); err != nil {
 				log.ApplicationLogger().Warn(
@@ -1062,13 +1049,40 @@ func (ms *MonitoringService) runRolesRefreshTask(runCtx context.Context) error {
 					"members", len(snapshots),
 					"err", err,
 				)
+			} else {
+				for _, snapshot := range snapshots {
+					ms.rolesCacheService.CacheRolesSet(gcfg.GuildID, snapshot.UserID, snapshot.Roles)
+				}
+				guildUpdates += len(snapshots)
+				totalUpdates += len(snapshots)
+			}
+			snapshots = snapshots[:0]
+		}
+
+		for member, err := range ms.StreamGuildMembersContext(runCtx, gcfg.GuildID) {
+			if err != nil {
+				log.ErrorLoggerRaw().Error("Error refreshing roles for guild", "guildID", gcfg.GuildID, "err", err)
+				break
+			}
+			if member == nil || member.User == nil {
 				continue
 			}
-			for _, snapshot := range snapshots {
-				ms.rolesCacheService.CacheRolesSet(gcfg.GuildID, snapshot.UserID, snapshot.Roles)
+			if member.User.Bot {
+				botUsers[member.User.ID] = struct{}{}
 			}
-			guildUpdates += len(snapshots)
+			snapshots = append(snapshots, storage.GuildMemberSnapshot{
+				UserID:   member.User.ID,
+				Roles:    member.Roles,
+				HasRoles: true,
+				JoinedAt: member.JoinedAt,
+				IsBot:    member.User.Bot,
+				HasBot:   true,
+			})
+			if len(snapshots) >= monitoringGuildMembersPageSize {
+				flush()
+			}
 		}
+		flush()
 		totalUpdates += guildUpdates
 		botUsersByGuild[gcfg.GuildID] = botUsers
 	}

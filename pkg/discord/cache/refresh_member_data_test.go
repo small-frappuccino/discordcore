@@ -121,9 +121,12 @@ func TestRefreshMemberDataUpdatesCacheAndStore(t *testing.T) {
 		t.Fatalf("expected join time %v, got %v (ok=%v)", joinedAt, gotJoin, ok)
 	}
 
-	gotRoles, err := store.GetMemberRoles("g1", "u1")
-	if err != nil {
-		t.Fatalf("GetMemberRoles error: %v", err)
+	var gotRoles []string
+	for r, err := range store.GetMemberRoles("g1", "u1") {
+		if err != nil {
+			t.Fatalf("GetMemberRoles error: %v", err)
+		}
+		gotRoles = append(gotRoles, r)
 	}
 	if len(gotRoles) != 2 {
 		t.Fatalf("expected 2 roles persisted, got %v", gotRoles)
