@@ -4,20 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
-	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
-	"github.com/small-frappuccino/discordgo"
 )
 
 // PublishScheduledIfDue publishes the scheduled QOTD for the active slot when
 // the publish boundary has passed and no official post exists yet.
-func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, session *discordgo.Session) (published bool, err error) {
+func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string) (published bool, err error) {
 	// publishAttempted flips to true once we have passed the "is anything
 	// due / are we configured" gates and have actually committed to a
 	// publish path (fresh provision OR resume of a pending provision).
@@ -43,10 +40,6 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 	if err = s.validate(); err != nil {
 		return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
 	}
-	if session == nil {
-		err = ErrDiscordUnavailable
-		return false, err
-	}
 
 	guildID = strings.TrimSpace(guildID)
 
@@ -59,7 +52,7 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 	}
 
 	val, err := s.ExecuteInGuildActorWithResult(guildID, func() (any, error) {
-		return s.publishScheduledInActor(ctx, guildID, session, recordAttempt)
+		return s.publishScheduledInActor(ctx, guildID, recordAttempt)
 	})
 	if err != nil {
 		return false, err
@@ -71,7 +64,7 @@ func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string, ses
 // actor: it loads config and the due slot, applies the schedule/boundary gates, and
 // dispatches to the existing-record or fresh-provision path. recordAttempt is invoked
 // once a path commits to talking to Discord.
-func (s *Service) publishScheduledInActor(ctx context.Context, guildID string, session *discordgo.Session, recordAttempt func()) (bool, error) {
+func (s *Service) publishScheduledInActor(ctx context.Context, guildID string, recordAttempt func()) (bool, error) {
 	now := s.clock()
 	cfg, err := s.configManager.QOTDConfig(guildID)
 	if err != nil {
@@ -89,7 +82,7 @@ func (s *Service) publishScheduledInActor(ctx context.Context, guildID string, s
 		return false, nil
 	}
 
-	scope := publishScope{GuildID: guildID, Session: session, Now: now}
+	scope := publishScope{GuildID: guildID, Now: now}
 	if slotState.HasOfficialPostRecord() {
 		return s.resumeOrReconcileExistingPost(ctx, scope, slotState, recordAttempt)
 	}
@@ -102,7 +95,6 @@ func (s *Service) publishScheduledInActor(ctx context.Context, guildID string, s
 // once by the actor.
 type publishScope struct {
 	GuildID string
-	Session *discordgo.Session
 	Now     time.Time
 }
 
@@ -115,16 +107,16 @@ func (s *Service) resumeOrReconcileExistingPost(ctx context.Context, scope publi
 		// metrics perspective: we are about to talk to Discord and may
 		// transition the post to current.
 		recordAttempt()
-		recovered, resumeErr := s.resumeOfficialPostProvisioning(ctx, scope.Session, *slotState.OfficialPost, scope.Now)
+		recovered, resumeErr := s.resumeOfficialPostProvisioning(ctx, *slotState.OfficialPost, scope.Now)
 		if resumeErr != nil {
 			return false, resumeErr
 		}
-		if err := s.reconcileOfficialPostWindow(ctx, scope.GuildID, scope.Session, scope.Now, recovered.OfficialPost.ID); err != nil {
+		if err := s.reconcileOfficialPostWindow(ctx, scope.GuildID, scope.Now, recovered.OfficialPost.ID); err != nil {
 			return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
 		}
 		return true, nil
 	}
-	if err := s.reconcileOfficialPostWindow(ctx, scope.GuildID, scope.Session, scope.Now, slotState.OfficialPost.ID); err != nil {
+	if err := s.reconcileOfficialPostWindow(ctx, scope.GuildID, scope.Now, slotState.OfficialPost.ID); err != nil {
 		return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
 	}
 	return false, nil
@@ -195,7 +187,7 @@ func (s *Service) provisionScheduledOfficialPost(ctx context.Context, scope publ
 		return s.handleProvisioningConflict(ctx, scope, slotState.PublishDateUTC, err)
 	}
 
-	finalized, updatedQuestion, _, err := s.completeOfficialPostProvisioning(ctx, scope.Session, officialPostProvisioningParams{
+	finalized, updatedQuestion, _, err := s.completeOfficialPostProvisioning(ctx, officialPostProvisioningParams{
 		Post:               *provisioned,
 		Question:           question,
 		AvailableQuestions: availableQuestions,
@@ -209,7 +201,7 @@ func (s *Service) provisionScheduledOfficialPost(ctx context.Context, scope publ
 		question = updatedQuestion
 	}
 
-	if err := s.reconcileOfficialPostWindow(ctx, scope.GuildID, scope.Session, scope.Now, finalized.ID); err != nil {
+	if err := s.reconcileOfficialPostWindow(ctx, scope.GuildID, scope.Now, finalized.ID); err != nil {
 		return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
 	}
 
@@ -229,19 +221,19 @@ func (s *Service) handleProvisioningConflict(ctx context.Context, scope publishS
 		// Existing record was permanently abandoned by a previous attempt
 		// (unrecoverable Discord error). Don't resume it — admin must
 		// intervene. Just keep the window state coherent.
-		return false, s.reconcileOfficialPostWindow(ctx, scope.GuildID, scope.Session, scope.Now, 0)
+		return false, s.reconcileOfficialPostWindow(ctx, scope.GuildID, scope.Now, 0)
 	}
 	if !isOfficialPostPublished(*existing) {
-		recovered, recoverErr := s.resumeOfficialPostProvisioning(ctx, scope.Session, *existing, scope.Now)
+		recovered, recoverErr := s.resumeOfficialPostProvisioning(ctx, *existing, scope.Now)
 		if recoverErr != nil {
 			return false, recoverErr
 		}
-		if err := s.reconcileOfficialPostWindow(ctx, scope.GuildID, scope.Session, scope.Now, recovered.OfficialPost.ID); err != nil {
+		if err := s.reconcileOfficialPostWindow(ctx, scope.GuildID, scope.Now, recovered.OfficialPost.ID); err != nil {
 			return false, fmt.Errorf("Service.PublishScheduledIfDue: %w", err)
 		}
 		return true, nil
 	}
-	return false, s.reconcileOfficialPostWindow(ctx, scope.GuildID, scope.Session, scope.Now, 0)
+	return false, s.reconcileOfficialPostWindow(ctx, scope.GuildID, scope.Now, 0)
 }
 
 // releaseReservedQuestionBestEffort returns a reserved question to the pool, logging but
@@ -308,7 +300,7 @@ func nextScheduledPublishTimeFromConfig(cfg files.QOTDConfig, now time.Time) (ti
 }
 
 // ReconcileGuild realigns QOTD thread state and snapshots/archive records for a guild.
-func (s *Service) ReconcileGuild(ctx context.Context, guildID string, session *discordgo.Session) (err error) {
+func (s *Service) ReconcileGuild(ctx context.Context, guildID string) (err error) {
 	// Named return + defer captures every exit path uniformly so the
 	// reconcile cycle counter is exact regardless of which gate trips
 	// first. Duration includes the lock acquisition; spikes there are
@@ -322,10 +314,6 @@ func (s *Service) ReconcileGuild(ctx context.Context, guildID string, session *d
 	if err = s.validate(); err != nil {
 		return fmt.Errorf("Service.ReconcileGuild: %w", err)
 	}
-	if session == nil {
-		err = ErrDiscordUnavailable
-		return err
-	}
 
 	guildID = strings.TrimSpace(guildID)
 
@@ -336,13 +324,13 @@ func (s *Service) ReconcileGuild(ctx context.Context, guildID string, session *d
 			return nil, fmt.Errorf("Service.ReconcileGuild: %w", err)
 		}
 		s.clearExpiredScheduledPublishSuppression(guildID, cfg, now)
-		if err := s.reconcilePendingOfficialPosts(ctx, guildID, session, now); err != nil {
+		if err := s.reconcilePendingOfficialPosts(ctx, guildID, now); err != nil {
 			return nil, fmt.Errorf("Service.ReconcileGuild: %w", err)
 		}
 		if err := s.reclaimOrphanReservedQuestions(ctx, guildID, now); err != nil {
 			return nil, fmt.Errorf("Service.ReconcileGuild: %w", err)
 		}
-		return nil, s.reconcileOfficialPostWindow(ctx, guildID, session, now, 0)
+		return nil, s.reconcileOfficialPostWindow(ctx, guildID, now, 0)
 	})
 
 	return err
@@ -378,7 +366,7 @@ func (s *Service) reclaimOrphanReservedQuestions(ctx context.Context, guildID st
 	return nil
 }
 
-func (s *Service) syncLiveOfficialPost(ctx context.Context, session *discordgo.Session, post storage.QOTDOfficialPostRecord, lifecycle OfficialPostLifecycle) error {
+func (s *Service) syncLiveOfficialPost(ctx context.Context, post storage.QOTDOfficialPostRecord, lifecycle OfficialPostLifecycle) error {
 	// Short-circuit when the DB already reflects the lifecycle target. For
 	// the current→previous transition the *thread* target is unchanged
 	// (both states want unlocked+unarchived+unpinned), so once we've reached
@@ -396,9 +384,9 @@ func (s *Service) syncLiveOfficialPost(ctx context.Context, session *discordgo.S
 	// applyOfficialPostThreadTransition. That helper documents the
 	// divergence-window contract; the reconcile loop is the recovery path
 	// if the DB write fails after Discord succeeded.
-	_, err := s.applyOfficialPostThreadTransition(ctx, session, officialPostThreadTransition{
+	_, err := s.applyOfficialPostThreadTransition(ctx, officialPostThreadTransition{
 		Post:          post,
-		ThreadState:   discordqotd.ThreadState{Pinned: false, Locked: false, Archived: false},
+		ThreadState:   ThreadState{Pinned: false, Locked: false, Archived: false},
 		TargetDBState: lifecycle.State,
 		ClosedAt:      nil,
 		ArchivedAt:    nil,
@@ -406,7 +394,7 @@ func (s *Service) syncLiveOfficialPost(ctx context.Context, session *discordgo.S
 	return err
 }
 
-func (s *Service) archiveOfficialPost(ctx context.Context, session *discordgo.Session, post storage.QOTDOfficialPostRecord, archivedAt time.Time) error {
+func (s *Service) archiveOfficialPost(ctx context.Context, post storage.QOTDOfficialPostRecord, archivedAt time.Time) error {
 	if _, err := s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(OfficialPostStateArchiving), nil, nil); err != nil {
 		return fmt.Errorf("Service.archiveOfficialPost: %w", err)
 	}
@@ -443,9 +431,9 @@ func (s *Service) archiveOfficialPost(ctx context.Context, session *discordgo.Se
 	// the archived state. applyOfficialPostThreadTransition flips the
 	// final state to OfficialPostStateMissingDiscord when the thread is
 	// gone from Discord's side.
-	_, err = s.applyOfficialPostThreadTransition(ctx, session, officialPostThreadTransition{
+	_, err = s.applyOfficialPostThreadTransition(ctx, officialPostThreadTransition{
 		Post:          post,
-		ThreadState:   discordqotd.ThreadState{Pinned: false, Locked: true, Archived: false},
+		ThreadState:   ThreadState{Pinned: false, Locked: true, Archived: false},
 		TargetDBState: OfficialPostStateArchived,
 		ClosedAt:      &archivedAt,
 		ArchivedAt:    &archivedAt,
@@ -461,12 +449,12 @@ func (s *Service) archiveAnswerRecord(ctx context.Context, answerRecord storage.
 	return err
 }
 
-func (s *Service) setThreadState(ctx context.Context, session *discordgo.Session, threadID string, state discordqotd.ThreadState) (bool, error) {
+func (s *Service) setThreadState(ctx context.Context, guildID string, threadID string, state ThreadState) (bool, error) {
 	threadID = strings.TrimSpace(threadID)
 	if threadID == "" {
 		return true, nil
 	}
-	if err := s.publisher.SetThreadState(ctx, session, threadID, state); err != nil {
+	if err := s.publisher.SetThreadState(ctx, guildID, threadID, state); err != nil {
 		if isMissingDiscordThreadError(err) {
 			return true, nil
 		}
@@ -492,7 +480,7 @@ func (s *Service) setThreadState(ctx context.Context, session *discordgo.Session
 // The metrics counter increments once per unique pair, matching the log
 // dedup — operators reading /v1/health/qotd see the same "distinct
 // rejection" cardinality as the WARN stream.
-func (s *Service) logUnmanageableThreadOnce(threadID string, state discordqotd.ThreadState, cause error) {
+func (s *Service) logUnmanageableThreadOnce(threadID string, state ThreadState, cause error) {
 	if s == nil {
 		return
 	}
@@ -512,14 +500,7 @@ func (s *Service) logUnmanageableThreadOnce(threadID string, state discordqotd.T
 }
 
 func isMissingDiscordThreadError(err error) bool {
-	var restErr *discordgo.RESTError
-	if !errors.As(err, &restErr) || restErr == nil {
-		return false
-	}
-	if restErr.Response != nil && restErr.Response.StatusCode == http.StatusNotFound {
-		return true
-	}
-	return restErr.Message != nil && restErr.Message.Code == discordgo.ErrCodeUnknownChannel
+	return errors.Is(err, ErrDiscordUnknownChannel)
 }
 
 // isUnmanageableDiscordThreadError reports whether Discord rejected a thread
@@ -531,20 +512,7 @@ func isMissingDiscordThreadError(err error) bool {
 // where 403 means "give up and abandon"; here 403 means "skip grooming and
 // move on with the lifecycle".
 func isUnmanageableDiscordThreadError(err error) bool {
-	var restErr *discordgo.RESTError
-	if !errors.As(err, &restErr) || restErr == nil {
-		return false
-	}
-	if restErr.Response != nil && restErr.Response.StatusCode == http.StatusForbidden {
-		return true
-	}
-	if restErr.Message != nil {
-		switch restErr.Message.Code {
-		case discordgo.ErrCodeMissingAccess, discordgo.ErrCodeMissingPermissions:
-			return true
-		}
-	}
-	return false
+	return errors.Is(err, ErrDiscordMissingAccess) || errors.Is(err, ErrDiscordMissingPermissions)
 }
 
 // isUnrecoverableDiscordPublishError reports whether the Discord error returned
@@ -555,28 +523,12 @@ func isUnmanageableDiscordThreadError(err error) bool {
 // minutes. Transient failures (5xx, DNS, rate limits) intentionally do NOT
 // match here so they keep retrying through the existing failed→retry loop.
 func isUnrecoverableDiscordPublishError(err error) bool {
-	var restErr *discordgo.RESTError
-	if !errors.As(err, &restErr) || restErr == nil {
-		return false
-	}
-	if restErr.Response != nil {
-		switch restErr.Response.StatusCode {
-		case http.StatusNotFound, http.StatusForbidden, http.StatusUnauthorized:
-			return true
-		}
-	}
-	if restErr.Message != nil {
-		switch restErr.Message.Code {
-		case discordgo.ErrCodeUnknownChannel,
-			discordgo.ErrCodeUnknownGuild,
-			discordgo.ErrCodeUnknownMessage,
-			discordgo.ErrCodeMissingAccess,
-			discordgo.ErrCodeMissingPermissions,
-			discordgo.ErrCodeCannotSendMessagesInVoiceChannel,
-			discordgo.ErrCodeCannotSendMessagesToThisUser,
-			discordgo.ErrCodeUnauthorized:
-			return true
-		}
-	}
-	return false
+	return errors.Is(err, ErrDiscordUnknownChannel) ||
+		errors.Is(err, ErrDiscordUnknownGuild) ||
+		errors.Is(err, ErrDiscordUnknownMessage) ||
+		errors.Is(err, ErrDiscordMissingAccess) ||
+		errors.Is(err, ErrDiscordMissingPermissions) ||
+		errors.Is(err, ErrDiscordCannotSendMessagesInVoice) ||
+		errors.Is(err, ErrDiscordCannotSendMessagesToUser) ||
+		errors.Is(err, ErrDiscordUnauthorized)
 }

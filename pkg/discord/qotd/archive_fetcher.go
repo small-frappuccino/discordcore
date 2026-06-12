@@ -27,7 +27,7 @@ type ArchivedMessage struct {
 }
 
 // FetchThreadMessages fetchs thread messages.
-func (p *Publisher) FetchThreadMessages(ctx context.Context, session *discordgo.Session, threadID string) ([]ArchivedMessage, error) {
+func FetchThreadMessages(ctx context.Context, session *discordgo.Session, threadID string) ([]ArchivedMessage, error) {
 	collected, err := fetchThreadMessagesRaw(ctx, session, threadID)
 	if err != nil {
 		return nil, fmt.Errorf("Publisher.FetchThreadMessages: %w", err)

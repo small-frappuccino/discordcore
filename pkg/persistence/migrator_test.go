@@ -21,7 +21,7 @@ func TestMigrator(t *testing.T) {
 	defer cleanup()
 
 	migrator := persistence.NewPostgresMigrator(db)
-	
+
 	version, err := migrator.Version(context.Background())
 	if err != nil {
 		t.Fatalf("failed to get version: %v", err)

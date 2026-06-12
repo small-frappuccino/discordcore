@@ -14,11 +14,10 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
-	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
+
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/testdb"
-	"github.com/small-frappuccino/discordgo"
 )
 
 var errFakePublishFailed = errors.New("fake publish failed")
@@ -48,13 +47,13 @@ func scheduledQOTDConfig(enabled bool, channelID string) files.QOTDConfig {
 }
 
 type fakePublisher struct {
-	publishedParams  []discordqotd.PublishOfficialPostParams
+	publishedParams  []PublishOfficialPostParams
 	publishResponses []fakePublishResponse
-	threadStates     map[string]discordqotd.ThreadState
+	threadStates     map[string]ThreadState
 }
 
 type fakePublishResponse struct {
-	result *discordqotd.PublishedOfficialPost
+	result *PublishedOfficialPost
 	err    error
 }
 
@@ -65,7 +64,7 @@ type blockingPublisher struct {
 	once    sync.Once
 }
 
-func (p *blockingPublisher) PublishOfficialPost(ctx context.Context, session *discordgo.Session, params discordqotd.PublishOfficialPostParams) (*discordqotd.PublishedOfficialPost, error) {
+func (p *blockingPublisher) PublishOfficialPost(ctx context.Context, params PublishOfficialPostParams) (*PublishedOfficialPost, error) {
 	p.once.Do(func() {
 		if p.started != nil {
 			close(p.started)
@@ -74,10 +73,10 @@ func (p *blockingPublisher) PublishOfficialPost(ctx context.Context, session *di
 	if p.release != nil {
 		<-p.release
 	}
-	return p.fakePublisher.PublishOfficialPost(ctx, session, params)
+	return p.fakePublisher.PublishOfficialPost(ctx, params)
 }
 
-func (p *fakePublisher) PublishOfficialPost(_ context.Context, _ *discordgo.Session, params discordqotd.PublishOfficialPostParams) (*discordqotd.PublishedOfficialPost, error) {
+func (p *fakePublisher) PublishOfficialPost(_ context.Context, params PublishOfficialPostParams) (*PublishedOfficialPost, error) {
 	p.publishedParams = append(p.publishedParams, params)
 	if len(p.publishResponses) > 0 {
 		response := p.publishResponses[0]
@@ -91,7 +90,7 @@ func (p *fakePublisher) PublishOfficialPost(_ context.Context, _ *discordgo.Sess
 	return defaultFakePublishedOfficialPost(params), nil
 }
 
-func defaultFakePublishedOfficialPost(params discordqotd.PublishOfficialPostParams) *discordqotd.PublishedOfficialPost {
+func defaultFakePublishedOfficialPost(params PublishOfficialPostParams) *PublishedOfficialPost {
 	listThreadID := strings.TrimSpace(params.QuestionListThreadID)
 	if listThreadID == "" {
 		listThreadID = "questions-list-thread"
@@ -116,22 +115,26 @@ func defaultFakePublishedOfficialPost(params discordqotd.PublishOfficialPostPara
 	if publishedAt.IsZero() {
 		publishedAt = time.Date(params.PublishDateUTC.Year(), params.PublishDateUTC.Month(), params.PublishDateUTC.Day(), 12, 43, 0, 0, time.UTC)
 	}
-	return &discordqotd.PublishedOfficialPost{
+	return &PublishedOfficialPost{
 		QuestionListThreadID:       listThreadID,
 		QuestionListEntryMessageID: listEntryID,
 		ThreadID:                   threadID,
 		StarterMessageID:           messageID,
 		AnswerChannelID:            answerChannelID,
 		PublishedAt:                publishedAt,
-		PostURL:                    discordqotd.BuildMessageJumpURL(params.GuildID, params.ChannelID, messageID),
+		PostURL:                    BuildMessageJumpURL(params.GuildID, params.ChannelID, messageID),
 	}
 }
 
-func (p *fakePublisher) SetThreadState(_ context.Context, _ *discordgo.Session, threadID string, state discordqotd.ThreadState) error {
+func (p *fakePublisher) SetThreadState(_ context.Context, guildID string, threadID string, state ThreadState) error {
 	if p.threadStates == nil {
-		p.threadStates = make(map[string]discordqotd.ThreadState)
+		p.threadStates = make(map[string]ThreadState)
 	}
 	p.threadStates[threadID] = state
+	return nil
+}
+
+func (p *fakePublisher) DeleteOfficialPost(_ context.Context, _ DeleteOfficialPostParams) error {
 	return nil
 }
 
@@ -249,7 +252,7 @@ func TestServiceReorderQuestionsChangesNextPublishSelection(t *testing.T) {
 		t.Fatalf("ReorderQuestions() failed: %v", err)
 	}
 
-	result, err := service.PublishNow(context.Background(), "g1", &discordgo.Session{})
+	result, err := service.PublishNow(context.Background(), "g1")
 	if err != nil {
 		t.Fatalf("PublishNow() failed: %v", err)
 	}
@@ -534,12 +537,19 @@ func TestServiceUpdateSettingsDeletesRemovedDeckQuestions(t *testing.T) {
 		t.Fatalf("expected only default deck to remain, got %+v", updated.Decks)
 	}
 
-	allQuestions, err := store.ListQOTDQuestions(context.Background(), "g1", "")
+	seq, err := store.ListQOTDQuestions(context.Background(), "g1", "")
 	if err != nil {
-		t.Fatalf("ListQOTDQuestions(all) failed: %v", err)
+		t.Fatalf("ListQOTDQuestions failed: %v", err)
 	}
-	if len(allQuestions) != 1 || allQuestions[0].ID != defaultQuestion.ID {
-		t.Fatalf("expected only default-deck questions to remain, got %+v", allQuestions)
+	var allQuestionsList []storage.QOTDQuestionRecord
+	for q, iterErr := range seq {
+		if iterErr != nil {
+			t.Fatalf("ListQOTDQuestions iterator failed: %v", iterErr)
+		}
+		allQuestionsList = append(allQuestionsList, q)
+	}
+	if len(allQuestionsList) != 1 || allQuestionsList[0].ID != defaultQuestion.ID {
+		t.Fatalf("expected only default-deck questions to remain, got %+v", allQuestionsList)
 	}
 
 	deletedQuestion, err := store.GetQOTDQuestion(context.Background(), "g1", deckBQuestion.ID)
@@ -623,7 +633,7 @@ func TestServicePublishNowCreatesCurrentSlotManualPostAlongsidePreviousDayPost(t
 	}
 	_ = nextQuestion
 
-	result, err := service.PublishNow(context.Background(), "g1", &discordgo.Session{})
+	result, err := service.PublishNow(context.Background(), "g1")
 	if err != nil {
 		t.Fatalf("PublishNow() failed: %v", err)
 	}
@@ -732,7 +742,7 @@ func TestServicePublishNowRejectsAdditionalManualPublishesForCurrentSlot(t *test
 		created = append(created, question)
 	}
 
-	firstResult, err := service.PublishNow(context.Background(), "g1", &discordgo.Session{})
+	firstResult, err := service.PublishNow(context.Background(), "g1")
 	if err != nil {
 		t.Fatalf("PublishNow(first) failed: %v", err)
 	}
@@ -743,7 +753,7 @@ func TestServicePublishNowRejectsAdditionalManualPublishesForCurrentSlot(t *test
 		t.Fatalf("expected first manual publish to consume the first question, got %+v", firstResult.Question)
 	}
 
-	_, err = service.PublishNow(context.Background(), "g1", &discordgo.Session{})
+	_, err = service.PublishNow(context.Background(), "g1")
 	if !errors.Is(err, ErrAlreadyPublished) {
 		t.Fatalf("expected second manual publish to see the occupied slot, got %v", err)
 	}
@@ -784,7 +794,7 @@ func TestServicePublishNowLateFailureDoesNotSuppressSameDayAutomaticPublish(t *t
 		t.Fatalf("UpdateSettings() failed: %v", err)
 	}
 
-	if _, err := service.PublishNow(context.Background(), "g1", &discordgo.Session{}); !errors.Is(err, ErrNoQuestionsAvailable) {
+	if _, err := service.PublishNow(context.Background(), "g1"); !errors.Is(err, ErrNoQuestionsAvailable) {
 		t.Fatalf("expected late manual publish with empty queue to fail with ErrNoQuestionsAvailable, got %v", err)
 	}
 
@@ -804,7 +814,7 @@ func TestServicePublishNowLateFailureDoesNotSuppressSameDayAutomaticPublish(t *t
 		t.Fatalf("CreateQuestion() failed: %v", err)
 	}
 
-	published, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	published, err := service.PublishScheduledIfDue(context.Background(), "g1")
 	if err != nil {
 		t.Fatalf("PublishScheduledIfDue() failed: %v", err)
 	}
@@ -860,29 +870,29 @@ func TestServicePublishNowMidPublishFailureDoesNotOrphanSuppressionAlongsideReco
 	// same row on the reconcile pass below.
 	fake.publishResponses = []fakePublishResponse{
 		{
-			result: &discordqotd.PublishedOfficialPost{
+			result: &PublishedOfficialPost{
 				QuestionListThreadID: "questions-list-thread",
 				ThreadID:             "thread-mid-failure",
 				StarterMessageID:     "starter-mid-failure",
 				AnswerChannelID:      "thread-mid-failure",
-				PostURL:              discordqotd.BuildThreadJumpURL("g1", "thread-mid-failure"),
+				PostURL:              BuildThreadJumpURL("g1", "thread-mid-failure"),
 			},
 			err: errFakePublishFailed,
 		},
 		{
-			result: &discordqotd.PublishedOfficialPost{
+			result: &PublishedOfficialPost{
 				QuestionListThreadID:       "questions-list-thread",
 				QuestionListEntryMessageID: "list-entry-recovered",
 				ThreadID:                   "thread-mid-failure",
 				StarterMessageID:           "starter-mid-failure",
 				AnswerChannelID:            "thread-mid-failure",
 				PublishedAt:                afterBoundary,
-				PostURL:                    discordqotd.BuildThreadJumpURL("g1", "thread-mid-failure"),
+				PostURL:                    BuildThreadJumpURL("g1", "thread-mid-failure"),
 			},
 		},
 	}
 
-	if _, err := service.PublishNow(context.Background(), "g1", &discordgo.Session{}); err == nil || !strings.Contains(err.Error(), errFakePublishFailed.Error()) {
+	if _, err := service.PublishNow(context.Background(), "g1"); err == nil || !strings.Contains(err.Error(), errFakePublishFailed.Error()) {
 		t.Fatalf("expected manual publish to surface the publisher error, got %v", err)
 	}
 
@@ -921,7 +931,7 @@ func TestServicePublishNowMidPublishFailureDoesNotOrphanSuppressionAlongsideReco
 	// publishing it. Today's scheduled slot is independent: it has no
 	// official post yet, so the scheduler is free to schedule one against
 	// today without colliding with the failed manual row scoped to tomorrow.
-	if err := service.ReconcileGuild(context.Background(), "g1", &discordgo.Session{}); err != nil {
+	if err := service.ReconcileGuild(context.Background(), "g1"); err != nil {
 		t.Fatalf("ReconcileGuild() recovery failed: %v", err)
 	}
 
@@ -981,7 +991,7 @@ func TestServicePublishScheduledIfDueSkipsWhenManualPostOccupiesCurrentSlot(t *t
 		t.Fatalf("CreateQuestion(second) failed: %v", err)
 	}
 
-	if _, err := service.PublishNow(context.Background(), "g1", &discordgo.Session{}); err != nil {
+	if _, err := service.PublishNow(context.Background(), "g1"); err != nil {
 		t.Fatalf("PublishNow() failed: %v", err)
 	}
 
@@ -1005,7 +1015,7 @@ func TestServicePublishScheduledIfDueSkipsWhenManualPostOccupiesCurrentSlot(t *t
 		t.Fatalf("expected the next ready question to stay queued for the upcoming slot, got %+v", automaticQueue)
 	}
 
-	published, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	published, err := service.PublishScheduledIfDue(context.Background(), "g1")
 	if err != nil {
 		t.Fatalf("PublishScheduledIfDue() failed: %v", err)
 	}
@@ -1077,7 +1087,7 @@ func TestServicePublishNowCanSkipAutomaticSlotConsumption(t *testing.T) {
 	}
 
 	consumeAutomaticSlot := false
-	result, err := service.PublishNowWithParams(context.Background(), "g1", &discordgo.Session{}, PublishNowParams{
+	result, err := service.PublishNowWithParams(context.Background(), "g1", PublishNowParams{
 		ConsumeAutomaticSlot: &consumeAutomaticSlot,
 	})
 	if err != nil {
@@ -1107,7 +1117,7 @@ func TestServicePublishNowCanSkipAutomaticSlotConsumption(t *testing.T) {
 		t.Fatalf("expected next ready question to advance to the second item, got %+v", automaticQueue)
 	}
 
-	published, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	published, err := service.PublishScheduledIfDue(context.Background(), "g1")
 	if err != nil {
 		t.Fatalf("PublishScheduledIfDue() failed: %v", err)
 	}
@@ -1121,7 +1131,7 @@ func TestServicePublishNowCanSkipAutomaticSlotConsumption(t *testing.T) {
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 4, 12, 43, 0, 0, time.UTC)
 	}
-	published, err = service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	published, err = service.PublishScheduledIfDue(context.Background(), "g1")
 	if err != nil {
 		t.Fatalf("PublishScheduledIfDue(next day) failed: %v", err)
 	}
@@ -1172,14 +1182,14 @@ func TestServicePublishScheduledIfDueRunsOncePerDayAcrossManualPublishScenarios(
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 12, 43, 0, 0, time.UTC)
 	}
-	published, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	published, err := service.PublishScheduledIfDue(context.Background(), "g1")
 	if err != nil {
 		t.Fatalf("PublishScheduledIfDue(day one) failed: %v", err)
 	}
 	if !published {
 		t.Fatal("expected the first day's scheduled publish to run at the boundary")
 	}
-	published, err = service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	published, err = service.PublishScheduledIfDue(context.Background(), "g1")
 	if err != nil {
 		t.Fatalf("PublishScheduledIfDue(day one repeat) failed: %v", err)
 	}
@@ -1197,7 +1207,7 @@ func TestServicePublishScheduledIfDueRunsOncePerDayAcrossManualPublishScenarios(
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 4, 13, 0, 0, 0, time.UTC)
 	}
-	manualDayTwo, err := service.PublishNow(context.Background(), "g1", &discordgo.Session{})
+	manualDayTwo, err := service.PublishNow(context.Background(), "g1")
 	if err != nil {
 		t.Fatalf("PublishNow(day two) failed: %v", err)
 	}
@@ -1207,7 +1217,7 @@ func TestServicePublishScheduledIfDueRunsOncePerDayAcrossManualPublishScenarios(
 	if !manualDayTwo.OfficialPost.PublishDateUTC.Equal(dayThree) {
 		t.Fatalf("expected day-two manual publish after the boundary to occupy day three, got %+v", manualDayTwo)
 	}
-	published, err = service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	published, err = service.PublishScheduledIfDue(context.Background(), "g1")
 	if err != nil {
 		t.Fatalf("PublishScheduledIfDue(day two) failed: %v", err)
 	}
@@ -1232,7 +1242,7 @@ func TestServicePublishScheduledIfDueRunsOncePerDayAcrossManualPublishScenarios(
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 5, 12, 43, 0, 0, time.UTC)
 	}
-	published, err = service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	published, err = service.PublishScheduledIfDue(context.Background(), "g1")
 	if err != nil {
 		t.Fatalf("PublishScheduledIfDue(day three) failed: %v", err)
 	}
@@ -1251,7 +1261,7 @@ func TestServicePublishScheduledIfDueRunsOncePerDayAcrossManualPublishScenarios(
 		return time.Date(2026, 4, 6, 13, 0, 0, 0, time.UTC)
 	}
 	consumeAutomaticSlot := false
-	manualDayFour, err := service.PublishNowWithParams(context.Background(), "g1", &discordgo.Session{}, PublishNowParams{
+	manualDayFour, err := service.PublishNowWithParams(context.Background(), "g1", PublishNowParams{
 		ConsumeAutomaticSlot: &consumeAutomaticSlot,
 	})
 	if err != nil {
@@ -1273,7 +1283,7 @@ func TestServicePublishScheduledIfDueRunsOncePerDayAcrossManualPublishScenarios(
 	if dayFourQueue.NextReadyQuestion == nil || dayFourQueue.NextReadyQuestion.ID != created[3].ID {
 		t.Fatalf("expected the next automatic question to remain available for day-five scheduling, got %+v", dayFourQueue)
 	}
-	published, err = service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	published, err = service.PublishScheduledIfDue(context.Background(), "g1")
 	if err != nil {
 		t.Fatalf("PublishScheduledIfDue(day four) failed: %v", err)
 	}
@@ -1284,14 +1294,14 @@ func TestServicePublishScheduledIfDueRunsOncePerDayAcrossManualPublishScenarios(
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 7, 12, 43, 0, 0, time.UTC)
 	}
-	published, err = service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	published, err = service.PublishScheduledIfDue(context.Background(), "g1")
 	if err != nil {
 		t.Fatalf("PublishScheduledIfDue(day five) failed: %v", err)
 	}
 	if !published {
 		t.Fatal("expected day-five scheduled publish to still run after a delayed non-consuming manual publish")
 	}
-	published, err = service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	published, err = service.PublishScheduledIfDue(context.Background(), "g1")
 	if err != nil {
 		t.Fatalf("PublishScheduledIfDue(day five repeat) failed: %v", err)
 	}
@@ -1364,7 +1374,7 @@ func TestServiceReconcileGuildReclaimsOrphanReservationsAcrossCrash(t *testing.T
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 12, 43, 0, 0, time.UTC)
 	}
-	if err := service.ReconcileGuild(context.Background(), "g1", &discordgo.Session{}); err != nil {
+	if err := service.ReconcileGuild(context.Background(), "g1"); err != nil {
 		t.Fatalf("ReconcileGuild() failed: %v", err)
 	}
 
@@ -1379,7 +1389,7 @@ func TestServiceReconcileGuildReclaimsOrphanReservationsAcrossCrash(t *testing.T
 		t.Fatalf("expected scheduled date to be cleared on the orphan, got %+v", restored.ScheduledForDateUTC)
 	}
 
-	published, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	published, err := service.PublishScheduledIfDue(context.Background(), "g1")
 	if err != nil {
 		t.Fatalf("PublishScheduledIfDue() failed: %v", err)
 	}
@@ -1415,7 +1425,7 @@ func TestServicePublishScheduledIfDuePublishesWhenTickArrivesAfterBoundary(t *te
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 12, 43, 30, 0, time.UTC)
 	}
-	published, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	published, err := service.PublishScheduledIfDue(context.Background(), "g1")
 	if err != nil {
 		t.Fatalf("PublishScheduledIfDue() failed: %v", err)
 	}
@@ -1457,7 +1467,7 @@ func TestServicePublishScheduledIfDueBackfillsAfterBootPostBoundary(t *testing.T
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 14, 0, 0, 0, time.UTC)
 	}
-	published, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	published, err := service.PublishScheduledIfDue(context.Background(), "g1")
 	if err != nil {
 		t.Fatalf("PublishScheduledIfDue() failed: %v", err)
 	}
@@ -1496,7 +1506,7 @@ func TestServicePublishScheduledIfDueIdleBeforeBoundary(t *testing.T) {
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 12, 42, 30, 0, time.UTC)
 	}
-	published, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	published, err := service.PublishScheduledIfDue(context.Background(), "g1")
 	if err != nil {
 		t.Fatalf("PublishScheduledIfDue() failed: %v", err)
 	}
@@ -1526,7 +1536,7 @@ func TestServicePublishScheduledIfDueDoesNotRepublishLateTicks(t *testing.T) {
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 12, 44, 0, 0, time.UTC)
 	}
-	if _, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{}); err != nil {
+	if _, err := service.PublishScheduledIfDue(context.Background(), "g1"); err != nil {
 		t.Fatalf("PublishScheduledIfDue(first) failed: %v", err)
 	}
 	if len(fake.publishedParams) != 1 {
@@ -1536,7 +1546,7 @@ func TestServicePublishScheduledIfDueDoesNotRepublishLateTicks(t *testing.T) {
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}
-	published, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	published, err := service.PublishScheduledIfDue(context.Background(), "g1")
 	if err != nil {
 		t.Fatalf("PublishScheduledIfDue(second) failed: %v", err)
 	}
@@ -1573,7 +1583,7 @@ func TestServiceGetAutomaticQueueStateSkipsPublishedCurrentSlotAfterBoundary(t *
 		t.Fatalf("CreateQuestion(second) failed: %v", err)
 	}
 
-	if _, err := service.PublishNow(context.Background(), "g1", &discordgo.Session{}); err != nil {
+	if _, err := service.PublishNow(context.Background(), "g1"); err != nil {
 		t.Fatalf("PublishNow() failed: %v", err)
 	}
 
@@ -1631,7 +1641,7 @@ func TestServicePublishNowUsesCurrentScheduledSlotBeforeBoundary(t *testing.T) {
 		t.Fatalf("CreateQuestion(first) failed: %v", err)
 	}
 
-	result, err := service.PublishNow(context.Background(), "g1", &discordgo.Session{})
+	result, err := service.PublishNow(context.Background(), "g1")
 	if err != nil {
 		t.Fatalf("PublishNow() failed: %v", err)
 	}
@@ -1693,10 +1703,10 @@ func TestServicePublishNowRejectsSecondCurrentSlotPublish(t *testing.T) {
 		}
 	}
 
-	if _, err := service.PublishNow(context.Background(), "g1", &discordgo.Session{}); err != nil {
+	if _, err := service.PublishNow(context.Background(), "g1"); err != nil {
 		t.Fatalf("PublishNow(first) failed: %v", err)
 	}
-	if _, err := service.PublishNow(context.Background(), "g1", &discordgo.Session{}); !errors.Is(err, ErrAlreadyPublished) {
+	if _, err := service.PublishNow(context.Background(), "g1"); !errors.Is(err, ErrAlreadyPublished) {
 		t.Fatalf("expected second publish to fail with ErrAlreadyPublished, got %v", err)
 	}
 	if len(fake.publishedParams) != 1 {
@@ -1870,7 +1880,7 @@ func TestServicePublishAcrossInstancesReportsInProgressDuringScheduledProvisioni
 	}
 	results := make(chan scheduledResult, 1)
 	go func() {
-		published, err := scheduledService.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+		published, err := scheduledService.PublishScheduledIfDue(context.Background(), "g1")
 		results <- scheduledResult{published: published, err: err}
 	}()
 
@@ -1880,7 +1890,7 @@ func TestServicePublishAcrossInstancesReportsInProgressDuringScheduledProvisioni
 		t.Fatal("timed out waiting for scheduled publish to enter provisioning")
 	}
 
-	_, err = manualService.PublishNow(context.Background(), "g1", &discordgo.Session{})
+	_, err = manualService.PublishNow(context.Background(), "g1")
 	if !errors.Is(err, ErrPublishInProgress) {
 		close(blocked.release)
 		t.Fatalf("expected manual publish to observe in-progress scheduled provisioning, got %v", err)
@@ -2008,7 +2018,7 @@ func TestServicePublishScheduledIfDueCreatesScheduledPost(t *testing.T) {
 
 	service.now = func() time.Time { return boundary }
 
-	published, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	published, err := service.PublishScheduledIfDue(context.Background(), "g1")
 	if err != nil {
 		t.Fatalf("PublishScheduledIfDue() failed: %v", err)
 	}
@@ -2038,7 +2048,7 @@ func TestServicePublishScheduledIfDueCreatesScheduledPost(t *testing.T) {
 	if official.DiscordThreadID == "" {
 		t.Fatalf("expected scheduled publish to persist the official thread id, got %+v", official)
 	}
-	if fake.threadStates[official.DiscordThreadID] != (discordqotd.ThreadState{Pinned: false, Locked: false, Archived: false}) {
+	if fake.threadStates[official.DiscordThreadID] != (ThreadState{Pinned: false, Locked: false, Archived: false}) {
 		t.Fatalf("expected the daily thread to remain open for answers, got %+v", fake.threadStates[official.DiscordThreadID])
 	}
 
@@ -2076,7 +2086,7 @@ func TestServiceEnableAfterCurrentSlotDueSuppressesImmediatePublish(t *testing.T
 		t.Fatalf("expected enabling after the boundary to suppress the current slot, got %+v", updated)
 	}
 
-	published, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	published, err := service.PublishScheduledIfDue(context.Background(), "g1")
 	if err != nil {
 		t.Fatalf("PublishScheduledIfDue() failed: %v", err)
 	}
@@ -2128,7 +2138,7 @@ func TestServicePublishScheduledIfDueClearsExpiredSuppression(t *testing.T) {
 		t.Fatalf("CreateQuestion() failed: %v", err)
 	}
 
-	published, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	published, err := service.PublishScheduledIfDue(context.Background(), "g1")
 	if err != nil {
 		t.Fatalf("PublishScheduledIfDue() failed: %v", err)
 	}
@@ -2166,7 +2176,7 @@ func TestServiceReconcileGuildClearsExpiredSuppressionForSuppressionOnlyConfig(t
 		t.Fatalf("expected stale suppression before reconcile, got %+v", before)
 	}
 
-	if err := service.ReconcileGuild(context.Background(), "g1", &discordgo.Session{}); err != nil {
+	if err := service.ReconcileGuild(context.Background(), "g1"); err != nil {
 		t.Fatalf("ReconcileGuild() failed: %v", err)
 	}
 
@@ -2204,29 +2214,29 @@ func TestServicePublishScheduledIfDueResumesFailedProvisioning(t *testing.T) {
 
 	fake.publishResponses = []fakePublishResponse{
 		{
-			result: &discordqotd.PublishedOfficialPost{
+			result: &PublishedOfficialPost{
 				QuestionListThreadID: "questions-list-thread",
 				ThreadID:             "thread-partial",
 				StarterMessageID:     "starter-partial",
 				AnswerChannelID:      "thread-partial",
-				PostURL:              discordqotd.BuildThreadJumpURL("g1", "thread-partial"),
+				PostURL:              BuildThreadJumpURL("g1", "thread-partial"),
 			},
 			err: errFakePublishFailed,
 		},
 		{
-			result: &discordqotd.PublishedOfficialPost{
+			result: &PublishedOfficialPost{
 				QuestionListThreadID:       "questions-list-thread",
 				QuestionListEntryMessageID: "list-entry-recovered",
 				ThreadID:                   "thread-partial",
 				StarterMessageID:           "starter-partial",
 				AnswerChannelID:            "thread-partial",
 				PublishedAt:                time.Date(2026, 4, 3, 12, 43, 0, 0, time.UTC),
-				PostURL:                    discordqotd.BuildThreadJumpURL("g1", "thread-partial"),
+				PostURL:                    BuildThreadJumpURL("g1", "thread-partial"),
 			},
 		},
 	}
 
-	published, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	published, err := service.PublishScheduledIfDue(context.Background(), "g1")
 	if err == nil || !strings.Contains(err.Error(), errFakePublishFailed.Error()) {
 		t.Fatalf("expected publish failure to surface, got published=%v err=%v", published, err)
 	}
@@ -2254,7 +2264,7 @@ func TestServicePublishScheduledIfDueResumesFailedProvisioning(t *testing.T) {
 		t.Fatalf("expected question to stay reserved during failed provisioning, got %+v", reservedQuestion)
 	}
 
-	published, err = service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	published, err = service.PublishScheduledIfDue(context.Background(), "g1")
 	if err != nil {
 		t.Fatalf("PublishScheduledIfDue(recovery) failed: %v", err)
 	}
@@ -2334,18 +2344,18 @@ func TestServiceReconcileGuildRecoversPendingOfficialPostProvisioning(t *testing
 	}
 
 	fake.publishResponses = []fakePublishResponse{{
-		result: &discordqotd.PublishedOfficialPost{
+		result: &PublishedOfficialPost{
 			QuestionListThreadID:       "questions-list-thread",
 			QuestionListEntryMessageID: "list-entry-recovered",
 			ThreadID:                   "thread-recover",
 			StarterMessageID:           "starter-recover",
 			AnswerChannelID:            "thread-recover",
 			PublishedAt:                time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC),
-			PostURL:                    discordqotd.BuildThreadJumpURL("g1", "thread-recover"),
+			PostURL:                    BuildThreadJumpURL("g1", "thread-recover"),
 		},
 	}}
 
-	if err := service.ReconcileGuild(context.Background(), "g1", &discordgo.Session{}); err != nil {
+	if err := service.ReconcileGuild(context.Background(), "g1"); err != nil {
 		t.Fatalf("ReconcileGuild() failed: %v", err)
 	}
 
@@ -2421,7 +2431,7 @@ func TestServiceResumeProvisioningSkipsDiscordWhenPostDeletedConcurrently(t *tes
 		t.Fatalf("DeleteQOTDOfficialPostByID() failed: %v", err)
 	}
 
-	if _, err := service.resumeOfficialPostProvisioning(context.Background(), &discordgo.Session{}, *provisioning, now); err == nil {
+	if _, err := service.resumeOfficialPostProvisioning(context.Background(), *provisioning, now); err == nil {
 		t.Fatal("expected resumeOfficialPostProvisioning() to fail when the post row is gone")
 	}
 	if len(fake.publishedParams) != 0 {
@@ -2500,7 +2510,7 @@ func TestServiceReconcileGuildArchivesExpiredPostsAndAnswerRecords(t *testing.T)
 		t.Fatalf("UpdateQOTDAnswerMessageState() failed: %v", err)
 	}
 
-	if err := service.ReconcileGuild(context.Background(), "g1", &discordgo.Session{}); err != nil {
+	if err := service.ReconcileGuild(context.Background(), "g1"); err != nil {
 		t.Fatalf("ReconcileGuild() failed: %v", err)
 	}
 
@@ -2524,11 +2534,11 @@ func TestServiceReconcileGuildArchivesExpiredPostsAndAnswerRecords(t *testing.T)
 	// auto_archive_duration (set to the QOTD answer window at creation)
 	// handles the actual "Close" transition. Setting Archived=true ourselves
 	// would race the platform-driven archive.
-	if fake.threadStates["official-thread-archive"] != (discordqotd.ThreadState{Pinned: false, Locked: true, Archived: false}) {
+	if fake.threadStates["official-thread-archive"] != (ThreadState{Pinned: false, Locked: true, Archived: false}) {
 		t.Fatalf("expected archived official thread to be locked while Discord auto-archives, got %+v", fake.threadStates["official-thread-archive"])
 	}
 
-	if err := service.ReconcileGuild(context.Background(), "g1", &discordgo.Session{}); err != nil {
+	if err := service.ReconcileGuild(context.Background(), "g1"); err != nil {
 		t.Fatalf("ReconcileGuild(second) failed: %v", err)
 	}
 }
@@ -2593,11 +2603,11 @@ func TestServiceArchiveClosesAndLocksThreadAndPreservesModeratorReopen(t *testin
 		t.Fatalf("UpdateQOTDOfficialPostState(seed previous) failed: %v", err)
 	}
 
-	if err := service.ReconcileGuild(context.Background(), "g1", &discordgo.Session{}); err != nil {
+	if err := service.ReconcileGuild(context.Background(), "g1"); err != nil {
 		t.Fatalf("ReconcileGuild(initial archive) failed: %v", err)
 	}
 
-	if got := fake.threadStates[threadID]; got != (discordqotd.ThreadState{Pinned: false, Locked: true, Archived: false}) {
+	if got := fake.threadStates[threadID]; got != (ThreadState{Pinned: false, Locked: true, Archived: false}) {
 		t.Fatalf("expected archive transition to lock the thread while Discord auto-archives, got %+v", got)
 	}
 
@@ -2612,13 +2622,13 @@ func TestServiceArchiveClosesAndLocksThreadAndPreservesModeratorReopen(t *testin
 	// Simulate a moderator manually unlocking the thread via the Discord
 	// UI (MANAGE_THREADS). The next reconcile must not re-impose the lock,
 	// otherwise the bot would fight moderator decisions in a loop.
-	fake.threadStates[threadID] = discordqotd.ThreadState{Pinned: false, Locked: false, Archived: false}
+	fake.threadStates[threadID] = ThreadState{Pinned: false, Locked: false, Archived: false}
 
-	if err := service.ReconcileGuild(context.Background(), "g1", &discordgo.Session{}); err != nil {
+	if err := service.ReconcileGuild(context.Background(), "g1"); err != nil {
 		t.Fatalf("ReconcileGuild(after moderator reopen) failed: %v", err)
 	}
 
-	if got := fake.threadStates[threadID]; got != (discordqotd.ThreadState{Pinned: false, Locked: false, Archived: false}) {
+	if got := fake.threadStates[threadID]; got != (ThreadState{Pinned: false, Locked: false, Archived: false}) {
 		t.Fatalf("expected reconcile to leave a moderator-unlocked archived thread alone, got %+v", got)
 	}
 }
@@ -2645,7 +2655,7 @@ func TestServicePublishScheduledIfDueGeneratesIdempotencyNonce(t *testing.T) {
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 12, 43, 0, 0, time.UTC)
 	}
-	if _, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{}); err != nil {
+	if _, err := service.PublishScheduledIfDue(context.Background(), "g1"); err != nil {
 		t.Fatalf("PublishScheduledIfDue() failed: %v", err)
 	}
 
@@ -2714,7 +2724,7 @@ func TestServicePublishScheduledIfDueResumeReusesPersistedNonce(t *testing.T) {
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 12, 43, 0, 0, time.UTC)
 	}
-	if _, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{}); err != nil {
+	if _, err := service.PublishScheduledIfDue(context.Background(), "g1"); err != nil {
 		t.Fatalf("PublishScheduledIfDue() failed: %v", err)
 	}
 
@@ -2744,17 +2754,14 @@ func TestServicePublishScheduledIfDueAbandonsOnUnrecoverableDiscordError(t *test
 		t.Fatalf("CreateQuestion() failed: %v", err)
 	}
 
-	unknownChannelErr := &discordgo.RESTError{
-		Response: &http.Response{StatusCode: http.StatusNotFound},
-		Message:  &discordgo.APIErrorMessage{Code: discordgo.ErrCodeUnknownChannel, Message: "Unknown Channel"},
-	}
+	unknownChannelErr := ErrDiscordUnknownChannel
 	fake.publishResponses = []fakePublishResponse{{err: unknownChannelErr}}
 
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 12, 43, 0, 0, time.UTC)
 	}
 
-	published, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	published, err := service.PublishScheduledIfDue(context.Background(), "g1")
 	if err == nil {
 		t.Fatal("expected publish to surface the unrecoverable error")
 	}
@@ -2778,7 +2785,7 @@ func TestServicePublishScheduledIfDueAbandonsOnUnrecoverableDiscordError(t *test
 	}
 
 	// Subsequent reconcile must NOT retry the abandoned post.
-	if err := service.ReconcileGuild(context.Background(), "g1", &discordgo.Session{}); err != nil {
+	if err := service.ReconcileGuild(context.Background(), "g1"); err != nil {
 		t.Fatalf("ReconcileGuild() after abandonment failed: %v", err)
 	}
 	if len(fake.publishedParams) != 1 {
@@ -2790,7 +2797,7 @@ func TestServicePublishScheduledIfDueAbandonsOnUnrecoverableDiscordError(t *test
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}
-	published, err = service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{})
+	published, err = service.PublishScheduledIfDue(context.Background(), "g1")
 	if err != nil {
 		t.Fatalf("PublishScheduledIfDue() after abandonment failed: %v", err)
 	}
@@ -2817,16 +2824,13 @@ func TestServicePublishScheduledIfDueRetriesTransientFailures(t *testing.T) {
 		t.Fatalf("CreateQuestion() failed: %v", err)
 	}
 
-	transientErr := &discordgo.RESTError{
-		Response: &http.Response{StatusCode: http.StatusInternalServerError},
-		Message:  &discordgo.APIErrorMessage{Message: "internal server error"},
-	}
+	transientErr := fmt.Errorf("internal server error")
 	fake.publishResponses = []fakePublishResponse{{err: transientErr}}
 
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 12, 43, 0, 0, time.UTC)
 	}
-	if _, err := service.PublishScheduledIfDue(context.Background(), "g1", &discordgo.Session{}); err == nil {
+	if _, err := service.PublishScheduledIfDue(context.Background(), "g1"); err == nil {
 		t.Fatal("expected first publish attempt to surface the transient error")
 	}
 
@@ -2843,7 +2847,7 @@ func TestServicePublishScheduledIfDueRetriesTransientFailures(t *testing.T) {
 	}
 
 	// Next reconcile cycle resumes; fake publisher now returns success.
-	if err := service.ReconcileGuild(context.Background(), "g1", &discordgo.Session{}); err != nil {
+	if err := service.ReconcileGuild(context.Background(), "g1"); err != nil {
 		t.Fatalf("ReconcileGuild() after transient error failed: %v", err)
 	}
 	if len(fake.publishedParams) != 2 {

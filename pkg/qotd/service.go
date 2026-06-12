@@ -7,10 +7,8 @@ import (
 	"sync"
 	"time"
 
-	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
-	"github.com/small-frappuccino/discordgo"
 )
 
 // ErrQOTDDisabled defines err qotddisabled.
@@ -41,8 +39,9 @@ var (
 // Publisher abstracts the Discord-side official-post operations the Service
 // depends on, so publish flows can be exercised without a live session.
 type Publisher interface {
-	PublishOfficialPost(ctx context.Context, session *discordgo.Session, params discordqotd.PublishOfficialPostParams) (*discordqotd.PublishedOfficialPost, error)
-	SetThreadState(ctx context.Context, session *discordgo.Session, threadID string, state discordqotd.ThreadState) error
+	PublishOfficialPost(ctx context.Context, params PublishOfficialPostParams) (*PublishedOfficialPost, error)
+	SetThreadState(ctx context.Context, guildID string, threadID string, state ThreadState) error
+	DeleteOfficialPost(ctx context.Context, params DeleteOfficialPostParams) error
 }
 
 // QuestionMutation carries the fields accepted when creating or updating a
@@ -180,9 +179,6 @@ func NewService(configManager *files.ConfigManager, store *storage.Store, publis
 // falls back to NopMetrics so library tests that don't care about
 // observability stay clean.
 func NewServiceWithMetrics(configManager *files.ConfigManager, store *storage.Store, publisher Publisher, metrics Metrics) *Service {
-	if publisher == nil {
-		publisher = discordqotd.NewPublisher()
-	}
 	if metrics == nil {
 		metrics = NopMetrics{}
 	}
@@ -195,4 +191,9 @@ func NewServiceWithMetrics(configManager *files.ConfigManager, store *storage.St
 			return time.Now().UTC()
 		},
 	}
+}
+
+// SetPublisher injects the Publisher after service construction.
+func (s *Service) SetPublisher(p Publisher) {
+	s.publisher = p
 }

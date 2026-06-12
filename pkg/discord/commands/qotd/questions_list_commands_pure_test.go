@@ -347,8 +347,8 @@ func TestQOTDPublishCommandTreatsRecoveredPublishedResultAsSuccess(t *testing.T)
 	if service.publishCalls != 1 {
 		t.Fatalf("expected publish command to call PublishNow once, got %d", service.publishCalls)
 	}
-	if service.lastPublishGuild != guildID || service.lastPublishSession != session {
-		t.Fatalf("expected publish command to forward guild and session, got guild=%q session=%p", service.lastPublishGuild, service.lastPublishSession)
+	if service.lastPublishGuild != guildID {
+		t.Fatalf("expected publish command to forward guild, got guild=%q", service.lastPublishGuild)
 	}
 	if service.lastPublishParams.ConsumeAutomaticSlot == nil || !*service.lastPublishParams.ConsumeAutomaticSlot {
 		t.Fatalf("expected publish command to default to consuming the automatic slot, got %+v", service.lastPublishParams)

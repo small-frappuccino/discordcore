@@ -188,10 +188,10 @@ func (m *mockQotdLifecycleService) StartThreadArchivePolicy(ctx context.Context,
 func (m *mockQotdLifecycleService) NextScheduledPublishTime(guildID string, now time.Time) (time.Time, bool) {
 	return time.Time{}, false
 }
-func (m *mockQotdLifecycleService) PublishScheduledIfDue(ctx context.Context, guildID string, session *discordgo.Session) (bool, error) {
+func (m *mockQotdLifecycleService) PublishScheduledIfDue(ctx context.Context, guildID string) (bool, error) {
 	return false, nil
 }
-func (m *mockQotdLifecycleService) ReconcileGuild(ctx context.Context, guildID string, session *discordgo.Session) error {
+func (m *mockQotdLifecycleService) ReconcileGuild(ctx context.Context, guildID string) error {
 	return nil
 }
 func (m *mockQotdLifecycleService) ScheduleDailyAutomatedArchiveForGuild(guildID string) {}

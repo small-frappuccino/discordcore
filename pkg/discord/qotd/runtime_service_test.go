@@ -24,7 +24,7 @@ type fakeGuildLifecycleService struct {
 	nextPublish map[string]time.Time
 }
 
-func (f *fakeGuildLifecycleService) PublishScheduledIfDue(_ context.Context, guildID string, _ *discordgo.Session) (bool, error) {
+func (f *fakeGuildLifecycleService) PublishScheduledIfDue(_ context.Context, guildID string) (bool, error) {
 	f.mu.Lock()
 	f.publishCalls = append(f.publishCalls, guildID)
 	f.mu.Unlock()
@@ -37,7 +37,7 @@ func (f *fakeGuildLifecycleService) PublishScheduledIfDue(_ context.Context, gui
 	return false, nil
 }
 
-func (f *fakeGuildLifecycleService) ReconcileGuild(_ context.Context, guildID string, _ *discordgo.Session) error {
+func (f *fakeGuildLifecycleService) ReconcileGuild(_ context.Context, guildID string) error {
 	f.mu.Lock()
 	f.reconcileCalls = append(f.reconcileCalls, guildID)
 	f.mu.Unlock()
@@ -86,7 +86,7 @@ type blockingContextLifecycleService struct {
 	once    sync.Once
 }
 
-func (f *blockingContextLifecycleService) PublishScheduledIfDue(ctx context.Context, _ string, _ *discordgo.Session) (bool, error) {
+func (f *blockingContextLifecycleService) PublishScheduledIfDue(ctx context.Context, _ string) (bool, error) {
 	f.once.Do(func() {
 		if f.started != nil {
 			close(f.started)
@@ -102,7 +102,7 @@ func (f *blockingContextLifecycleService) PublishScheduledIfDue(ctx context.Cont
 	return false, ctx.Err()
 }
 
-func (f *blockingContextLifecycleService) ReconcileGuild(context.Context, string, *discordgo.Session) error {
+func (f *blockingContextLifecycleService) ReconcileGuild(context.Context, string) error {
 	return nil
 }
 

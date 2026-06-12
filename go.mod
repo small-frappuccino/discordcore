@@ -15,12 +15,15 @@ require (
 
 require (
 	github.com/bwmarrin/discordgo v0.29.0 // indirect
+	github.com/diamondburned/arikawa/v3 v3.6.0 // indirect
+	github.com/gorilla/schema v1.4.1 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	golang.org/x/crypto v0.41.0 // indirect
 	golang.org/x/text v0.29.0 // indirect
+	golang.org/x/time v0.10.0 // indirect
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
 )
 

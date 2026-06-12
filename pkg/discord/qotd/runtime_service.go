@@ -40,8 +40,8 @@ const (
 // drives on its publish and reconcile timers. NextScheduledPublishTime is only a
 // wake-up hint; PublishScheduledIfDue remains the authoritative due check.
 type GuildLifecycleService interface {
-	PublishScheduledIfDue(ctx context.Context, guildID string, session *discordgo.Session) (bool, error)
-	ReconcileGuild(ctx context.Context, guildID string, session *discordgo.Session) error
+	PublishScheduledIfDue(ctx context.Context, guildID string) (bool, error)
+	ReconcileGuild(ctx context.Context, guildID string) error
 	// NextScheduledPublishTime returns the next eligible scheduled publish
 	// moment for a guild based on its current configuration. It is consulted
 	// only as a wake-up hint: the authoritative "is this slot due" decision
@@ -298,7 +298,7 @@ func (s *RuntimeService) runPublishCycle(now time.Time) {
 		default:
 		}
 		ctx, cancel := s.operationContext()
-		published, err := s.lifecycleService.PublishScheduledIfDue(ctx, guildID, s.session)
+		published, err := s.lifecycleService.PublishScheduledIfDue(ctx, guildID)
 		cancel()
 		if err != nil {
 			if errors.Is(err, context.Canceled) && s.stopping() {
@@ -332,7 +332,7 @@ func (s *RuntimeService) runReconcileCycle(now time.Time) {
 		default:
 		}
 		ctx, cancel := s.operationContext()
-		err := s.lifecycleService.ReconcileGuild(ctx, guildID, s.session)
+		err := s.lifecycleService.ReconcileGuild(ctx, guildID)
 		cancel()
 		if err != nil {
 			if errors.Is(err, context.Canceled) && s.stopping() {

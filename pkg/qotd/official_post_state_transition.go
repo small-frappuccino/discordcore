@@ -7,10 +7,8 @@ import (
 	"strings"
 	"time"
 
-	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
-	"github.com/small-frappuccino/discordgo"
 )
 
 // ErrOfficialPostStateDivergence is the sentinel wrapped by
@@ -76,7 +74,7 @@ func (e *OfficialPostStateDivergenceError) Unwrap() error {
 // timestamps forwarded to the DB write.
 type officialPostThreadTransition struct {
 	Post          storage.QOTDOfficialPostRecord
-	ThreadState   discordqotd.ThreadState
+	ThreadState   ThreadState
 	TargetDBState OfficialPostState
 	ClosedAt      *time.Time
 	ArchivedAt    *time.Time
@@ -142,7 +140,7 @@ type officialPostThreadTransition struct {
 //     gone from Discord's side.
 //   - ClosedAt, ArchivedAt: passed through to UpdateQOTDOfficialPostState
 //     unchanged. nil for live transitions, non-nil for archive.
-func (s *Service) applyOfficialPostThreadTransition(ctx context.Context, session *discordgo.Session, params officialPostThreadTransition) (*storage.QOTDOfficialPostRecord, error) {
+func (s *Service) applyOfficialPostThreadTransition(ctx context.Context, params officialPostThreadTransition) (*storage.QOTDOfficialPostRecord, error) {
 	post := params.Post
 	threadState := params.ThreadState
 	targetDBState := params.TargetDBState
@@ -159,7 +157,7 @@ func (s *Service) applyOfficialPostThreadTransition(ctx context.Context, session
 		return updated, nil
 	}
 
-	missing, err := s.setThreadState(ctx, session, post.DiscordThreadID, threadState)
+	missing, err := s.setThreadState(ctx, post.GuildID, post.DiscordThreadID, threadState)
 	if err != nil {
 		return nil, fmt.Errorf("Service.applyOfficialPostThreadTransition: %w", err)
 	}

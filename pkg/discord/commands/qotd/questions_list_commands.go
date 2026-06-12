@@ -63,8 +63,8 @@ type QuestionCatalog interface {
 
 type PublishCoordinator interface {
 	GetAutomaticQueueState(ctx context.Context, guildID, deckID string) (applicationqotd.AutomaticQueueState, error)
-	PublishNowWithParams(ctx context.Context, guildID string, session *discordgo.Session, params applicationqotd.PublishNowParams) (*applicationqotd.PublishResult, error)
-	ReplaceCurrentPublish(ctx context.Context, guildID string, session *discordgo.Session) (*applicationqotd.PublishResult, error)
+	PublishNowWithParams(ctx context.Context, guildID string, params applicationqotd.PublishNowParams) (*applicationqotd.PublishResult, error)
+	ReplaceCurrentPublish(ctx context.Context, guildID string) (*applicationqotd.PublishResult, error)
 }
 
 type QuestionCatalogService interface {
@@ -482,7 +482,7 @@ func (c *qotdPublishCommand) Handle(ctx *core.Context) error {
 		break
 	}
 
-	result, err := c.publishCoordinator.PublishNowWithParams(context.Background(), ctx.GuildID, ctx.Session, applicationqotd.PublishNowParams{
+	result, err := c.publishCoordinator.PublishNowWithParams(context.Background(), ctx.GuildID, applicationqotd.PublishNowParams{
 		ConsumeAutomaticSlot: &consumeAutomaticSlot,
 	})
 	if err != nil {
@@ -536,7 +536,7 @@ func (c *qotdSkipCommand) Handle(ctx *core.Context) error {
 		return &core.CommandError{Message: "You need the Manage Messages permission to skip QOTD questions.", Ephemeral: false}
 	}
 
-	result, err := c.publishCoordinator.ReplaceCurrentPublish(context.Background(), ctx.GuildID, ctx.Session)
+	result, err := c.publishCoordinator.ReplaceCurrentPublish(context.Background(), ctx.GuildID)
 	if err != nil {
 		if errors.Is(err, applicationqotd.ErrNoCurrentPublish) {
 			return &core.CommandError{Message: "There is no active QOTD question to skip.", Ephemeral: false}

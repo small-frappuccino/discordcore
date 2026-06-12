@@ -18,14 +18,13 @@ import (
 )
 
 type publishCommandStubService struct {
-	t                  *testing.T
-	settings           files.QOTDConfig
-	publishResult      *applicationqotd.PublishResult
-	publishErr         error
-	publishCalls       int
-	lastPublishGuild   string
-	lastPublishSession *discordgo.Session
-	lastPublishParams  applicationqotd.PublishNowParams
+	t                 *testing.T
+	settings          files.QOTDConfig
+	publishResult     *applicationqotd.PublishResult
+	publishErr        error
+	publishCalls      int
+	lastPublishGuild  string
+	lastPublishParams applicationqotd.PublishNowParams
 }
 
 type listCommandStubService struct {
@@ -75,18 +74,16 @@ func (s *publishCommandStubService) GetAutomaticQueueState(context.Context, stri
 	return applicationqotd.AutomaticQueueState{}, nil
 }
 
-func (s *publishCommandStubService) PublishNowWithParams(_ context.Context, guildID string, session *discordgo.Session, params applicationqotd.PublishNowParams) (*applicationqotd.PublishResult, error) {
+func (s *publishCommandStubService) PublishNowWithParams(_ context.Context, guildID string, params applicationqotd.PublishNowParams) (*applicationqotd.PublishResult, error) {
 	s.publishCalls++
 	s.lastPublishGuild = guildID
-	s.lastPublishSession = session
 	s.lastPublishParams = params
 	return s.publishResult, s.publishErr
 }
 
-func (s *publishCommandStubService) ReplaceCurrentPublish(_ context.Context, guildID string, session *discordgo.Session) (*applicationqotd.PublishResult, error) {
+func (s *publishCommandStubService) ReplaceCurrentPublish(_ context.Context, guildID string) (*applicationqotd.PublishResult, error) {
 	s.publishCalls++
 	s.lastPublishGuild = guildID
-	s.lastPublishSession = session
 	return s.publishResult, s.publishErr
 }
 
@@ -133,11 +130,11 @@ func (s *listCommandStubService) GetAutomaticQueueState(context.Context, string,
 	return applicationqotd.AutomaticQueueState{}, nil
 }
 
-func (s *listCommandStubService) PublishNowWithParams(context.Context, string, *discordgo.Session, applicationqotd.PublishNowParams) (*applicationqotd.PublishResult, error) {
+func (s *listCommandStubService) PublishNowWithParams(context.Context, string, applicationqotd.PublishNowParams) (*applicationqotd.PublishResult, error) {
 	return nil, nil
 }
 
-func (s *listCommandStubService) ReplaceCurrentPublish(context.Context, string, *discordgo.Session) (*applicationqotd.PublishResult, error) {
+func (s *listCommandStubService) ReplaceCurrentPublish(context.Context, string) (*applicationqotd.PublishResult, error) {
 	return nil, nil
 }
 

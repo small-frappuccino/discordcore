@@ -1,6 +1,7 @@
 package qotd
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -9,6 +10,14 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
+
+type nopPublisher struct{}
+
+func (nopPublisher) PublishOfficialPost(context.Context, PublishOfficialPostParams) (*PublishedOfficialPost, error) {
+	return nil, nil
+}
+func (nopPublisher) SetThreadState(context.Context, string, string, ThreadState) error  { return nil }
+func (nopPublisher) DeleteOfficialPost(context.Context, DeleteOfficialPostParams) error { return nil }
 
 func TestNormalizeQuestionMutationDefaultsAndValidation(t *testing.T) {
 	t.Parallel()
@@ -297,7 +306,7 @@ func TestNextScheduledPublishTimeProjectsTodayOrTomorrow(t *testing.T) {
 			if err := cm.AddGuildConfig(files.GuildConfig{GuildID: "g1", QOTD: tc.cfg}); err != nil {
 				t.Fatalf("AddGuildConfig: %v", err)
 			}
-			service := NewService(cm, &storage.Store{}, nil)
+			service := NewService(cm, &storage.Store{}, nopPublisher{})
 			got, ok := service.NextScheduledPublishTime("g1", tc.now)
 			if ok != tc.wantOK {
 				t.Fatalf("ok = %v, want %v (got=%s)", ok, tc.wantOK, got.Format(time.RFC3339))

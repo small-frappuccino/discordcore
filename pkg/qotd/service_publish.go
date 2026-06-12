@@ -9,16 +9,15 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
-	"github.com/small-frappuccino/discordgo"
 )
 
 // PublishNow publishs now.
-func (s *Service) PublishNow(ctx context.Context, guildID string, session *discordgo.Session) (*PublishResult, error) {
-	return s.PublishNowWithParams(ctx, guildID, session, PublishNowParams{})
+func (s *Service) PublishNow(ctx context.Context, guildID string) (*PublishResult, error) {
+	return s.PublishNowWithParams(ctx, guildID, PublishNowParams{})
 }
 
 // PublishNowWithParams publishs now with params.
-func (s *Service) PublishNowWithParams(ctx context.Context, guildID string, session *discordgo.Session, params PublishNowParams) (result *PublishResult, err error) {
+func (s *Service) PublishNowWithParams(ctx context.Context, guildID string, params PublishNowParams) (result *PublishResult, err error) {
 
 	publishStart := time.Now()
 	s.observability().RecordPublishAttempt(PublishModeManual)
@@ -33,10 +32,6 @@ func (s *Service) PublishNowWithParams(ctx context.Context, guildID string, sess
 
 	if err = s.validate(); err != nil {
 		return nil, fmt.Errorf("Service.PublishNowWithParams: %w", err)
-	}
-	if session == nil {
-		err = ErrDiscordUnavailable
-		return nil, err
 	}
 
 	guildID = strings.TrimSpace(guildID)
@@ -91,7 +86,7 @@ func (s *Service) PublishNowWithParams(ctx context.Context, guildID string, sess
 			}
 		}
 
-		publishResult, keep, err := s.provisionManualOfficialPost(ctx, publishScope{GuildID: guildID, Session: session, Now: now}, deck, publishDate, consumeAutomaticSlot)
+		publishResult, keep, err := s.provisionManualOfficialPost(ctx, publishScope{GuildID: guildID, Now: now}, deck, publishDate, consumeAutomaticSlot)
 		keepSuppression = keep
 		if err != nil {
 			return nil, err
@@ -181,7 +176,7 @@ func (s *Service) provisionManualOfficialPost(ctx context.Context, scope publish
 		return conflictResult, false, conflictErr
 	}
 
-	finalized, updatedQuestion, postURL, err := s.completeOfficialPostProvisioning(ctx, scope.Session, officialPostProvisioningParams{
+	finalized, updatedQuestion, postURL, err := s.completeOfficialPostProvisioning(ctx, officialPostProvisioningParams{
 		Post:               *provisioned,
 		Question:           question,
 		AvailableQuestions: availableQuestions,
@@ -195,7 +190,7 @@ func (s *Service) provisionManualOfficialPost(ctx context.Context, scope publish
 		question = updatedQuestion
 	}
 
-	if err := s.reconcileOfficialPostWindow(ctx, scope.GuildID, scope.Session, scope.Now, finalized.ID); err != nil {
+	if err := s.reconcileOfficialPostWindow(ctx, scope.GuildID, scope.Now, finalized.ID); err != nil {
 		return nil, false, fmt.Errorf("Service.PublishNowWithParams: %w", err)
 	}
 	if consumeAutomaticSlot {

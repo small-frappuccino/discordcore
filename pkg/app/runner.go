@@ -214,6 +214,7 @@ func runWithOptions(appName string, opts RunOptions) error {
 	}
 
 	botSupervisor := NewBotSupervisor(configManager, botOpts)
+	qotdService.SetPublisher(newDualSDKPublisher(botSupervisor.GetResolver()))
 	configManager.AddSubscriber(botSupervisor.onConfigChanged)
 
 	botSupervisor.SetFatalCallback(func(err error) {

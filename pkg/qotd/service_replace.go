@@ -6,16 +6,12 @@ import (
 	"strings"
 
 	"github.com/small-frappuccino/discordcore/pkg/log"
-	"github.com/small-frappuccino/discordgo"
 )
 
 // ReplaceCurrentPublish replaces current publish.
-func (s *Service) ReplaceCurrentPublish(ctx context.Context, guildID string, session *discordgo.Session) (*PublishResult, error) {
+func (s *Service) ReplaceCurrentPublish(ctx context.Context, guildID string) (*PublishResult, error) {
 	if err := s.validate(); err != nil {
 		return nil, fmt.Errorf("Service.ReplaceCurrentPublish: %w", err)
-	}
-	if session == nil {
-		return nil, ErrDiscordUnavailable
 	}
 
 	guildID = strings.TrimSpace(guildID)
@@ -58,23 +54,16 @@ func (s *Service) ReplaceCurrentPublish(ctx context.Context, guildID string, ses
 		}
 
 		// Delete from Discord (best effort, errors logged but ignored)
-		if post.DiscordThreadID != "" {
-			_, err := session.ChannelDelete(post.DiscordThreadID)
-			if err != nil {
-				log.ApplicationLogger().Warn("qotd skip failed to delete discord thread", "guildID", guildID, "threadID", post.DiscordThreadID, "err", err)
-			}
-		}
-		if post.DiscordStarterMessageID != "" && post.ChannelID != "" {
-			err := session.ChannelMessageDelete(post.ChannelID, post.DiscordStarterMessageID)
-			if err != nil {
-				log.ApplicationLogger().Warn("qotd skip failed to delete starter message", "guildID", guildID, "channelID", post.ChannelID, "messageID", post.DiscordStarterMessageID, "err", err)
-			}
-		}
-		if post.QuestionListEntryMessageID != "" && post.QuestionListThreadID != "" {
-			err := session.ChannelMessageDelete(post.QuestionListThreadID, post.QuestionListEntryMessageID)
-			if err != nil {
-				log.ApplicationLogger().Warn("qotd skip failed to delete question list entry", "guildID", guildID, "threadID", post.QuestionListThreadID, "messageID", post.QuestionListEntryMessageID, "err", err)
-			}
+		err = s.publisher.DeleteOfficialPost(ctx, DeleteOfficialPostParams{
+			GuildID:                    guildID,
+			DiscordThreadID:            post.DiscordThreadID,
+			DiscordStarterMessageID:    post.DiscordStarterMessageID,
+			ChannelID:                  post.ChannelID,
+			QuestionListThreadID:       post.QuestionListThreadID,
+			QuestionListEntryMessageID: post.QuestionListEntryMessageID,
+		})
+		if err != nil {
+			log.ApplicationLogger().Warn("qotd skip failed to delete discord thread/message", "guildID", guildID, "threadID", post.DiscordThreadID, "err", err)
 		}
 
 		// Delete from DB
@@ -95,7 +84,7 @@ func (s *Service) ReplaceCurrentPublish(ctx context.Context, guildID string, ses
 		}
 
 		publishDate := post.PublishDateUTC
-		return s.PublishNowWithParams(ctx, guildID, session, PublishNowParams{
+		return s.PublishNowWithParams(ctx, guildID, PublishNowParams{
 			ConsumeAutomaticSlot: &post.ConsumeAutomaticSlot,
 			PublishDateOverride:  &publishDate,
 			IsReplacement:        true,

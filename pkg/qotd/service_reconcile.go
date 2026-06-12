@@ -6,16 +6,15 @@ import (
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/storage"
-	"github.com/small-frappuccino/discordgo"
 )
 
-func (s *Service) reconcileOfficialPostWindow(ctx context.Context, guildID string, session *discordgo.Session, now time.Time, currentOfficialPostID int64) error {
+func (s *Service) reconcileOfficialPostWindow(ctx context.Context, guildID string, now time.Time, currentOfficialPostID int64) error {
 	for post, err := range s.store.GetCurrentAndPreviousQOTDPosts(ctx, guildID, now) {
 		if err != nil {
 			return fmt.Errorf("Service.reconcileOfficialPostWindow: %w", err)
 		}
 		lifecycle := EvaluateOfficialPostWindow(post.PublishDateUTC, derefTime(post.PublishedAt), post.GraceUntil, post.ArchiveAt, now)
-		if err := s.syncLiveOfficialPost(ctx, session, post, lifecycle); err != nil {
+		if err := s.syncLiveOfficialPost(ctx, post, lifecycle); err != nil {
 			return fmt.Errorf("Service.reconcileOfficialPostWindow: %w", err)
 		}
 	}
@@ -27,7 +26,7 @@ func (s *Service) reconcileOfficialPostWindow(ctx context.Context, guildID strin
 		if post.GuildID != guildID || post.ID == currentOfficialPostID {
 			continue
 		}
-		if err := s.archiveOfficialPost(ctx, session, post, now.UTC()); err != nil {
+		if err := s.archiveOfficialPost(ctx, post, now.UTC()); err != nil {
 			return fmt.Errorf("Service.reconcileOfficialPostWindow: %w", err)
 		}
 	}

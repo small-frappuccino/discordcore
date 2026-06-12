@@ -8,10 +8,8 @@ import (
 	"strings"
 	"time"
 
-	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
-	"github.com/small-frappuccino/discordgo"
 )
 
 func isOfficialPostProvisioningComplete(post storage.QOTDOfficialPostRecord) bool {
@@ -58,7 +56,7 @@ type officialPostProvisioningParams struct {
 	Now                time.Time
 }
 
-func (s *Service) completeOfficialPostProvisioning(ctx context.Context, session *discordgo.Session, params officialPostProvisioningParams) (*storage.QOTDOfficialPostRecord, *storage.QOTDQuestionRecord, string, error) {
+func (s *Service) completeOfficialPostProvisioning(ctx context.Context, params officialPostProvisioningParams) (*storage.QOTDOfficialPostRecord, *storage.QOTDQuestionRecord, string, error) {
 	post := params.Post
 	question := params.Question
 	availableQuestions := params.AvailableQuestions
@@ -79,7 +77,7 @@ func (s *Service) completeOfficialPostProvisioning(ctx context.Context, session 
 		displayID = question.DisplayID
 	}
 
-	published, publishErr := s.publisher.PublishOfficialPost(ctx, session, discordqotd.PublishOfficialPostParams{
+	published, publishErr := s.publisher.PublishOfficialPost(ctx, PublishOfficialPostParams{
 		GuildID:                    post.GuildID,
 		OfficialPostID:             post.ID,
 		DisplayID:                  displayID,
@@ -148,7 +146,7 @@ func (s *Service) completeOfficialPostProvisioning(ctx context.Context, session 
 // persistPublishedProgress records the Discord IDs returned by a successful publish and,
 // when a question-list thread exists, upserts the corresponding surface. It returns the
 // progressed post record.
-func (s *Service) persistPublishedProgress(ctx context.Context, post storage.QOTDOfficialPostRecord, published *discordqotd.PublishedOfficialPost) (storage.QOTDOfficialPostRecord, error) {
+func (s *Service) persistPublishedProgress(ctx context.Context, post storage.QOTDOfficialPostRecord, published *PublishedOfficialPost) (storage.QOTDOfficialPostRecord, error) {
 	progress, err := s.store.UpdateQOTDOfficialPostProgress(ctx, post.ID, storage.QOTDOfficialPostRecord{
 		QuestionListThreadID:       published.QuestionListThreadID,
 		QuestionListEntryMessageID: published.QuestionListEntryMessageID,
@@ -258,7 +256,7 @@ func (s *Service) updateQuestionAfterPublish(ctx context.Context, question *stor
 	return updated, nil
 }
 
-func (s *Service) resumeOfficialPostProvisioning(ctx context.Context, session *discordgo.Session, post storage.QOTDOfficialPostRecord, now time.Time) (*PublishResult, error) {
+func (s *Service) resumeOfficialPostProvisioning(ctx context.Context, post storage.QOTDOfficialPostRecord, now time.Time) (*PublishResult, error) {
 	if isOfficialPostAbandoned(post) {
 		// Defensive guard: callers should already filter abandoned posts out.
 		// If we got here, return the post as-is so the caller can keep the
@@ -289,7 +287,7 @@ func (s *Service) resumeOfficialPostProvisioning(ctx context.Context, session *d
 	// that finalize will perform momentarily.
 	threadName := buildOfficialThreadName(displayNumber)
 
-	finalized, updatedQuestion, postURL, err := s.completeOfficialPostProvisioning(ctx, session, officialPostProvisioningParams{
+	finalized, updatedQuestion, postURL, err := s.completeOfficialPostProvisioning(ctx, officialPostProvisioningParams{
 		Post:               post,
 		Question:           question,
 		AvailableQuestions: availableQuestions,
@@ -310,22 +308,22 @@ func (s *Service) resumeOfficialPostProvisioning(ctx context.Context, session *d
 	return result, nil
 }
 
-func (s *Service) resumeOldestPendingOfficialPost(ctx context.Context, guildID string, session *discordgo.Session, now time.Time) (*PublishResult, error) {
+func (s *Service) resumeOldestPendingOfficialPost(ctx context.Context, guildID string, now time.Time) (*PublishResult, error) {
 	for post, err := range s.store.ListQOTDOfficialPostsPendingRecovery(ctx, guildID) {
 		if err != nil {
 			return nil, fmt.Errorf("Service.resumeOldestPendingOfficialPost: %w", err)
 		}
-		return s.resumeOfficialPostProvisioning(ctx, session, post, now)
+		return s.resumeOfficialPostProvisioning(ctx, post, now)
 	}
 	return nil, nil
 }
 
-func (s *Service) reconcilePendingOfficialPosts(ctx context.Context, guildID string, session *discordgo.Session, now time.Time) error {
+func (s *Service) reconcilePendingOfficialPosts(ctx context.Context, guildID string, now time.Time) error {
 	for post, err := range s.store.ListQOTDOfficialPostsPendingRecovery(ctx, guildID) {
 		if err != nil {
 			return fmt.Errorf("Service.reconcilePendingOfficialPosts: %w", err)
 		}
-		if _, err := s.resumeOfficialPostProvisioning(ctx, session, post, now); err != nil {
+		if _, err := s.resumeOfficialPostProvisioning(ctx, post, now); err != nil {
 			return fmt.Errorf("Service.reconcilePendingOfficialPosts: %w", err)
 		}
 	}

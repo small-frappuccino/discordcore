@@ -116,7 +116,7 @@ func TestInitRepairsMissingMemberJoinStateColumns(t *testing.T) {
 	var gotJoinedAt, gotLastSeen time.Time
 	var gotIsBot sql.NullBool
 	var gotLeftAt sql.NullTime
-	if err := store.db.QueryRow(context.Background(), 
+	if err := store.db.QueryRow(context.Background(),
 		`SELECT joined_at, last_seen_at, is_bot, left_at FROM member_joins WHERE guild_id = 'g1' AND user_id = 'u1'`,
 	).Scan(&gotJoinedAt, &gotLastSeen, &gotIsBot, &gotLeftAt); err != nil {
 		t.Fatalf("read repaired join row: %v", err)
@@ -344,7 +344,7 @@ func TestInsertMessageVersionsBatchContextPreservesExplicitVersions(t *testing.T
 	}
 
 	var lastVersion int
-	if err := store.db.QueryRow(context.Background(), 
+	if err := store.db.QueryRow(context.Background(),
 		`SELECT last_version FROM message_version_counters WHERE guild_id='g' AND message_id='m'`,
 	).Scan(&lastVersion); err != nil {
 		t.Fatalf("query version counter: %v", err)
@@ -419,7 +419,7 @@ func TestInsertMessageVersionBackfillsCounterFromHistoryWhenMissing(t *testing.T
 	store := newTempStore(t)
 
 	createdAt := time.Now().UTC().Add(-time.Minute)
-	if _, err := store.db.Exec(context.Background(), 
+	if _, err := store.db.Exec(context.Background(),
 		`INSERT INTO messages_history (guild_id, message_id, channel_id, author_id, version, event_type, content, attachments, embeds_count, stickers, created_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, 0, 0, 0, $8)`,
 		"g",
@@ -468,7 +468,7 @@ func TestInsertMessageVersionBackfillsCounterFromHistoryWhenMissing(t *testing.T
 	}
 
 	var lastVersion int
-	if err := store.db.QueryRow(context.Background(), 
+	if err := store.db.QueryRow(context.Background(),
 		`SELECT last_version FROM message_version_counters WHERE guild_id='g' AND message_id='m'`,
 	).Scan(&lastVersion); err != nil {
 		t.Fatalf("query version counter: %v", err)
@@ -491,7 +491,7 @@ func TestIncrementDailyMessageCountsContextAggregatesDeltas(t *testing.T) {
 	}
 
 	var count int
-	if err := store.db.QueryRow(context.Background(), 
+	if err := store.db.QueryRow(context.Background(),
 		`SELECT count FROM daily_message_metrics WHERE guild_id='g' AND channel_id='c' AND user_id='u' AND day='2026-03-19'`,
 	).Scan(&count); err != nil {
 		t.Fatalf("query aggregated count: %v", err)
@@ -500,7 +500,7 @@ func TestIncrementDailyMessageCountsContextAggregatesDeltas(t *testing.T) {
 		t.Fatalf("expected aggregated count 3, got %d", count)
 	}
 
-	if err := store.db.QueryRow(context.Background(), 
+	if err := store.db.QueryRow(context.Background(),
 		`SELECT count FROM daily_message_metrics WHERE guild_id='g' AND channel_id='c' AND user_id='v' AND day='2026-03-19'`,
 	).Scan(&count); err != nil {
 		t.Fatalf("query second bucket count: %v", err)
@@ -650,7 +650,7 @@ func TestUpsertGuildMemberSnapshotsContext_BatchesAvatarRolesAndJoins(t *testing
 
 	var historyCount int
 	var oldHash, newHash string
-	if err := store.db.QueryRow(context.Background(), 
+	if err := store.db.QueryRow(context.Background(),
 		`SELECT COUNT(*), COALESCE(MIN(old_hash), ''), COALESCE(MIN(new_hash), '') FROM avatars_history WHERE guild_id = $1 AND user_id = $2`,
 		guildID,
 		"u1",
@@ -824,7 +824,7 @@ func TestInsertMessageVersion_ConcurrentAutoVersioning(t *testing.T) {
 	}
 
 	var lastVersion int
-	if err := store.db.QueryRow(context.Background(), 
+	if err := store.db.QueryRow(context.Background(),
 		`SELECT last_version FROM message_version_counters WHERE guild_id='g' AND message_id='m'`,
 	).Scan(&lastVersion); err != nil {
 		t.Fatalf("query version counter: %v", err)
