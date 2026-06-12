@@ -282,6 +282,26 @@ func registerQOTDRuntimeService(runtime *botRuntime, opts botRuntimeOptions) err
 func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg *files.BotConfig, monitoringService *logging.MonitoringService) *service.LegacyServiceWrapper {
 	if !runtime.capabilities.HasCommands() {
 		logRuntimeCommandsSkipped(runtime, opts, cfg)
+
+		// If the bot has a valid token, we must still synchronize an empty command list to Discord.
+		// Otherwise, previously registered commands from an earlier capability assignment
+		// (or before registry sync existed) will remain perpetually cached in the guild or global scope.
+		if runtime.session != nil && runtime.session.Token != "" {
+			commandHandler := newCommandHandlerForBot(runtime.session, opts.configManager, runtime.instanceID, opts.defaultBotInstanceID)
+			return service.NewLegacyServiceWrapper(service.LegacyServiceWrapperSpec{
+				Name:         "commands-clear",
+				Type:         service.TypeCommands,
+				Priority:     service.PriorityHigh,
+				Dependencies: []string{},
+				Start: func(context.Context) error {
+					return setupCommandHandler(commandHandler)
+				},
+				Stop: func(context.Context) error {
+					return shutdownCommandHandler(commandHandler)
+				},
+				Check: func() bool { return true },
+			})
+		}
 		return nil
 	}
 

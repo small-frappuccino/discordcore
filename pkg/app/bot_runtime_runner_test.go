@@ -18,6 +18,7 @@ func TestInitializeBotRuntimeSkipsCommandHandlerWhenCommandsDisabled(t *testing.
 	if err != nil {
 		t.Fatalf("create discord session: %v", err)
 	}
+	session.Token = "" // clear it so we don't trigger the commands-clear cleanup logic
 
 	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 
