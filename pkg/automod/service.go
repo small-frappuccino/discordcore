@@ -2,80 +2,21 @@ package automod
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"log/slog"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/log"
-	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
 	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/task"
-	"github.com/small-frappuccino/discordcore/pkg/theme"
 	"github.com/small-frappuccino/discordgo"
 )
-
-// Discord AutoMod logging — per-action gateway behavior and coalescing
-//
-// Discord emits one AUTO_MODERATION_ACTION_EXECUTION gateway event per
-// *action* configured on a triggered rule, not one event per violation. A
-// member-profile rule with both Block Member Interactions and Send Alert
-// Message configured therefore fires TWO events for a single profile
-// violation, with the same rule_id, user_id, and matched_content but
-// different gateway sequence numbers and different Action.Type values.
-// Message rules with Block Message + Send Alert Message behave the same
-// way, sharing the blocked MessageID across actions.
-//
-// To match Discord's chat-side "one notice per violation" parity, this
-// package collapses the per-action stream through two layered defenses:
-//
-//   1. Per-violation idempotency key (task.AutomodIdempotencyKey): the key
-//      derives from per-violation fields (MessageID, MatchedContent,
-//      MatchedKeyword) and falls back to a 3-second (guild, rule, user)
-//      tbucket. Per-action fields (gateway sequence, AlertSystemMessageID)
-//      are excluded so multiple actions for one violation collide on the
-//      same key and the router drops the second arrival.
-//
-//   2. SEND_ALERT_MESSAGE handler filter (handleAutoModerationAction):
-//      events whose Action.Type is the alert action are dropped before any
-//      key is computed. Discord posts its own native rich alert message to
-//      the configured alert channel for these, so our embed would be
-//      redundant; the filter also guarantees we cannot accidentally emit a
-//      sibling embed if a future trigger type's payload shape breaks the
-//      key-level coalescing. Rules configured with ONLY Send Alert Message
-//      (no block action) therefore produce no embed on our side — Discord's
-//      native alert remains the staff-visible notice.
-//
-// The user-facing embed reports what was blocked (matched keyword +
-// offending fragment) and lets the description convey that the user has
-// been restricted, without duplicating one log line per action type.
-//
-//
-// Trigger types Discord can fire (see automodTrigger* constants):
-//
-//   1 Keyword            2 Harmful link       3 Spam
-//   4 Keyword preset     5 Mention spam       6 Member profile
-//
-// Action types Discord can fire (see automodAction* constants):
-//
-//   1 Block message      2 Send alert message
-//   3 Timeout            4 Block member interactions (quarantine)
 
 // automodActionExecutionEventType is the gateway event type Discord uses for
 // AutoMod action executions. Mirrored here so the raw *Event handler can
 // filter without importing the discordgo-internal constant.
 const automodActionExecutionEventType = "AUTO_MODERATION_ACTION_EXECUTION"
 
-// AutoModeration trigger types. discordgo v0.29.0 only exports constants up to
-// AutoModerationEventTriggerKeywordPreset (4); Discord also issues 5
-// (MENTION_SPAM) and 6 (MEMBER_PROFILE). MEMBER_PROFILE has no message context
-// (empty ChannelID and MessageID) and is what powers "Block Words in Member
-// Profile Names" rules.
+// AutoModeration trigger types.
 const (
 	automodTriggerKeyword       = 1
 	automodTriggerHarmfulLink   = 2
@@ -85,9 +26,7 @@ const (
 	automodTriggerMemberProfile = 6
 )
 
-// AutoModeration action types. discordgo v0.29.0 only exports 1..3; Discord
-// also issues 4 (BLOCK_MEMBER_INTERACTION, the "quarantine" applied to
-// MEMBER_PROFILE triggers).
+// AutoModeration action types.
 const (
 	automodActionBlockMessage           = 1
 	automodActionSendAlert              = 2
@@ -107,11 +46,17 @@ const automodFallbackDedupTTL = 10 * time.Second
 // before lazy cleanup runs.
 const automodFallbackDedupCleanupThreshold = 64
 
+// Notifier defines the interface for outbound moderation alerts.
+type Notifier interface {
+	Send(channelID string, embed *discordgo.MessageEmbed) error
+}
+
 // AutomodService listens for Discord native AutoMod executions and routes them to logging.
 type AutomodService struct {
 	session       *discordgo.Session
 	configManager *files.ConfigManager
 	adapters      *task.NotificationAdapters
+	notifier      Notifier
 	isRunning     bool
 	handlerCancel func()
 
@@ -122,8 +67,7 @@ type AutomodService struct {
 	defaultBotInstanceID string
 
 	// Fallback dedup cache
-	dedupMu    sync.Mutex
-	dedupCache map[string]time.Time
+	dedupCache *FallbackDedupCache
 }
 
 // NewAutomodService news automod service.
@@ -133,12 +77,18 @@ func NewAutomodService(session *discordgo.Session, configManager *files.ConfigMa
 		configManager:        configManager,
 		botInstanceID:        files.NormalizeBotInstanceID(botInstanceID),
 		defaultBotInstanceID: files.NormalizeBotInstanceID(defaultBotInstanceID),
+		dedupCache:           NewFallbackDedupCache(),
 	}
 }
 
 // SetAdapters allows wiring TaskRouter adapters for async notifications.
 func (as *AutomodService) SetAdapters(adapters *task.NotificationAdapters) {
 	as.adapters = adapters
+}
+
+// SetNotifier sets the outbound publisher.
+func (as *AutomodService) SetNotifier(notifier Notifier) {
+	as.notifier = notifier
 }
 
 // Name returns the service name.
@@ -199,8 +149,6 @@ func (as *AutomodService) Start(ctx context.Context) error {
 	as.isRunning = true
 	as.startTime = time.Now()
 
-	as.dedupCache = make(map[string]time.Time)
-
 	if as.session != nil {
 		as.handlerCancel = as.session.AddHandler(as.handleRawEvent)
 	}
@@ -224,307 +172,4 @@ func (as *AutomodService) Stop(ctx context.Context) error {
 	}
 	as.isRunning = false
 	return nil
-}
-
-// handleRawEvent decomposes a raw gateway envelope, filters for AutoMod action
-// executions, and forwards the typed payload alongside the envelope's gateway
-// sequence number to handleAutoModerationAction. The sequence is preserved
-// across Discord re-deliveries (including RESUME), so it is the most reliable
-// dedup key available to the bot.
-func (as *AutomodService) handleRawEvent(s *discordgo.Session, evt *discordgo.Event) {
-	if evt == nil || evt.Type != automodActionExecutionEventType {
-		return
-	}
-
-	e, ok := evt.Struct.(*discordgo.AutoModerationActionExecution)
-	if !ok || e == nil {
-		// discordgo guarantees registeredInterfaceProviders[evt.Type] populates
-		// evt.Struct before dispatch, but documents that the struct may be
-		// "partially populated or at default values" if unmarshalling failed
-		// (wsapi.go:665-669). Fall back to a fresh unmarshal of RawData so we
-		// don't silently drop events when discordgo changes the registered
-		// type — small cost, defends the future-bump path.
-		fallback := &discordgo.AutoModerationActionExecution{}
-		if err := json.Unmarshal(evt.RawData, fallback); err != nil {
-			log.ErrorLoggerRaw().Error("Failed to decode automod action execution payload", "type", evt.Type, "seq", evt.Sequence, "err", err)
-			return
-		}
-		e = fallback
-	}
-
-	as.handleAutoModerationAction(s, e, evt.Sequence)
-}
-
-// handleAutoModerationAction logs native AutoMod events to the configured
-// automod log channel. The sequence argument is the gateway sequence number
-// from the *Event envelope and is recorded for observability only; the
-// idempotency key is derived from per-violation payload fields so the
-// multiple action events Discord fires for one trigger coalesce to a single
-// log embed (see the package-level "AutoMod logging" comment block above).
-//
-// SEND_ALERT_MESSAGE action events are dropped here as a belt-and-suspenders
-// complement to the per-violation key: Discord posts its own native rich
-// alert message to the configured alert channel for those, and dropping
-// them at the handler guarantees no sibling embed leaks through even if a
-// future trigger type's payload shape breaks the key-level coalescing.
-func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *discordgo.AutoModerationActionExecution, sequence int64) {
-	if e == nil || e.GuildID == "" {
-		return
-	}
-
-	done := perf.StartGatewayEvent(
-		"auto_moderation_action_execution",
-		slog.String("guildID", e.GuildID),
-		slog.String("channelID", e.ChannelID),
-		slog.String("userID", e.UserID),
-		slog.String("ruleID", e.RuleID),
-		slog.Int64("seq", sequence),
-	)
-	defer done()
-
-	if int(e.Action.Type) == automodActionSendAlert {
-		log.ApplicationLogger().Debug("Dropping SEND_ALERT_MESSAGE automod event; Discord posts its own native alert", "guildID", e.GuildID, "ruleID", e.RuleID, "userID", e.UserID, "seq", sequence)
-		return
-	}
-
-	if as.configManager == nil {
-		return
-	}
-	guildConfig := as.configManager.GuildConfig(e.GuildID)
-	if guildConfig == nil {
-		return
-	}
-	if !guildConfig.BelongsToBotInstance(as.botInstanceID) {
-		return
-	}
-	resolvedID, _ := guildConfig.ResolveFeatureBotInstanceID("moderation", as.defaultBotInstanceID)
-	if resolvedID != as.botInstanceID {
-		return
-	}
-
-	emit := logpolicy.ShouldEmitLogEvent(s, as.configManager, logpolicy.LogEventAutomodAction, e.GuildID)
-	if !emit.Enabled {
-		log.ApplicationLogger().Debug("Automod action notification suppressed by policy", "guildID", e.GuildID, "channelID", e.ChannelID, "userID", e.UserID, "seq", sequence, "reason", emit.Reason)
-		return
-	}
-	logChannelID := emit.ChannelID
-	idempotencyKey := task.AutomodIdempotencyKey(e)
-
-	// If adapters are wired, enqueue via TaskRouter for retries/backoff
-	if as.adapters != nil {
-		if err := as.adapters.EnqueueAutomodActionWithKey(logChannelID, e, idempotencyKey); err != nil {
-			if errors.Is(err, task.ErrDuplicateTask) {
-				log.ApplicationLogger().Debug("Dropped duplicate automod log task", "guildID", e.GuildID, "channelID", logChannelID, "userID", e.UserID, "ruleID", e.RuleID, "seq", sequence, "messageID", e.MessageID, "alertSystemMessageID", e.AlertSystemMessageID)
-				return
-			}
-			log.ErrorLoggerRaw().Error("Failed to enqueue automod log task; falling back to synchronous send", "guildID", e.GuildID, "channelID", logChannelID, "userID", e.UserID, "seq", sequence, "err", err)
-		} else {
-			return
-		}
-	}
-
-	// Synchronous fallback (adapters nil or router enqueue failed). Apply an
-	// in-process dedup so Gateway re-deliveries do not duplicate the embed.
-	if as.fallbackShouldDedup(idempotencyKey) {
-		log.ApplicationLogger().Debug("Dropped duplicate automod log task on fallback path", "guildID", e.GuildID, "channelID", logChannelID, "userID", e.UserID, "ruleID", e.RuleID, "seq", sequence)
-		return
-	}
-
-	embed := BuildAutomodEmbed(e)
-	if _, err := s.ChannelMessageSendEmbed(logChannelID, embed); err != nil {
-		log.ErrorLoggerRaw().Error("Failed to send native automod log message", "guildID", e.GuildID, "channelID", logChannelID, "userID", e.UserID, "seq", sequence, "err", err)
-	}
-}
-
-// fallbackShouldDedup reports whether key was seen within automodFallbackDedupTTL.
-// Empty keys never dedup (no stable identifier available).
-func (as *AutomodService) fallbackShouldDedup(key string) bool {
-	return as.fallbackShouldDedupAt(key, time.Now())
-}
-
-func (as *AutomodService) fallbackShouldDedupAt(key string, now time.Time) bool {
-	if !as.isRunning || key == "" {
-		return false
-	}
-
-	as.dedupMu.Lock()
-	defer as.dedupMu.Unlock()
-
-	if as.dedupCache == nil {
-		as.dedupCache = make(map[string]time.Time)
-	}
-
-	if len(as.dedupCache) > automodFallbackDedupCleanupThreshold {
-		for k, expiry := range as.dedupCache {
-			if now.After(expiry) {
-				delete(as.dedupCache, k)
-			}
-		}
-	}
-
-	if expiry, exists := as.dedupCache[key]; exists && now.Before(expiry) {
-		return true
-	}
-
-	as.dedupCache[key] = now.Add(automodFallbackDedupTTL)
-	return false
-}
-
-// BuildAutomodEmbed dispatches to the trigger-specific embed builder.
-// MEMBER_PROFILE events have no message context and get a distinct embed; all
-// other triggers reuse the message-keyword shape.
-func BuildAutomodEmbed(e *discordgo.AutoModerationActionExecution) *discordgo.MessageEmbed {
-	if int(e.RuleTriggerType) == automodTriggerMemberProfile {
-		return buildAutomodMemberProfileEmbed(e)
-	}
-	return buildAutomodMessageEmbed(e)
-}
-
-func buildAutomodMessageEmbed(e *discordgo.AutoModerationActionExecution) *discordgo.MessageEmbed {
-	desc := "Blocked content detected in a message."
-	if e.GuildID != "" && e.ChannelID != "" && e.MessageID != "" {
-		desc += "\n[Jump to message](https://discord.com/channels/" + e.GuildID + "/" + e.ChannelID + "/" + e.MessageID + ")"
-	}
-	embed := &discordgo.MessageEmbed{
-		Title:       "AutoMod • Message Blocked",
-		Description: desc,
-		Color:       theme.AutomodAction(),
-		Timestamp:   time.Now().Format(time.RFC3339),
-		Fields: []*discordgo.MessageEmbedField{
-			{Name: "User", Value: formatUserRef(e.UserID), Inline: true},
-			{Name: "Channel", Value: automodChannelLabel(e.ChannelID), Inline: true},
-		},
-	}
-	if label := automodTriggerLabel(e.RuleTriggerType); label != "" {
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Trigger", Value: label, Inline: true})
-	}
-	if e.RuleID != "" {
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Rule ID", Value: "`" + e.RuleID + "`", Inline: true})
-	}
-	if e.MatchedKeyword != "" {
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Matched keyword", Value: "`" + e.MatchedKeyword + "`", Inline: true})
-	}
-	if excerpt := automodExcerpt(e); excerpt != "" {
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Excerpt", Value: "```" + excerpt + "```", Inline: false})
-	}
-	return embed
-}
-
-func buildAutomodMemberProfileEmbed(e *discordgo.AutoModerationActionExecution) *discordgo.MessageEmbed {
-	// The per-action Action.Type is intentionally not surfaced on the
-	// embed: the package-level coalescing collapses Block Member
-	// Interactions + Send Alert Message into a single embed per violation,
-	// and "user is quarantined" is already conveyed by the description.
-	embed := &discordgo.MessageEmbed{
-		Title:       "AutoMod • Member Profile Quarantined",
-		Description: "Blocked words detected in this member's profile. The user is quarantined until the profile is updated.",
-		Color:       theme.AutomodAction(),
-		Timestamp:   time.Now().Format(time.RFC3339),
-		Fields: []*discordgo.MessageEmbedField{
-			{Name: "Member", Value: formatUserRef(e.UserID), Inline: true},
-			{Name: "Trigger", Value: "Member profile", Inline: true},
-		},
-	}
-	if e.RuleID != "" {
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Rule ID", Value: "`" + e.RuleID + "`", Inline: true})
-	}
-	if e.MatchedKeyword != "" {
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Matched keyword", Value: "`" + e.MatchedKeyword + "`", Inline: true})
-	}
-	if excerpt := automodExcerpt(e); excerpt != "" {
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Offending fragment", Value: "```" + excerpt + "```", Inline: false})
-	}
-	return embed
-}
-
-func automodTriggerLabel(t discordgo.AutoModerationRuleTriggerType) string {
-	switch int(t) {
-	case automodTriggerKeyword:
-		return "Keyword"
-	case automodTriggerHarmfulLink:
-		return "Harmful link"
-	case automodTriggerSpam:
-		return "Spam"
-	case automodTriggerKeywordPreset:
-		return "Keyword preset"
-	case automodTriggerMentionSpam:
-		return "Mention spam"
-	case automodTriggerMemberProfile:
-		return "Member profile"
-	}
-	return ""
-}
-
-// automodActionLabel returns a human-readable label for a Discord AutoMod
-// action type. The standard embed builders deliberately do not
-// surface this label because the per-action stream is coalesced into one
-// embed per violation. See the package-level "AutoMod logging" comment block.
-func automodActionLabel(t discordgo.AutoModerationActionType) string {
-	switch int(t) {
-	case automodActionBlockMessage:
-		return "Block message"
-	case automodActionSendAlert:
-		return "Send alert"
-	case automodActionTimeout:
-		return "Timeout"
-	case automodActionBlockMemberInteraction:
-		return "Block member interactions"
-	}
-	return ""
-}
-
-func automodChannelLabel(channelID string) string {
-	if strings.TrimSpace(channelID) == "" {
-		return "Unknown"
-	}
-	return formatChannelLabel(channelID)
-}
-
-func automodExcerpt(e *discordgo.AutoModerationActionExecution) string {
-	content := strings.TrimSpace(e.Content)
-	if content == "" {
-		content = strings.TrimSpace(e.MatchedContent)
-	}
-	if content == "" {
-		return ""
-	}
-	if len(content) > automodExcerptMaxLen {
-		content = content[:automodExcerptMaxLen] + "..."
-	}
-	return sanitizeForCodeBlock(content)
-}
-
-// sanitizeForCodeBlock prevents breaking out of the code fence and removes backticks.
-func sanitizeForCodeBlock(input string) string {
-	// Replace backticks and normalize newlines for safer preview in a code block
-	s := strings.ReplaceAll(input, "`", "'")
-	// Discord code blocks tolerate newlines; keep them but trim excessive whitespace
-	return strings.TrimSpace(s)
-}
-
-func formatUserLabel(username, userID string) string {
-	userID = strings.TrimSpace(userID)
-	username = strings.TrimSpace(username)
-	if userID == "" {
-		if username != "" {
-			return "**" + username + "**"
-		}
-		return "Unknown"
-	}
-	if username == "" {
-		return "<@" + userID + "> (`" + userID + "`)"
-	}
-	return fmt.Sprintf("**%s** (<@%s>, `%s`)", username, userID, userID)
-}
-
-func formatUserRef(userID string) string {
-	return formatUserLabel("", userID)
-}
-
-func formatChannelLabel(channelID string) string {
-	channelID = strings.TrimSpace(channelID)
-	if channelID == "" {
-		return "Unknown"
-	}
-	return "<#" + channelID + ">, `" + channelID + "`"
 }
