@@ -7,6 +7,7 @@ import (
 
 	"github.com/small-frappuccino/discordgo"
 
+	"github.com/small-frappuccino/discordcore/pkg/automod"
 	"github.com/small-frappuccino/discordcore/pkg/clock"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
@@ -194,7 +195,7 @@ func buildAutomodService(runtime *botRuntime, opts botRuntimeOptions, routerConf
 		return nil
 	}
 
-	automodService := logging.NewAutomodService(runtime.session, opts.configManager, runtime.instanceID, "")
+	automodService := automod.NewAutomodService(runtime.session, opts.configManager, runtime.instanceID, "")
 	automodRouter := task.NewRouter(routerConfig)
 	notifier := logging.NewNotificationSender(runtime.session, log.DiscordLogger())
 	if monitoringService != nil {

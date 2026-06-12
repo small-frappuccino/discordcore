@@ -1,9 +1,10 @@
-package logging
+package automod
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
@@ -329,7 +330,7 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 		return
 	}
 
-	embed := buildAutomodEmbed(e)
+	embed := BuildAutomodEmbed(e)
 	if _, err := s.ChannelMessageSendEmbed(logChannelID, embed); err != nil {
 		log.ErrorLoggerRaw().Error("Failed to send native automod log message", "guildID", e.GuildID, "channelID", logChannelID, "userID", e.UserID, "seq", sequence, "err", err)
 	}
@@ -369,10 +370,10 @@ func (as *AutomodService) fallbackShouldDedupAt(key string, now time.Time) bool 
 	return false
 }
 
-// buildAutomodEmbed dispatches to the trigger-specific embed builder.
+// BuildAutomodEmbed dispatches to the trigger-specific embed builder.
 // MEMBER_PROFILE events have no message context and get a distinct embed; all
 // other triggers reuse the message-keyword shape.
-func buildAutomodEmbed(e *discordgo.AutoModerationActionExecution) *discordgo.MessageEmbed {
+func BuildAutomodEmbed(e *discordgo.AutoModerationActionExecution) *discordgo.MessageEmbed {
 	if int(e.RuleTriggerType) == automodTriggerMemberProfile {
 		return buildAutomodMemberProfileEmbed(e)
 	}
@@ -499,4 +500,31 @@ func sanitizeForCodeBlock(input string) string {
 	s := strings.ReplaceAll(input, "`", "'")
 	// Discord code blocks tolerate newlines; keep them but trim excessive whitespace
 	return strings.TrimSpace(s)
+}
+
+func formatUserLabel(username, userID string) string {
+	userID = strings.TrimSpace(userID)
+	username = strings.TrimSpace(username)
+	if userID == "" {
+		if username != "" {
+			return "**" + username + "**"
+		}
+		return "Unknown"
+	}
+	if username == "" {
+		return "<@" + userID + "> (`" + userID + "`)"
+	}
+	return fmt.Sprintf("**%s** (<@%s>, `%s`)", username, userID, userID)
+}
+
+func formatUserRef(userID string) string {
+	return formatUserLabel("", userID)
+}
+
+func formatChannelLabel(channelID string) string {
+	channelID = strings.TrimSpace(channelID)
+	if channelID == "" {
+		return "Unknown"
+	}
+	return "<#" + channelID + ">, `" + channelID + "`"
 }

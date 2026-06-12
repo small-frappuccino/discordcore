@@ -1,4 +1,4 @@
-package logging
+package automod
 
 import (
 	"strings"
@@ -19,7 +19,7 @@ func findField(fields []*discordgo.MessageEmbedField, name string) *discordgo.Me
 func TestBuildAutomodEmbed_MemberProfile_OmitsChannelField(t *testing.T) {
 	t.Parallel()
 
-	embed := buildAutomodEmbed(&discordgo.AutoModerationActionExecution{
+	embed := BuildAutomodEmbed(&discordgo.AutoModerationActionExecution{
 		GuildID:         "g1",
 		RuleID:          "r1",
 		UserID:          "u1",
@@ -55,7 +55,7 @@ func TestBuildAutomodEmbed_MemberProfile_OmitsChannelField(t *testing.T) {
 func TestBuildAutomodEmbed_Message_IncludesChannelAndJumpLink(t *testing.T) {
 	t.Parallel()
 
-	embed := buildAutomodEmbed(&discordgo.AutoModerationActionExecution{
+	embed := BuildAutomodEmbed(&discordgo.AutoModerationActionExecution{
 		GuildID:         "g1",
 		ChannelID:       "c1",
 		MessageID:       "m1",
@@ -85,7 +85,7 @@ func TestBuildAutomodEmbed_Message_IncludesChannelAndJumpLink(t *testing.T) {
 func TestBuildAutomodEmbed_Message_NoJumpLinkWhenMessageIDMissing(t *testing.T) {
 	t.Parallel()
 
-	embed := buildAutomodEmbed(&discordgo.AutoModerationActionExecution{
+	embed := BuildAutomodEmbed(&discordgo.AutoModerationActionExecution{
 		GuildID:         "g1",
 		ChannelID:       "c1",
 		RuleID:          "r1",
@@ -100,7 +100,7 @@ func TestBuildAutomodEmbed_Message_NoJumpLinkWhenMessageIDMissing(t *testing.T) 
 func TestBuildAutomodEmbed_OmitsEmptyOptionalFields(t *testing.T) {
 	t.Parallel()
 
-	embed := buildAutomodEmbed(&discordgo.AutoModerationActionExecution{
+	embed := BuildAutomodEmbed(&discordgo.AutoModerationActionExecution{
 		GuildID:         "g1",
 		RuleID:          "",
 		UserID:          "u1",
@@ -121,7 +121,7 @@ func TestBuildAutomodEmbed_TruncatesLongExcerpt(t *testing.T) {
 	t.Parallel()
 
 	long := strings.Repeat("x", automodExcerptMaxLen+50)
-	embed := buildAutomodEmbed(&discordgo.AutoModerationActionExecution{
+	embed := BuildAutomodEmbed(&discordgo.AutoModerationActionExecution{
 		GuildID:         "g1",
 		ChannelID:       "c1",
 		RuleID:          "r1",

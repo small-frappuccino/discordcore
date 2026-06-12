@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/small-frappuccino/discordcore/pkg/automod"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/task"
 
@@ -639,6 +640,6 @@ func (ns *NotificationSender) SendAutomodActionNotification(channelID string, e 
 	if e == nil || channelID == "" {
 		return nil
 	}
-	_, err := ns.session.ChannelMessageSendEmbed(channelID, buildAutomodEmbed(e))
+	_, err := ns.session.ChannelMessageSendEmbed(channelID, automod.BuildAutomodEmbed(e))
 	return err
 }

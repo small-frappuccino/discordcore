@@ -48,6 +48,7 @@ flowchart TD
     Partners["pkg/partners"]
     Tickets["pkg/tickets"]
     Stats["pkg/stats"]
+    Automod["pkg/automod"]
     
     %% Core Domain
     Files["pkg/files (Config & State)"]
@@ -92,6 +93,7 @@ flowchart TD
     App --> RPC
     App --> Service
     App --> Stats
+    App --> Automod
     
     %% Additional Adapter Connections
     App --> Webhook
@@ -134,7 +136,15 @@ flowchart TD
     
     %% Discord Domain to Adapters
     AdapterQOTD --> QOTD
+    AdapterQOTD --> Files
+    AdapterQOTD --> Storage
+    AdapterQOTD --> Log
+    AdapterQOTD --> Clock
+    AdapterQOTD --> Service
+    
     AdapterTickets --> Tickets
+    AdapterTickets --> Commands
+    AdapterTickets --> Storage
     
     %% The Monolith and Adapters
     Logging --> Files
@@ -156,6 +166,7 @@ flowchart TD
     Tickets --> Files
     Stats --> Files
     Stats --> Storage
+    Automod --> Files
     
     Persistence --> Storage
     RuntimeApply --> Files
@@ -170,7 +181,7 @@ flowchart TD
     
     class Files,Storage,Persistence,RuntimeApply core;
     class Control,Task,RPC,Commands,Logging,Cache,Session,DualSDK,Webhook,Perf,Cleanup,Maintenance,MessageUpdate,AdapterQOTD,AdapterTickets adapter;
-    class QOTD,Roles,Embeds,Partners,Tickets,Stats feature;
+    class QOTD,Roles,Embeds,Partners,Tickets,Stats,Automod feature;
     class Service,Log,LogPolicy,Observability,Clock,Theme,TestDB infra;
     class DiscordGo,Arikawa,DiscordAPI,DiscordGateway external;
     class UI ui;
@@ -182,6 +193,6 @@ flowchart TD
 - **Bootstrapper (`pkg/app`)**: The glue that connects the configuration, the database, and the discord sessions together into a runnable state.
 - **Discord Adapters (`pkg/discord/*`)**: Connects Discord SDK behavior (e.g., DiscordGo commands, events, caching) into the core bot systems.
 - **Control & Background Tasks (`pkg/control`, `pkg/task`)**: Orchestrates HTTP APIs for the dashboard and scheduled tasks independent of Discord gateway events.
-- **Vertical Features**: Domain-specific logic encapsulating behavior like `QOTD`, `Tickets`, `Partners`, etc.
+- **Vertical Features**: Domain-specific logic encapsulating behavior like `QOTD`, `Partners`, etc.
 - **Core Domain (`pkg/files`, `pkg/storage`)**: The foundational data layers, modeling the application's configuration state and Postgres persistence.
 - **Infrastructure**: Foundational utilities such as structured logging, lifecycle management, and observability hooks.
