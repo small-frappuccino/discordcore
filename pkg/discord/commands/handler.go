@@ -13,8 +13,11 @@ import (
 	qotdcmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
 	"github.com/small-frappuccino/discordcore/pkg/discord/tickets"
+	"github.com/small-frappuccino/discordcore/pkg/embeds"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/partners"
+	"github.com/small-frappuccino/discordcore/pkg/roles"
 	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordgo"
 )
@@ -32,6 +35,9 @@ type CommandHandler struct {
 	moderationMetrics   moderation.Metrics
 	adminServiceManager *service.ServiceManager
 	ticketService       *tickets.TicketService
+	embedService        *embeds.EmbedService
+	rolePanelService    *roles.RolePanelService
+	partnerService      *partners.PartnerService
 
 	mu           sync.RWMutex
 	running      bool
@@ -164,6 +170,10 @@ func (ch *CommandHandler) SetupCommands() error {
 
 	// Create the command manager
 	ch.commandManager = core.NewCommandManager(ch.session, ch.configManager)
+	ch.embedService = embeds.NewEmbedService(ch.configManager)
+	ch.rolePanelService = roles.NewRolePanelService(ch.configManager)
+	ch.partnerService = partners.NewPartnerService(ch.configManager)
+
 	if router := ch.commandManager.GetRouter(); router != nil {
 		router.SetGuildRouteFilter(ch.handlesGuildRoute)
 	}

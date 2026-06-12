@@ -7,16 +7,18 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	partnersvc "github.com/small-frappuccino/discordcore/pkg/partners"
 	"github.com/small-frappuccino/discordgo"
 )
 
 // --- Post ---
 type partnerPostSubCommand struct {
-	configManager *files.ConfigManager
+	configManager  *files.ConfigManager
+	partnerService *partnersvc.PartnerService
 }
 
-func newPartnerPostSubCommand(cm *files.ConfigManager) *partnerPostSubCommand {
-	return &partnerPostSubCommand{configManager: cm}
+func newPartnerPostSubCommand(cm *files.ConfigManager, s *partnersvc.PartnerService) *partnerPostSubCommand {
+	return &partnerPostSubCommand{configManager: cm, partnerService: s}
 }
 
 // Name names.
@@ -65,16 +67,16 @@ func (c *partnerPostSubCommand) Handle(ctx *core.Context) error {
 	}
 
 	boardCfg := cfg.PartnerBoard
-	var partners []PartnerRecord
+	var partners []partnersvc.PartnerRecord
 	for _, p := range boardCfg.Partners {
-		partners = append(partners, PartnerRecord{
+		partners = append(partners, partnersvc.PartnerRecord{
 			Fandom: p.Fandom,
 			Name:   p.Name,
 			Link:   p.Link,
 		})
 	}
 
-	template := PartnerBoardTemplate{
+	template := partnersvc.PartnerBoardTemplate{
 		Title:                      boardCfg.Template.Title,
 		ContinuationTitle:          boardCfg.Template.ContinuationTitle,
 		Intro:                      boardCfg.Template.Intro,
@@ -90,8 +92,7 @@ func (c *partnerPostSubCommand) Handle(ctx *core.Context) error {
 		DisablePartnerSorting:      boardCfg.Template.DisablePartnerSorting,
 	}
 
-	renderer := NewBoardRenderer()
-	embeds, err := renderer.Render(template, partners)
+	embeds, err := c.partnerService.Render(template, partners)
 	if err != nil || len(embeds) == 0 {
 		return partnerDetailedCommandError(fmt.Sprintf("Failed to render partner board: %v", err))
 	}

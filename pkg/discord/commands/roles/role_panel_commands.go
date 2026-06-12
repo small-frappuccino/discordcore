@@ -20,6 +20,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	rolesvc "github.com/small-frappuccino/discordcore/pkg/roles"
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -72,15 +73,15 @@ const (
 
 // RolePanelCommands wires the /roles command tree into the router.
 type RolePanelCommands struct {
-	configManager *files.ConfigManager
-	syncer        *rolePanelPostingSyncer
+	configManager    *files.ConfigManager
+	rolePanelService *rolesvc.RolePanelService
 }
 
 // NewRolePanelCommands builds the command bundle.
-func NewRolePanelCommands(configManager *files.ConfigManager) *RolePanelCommands {
+func NewRolePanelCommands(configManager *files.ConfigManager, svc *rolesvc.RolePanelService) *RolePanelCommands {
 	return &RolePanelCommands{
-		configManager: configManager,
-		syncer:        newRolePanelPostingSyncer(configManager),
+		configManager:    configManager,
+		rolePanelService: svc,
 	}
 }
 
@@ -100,15 +101,15 @@ func (rc *RolePanelCommands) RegisterCommands(router *core.CommandRouter) {
 		"Manage self-service role panels for this server",
 		checker,
 	)
-	rolesGroup.AddSubCommand(newRolePanelPostSubCommand(rc.configManager))
-	rolesGroup.AddSubCommand(newRolePanelPreviewSubCommand(rc.configManager))
-	rolesGroup.AddSubCommand(newRolePanelSetSubCommand(rc.configManager, rc.syncer))
-	rolesGroup.AddSubCommand(newRolePanelDeleteSubCommand(rc.configManager, rc.syncer))
+	rolesGroup.AddSubCommand(newRolePanelPostSubCommand(rc.configManager, rc.rolePanelService))
+	rolesGroup.AddSubCommand(newRolePanelPreviewSubCommand(rc.configManager, rc.rolePanelService))
+	rolesGroup.AddSubCommand(newRolePanelSetSubCommand(rc.configManager, rc.rolePanelService))
+	rolesGroup.AddSubCommand(newRolePanelDeleteSubCommand(rc.configManager, rc.rolePanelService))
 	rolesGroup.AddSubCommand(newRolePanelListSubCommand(rc.configManager))
-	rolesGroup.AddSubCommand(newRolePanelRefreshSubCommand(rc.configManager, rc.syncer))
-	rolesGroup.AddSubCommand(newRolePanelUnpostSubCommand(rc.configManager, rc.syncer))
+	rolesGroup.AddSubCommand(newRolePanelRefreshSubCommand(rc.configManager, rc.rolePanelService))
+	rolesGroup.AddSubCommand(newRolePanelUnpostSubCommand(rc.configManager, rc.rolePanelService))
 	rolesGroup.AddSubCommand(newRolePanelToggleSubCommand(rc.configManager))
-	rolesGroup.AddSubCommand(newRolePanelImportSubCommand(rc.configManager, rc.syncer))
+	rolesGroup.AddSubCommand(newRolePanelImportSubCommand(rc.configManager, rc.rolePanelService))
 	rolesGroup.AddSubCommand(newRolePanelExportSubCommand(rc.configManager))
 
 	buttonGroup := core.NewGroupCommand(
@@ -116,8 +117,8 @@ func (rc *RolePanelCommands) RegisterCommands(router *core.CommandRouter) {
 		"Manage the buttons on one role panel",
 		checker,
 	)
-	buttonGroup.AddSubCommand(newRolePanelButtonAddSubCommand(rc.configManager, rc.syncer))
-	buttonGroup.AddSubCommand(newRolePanelButtonRemoveSubCommand(rc.configManager, rc.syncer))
+	buttonGroup.AddSubCommand(newRolePanelButtonAddSubCommand(rc.configManager, rc.rolePanelService))
+	buttonGroup.AddSubCommand(newRolePanelButtonRemoveSubCommand(rc.configManager, rc.rolePanelService))
 	buttonGroup.AddSubCommand(newRolePanelButtonListSubCommand(rc.configManager))
 	rolesGroup.AddSubCommand(buttonGroup)
 
@@ -126,15 +127,15 @@ func (rc *RolePanelCommands) RegisterCommands(router *core.CommandRouter) {
 		"Manage the fields on one role panel embed",
 		checker,
 	)
-	fieldGroup.AddSubCommand(newRolePanelFieldAddSubCommand(rc.configManager, rc.syncer))
-	fieldGroup.AddSubCommand(newRolePanelFieldRemoveSubCommand(rc.configManager, rc.syncer))
+	fieldGroup.AddSubCommand(newRolePanelFieldAddSubCommand(rc.configManager, rc.rolePanelService))
+	fieldGroup.AddSubCommand(newRolePanelFieldRemoveSubCommand(rc.configManager, rc.rolePanelService))
 	fieldGroup.AddSubCommand(newRolePanelFieldListSubCommand(rc.configManager))
 	rolesGroup.AddSubCommand(fieldGroup)
 
 	router.RegisterSlashCommand(rolesGroup)
 
 	router.RegisterInteractionRoutes(core.InteractionRouteBinding{
-		Path:      rolePanelComponentRouteID,
+		Path:      rolesvc.RolePanelComponentRouteID,
 		Component: newRolePanelComponentHandler(rc.configManager),
 		AckPolicy: core.InteractionAckPolicy{
 			Mode:      core.InteractionAckModeNone,
@@ -146,11 +147,12 @@ func (rc *RolePanelCommands) RegisterCommands(router *core.CommandRouter) {
 // --- Leaf subcommands: /roles post|preview|set|delete|list ---
 
 type rolePanelPostSubCommand struct {
-	configManager *files.ConfigManager
+	configManager    *files.ConfigManager
+	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelPostSubCommand(cm *files.ConfigManager) *rolePanelPostSubCommand {
-	return &rolePanelPostSubCommand{configManager: cm}
+func newRolePanelPostSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelPostSubCommand {
+	return &rolePanelPostSubCommand{configManager: cm, rolePanelService: svc}
 }
 
 // Name names.
@@ -200,8 +202,8 @@ func (c *rolePanelPostSubCommand) Handle(ctx *core.Context) error {
 		return rolePanelDetailedCommandError(fmt.Sprintf("Panel `%s` has no buttons configured yet. Add at least one with /roles button add.", panel.Key))
 	}
 
-	embed := renderRolePanelEmbed(panel)
-	components := renderRolePanelComponents(panel)
+	embed := c.rolePanelService.RenderEmbed(&panel)
+	components := c.rolePanelService.RenderComponents(&panel)
 
 	var messageID, channelID, webhookID, webhookToken string
 	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
@@ -303,11 +305,12 @@ func (c *rolePanelPostSubCommand) Handle(ctx *core.Context) error {
 }
 
 type rolePanelPreviewSubCommand struct {
-	configManager *files.ConfigManager
+	configManager    *files.ConfigManager
+	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelPreviewSubCommand(cm *files.ConfigManager) *rolePanelPreviewSubCommand {
-	return &rolePanelPreviewSubCommand{configManager: cm}
+func newRolePanelPreviewSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelPreviewSubCommand {
+	return &rolePanelPreviewSubCommand{configManager: cm, rolePanelService: svc}
 }
 
 // Name names.
@@ -351,20 +354,20 @@ func (c *rolePanelPreviewSubCommand) Handle(ctx *core.Context) error {
 		return fmt.Errorf("rolePanelPreviewSubCommand.Handle: %w", err)
 	}
 
-	embed := renderRolePanelEmbed(panel)
-	components := renderRolePanelComponents(panel)
+	embed := c.rolePanelService.RenderEmbed(&panel)
+	components := c.rolePanelService.RenderComponents(&panel)
 
 	rm := rolePanelPreviewResponseBuilder(ctx.Session).WithComponents(components...).Build()
 	return rm.Custom(ctx.Interaction, "", []*discordgo.MessageEmbed{embed})
 }
 
 type rolePanelSetSubCommand struct {
-	configManager *files.ConfigManager
-	syncer        *rolePanelPostingSyncer
+	configManager    *files.ConfigManager
+	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelSetSubCommand(cm *files.ConfigManager, syncer *rolePanelPostingSyncer) *rolePanelSetSubCommand {
-	return &rolePanelSetSubCommand{configManager: cm, syncer: syncer}
+func newRolePanelSetSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelSetSubCommand {
+	return &rolePanelSetSubCommand{configManager: cm, rolePanelService: svc}
 }
 
 // Name names.
@@ -454,7 +457,7 @@ func (c *rolePanelSetSubCommand) Handle(ctx *core.Context) error {
 		return rolePanelDetailedCommandError(fmt.Sprintf("Failed to update panel `%s`: %v", key, err))
 	}
 
-	syncNote := refreshRolePanelPostingsBestEffort(c.configManager, c.syncer, ctx, key)
+	syncNote := refreshRolePanelPostingsBestEffort(c.configManager, c.rolePanelService, ctx, key)
 	return rolePanelConfigurationResponseBuilder(ctx.Session).Success(
 		ctx.Interaction,
 		fmt.Sprintf("Panel `%s` embed settings were updated.%s", key, syncNote),
@@ -462,12 +465,12 @@ func (c *rolePanelSetSubCommand) Handle(ctx *core.Context) error {
 }
 
 type rolePanelDeleteSubCommand struct {
-	configManager *files.ConfigManager
-	syncer        *rolePanelPostingSyncer
+	configManager    *files.ConfigManager
+	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelDeleteSubCommand(cm *files.ConfigManager, syncer *rolePanelPostingSyncer) *rolePanelDeleteSubCommand {
-	return &rolePanelDeleteSubCommand{configManager: cm, syncer: syncer}
+func newRolePanelDeleteSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelDeleteSubCommand {
+	return &rolePanelDeleteSubCommand{configManager: cm, rolePanelService: svc}
 }
 
 // Name names.
@@ -517,8 +520,8 @@ func (c *rolePanelDeleteSubCommand) Handle(ctx *core.Context) error {
 
 	syncNote := ""
 	if len(panel.Postings) > 0 {
-		result := c.syncer.Sync(rolePanelSyncRequest{Session: ctx.Session, GuildID: ctx.GuildID, Key: panel.Key, Postings: panel.Postings, Embed: renderRolePanelEmbed(panel)})
-		if summary := formatRolePanelSyncSummary(result, "Stripped buttons from"); summary != "" {
+		syncResult := c.rolePanelService.Sync(ctx.Session, ctx.GuildID, key, panel.Postings, &panel)
+		if summary := c.rolePanelService.FormatSyncSummary(syncResult, "Stripped buttons from"); summary != "" {
 			syncNote = "\n" + summary
 		}
 	}
@@ -588,12 +591,12 @@ func (c *rolePanelListSubCommand) Handle(ctx *core.Context) error {
 // --- Subgroup: /roles button add|remove|list ---
 
 type rolePanelButtonAddSubCommand struct {
-	configManager *files.ConfigManager
-	syncer        *rolePanelPostingSyncer
+	configManager    *files.ConfigManager
+	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelButtonAddSubCommand(cm *files.ConfigManager, syncer *rolePanelPostingSyncer) *rolePanelButtonAddSubCommand {
-	return &rolePanelButtonAddSubCommand{configManager: cm, syncer: syncer}
+func newRolePanelButtonAddSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelButtonAddSubCommand {
+	return &rolePanelButtonAddSubCommand{configManager: cm, rolePanelService: svc}
 }
 
 // Name names.
@@ -664,7 +667,7 @@ func (c *rolePanelButtonAddSubCommand) Handle(ctx *core.Context) error {
 	if err := c.configManager.UpsertRolePanelButton(ctx.GuildID, key, button); err != nil {
 		return rolePanelDetailedCommandError(fmt.Sprintf("Failed to save button: %v", err))
 	}
-	syncNote := refreshRolePanelPostingsBestEffort(c.configManager, c.syncer, ctx, key)
+	syncNote := refreshRolePanelPostingsBestEffort(c.configManager, c.rolePanelService, ctx, key)
 	return rolePanelConfigurationResponseBuilder(ctx.Session).Success(
 		ctx.Interaction,
 		fmt.Sprintf("Button for <@&%s> was saved on panel `%s`.%s", roleID, key, syncNote),
@@ -672,12 +675,12 @@ func (c *rolePanelButtonAddSubCommand) Handle(ctx *core.Context) error {
 }
 
 type rolePanelButtonRemoveSubCommand struct {
-	configManager *files.ConfigManager
-	syncer        *rolePanelPostingSyncer
+	configManager    *files.ConfigManager
+	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelButtonRemoveSubCommand(cm *files.ConfigManager, syncer *rolePanelPostingSyncer) *rolePanelButtonRemoveSubCommand {
-	return &rolePanelButtonRemoveSubCommand{configManager: cm, syncer: syncer}
+func newRolePanelButtonRemoveSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelButtonRemoveSubCommand {
+	return &rolePanelButtonRemoveSubCommand{configManager: cm, rolePanelService: svc}
 }
 
 // Name names.
@@ -733,7 +736,7 @@ func (c *rolePanelButtonRemoveSubCommand) Handle(ctx *core.Context) error {
 			return rolePanelDetailedCommandError(fmt.Sprintf("Failed to remove button: %v", err))
 		}
 	}
-	syncNote := refreshRolePanelPostingsBestEffort(c.configManager, c.syncer, ctx, key)
+	syncNote := refreshRolePanelPostingsBestEffort(c.configManager, c.rolePanelService, ctx, key)
 	return rolePanelConfigurationResponseBuilder(ctx.Session).Success(
 		ctx.Interaction,
 		fmt.Sprintf("Button for <@&%s> was removed from panel `%s`.%s", roleID, key, syncNote),
@@ -796,9 +799,11 @@ func (c *rolePanelButtonListSubCommand) Handle(ctx *core.Context) error {
 	}
 
 	var b strings.Builder
+	var buttons []string
 	b.WriteString(fmt.Sprintf("Buttons on panel `%s`:\n", panel.Key))
 	for i, btn := range panel.Buttons {
-		b.WriteString(fmt.Sprintf("%d. %s\n", i+1, formatRolePanelButtonForList(btn)))
+		buttons = append(buttons, rolesvc.FormatRolePanelButtonForList(btn))
+		b.WriteString(fmt.Sprintf("%d. %s\n", i+1, buttons[len(buttons)-1]))
 	}
 	return rolePanelConfigurationResponseBuilder(ctx.Session).Info(ctx.Interaction, strings.TrimSpace(b.String()))
 }
@@ -806,12 +811,12 @@ func (c *rolePanelButtonListSubCommand) Handle(ctx *core.Context) error {
 // --- Subgroup: /roles field add|remove|list ---
 
 type rolePanelFieldAddSubCommand struct {
-	configManager *files.ConfigManager
-	syncer        *rolePanelPostingSyncer
+	configManager    *files.ConfigManager
+	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelFieldAddSubCommand(cm *files.ConfigManager, syncer *rolePanelPostingSyncer) *rolePanelFieldAddSubCommand {
-	return &rolePanelFieldAddSubCommand{configManager: cm, syncer: syncer}
+func newRolePanelFieldAddSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelFieldAddSubCommand {
+	return &rolePanelFieldAddSubCommand{configManager: cm, rolePanelService: svc}
 }
 
 // Name names.
@@ -878,7 +883,7 @@ func (c *rolePanelFieldAddSubCommand) Handle(ctx *core.Context) error {
 	if err := c.configManager.AddRolePanelField(ctx.GuildID, key, field); err != nil {
 		return rolePanelDetailedCommandError(fmt.Sprintf("Failed to add field: %v", err))
 	}
-	syncNote := refreshRolePanelPostingsBestEffort(c.configManager, c.syncer, ctx, key)
+	syncNote := refreshRolePanelPostingsBestEffort(c.configManager, c.rolePanelService, ctx, key)
 	return rolePanelConfigurationResponseBuilder(ctx.Session).Success(
 		ctx.Interaction,
 		fmt.Sprintf("Field `%s` was added to panel `%s`.%s", name, key, syncNote),
@@ -886,12 +891,12 @@ func (c *rolePanelFieldAddSubCommand) Handle(ctx *core.Context) error {
 }
 
 type rolePanelFieldRemoveSubCommand struct {
-	configManager *files.ConfigManager
-	syncer        *rolePanelPostingSyncer
+	configManager    *files.ConfigManager
+	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelFieldRemoveSubCommand(cm *files.ConfigManager, syncer *rolePanelPostingSyncer) *rolePanelFieldRemoveSubCommand {
-	return &rolePanelFieldRemoveSubCommand{configManager: cm, syncer: syncer}
+func newRolePanelFieldRemoveSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelFieldRemoveSubCommand {
+	return &rolePanelFieldRemoveSubCommand{configManager: cm, rolePanelService: svc}
 }
 
 // Name names.
@@ -948,7 +953,7 @@ func (c *rolePanelFieldRemoveSubCommand) Handle(ctx *core.Context) error {
 			return rolePanelDetailedCommandError(fmt.Sprintf("Failed to remove field: %v", err))
 		}
 	}
-	syncNote := refreshRolePanelPostingsBestEffort(c.configManager, c.syncer, ctx, key)
+	syncNote := refreshRolePanelPostingsBestEffort(c.configManager, c.rolePanelService, ctx, key)
 	return rolePanelConfigurationResponseBuilder(ctx.Session).Success(
 		ctx.Interaction,
 		fmt.Sprintf("Field %d was removed from panel `%s`.%s", index+1, key, syncNote),
@@ -1025,12 +1030,12 @@ func (c *rolePanelFieldListSubCommand) Handle(ctx *core.Context) error {
 // --- /roles refresh, /roles unpost ---
 
 type rolePanelRefreshSubCommand struct {
-	configManager *files.ConfigManager
-	syncer        *rolePanelPostingSyncer
+	configManager    *files.ConfigManager
+	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelRefreshSubCommand(cm *files.ConfigManager, syncer *rolePanelPostingSyncer) *rolePanelRefreshSubCommand {
-	return &rolePanelRefreshSubCommand{configManager: cm, syncer: syncer}
+func newRolePanelRefreshSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelRefreshSubCommand {
+	return &rolePanelRefreshSubCommand{configManager: cm, rolePanelService: svc}
 }
 
 // Name names.
@@ -1080,15 +1085,14 @@ func (c *rolePanelRefreshSubCommand) Handle(ctx *core.Context) error {
 		)
 	}
 
-	result := c.syncer.Sync(rolePanelSyncRequest{
-		Session:    ctx.Session,
-		GuildID:    ctx.GuildID,
-		Key:        panel.Key,
-		Postings:   panel.Postings,
-		Embed:      renderRolePanelEmbed(panel),
-		Components: renderRolePanelComponents(panel),
-	})
-	summary := formatRolePanelSyncSummary(result, "Refreshed")
+	result := c.rolePanelService.Sync(
+		ctx.Session,
+		ctx.GuildID,
+		panel.Key,
+		panel.Postings,
+		&panel,
+	)
+	summary := c.rolePanelService.FormatSyncSummary(result, "Refreshed")
 	if summary == "" {
 		summary = "No postings needed updating."
 	}
@@ -1096,12 +1100,12 @@ func (c *rolePanelRefreshSubCommand) Handle(ctx *core.Context) error {
 }
 
 type rolePanelUnpostSubCommand struct {
-	configManager *files.ConfigManager
-	syncer        *rolePanelPostingSyncer
+	configManager    *files.ConfigManager
+	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelUnpostSubCommand(cm *files.ConfigManager, syncer *rolePanelPostingSyncer) *rolePanelUnpostSubCommand {
-	return &rolePanelUnpostSubCommand{configManager: cm, syncer: syncer}
+func newRolePanelUnpostSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelUnpostSubCommand {
+	return &rolePanelUnpostSubCommand{configManager: cm, rolePanelService: svc}
 }
 
 // Name names.
@@ -1160,14 +1164,16 @@ func (c *rolePanelUnpostSubCommand) Handle(ctx *core.Context) error {
 		return rolePanelDetailedCommandError(fmt.Sprintf("Failed to load panel `%s`: %v", panelKey, fetchErr))
 	}
 
-	embed := renderRolePanelEmbed(panel)
-	result := c.syncer.Sync(rolePanelSyncRequest{
-		Session:  ctx.Session,
-		GuildID:  ctx.GuildID,
-		Key:      panelKey,
-		Postings: []files.RolePanelPostingConfig{posting},
-		Embed:    embed,
-	})
+	emptyPanel := panel
+	emptyPanel.Buttons = nil // Strip buttons
+
+	result := c.rolePanelService.Sync(
+		ctx.Session,
+		ctx.GuildID,
+		panelKey,
+		[]files.RolePanelPostingConfig{posting},
+		&emptyPanel,
+	)
 
 	// Sync's drop-on-missing path already removed the posting from
 	// config when Discord returned 10003/10008. Otherwise, the
@@ -1180,7 +1186,7 @@ func (c *rolePanelUnpostSubCommand) Handle(ctx *core.Context) error {
 	}
 
 	syncSummary := ""
-	if summary := formatRolePanelSyncSummary(result, "Stripped buttons from"); summary != "" {
+	if summary := c.rolePanelService.FormatSyncSummary(result, "Stripped buttons from"); summary != "" {
 		syncSummary = "\n" + summary
 	}
 	return rolePanelConfigurationResponseBuilder(ctx.Session).Success(
@@ -1251,8 +1257,8 @@ func (c *rolePanelToggleSubCommand) Handle(ctx *core.Context) error {
 // (starting with a newline) when there is something to report;
 // returns an empty string when the panel has no postings or the
 // refresh was a quiet success.
-func refreshRolePanelPostingsBestEffort(cm *files.ConfigManager, syncer *rolePanelPostingSyncer, ctx *core.Context, key string) string {
-	if cm == nil || syncer == nil || ctx == nil {
+func refreshRolePanelPostingsBestEffort(cm *files.ConfigManager, svc *rolesvc.RolePanelService, ctx *core.Context, key string) string {
+	if cm == nil || svc == nil || ctx == nil {
 		return ""
 	}
 	panel, err := cm.RolePanel(ctx.GuildID, key)
@@ -1262,18 +1268,17 @@ func refreshRolePanelPostingsBestEffort(cm *files.ConfigManager, syncer *rolePan
 	if len(panel.Postings) == 0 {
 		return ""
 	}
-	result := syncer.Sync(rolePanelSyncRequest{
-		Session:    ctx.Session,
-		GuildID:    ctx.GuildID,
-		Key:        panel.Key,
-		Postings:   panel.Postings,
-		Embed:      renderRolePanelEmbed(panel),
-		Components: renderRolePanelComponents(panel),
-	})
+	result := svc.Sync(
+		ctx.Session,
+		ctx.GuildID,
+		panel.Key,
+		panel.Postings,
+		&panel,
+	)
 	if !result.HasIssues() && result.Edited == 0 {
 		return ""
 	}
-	summary := formatRolePanelSyncSummary(result, "Refreshed")
+	summary := svc.FormatSyncSummary(result, "Refreshed")
 	if summary == "" {
 		return ""
 	}
@@ -1381,12 +1386,12 @@ func parseRolePanelWebhookURL(rawURL string) (webhookID, webhookToken string, er
 }
 
 type rolePanelImportSubCommand struct {
-	configManager *files.ConfigManager
-	syncer        *rolePanelPostingSyncer
+	configManager    *files.ConfigManager
+	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelImportSubCommand(cm *files.ConfigManager, syncer *rolePanelPostingSyncer) *rolePanelImportSubCommand {
-	return &rolePanelImportSubCommand{configManager: cm, syncer: syncer}
+func newRolePanelImportSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelImportSubCommand {
+	return &rolePanelImportSubCommand{configManager: cm, rolePanelService: svc}
 }
 
 // Name names.

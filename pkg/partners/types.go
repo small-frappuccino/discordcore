@@ -1,4 +1,4 @@
-package partner
+package partners
 
 // PartnerRecord is one partner entry to be rendered in a board.
 type PartnerRecord struct {

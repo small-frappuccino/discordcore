@@ -6,21 +6,18 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordgo"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestRolePanelButtonCustomIDRoundTrip(t *testing.T) {
 	t.Parallel()
 	roleID := "1380646673482518639"
-	cid := rolePanelButtonCustomID(roleID)
-	if !strings.HasPrefix(cid, rolePanelComponentRouteID+rolePanelCustomIDSeparator) {
-		t.Fatalf("custom ID missing route prefix: %q", cid)
-	}
-	if got := rolePanelButtonRoleIDFromCustomID(cid); got != roleID {
-		t.Fatalf("extracted role id = %q want %q", got, roleID)
-	}
-	if got := rolePanelButtonRoleIDFromCustomID("other:route|x"); got != "" {
-		t.Fatalf("expected empty extraction for unrelated route, got %q", got)
-	}
+	customID := RolePanelButtonCustomID(roleID)
+	assert.True(t, strings.HasPrefix(customID, RolePanelComponentRouteID+rolePanelCustomIDSeparator))
+	got := RolePanelButtonRoleIDFromCustomID(customID)
+	assert.Equal(t, roleID, got)
+	got = RolePanelButtonRoleIDFromCustomID("invalid_prefix|123456789")
+	assert.Equal(t, "", got)
 }
 
 func TestRenderRolePanelEmbedHonorsConfig(t *testing.T) {
@@ -77,7 +74,7 @@ func TestRenderRolePanelComponentsLayout(t *testing.T) {
 		if button.Emoji == nil || button.Emoji.ID == "" {
 			t.Fatalf("button %d missing custom emoji", i)
 		}
-		expected := rolePanelButtonCustomID(panel.Buttons[i].RoleID)
+		expected := RolePanelButtonCustomID(panel.Buttons[i].RoleID)
 		if button.CustomID != expected {
 			t.Fatalf("button %d custom id = %q want %q", i, button.CustomID, expected)
 		}
@@ -110,7 +107,7 @@ func TestRenderRolePanelComponentsChunksAcrossRows(t *testing.T) {
 
 func TestFormatRolePanelButtonForListContainsAllFields(t *testing.T) {
 	t.Parallel()
-	line := formatRolePanelButtonForList(files.RolePanelButtonConfig{
+	line := FormatRolePanelButtonForList(files.RolePanelButtonConfig{
 		RoleID:    "1380646673482518639",
 		Label:     "Announcements",
 		EmojiName: "clouud",

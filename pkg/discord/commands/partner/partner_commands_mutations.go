@@ -7,18 +7,19 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	partnersvc "github.com/small-frappuccino/discordcore/pkg/partners"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
 	"github.com/small-frappuccino/discordgo"
 )
 
 // --- Add ---
 type partnerAddSubCommand struct {
-	configManager *files.ConfigManager
-	syncer        *partnerPostingSyncer
+	configManager  *files.ConfigManager
+	partnerService *partnersvc.PartnerService
 }
 
-func newPartnerAddSubCommand(cm *files.ConfigManager, s *partnerPostingSyncer) *partnerAddSubCommand {
-	return &partnerAddSubCommand{configManager: cm, syncer: s}
+func newPartnerAddSubCommand(cm *files.ConfigManager, s *partnersvc.PartnerService) *partnerAddSubCommand {
+	return &partnerAddSubCommand{configManager: cm, partnerService: s}
 }
 
 // Name names.
@@ -80,18 +81,18 @@ func (c *partnerAddSubCommand) Handle(ctx *core.Context) error {
 		return partnerDetailedCommandError(fmt.Sprintf("Failed to add partner: %v", err))
 	}
 
-	_ = c.syncer.SyncConfig(ctx.GuildID, ctx.Session)
+	_ = c.partnerService.SyncConfig(ctx.GuildID, ctx.Session)
 	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, "Partner added successfully.")
 }
 
 // --- Remove ---
 type partnerRemoveSubCommand struct {
-	configManager *files.ConfigManager
-	syncer        *partnerPostingSyncer
+	configManager  *files.ConfigManager
+	partnerService *partnersvc.PartnerService
 }
 
-func newPartnerRemoveSubCommand(cm *files.ConfigManager, s *partnerPostingSyncer) *partnerRemoveSubCommand {
-	return &partnerRemoveSubCommand{configManager: cm, syncer: s}
+func newPartnerRemoveSubCommand(cm *files.ConfigManager, s *partnersvc.PartnerService) *partnerRemoveSubCommand {
+	return &partnerRemoveSubCommand{configManager: cm, partnerService: s}
 }
 
 // Name names.
@@ -150,18 +151,18 @@ func (c *partnerRemoveSubCommand) Handle(ctx *core.Context) error {
 		return partnerDetailedCommandError(fmt.Sprintf("Failed to remove partner: %v", err))
 	}
 
-	_ = c.syncer.SyncConfig(ctx.GuildID, ctx.Session)
+	_ = c.partnerService.SyncConfig(ctx.GuildID, ctx.Session)
 	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, "Partner removed successfully.")
 }
 
 // --- Link ---
 type partnerLinkSubCommand struct {
-	configManager *files.ConfigManager
-	syncer        *partnerPostingSyncer
+	configManager  *files.ConfigManager
+	partnerService *partnersvc.PartnerService
 }
 
-func newPartnerLinkSubCommand(cm *files.ConfigManager, s *partnerPostingSyncer) *partnerLinkSubCommand {
-	return &partnerLinkSubCommand{configManager: cm, syncer: s}
+func newPartnerLinkSubCommand(cm *files.ConfigManager, s *partnersvc.PartnerService) *partnerLinkSubCommand {
+	return &partnerLinkSubCommand{configManager: cm, partnerService: s}
 }
 
 // Name names.
@@ -220,18 +221,18 @@ func (c *partnerLinkSubCommand) Handle(ctx *core.Context) error {
 		return partnerDetailedCommandError(fmt.Sprintf("Failed to update partner link: %v", err))
 	}
 
-	_ = c.syncer.SyncConfig(ctx.GuildID, ctx.Session)
+	_ = c.partnerService.SyncConfig(ctx.GuildID, ctx.Session)
 	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, "Partner link updated successfully.")
 }
 
 // --- Rename ---
 type partnerRenameSubCommand struct {
-	configManager *files.ConfigManager
-	syncer        *partnerPostingSyncer
+	configManager  *files.ConfigManager
+	partnerService *partnersvc.PartnerService
 }
 
-func newPartnerRenameSubCommand(cm *files.ConfigManager, s *partnerPostingSyncer) *partnerRenameSubCommand {
-	return &partnerRenameSubCommand{configManager: cm, syncer: s}
+func newPartnerRenameSubCommand(cm *files.ConfigManager, s *partnersvc.PartnerService) *partnerRenameSubCommand {
+	return &partnerRenameSubCommand{configManager: cm, partnerService: s}
 }
 
 // Name names.
@@ -313,7 +314,7 @@ func (c *partnerRenameSubCommand) Handle(ctx *core.Context) error {
 		return partnerDetailedCommandError(fmt.Sprintf("Failed to update partner: %v", err))
 	}
 
-	_ = c.syncer.SyncConfig(ctx.GuildID, ctx.Session)
+	_ = c.partnerService.SyncConfig(ctx.GuildID, ctx.Session)
 	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, "Partner renamed successfully.")
 }
 
@@ -367,12 +368,12 @@ func (c *partnerListSubCommand) Handle(ctx *core.Context) error {
 
 // --- Refresh ---
 type partnerRefreshSubCommand struct {
-	configManager *files.ConfigManager
-	syncer        *partnerPostingSyncer
+	configManager  *files.ConfigManager
+	partnerService *partnersvc.PartnerService
 }
 
-func newPartnerRefreshSubCommand(cm *files.ConfigManager, s *partnerPostingSyncer) *partnerRefreshSubCommand {
-	return &partnerRefreshSubCommand{configManager: cm, syncer: s}
+func newPartnerRefreshSubCommand(cm *files.ConfigManager, s *partnersvc.PartnerService) *partnerRefreshSubCommand {
+	return &partnerRefreshSubCommand{configManager: cm, partnerService: s}
 }
 
 // Name names.
@@ -398,7 +399,7 @@ func (c *partnerRefreshSubCommand) Handle(ctx *core.Context) error {
 	}
 	ctx.Acknowledged = true
 
-	if err := c.syncer.SyncConfig(ctx.GuildID, ctx.Session); err != nil {
+	if err := c.partnerService.SyncConfig(ctx.GuildID, ctx.Session); err != nil {
 		return builder.WithContext(ctx).Error(ctx.Interaction, fmt.Sprintf("Failed to sync partner board: %v", err))
 	}
 	return builder.WithContext(ctx).Success(ctx.Interaction, "Partner board refreshed successfully.")

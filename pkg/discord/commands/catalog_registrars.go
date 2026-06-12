@@ -4,11 +4,11 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/admin"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/analytics"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/embeds"
+	embedscmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/embeds"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/partner"
+	partnercmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/partner"
 	qotdcmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/qotd"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/roles"
+	rolescmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/roles"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/runtime"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/stats"
 	tickets_cmds "github.com/small-frappuccino/discordcore/pkg/discord/commands/tickets"
@@ -66,7 +66,7 @@ func AnalyticsCommandCatalogRegistrar() CommandCatalogRegistrar {
 func PartnerCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
 		Register: func(ch *CommandHandler, router *core.CommandRouter) {
-			partner.NewPartnerCommands(ch.configManager).RegisterCommands(router)
+			partnercmd.NewPartnerCommands(ch.configManager, ch.partnerService).RegisterCommands(router)
 		},
 	}
 }
@@ -84,7 +84,7 @@ func ModerationCommandCatalogRegistrar() CommandCatalogRegistrar {
 func RolesCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
 		Register: func(ch *CommandHandler, router *core.CommandRouter) {
-			roles.NewRolePanelCommands(ch.configManager).RegisterCommands(router)
+			rolescmd.NewRolePanelCommands(ch.configManager, ch.rolePanelService).RegisterCommands(router)
 		},
 	}
 }
@@ -93,7 +93,7 @@ func RolesCommandCatalogRegistrar() CommandCatalogRegistrar {
 func EmbedsCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
 		Register: func(ch *CommandHandler, router *core.CommandRouter) {
-			embeds.NewEmbedCommands(ch.configManager).RegisterCommands(router)
+			embedscmd.NewEmbedCommands(ch.configManager, ch.embedService).RegisterCommands(router)
 		},
 	}
 }

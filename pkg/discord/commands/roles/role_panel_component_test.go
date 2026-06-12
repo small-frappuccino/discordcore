@@ -11,6 +11,7 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	rolesvc "github.com/small-frappuccino/discordcore/pkg/roles"
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -80,7 +81,7 @@ func newRolePanelTestComponentInteraction(guildID, userID, roleID string) *disco
 				User: &discordgo.User{ID: userID},
 			},
 			Data: discordgo.MessageComponentInteractionData{
-				CustomID:      rolePanelButtonCustomID(roleID),
+				CustomID:      rolesvc.RolePanelButtonCustomID(roleID),
 				ComponentType: discordgo.ButtonComponent,
 			},
 		},
@@ -121,7 +122,7 @@ func runRolePanelComponent(t *testing.T, cm *files.ConfigManager, session *disco
 		UserID:      rolePanelInteractionUserID(i),
 		RouteKey: core.InteractionRouteKey{
 			Kind:     core.InteractionKindComponent,
-			Path:     rolePanelComponentRouteID,
+			Path:     rolesvc.RolePanelComponentRouteID,
 			CustomID: i.MessageComponentData().CustomID,
 		},
 	}

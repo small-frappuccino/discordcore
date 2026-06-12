@@ -7,6 +7,7 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	rolesvc "github.com/small-frappuccino/discordcore/pkg/roles"
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -56,7 +57,7 @@ func (h *rolePanelComponentHandler) HandleComponent(ctx *core.Context) error {
 		}
 	}
 
-	roleID := rolePanelButtonRoleIDFromCustomID(ctx.RouteKey.CustomID)
+	roleID := rolesvc.RolePanelButtonRoleIDFromCustomID(ctx.Interaction.MessageComponentData().CustomID)
 	if roleID == "" {
 		return rolePanelToggleEphemeralError(ctx, "This button is no longer recognized. Ask a moderator to repost the panel.")
 	}

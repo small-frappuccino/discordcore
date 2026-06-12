@@ -8,10 +8,10 @@ import (
 )
 
 const (
-	// rolePanelComponentRouteID is the stable component route ID used by
+	// RolePanelComponentRouteID is the stable component route ID used by
 	// every panel button. The full custom ID is
 	// "<routeID>|<roleID>"; only the role ID changes per button.
-	rolePanelComponentRouteID = "roles_panel:toggle"
+	RolePanelComponentRouteID = "roles_panel:toggle"
 	// rolePanelCustomIDSeparator splits the route ID from the encoded
 	// role ID, mirroring the convention used by the runtime config panel.
 	rolePanelCustomIDSeparator = "|"
@@ -20,19 +20,19 @@ const (
 	rolePanelMaxButtonsPerRow = 5
 )
 
-// rolePanelButtonCustomID builds the persistent component custom ID for
+// RolePanelButtonCustomID builds the persistent component custom ID for
 // one role-toggle button. The role ID is the only piece of state the
 // handler needs: Discord guarantees only the bot can author a component,
 // so the encoded role ID is trusted at click time.
-func rolePanelButtonCustomID(roleID string) string {
-	return rolePanelComponentRouteID + rolePanelCustomIDSeparator + strings.TrimSpace(roleID)
+func RolePanelButtonCustomID(roleID string) string {
+	return RolePanelComponentRouteID + rolePanelCustomIDSeparator + strings.TrimSpace(roleID)
 }
 
-// rolePanelButtonRoleIDFromCustomID extracts the role ID encoded in a
+// RolePanelButtonRoleIDFromCustomID extracts the role ID encoded in a
 // component custom ID. Returns an empty string when the custom ID does
 // not match the role-panel routing prefix.
-func rolePanelButtonRoleIDFromCustomID(customID string) string {
-	prefix := rolePanelComponentRouteID + rolePanelCustomIDSeparator
+func RolePanelButtonRoleIDFromCustomID(customID string) string {
+	prefix := RolePanelComponentRouteID + rolePanelCustomIDSeparator
 	if !strings.HasPrefix(customID, prefix) {
 		return ""
 	}
@@ -118,7 +118,7 @@ func buildRolePanelButton(b files.RolePanelButtonConfig) discordgo.Button {
 	button := discordgo.Button{
 		Style:    discordgo.SecondaryButton,
 		Label:    strings.TrimSpace(b.Label),
-		CustomID: rolePanelButtonCustomID(b.RoleID),
+		CustomID: RolePanelButtonCustomID(b.RoleID),
 	}
 	if b.HasEmoji() {
 		button.Emoji = &discordgo.ComponentEmoji{
@@ -130,9 +130,9 @@ func buildRolePanelButton(b files.RolePanelButtonConfig) discordgo.Button {
 	return button
 }
 
-// formatRolePanelButtonForList renders one button as a single text line
+// FormatRolePanelButtonForList renders one button as a single text line
 // for the /roles panel button list output.
-func formatRolePanelButtonForList(b files.RolePanelButtonConfig) string {
+func FormatRolePanelButtonForList(b files.RolePanelButtonConfig) string {
 	var sb strings.Builder
 	if b.HasEmoji() {
 		sb.WriteString(formatButtonEmojiDisplay(b))

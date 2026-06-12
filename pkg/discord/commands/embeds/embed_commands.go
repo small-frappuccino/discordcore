@@ -9,6 +9,7 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/discord"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	embedsvc "github.com/small-frappuccino/discordcore/pkg/embeds"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordgo"
 )
@@ -51,14 +52,14 @@ const (
 // EmbedCommands wires the /embed command tree into the router.
 type EmbedCommands struct {
 	configManager *files.ConfigManager
-	syncer        *customEmbedPostingSyncer
+	embedService  *embedsvc.EmbedService
 }
 
 // NewEmbedCommands builds the command bundle.
-func NewEmbedCommands(configManager *files.ConfigManager) *EmbedCommands {
+func NewEmbedCommands(configManager *files.ConfigManager, embedService *embedsvc.EmbedService) *EmbedCommands {
 	return &EmbedCommands{
 		configManager: configManager,
-		syncer:        newCustomEmbedPostingSyncer(configManager),
+		embedService:  embedService,
 	}
 }
 
@@ -75,12 +76,12 @@ func (ec *EmbedCommands) RegisterCommands(router *core.CommandRouter) {
 		"Manage custom embeds for this server",
 		checker,
 	)
-	embedGroup.AddSubCommand(newEmbedPostSubCommand(ec.configManager))
-	embedGroup.AddSubCommand(newEmbedPreviewSubCommand(ec.configManager))
-	embedGroup.AddSubCommand(newEmbedSetSubCommand(ec.configManager, ec.syncer))
+	embedGroup.AddSubCommand(newEmbedPostSubCommand(ec.configManager, ec.embedService))
+	embedGroup.AddSubCommand(newEmbedPreviewSubCommand(ec.configManager, ec.embedService))
+	embedGroup.AddSubCommand(newEmbedSetSubCommand(ec.configManager, ec.embedService))
 	embedGroup.AddSubCommand(newEmbedDeleteSubCommand(ec.configManager))
 	embedGroup.AddSubCommand(newEmbedListSubCommand(ec.configManager))
-	embedGroup.AddSubCommand(newEmbedRefreshSubCommand(ec.configManager, ec.syncer))
+	embedGroup.AddSubCommand(newEmbedRefreshSubCommand(ec.configManager, ec.embedService))
 	embedGroup.AddSubCommand(newEmbedUnpostSubCommand(ec.configManager))
 	embedGroup.AddSubCommand(newEmbedImportSubCommand(ec.configManager))
 	embedGroup.AddSubCommand(newEmbedExportSubCommand(ec.configManager))
@@ -90,8 +91,8 @@ func (ec *EmbedCommands) RegisterCommands(router *core.CommandRouter) {
 		"Manage the fields on a custom embed",
 		checker,
 	)
-	fieldGroup.AddSubCommand(newEmbedFieldAddSubCommand(ec.configManager, ec.syncer))
-	fieldGroup.AddSubCommand(newEmbedFieldRemoveSubCommand(ec.configManager, ec.syncer))
+	fieldGroup.AddSubCommand(newEmbedFieldAddSubCommand(ec.configManager, ec.embedService))
+	fieldGroup.AddSubCommand(newEmbedFieldRemoveSubCommand(ec.configManager, ec.embedService))
 	fieldGroup.AddSubCommand(newEmbedFieldListSubCommand(ec.configManager))
 	embedGroup.AddSubCommand(fieldGroup)
 
@@ -102,10 +103,11 @@ func (ec *EmbedCommands) RegisterCommands(router *core.CommandRouter) {
 
 type embedPostSubCommand struct {
 	configManager *files.ConfigManager
+	embedService  *embedsvc.EmbedService
 }
 
-func newEmbedPostSubCommand(cm *files.ConfigManager) *embedPostSubCommand {
-	return &embedPostSubCommand{configManager: cm}
+func newEmbedPostSubCommand(cm *files.ConfigManager, svc *embedsvc.EmbedService) *embedPostSubCommand {
+	return &embedPostSubCommand{configManager: cm, embedService: svc}
 }
 
 // Name names.
@@ -164,7 +166,7 @@ func (c *embedPostSubCommand) Handle(ctx *core.Context) error {
 		}
 	}
 
-	embed := renderCustomEmbed(ce)
+	embed := c.embedService.Render(ce)
 	message, err := ctx.Session.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
 		Embeds: []*discordgo.MessageEmbed{embed},
 	})
@@ -191,10 +193,11 @@ func (c *embedPostSubCommand) Handle(ctx *core.Context) error {
 
 type embedPreviewSubCommand struct {
 	configManager *files.ConfigManager
+	embedService  *embedsvc.EmbedService
 }
 
-func newEmbedPreviewSubCommand(cm *files.ConfigManager) *embedPreviewSubCommand {
-	return &embedPreviewSubCommand{configManager: cm}
+func newEmbedPreviewSubCommand(cm *files.ConfigManager, svc *embedsvc.EmbedService) *embedPreviewSubCommand {
+	return &embedPreviewSubCommand{configManager: cm, embedService: svc}
 }
 
 // Name names.
@@ -235,17 +238,17 @@ func (c *embedPreviewSubCommand) Handle(ctx *core.Context) error {
 		return fmt.Errorf("embedPreviewSubCommand.Handle: %w", err)
 	}
 
-	embed := renderCustomEmbed(ce)
+	embed := c.embedService.Render(ce)
 	return customEmbedResponseBuilder(ctx.Session).Build().Custom(ctx.Interaction, "", []*discordgo.MessageEmbed{embed})
 }
 
 type embedSetSubCommand struct {
 	configManager *files.ConfigManager
-	syncer        *customEmbedPostingSyncer
+	embedService  *embedsvc.EmbedService
 }
 
-func newEmbedSetSubCommand(cm *files.ConfigManager, syncer *customEmbedPostingSyncer) *embedSetSubCommand {
-	return &embedSetSubCommand{configManager: cm, syncer: syncer}
+func newEmbedSetSubCommand(cm *files.ConfigManager, svc *embedsvc.EmbedService) *embedSetSubCommand {
+	return &embedSetSubCommand{configManager: cm, embedService: svc}
 }
 
 // Name names.
@@ -332,7 +335,7 @@ func (c *embedSetSubCommand) Handle(ctx *core.Context) error {
 		return customEmbedDetailedCommandError(fmt.Sprintf("Failed to update embed `%s`: %v", key, err))
 	}
 
-	syncNote := refreshCustomEmbedPostingsBestEffort(c.configManager, c.syncer, ctx, key)
+	syncNote := refreshCustomEmbedPostingsBestEffort(c.configManager, c.embedService, ctx, key)
 	return customEmbedResponseBuilder(ctx.Session).Success(
 		ctx.Interaction,
 		fmt.Sprintf("Embed `%s` settings were updated.%s", key, syncNote),
@@ -440,11 +443,11 @@ func (c *embedListSubCommand) Handle(ctx *core.Context) error {
 
 type embedRefreshSubCommand struct {
 	configManager *files.ConfigManager
-	syncer        *customEmbedPostingSyncer
+	embedService  *embedsvc.EmbedService
 }
 
-func newEmbedRefreshSubCommand(cm *files.ConfigManager, syncer *customEmbedPostingSyncer) *embedRefreshSubCommand {
-	return &embedRefreshSubCommand{configManager: cm, syncer: syncer}
+func newEmbedRefreshSubCommand(cm *files.ConfigManager, svc *embedsvc.EmbedService) *embedRefreshSubCommand {
+	return &embedRefreshSubCommand{configManager: cm, embedService: svc}
 }
 
 // Name names.
@@ -497,14 +500,14 @@ func (c *embedRefreshSubCommand) Handle(ctx *core.Context) error {
 	}
 	ctx.Acknowledged = true
 
-	result := c.syncer.Sync(
+	result := c.embedService.Sync(
 		ctx.Session,
 		ctx.GuildID,
 		ce.Key,
 		ce.Postings,
-		renderCustomEmbed(ce),
+		c.embedService.Render(ce),
 	)
-	summary := formatCustomEmbedSyncSummary(result, "Refreshed")
+	summary := c.embedService.FormatSyncSummary(result, "Refreshed")
 	if summary == "" {
 		summary = "No postings needed updating."
 	}
@@ -585,11 +588,11 @@ func (c *embedUnpostSubCommand) Handle(ctx *core.Context) error {
 
 type embedFieldAddSubCommand struct {
 	configManager *files.ConfigManager
-	syncer        *customEmbedPostingSyncer
+	embedService  *embedsvc.EmbedService
 }
 
-func newEmbedFieldAddSubCommand(cm *files.ConfigManager, syncer *customEmbedPostingSyncer) *embedFieldAddSubCommand {
-	return &embedFieldAddSubCommand{configManager: cm, syncer: syncer}
+func newEmbedFieldAddSubCommand(cm *files.ConfigManager, svc *embedsvc.EmbedService) *embedFieldAddSubCommand {
+	return &embedFieldAddSubCommand{configManager: cm, embedService: svc}
 }
 
 // Name names.
@@ -653,7 +656,7 @@ func (c *embedFieldAddSubCommand) Handle(ctx *core.Context) error {
 	if err := c.configManager.AddCustomEmbedField(ctx.GuildID, key, field); err != nil {
 		return customEmbedDetailedCommandError(fmt.Sprintf("Failed to add field: %v", err))
 	}
-	syncNote := refreshCustomEmbedPostingsBestEffort(c.configManager, c.syncer, ctx, key)
+	syncNote := refreshCustomEmbedPostingsBestEffort(c.configManager, c.embedService, ctx, key)
 	return customEmbedResponseBuilder(ctx.Session).Success(
 		ctx.Interaction,
 		fmt.Sprintf("Field `%s` was added to embed `%s`.%s", name, key, syncNote),
@@ -662,11 +665,11 @@ func (c *embedFieldAddSubCommand) Handle(ctx *core.Context) error {
 
 type embedFieldRemoveSubCommand struct {
 	configManager *files.ConfigManager
-	syncer        *customEmbedPostingSyncer
+	embedService  *embedsvc.EmbedService
 }
 
-func newEmbedFieldRemoveSubCommand(cm *files.ConfigManager, syncer *customEmbedPostingSyncer) *embedFieldRemoveSubCommand {
-	return &embedFieldRemoveSubCommand{configManager: cm, syncer: syncer}
+func newEmbedFieldRemoveSubCommand(cm *files.ConfigManager, svc *embedsvc.EmbedService) *embedFieldRemoveSubCommand {
+	return &embedFieldRemoveSubCommand{configManager: cm, embedService: svc}
 }
 
 // Name names.
@@ -720,7 +723,7 @@ func (c *embedFieldRemoveSubCommand) Handle(ctx *core.Context) error {
 			return customEmbedDetailedCommandError(fmt.Sprintf("Failed to remove field: %v", err))
 		}
 	}
-	syncNote := refreshCustomEmbedPostingsBestEffort(c.configManager, c.syncer, ctx, key)
+	syncNote := refreshCustomEmbedPostingsBestEffort(c.configManager, c.embedService, ctx, key)
 	return customEmbedResponseBuilder(ctx.Session).Success(
 		ctx.Interaction,
 		fmt.Sprintf("Field %d was removed from embed `%s`.%s", index+1, key, syncNote),
@@ -789,8 +792,8 @@ func (c *embedFieldListSubCommand) Handle(ctx *core.Context) error {
 
 // --- Helpers ---
 
-func refreshCustomEmbedPostingsBestEffort(cm *files.ConfigManager, syncer *customEmbedPostingSyncer, ctx *core.Context, key string) string {
-	if cm == nil || syncer == nil || ctx == nil {
+func refreshCustomEmbedPostingsBestEffort(cm *files.ConfigManager, svc *embedsvc.EmbedService, ctx *core.Context, key string) string {
+	if cm == nil || svc == nil || ctx == nil {
 		return ""
 	}
 	ce, err := cm.CustomEmbed(ctx.GuildID, key)
@@ -800,17 +803,17 @@ func refreshCustomEmbedPostingsBestEffort(cm *files.ConfigManager, syncer *custo
 	if len(ce.Postings) == 0 {
 		return ""
 	}
-	result := syncer.Sync(
+	result := svc.Sync(
 		ctx.Session,
 		ctx.GuildID,
 		ce.Key,
 		ce.Postings,
-		renderCustomEmbed(ce),
+		svc.Render(ce),
 	)
 	if !result.HasIssues() && result.Edited == 0 {
 		return ""
 	}
-	summary := formatCustomEmbedSyncSummary(result, "Refreshed")
+	summary := svc.FormatSyncSummary(result, "Refreshed")
 	if summary == "" {
 		return ""
 	}
