@@ -532,7 +532,7 @@ func (s *Store) GetActiveGuildMemberStatesContext(ctx context.Context, guildID s
 			   AND rc.deleted_at IS NULL
 			 WHERE mj.guild_id = $1
 			   AND mj.left_at IS NULL
-			 ORDER BY mj.user_id, rc.role_id
+			 ORDER BY CAST(mj.user_id AS BIGINT), rc.role_id
 		`, guildID)
 		if err != nil {
 			yield(GuildMemberCurrentState{}, fmt.Errorf("Store.GetActiveGuildMemberStatesContext: %w", err))

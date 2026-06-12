@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"iter"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -770,6 +771,16 @@ func (ms *MonitoringService) initializeGuildCache(guildID string) {
 	_ = ms.initializeGuildCacheContext(context.Background(), guildID)
 }
 
+func compareSnowflakes(a, b string) int {
+	if len(a) < len(b) {
+		return -1
+	}
+	if len(a) > len(b) {
+		return 1
+	}
+	return strings.Compare(a, b)
+}
+
 func (ms *MonitoringService) initializeGuildCacheContext(ctx context.Context, guildID string) error {
 	if ms.store == nil {
 		log.ApplicationLogger().Warn("Store is nil; skipping cache initialization for guild", "guildID", guildID)
@@ -847,34 +858,107 @@ func (ms *MonitoringService) initializeGuildCacheContext(ctx context.Context, gu
 		return nil
 	}
 
-	for member, err := range ms.StreamGuildMembersContext(ctx, guildID) {
-		if err != nil {
-			log.ErrorLoggerRaw().Error("Error getting members for guild", "guildID", guildID, "err", err)
+	nextDiscord, stopDiscord := iter.Pull2(ms.StreamGuildMembersContext(ctx, guildID))
+	defer stopDiscord()
+
+	nextDB, stopDB := iter.Pull2(ms.store.GetActiveGuildMemberStatesContext(ctx, guildID))
+	defer stopDB()
+
+	discordMember, errDiscord, okDiscord := nextDiscord()
+	dbMember, errDB, okDB := nextDB()
+
+	for okDiscord || okDB {
+		if err := ctx.Err(); err != nil {
+			log.ErrorLoggerRaw().Error("Context canceled during cache initialization", "guildID", guildID, "err", err)
 			return fmt.Errorf("MonitoringService.initializeGuildCacheContext: %w", err)
 		}
-		totalMembers++
-		if member == nil || member.User == nil {
-			continue
-		}
-		avatarHash := member.User.Avatar
-		if avatarHash == "" {
-			avatarHash = "default"
-		}
-		snapshots = append(snapshots, storage.GuildMemberSnapshot{
-			UserID:     member.User.ID,
-			AvatarHash: avatarHash,
-			HasAvatar:  true,
-			Roles:      member.Roles,
-			HasRoles:   true,
-			JoinedAt:   member.JoinedAt,
-			IsBot:      member.User.Bot,
-			HasBot:     true,
-		})
 
-		if len(snapshots) >= monitoringGuildMembersPageSize {
-			_ = flush()
+		var cmp int
+		if !okDiscord {
+			if errDB != nil {
+				log.ErrorLoggerRaw().Error("Error reading member state from DB", "guildID", guildID, "err", errDB)
+				return fmt.Errorf("MonitoringService.initializeGuildCacheContext (DB error): %w", errDB)
+			}
+			cmp = 1 // only DB has members left (DB is smaller, meaning we must advance DB)
+		} else if !okDB {
+			if errDiscord != nil {
+				log.ErrorLoggerRaw().Error("Error reading member from Discord", "guildID", guildID, "err", errDiscord)
+				return fmt.Errorf("MonitoringService.initializeGuildCacheContext (Discord error): %w", errDiscord)
+			}
+			cmp = -1 // only Discord has members left (Discord is smaller, advance Discord)
+		} else {
+			if errDiscord != nil {
+				return fmt.Errorf("MonitoringService.initializeGuildCacheContext (Discord error): %w", errDiscord)
+			}
+			if errDB != nil {
+				return fmt.Errorf("MonitoringService.initializeGuildCacheContext (DB error): %w", errDB)
+			}
+			cmp = compareSnowflakes(discordMember.User.ID, dbMember.UserID)
+		}
+
+		if cmp < 0 {
+			// Discord ID is smaller (or DB is empty) -> New member missing from DB or just updating
+			totalMembers++
+			if discordMember != nil && discordMember.User != nil {
+				avatarHash := discordMember.User.Avatar
+				if avatarHash == "" {
+					avatarHash = "default"
+				}
+				snapshots = append(snapshots, storage.GuildMemberSnapshot{
+					UserID:     discordMember.User.ID,
+					AvatarHash: avatarHash,
+					HasAvatar:  true,
+					Roles:      discordMember.Roles,
+					HasRoles:   true,
+					JoinedAt:   discordMember.JoinedAt,
+					IsBot:      discordMember.User.Bot,
+					HasBot:     true,
+				})
+
+				if len(snapshots) >= monitoringGuildMembersPageSize {
+					_ = flush()
+				}
+			}
+			discordMember, errDiscord, okDiscord = nextDiscord()
+		} else if cmp > 0 {
+			// DB ID is smaller (or Discord is empty) -> Member left the server
+			if err := ms.store.MarkMemberLeftContext(ctx, guildID, dbMember.UserID, snapshotAt); err != nil {
+				log.ApplicationLogger().Warn(
+					"Failed to mark member as left during reconciliation",
+					"guildID", guildID,
+					"userID", dbMember.UserID,
+					"err", err,
+				)
+			}
+			dbMember, errDB, okDB = nextDB()
+		} else {
+			// Match! Member exists in both. Update DB snapshot from Discord data.
+			totalMembers++
+			if discordMember != nil && discordMember.User != nil {
+				avatarHash := discordMember.User.Avatar
+				if avatarHash == "" {
+					avatarHash = "default"
+				}
+				snapshots = append(snapshots, storage.GuildMemberSnapshot{
+					UserID:     discordMember.User.ID,
+					AvatarHash: avatarHash,
+					HasAvatar:  true,
+					Roles:      discordMember.Roles,
+					HasRoles:   true,
+					JoinedAt:   discordMember.JoinedAt,
+					IsBot:      discordMember.User.Bot,
+					HasBot:     true,
+				})
+
+				if len(snapshots) >= monitoringGuildMembersPageSize {
+					_ = flush()
+				}
+			}
+			discordMember, errDiscord, okDiscord = nextDiscord()
+			dbMember, errDB, okDB = nextDB()
 		}
 	}
+
 	_ = flush()
 	log.ApplicationLogger().Info("Guild cache initialization member scan completed", "guildID", guildID, "members", totalMembers)
 	return nil
