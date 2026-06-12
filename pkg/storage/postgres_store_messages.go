@@ -2,10 +2,11 @@ package storage
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // MessageRecord represents a cached Discord message snapshot for edit/delete notifications.
@@ -69,7 +70,7 @@ func (s *Store) UpsertMessagesContext(ctx context.Context, records []MessageReco
 	authorAvatars := make([]string, len(normalized))
 	contents := make([]string, len(normalized))
 	cachedAts := make([]time.Time, len(normalized))
-	expiresAts := make([]sql.NullTime, len(normalized))
+	expiresAts := make([]*time.Time, len(normalized))
 
 	for i, record := range normalized {
 		guildIDs[i] = record.GuildID
@@ -81,11 +82,12 @@ func (s *Store) UpsertMessagesContext(ctx context.Context, records []MessageReco
 		contents[i] = record.Content
 		cachedAts[i] = record.CachedAt.UTC()
 		if record.HasExpiry {
-			expiresAts[i] = sql.NullTime{Time: record.ExpiresAt.UTC(), Valid: true}
+			t := record.ExpiresAt.UTC()
+			expiresAts[i] = &t
 		}
 	}
 
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.db.Exec(ctx,
 		`INSERT INTO messages (guild_id, message_id, channel_id, author_id, author_username, author_avatar, content, cached_at, expires_at)
          SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::timestamptz[], $9::timestamptz[])
          ON CONFLICT(guild_id, message_id) DO UPDATE SET
@@ -140,7 +142,7 @@ func (s *Store) GetMessage(guildID, messageID string) (*MessageRecord, error) {
 	)
 
 	var rec MessageRecord
-	var expires sql.NullTime
+	var expires *time.Time
 	if err := row.Scan(
 		&rec.GuildID,
 		&rec.MessageID,
@@ -152,14 +154,14 @@ func (s *Store) GetMessage(guildID, messageID string) (*MessageRecord, error) {
 		&rec.CachedAt,
 		&expires,
 	); err != nil {
-		if err == sql.ErrNoRows {
+		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
 		return nil, err
 	}
-	if expires.Valid {
+	if expires != nil {
 		rec.HasExpiry = true
-		rec.ExpiresAt = expires.Time
+		rec.ExpiresAt = *expires
 	}
 	return &rec, nil
 }
@@ -186,7 +188,7 @@ func (s *Store) DeleteMessagesContext(ctx context.Context, keys []MessageDeleteK
 		messageIDs[i] = key.MessageID
 	}
 
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.db.Exec(ctx,
 		`DELETE FROM messages 
          USING UNNEST($1::text[], $2::text[]) AS doomed(guild_id, message_id) 
          WHERE messages.guild_id = doomed.guild_id AND messages.message_id = doomed.message_id`,
@@ -249,7 +251,7 @@ func (s *Store) CleanupObsoleteMemberRoles(retentionDays int) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("Store.CleanupObsoleteMemberRoles: %w", err)
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 // CleanupObsoleteAvatars removes avatar records older than retentionDays
@@ -262,7 +264,7 @@ func (s *Store) CleanupObsoleteAvatars(retentionDays int) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("Store.CleanupObsoleteAvatars: %w", err)
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
 // CleanupAllObsoleteData performs cleanup of all obsolete data with default retention periods

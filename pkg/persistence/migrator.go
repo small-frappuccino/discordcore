@@ -2,10 +2,12 @@ package persistence
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"sort"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Migrator applies and rolls back versioned SQL migrations.
@@ -22,12 +24,12 @@ type migration struct {
 }
 
 type postgresMigrator struct {
-	db         *sql.DB
+	db         *pgxpool.Pool
 	migrations []migration
 }
 
 // NewPostgresMigrator news postgres migrator.
-func NewPostgresMigrator(db *sql.DB) Migrator {
+func NewPostgresMigrator(db *pgxpool.Pool) Migrator {
 	migs := append([]migration(nil), postgresMigrations...)
 	sort.Slice(migs, func(i, j int) bool { return migs[i].Version < migs[j].Version })
 	return &postgresMigrator{db: db, migrations: migs}
@@ -53,29 +55,29 @@ func (m *postgresMigrator) Up(ctx context.Context) error {
 		if mig.Version <= current {
 			continue
 		}
-		tx, err := m.db.BeginTx(ctx, nil)
+		tx, err := m.db.Begin(ctx)
 		if err != nil {
 			return fmt.Errorf("begin migration tx version %d: %w", mig.Version, err)
 		}
 		for _, sqlText := range mig.UpSQL {
-			if _, execErr := tx.ExecContext(ctx, sqlText); execErr != nil {
+			if _, execErr := tx.Exec(ctx, sqlText); execErr != nil {
 				retErr := fmt.Errorf("apply migration version %d: %w", mig.Version, execErr)
-				if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+				if rerr := tx.Rollback(context.WithoutCancel(ctx)); rerr != nil && !errors.Is(rerr, pgx.ErrTxClosed) {
 					return errors.Join(retErr, fmt.Errorf("rollback failed: %w", rerr))
 				}
 				return retErr
 			}
 		}
-		if _, execErr := tx.ExecContext(ctx, `INSERT INTO schema_migrations (version) VALUES ($1)`, mig.Version); execErr != nil {
+		if _, execErr := tx.Exec(ctx, `INSERT INTO schema_migrations (version) VALUES ($1)`, mig.Version); execErr != nil {
 			retErr := fmt.Errorf("record migration version %d: %w", mig.Version, execErr)
-			if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+			if rerr := tx.Rollback(context.WithoutCancel(ctx)); rerr != nil && !errors.Is(rerr, pgx.ErrTxClosed) {
 				return errors.Join(retErr, fmt.Errorf("rollback failed: %w", rerr))
 			}
 			return retErr
 		}
-		if execErr := tx.Commit(); execErr != nil {
+		if execErr := tx.Commit(ctx); execErr != nil {
 			retErr := fmt.Errorf("commit migration version %d: %w", mig.Version, execErr)
-			if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+			if rerr := tx.Rollback(context.WithoutCancel(ctx)); rerr != nil && !errors.Is(rerr, pgx.ErrTxClosed) {
 				return errors.Join(retErr, fmt.Errorf("rollback failed: %w", rerr))
 			}
 			return retErr
@@ -120,29 +122,29 @@ func (m *postgresMigrator) Down(ctx context.Context, steps int) error {
 		if remaining == 0 || mig.Version > current {
 			continue
 		}
-		tx, err := m.db.BeginTx(ctx, nil)
+		tx, err := m.db.Begin(ctx)
 		if err != nil {
 			return fmt.Errorf("begin rollback tx version %d: %w", mig.Version, err)
 		}
 		for _, sqlText := range mig.DownSQL {
-			if _, execErr := tx.ExecContext(ctx, sqlText); execErr != nil {
+			if _, execErr := tx.Exec(ctx, sqlText); execErr != nil {
 				retErr := fmt.Errorf("rollback migration version %d: %w", mig.Version, execErr)
-				if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+				if rerr := tx.Rollback(context.WithoutCancel(ctx)); rerr != nil && !errors.Is(rerr, pgx.ErrTxClosed) {
 					return errors.Join(retErr, fmt.Errorf("rollback failed: %w", rerr))
 				}
 				return retErr
 			}
 		}
-		if _, execErr := tx.ExecContext(ctx, `DELETE FROM schema_migrations WHERE version = $1`, mig.Version); execErr != nil {
+		if _, execErr := tx.Exec(ctx, `DELETE FROM schema_migrations WHERE version = $1`, mig.Version); execErr != nil {
 			retErr := fmt.Errorf("delete migration record version %d: %w", mig.Version, execErr)
-			if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+			if rerr := tx.Rollback(context.WithoutCancel(ctx)); rerr != nil && !errors.Is(rerr, pgx.ErrTxClosed) {
 				return errors.Join(retErr, fmt.Errorf("rollback failed: %w", rerr))
 			}
 			return retErr
 		}
-		if execErr := tx.Commit(); execErr != nil {
+		if execErr := tx.Commit(ctx); execErr != nil {
 			retErr := fmt.Errorf("commit rollback version %d: %w", mig.Version, execErr)
-			if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+			if rerr := tx.Rollback(context.WithoutCancel(ctx)); rerr != nil && !errors.Is(rerr, pgx.ErrTxClosed) {
 				return errors.Join(retErr, fmt.Errorf("rollback failed: %w", rerr))
 			}
 			return retErr
@@ -164,12 +166,12 @@ func (m *postgresMigrator) Version(ctx context.Context) (int64, error) {
 		return 0, fmt.Errorf("postgresMigrator.Version: %w", err)
 	}
 
-	var version sql.NullInt64
-	if err := m.db.QueryRowContext(ctx, `SELECT COALESCE(MAX(version), 0) FROM schema_migrations`).Scan(&version); err != nil {
+	var version *int64
+	if err := m.db.QueryRow(ctx, `SELECT COALESCE(MAX(version), 0) FROM schema_migrations`).Scan(&version); err != nil {
 		return 0, fmt.Errorf("read schema version: %w", err)
 	}
-	if version.Valid {
-		return version.Int64, nil
+	if version != nil {
+		return *version, nil
 	}
 	return 0, nil
 }
@@ -178,7 +180,7 @@ func (m *postgresMigrator) ensureVersionTable(ctx context.Context) error {
 	if m == nil || m.db == nil {
 		return fmt.Errorf("postgres migrator database handle is nil")
 	}
-	if _, err := m.db.ExecContext(ctx, `
+	if _, err := m.db.Exec(ctx, `
 CREATE TABLE IF NOT EXISTS schema_migrations (
 	version    BIGINT PRIMARY KEY,
 	applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -196,20 +198,20 @@ func (m *postgresMigrator) repairLegacySchemas(ctx context.Context) error {
 		ctx = context.Background()
 	}
 
-	tx, err := m.db.BeginTx(ctx, nil)
+	tx, err := m.db.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin legacy schema repair tx: %w", err)
 	}
 	if execErr := repairQOTDLegacySchema(ctx, tx); execErr != nil {
 		retErr := fmt.Errorf("postgresMigrator.repairLegacySchemas: %w", execErr)
-		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+		if rerr := tx.Rollback(context.WithoutCancel(ctx)); rerr != nil && !errors.Is(rerr, pgx.ErrTxClosed) {
 			return errors.Join(retErr, fmt.Errorf("rollback failed: %w", rerr))
 		}
 		return retErr
 	}
-	if execErr := tx.Commit(); execErr != nil {
+	if execErr := tx.Commit(ctx); execErr != nil {
 		retErr := fmt.Errorf("commit legacy schema repair: %w", execErr)
-		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+		if rerr := tx.Rollback(context.WithoutCancel(ctx)); rerr != nil && !errors.Is(rerr, pgx.ErrTxClosed) {
 			return errors.Join(retErr, fmt.Errorf("rollback failed: %w", rerr))
 		}
 		return retErr

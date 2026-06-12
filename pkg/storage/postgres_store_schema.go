@@ -2,10 +2,12 @@ package storage
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var requiredSchemaTables = []string{
@@ -41,36 +43,36 @@ func (s *Store) ensureMemberJoinColumns(ctx context.Context) (err error) {
 		return nil
 	}
 
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin member_joins bootstrap tx: %w", err)
 	}
 	defer func() {
-		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+		if rerr := tx.Rollback(ctx); rerr != nil && !errors.Is(rerr, pgx.ErrTxClosed) {
 			err = errors.Join(err, fmt.Errorf("rollback failed: %w", rerr))
 		}
 	}()
 
-	if _, err := tx.ExecContext(ctx, `ALTER TABLE member_joins ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ`); err != nil {
+	if _, err := tx.Exec(ctx, `ALTER TABLE member_joins ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ`); err != nil {
 		return fmt.Errorf("add member_joins.last_seen_at column: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, `ALTER TABLE member_joins ADD COLUMN IF NOT EXISTS is_bot BOOLEAN`); err != nil {
+	if _, err := tx.Exec(ctx, `ALTER TABLE member_joins ADD COLUMN IF NOT EXISTS is_bot BOOLEAN`); err != nil {
 		return fmt.Errorf("add member_joins.is_bot column: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, `ALTER TABLE member_joins ADD COLUMN IF NOT EXISTS left_at TIMESTAMPTZ`); err != nil {
+	if _, err := tx.Exec(ctx, `ALTER TABLE member_joins ADD COLUMN IF NOT EXISTS left_at TIMESTAMPTZ`); err != nil {
 		return fmt.Errorf("add member_joins.left_at column: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, `
+	if _, err := tx.Exec(ctx, `
 		UPDATE member_joins
 		   SET last_seen_at = COALESCE(last_seen_at, joined_at)
 		 WHERE last_seen_at IS NULL
 	`); err != nil {
 		return fmt.Errorf("backfill member_joins.last_seen_at: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_member_joins_active ON member_joins(guild_id, left_at)`); err != nil {
+	if _, err := tx.Exec(ctx, `CREATE INDEX IF NOT EXISTS idx_member_joins_active ON member_joins(guild_id, left_at)`); err != nil {
 		return fmt.Errorf("create member_joins active index: %w", err)
 	}
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit member_joins bootstrap: %w", err)
 	}
 	return nil
@@ -80,7 +82,7 @@ func (s *Store) missingColumns(ctx context.Context, table string, columns []stri
 	missing := make([]string, 0)
 	for _, column := range columns {
 		var exists bool
-		if err := s.db.QueryRowContext(
+		if err := s.db.QueryRow(
 			ctx,
 			`SELECT EXISTS (
 				SELECT 1
@@ -101,14 +103,14 @@ func (s *Store) missingColumns(ctx context.Context, table string, columns []stri
 	return missing, nil
 }
 
-func validateSchema(ctx context.Context, db *sql.DB) error {
+func validateSchema(ctx context.Context, db *pgxpool.Pool) error {
 	missing := make([]string, 0)
 	for _, table := range requiredSchemaTables {
-		var regclass sql.NullString
-		if err := db.QueryRowContext(ctx, `SELECT to_regclass($1)`, table).Scan(&regclass); err != nil {
+		var regclass *string
+		if err := db.QueryRow(ctx, `SELECT to_regclass($1)`, table).Scan(&regclass); err != nil {
 			return fmt.Errorf("check table %s existence: %w", table, err)
 		}
-		if !regclass.Valid || strings.TrimSpace(regclass.String) == "" {
+		if regclass == nil || strings.TrimSpace(*regclass) == "" {
 			missing = append(missing, table)
 		}
 	}
@@ -120,7 +122,7 @@ func validateSchema(ctx context.Context, db *sql.DB) error {
 	for table, columns := range requiredSchemaColumns {
 		for _, column := range columns {
 			var exists bool
-			if err := db.QueryRowContext(
+			if err := db.QueryRow(
 				ctx,
 				`SELECT EXISTS (
 					SELECT 1

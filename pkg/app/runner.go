@@ -616,9 +616,7 @@ func setupStorage(dbb resolvedDatabaseBootstrap) (*storage.Store, *files.ConfigM
 	pingCtx, pingCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer pingCancel()
 	if err := persistence.Ping(pingCtx, db); err != nil {
-		if closeErr := db.Close(); closeErr != nil {
-			err = stdErrors.Join(err, fmt.Errorf("close db after ping failure: %w", closeErr))
-		}
+		db.Close()
 		return nil, nil, fmt.Errorf("postgres readiness check failed: %w", err)
 	}
 	log.ApplicationLogger().Info("Database readiness check passed", "operation", "startup.database.ping", "driver", "postgres")
@@ -627,24 +625,18 @@ func setupStorage(dbb resolvedDatabaseBootstrap) (*storage.Store, *files.ConfigM
 	defer migrateCancel()
 	migrator := persistence.NewPostgresMigrator(db)
 	if err := migrator.Up(migrateCtx); err != nil {
-		if closeErr := db.Close(); closeErr != nil {
-			err = stdErrors.Join(err, fmt.Errorf("close db after migrate failure: %w", closeErr))
-		}
+		db.Close()
 		return nil, nil, fmt.Errorf("apply postgres migrations: %w", err)
 	}
 	log.ApplicationLogger().Info("Database migrations applied", "operation", "startup.database.migrate", "driver", "postgres")
 
 	store, err := storage.NewStore(db)
 	if err != nil {
-		if closeErr := db.Close(); closeErr != nil {
-			err = stdErrors.Join(err, fmt.Errorf("close db after store creation failure: %w", closeErr))
-		}
+		db.Close()
 		return nil, nil, fmt.Errorf("create postgres store: %w", err)
 	}
 	if err := store.Init(); err != nil {
-		if closeErr := db.Close(); closeErr != nil {
-			err = stdErrors.Join(err, fmt.Errorf("close db after store init failure: %w", closeErr))
-		}
+		db.Close()
 		return nil, nil, fmt.Errorf("initialize postgres store: %w", err)
 	}
 	log.ApplicationLogger().Info("Storage layer initialized", "operation", "startup.database.store_init", "driver", "postgres")

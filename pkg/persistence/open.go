@@ -2,15 +2,12 @@ package persistence
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"fmt"
 	"io"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgproto3"
-	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // maxPostgresMessageBodyBytes is the hard ceiling enforced on every Postgres
@@ -29,27 +26,42 @@ import (
 // database/sql and is logged like any other connection failure.
 const maxPostgresMessageBodyBytes = 64 * 1024 * 1024
 
-// Open creates a SQL handle configured for PostgreSQL.
-func Open(ctx context.Context, cfg Config) (*sql.DB, error) {
+// Open creates a pgxpool handle configured for PostgreSQL.
+func Open(ctx context.Context, cfg Config) (*pgxpool.Pool, error) {
 	normalized := cfg.Normalized()
 	if err := normalized.Validate(); err != nil {
 		return nil, fmt.Errorf("Open: %w", err)
 	}
 
-	connStr, err := registerSafeConnConfig(normalized.DatabaseURL)
+	config, err := pgxpool.ParseConfig(normalized.DatabaseURL)
 	if err != nil {
-		return nil, fmt.Errorf("Open: %w", err)
+		return nil, fmt.Errorf("parse postgres connection config: %w", err)
 	}
 
-	db, err := sql.Open("pgx", connStr)
+	// Compose with any pre-existing BuildFrontend (today nil, but a future pgx
+	// or middleware may install one) instead of clobbering it.
+	previousBuildFrontend := config.ConnConfig.BuildFrontend
+	config.ConnConfig.BuildFrontend = func(r io.Reader, w io.Writer) *pgproto3.Frontend {
+		var frontend *pgproto3.Frontend
+		if previousBuildFrontend != nil {
+			frontend = previousBuildFrontend(r, w)
+		} else {
+			frontend = pgproto3.NewFrontend(r, w)
+		}
+		frontend.SetMaxBodyLen(maxPostgresMessageBodyBytes)
+		return frontend
+	}
+
+	config.MaxConns = int32(normalized.MaxOpenConns)
+	config.MinConns = int32(normalized.MaxIdleConns)
+	config.MaxConnLifetime = time.Duration(normalized.ConnMaxLifetimeSecs) * time.Second
+	config.MaxConnIdleTime = time.Duration(normalized.ConnMaxIdleTimeSecs) * time.Second
+	config.ConnConfig.Tracer = newQueryTracer()
+
+	db, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		return nil, fmt.Errorf("open postgres connection: %w", err)
 	}
-
-	db.SetMaxOpenConns(normalized.MaxOpenConns)
-	db.SetMaxIdleConns(normalized.MaxIdleConns)
-	db.SetConnMaxLifetime(time.Duration(normalized.ConnMaxLifetimeSecs) * time.Second)
-	db.SetConnMaxIdleTime(time.Duration(normalized.ConnMaxIdleTimeSecs) * time.Second)
 
 	pingCtx := ctx
 	if pingCtx == nil {
@@ -60,34 +72,8 @@ func Open(ctx context.Context, cfg Config) (*sql.DB, error) {
 	defer cancel()
 
 	if err := Ping(pingCtx, db); err != nil {
-		if closeErr := db.Close(); closeErr != nil {
-			err = errors.Join(err, fmt.Errorf("close postgres connection after ping failure: %w", closeErr))
-		}
+		db.Close()
 		return nil, fmt.Errorf("ping postgres connection: %w", err)
 	}
 	return db, nil
-}
-
-// registerSafeConnConfig parses the database URL through pgx so we can hook
-// BuildFrontend and cap the per-message body size. Returns the
-// stdlib-compatible connection string that `sql.Open("pgx", ...)` accepts.
-func registerSafeConnConfig(databaseURL string) (string, error) {
-	config, err := pgx.ParseConfig(databaseURL)
-	if err != nil {
-		return "", fmt.Errorf("parse postgres connection config: %w", err)
-	}
-	// Compose with any pre-existing BuildFrontend (today nil, but a future pgx
-	// or middleware may install one) instead of clobbering it.
-	previousBuildFrontend := config.BuildFrontend
-	config.BuildFrontend = func(r io.Reader, w io.Writer) *pgproto3.Frontend {
-		var frontend *pgproto3.Frontend
-		if previousBuildFrontend != nil {
-			frontend = previousBuildFrontend(r, w)
-		} else {
-			frontend = pgproto3.NewFrontend(r, w)
-		}
-		frontend.SetMaxBodyLen(maxPostgresMessageBodyBytes)
-		return frontend
-	}
-	return stdlib.RegisterConnConfig(config), nil
 }

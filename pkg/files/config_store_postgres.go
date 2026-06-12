@@ -1,20 +1,23 @@
 package files
 
 import (
-	"database/sql"
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // PostgresConfigStore persists BotConfig in PostgreSQL as one canonical JSONB document.
 type PostgresConfigStore struct {
-	db  *sql.DB
+	db  *pgxpool.Pool
 	key string
 }
 
 // NewPostgresConfigStore news postgres config store.
-func NewPostgresConfigStore(db *sql.DB, key string) *PostgresConfigStore {
+func NewPostgresConfigStore(db *pgxpool.Pool, key string) *PostgresConfigStore {
 	key = strings.TrimSpace(key)
 	if key == "" {
 		key = DefaultPostgresConfigStoreKey
@@ -34,11 +37,12 @@ func (s *PostgresConfigStore) Load() (*BotConfig, error) {
 
 	var raw []byte
 	err := s.db.QueryRow(
+		context.Background(),
 		`SELECT config_json FROM bot_config_state WHERE config_key = $1`,
 		s.key,
 	).Scan(&raw)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if err == pgx.ErrNoRows {
 			return cfg, nil
 		}
 		return nil, fmt.Errorf("load config row from postgres: %w", err)
@@ -69,6 +73,7 @@ func (s *PostgresConfigStore) Save(cfg *BotConfig) error {
 		return fmt.Errorf("encode config for postgres: %w", err)
 	}
 	if _, err := s.db.Exec(
+		context.Background(),
 		`INSERT INTO bot_config_state (config_key, config_json)
 		 VALUES ($1, $2::jsonb)
 		 ON CONFLICT (config_key) DO UPDATE
@@ -90,6 +95,7 @@ func (s *PostgresConfigStore) Exists() (bool, error) {
 
 	var exists bool
 	if err := s.db.QueryRow(
+		context.Background(),
 		`SELECT EXISTS(SELECT 1 FROM bot_config_state WHERE config_key = $1)`,
 		s.key,
 	).Scan(&exists); err != nil {

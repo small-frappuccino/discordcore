@@ -2,12 +2,13 @@ package storage
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"iter"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // GuildMemberSnapshot represents the persisted snapshot for one guild member.
@@ -54,12 +55,12 @@ func (s *Store) UpsertGuildMemberSnapshotsContext(ctx context.Context, guildID s
 		return nil
 	}
 
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("Store.UpsertGuildMemberSnapshotsContext: %w", err)
 	}
 	defer func() {
-		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+		if rerr := tx.Rollback(ctx); rerr != nil && !errors.Is(rerr, pgx.ErrTxClosed) {
 			err = errors.Join(err, fmt.Errorf("rollback failed: %w", rerr))
 		}
 	}()
@@ -67,10 +68,10 @@ func (s *Store) UpsertGuildMemberSnapshotsContext(ctx context.Context, guildID s
 	if err := upsertGuildMemberSnapshotBatch(ctx, tx, guildID, normalized, updatedAt); err != nil {
 		return fmt.Errorf("Store.UpsertGuildMemberSnapshotsContext: %w", err)
 	}
-	return tx.Commit()
+	return tx.Commit(ctx)
 }
 
-func upsertGuildMemberSnapshotBatch(ctx context.Context, tx *sql.Tx, guildID string, snapshots []GuildMemberSnapshot, updatedAt time.Time) error {
+func upsertGuildMemberSnapshotBatch(ctx context.Context, tx pgx.Tx, guildID string, snapshots []GuildMemberSnapshot, updatedAt time.Time) error {
 	avatarRows := make([]GuildMemberSnapshot, 0, len(snapshots))
 	roleRows := make([]GuildMemberSnapshot, 0, len(snapshots))
 	joinRows := make([]GuildMemberSnapshot, 0, len(snapshots))
@@ -190,7 +191,7 @@ func dedupeNonEmptyStrings(values []string) []string {
 	return out
 }
 
-func queryCurrentAvatarHashesByUserID(ctx context.Context, tx *sql.Tx, guildID string, userIDs []string) (map[string]string, error) {
+func queryCurrentAvatarHashesByUserID(ctx context.Context, tx pgx.Tx, guildID string, userIDs []string) (map[string]string, error) {
 	if len(userIDs) == 0 {
 		return nil, nil
 	}
@@ -219,7 +220,7 @@ type avatarHistoryBatch struct {
 	UpdatedAt     time.Time
 }
 
-func insertAvatarHistoryBatch(ctx context.Context, tx *sql.Tx, batch avatarHistoryBatch) error {
+func insertAvatarHistoryBatch(ctx context.Context, tx pgx.Tx, batch avatarHistoryBatch) error {
 	type avatarHistoryRow struct {
 		UserID    string
 		OldHash   string
@@ -254,7 +255,7 @@ func insertAvatarHistoryBatch(ctx context.Context, tx *sql.Tx, batch avatarHisto
 	}
 
 	if len(rows) > 0 {
-		_, err := tx.ExecContext(ctx,
+		_, err := tx.Exec(ctx,
 			`INSERT INTO avatars_history (guild_id, user_id, old_hash, new_hash, changed_at)
              SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[], $5::timestamptz[])`,
 			guildIDs, userIDs, oldHashes, newHashes, changedAts,
@@ -264,7 +265,7 @@ func insertAvatarHistoryBatch(ctx context.Context, tx *sql.Tx, batch avatarHisto
 	return nil
 }
 
-func upsertAvatarCurrentBatch(ctx context.Context, tx *sql.Tx, guildID string, snapshots []GuildMemberSnapshot, updatedAt time.Time) error {
+func upsertAvatarCurrentBatch(ctx context.Context, tx pgx.Tx, guildID string, snapshots []GuildMemberSnapshot, updatedAt time.Time) error {
 	userIDs := make([]string, len(snapshots))
 	avatarHashes := make([]string, len(snapshots))
 	updatedAts := make([]time.Time, len(snapshots))
@@ -276,7 +277,7 @@ func upsertAvatarCurrentBatch(ctx context.Context, tx *sql.Tx, guildID string, s
 	}
 
 	if len(snapshots) > 0 {
-		_, err := tx.ExecContext(ctx,
+		_, err := tx.Exec(ctx,
 			`INSERT INTO avatars_current (guild_id, user_id, avatar_hash, updated_at)
              SELECT $1::text, * FROM UNNEST($2::text[], $3::text[], $4::timestamptz[])
              ON CONFLICT(guild_id, user_id) DO UPDATE SET avatar_hash=excluded.avatar_hash, updated_at=excluded.updated_at
@@ -288,19 +289,19 @@ func upsertAvatarCurrentBatch(ctx context.Context, tx *sql.Tx, guildID string, s
 	return nil
 }
 
-func deleteRolesForUsersBatch(ctx context.Context, tx *sql.Tx, guildID string, userIDs []string, updatedAt time.Time) error {
+func deleteRolesForUsersBatch(ctx context.Context, tx pgx.Tx, guildID string, userIDs []string, updatedAt time.Time) error {
 	if len(userIDs) == 0 {
 		return nil
 	}
 
-	_, err := tx.ExecContext(ctx,
+	_, err := tx.Exec(ctx,
 		`UPDATE roles_current SET deleted_at = $3, updated_at = $3 WHERE guild_id=$1 AND user_id = ANY($2::text[]) AND updated_at < $3`,
 		guildID, userIDs, updatedAt,
 	)
 	return err
 }
 
-func insertMemberRolesBatch(ctx context.Context, tx *sql.Tx, guildID string, snapshots []GuildMemberSnapshot, updatedAt time.Time) error {
+func insertMemberRolesBatch(ctx context.Context, tx pgx.Tx, guildID string, snapshots []GuildMemberSnapshot, updatedAt time.Time) error {
 	var totalRoles int
 	for _, snap := range snapshots {
 		totalRoles += len(snap.Roles)
@@ -321,7 +322,7 @@ func insertMemberRolesBatch(ctx context.Context, tx *sql.Tx, guildID string, sna
 		}
 	}
 
-	_, err := tx.ExecContext(ctx,
+	_, err := tx.Exec(ctx,
 		`INSERT INTO roles_current (guild_id, user_id, role_id, updated_at)
          SELECT $1::text, * FROM UNNEST($2::text[], $3::text[], $4::timestamptz[])
          ON CONFLICT(guild_id, user_id, role_id) DO UPDATE SET updated_at=excluded.updated_at, deleted_at=NULL
@@ -331,11 +332,11 @@ func insertMemberRolesBatch(ctx context.Context, tx *sql.Tx, guildID string, sna
 	return err
 }
 
-func upsertMemberJoinsBatch(ctx context.Context, tx *sql.Tx, guildID string, snapshots []GuildMemberSnapshot, seenAt time.Time) error {
+func upsertMemberJoinsBatch(ctx context.Context, tx pgx.Tx, guildID string, snapshots []GuildMemberSnapshot, seenAt time.Time) error {
 	userIDs := make([]string, len(snapshots))
 	joinedAts := make([]time.Time, len(snapshots))
 	seenAts := make([]time.Time, len(snapshots))
-	isBots := make([]sql.NullBool, len(snapshots))
+	isBots := make([]*bool, len(snapshots))
 
 	for i, row := range snapshots {
 		userIDs[i] = row.UserID
@@ -347,15 +348,16 @@ func upsertMemberJoinsBatch(ctx context.Context, tx *sql.Tx, guildID string, sna
 		joinedAts[i] = joinedAt
 		seenAts[i] = seenAt
 
-		var isBot sql.NullBool
+		var isBot *bool
 		if row.HasBot {
-			isBot = sql.NullBool{Valid: true, Bool: row.IsBot}
+			b := row.IsBot
+			isBot = &b
 		}
 		isBots[i] = isBot
 	}
 
 	if len(snapshots) > 0 {
-		_, err := tx.ExecContext(ctx,
+		_, err := tx.Exec(ctx,
 			`INSERT INTO member_joins (guild_id, user_id, joined_at, last_seen_at, is_bot)
              SELECT $1::text, * FROM UNNEST($2::text[], $3::timestamptz[], $4::timestamptz[], $5::boolean[])
              ON CONFLICT(guild_id, user_id) DO UPDATE SET
@@ -469,12 +471,12 @@ func (s *Store) MarkMemberLeftContext(ctx context.Context, guildID, userID strin
 		leftAt = leftAt.UTC()
 	}
 
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("Store.MarkMemberLeftContext: %w", err)
 	}
 	defer func() {
-		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+		if rerr := tx.Rollback(ctx); rerr != nil && !errors.Is(rerr, pgx.ErrTxClosed) {
 			err = errors.Join(err, fmt.Errorf("rollback failed: %w", rerr))
 		}
 	}()
@@ -499,7 +501,7 @@ func (s *Store) MarkMemberLeftContext(ctx context.Context, guildID, userID strin
 	if _, err := txExecContext(ctx, tx, `UPDATE roles_current SET deleted_at = $3, updated_at = $3 WHERE guild_id=$1 AND user_id=$2 AND updated_at < $3`, guildID, userID, leftAt); err != nil {
 		return fmt.Errorf("Store.MarkMemberLeftContext: %w", err)
 	}
-	return tx.Commit()
+	return tx.Commit(ctx)
 }
 
 // MemberJoin returns the stored join time for a member, if any.
@@ -507,7 +509,7 @@ func (s *Store) MemberJoin(ctx context.Context, guildID, userID string) (time.Ti
 	row := s.queryRowContext(ctx, `SELECT joined_at FROM member_joins WHERE guild_id=$1 AND user_id=$2`, guildID, userID)
 	var jt time.Time
 	if err := row.Scan(&jt); err != nil {
-		if err == sql.ErrNoRows {
+		if err == pgx.ErrNoRows {
 			return time.Time{}, false, nil
 		}
 		return time.Time{}, false, fmt.Errorf("Store.MemberJoin: %w", err)
@@ -546,9 +548,9 @@ func (s *Store) GetActiveGuildMemberStatesContext(ctx context.Context, guildID s
 			var (
 				userID     string
 				joinedAt   time.Time
-				lastSeenAt sql.NullTime
-				isBot      sql.NullBool
-				roleID     sql.NullString
+				lastSeenAt *time.Time
+				isBot      *bool
+				roleID     *string
 			)
 			if err := rows.Scan(&userID, &joinedAt, &lastSeenAt, &isBot, &roleID); err != nil {
 				yield(GuildMemberCurrentState{}, fmt.Errorf("Store.GetActiveGuildMemberStatesContext: %w", err))
@@ -568,17 +570,17 @@ func (s *Store) GetActiveGuildMemberStatesContext(ctx context.Context, guildID s
 					JoinedAt: joinedAt.UTC(),
 					Active:   true,
 				}
-				if lastSeenAt.Valid {
-					currentState.LastSeenAt = lastSeenAt.Time.UTC()
+				if lastSeenAt != nil {
+					currentState.LastSeenAt = lastSeenAt.UTC()
 				}
-				if isBot.Valid {
+				if isBot != nil {
 					currentState.HasBot = true
-					currentState.IsBot = isBot.Bool
+					currentState.IsBot = *isBot
 				}
 			}
 
-			if roleID.Valid && strings.TrimSpace(roleID.String) != "" {
-				currentState.Roles = append(currentState.Roles, roleID.String)
+			if roleID != nil && strings.TrimSpace(*roleID) != "" {
+				currentState.Roles = append(currentState.Roles, *roleID)
 			}
 		}
 
@@ -604,23 +606,24 @@ func (s *Store) UpsertAvatar(guildID, userID, newHash string, updatedAt time.Tim
 		updatedAt = time.Now().UTC()
 	}
 
-	tx, err := s.db.Begin()
+	ctx := context.Background()
+	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return false, "", fmt.Errorf("Store.UpsertAvatar: %w", err)
 	}
 	defer func() {
-		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+		if rerr := tx.Rollback(ctx); rerr != nil && !errors.Is(rerr, pgx.ErrTxClosed) {
 			err = errors.Join(err, fmt.Errorf("rollback failed: %w", rerr))
 		}
 	}()
 
 	var curHash string
 	var hasCur bool
-	if err := txQueryRow(tx,
+	if err := txQueryRowContext(ctx, tx,
 		`SELECT avatar_hash FROM avatars_current WHERE guild_id=$1 AND user_id=$2`,
 		guildID, userID,
 	).Scan(&curHash); err != nil {
-		if err != sql.ErrNoRows {
+		if err != pgx.ErrNoRows {
 			return false, "", err
 		}
 	} else {
@@ -649,7 +652,7 @@ func (s *Store) UpsertAvatar(guildID, userID, newHash string, updatedAt time.Tim
 		return false, "", err
 	}
 
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return false, "", fmt.Errorf("Store.UpsertAvatar: %w", err)
 	}
 	return changed, curHash, nil
@@ -664,7 +667,7 @@ func (s *Store) GetAvatar(guildID, userID string) (hash string, updatedAt time.T
 	var h string
 	var t time.Time
 	if scanErr := row.Scan(&h, &t); scanErr != nil {
-		if scanErr == sql.ErrNoRows {
+		if scanErr == pgx.ErrNoRows {
 			return "", time.Time{}, false, nil
 		}
 		return "", time.Time{}, false, scanErr

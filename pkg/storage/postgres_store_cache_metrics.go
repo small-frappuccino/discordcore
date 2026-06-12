@@ -2,11 +2,12 @@ package storage
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"iter"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // CacheEntryRecord is a single persisted cache row keyed by Key within a
@@ -89,7 +90,7 @@ func (s *Store) UpsertCacheEntriesContext(ctx context.Context, entries []CacheEn
 			for i := range batch {
 				guildIDs[i] = guildID
 			}
-			_, err = s.db.ExecContext(ctx,
+			_, err = s.db.Exec(ctx,
 				`INSERT INTO persistent_cache (cache_key, cache_type, guild_id, data, expires_at, cached_at)
 				 SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[], $5::timestamptz[], $6::timestamptz[])
 				 ON CONFLICT(cache_key) DO UPDATE SET
@@ -100,7 +101,7 @@ func (s *Store) UpsertCacheEntriesContext(ctx context.Context, entries []CacheEn
 				keys, cacheTypes, guildIDs, datas, expiresAts, cachedAts,
 			)
 		} else {
-			_, err = s.db.ExecContext(ctx,
+			_, err = s.db.Exec(ctx,
 				`INSERT INTO persistent_cache (cache_key, cache_type, data, expires_at, cached_at)
 				 SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::timestamptz[], $5::timestamptz[])
 				 ON CONFLICT(cache_key) DO UPDATE SET
@@ -131,7 +132,7 @@ func (s *Store) GetCacheEntry(key string) (cacheType, data string, expiresAt tim
 	)
 	err = row.Scan(&cacheType, &data, &expiresAt)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if err == pgx.ErrNoRows {
 			return "", "", time.Time{}, false, nil
 		}
 		return "", "", time.Time{}, false, fmt.Errorf("Store.GetCacheEntry: %w", err)
@@ -222,7 +223,7 @@ type PersistentCacheStats struct {
 // the query so HTTP scrapers do not stall an unhealthy database connection
 // forever.
 func (s *Store) GetCacheStatsContext(ctx context.Context) (PersistentCacheStats, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT cache_type, COUNT(*) FROM persistent_cache
+	rows, err := s.db.Query(ctx, `SELECT cache_type, COUNT(*) FROM persistent_cache
          WHERE expires_at > $1 GROUP BY cache_type`, time.Now().UTC())
 	if err != nil {
 		return PersistentCacheStats{}, fmt.Errorf("Store.GetCacheStatsContext: %w", err)
@@ -318,7 +319,7 @@ func (s *Store) IncrementDailyMessageCountsContext(ctx context.Context, deltas [
 		counts[i] = delta.Count
 	}
 
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.db.Exec(ctx,
 		`INSERT INTO daily_message_metrics (guild_id, channel_id, user_id, day, count)
          SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::date[], $5::bigint[])
          ON CONFLICT(guild_id, channel_id, user_id, day) DO UPDATE SET
@@ -426,7 +427,7 @@ func (s *Store) metricTotalsByDimension(ctx context.Context, tableName, dimensio
 		}
 		baseSQL += fmt.Sprintf(" GROUP BY %s ORDER BY 2 DESC", dimension)
 
-		rows, err := s.db.QueryContext(ctx, baseSQL, args...)
+		rows, err := s.db.Query(ctx, baseSQL, args...)
 		if err != nil {
 			yield(MetricTotal{}, fmt.Errorf("Store.metricTotalsByDimension: %w", err))
 			return
@@ -435,13 +436,13 @@ func (s *Store) metricTotalsByDimension(ctx context.Context, tableName, dimensio
 
 		for rows.Next() {
 			var key string
-			var total sql.NullInt64
+			var total *int64
 			if err := rows.Scan(&key, &total); err != nil {
 				yield(MetricTotal{}, fmt.Errorf("Store.metricTotalsByDimension: %w", err))
 				return
 			}
-			if total.Valid {
-				if !yield(MetricTotal{Key: key, Total: total.Int64}, nil) {
+			if total != nil {
+				if !yield(MetricTotal{Key: key, Total: *total}, nil) {
 					return
 				}
 			}
@@ -477,12 +478,12 @@ func (s *Store) CountDistinctMemberJoins(ctx context.Context, guildID string) (i
 	if guildID == "" {
 		return 0, nil
 	}
-	var total sql.NullInt64
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(DISTINCT user_id) FROM member_joins WHERE guild_id=$1`, guildID).Scan(&total); err != nil {
+	var total *int64
+	if err := s.db.QueryRow(ctx, `SELECT COUNT(DISTINCT user_id) FROM member_joins WHERE guild_id=$1`, guildID).Scan(&total); err != nil {
 		return 0, fmt.Errorf("Store.CountDistinctMemberJoins: %w", err)
 	}
-	if total.Valid {
-		return total.Int64, nil
+	if total != nil {
+		return *total, nil
 	}
 	return 0, nil
 }
@@ -493,7 +494,7 @@ func (s *Store) ListDistinctMemberJoinUserIDs(ctx context.Context, guildID strin
 		if guildID == "" {
 			return
 		}
-		rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT user_id FROM member_joins WHERE guild_id=$1`, guildID)
+		rows, err := s.db.Query(ctx, `SELECT DISTINCT user_id FROM member_joins WHERE guild_id=$1`, guildID)
 		if err != nil {
 			yield("", fmt.Errorf("Store.ListDistinctMemberJoinUserIDs: %w", err))
 			return
@@ -531,24 +532,24 @@ func (s *Store) sumMetricSince(ctx context.Context, query, guildID, cutoffDay st
 	if guildID == "" || cutoffDay == "" {
 		return 0, nil
 	}
-	var total sql.NullInt64
-	if err := s.db.QueryRowContext(ctx, query, guildID, cutoffDay).Scan(&total); err != nil {
+	var total *int64
+	if err := s.db.QueryRow(ctx, query, guildID, cutoffDay).Scan(&total); err != nil {
 		return 0, fmt.Errorf("Store.sumMetricSince: %w", err)
 	}
-	if total.Valid {
-		return total.Int64, nil
+	if total != nil {
+		return *total, nil
 	}
 	return 0, nil
 }
 
 // DatabaseSizeBytes databases size bytes.
 func (s *Store) DatabaseSizeBytes(ctx context.Context) (int64, error) {
-	var size sql.NullInt64
-	if err := s.db.QueryRowContext(ctx, `SELECT pg_database_size(current_database())`).Scan(&size); err != nil {
+	var size *int64
+	if err := s.db.QueryRow(ctx, `SELECT pg_database_size(current_database())`).Scan(&size); err != nil {
 		return 0, fmt.Errorf("Store.DatabaseSizeBytes: %w", err)
 	}
-	if size.Valid {
-		return size.Int64, nil
+	if size != nil {
+		return *size, nil
 	}
 	return 0, nil
 }

@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 type qotdRowScanner interface {
@@ -111,12 +113,12 @@ func (s *Store) UpdateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 		return nil, fmt.Errorf("Store.UpdateQOTDQuestion: %w", err)
 	}
 
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("Store.UpdateQOTDQuestion: %w", err)
 	}
 	defer func() {
-		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+		if rerr := tx.Rollback(ctx); rerr != nil && !errors.Is(rerr, pgx.ErrTxClosed) {
 			err = errors.Join(err, fmt.Errorf("rollback failed: %w", rerr))
 		}
 	}()
@@ -211,7 +213,7 @@ func (s *Store) UpdateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 		}
 	}
 
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("Store.UpdateQOTDQuestion: %w", err)
 	}
 	return updated, nil
@@ -229,12 +231,12 @@ func (s *Store) DeleteQOTDQuestion(ctx context.Context, guildID string, question
 		return nil
 	}
 
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("Store.DeleteQOTDQuestion: %w", err)
 	}
 	defer func() {
-		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+		if rerr := tx.Rollback(ctx); rerr != nil && !errors.Is(rerr, pgx.ErrTxClosed) {
 			err = errors.Join(err, fmt.Errorf("rollback failed: %w", rerr))
 		}
 	}()
@@ -245,7 +247,7 @@ func (s *Store) DeleteQOTDQuestion(ctx context.Context, guildID string, question
 		guildID,
 		questionID,
 	).Scan(&deckID); err != nil {
-		if err == sql.ErrNoRows {
+		if err == pgx.ErrNoRows {
 			return nil
 		}
 		return err
@@ -257,7 +259,7 @@ func (s *Store) DeleteQOTDQuestion(ctx context.Context, guildID string, question
 	if err := reindexQOTDQuestionDisplayIDsTx(ctx, tx, guildID, deckID); err != nil {
 		return fmt.Errorf("Store.DeleteQOTDQuestion: %w", err)
 	}
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("Store.DeleteQOTDQuestion: %w", err)
 	}
 	return nil
@@ -279,12 +281,12 @@ func (s *Store) DeleteQOTDQuestionsByDecks(ctx context.Context, guildID string, 
 		return nil
 	}
 
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("Store.DeleteQOTDQuestionsByDecks: %w", err)
 	}
 	defer func() {
-		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+		if rerr := tx.Rollback(ctx); rerr != nil && !errors.Is(rerr, pgx.ErrTxClosed) {
 			err = errors.Join(err, fmt.Errorf("rollback failed: %w", rerr))
 		}
 	}()
@@ -299,7 +301,7 @@ func (s *Store) DeleteQOTDQuestionsByDecks(ctx context.Context, guildID string, 
 		}
 	}
 
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("Store.DeleteQOTDQuestionsByDecks: %w", err)
 	}
 	return nil
@@ -394,7 +396,7 @@ func (s *Store) GetQOTDQuestion(ctx context.Context, guildID string, questionID 
 	)
 	record, err := scanQOTDQuestionRecord(row)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("Store.GetQOTDQuestion: %w", err)
@@ -422,12 +424,12 @@ func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID, deckID string
 		return fmt.Errorf("Store.ReorderQOTDQuestions: %w", err)
 	}
 
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("Store.ReorderQOTDQuestions: %w", err)
 	}
 	defer func() {
-		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+		if rerr := tx.Rollback(ctx); rerr != nil && !errors.Is(rerr, pgx.ErrTxClosed) {
 			err = errors.Join(err, fmt.Errorf("rollback failed: %w", rerr))
 		}
 	}()
@@ -494,7 +496,7 @@ func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID, deckID string
 	if err := reindexQOTDQuestionDisplayIDsTx(ctx, tx, guildID, deckID); err != nil {
 		return fmt.Errorf("Store.ReorderQOTDQuestions: %w", err)
 	}
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("Store.ReorderQOTDQuestions: %w", err)
 	}
 	return nil
@@ -520,12 +522,12 @@ func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID, deckID str
 		return nil, fmt.Errorf("publish_date_utc is required")
 	}
 
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("Store.ReserveNextQOTDQuestion: %w", err)
 	}
 	defer func() {
-		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+		if rerr := tx.Rollback(ctx); rerr != nil && !errors.Is(rerr, pgx.ErrTxClosed) {
 			err = errors.Join(err, fmt.Errorf("rollback failed: %w", rerr))
 		}
 	}()
@@ -559,7 +561,7 @@ func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID, deckID str
 	)
 	record, err := scanQOTDQuestionRecord(row)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("Store.ReserveNextQOTDQuestion: %w", err)
@@ -593,7 +595,7 @@ func (s *Store) ReserveNextQOTDQuestion(ctx context.Context, guildID, deckID str
 	if err != nil {
 		return nil, fmt.Errorf("Store.ReserveNextQOTDQuestion: %w", err)
 	}
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("Store.ReserveNextQOTDQuestion: %w", err)
 	}
 	return record, nil
@@ -615,12 +617,12 @@ func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID, deckI
 		return nil, fmt.Errorf("deck_id is required")
 	}
 
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("Store.ReserveNextReadyQOTDQuestion: %w", err)
 	}
 	defer func() {
-		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+		if rerr := tx.Rollback(ctx); rerr != nil && !errors.Is(rerr, pgx.ErrTxClosed) {
 			err = errors.Join(err, fmt.Errorf("rollback failed: %w", rerr))
 		}
 	}()
@@ -654,7 +656,7 @@ func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID, deckI
 	)
 	record, err := scanQOTDQuestionRecord(row)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("Store.ReserveNextReadyQOTDQuestion: %w", err)
@@ -686,7 +688,7 @@ func (s *Store) ReserveNextReadyQOTDQuestion(ctx context.Context, guildID, deckI
 	if err != nil {
 		return nil, fmt.Errorf("Store.ReserveNextReadyQOTDQuestion: %w", err)
 	}
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("Store.ReserveNextReadyQOTDQuestion: %w", err)
 	}
 	return record, nil
@@ -863,7 +865,7 @@ func scanQOTDQuestionRecord(scanner qotdRowScanner) (*QOTDQuestionRecord, error)
 	return &record, nil
 }
 
-func getQOTDQuestionTx(ctx context.Context, tx *sql.Tx, guildID string, questionID int64) (*QOTDQuestionRecord, error) {
+func getQOTDQuestionTx(ctx context.Context, tx pgx.Tx, guildID string, questionID int64) (*QOTDQuestionRecord, error) {
 	if tx == nil {
 		return nil, fmt.Errorf("transaction is required")
 	}
@@ -898,7 +900,7 @@ func getQOTDQuestionTx(ctx context.Context, tx *sql.Tx, guildID string, question
 	return record, nil
 }
 
-func reindexQOTDQuestionDisplayIDsTx(ctx context.Context, tx *sql.Tx, guildID, deckID string) error {
+func reindexQOTDQuestionDisplayIDsTx(ctx context.Context, tx pgx.Tx, guildID, deckID string) error {
 	if tx == nil {
 		return fmt.Errorf("transaction is required")
 	}

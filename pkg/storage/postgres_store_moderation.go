@@ -2,12 +2,13 @@ package storage
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"iter"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // ModerationWarning is a stored warning against a user in a guild. CaseNumber is
@@ -68,17 +69,18 @@ func (s *Store) CreateModerationWarning(guildID, userID, moderatorID, reason str
 		createdAt = createdAt.UTC()
 	}
 
-	tx, err := s.db.Begin()
+	ctx := context.Background()
+	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return ModerationWarning{}, fmt.Errorf("Store.CreateModerationWarning: %w", err)
 	}
 	defer func() {
-		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+		if rerr := tx.Rollback(ctx); rerr != nil && !errors.Is(rerr, pgx.ErrTxClosed) {
 			err = errors.Join(err, fmt.Errorf("rollback failed: %w", rerr))
 		}
 	}()
 
-	caseNumber, err := nextModerationCaseNumberTx(tx, guildID)
+	caseNumber, err := nextModerationCaseNumberTx(ctx, tx, guildID)
 	if err != nil {
 		return ModerationWarning{}, fmt.Errorf("Store.CreateModerationWarning: %w", err)
 	}
@@ -91,7 +93,8 @@ func (s *Store) CreateModerationWarning(guildID, userID, moderatorID, reason str
 		Reason:      reason,
 		CreatedAt:   createdAt,
 	}
-	if err := txQueryRow(
+	if err := txQueryRowContext(
+		ctx,
 		tx,
 		`INSERT INTO moderation_warnings (guild_id, user_id, case_number, moderator_id, reason, created_at)
          VALUES ($1, $2, $3, $4, $5, $6)
@@ -106,7 +109,7 @@ func (s *Store) CreateModerationWarning(guildID, userID, moderatorID, reason str
 		return ModerationWarning{}, err
 	}
 
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return ModerationWarning{}, fmt.Errorf("Store.CreateModerationWarning: %w", err)
 	}
 	return warning, nil
@@ -168,9 +171,10 @@ func (s *Store) ListModerationWarnings(guildID, userID string, limit int) iter.S
 	}
 }
 
-func nextModerationCaseNumberTx(tx *sql.Tx, guildID string) (int64, error) {
+func nextModerationCaseNumberTx(ctx context.Context, tx pgx.Tx, guildID string) (int64, error) {
 	var next int64
-	if err := txQueryRow(
+	if err := txQueryRowContext(
+		ctx,
 		tx,
 		`INSERT INTO moderation_cases (guild_id, last_case_number)
          VALUES ($1, 1)
@@ -202,17 +206,17 @@ func (s *Store) SetGuildOwnerID(guildID, ownerID string) error {
 // GetGuildOwnerID retrieves the cached owner ID for a guild, if any.
 func (s *Store) GetGuildOwnerID(guildID string) (string, bool, error) {
 	row := s.queryRow(`SELECT owner_id FROM guild_meta WHERE guild_id=$1`, guildID)
-	var owner sql.NullString
+	var owner *string
 	if err := row.Scan(&owner); err != nil {
-		if err == sql.ErrNoRows {
+		if err == pgx.ErrNoRows {
 			return "", false, nil
 		}
 		return "", false, fmt.Errorf("Store.GetGuildOwnerID: %w", err)
 	}
-	if !owner.Valid || owner.String == "" {
+	if owner == nil || strings.TrimSpace(*owner) == "" {
 		return "", false, nil
 	}
-	return owner.String, true, nil
+	return *owner, true, nil
 }
 
 // UpsertMemberRoles replaces the current set of roles for a member in a guild atomically.
@@ -224,17 +228,18 @@ func (s *Store) UpsertMemberRoles(guildID, userID string, roles []string, update
 		updatedAt = time.Now().UTC()
 	}
 
-	tx, err := s.db.BeginTx(context.Background(), nil)
+	ctx := context.Background()
+	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() {
-		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+		if rerr := tx.Rollback(ctx); rerr != nil && !errors.Is(rerr, pgx.ErrTxClosed) {
 			err = errors.Join(err, fmt.Errorf("rollback failed: %w", rerr))
 		}
 	}()
 
-	if _, err = tx.ExecContext(context.Background(), `UPDATE roles_current SET deleted_at=$3, updated_at=$3 WHERE guild_id=$1 AND user_id=$2 AND updated_at < $3`, guildID, userID, updatedAt); err != nil {
+	if _, err = tx.Exec(ctx, `UPDATE roles_current SET deleted_at=$3, updated_at=$3 WHERE guild_id=$1 AND user_id=$2 AND updated_at < $3`, guildID, userID, updatedAt); err != nil {
 		return err
 	}
 
@@ -255,7 +260,7 @@ func (s *Store) UpsertMemberRoles(guildID, userID string, roles []string, update
 			updatedAts[i] = updatedAt
 		}
 
-		if _, err = tx.ExecContext(context.Background(), `
+		if _, err = tx.Exec(ctx, `
 			INSERT INTO roles_current (guild_id, user_id, role_id, updated_at)
 			SELECT $1::text, * FROM UNNEST($2::text[], $3::text[], $4::timestamptz[])
 			ON CONFLICT(guild_id, user_id, role_id) DO UPDATE SET updated_at=excluded.updated_at, deleted_at=NULL
@@ -266,7 +271,7 @@ func (s *Store) UpsertMemberRoles(guildID, userID string, roles []string, update
 		}
 	}
 
-	return tx.Commit()
+	return tx.Commit(ctx)
 }
 
 func (s *Store) GetMemberRoles(guildID, userID string) iter.Seq2[string, error] {

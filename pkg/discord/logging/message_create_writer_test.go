@@ -310,7 +310,7 @@ func TestMessageEventService_WriterDrainKeepsCreateEditDeleteVersionsContiguous(
 		t.Fatalf("stop message create writer: %v", err)
 	}
 
-	rows, err := db.Query(`SELECT version, event_type FROM messages_history WHERE guild_id = $1 AND message_id = $2 ORDER BY version`, guildID, messageID)
+	rows, err := db.Query(context.Background(), `SELECT version, event_type FROM messages_history WHERE guild_id = $1 AND message_id = $2 ORDER BY version`, guildID, messageID)
 	if err != nil {
 		t.Fatalf("query history: %v", err)
 	}

@@ -44,7 +44,7 @@ func newTempStore(t *testing.T) *Store {
 
 func TestSchemaInitialized(t *testing.T) {
 	store := newTempStore(t)
-	rows, err := store.db.Query(`SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema()`)
+	rows, err := store.db.Query(context.Background(), `SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema()`)
 	if err != nil {
 		t.Fatalf("query schema: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestInitRepairsMissingMemberJoinStateColumns(t *testing.T) {
 		t.Fatalf("seed member join: %v", err)
 	}
 
-	if _, err := store.db.Exec(`
+	if _, err := store.db.Exec(context.Background(), `
 		ALTER TABLE member_joins
 			DROP COLUMN IF EXISTS left_at,
 			DROP COLUMN IF EXISTS is_bot,
@@ -116,7 +116,7 @@ func TestInitRepairsMissingMemberJoinStateColumns(t *testing.T) {
 	var gotJoinedAt, gotLastSeen time.Time
 	var gotIsBot sql.NullBool
 	var gotLeftAt sql.NullTime
-	if err := store.db.QueryRow(
+	if err := store.db.QueryRow(context.Background(), 
 		`SELECT joined_at, last_seen_at, is_bot, left_at FROM member_joins WHERE guild_id = 'g1' AND user_id = 'u1'`,
 	).Scan(&gotJoinedAt, &gotLastSeen, &gotIsBot, &gotLeftAt); err != nil {
 		t.Fatalf("read repaired join row: %v", err)
@@ -157,7 +157,7 @@ func TestUpsertMessageIsTransactional(t *testing.T) {
 	}
 
 	var count int
-	row := store.db.QueryRow(`SELECT COUNT(*) FROM messages WHERE guild_id='g' AND message_id='m'`)
+	row := store.db.QueryRow(context.Background(), `SELECT COUNT(*) FROM messages WHERE guild_id='g' AND message_id='m'`)
 	if err := row.Scan(&count); err != nil {
 		t.Fatalf("count scan: %v", err)
 	}
@@ -321,7 +321,7 @@ func TestInsertMessageVersionsBatchContextPreservesExplicitVersions(t *testing.T
 		t.Fatalf("InsertMessageVersionsBatchContext() failed: %v", err)
 	}
 
-	rows, err := store.db.Query(`SELECT version, event_type FROM messages_history WHERE guild_id='g' AND message_id='m' ORDER BY version`)
+	rows, err := store.db.Query(context.Background(), `SELECT version, event_type FROM messages_history WHERE guild_id='g' AND message_id='m' ORDER BY version`)
 	if err != nil {
 		t.Fatalf("query versions: %v", err)
 	}
@@ -344,7 +344,7 @@ func TestInsertMessageVersionsBatchContextPreservesExplicitVersions(t *testing.T
 	}
 
 	var lastVersion int
-	if err := store.db.QueryRow(
+	if err := store.db.QueryRow(context.Background(), 
 		`SELECT last_version FROM message_version_counters WHERE guild_id='g' AND message_id='m'`,
 	).Scan(&lastVersion); err != nil {
 		t.Fatalf("query version counter: %v", err)
@@ -392,7 +392,7 @@ func TestInsertMessageVersionsMixedBatchContextAssignsContiguousVersions(t *test
 		t.Fatalf("InsertMessageVersionsMixedBatchContext() failed: %v", err)
 	}
 
-	rows, err := store.db.Query(`SELECT version, event_type FROM messages_history WHERE guild_id='g' AND message_id='m' ORDER BY version`)
+	rows, err := store.db.Query(context.Background(), `SELECT version, event_type FROM messages_history WHERE guild_id='g' AND message_id='m' ORDER BY version`)
 	if err != nil {
 		t.Fatalf("query versions: %v", err)
 	}
@@ -419,7 +419,7 @@ func TestInsertMessageVersionBackfillsCounterFromHistoryWhenMissing(t *testing.T
 	store := newTempStore(t)
 
 	createdAt := time.Now().UTC().Add(-time.Minute)
-	if _, err := store.db.Exec(
+	if _, err := store.db.Exec(context.Background(), 
 		`INSERT INTO messages_history (guild_id, message_id, channel_id, author_id, version, event_type, content, attachments, embeds_count, stickers, created_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, 0, 0, 0, $8)`,
 		"g",
@@ -446,7 +446,7 @@ func TestInsertMessageVersionBackfillsCounterFromHistoryWhenMissing(t *testing.T
 		t.Fatalf("InsertMessageVersion() failed: %v", err)
 	}
 
-	rows, err := store.db.Query(`SELECT version FROM messages_history WHERE guild_id='g' AND message_id='m' ORDER BY version`)
+	rows, err := store.db.Query(context.Background(), `SELECT version FROM messages_history WHERE guild_id='g' AND message_id='m' ORDER BY version`)
 	if err != nil {
 		t.Fatalf("query versions: %v", err)
 	}
@@ -468,7 +468,7 @@ func TestInsertMessageVersionBackfillsCounterFromHistoryWhenMissing(t *testing.T
 	}
 
 	var lastVersion int
-	if err := store.db.QueryRow(
+	if err := store.db.QueryRow(context.Background(), 
 		`SELECT last_version FROM message_version_counters WHERE guild_id='g' AND message_id='m'`,
 	).Scan(&lastVersion); err != nil {
 		t.Fatalf("query version counter: %v", err)
@@ -491,7 +491,7 @@ func TestIncrementDailyMessageCountsContextAggregatesDeltas(t *testing.T) {
 	}
 
 	var count int
-	if err := store.db.QueryRow(
+	if err := store.db.QueryRow(context.Background(), 
 		`SELECT count FROM daily_message_metrics WHERE guild_id='g' AND channel_id='c' AND user_id='u' AND day='2026-03-19'`,
 	).Scan(&count); err != nil {
 		t.Fatalf("query aggregated count: %v", err)
@@ -500,7 +500,7 @@ func TestIncrementDailyMessageCountsContextAggregatesDeltas(t *testing.T) {
 		t.Fatalf("expected aggregated count 3, got %d", count)
 	}
 
-	if err := store.db.QueryRow(
+	if err := store.db.QueryRow(context.Background(), 
 		`SELECT count FROM daily_message_metrics WHERE guild_id='g' AND channel_id='c' AND user_id='v' AND day='2026-03-19'`,
 	).Scan(&count); err != nil {
 		t.Fatalf("query second bucket count: %v", err)
@@ -525,15 +525,15 @@ func sameStringSlice(got, want []string) bool {
 func TestForeignKeysAndUniqueConstraints(t *testing.T) {
 	store := newTempStore(t)
 
-	if _, err := store.db.Exec(`INSERT INTO member_joins (guild_id, user_id, joined_at) VALUES ('g','u',CURRENT_TIMESTAMP)`); err != nil {
+	if _, err := store.db.Exec(context.Background(), `INSERT INTO member_joins (guild_id, user_id, joined_at) VALUES ('g','u',CURRENT_TIMESTAMP)`); err != nil {
 		t.Fatalf("insert1: %v", err)
 	}
-	if _, err := store.db.Exec(`INSERT INTO member_joins (guild_id, user_id, joined_at) VALUES ('g','u',CURRENT_TIMESTAMP)`); err == nil {
+	if _, err := store.db.Exec(context.Background(), `INSERT INTO member_joins (guild_id, user_id, joined_at) VALUES ('g','u',CURRENT_TIMESTAMP)`); err == nil {
 		t.Fatalf("expected unique constraint error on duplicate insert")
 	}
 
 	var count int
-	row := store.db.QueryRow(`SELECT COUNT(*) FROM member_joins WHERE guild_id='g' AND user_id='u'`)
+	row := store.db.QueryRow(context.Background(), `SELECT COUNT(*) FROM member_joins WHERE guild_id='g' AND user_id='u'`)
 	if err := row.Scan(&count); err != nil {
 		t.Fatalf("count: %v", err)
 	}
@@ -650,7 +650,7 @@ func TestUpsertGuildMemberSnapshotsContext_BatchesAvatarRolesAndJoins(t *testing
 
 	var historyCount int
 	var oldHash, newHash string
-	if err := store.db.QueryRow(
+	if err := store.db.QueryRow(context.Background(), 
 		`SELECT COUNT(*), COALESCE(MIN(old_hash), ''), COALESCE(MIN(new_hash), '') FROM avatars_history WHERE guild_id = $1 AND user_id = $2`,
 		guildID,
 		"u1",
@@ -795,7 +795,7 @@ func TestInsertMessageVersion_ConcurrentAutoVersioning(t *testing.T) {
 		}
 	}
 
-	rows, err := store.db.Query(`SELECT version FROM messages_history WHERE guild_id='g' AND message_id='m' ORDER BY version`)
+	rows, err := store.db.Query(context.Background(), `SELECT version FROM messages_history WHERE guild_id='g' AND message_id='m' ORDER BY version`)
 	if err != nil {
 		t.Fatalf("query versions: %v", err)
 	}
@@ -824,7 +824,7 @@ func TestInsertMessageVersion_ConcurrentAutoVersioning(t *testing.T) {
 	}
 
 	var lastVersion int
-	if err := store.db.QueryRow(
+	if err := store.db.QueryRow(context.Background(), 
 		`SELECT last_version FROM message_version_counters WHERE guild_id='g' AND message_id='m'`,
 	).Scan(&lastVersion); err != nil {
 		t.Fatalf("query version counter: %v", err)

@@ -536,10 +536,7 @@ func (s *Store) DeleteQOTDOfficialPostsByDeck(ctx context.Context, guildID, deck
 	if err != nil {
 		return 0, fmt.Errorf("Store.DeleteQOTDOfficialPostsByDeck: %w", err)
 	}
-	deleted, err := result.RowsAffected()
-	if err != nil {
-		return 0, fmt.Errorf("Store.DeleteQOTDOfficialPostsByDeck: %w", err)
-	}
+	deleted := result.RowsAffected()
 	return int(deleted), nil
 }
 
@@ -574,10 +571,7 @@ func (s *Store) DeleteQOTDUnpublishedOfficialPostsByDeck(ctx context.Context, gu
 	if err != nil {
 		return 0, fmt.Errorf("Store.DeleteQOTDUnpublishedOfficialPostsByDeck: %w", err)
 	}
-	deleted, err := result.RowsAffected()
-	if err != nil {
-		return 0, fmt.Errorf("Store.DeleteQOTDUnpublishedOfficialPostsByDeck: %w", err)
-	}
+	deleted := result.RowsAffected()
 	return int(deleted), nil
 }
 func normalizeQOTDOfficialPostRecord(rec QOTDOfficialPostRecord) (QOTDOfficialPostRecord, error) {

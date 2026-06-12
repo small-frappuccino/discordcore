@@ -2,19 +2,20 @@ package logging
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/testdb"
 )
 
-func newLoggingStore(t *testing.T, _ string) (*storage.Store, *sql.DB) {
+func newLoggingStore(t *testing.T, _ string) (*storage.Store, *pgxpool.Pool) {
 	t.Helper()
 
 	baseDSN, err := testdb.BaseDatabaseURLFromEnv()
@@ -60,12 +61,12 @@ func newLoggingConfigManager(t *testing.T, guildID string, channels files.Channe
 	return mgr
 }
 
-func queryIntFromStoreDB(t *testing.T, db *sql.DB, query string, args ...any) int {
+func queryIntFromStoreDB(t *testing.T, db *pgxpool.Pool, query string, args ...any) int {
 	t.Helper()
 
 	var value int
-	if err := db.QueryRow(rebindQuestionPlaceholders(query), args...).Scan(&value); err != nil {
-		if err == sql.ErrNoRows {
+	if err := db.QueryRow(context.Background(), rebindQuestionPlaceholders(query), args...).Scan(&value); err != nil {
+		if err == pgx.ErrNoRows {
 			return 0
 		}
 		t.Fatalf("query assertion failed: %v", err)
@@ -80,7 +81,7 @@ func utcDay(at time.Time) string {
 	return time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02")
 }
 
-func dailyMessageMetricCount(t *testing.T, db *sql.DB, guildID, channelID, userID string, at time.Time) int {
+func dailyMessageMetricCount(t *testing.T, db *pgxpool.Pool, guildID, channelID, userID string, at time.Time) int {
 	t.Helper()
 	return queryIntFromStoreDB(
 		t,
@@ -93,7 +94,7 @@ func dailyMessageMetricCount(t *testing.T, db *sql.DB, guildID, channelID, userI
 	)
 }
 
-func dailyMemberMetricCount(t *testing.T, db *sql.DB, tableName, guildID, userID string, at time.Time) int {
+func dailyMemberMetricCount(t *testing.T, db *pgxpool.Pool, tableName, guildID, userID string, at time.Time) int {
 	t.Helper()
 	return queryIntFromStoreDB(
 		t,
@@ -105,7 +106,7 @@ func dailyMemberMetricCount(t *testing.T, db *sql.DB, tableName, guildID, userID
 	)
 }
 
-func dailyReactionMetricCount(t *testing.T, db *sql.DB, guildID, channelID, userID string, at time.Time) int {
+func dailyReactionMetricCount(t *testing.T, db *pgxpool.Pool, guildID, channelID, userID string, at time.Time) int {
 	t.Helper()
 	return queryIntFromStoreDB(
 		t,
@@ -118,7 +119,7 @@ func dailyReactionMetricCount(t *testing.T, db *sql.DB, guildID, channelID, user
 	)
 }
 
-func messageHistoryCount(t *testing.T, db *sql.DB, guildID, messageID, eventType string) int {
+func messageHistoryCount(t *testing.T, db *pgxpool.Pool, guildID, messageID, eventType string) int {
 	t.Helper()
 	return queryIntFromStoreDB(
 		t,
@@ -145,7 +146,7 @@ func waitForCondition(t *testing.T, timeout time.Duration, description string, f
 	t.Fatalf("timed out waiting for %s", description)
 }
 
-func waitForDailyMessageMetricCount(t *testing.T, db *sql.DB, guildID, channelID, userID string, at time.Time, want int) {
+func waitForDailyMessageMetricCount(t *testing.T, db *pgxpool.Pool, guildID, channelID, userID string, at time.Time, want int) {
 	t.Helper()
 	waitForCondition(t, 3*time.Second, fmt.Sprintf("daily_message_metrics=%d for %s/%s/%s", want, guildID, channelID, userID), func() bool {
 		return dailyMessageMetricCount(t, db, guildID, channelID, userID, at) == want

@@ -2,11 +2,12 @@ package storage
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // Message Versioning (history)
@@ -42,12 +43,12 @@ func (s *Store) InsertMessageVersionsMixedBatchContext(ctx context.Context, vers
 		return nil
 	}
 
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin message versions tx: %w", err)
 	}
 	defer func() {
-		if rerr := tx.Rollback(); rerr != nil && !errors.Is(rerr, sql.ErrTxDone) {
+		if rerr := tx.Rollback(ctx); rerr != nil && !errors.Is(rerr, pgx.ErrTxClosed) {
 			err = errors.Join(err, fmt.Errorf("rollback failed: %w", rerr))
 		}
 	}()
@@ -59,7 +60,7 @@ func (s *Store) InsertMessageVersionsMixedBatchContext(ctx context.Context, vers
 	if err := insertMessageHistoryBatchTx(ctx, tx, assigned); err != nil {
 		return fmt.Errorf("Store.InsertMessageVersionsMixedBatchContext: %w", err)
 	}
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit message versions tx: %w", err)
 	}
 	return nil
@@ -104,7 +105,7 @@ type messageVersionGroup struct {
 	Indexes   []int
 }
 
-func reserveMessageVersionRangesTx(ctx context.Context, tx *sql.Tx, versions []MessageVersion) ([]MessageVersion, error) {
+func reserveMessageVersionRangesTx(ctx context.Context, tx pgx.Tx, versions []MessageVersion) ([]MessageVersion, error) {
 	if len(versions) == 0 {
 		return nil, nil
 	}
@@ -163,12 +164,12 @@ func groupMessageVersions(versions []MessageVersion) []messageVersionGroup {
 	return grouped
 }
 
-func lockMessageVersionCounterTx(ctx context.Context, tx *sql.Tx, guildID, messageID string) (int, error) {
+func lockMessageVersionCounterTx(ctx context.Context, tx pgx.Tx, guildID, messageID string) (int, error) {
 	if guildID == "" || messageID == "" {
 		return 0, nil
 	}
 
-	if _, err := tx.ExecContext(ctx,
+	if _, err := tx.Exec(ctx,
 		`INSERT INTO message_version_counters (guild_id, message_id, last_version)
          VALUES ($1, $2, COALESCE((SELECT MAX(version) FROM messages_history WHERE guild_id=$3 AND message_id=$4), 0))
          ON CONFLICT (guild_id, message_id) DO NOTHING`,
@@ -177,7 +178,7 @@ func lockMessageVersionCounterTx(ctx context.Context, tx *sql.Tx, guildID, messa
 	}
 
 	var lastVersion int64
-	if err := tx.QueryRowContext(ctx,
+	if err := tx.QueryRow(ctx,
 		`SELECT last_version FROM message_version_counters WHERE guild_id=$1 AND message_id=$2 FOR UPDATE`,
 		guildID, messageID).Scan(&lastVersion); err != nil {
 		return 0, fmt.Errorf("lock message version counter: %w", err)
@@ -185,11 +186,11 @@ func lockMessageVersionCounterTx(ctx context.Context, tx *sql.Tx, guildID, messa
 	return int(lastVersion), nil
 }
 
-func updateMessageVersionCounterTx(ctx context.Context, tx *sql.Tx, guildID, messageID string, lastVersion int) error {
+func updateMessageVersionCounterTx(ctx context.Context, tx pgx.Tx, guildID, messageID string, lastVersion int) error {
 	if guildID == "" || messageID == "" {
 		return nil
 	}
-	if _, err := tx.ExecContext(ctx,
+	if _, err := tx.Exec(ctx,
 		`UPDATE message_version_counters SET last_version=$1 WHERE guild_id=$2 AND message_id=$3`,
 		lastVersion, guildID, messageID); err != nil {
 		return fmt.Errorf("update message version counter: %w", err)
@@ -197,7 +198,7 @@ func updateMessageVersionCounterTx(ctx context.Context, tx *sql.Tx, guildID, mes
 	return nil
 }
 
-func insertMessageHistoryBatchTx(ctx context.Context, tx *sql.Tx, versions []MessageVersion) error {
+func insertMessageHistoryBatchTx(ctx context.Context, tx pgx.Tx, versions []MessageVersion) error {
 	if len(versions) == 0 {
 		return nil
 	}
@@ -227,7 +228,7 @@ func insertMessageHistoryBatchTx(ctx context.Context, tx *sql.Tx, versions []Mes
 		createdAts[i] = v.CreatedAt.UTC()
 	}
 
-	_, err := tx.ExecContext(ctx,
+	_, err := tx.Exec(ctx,
 		`INSERT INTO messages_history
          (guild_id, message_id, channel_id, author_id, version, event_type, content, attachments, embeds_count, stickers, created_at)
          SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[], $5::int[], $6::text[], $7::text[], $8::int[], $9::int[], $10::int[], $11::timestamptz[])

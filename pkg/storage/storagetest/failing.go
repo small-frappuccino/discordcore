@@ -4,10 +4,10 @@ package storagetest
 
 import (
 	"context"
-	"database/sql"
-	"database/sql/driver"
 	"errors"
+	"net"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
@@ -16,23 +16,11 @@ import (
 // the connector error, exercising the persistence-unavailable branch without
 // requiring a real Postgres connection.
 func NewFailingStore() *storage.Store {
-	store, _ := storage.NewStore(sql.OpenDB(failingConnector{}))
+	config, _ := pgxpool.ParseConfig("postgres://postgres:password@localhost:5432/postgres")
+	config.ConnConfig.DialFunc = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		return nil, errors.New("storagetest: connector always fails")
+	}
+	pool, _ := pgxpool.NewWithConfig(context.Background(), config)
+	store, _ := storage.NewStore(pool)
 	return store
-}
-
-type failingConnector struct{}
-
-// Connect connects.
-func (failingConnector) Connect(context.Context) (driver.Conn, error) {
-	return nil, errors.New("storagetest: connector always fails")
-}
-
-// Driver drivers.
-func (failingConnector) Driver() driver.Driver { return failingDriver{} }
-
-type failingDriver struct{}
-
-// Open opens.
-func (failingDriver) Open(string) (driver.Conn, error) {
-	return nil, errors.New("storagetest: driver always fails")
 }

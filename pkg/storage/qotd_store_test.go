@@ -21,7 +21,7 @@ func TestQOTDTablesInitialized(t *testing.T) {
 	}
 	for _, tableName := range required {
 		var exists bool
-		if err := store.db.QueryRow(
+		if err := store.db.QueryRow(context.Background(), 
 			`SELECT EXISTS(
 				SELECT 1
 				FROM information_schema.tables
@@ -40,7 +40,7 @@ func TestQOTDTablesInitialized(t *testing.T) {
 	legacyTables := []string{"qotd_reply_threads", "qotd_thread_archives", "qotd_message_archives"}
 	for _, tableName := range legacyTables {
 		var exists bool
-		if err := store.db.QueryRow(
+		if err := store.db.QueryRow(context.Background(), 
 			`SELECT EXISTS(
 				SELECT 1
 				FROM information_schema.tables
@@ -65,7 +65,7 @@ func TestQOTDTablesInitialized(t *testing.T) {
 	}
 	for _, legacyColumn := range legacyColumns {
 		var exists bool
-		if err := store.db.QueryRow(
+		if err := store.db.QueryRow(context.Background(), 
 			`SELECT EXISTS(
 				SELECT 1
 				FROM information_schema.columns
@@ -84,7 +84,7 @@ func TestQOTDTablesInitialized(t *testing.T) {
 	}
 
 	var publishedOnceExists bool
-	if err := store.db.QueryRow(
+	if err := store.db.QueryRow(context.Background(), 
 		`SELECT EXISTS(
 			SELECT 1
 			FROM information_schema.columns

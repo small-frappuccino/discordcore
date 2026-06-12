@@ -2,7 +2,6 @@ package testdb
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"net/url"
@@ -12,7 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/small-frappuccino/discordcore/pkg/persistence"
 )
 
@@ -41,14 +40,14 @@ func IsDatabaseURLNotConfigured(err error) bool {
 
 // OpenIsolatedDatabase creates a temporary schema and returns a DB handle scoped to it plus cleanup.
 // Tests must set DISCORDCORE_TEST_DATABASE_URL to a writable PostgreSQL database URL.
-func OpenIsolatedDatabase(ctx context.Context, baseDSN string) (*sql.DB, func() error, error) {
+func OpenIsolatedDatabase(ctx context.Context, baseDSN string) (*pgxpool.Pool, func() error, error) {
 	db, _, cleanup, err := OpenIsolatedDatabaseWithDSN(ctx, baseDSN)
 	return db, cleanup, err
 }
 
 // OpenIsolatedDatabaseWithDSN creates a temporary schema and returns a DB
 // handle scoped to it, the DSN pointing at that schema, plus cleanup.
-func OpenIsolatedDatabaseWithDSN(ctx context.Context, baseDSN string) (*sql.DB, string, func() error, error) {
+func OpenIsolatedDatabaseWithDSN(ctx context.Context, baseDSN string) (*pgxpool.Pool, string, func() error, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -62,13 +61,13 @@ func OpenIsolatedDatabaseWithDSN(ctx context.Context, baseDSN string) (*sql.DB, 
 		return nil, "", nil, fmt.Errorf("parse base database url: %w", err)
 	}
 
-	admin, err := sql.Open("pgx", baseDSN)
+	admin, err := pgxpool.New(ctx, baseDSN)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("open base database connection: %w", err)
 	}
 	defer admin.Close()
 
-	if err := admin.PingContext(ctx); err != nil {
+	if err := admin.Ping(ctx); err != nil {
 		return nil, "", nil, fmt.Errorf("ping base database connection: %w", err)
 	}
 
@@ -81,47 +80,49 @@ func OpenIsolatedDatabaseWithDSN(ctx context.Context, baseDSN string) (*sql.DB, 
 		return nil, "", nil, fmt.Errorf("generated invalid test schema name %q", schemaName)
 	}
 
-	if _, err := admin.ExecContext(ctx, fmt.Sprintf(`CREATE SCHEMA "%s"`, schemaName)); err != nil {
+	if _, err := admin.Exec(ctx, fmt.Sprintf(`CREATE SCHEMA "%s"`, schemaName)); err != nil {
 		return nil, "", nil, fmt.Errorf("create test schema %s: %w", schemaName, err)
 	}
 
 	testDSN, err := withSearchPath(baseDSN, schemaName)
 	if err != nil {
-		_, _ = admin.ExecContext(ctx, fmt.Sprintf(`DROP SCHEMA IF EXISTS "%s" CASCADE`, schemaName))
+		_, _ = admin.Exec(ctx, fmt.Sprintf(`DROP SCHEMA IF EXISTS "%s" CASCADE`, schemaName))
 		return nil, "", nil, fmt.Errorf("OpenIsolatedDatabaseWithDSN: %w", err)
 	}
 
-	testDB, err := sql.Open("pgx", testDSN)
+	testDB, err := pgxpool.New(ctx, testDSN)
 	if err != nil {
-		_, _ = admin.ExecContext(ctx, fmt.Sprintf(`DROP SCHEMA IF EXISTS "%s" CASCADE`, schemaName))
+		_, _ = admin.Exec(ctx, fmt.Sprintf(`DROP SCHEMA IF EXISTS "%s" CASCADE`, schemaName))
 		return nil, "", nil, fmt.Errorf("open test database handle for schema %s: %w", schemaName, err)
 	}
-	if err := testDB.PingContext(ctx); err != nil {
-		_ = testDB.Close()
-		_, _ = admin.ExecContext(ctx, fmt.Sprintf(`DROP SCHEMA IF EXISTS "%s" CASCADE`, schemaName))
+	if err := testDB.Ping(ctx); err != nil {
+		testDB.Close()
+		_, _ = admin.Exec(ctx, fmt.Sprintf(`DROP SCHEMA IF EXISTS "%s" CASCADE`, schemaName))
 		return nil, "", nil, fmt.Errorf("ping test database handle for schema %s: %w", schemaName, err)
 	}
 
 	migrateCtx, migrateCancel := context.WithTimeout(ctx, 30*time.Second)
 	defer migrateCancel()
 	if err := persistence.NewPostgresMigrator(testDB).Up(migrateCtx); err != nil {
-		_ = testDB.Close()
-		_, _ = admin.ExecContext(ctx, fmt.Sprintf(`DROP SCHEMA IF EXISTS "%s" CASCADE`, schemaName))
+		testDB.Close()
+		_, _ = admin.Exec(ctx, fmt.Sprintf(`DROP SCHEMA IF EXISTS "%s" CASCADE`, schemaName))
 		return nil, "", nil, fmt.Errorf("apply postgres migrations for test schema %s: %w", schemaName, err)
 	}
 
 	cleanup := func() error {
-		_ = testDB.Close()
+		testDB.Close()
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		cleanupAdmin, err := sql.Open("pgx", baseDSN)
+		cleanupAdmin, err := pgxpool.New(cleanupCtx, baseDSN)
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "postgres test cleanup error: %v\n", err)
 			return fmt.Errorf("open cleanup admin connection: %w", err)
 		}
 		defer cleanupAdmin.Close()
 
-		if _, err := cleanupAdmin.ExecContext(cleanupCtx, fmt.Sprintf(`DROP SCHEMA IF EXISTS "%s" CASCADE`, schemaName)); err != nil {
+		if _, err := cleanupAdmin.Exec(cleanupCtx, fmt.Sprintf(`DROP SCHEMA IF EXISTS "%s" CASCADE`, schemaName)); err != nil {
+			fmt.Fprintf(os.Stderr, "postgres test cleanup error: %v\n", err)
 			return fmt.Errorf("drop test schema %s: %w", schemaName, err)
 		}
 		return nil
