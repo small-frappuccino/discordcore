@@ -58,40 +58,24 @@ func resolveBotRuntimeCapabilities(
 				}
 			}
 
-			// Sub-domain feature routing grants command capability to the assigned bot.
-			// If a sub-domain route is not explicitly configured, it falls back to the
-			// base "commands" route (which itself falls back to the default bot).
+			// Any explicitly routed sub-domain implies the bot might need to handle commands or interactions for it.
+			for _, routedBotID := range guild.FeatureRouting {
+				if routedBotID == botInstanceID {
+					capabilities.hasCommands = true
+					break
+				}
+			}
+
+			// Specific features still grant additional specific capabilities beyond just commands.
 			rolesResolvedID, _ := guild.ResolveFeatureBotInstanceID("roles", cmdResolvedID)
 			if rolesResolvedID == botInstanceID {
-				capabilities.hasCommands = true
 				capabilities.intents |= discordgo.IntentsGuildMembers
 				capabilities.warmup = true
-			}
-
-			modResolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation", cmdResolvedID)
-			if modResolvedID == botInstanceID {
-				capabilities.hasCommands = true
-			}
-
-			partnersResolvedID, _ := guild.ResolveFeatureBotInstanceID("partners", cmdResolvedID)
-			if partnersResolvedID == botInstanceID {
-				capabilities.hasCommands = true
-			}
-
-			embedsResolvedID, _ := guild.ResolveFeatureBotInstanceID("embeds", cmdResolvedID)
-			if embedsResolvedID == botInstanceID {
-				capabilities.hasCommands = true
-			}
-
-			ticketsResolvedID, _ := guild.ResolveFeatureBotInstanceID("tickets", cmdResolvedID)
-			if ticketsResolvedID == botInstanceID {
-				capabilities.hasCommands = true
 			}
 
 			statsResolvedID, _ := guild.ResolveFeatureBotInstanceID("stats", cmdResolvedID)
 			if statsResolvedID == botInstanceID {
 				capabilities.stats = true
-				capabilities.hasCommands = true
 			}
 		}
 
