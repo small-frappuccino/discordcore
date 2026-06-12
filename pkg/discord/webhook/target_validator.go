@@ -185,6 +185,17 @@ func wrapTargetValidationError(operation string, err error) error {
 			Cause:      err,
 		}
 	}
+
+	if strings.Contains(err.Error(), "HTTP 5") {
+		return &TargetValidationError{
+			Operation:  operation,
+			StatusCode: http.StatusInternalServerError,
+			Class:      TargetValidationClassDiscordUnavailable,
+			Temporary:  true,
+			Cause:      err,
+		}
+	}
+
 	return &TargetValidationError{
 		Operation:  operation,
 		StatusCode: 0,
