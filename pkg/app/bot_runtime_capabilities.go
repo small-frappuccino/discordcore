@@ -43,6 +43,9 @@ func resolveBotRuntimeCapabilities(
 			resolvedID, _ := guild.ResolveFeatureBotInstanceID("qotd", defaultBotInstanceID)
 			if resolvedID == botInstanceID {
 				capabilities.qotdRuntime = true
+				if features.Services.Commands {
+					capabilities.hasCommands = true
+				}
 			}
 		}
 

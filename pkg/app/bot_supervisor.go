@@ -142,10 +142,21 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 	// 2. Compute differences
 	toStart := make(map[string]string)
 	toStop := make([]string, 0)
+	capsChangedMap := make(map[string]bool)
 
 	for id, token := range currentTokens {
 		oldState, exists := s.instances[id]
-		if !exists || oldState.Token != token {
+		var capsChanged bool
+		if exists && oldCfg != nil {
+			oldCaps := resolveBotRuntimeCapabilities(oldCfg, id, s.opts.defaultBotInstanceID)
+			newCaps := resolveBotRuntimeCapabilities(newCfg, id, s.opts.defaultBotInstanceID)
+			if oldCaps != newCaps {
+				capsChanged = true
+				capsChangedMap[id] = true
+			}
+		}
+
+		if !exists || oldState.Token != token || capsChanged {
 			toStart[id] = token
 		} else if oldState.DiscordStatus != currentStatuses[id] {
 			oldState.DiscordStatus = currentStatuses[id]
@@ -182,21 +193,21 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 	for id, token := range toStart {
 		var oldState *botInstanceState
 		if state, exists := s.instances[id]; exists {
-			if state.Token != token {
-				if state.Status != StatusStopping {
+			if state.Status != StatusStopping {
+				if state.Token != token {
 					log.ApplicationLogger().Info("Stopping bot instance due to token update", "botInstanceID", id)
-					state.Status = StatusStopping
-					state.StopWG.Add(1)
-					s.bgWG.Add(1)
-					go func(id string, state *botInstanceState) {
-						defer s.bgWG.Done()
-						s.executeStopAndRemove(context.Background(), id, state, nil)
-					}(id, state)
+				} else {
+					log.ApplicationLogger().Info("Stopping bot instance due to capability change", "botInstanceID", id)
 				}
-				oldState = state
-			} else {
-				continue
+				state.Status = StatusStopping
+				state.StopWG.Add(1)
+				s.bgWG.Add(1)
+				go func(id string, state *botInstanceState) {
+					defer s.bgWG.Done()
+					s.executeStopAndRemove(context.Background(), id, state, nil)
+				}(id, state)
 			}
+			oldState = state
 		}
 
 		s.bgWG.Add(1)
