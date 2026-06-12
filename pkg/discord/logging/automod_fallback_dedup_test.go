@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -9,8 +10,8 @@ func TestAutomodFallbackShouldDedup_EmptyKeyNeverDedups(t *testing.T) {
 	t.Parallel()
 
 	as := NewAutomodService(nil, nil, "", "")
-	as.Start()
-	defer as.Stop()
+	as.Start(context.Background())
+	defer as.Stop(context.Background())
 
 	now := time.Date(2026, 5, 19, 9, 13, 0, 0, time.UTC)
 	if as.fallbackShouldDedupAt("", now) {
@@ -25,8 +26,8 @@ func TestAutomodFallbackShouldDedup_SecondCallWithinTTLReturnsTrue(t *testing.T)
 	t.Parallel()
 
 	as := NewAutomodService(nil, nil, "", "")
-	as.Start()
-	defer as.Stop()
+	as.Start(context.Background())
+	defer as.Stop(context.Background())
 
 	now := time.Date(2026, 5, 19, 9, 13, 0, 0, time.UTC)
 	key := "automod:g1:r1:u1:content:abcd"
@@ -43,8 +44,8 @@ func TestAutomodFallbackShouldDedup_CallAfterTTLReturnsFalse(t *testing.T) {
 	t.Parallel()
 
 	as := NewAutomodService(nil, nil, "", "")
-	as.Start()
-	defer as.Stop()
+	as.Start(context.Background())
+	defer as.Stop(context.Background())
 
 	now := time.Date(2026, 5, 19, 9, 13, 0, 0, time.UTC)
 	key := "automod:g1:r1:u1:content:abcd"
@@ -61,8 +62,8 @@ func TestAutomodFallbackShouldDedup_DistinctKeysDoNotInterfere(t *testing.T) {
 	t.Parallel()
 
 	as := NewAutomodService(nil, nil, "", "")
-	as.Start()
-	defer as.Stop()
+	as.Start(context.Background())
+	defer as.Stop(context.Background())
 
 	now := time.Date(2026, 5, 19, 9, 13, 0, 0, time.UTC)
 
@@ -81,8 +82,8 @@ func TestAutomodFallbackShouldDedup_LazyCleanupBoundsMap(t *testing.T) {
 	t.Parallel()
 
 	as := NewAutomodService(nil, nil, "", "")
-	as.Start()
-	defer as.Stop()
+	as.Start(context.Background())
+	defer as.Stop(context.Background())
 
 	base := time.Date(2026, 5, 19, 9, 13, 0, 0, time.UTC)
 

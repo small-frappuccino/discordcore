@@ -155,8 +155,8 @@ func TestRuntimeServiceLoopRunsPublishCycleOnStartAndInterval(t *testing.T) {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}
 
-	service.Start()
-	t.Cleanup(service.Stop)
+	service.Start(context.Background())
+	t.Cleanup(func() { service.Stop(context.Background()) })
 	if !service.IsRunning() {
 		t.Fatal("expected runtime service to report running after Start()")
 	}
@@ -172,7 +172,7 @@ func TestRuntimeServiceLoopRunsPublishCycleOnStartAndInterval(t *testing.T) {
 		}
 	}
 
-	service.Stop()
+	service.Stop(context.Background())
 
 	if service.IsRunning() {
 		t.Fatal("expected runtime service to stop running after Stop()")
@@ -455,7 +455,7 @@ func TestRuntimeServiceRestartResumesIntervalCycles(t *testing.T) {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}
 
-	service.Start()
+	service.Start(context.Background())
 	select {
 	case guildID := <-fake.publishCh:
 		if guildID != "g-enabled" {
@@ -464,11 +464,11 @@ func TestRuntimeServiceRestartResumesIntervalCycles(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for first start publish cycle")
 	}
-	service.Stop()
+	service.Stop(context.Background())
 
 	service.publishInterval = 10 * time.Millisecond
-	service.Start()
-	t.Cleanup(service.Stop)
+	service.Start(context.Background())
+	t.Cleanup(func() { service.Stop(context.Background()) })
 
 	select {
 	case guildID := <-fake.publishCh:
@@ -533,12 +533,12 @@ func TestRuntimeServiceMultipleRestartsResumeIntervalCycles(t *testing.T) {
 	}
 
 	for cycle := 1; cycle <= 3; cycle++ {
-		service.Start()
+		service.Start(context.Background())
 		if !service.IsRunning() {
 			t.Fatalf("cycle %d: expected runtime service to report running after Start()", cycle)
 		}
 		expectStartupPublish(t, fmt.Sprintf("cycle %d", cycle))
-		service.Stop()
+		service.Stop(context.Background())
 		if service.IsRunning() {
 			t.Fatalf("cycle %d: expected runtime service to stop running after Stop()", cycle)
 		}
@@ -549,8 +549,8 @@ func TestRuntimeServiceMultipleRestartsResumeIntervalCycles(t *testing.T) {
 	// More importantly, a final restart must still spin up a fresh interval
 	// loop — proving the reset path remains effective without bound.
 	service.publishInterval = 10 * time.Millisecond
-	service.Start()
-	t.Cleanup(service.Stop)
+	service.Start(context.Background())
+	t.Cleanup(func() { service.Stop(context.Background()) })
 	expectStartupPublish(t, "final restart startup")
 	select {
 	case guildID := <-fake.publishCh:
@@ -589,7 +589,7 @@ func TestRuntimeServiceStopCancelsInflightPublish(t *testing.T) {
 	service.publishInterval = time.Hour
 	service.reconcileEvery = time.Hour
 
-	service.Start()
+	service.Start(context.Background())
 	select {
 	case <-fake.started:
 	case <-time.After(2 * time.Second):
@@ -598,7 +598,7 @@ func TestRuntimeServiceStopCancelsInflightPublish(t *testing.T) {
 
 	stopped := make(chan struct{})
 	go func() {
-		service.Stop()
+		service.Stop(context.Background())
 		close(stopped)
 	}()
 
@@ -753,8 +753,8 @@ func TestRuntimeServiceLoopWakesAtScheduledMoment(t *testing.T) {
 	clockOffset := time.Since(startWall)
 	service.now = func() time.Time { return time.Now().UTC().Add(-clockOffset) }
 
-	service.Start()
-	t.Cleanup(service.Stop)
+	service.Start(context.Background())
+	t.Cleanup(func() { service.Stop(context.Background()) })
 
 	// Drain the startup publish that runs before the timer loop.
 	select {
@@ -812,8 +812,8 @@ func TestRuntimeServiceLoopFallsBackToCapWithoutSchedule(t *testing.T) {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}
 
-	service.Start()
-	t.Cleanup(service.Stop)
+	service.Start(context.Background())
+	t.Cleanup(func() { service.Stop(context.Background()) })
 
 	for idx := 0; idx < 3; idx++ {
 		select {

@@ -1,9 +1,12 @@
 package commands
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
@@ -27,6 +30,11 @@ type CommandHandler struct {
 	statsService        *logging.StatsService
 	moderationMetrics   moderation.Metrics
 	adminServiceManager *service.ServiceManager
+
+	mu           sync.RWMutex
+	running      bool
+	startTime    time.Time
+	dependencies []string
 }
 
 // NewCommandHandler creates a new CommandHandler instance
@@ -49,6 +57,95 @@ func NewCommandHandlerForBot(
 		botInstanceID:     files.NormalizeBotInstanceID(botInstanceID),
 		catalogRegistrars: DefaultCommandCatalogRegistrars(),
 	}
+}
+
+// SetDependencies allows the orchestrator to inject dynamic dependencies.
+func (ch *CommandHandler) SetDependencies(deps []string) {
+	ch.mu.Lock()
+	defer ch.mu.Unlock()
+	ch.dependencies = append([]string(nil), deps...)
+}
+
+// Name returns the service name.
+func (ch *CommandHandler) Name() string { return "command-handler" }
+
+// Type returns the service type.
+func (ch *CommandHandler) Type() service.ServiceType { return service.TypeCommands }
+
+// Priority returns the service startup priority.
+func (ch *CommandHandler) Priority() service.ServicePriority { return service.PriorityNormal }
+
+// Dependencies returns the dependencies.
+func (ch *CommandHandler) Dependencies() []string {
+	ch.mu.RLock()
+	defer ch.mu.RUnlock()
+	return append([]string(nil), ch.dependencies...)
+}
+
+// IsRunning reports whether the service is running.
+func (ch *CommandHandler) IsRunning() bool {
+	ch.mu.RLock()
+	defer ch.mu.RUnlock()
+	return ch.running
+}
+
+// HealthCheck returns the current health status.
+func (ch *CommandHandler) HealthCheck(ctx context.Context) service.HealthStatus {
+	return service.HealthStatus{
+		Healthy:   true,
+		Message:   "Command Handler is active",
+		LastCheck: time.Now(),
+	}
+}
+
+// Stats returns runtime statistics.
+func (ch *CommandHandler) Stats() service.ServiceStats {
+	ch.mu.RLock()
+	defer ch.mu.RUnlock()
+
+	var uptime time.Duration
+	if ch.running {
+		uptime = time.Since(ch.startTime)
+	}
+
+	return service.ServiceStats{
+		StartTime: ch.startTime,
+		Uptime:    uptime,
+		Metrics: []service.ServiceMetric{
+			{Label: "Status", Value: "Running"},
+		},
+	}
+}
+
+// Start implements the service.Service interface.
+func (ch *CommandHandler) Start(ctx context.Context) error {
+	ch.mu.Lock()
+	if ch.running {
+		ch.mu.Unlock()
+		return nil
+	}
+	ch.running = true
+	ch.startTime = time.Now()
+	ch.mu.Unlock()
+
+	err := ch.SetupCommands()
+	if err != nil {
+		log.ApplicationLogger().Warn("Failed to sync commands during startup; continuing without updated commands", "err", err)
+	}
+	return nil
+}
+
+// Stop implements the service.Service interface.
+func (ch *CommandHandler) Stop(ctx context.Context) error {
+	ch.mu.Lock()
+	if !ch.running {
+		ch.mu.Unlock()
+		return nil
+	}
+	ch.running = false
+	ch.mu.Unlock()
+
+	return ch.Shutdown()
 }
 
 // SetupCommands initializes and registers all bot commands

@@ -9,6 +9,7 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -68,8 +69,11 @@ type RuntimeService struct {
 	stopCh   chan struct{}
 	wg       sync.WaitGroup
 
-	mu      sync.RWMutex
-	running bool
+	mu        sync.RWMutex
+	running   bool
+	startTime time.Time
+
+	dependencies []string
 }
 
 // NewRuntimeService news runtime service.
@@ -100,12 +104,63 @@ func NewRuntimeServiceForBot(
 	}
 }
 
+// SetDependencies allows the orchestrator to inject dynamic dependencies.
+func (s *RuntimeService) SetDependencies(deps []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.dependencies = append([]string(nil), deps...)
+}
+
+// Name returns the service name.
+func (s *RuntimeService) Name() string { return "qotd" }
+
+// Type returns the service type.
+func (s *RuntimeService) Type() service.ServiceType { return service.TypeMonitoring }
+
+// Priority returns the service priority.
+func (s *RuntimeService) Priority() service.ServicePriority { return service.PriorityNormal }
+
+// Dependencies returns the service dependencies.
+func (s *RuntimeService) Dependencies() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append([]string(nil), s.dependencies...)
+}
+
+// HealthCheck returns the current health status.
+func (s *RuntimeService) HealthCheck(ctx context.Context) service.HealthStatus {
+	return service.HealthStatus{
+		Healthy:   true,
+		Message:   "QOTD Runtime Service is active",
+		LastCheck: time.Now(),
+	}
+}
+
+// Stats returns runtime statistics.
+func (s *RuntimeService) Stats() service.ServiceStats {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var uptime time.Duration
+	if s.running {
+		uptime = time.Since(s.startTime)
+	}
+
+	return service.ServiceStats{
+		StartTime: s.startTime,
+		Uptime:    uptime,
+		Metrics: []service.ServiceMetric{
+			{Label: "Status", Value: "Running"},
+		},
+	}
+}
+
 // Start starts.
-func (s *RuntimeService) Start() {
+func (s *RuntimeService) Start(ctx context.Context) error {
 	s.mu.Lock()
 	if s.running {
 		s.mu.Unlock()
-		return
+		return nil
 	}
 	select {
 	case <-s.stopCh:
@@ -114,20 +169,34 @@ func (s *RuntimeService) Start() {
 	default:
 	}
 	s.running = true
+	s.startTime = time.Now()
 	s.mu.Unlock()
 
 	s.wg.Add(1)
 	go s.loop()
+	return nil
 }
 
 // Stop stops.
-func (s *RuntimeService) Stop() {
+func (s *RuntimeService) Stop(ctx context.Context) error {
 	s.stopOnce.Do(func() { close(s.stopCh) })
-	s.wg.Wait()
+
+	done := make(chan struct{})
+	go func() {
+		s.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 
 	s.mu.Lock()
 	s.running = false
 	s.mu.Unlock()
+	return nil
 }
 
 // IsRunning is running.

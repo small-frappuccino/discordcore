@@ -109,15 +109,13 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 		opts.runtimeApplier.AddRuntime(runtime.serviceManager, monitoringService)
 	}
 
-	automodWrapper := buildAutomodWrapper(runtime, opts, routerConfig, runtimeConfig, monitoringService)
-
 	if monitoringService != nil {
 		if err := runtime.serviceManager.Register(monitoringService); err != nil {
 			return fmt.Errorf("register monitoring service for %s: %w", runtime.instanceID, err)
 		}
 	}
-	if automodWrapper != nil {
-		if err := runtime.serviceManager.Register(automodWrapper); err != nil {
+	if automodService := buildAutomodService(runtime, opts, routerConfig, runtimeConfig, monitoringService); automodService != nil {
+		if err := runtime.serviceManager.Register(automodService); err != nil {
 			return fmt.Errorf("register automod service for %s: %w", runtime.instanceID, err)
 		}
 	}
@@ -129,9 +127,8 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 		return err
 	}
 
-	commandWrapper := setupRuntimeCommandHandler(runtime, opts, cfg, monitoringService)
-	if commandWrapper != nil {
-		if err := runtime.serviceManager.Register(commandWrapper); err != nil {
+	if commandHandler := setupRuntimeCommandHandler(runtime, opts, cfg, monitoringService); commandHandler != nil {
+		if err := runtime.serviceManager.Register(commandHandler); err != nil {
 			return fmt.Errorf("register command handler service for %s: %w", runtime.instanceID, err)
 		}
 	}
@@ -176,10 +173,10 @@ func setupMonitoringService(runtime *botRuntime, opts botRuntimeOptions, routerC
 	return monitoringService, nil
 }
 
-// buildAutomodWrapper constructs the automod logging service wrapper when the runtime
+// buildAutomodService constructs the automod logging service when the runtime
 // has the automod capability and automod logs are not disabled, sharing the monitoring
 // notifier when available. It returns nil when automod should not run.
-func buildAutomodWrapper(runtime *botRuntime, opts botRuntimeOptions, routerConfig task.RouterConfig, runtimeConfig files.RuntimeConfig, monitoringService *logging.MonitoringService) *service.LegacyServiceWrapper {
+func buildAutomodService(runtime *botRuntime, opts botRuntimeOptions, routerConfig task.RouterConfig, runtimeConfig files.RuntimeConfig, monitoringService *logging.MonitoringService) service.Service {
 	if !runtime.capabilities.automod {
 		log.ApplicationLogger().Info("Automod service skipped; no effective automod logging workload is enabled", "botInstanceID", runtime.instanceID)
 		return nil
@@ -205,19 +202,9 @@ func buildAutomodWrapper(runtime *botRuntime, opts botRuntimeOptions, routerConf
 	automodAdapters.RegisterHandlers()
 	automodService.SetAdapters(automodAdapters)
 
-	return service.NewLegacyServiceWrapper(service.LegacyServiceWrapperSpec{
-		Name:         "automod",
-		Type:         service.TypeAutomod,
-		Priority:     service.PriorityNormal,
-		Dependencies: []string{},
-		Start:        func(context.Context) error { automodService.Start(); return nil },
-		Stop: func(context.Context) error {
-			automodRouter.Close()
-			automodService.Stop()
-			return nil
-		},
-		Check: func() bool { return true },
-	})
+	automodService.SetAdapters(automodAdapters)
+
+	return automodService
 }
 
 // registerUserPruneService registers the Discord-native user prune maintenance service
@@ -231,16 +218,9 @@ func registerUserPruneService(runtime *botRuntime, opts botRuntimeOptions, monit
 	if monitoringService != nil {
 		userPruneDependencies = []string{"monitoring"}
 	}
-	userPruneWrapper := service.NewLegacyServiceWrapper(service.LegacyServiceWrapperSpec{
-		Name:         "user-prune",
-		Type:         service.TypeMonitoring,
-		Priority:     service.PriorityNormal,
-		Dependencies: userPruneDependencies,
-		Start:        func(context.Context) error { userPruneService.Start(); return nil },
-		Stop:         func(context.Context) error { userPruneService.Stop(); return nil },
-		Check:        func() bool { return userPruneService.IsRunning() },
-	})
-	if err := runtime.serviceManager.Register(userPruneWrapper); err != nil {
+	userPruneService.SetDependencies(userPruneDependencies)
+
+	if err := runtime.serviceManager.Register(userPruneService); err != nil {
 		return fmt.Errorf("register user prune service for %s: %w", runtime.instanceID, err)
 	}
 	log.ApplicationLogger().Info("User prune enabled (Discord native prune: day 28, 30 days)", "botInstanceID", runtime.instanceID)
@@ -260,16 +240,7 @@ func registerQOTDRuntimeService(runtime *botRuntime, opts botRuntimeOptions) err
 		runtime.instanceID,
 		"",
 	)
-	qotdWrapper := service.NewLegacyServiceWrapper(service.LegacyServiceWrapperSpec{
-		Name:         "qotd",
-		Type:         service.TypeMonitoring,
-		Priority:     service.PriorityNormal,
-		Dependencies: []string{},
-		Start:        func(context.Context) error { qotdRuntimeService.Start(); return nil },
-		Stop:         func(context.Context) error { qotdRuntimeService.Stop(); return nil },
-		Check:        func() bool { return qotdRuntimeService.IsRunning() },
-	})
-	if err := runtime.serviceManager.Register(qotdWrapper); err != nil {
+	if err := runtime.serviceManager.Register(qotdRuntimeService); err != nil {
 		return fmt.Errorf("register qotd runtime service for %s: %w", runtime.instanceID, err)
 	}
 	log.ApplicationLogger().Info("QOTD runtime enabled", "botInstanceID", runtime.instanceID)
@@ -278,7 +249,7 @@ func registerQOTDRuntimeService(runtime *botRuntime, opts botRuntimeOptions) err
 
 // setupRuntimeCommandHandler builds and registers the slash-command handler for runtimes
 // that expose commands; otherwise it logs why commands were skipped.
-func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg *files.BotConfig, monitoringService *logging.MonitoringService) *service.LegacyServiceWrapper {
+func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg *files.BotConfig, monitoringService *logging.MonitoringService) service.Service {
 	if !runtime.capabilities.HasCommands() {
 		logRuntimeCommandsSkipped(runtime, opts, cfg)
 
@@ -287,19 +258,8 @@ func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg
 		// (or before registry sync existed) will remain perpetually cached in the guild or global scope.
 		if runtime.session != nil && runtime.session.Token != "" {
 			commandHandler := newCommandHandlerForBot(runtime.session, opts.configManager, runtime.instanceID)
-			return service.NewLegacyServiceWrapper(service.LegacyServiceWrapperSpec{
-				Name:         "commands-clear",
-				Type:         service.TypeCommands,
-				Priority:     service.PriorityHigh,
-				Dependencies: []string{},
-				Start: func(context.Context) error {
-					return setupCommandHandler(commandHandler)
-				},
-				Stop: func(context.Context) error {
-					return shutdownCommandHandler(commandHandler)
-				},
-				Check: func() bool { return true },
-			})
+			// Returning the empty command handler will clear the Discord commands upon Start()
+			return commandHandler
 		}
 		return nil
 	}
@@ -334,16 +294,9 @@ func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg
 	if monitoringService != nil {
 		deps = append(deps, "monitoring")
 	}
+	commandHandler.SetDependencies(deps)
 
-	return service.NewLegacyServiceWrapper(service.LegacyServiceWrapperSpec{
-		Name:         "command-handler",
-		Type:         service.TypeCommands,
-		Priority:     service.PriorityNormal,
-		Dependencies: deps,
-		Start:        func(context.Context) error { return setupCommandHandler(commandHandler) },
-		Stop:         func(context.Context) error { return shutdownCommandHandler(commandHandler) },
-		Check:        func() bool { return true },
-	})
+	return commandHandler
 }
 
 func logRuntimeCommandsSkipped(runtime *botRuntime, opts botRuntimeOptions, cfg *files.BotConfig) {

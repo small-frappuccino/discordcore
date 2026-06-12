@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -12,6 +13,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
+	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/task"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
 	"github.com/small-frappuccino/discordgo"
@@ -112,6 +114,9 @@ type AutomodService struct {
 	isRunning     bool
 	handlerCancel func()
 
+	mu        sync.RWMutex
+	startTime time.Time
+
 	botInstanceID        string
 	defaultBotInstanceID string
 
@@ -135,30 +140,89 @@ func (as *AutomodService) SetAdapters(adapters *task.NotificationAdapters) {
 	as.adapters = adapters
 }
 
-// Start registers handlers.
-func (as *AutomodService) Start() {
+// Name returns the service name.
+func (as *AutomodService) Name() string { return "automod" }
+
+// Type returns the service type.
+func (as *AutomodService) Type() service.ServiceType { return service.TypeAutomod }
+
+// Priority returns the service startup priority.
+func (as *AutomodService) Priority() service.ServicePriority { return service.PriorityNormal }
+
+// Dependencies returns the dependencies.
+func (as *AutomodService) Dependencies() []string { return nil }
+
+// IsRunning reports whether the service is running.
+func (as *AutomodService) IsRunning() bool {
+	as.mu.RLock()
+	defer as.mu.RUnlock()
+	return as.isRunning
+}
+
+// HealthCheck returns the current health status.
+func (as *AutomodService) HealthCheck(ctx context.Context) service.HealthStatus {
+	return service.HealthStatus{
+		Healthy:   true,
+		Message:   "Automod Service is active",
+		LastCheck: time.Now(),
+	}
+}
+
+// Stats returns runtime statistics.
+func (as *AutomodService) Stats() service.ServiceStats {
+	as.mu.RLock()
+	defer as.mu.RUnlock()
+
+	var uptime time.Duration
 	if as.isRunning {
-		return
+		uptime = time.Since(as.startTime)
+	}
+
+	return service.ServiceStats{
+		StartTime: as.startTime,
+		Uptime:    uptime,
+		Metrics: []service.ServiceMetric{
+			{Label: "Status", Value: "Running"},
+		},
+	}
+}
+
+// Start registers handlers.
+func (as *AutomodService) Start(ctx context.Context) error {
+	as.mu.Lock()
+	defer as.mu.Unlock()
+
+	if as.isRunning {
+		return nil
 	}
 	as.isRunning = true
+	as.startTime = time.Now()
 
 	as.dedupCache = make(map[string]time.Time)
 
 	if as.session != nil {
 		as.handlerCancel = as.session.AddHandler(as.handleRawEvent)
 	}
+	return nil
 }
 
-// Stop stops the service (no-op for now).
-func (as *AutomodService) Stop() {
+// Stop stops the service.
+func (as *AutomodService) Stop(ctx context.Context) error {
+	as.mu.Lock()
+	defer as.mu.Unlock()
+
 	if !as.isRunning {
-		return
+		return nil
 	}
 	if as.handlerCancel != nil {
 		as.handlerCancel()
 		as.handlerCancel = nil
 	}
+	if as.adapters != nil && as.adapters.Router != nil {
+		as.adapters.Router.Close()
+	}
 	as.isRunning = false
+	return nil
 }
 
 // handleRawEvent decomposes a raw gateway envelope, filters for AutoMod action

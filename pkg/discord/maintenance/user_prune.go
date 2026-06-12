@@ -11,6 +11,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
+	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
 	"github.com/small-frappuccino/discordgo"
@@ -43,8 +44,11 @@ type UserPruneService struct {
 	stopCh   chan struct{}
 	wg       sync.WaitGroup
 
-	mu      sync.RWMutex
-	running bool
+	mu        sync.RWMutex
+	running   bool
+	startTime time.Time
+
+	dependencies []string
 }
 
 // NewUserPruneServiceForBot news user prune service for bot.
@@ -65,28 +69,94 @@ func NewUserPruneServiceForBot(
 	}
 }
 
+// SetDependencies allows the orchestrator to inject dynamic dependencies.
+func (s *UserPruneService) SetDependencies(deps []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.dependencies = append([]string(nil), deps...)
+}
+
+// Name returns the service name.
+func (s *UserPruneService) Name() string { return "user-prune" }
+
+// Type returns the service type.
+func (s *UserPruneService) Type() service.ServiceType { return service.TypeMonitoring }
+
+// Priority returns the service priority.
+func (s *UserPruneService) Priority() service.ServicePriority { return service.PriorityNormal }
+
+// Dependencies returns the service dependencies.
+func (s *UserPruneService) Dependencies() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append([]string(nil), s.dependencies...)
+}
+
+// HealthCheck returns the current health status.
+func (s *UserPruneService) HealthCheck(ctx context.Context) service.HealthStatus {
+	return service.HealthStatus{
+		Healthy:   true,
+		Message:   "User Prune Service is active",
+		LastCheck: time.Now(),
+	}
+}
+
+// Stats returns runtime statistics.
+func (s *UserPruneService) Stats() service.ServiceStats {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var uptime time.Duration
+	if s.running {
+		uptime = time.Since(s.startTime)
+	}
+
+	return service.ServiceStats{
+		StartTime: s.startTime,
+		Uptime:    uptime,
+		Metrics: []service.ServiceMetric{
+			{Label: "Status", Value: "Running"},
+		},
+	}
+}
+
 // Start starts.
-func (s *UserPruneService) Start() {
+func (s *UserPruneService) Start(ctx context.Context) error {
 	s.mu.Lock()
 	if s.running {
 		s.mu.Unlock()
-		return
+		return nil
 	}
 	s.running = true
+	s.startTime = time.Now()
 	s.mu.Unlock()
 
 	s.wg.Add(1)
 	go s.loop()
+	return nil
 }
 
 // Stop stops.
-func (s *UserPruneService) Stop() {
+func (s *UserPruneService) Stop(ctx context.Context) error {
 	s.stopOnce.Do(func() { close(s.stopCh) })
-	s.wg.Wait()
+
+	// Wait for loop to finish or context to expire
+	done := make(chan struct{})
+	go func() {
+		s.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 
 	s.mu.Lock()
 	s.running = false
 	s.mu.Unlock()
+	return nil
 }
 
 // IsRunning is running.
