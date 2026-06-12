@@ -25,7 +25,7 @@ func TestResolveBotRuntimeCapabilitiesResolvesGranularFeatures(t *testing.T) {
 		},
 	}
 
-	sandroneCaps := resolveBotRuntimeCapabilities(cfg, "sandrone", "alice")
+	sandroneCaps := resolveBotRuntimeCapabilities(cfg, "sandrone")
 	if !sandroneCaps.HasCommands() {
 		t.Errorf("Expected Sandrone to have commands capability due to roles feature routing")
 	}
@@ -33,7 +33,7 @@ func TestResolveBotRuntimeCapabilitiesResolvesGranularFeatures(t *testing.T) {
 		t.Errorf("Expected Sandrone to have IntentsGuildMembers due to roles feature routing")
 	}
 
-	aliceCaps := resolveBotRuntimeCapabilities(cfg, "alice", "alice")
+	aliceCaps := resolveBotRuntimeCapabilities(cfg, "alice")
 	if !aliceCaps.HasCommands() {
 		t.Errorf("Expected Alice to have commands capability due to default fallback for commands feature")
 	}

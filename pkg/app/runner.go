@@ -154,11 +154,6 @@ func runWithOptions(appName string, opts RunOptions) error {
 		runtimeApplier.SetInitial(cfg.RuntimeConfig)
 	}
 
-	defaultBotInstanceID := strings.TrimSpace(opts.DefaultOwnerBotInstanceID)
-	if defaultBotInstanceID == "" {
-		defaultBotInstanceID = DefaultBotInstanceID
-	}
-
 	knownInstances := make(map[string]struct{})
 	if cfg := configManager.Config(); cfg != nil {
 		for _, guild := range cfg.Guilds {
@@ -206,7 +201,6 @@ func runWithOptions(appName string, opts RunOptions) error {
 	}
 
 	botOpts := botRuntimeOptions{
-		defaultBotInstanceID:     defaultBotInstanceID,
 		runtimeCount:             runtimeCount,
 		configManager:            configManager,
 		store:                    store,
@@ -264,29 +258,16 @@ func runWithOptions(appName string, opts RunOptions) error {
 			return err
 		}
 
-		var defaultSession *discordgo.Session
-		var sessionErr error
-		defaultSession, sessionErr = runtimeResolver.sessionForGuild("")
-		if sessionErr != nil {
-			if stdErrors.Is(sessionErr, ErrSessionUnavailable) {
-				log.ApplicationLogger().Info(
-					"Default discord session is unavailable; startup webhooks will be disabled",
-					"operation", "startup.default_session.resolve",
-					"botInstanceID", DefaultBotInstanceID,
-				)
-			} else {
-				return fmt.Errorf("resolve default session for startup: %w", sessionErr)
-			}
-		}
-
 		controlBearerToken := strings.TrimSpace(files.EnvString(controlBearerTokenEnv, ""))
-		scheduleStartupWebhookEmbedUpdates(startupTasks, configManager.Config(), defaultSession)
+		scheduleStartupWebhookEmbedUpdates(startupTasks, configManager.Config(), func(guildID string) *discordgo.Session {
+			sess, _ := runtimeResolver.sessionForGuild(guildID)
+			return sess
+		})
 		scheduleControlServerStartup(startupTasks, controlStartupTaskOptions{
 			runOptions:            opts,
 			configManager:         configManager,
 			runtimeApplier:        runtimeApplier,
 			controlBearerToken:    controlBearerToken,
-			defaultBotInstanceID:  defaultBotInstanceID,
 			runtimeResolver:       runtimeResolver,
 			store:                 store,
 			qotdService:           qotdService,
@@ -421,13 +402,12 @@ func scheduleDBCleanup(store *storage.Store, configManager *files.ConfigManager)
 	return nil
 }
 
-func resolveRuntimeCapabilities(configSnapshot *files.BotConfig, botInstances []resolvedBotInstance, defaultBotInstanceID string, profile RunProfile) map[string]botRuntimeCapabilities {
+func resolveRuntimeCapabilities(configSnapshot *files.BotConfig, botInstances []resolvedBotInstance, profile RunProfile) map[string]botRuntimeCapabilities {
 	capabilities := make(map[string]botRuntimeCapabilities, len(botInstances))
 	for _, instance := range botInstances {
 		cap := resolveBotRuntimeCapabilities(
 			configSnapshot,
 			instance.ID,
-			defaultBotInstanceID,
 		)
 
 		capabilities[instance.ID] = cap

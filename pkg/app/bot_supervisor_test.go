@@ -80,7 +80,7 @@ func TestSupervisorFaultIsolation(t *testing.T) {
 	}
 	cfgManager.ApplyConfig(&cfg)
 
-	supervisor := NewBotSupervisor(cfgManager, botRuntimeOptions{defaultBotInstanceID: "child1", configManager: cfgManager})
+	supervisor := NewBotSupervisor(cfgManager, botRuntimeOptions{configManager: cfgManager})
 
 	fatalCount := 0
 	supervisor.SetFatalCallback(func(err error) {
@@ -136,7 +136,7 @@ func TestZeroStateIdling(t *testing.T) {
 	}
 	cfgManager.ApplyConfig(&cfg)
 
-	supervisor := NewBotSupervisor(cfgManager, botRuntimeOptions{defaultBotInstanceID: "child1", configManager: cfgManager})
+	supervisor := NewBotSupervisor(cfgManager, botRuntimeOptions{configManager: cfgManager})
 
 	fatalCount := 0
 	supervisor.SetFatalCallback(func(err error) {
@@ -221,7 +221,7 @@ func TestSupervisorSwarmTopology(t *testing.T) {
 	}
 	cfgManager.ApplyConfig(&cfg)
 
-	supervisor := NewBotSupervisor(cfgManager, botRuntimeOptions{defaultBotInstanceID: "child1", configManager: cfgManager})
+	supervisor := NewBotSupervisor(cfgManager, botRuntimeOptions{configManager: cfgManager})
 
 	if err := supervisor.Start(); err != nil {
 		t.Fatalf("supervisor start: %v", err)
@@ -316,7 +316,7 @@ func TestSupervisorConfigChange(t *testing.T) {
 	}
 	cfgManager.ApplyConfig(&cfg)
 
-	supervisor := NewBotSupervisor(cfgManager, botRuntimeOptions{defaultBotInstanceID: "child1", configManager: cfgManager})
+	supervisor := NewBotSupervisor(cfgManager, botRuntimeOptions{configManager: cfgManager})
 
 	if err := supervisor.Start(); err != nil {
 		t.Fatalf("supervisor start: %v", err)

@@ -7,7 +7,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 
 	"github.com/bwmarrin/discordgo"
 
@@ -16,12 +15,9 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/log"
+
 	"github.com/small-frappuccino/discordcore/pkg/service"
 )
-
-// DefaultBotInstanceID defines default bot instance id.
-const DefaultBotInstanceID = "default"
 
 // ErrNoBotTokensConfigured defines err no bot tokens configured.
 var ErrNoBotTokensConfigured = errors.New("no bot instances have a configured token")
@@ -46,11 +42,11 @@ type botRuntime struct {
 }
 
 type botRuntimeResolver struct {
-	configManager        *files.ConfigManager
-	runtimes             atomic.Value // holds map[string]*botRuntime
-	defaultBotInstanceID string
-	readyCh              chan struct{}
-	readyOnce            sync.Once
+	mu            sync.RWMutex
+	configManager *files.ConfigManager
+	runtimes      map[string]*botRuntime
+	readyCh       chan struct{}
+	readyOnce     sync.Once
 }
 
 func (r *botRuntimeResolver) markReady() {
@@ -73,14 +69,15 @@ func (r *botRuntimeResolver) waitForReady(ctx context.Context) error {
 }
 
 func (r *botRuntimeResolver) getRuntimes() map[string]*botRuntime {
-	if m := r.runtimes.Load(); m != nil {
-		return m.(map[string]*botRuntime)
-	}
-	return nil
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.runtimes
 }
 
 func (r *botRuntimeResolver) swapRuntimes(newMap map[string]*botRuntime) {
-	r.runtimes.Store(newMap)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.runtimes = newMap
 }
 
 func knownBotInstanceCatalog(runtimes map[string]*botRuntime, additional []string) map[string]struct{} {
@@ -115,65 +112,55 @@ func knownBotInstanceCatalogSlice(catalog map[string]struct{}) []string {
 	return out
 }
 
-func newBotRuntimeResolver(
-	configManager *files.ConfigManager,
-	runtimes map[string]*botRuntime,
-	defaultBotInstanceID string,
-) *botRuntimeResolver {
-	resolver := &botRuntimeResolver{
-		configManager:        configManager,
-		defaultBotInstanceID: strings.TrimSpace(defaultBotInstanceID),
-		readyCh:              make(chan struct{}),
+func newBotRuntimeResolver(configManager *files.ConfigManager, initialRuntimes map[string]*botRuntime) *botRuntimeResolver {
+	return &botRuntimeResolver{
+		configManager: configManager,
+		runtimes:      initialRuntimes,
+		readyCh:       make(chan struct{}),
 	}
-	resolver.swapRuntimes(runtimes)
-	return resolver
 }
 
-// defaultUnifiedCache returns the UnifiedCache from the default bot runtime's
-// monitoring service, or nil if no runtime is registered, the runtime has no
-// monitoring service, or the cache has not been constructed yet. The control
-// server's /v1/health/cache route calls this on each request so it sees the
-// cache as soon as the runtime layer publishes it.
-func (r *botRuntimeResolver) defaultUnifiedCache() *cache.UnifiedCache {
+// aggregateUnifiedCaches collects the UnifiedCache of all active bot instances.
+func (r *botRuntimeResolver) aggregateUnifiedCaches() map[string]*cache.UnifiedCache {
 	if r == nil {
 		return nil
 	}
-	runtime, _, err := r.defaultRuntime()
-	if err != nil || runtime == nil || runtime.monitoringService == nil {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	caches := make(map[string]*cache.UnifiedCache)
+	for id, runtime := range r.runtimes {
+		if runtime.monitoringService != nil && runtime.monitoringService.GetUnifiedCache() != nil {
+			caches[id] = runtime.monitoringService.GetUnifiedCache()
+		}
+	}
+	if len(caches) == 0 {
 		return nil
 	}
-	return runtime.monitoringService.GetUnifiedCache()
+	return caches
 }
 
-// defaultMonitoringMetrics returns the monitoring observability sink from the
-// default bot runtime's monitoring service, or nil if no runtime is
-// registered or monitoring is disabled on that runtime. Mirrors
-// defaultUnifiedCache; /v1/health/monitoring scrapes via this accessor.
-func (r *botRuntimeResolver) defaultMonitoringMetrics() logging.Metrics {
+// aggregateMonitoringMetrics collects the logging.Metrics of all active bot instances.
+func (r *botRuntimeResolver) aggregateMonitoringMetrics() map[string]logging.Metrics {
 	if r == nil {
 		return nil
 	}
-	runtime, _, err := r.defaultRuntime()
-	if err != nil || runtime == nil || runtime.monitoringService == nil {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	metrics := make(map[string]logging.Metrics)
+	for id, runtime := range r.runtimes {
+		if runtime.monitoringService != nil {
+			m := runtime.monitoringService.Metrics()
+			if m != nil {
+				metrics[id] = m
+			}
+		}
+	}
+	if len(metrics) == 0 {
 		return nil
 	}
-	return runtime.monitoringService.Metrics()
-}
-
-func (r *botRuntimeResolver) defaultRuntime() (*botRuntime, string, error) {
-	if r == nil {
-		return nil, "", fmt.Errorf("bot runtime resolver is unavailable")
-	}
-	botInstanceID := strings.TrimSpace(r.defaultBotInstanceID)
-	if botInstanceID == "" {
-		return nil, "", fmt.Errorf("default bot instance is not configured")
-	}
-	runtimes := r.getRuntimes()
-	runtime := runtimes[botInstanceID]
-	if runtime == nil {
-		return nil, botInstanceID, fmt.Errorf("default bot instance %q is unavailable", botInstanceID)
-	}
-	return runtime, botInstanceID, nil
+	return metrics
 }
 
 func (r *botRuntimeResolver) runtimeForGuild(guildID string) (*botRuntime, string, error) {
@@ -181,9 +168,6 @@ func (r *botRuntimeResolver) runtimeForGuild(guildID string) (*botRuntime, strin
 		return nil, "", fmt.Errorf("bot runtime resolver is unavailable")
 	}
 	guildID = strings.TrimSpace(guildID)
-	if guildID == "" {
-		return r.defaultRuntime()
-	}
 	if r.configManager == nil {
 		return nil, "", fmt.Errorf("bot runtime resolver config manager is unavailable")
 	}
@@ -192,29 +176,31 @@ func (r *botRuntimeResolver) runtimeForGuild(guildID string) (*botRuntime, strin
 		return nil, "", fmt.Errorf("guild %s is not configured", guildID)
 	}
 
-	bestInstanceID, fallback := guild.ResolveFeatureBotInstanceID("dashboard", r.defaultBotInstanceID)
+	bestInstanceID, _ := guild.ResolveFeatureBotInstanceID("dashboard", "")
 
-	if fallback && bestInstanceID == r.defaultBotInstanceID {
-		log.ApplicationLogger().Warn(
-			"Routing degraded to default bot instance due to missing or invalid token for designated route",
-			"guildID", guildID,
-			"fallbackBotInstanceID", bestInstanceID,
-		)
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	runtimes := r.runtimes
+	if len(runtimes) == 0 {
+		return nil, "", ErrSessionUnavailable
 	}
 
-	runtimes := r.getRuntimes()
-	bestRuntime := runtimes[bestInstanceID]
+	if bestInstanceID != "" {
+		if runtime, ok := runtimes[bestInstanceID]; ok && runtime != nil {
+			return runtime, bestInstanceID, nil
+		}
+	}
 
-	if bestRuntime == nil {
-		if r.defaultBotInstanceID != "" && runtimes[r.defaultBotInstanceID] != nil {
-			if len(guild.BotInstanceTokens) == 0 {
-				return runtimes[r.defaultBotInstanceID], r.defaultBotInstanceID, nil
+	if len(guild.BotInstanceTokens) > 0 {
+		for id := range guild.BotInstanceTokens {
+			if runtime, ok := runtimes[id]; ok && runtime != nil {
+				return runtime, id, nil
 			}
 		}
-		return nil, "", fmt.Errorf("guild %s does not resolve to a running bot instance", guildID)
 	}
 
-	return bestRuntime, bestInstanceID, nil
+	return nil, "", fmt.Errorf("guild %s does not resolve to a running bot instance", guildID)
 }
 
 func (r *botRuntimeResolver) sessionForGuild(guildID string) (*discordgo.Session, error) {

@@ -13,10 +13,9 @@ const (
 func resolveRuntimeTaskRouterWorkers(
 	cfg *files.BotConfig,
 	botInstanceID string,
-	defaultBotInstanceID string,
 	runtimeCount int,
 ) int {
-	if configured, ok := configuredRuntimeTaskRouterWorkers(cfg, botInstanceID, defaultBotInstanceID); ok {
+	if configured, ok := configuredRuntimeTaskRouterWorkers(cfg, botInstanceID); ok {
 		return configured
 	}
 	if runtimeCount > 1 {
@@ -28,7 +27,6 @@ func resolveRuntimeTaskRouterWorkers(
 func configuredRuntimeTaskRouterWorkers(
 	cfg *files.BotConfig,
 	botInstanceID string,
-	defaultBotInstanceID string,
 ) (int, bool) {
 	if cfg == nil {
 		return 0, false
@@ -58,10 +56,9 @@ func configuredRuntimeTaskRouterWorkers(
 func newRuntimeTaskRouterConfig(
 	cfg *files.BotConfig,
 	botInstanceID string,
-	defaultBotInstanceID string,
 	runtimeCount int,
 ) task.RouterConfig {
-	workers := resolveRuntimeTaskRouterWorkers(cfg, botInstanceID, defaultBotInstanceID, runtimeCount)
+	workers := resolveRuntimeTaskRouterWorkers(cfg, botInstanceID, runtimeCount)
 	limiter := task.NewExecutionLimiter(workers)
 
 	routerCfg := task.Defaults()

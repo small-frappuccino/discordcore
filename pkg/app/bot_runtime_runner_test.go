@@ -58,9 +58,9 @@ func TestInitializeBotRuntimeSkipsCommandHandlerWhenCommandsDisabled(t *testing.
 	var created bool
 	var setupCommandsCalls int
 
-	newCommandHandlerForBot = func(session *discordgo.Session, configManager *files.ConfigManager, botInstanceID string, defaultBotInstanceID string) *commands.CommandHandler {
+	newCommandHandlerForBot = func(session *discordgo.Session, configManager *files.ConfigManager, botInstanceID string) *commands.CommandHandler {
 		created = true
-		return commands.NewCommandHandlerForBot(session, configManager, botInstanceID, defaultBotInstanceID)
+		return commands.NewCommandHandlerForBot(session, configManager, botInstanceID)
 	}
 	setupCommandHandler = func(ch *commands.CommandHandler) error {
 		setupCommandsCalls++
@@ -73,9 +73,8 @@ func TestInitializeBotRuntimeSkipsCommandHandlerWhenCommandsDisabled(t *testing.
 		session:      session,
 	}
 	err = initializeBotRuntime(context.Background(), runtime, botRuntimeOptions{
-		defaultBotInstanceID: "main",
-		runtimeCount:         1,
-		configManager:        cfgMgr,
+		runtimeCount:  1,
+		configManager: cfgMgr,
 	})
 	if err != nil {
 		t.Fatalf("initialize bot runtime: %v", err)
@@ -127,8 +126,8 @@ func TestInitializeBotRuntime_FullCapabilities(t *testing.T) {
 		setupCommandHandler = origSetupCommandHandler
 	})
 
-	newCommandHandlerForBot = func(session *discordgo.Session, configManager *files.ConfigManager, botInstanceID string, defaultBotInstanceID string) *commands.CommandHandler {
-		return commands.NewCommandHandlerForBot(session, configManager, botInstanceID, defaultBotInstanceID)
+	newCommandHandlerForBot = func(session *discordgo.Session, configManager *files.ConfigManager, botInstanceID string) *commands.CommandHandler {
+		return commands.NewCommandHandlerForBot(session, configManager, botInstanceID)
 	}
 	setupCommandHandler = func(ch *commands.CommandHandler) error { return nil }
 
@@ -153,7 +152,6 @@ func TestInitializeBotRuntime_FullCapabilities(t *testing.T) {
 	}
 
 	err := initializeBotRuntime(context.Background(), rt, botRuntimeOptions{
-		defaultBotInstanceID: "test",
 		configManager:        cfgMgr,
 		qotdLifecycleService: &mockQotdLifecycleService{},
 		store:                &storage.Store{},

@@ -54,7 +54,7 @@ func NewBotSupervisor(configManager *files.ConfigManager, opts botRuntimeOptions
 	ctx, cancel := context.WithCancel(context.Background())
 	supervisor := &BotSupervisor{
 		configManager:  configManager,
-		resolver:       newBotRuntimeResolver(configManager, make(map[string]*botRuntime), opts.defaultBotInstanceID),
+		resolver:       newBotRuntimeResolver(configManager, make(map[string]*botRuntime)),
 		serviceManager: service.NewManager(),
 		opts:           opts,
 		ctx:            ctx,
@@ -148,8 +148,8 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 		oldState, exists := s.instances[id]
 		var capsChanged bool
 		if exists && oldCfg != nil {
-			oldCaps := resolveBotRuntimeCapabilities(oldCfg, id, s.opts.defaultBotInstanceID)
-			newCaps := resolveBotRuntimeCapabilities(newCfg, id, s.opts.defaultBotInstanceID)
+			oldCaps := resolveBotRuntimeCapabilities(oldCfg, id)
+			newCaps := resolveBotRuntimeCapabilities(newCfg, id)
 			if oldCaps != newCaps {
 				capsChanged = true
 				capsChangedMap[id] = true
@@ -347,7 +347,7 @@ func (s *BotSupervisor) awaitStopAndStart(id, token, status string, oldState *bo
 }
 
 func (s *BotSupervisor) startBotInstanceBackground(instanceID, token, status string, state *botInstanceState) {
-	capabilities := resolveBotRuntimeCapabilities(s.configManager.Config(), instanceID, s.opts.defaultBotInstanceID)
+	capabilities := resolveBotRuntimeCapabilities(s.configManager.Config(), instanceID)
 
 	var runtime *botRuntime
 	var err error

@@ -13,10 +13,8 @@ import (
 )
 
 // MainRuntimeAppName defines main runtime app name.
-// DefaultBotInstanceID defines the default bot instance id.
 const (
-	DefaultBotInstanceID = "main"
-	MainRuntimeAppName   = "discordmain"
+	MainRuntimeAppName = "discordmain"
 )
 
 // Spec describes a runtime entrypoint command: its name, and a factory that
@@ -75,8 +73,6 @@ func buildMainRunOptions() discordcoreapp.RunOptions {
 				AutoTrust: true,
 			},
 		},
-		DefaultOwnerBotInstanceID: DefaultBotInstanceID,
-
 		CommandCatalogRegistrars: []discordcommands.CommandCatalogRegistrar{
 			discordcommands.BaseCommandCatalogRegistrar(),
 			discordcommands.AdminCommandCatalogRegistrar(),

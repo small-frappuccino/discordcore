@@ -93,7 +93,6 @@ type Server struct {
 	health               healthSources
 	guildRegistration    guildRegistrationFunc
 	discordSession       discordSessionResolver
-	defaultBotInstanceID string
 	discordOAuth         *discordOAuthProvider
 	publicOrigin         controlPublicOrigin
 	runtimeApplier       *runtimeapply.Manager
@@ -293,15 +292,6 @@ func (s *Server) SetGuildRegistrationResolver(fn func(context.Context, string) e
 		return
 	}
 	s.guildRegistration = fn
-}
-
-// SetDefaultBotInstanceID configures the fallback bot instance used for legacy
-// guild configs that do not yet have an explicit binding.
-func (s *Server) SetDefaultBotInstanceID(botInstanceID string) {
-	if s == nil {
-		return
-	}
-	s.defaultBotInstanceID = strings.TrimSpace(botInstanceID)
 }
 
 // Start opens the control server listening socket.

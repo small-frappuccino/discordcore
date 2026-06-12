@@ -432,7 +432,6 @@ func TestGuildRegistrationPostCreatesDormantGuildWorkspace(t *testing.T) {
 	t.Parallel()
 
 	srv, cm := newControlTestServer(t)
-	srv.SetDefaultBotInstanceID("main")
 	setTestBotGuildBindings(srv, BotGuildBinding{GuildID: "g2", BotInstanceID: "main"})
 	srv.SetGuildRegistrationResolver(func(_ context.Context, guildID string) error {
 		return cm.EnsureMinimalGuildConfig(guildID)

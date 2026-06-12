@@ -9,10 +9,10 @@ import (
 func TestResolveRuntimeTaskRouterWorkersUsesAutoBudgets(t *testing.T) {
 	t.Parallel()
 
-	if got := resolveRuntimeTaskRouterWorkers(nil, "default", "default", 1); got != defaultSingleRuntimeMaxWorkers {
+	if got := resolveRuntimeTaskRouterWorkers(nil, "default", 1); got != defaultSingleRuntimeMaxWorkers {
 		t.Fatalf("expected single-runtime default budget %d, got %d", defaultSingleRuntimeMaxWorkers, got)
 	}
-	if got := resolveRuntimeTaskRouterWorkers(nil, "default", "default", 2); got != defaultMultiRuntimeMaxWorkers {
+	if got := resolveRuntimeTaskRouterWorkers(nil, "default", 2); got != defaultMultiRuntimeMaxWorkers {
 		t.Fatalf("expected multi-runtime default budget %d, got %d", defaultMultiRuntimeMaxWorkers, got)
 	}
 }
@@ -46,10 +46,10 @@ func TestResolveRuntimeTaskRouterWorkersUsesSmallestRuntimeOverride(t *testing.T
 		},
 	}
 
-	if got := resolveRuntimeTaskRouterWorkers(cfg, "alpha", "default", 2); got != 3 {
+	if got := resolveRuntimeTaskRouterWorkers(cfg, "alpha", 2); got != 3 {
 		t.Fatalf("expected alpha runtime to use smallest non-zero override 3, got %d", got)
 	}
-	if got := resolveRuntimeTaskRouterWorkers(cfg, "beta", "default", 2); got != 10 {
+	if got := resolveRuntimeTaskRouterWorkers(cfg, "beta", 2); got != 10 {
 		t.Fatalf("expected beta runtime to fall back to global override 10, got %d", got)
 	}
 }
@@ -63,7 +63,7 @@ func TestNewRuntimeTaskRouterConfigBuildsSharedLimiter(t *testing.T) {
 		},
 	}
 
-	routerCfg := newRuntimeTaskRouterConfig(cfg, "default", "default", 1)
+	routerCfg := newRuntimeTaskRouterConfig(cfg, "default", 1)
 	if routerCfg.GlobalMaxWorkers != 5 {
 		t.Fatalf("expected router config workers 5, got %d", routerCfg.GlobalMaxWorkers)
 	}

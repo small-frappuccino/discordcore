@@ -24,7 +24,6 @@ import (
 )
 
 type botRuntimeOptions struct {
-	defaultBotInstanceID     string
 	runtimeCount             int
 	configManager            *files.ConfigManager
 	store                    *storage.Store
@@ -92,7 +91,7 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 	if cfg != nil {
 		runtimeConfig = cfg.RuntimeConfig
 	}
-	routerConfig := newRuntimeTaskRouterConfig(cfg, runtime.instanceID, opts.defaultBotInstanceID, opts.runtimeCount)
+	routerConfig := newRuntimeTaskRouterConfig(cfg, runtime.instanceID, opts.runtimeCount)
 	log.ApplicationLogger().Info(
 		"Configured runtime task router budget",
 		"botInstanceID", runtime.instanceID,
@@ -142,7 +141,7 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 		return fmt.Errorf("start services for %s: %w", runtime.instanceID, err)
 	}
 
-	scheduleRuntimeConfiguredGuildLogging(runtime, opts.configManager, opts.defaultBotInstanceID, opts.startupTasks)
+	scheduleRuntimeConfiguredGuildLogging(runtime, opts.configManager, opts.startupTasks)
 	scheduleRuntimeWarmup(ctx, runtime, opts.store, opts.startupTasks)
 	return nil
 }
@@ -165,7 +164,7 @@ func setupMonitoringService(runtime *botRuntime, opts botRuntimeOptions, routerC
 		opts.configManager,
 		opts.store,
 		runtime.instanceID,
-		opts.defaultBotInstanceID,
+		"",
 		&logging.InMemoryMetrics{},
 		log.DiscordLogger(),
 	)
@@ -190,7 +189,7 @@ func buildAutomodWrapper(runtime *botRuntime, opts botRuntimeOptions, routerConf
 		return nil
 	}
 
-	automodService := logging.NewAutomodService(runtime.session, opts.configManager, runtime.instanceID, opts.defaultBotInstanceID)
+	automodService := logging.NewAutomodService(runtime.session, opts.configManager, runtime.instanceID, "")
 	automodRouter := task.NewRouter(routerConfig)
 	notifier := logging.NewNotificationSender(runtime.session, log.DiscordLogger())
 	if monitoringService != nil {
@@ -227,7 +226,7 @@ func registerUserPruneService(runtime *botRuntime, opts botRuntimeOptions, monit
 	if !runtime.capabilities.userPrune {
 		return nil
 	}
-	userPruneService := maintenance.NewUserPruneServiceForBot(runtime.session, opts.configManager, opts.store, runtime.instanceID, opts.defaultBotInstanceID)
+	userPruneService := maintenance.NewUserPruneServiceForBot(runtime.session, opts.configManager, opts.store, runtime.instanceID, "")
 	userPruneDependencies := []string{}
 	if monitoringService != nil {
 		userPruneDependencies = []string{"monitoring"}
@@ -259,7 +258,7 @@ func registerQOTDRuntimeService(runtime *botRuntime, opts botRuntimeOptions) err
 		opts.configManager,
 		opts.qotdLifecycleService,
 		runtime.instanceID,
-		opts.defaultBotInstanceID,
+		"",
 	)
 	qotdWrapper := service.NewLegacyServiceWrapper(service.LegacyServiceWrapperSpec{
 		Name:         "qotd",
@@ -287,7 +286,7 @@ func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg
 		// Otherwise, previously registered commands from an earlier capability assignment
 		// (or before registry sync existed) will remain perpetually cached in the guild or global scope.
 		if runtime.session != nil && runtime.session.Token != "" {
-			commandHandler := newCommandHandlerForBot(runtime.session, opts.configManager, runtime.instanceID, opts.defaultBotInstanceID)
+			commandHandler := newCommandHandlerForBot(runtime.session, opts.configManager, runtime.instanceID)
 			return service.NewLegacyServiceWrapper(service.LegacyServiceWrapperSpec{
 				Name:         "commands-clear",
 				Type:         service.TypeCommands,
@@ -305,7 +304,7 @@ func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg
 		return nil
 	}
 
-	commandHandler := newCommandHandlerForBot(runtime.session, opts.configManager, runtime.instanceID, opts.defaultBotInstanceID)
+	commandHandler := newCommandHandlerForBot(runtime.session, opts.configManager, runtime.instanceID)
 	if len(opts.commandCatalogRegistrars) > 0 {
 		commandHandler.SetCommandCatalogRegistrars(opts.commandCatalogRegistrars...)
 	}

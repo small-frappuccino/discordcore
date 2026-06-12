@@ -196,7 +196,7 @@ func TestCommandHandlerSkipsGuildWithoutCommandsFeature(t *testing.T) {
 		t.Fatalf("seed config: %v", err)
 	}
 
-	handler := NewCommandHandlerForBot(nil, cfgMgr, "main", "main")
+	handler := NewCommandHandlerForBot(nil, cfgMgr, "main")
 	if handler.handlesGuild("guild-1") {
 		t.Fatal("expected slash command handler to remain disabled for commands-off guild")
 	}
@@ -207,7 +207,7 @@ func TestCommandHandlerRegistersAdminCatalogOnlyWhenCapabilityEnabled(t *testing
 
 	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 
-	withoutCapability := NewCommandHandler(nil, cfgMgr)
+	withoutCapability := NewCommandHandlerForBot(nil, cfgMgr, "test-bot")
 	withoutCapability.commandManager = core.NewCommandManager(nil, cfgMgr)
 	withoutCapability.SetCommandCatalogRegistrars(AdminCommandCatalogRegistrar())
 	withoutCapability.SetAdminCommandServices(service.NewServiceManager())

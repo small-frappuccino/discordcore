@@ -25,7 +25,6 @@ func (c botRuntimeCapabilities) HasCommands() bool { return c.hasCommands }
 func resolveBotRuntimeCapabilities(
 	cfg *files.BotConfig,
 	botInstanceID string,
-	defaultBotInstanceID string,
 ) botRuntimeCapabilities {
 	capabilities := botRuntimeCapabilities{
 		intents: discordgo.IntentsGuilds,
@@ -40,47 +39,32 @@ func resolveBotRuntimeCapabilities(
 		runtimeConfig := cfg.ResolveRuntimeConfig(guild.GuildID)
 
 		if !guild.QOTD.IsZero() {
-			resolvedID, _ := guild.ResolveFeatureBotInstanceID("qotd", defaultBotInstanceID)
+			resolvedID, _ := guild.ResolveFeatureBotInstanceID("qotd", "")
 			if resolvedID == botInstanceID {
 				capabilities.qotdRuntime = true
-				if features.Services.Commands {
-					capabilities.hasCommands = true
-				}
 			}
 		}
 
 		if features.Services.Commands {
-			cmdResolvedID, _ := guild.ResolveFeatureBotInstanceID("commands", defaultBotInstanceID)
-			if cmdResolvedID == botInstanceID {
-				capabilities.hasCommands = true
-				if features.Services.AdminCommands {
-					capabilities.admin = true
-				}
+			capabilities.hasCommands = true
+			if features.Services.AdminCommands {
+				capabilities.admin = true
 			}
 
-			// Any explicitly routed sub-domain implies the bot might need to handle commands or interactions for it.
-			for _, routedBotID := range guild.FeatureRouting {
-				if routedBotID == botInstanceID {
-					capabilities.hasCommands = true
-					break
-				}
-			}
-
-			// Specific features still grant additional specific capabilities beyond just commands.
-			rolesResolvedID, _ := guild.ResolveFeatureBotInstanceID("roles", cmdResolvedID)
+			rolesResolvedID, _ := guild.ResolveFeatureBotInstanceID("roles", "")
 			if rolesResolvedID == botInstanceID {
 				capabilities.intents |= discordgo.IntentsGuildMembers
 				capabilities.warmup = true
 			}
 
-			statsResolvedID, _ := guild.ResolveFeatureBotInstanceID("stats", cmdResolvedID)
+			statsResolvedID, _ := guild.ResolveFeatureBotInstanceID("stats", "")
 			if statsResolvedID == botInstanceID {
 				capabilities.stats = true
 			}
 		}
 
 		if features.Services.Automod && features.Logging.AutomodAction && !runtimeConfig.DisableAutomodLogs {
-			resolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation", defaultBotInstanceID)
+			resolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation", "")
 			if resolvedID == botInstanceID {
 				capabilities.automod = true
 				capabilities.intents |= discordgo.IntentAutoModerationExecution
@@ -88,7 +72,7 @@ func resolveBotRuntimeCapabilities(
 		}
 
 		if features.UserPrune && guild.UserPrune.Enabled {
-			resolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation", defaultBotInstanceID)
+			resolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation", "")
 			if resolvedID == botInstanceID {
 				capabilities.userPrune = true
 				capabilities.intents |= discordgo.IntentsGuildMembers
@@ -100,8 +84,8 @@ func resolveBotRuntimeCapabilities(
 			continue
 		}
 
-		rolesResolvedID, _ := guild.ResolveFeatureBotInstanceID("roles", defaultBotInstanceID)
-		modResolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation", defaultBotInstanceID)
+		rolesResolvedID, _ := guild.ResolveFeatureBotInstanceID("roles", "")
+		modResolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation", "")
 
 		isRolesBot := rolesResolvedID == botInstanceID
 		isModBot := modResolvedID == botInstanceID

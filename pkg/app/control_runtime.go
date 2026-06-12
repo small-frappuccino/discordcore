@@ -43,8 +43,6 @@ type RunOptions struct {
 	Profile RunProfile
 	// Control configures the optional local control plane served by this process.
 	Control ControlOptions
-	// DefaultOwnerBotInstanceID is the fallback owner used by legacy guild bindings.
-	DefaultOwnerBotInstanceID string
 	// CommandCatalogRegistrars optionally override the default slash command
 	// catalog composition for handlers started by this process.
 	CommandCatalogRegistrars []commands.CommandCatalogRegistrar

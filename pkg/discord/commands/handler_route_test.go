@@ -31,8 +31,8 @@ func TestCommandHandlerRoutesFeaturesToCorrectBotInstance(t *testing.T) {
 		t.Fatalf("seed config: %v", err)
 	}
 
-	aliceHandler := NewCommandHandlerForBot(nil, cfgMgr, "alice", "alice")
-	sandroneHandler := NewCommandHandlerForBot(nil, cfgMgr, "sandrone", "alice")
+	aliceHandler := NewCommandHandlerForBot(nil, cfgMgr, "alice")
+	sandroneHandler := NewCommandHandlerForBot(nil, cfgMgr, "sandrone")
 
 	tests := []struct {
 		name         string
@@ -42,8 +42,8 @@ func TestCommandHandlerRoutesFeaturesToCorrectBotInstance(t *testing.T) {
 	}{
 		{"Roles command goes to Sandrone", "rolepanel", false, true},
 		{"Moderation command goes to Sandrone", "ban", false, true},
-		{"Unrouted command goes to default (Alice)", "config", true, false},
-		{"Unrouted QOTD command goes to default (Alice)", "qotd", true, false},
+		{"Base command goes to all bots", "config", true, true},
+		{"Unrouted QOTD command goes to no one", "qotd", false, false},
 	}
 
 	for _, tt := range tests {

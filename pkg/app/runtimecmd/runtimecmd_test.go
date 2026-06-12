@@ -31,9 +31,6 @@ func TestRunUsesMainProfileOptions(t *testing.T) {
 	if called.name != MainRuntimeAppName {
 		t.Fatalf("unexpected call args: %+v", called)
 	}
-	if called.opts.DefaultOwnerBotInstanceID != DefaultBotInstanceID {
-		t.Fatalf("expected main as the default owner, got %+v", called.opts)
-	}
 	if called.opts.Profile != discordcoreapp.RunProfileDiscordMain {
 		t.Fatalf("expected main run profile, got %+v", called.opts)
 	}

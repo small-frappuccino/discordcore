@@ -57,7 +57,6 @@ type controlStartupTaskOptions struct {
 	configManager         *files.ConfigManager
 	runtimeApplier        *runtimeapply.Manager
 	controlBearerToken    string
-	defaultBotInstanceID  string
 	runtimeResolver       *botRuntimeResolver
 	store                 *storage.Store
 	qotdService           *qotd.Service
@@ -68,7 +67,6 @@ type controlStartupTaskOptions struct {
 func scheduleRuntimeConfiguredGuildLogging(
 	runtime *botRuntime,
 	configManager *files.ConfigManager,
-	defaultBotInstanceID string,
 	startupTasks *StartupTaskOrchestrator,
 ) {
 	if runtime == nil || runtime.session == nil || configManager == nil {
@@ -100,9 +98,9 @@ func scheduleRuntimeConfiguredGuildLogging(
 func scheduleStartupWebhookEmbedUpdates(
 	startupTasks *StartupTaskOrchestrator,
 	cfg *files.BotConfig,
-	defaultSession *discordgo.Session,
+	sessionResolver func(guildID string) *discordgo.Session,
 ) {
-	if cfg == nil || defaultSession == nil {
+	if cfg == nil || sessionResolver == nil {
 		return
 	}
 
@@ -117,7 +115,12 @@ func scheduleStartupWebhookEmbedUpdates(
 				item.scope,
 				item.index,
 			)
-			if err := webhook.PatchMessageEmbed(defaultSession, webhook.MessageEmbedPatch{
+			sess := sessionResolver(item.scope)
+			if sess == nil {
+				continue
+			}
+
+			if err := webhook.PatchMessageEmbed(sess, webhook.MessageEmbedPatch{
 				MessageID:  item.update.MessageID,
 				WebhookURL: item.update.WebhookURL,
 				Embed:      item.update.Embed,
@@ -199,7 +202,6 @@ func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskO
 	if opts.controlBearerToken != "" {
 		controlServer.SetBearerToken(opts.controlBearerToken)
 	}
-	controlServer.SetDefaultBotInstanceID(opts.defaultBotInstanceID)
 	if opts.runtimeResolver != nil {
 		controlServer.SetKnownBotInstanceIDs(
 			knownBotInstanceCatalogSlice(
@@ -213,13 +215,28 @@ func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskO
 		if opts.runtimeResolver == nil {
 			return nil
 		}
-		return opts.runtimeResolver.defaultUnifiedCache()
+		caches := opts.runtimeResolver.aggregateUnifiedCaches()
+		if len(caches) == 0 {
+			return nil
+		}
+		// For dashboard simplicity, just return the first one found until UI handles aggregates.
+		for _, c := range caches {
+			return c
+		}
+		return nil
 	}, opts.store)
 	controlServer.SetMonitoringMetricsResolver(func() logging.Metrics {
 		if opts.runtimeResolver == nil {
 			return nil
 		}
-		return opts.runtimeResolver.defaultMonitoringMetrics()
+		metrics := opts.runtimeResolver.aggregateMonitoringMetrics()
+		if len(metrics) == 0 {
+			return nil
+		}
+		for _, m := range metrics {
+			return m
+		}
+		return nil
 	})
 	controlServer.SetDiscordSessionResolver(func(guildID string) (*discordgo.Session, error) {
 		return opts.runtimeResolver.sessionForGuild(guildID)

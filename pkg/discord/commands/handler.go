@@ -17,17 +17,16 @@ import (
 
 // CommandHandler manages bot command setup and handling
 type CommandHandler struct {
-	session              *discordgo.Session
-	configManager        *files.ConfigManager
-	botInstanceID        string
-	defaultBotInstanceID string
-	catalogCapabilities  CommandCatalogCapabilities
-	catalogRegistrars    []CommandCatalogRegistrar
-	commandManager       *core.CommandManager
-	qotdService          qotdcmd.QuestionCatalogService
-	statsService         *logging.StatsService
-	moderationMetrics    moderation.Metrics
-	adminServiceManager  *service.ServiceManager
+	session             *discordgo.Session
+	configManager       *files.ConfigManager
+	botInstanceID       string
+	catalogCapabilities CommandCatalogCapabilities
+	catalogRegistrars   []CommandCatalogRegistrar
+	commandManager      *core.CommandManager
+	qotdService         qotdcmd.QuestionCatalogService
+	statsService        *logging.StatsService
+	moderationMetrics   moderation.Metrics
+	adminServiceManager *service.ServiceManager
 }
 
 // NewCommandHandler creates a new CommandHandler instance
@@ -35,7 +34,7 @@ func NewCommandHandler(
 	session *discordgo.Session,
 	configManager *files.ConfigManager,
 ) *CommandHandler {
-	return NewCommandHandlerForBot(session, configManager, "", "")
+	return NewCommandHandlerForBot(session, configManager, "")
 }
 
 // NewCommandHandlerForBot creates a command handler scoped to a bot-instance guild assignment.
@@ -43,14 +42,12 @@ func NewCommandHandlerForBot(
 	session *discordgo.Session,
 	configManager *files.ConfigManager,
 	botInstanceID string,
-	defaultBotInstanceID string,
 ) *CommandHandler {
 	return &CommandHandler{
-		session:              session,
-		configManager:        configManager,
-		botInstanceID:        files.NormalizeBotInstanceID(botInstanceID),
-		defaultBotInstanceID: files.NormalizeBotInstanceID(defaultBotInstanceID),
-		catalogRegistrars:    DefaultCommandCatalogRegistrars(),
+		session:           session,
+		configManager:     configManager,
+		botInstanceID:     files.NormalizeBotInstanceID(botInstanceID),
+		catalogRegistrars: DefaultCommandCatalogRegistrars(),
 	}
 }
 
@@ -222,9 +219,6 @@ func (ch *CommandHandler) matchesGuildBotInstance(guildID string, feature string
 	if ch == nil {
 		return false
 	}
-	if ch.botInstanceID == "" && ch.defaultBotInstanceID == "" {
-		return true
-	}
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" || ch.configManager == nil {
 		return false
@@ -234,26 +228,11 @@ func (ch *CommandHandler) matchesGuildBotInstance(guildID string, feature string
 		return false
 	}
 
-	botInstanceID := ch.botInstanceID
-	if botInstanceID == "" {
-		botInstanceID = ch.defaultBotInstanceID
-	}
-	if botInstanceID == "" {
-		return true
-	}
-	if len(guild.BotInstanceTokens) == 0 {
-		return botInstanceID == ch.defaultBotInstanceID
+	// Commands feature is now universally available to all active bots in the guild.
+	if feature == "commands" {
+		return guild.BelongsToBotInstance(ch.botInstanceID)
 	}
 
-	resolvedID, fallback := guild.ResolveFeatureBotInstanceID(feature, ch.defaultBotInstanceID)
-	if fallback && resolvedID == ch.defaultBotInstanceID {
-		log.ApplicationLogger().Debug(
-			"Command routing degraded to default bot instance due to missing or invalid token for designated route",
-			"guildID", guildID,
-			"feature", feature,
-			"fallbackBotInstanceID", resolvedID,
-		)
-	}
-
-	return botInstanceID == resolvedID
+	resolvedID, _ := guild.ResolveFeatureBotInstanceID(feature, "")
+	return ch.botInstanceID == resolvedID
 }
