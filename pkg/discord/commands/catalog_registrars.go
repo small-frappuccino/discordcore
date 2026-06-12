@@ -11,6 +11,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/roles"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/runtime"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/stats"
+	tickets_cmds "github.com/small-frappuccino/discordcore/pkg/discord/commands/tickets"
 )
 
 // CommandCatalogCapabilities captures runtime capabilities that can gate
@@ -31,23 +32,79 @@ type CommandCatalogRegistrar struct {
 // callers that do not inject a profile-specific registrar set.
 func DefaultCommandCatalogRegistrars() []CommandCatalogRegistrar {
 	return []CommandCatalogRegistrar{
-		BaseCommandCatalogRegistrar(),
+		RuntimeCommandCatalogRegistrar(),
+		AnalyticsCommandCatalogRegistrar(),
+		PartnerCommandCatalogRegistrar(),
+		ModerationCommandCatalogRegistrar(),
+		RolesCommandCatalogRegistrar(),
+		EmbedsCommandCatalogRegistrar(),
+		TicketsCommandCatalogRegistrar(),
 		QOTDCommandCatalogRegistrar(),
 		StatsCommandCatalogRegistrar(),
 	}
 }
 
-// BaseCommandCatalogRegistrar registers the default-domain slash command
-// surfaces.
-func BaseCommandCatalogRegistrar() CommandCatalogRegistrar {
+// RuntimeCommandCatalogRegistrar registers the runtime config slash command surface.
+func RuntimeCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
 		Register: func(ch *CommandHandler, router *core.CommandRouter) {
 			runtime.NewRuntimeConfigCommands(ch.configManager).RegisterCommands(router)
+		},
+	}
+}
+
+// AnalyticsCommandCatalogRegistrar registers the analytics slash command surface.
+func AnalyticsCommandCatalogRegistrar() CommandCatalogRegistrar {
+	return CommandCatalogRegistrar{
+		Register: func(ch *CommandHandler, router *core.CommandRouter) {
 			analytics.RegisterAnalyticsCommands(router)
+		},
+	}
+}
+
+// PartnerCommandCatalogRegistrar registers the partner slash command surface.
+func PartnerCommandCatalogRegistrar() CommandCatalogRegistrar {
+	return CommandCatalogRegistrar{
+		Register: func(ch *CommandHandler, router *core.CommandRouter) {
 			partner.NewPartnerCommands(ch.configManager).RegisterCommands(router)
+		},
+	}
+}
+
+// ModerationCommandCatalogRegistrar registers the moderation slash command surface.
+func ModerationCommandCatalogRegistrar() CommandCatalogRegistrar {
+	return CommandCatalogRegistrar{
+		Register: func(ch *CommandHandler, router *core.CommandRouter) {
 			moderation.RegisterModerationCommandsWithMetrics(router, ch.moderationMetrics)
+		},
+	}
+}
+
+// RolesCommandCatalogRegistrar registers the roles slash command surface.
+func RolesCommandCatalogRegistrar() CommandCatalogRegistrar {
+	return CommandCatalogRegistrar{
+		Register: func(ch *CommandHandler, router *core.CommandRouter) {
 			roles.NewRolePanelCommands(ch.configManager).RegisterCommands(router)
+		},
+	}
+}
+
+// EmbedsCommandCatalogRegistrar registers the embeds slash command surface.
+func EmbedsCommandCatalogRegistrar() CommandCatalogRegistrar {
+	return CommandCatalogRegistrar{
+		Register: func(ch *CommandHandler, router *core.CommandRouter) {
 			embeds.NewEmbedCommands(ch.configManager).RegisterCommands(router)
+		},
+	}
+}
+
+// TicketsCommandCatalogRegistrar registers the tickets interaction routing surface.
+func TicketsCommandCatalogRegistrar() CommandCatalogRegistrar {
+	return CommandCatalogRegistrar{
+		Register: func(ch *CommandHandler, router *core.CommandRouter) {
+			if ch.ticketService != nil {
+				tickets_cmds.RegisterComponents(router, ch.ticketService)
+			}
 		},
 	}
 }

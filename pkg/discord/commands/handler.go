@@ -12,6 +12,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	qotdcmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
+	"github.com/small-frappuccino/discordcore/pkg/discord/tickets"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/service"
@@ -30,6 +31,7 @@ type CommandHandler struct {
 	statsService        *logging.StatsService
 	moderationMetrics   moderation.Metrics
 	adminServiceManager *service.ServiceManager
+	ticketService       *tickets.TicketService
 
 	mu           sync.RWMutex
 	running      bool
@@ -209,6 +211,14 @@ func (ch *CommandHandler) SetModerationMetrics(metrics moderation.Metrics) {
 		return
 	}
 	ch.moderationMetrics = metrics
+}
+
+// SetTicketService injects the ticket management service.
+func (ch *CommandHandler) SetTicketService(service *tickets.TicketService) {
+	if ch == nil {
+		return
+	}
+	ch.ticketService = service
 }
 
 // SetAdminCommandServices injects runtime services consumed by the admin
