@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
-	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
+	"github.com/small-frappuccino/discordcore/pkg/monitoring"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordgo"
 )
@@ -33,10 +33,10 @@ func TestScheduleRuntimeWarmupWithoutWorkerRunsPhasesSequentially(t *testing.T) 
 		wg.Done()
 		return nil
 	}
-	monitoringUnifiedCacheFn = func(ms *logging.MonitoringService) *cache.UnifiedCache {
+	monitoringUnifiedCacheFn = func(ms *monitoring.MonitoringService) *cache.UnifiedCache {
 		return &cache.UnifiedCache{}
 	}
-	scheduleStartupMemberWarmupFn = func(ms *logging.MonitoringService, config cache.WarmupConfig) bool {
+	scheduleStartupMemberWarmupFn = func(ms *monitoring.MonitoringService, config cache.WarmupConfig) bool {
 		return false
 	}
 
@@ -46,7 +46,7 @@ func TestScheduleRuntimeWarmupWithoutWorkerRunsPhasesSequentially(t *testing.T) 
 			warmup: true,
 		},
 		session:           &discordgo.Session{},
-		monitoringService: &logging.MonitoringService{},
+		monitoringService: &monitoring.MonitoringService{},
 	}
 
 	scheduleRuntimeWarmup(context.Background(), runtime, nil, nil)
@@ -86,10 +86,10 @@ func TestScheduleRuntimeWarmupQueuesMemberPhaseAfterBasePhase(t *testing.T) {
 		baseDone <- struct{}{}
 		return nil
 	}
-	monitoringUnifiedCacheFn = func(ms *logging.MonitoringService) *cache.UnifiedCache {
+	monitoringUnifiedCacheFn = func(ms *monitoring.MonitoringService) *cache.UnifiedCache {
 		return &cache.UnifiedCache{}
 	}
-	scheduleStartupMemberWarmupFn = func(ms *logging.MonitoringService, config cache.WarmupConfig) bool {
+	scheduleStartupMemberWarmupFn = func(ms *monitoring.MonitoringService, config cache.WarmupConfig) bool {
 		mu.Lock()
 		queued = append(queued, config)
 		mu.Unlock()
@@ -103,7 +103,7 @@ func TestScheduleRuntimeWarmupQueuesMemberPhaseAfterBasePhase(t *testing.T) {
 			warmup: true,
 		},
 		session:           &discordgo.Session{},
-		monitoringService: &logging.MonitoringService{},
+		monitoringService: &monitoring.MonitoringService{},
 	}
 
 	worker := NewRuntimeStartupBackgroundWorker(1)

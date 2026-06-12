@@ -1,0 +1,115 @@
+//go:build ignore
+
+package monitoring
+
+import (
+	"context"
+	stdErrors "errors"
+	"log/slog"
+	"net/http"
+	"testing"
+	"time"
+
+	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/task"
+	"github.com/small-frappuccino/discordgo"
+)
+
+func testBoolPtr(b bool) *bool { return &b }
+
+func TestMonitoringServiceRestartRebuildsTaskPipeline(t *testing.T) {
+	store, _ := newLoggingStore(t, "monitoring-restart.db")
+	if err := store.SetHeartbeatForBot(context.Background(), "default", time.Now().UTC()); err != nil {
+		t.Fatalf("seed heartbeat: %v", err)
+	}
+
+	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	if _, err := cfgMgr.UpdateRuntimeConfig(func(rc *files.RuntimeConfig) error {
+		rc.DisableEntryExitLogs = true
+		rc.DisableMessageLogs = true
+		rc.DisableReactionLogs = true
+		return nil
+	}); err != nil {
+		t.Fatalf("update runtime config: %v", err)
+	}
+	if err := cfgMgr.AddGuildConfig(files.GuildConfig{
+		GuildID:           "g-restart",
+		BotInstanceTokens: map[string]files.EncryptedString{"default": "test-token"},
+		Features: files.FeatureToggles{
+			Services: files.FeatureServiceToggles{
+				Monitoring: testBoolPtr(true)},
+			StatsChannels: testBoolPtr(true)},
+		Stats: files.StatsConfig{
+			Enabled:            true,
+			UpdateIntervalMins: 1,
+			Channels: []files.StatsChannelConfig{{
+				ChannelID:    "c-restart",
+				Label:        "Members",
+				NameTemplate: "{label} | {count}",
+				MemberType:   "all"}}}}); err != nil {
+		t.Fatalf("add guild config: %v", err)
+	}
+
+	// A bare session has no Ratelimiter/Client, so any REST call panics. The
+	// stats reconcile path can issue GuildMembers during startup (the in-memory
+	// pre-seed only skips reconcile when the actor wins the race), so back the
+	// session with a local test server that returns empty member pages.
+	session := newDiscordSessionWithAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("[]"))
+	})
+	session.State.User = &discordgo.User{ID: "bot-1"}
+
+	ms, err := NewMonitoringServiceForBot(session, cfgMgr, store, "default", "default", slog.Default())
+	if err != nil {
+		t.Fatalf("new monitoring service: %v", err)
+	}
+
+	firstRouter := ms.TaskRouter()
+	if firstRouter == nil {
+		t.Fatalf("expected initial task router")
+	}
+	if ms.adapters == nil || ms.adapters.Router != firstRouter {
+		t.Fatalf("expected adapters to point at initial router")
+	}
+	if ms.messageEventService == nil || ms.messageEventService.taskRouter != firstRouter {
+		t.Fatalf("expected message event service to point at initial router")
+	}
+
+	if err := ms.Start(context.Background()); err != nil {
+		t.Fatalf("start monitoring service: %v", err)
+	}
+	if err := ms.Stop(context.Background()); err != nil {
+		t.Fatalf("stop monitoring service: %v", err)
+	}
+
+	if err := firstRouter.Dispatch(context.Background(), task.Task{Type: "monitor.update_stats_channels"}); !stdErrors.Is(err, task.ErrRouterClosed) {
+		t.Fatalf("expected old router to be closed, got %v", err)
+	}
+
+	if err := ms.Start(context.Background()); err != nil {
+		t.Fatalf("restart monitoring service: %v", err)
+	}
+	t.Cleanup(func() {
+		if ms.IsRunning() {
+			_ = ms.Stop(context.Background())
+		}
+	})
+
+	secondRouter := ms.TaskRouter()
+	if secondRouter == nil {
+		t.Fatalf("expected router after restart")
+	}
+	if secondRouter == firstRouter {
+		t.Fatalf("expected restart to create a fresh router")
+	}
+	if ms.adapters == nil || ms.adapters.Router != secondRouter {
+		t.Fatalf("expected adapters to be rewired to restarted router")
+	}
+	if ms.messageEventService == nil || ms.messageEventService.taskRouter != secondRouter {
+		t.Fatalf("expected message event service router to be refreshed on restart")
+	}
+	if err := secondRouter.Dispatch(context.Background(), task.Task{Type: "monitor.update_stats_channels"}); err != nil {
+		t.Fatalf("dispatch on restarted router: %v", err)
+	}
+}

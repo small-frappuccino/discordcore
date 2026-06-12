@@ -28,7 +28,6 @@ flowchart TD
     %% Discord Sub-domains & Adapters
     Session["pkg/discord/session"]
     Commands["pkg/discord/commands"]
-    Logging["pkg/discord/logging"]
     Cache["pkg/discord/cache"]
     Control["pkg/control (HTTP API)"]
     Task["pkg/task (Background Jobs)"]
@@ -49,6 +48,11 @@ flowchart TD
     Tickets["pkg/tickets"]
     Stats["pkg/stats"]
     Automod["pkg/automod"]
+    Monitoring["pkg/monitoring"]
+    Messages["pkg/messages"]
+    Members["pkg/members"]
+    Reactions["pkg/reactions"]
+    Notifications["pkg/notifications"]
     
     %% Core Domain
     Files["pkg/files (Config & State)"]
@@ -73,7 +77,6 @@ flowchart TD
     %% Downward dependencies from SDKs
     DiscordGo --> Session
     DiscordGo --> Commands
-    DiscordGo --> Logging
     DiscordGo --> Cache
     DiscordGo -- Provides Token --> App
     
@@ -86,7 +89,11 @@ flowchart TD
     
     App --> Session
     App --> Commands
-    App --> Logging
+    App --> Monitoring
+    App --> Messages
+    App --> Members
+    App --> Reactions
+    App --> Notifications
     App --> Control
     App --> Task
     App --> Persistence
@@ -170,6 +177,7 @@ flowchart TD
     
     Persistence --> Storage
     RuntimeApply --> Files
+    RuntimeApply --> Service
     
     %% Styling
     classDef core fill:#232B2B,stroke:#5E81AC,stroke-width:2px,color:#ECEFF4;

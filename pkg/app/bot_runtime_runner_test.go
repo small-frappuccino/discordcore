@@ -7,8 +7,8 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
-	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/monitoring"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordgo"
 )
@@ -217,10 +217,10 @@ func TestScheduleRuntimeWarmup(t *testing.T) {
 		}
 		return nil
 	}
-	monitoringUnifiedCacheFn = func(ms *logging.MonitoringService) *cache.UnifiedCache {
+	monitoringUnifiedCacheFn = func(ms *monitoring.MonitoringService) *cache.UnifiedCache {
 		return cache.NewUnifiedCache(cache.CacheConfig{})
 	}
-	scheduleStartupMemberWarmupFn = func(ms *logging.MonitoringService, config cache.WarmupConfig) bool {
+	scheduleStartupMemberWarmupFn = func(ms *monitoring.MonitoringService, config cache.WarmupConfig) bool {
 		return false
 	}
 
@@ -228,7 +228,7 @@ func TestScheduleRuntimeWarmup(t *testing.T) {
 		instanceID:        "test",
 		capabilities:      botRuntimeCapabilities{warmup: true},
 		session:           &discordgo.Session{},
-		monitoringService: &logging.MonitoringService{},
+		monitoringService: &monitoring.MonitoringService{},
 	}
 
 	scheduleRuntimeWarmup(context.Background(), rt, nil, nil)

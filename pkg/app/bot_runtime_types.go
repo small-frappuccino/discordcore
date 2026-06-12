@@ -13,8 +13,8 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/control"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
-	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/monitoring"
 
 	"github.com/small-frappuccino/discordcore/pkg/service"
 )
@@ -37,7 +37,7 @@ type botRuntime struct {
 	capabilities      botRuntimeCapabilities
 	session           *discordgo.Session
 	serviceManager    *service.ServiceManager
-	monitoringService *logging.MonitoringService
+	monitoringService *monitoring.MonitoringService
 	commandHandler    *commands.CommandHandler
 }
 
@@ -140,15 +140,15 @@ func (r *botRuntimeResolver) aggregateUnifiedCaches() map[string]*cache.UnifiedC
 	return caches
 }
 
-// aggregateMonitoringMetrics collects the logging.Metrics of all active bot instances.
-func (r *botRuntimeResolver) aggregateMonitoringMetrics() map[string]logging.Metrics {
+// aggregateMonitoringMetrics collects the monitoring.Metrics of all active bot instances.
+func (r *botRuntimeResolver) aggregateMonitoringMetrics() map[string]monitoring.Metrics {
 	if r == nil {
 		return nil
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	metrics := make(map[string]logging.Metrics)
+	metrics := make(map[string]monitoring.Metrics)
 	for id, runtime := range r.runtimes {
 		if runtime.monitoringService != nil {
 			m := runtime.monitoringService.Metrics()

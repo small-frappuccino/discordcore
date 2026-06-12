@@ -12,12 +12,13 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
-	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
 	"github.com/small-frappuccino/discordcore/pkg/discord/maintenance"
 	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/discord/session"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/monitoring"
+	"github.com/small-frappuccino/discordcore/pkg/notifications"
 	applicationqotd "github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordcore/pkg/service"
@@ -155,7 +156,7 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 // setupMonitoringService creates and wires the per-runtime monitoring service when the
 // runtime has the monitoring capability, configuring its task-router budget and cache
 // persistence interval. It returns (nil, nil) when monitoring is not enabled.
-func setupMonitoringService(runtime *botRuntime, opts botRuntimeOptions, routerConfig task.RouterConfig) (*logging.MonitoringService, error) {
+func setupMonitoringService(runtime *botRuntime, opts botRuntimeOptions, routerConfig task.RouterConfig) (*monitoring.MonitoringService, error) {
 	if !runtime.capabilities.monitoring {
 		log.ApplicationLogger().Info("Monitoring runtime skipped; no effective monitoring workload is enabled", "botInstanceID", runtime.instanceID)
 		return nil, nil
@@ -165,13 +166,13 @@ func setupMonitoringService(runtime *botRuntime, opts botRuntimeOptions, routerC
 	// own InMemoryMetrics. The control plane reads via the default
 	// runtime's MonitoringMetricsResolver, mirroring the cache
 	// observability resolver pattern.
-	monitoringService, err := logging.NewMonitoringServiceForBotWithMetrics(
+	monitoringService, err := monitoring.NewMonitoringServiceForBotWithMetrics(
 		runtime.session,
 		opts.configManager,
 		opts.store,
 		runtime.instanceID,
 		"",
-		&logging.InMemoryMetrics{},
+		&monitoring.InMemoryMetrics{},
 		log.DiscordLogger(),
 	)
 	if err != nil {
@@ -185,7 +186,7 @@ func setupMonitoringService(runtime *botRuntime, opts botRuntimeOptions, routerC
 // buildAutomodService constructs the automod logging service when the runtime
 // has the automod capability and automod logs are not disabled, sharing the monitoring
 // notifier when available. It returns nil when automod should not run.
-func buildAutomodService(runtime *botRuntime, opts botRuntimeOptions, routerConfig task.RouterConfig, runtimeConfig files.RuntimeConfig, monitoringService *logging.MonitoringService) service.Service {
+func buildAutomodService(runtime *botRuntime, opts botRuntimeOptions, routerConfig task.RouterConfig, runtimeConfig files.RuntimeConfig, monitoringService *monitoring.MonitoringService) service.Service {
 	if !runtime.capabilities.automod {
 		log.ApplicationLogger().Info("Automod service skipped; no effective automod logging workload is enabled", "botInstanceID", runtime.instanceID)
 		return nil
@@ -197,7 +198,7 @@ func buildAutomodService(runtime *botRuntime, opts botRuntimeOptions, routerConf
 
 	automodService := automod.NewAutomodService(runtime.session, opts.configManager, runtime.instanceID, "")
 	automodRouter := task.NewRouter(routerConfig)
-	notifier := logging.NewNotificationSender(runtime.session, log.DiscordLogger())
+	notifier := notifications.NewNotificationSender(runtime.session, log.DiscordLogger())
 	if monitoringService != nil {
 		notifier = monitoringService.Notifier()
 	}
@@ -218,7 +219,7 @@ func buildAutomodService(runtime *botRuntime, opts botRuntimeOptions, routerConf
 
 // registerUserPruneService registers the Discord-native user prune maintenance service
 // when the runtime has the userPrune capability.
-func registerUserPruneService(runtime *botRuntime, opts botRuntimeOptions, monitoringService *logging.MonitoringService) error {
+func registerUserPruneService(runtime *botRuntime, opts botRuntimeOptions, monitoringService *monitoring.MonitoringService) error {
 	if !runtime.capabilities.userPrune {
 		return nil
 	}
@@ -261,7 +262,7 @@ func registerQOTDRuntimeService(runtime *botRuntime, opts botRuntimeOptions) err
 
 // setupRuntimeCommandHandler builds and registers the slash-command handler for runtimes
 // that expose commands; otherwise it logs why commands were skipped.
-func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg *files.BotConfig, monitoringService *logging.MonitoringService, statsService *stats.StatsService) service.Service {
+func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg *files.BotConfig, monitoringService *monitoring.MonitoringService, statsService *stats.StatsService) service.Service {
 	if !runtime.capabilities.HasCommands() {
 		logRuntimeCommandsSkipped(runtime, opts, cfg)
 
@@ -317,13 +318,13 @@ func logRuntimeCommandsSkipped(runtime *botRuntime, opts botRuntimeOptions, cfg 
 }
 
 var intelligentWarmupFn = cache.IntelligentWarmupContext
-var monitoringUnifiedCacheFn = func(ms *logging.MonitoringService) *cache.UnifiedCache {
+var monitoringUnifiedCacheFn = func(ms *monitoring.MonitoringService) *cache.UnifiedCache {
 	if ms == nil {
 		return nil
 	}
 	return ms.GetUnifiedCache()
 }
-var scheduleStartupMemberWarmupFn = func(ms *logging.MonitoringService, config cache.WarmupConfig) bool {
+var scheduleStartupMemberWarmupFn = func(ms *monitoring.MonitoringService, config cache.WarmupConfig) bool {
 	if ms == nil {
 		return false
 	}

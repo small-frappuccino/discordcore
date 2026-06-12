@@ -10,10 +10,10 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/control"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
-	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
 	"github.com/small-frappuccino/discordcore/pkg/discord/webhook"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/monitoring"
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
@@ -225,7 +225,7 @@ func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskO
 		}
 		return nil
 	}, opts.store)
-	controlServer.SetMonitoringMetricsResolver(func() logging.Metrics {
+	controlServer.SetMonitoringMetricsResolver(func() monitoring.Metrics {
 		if opts.runtimeResolver == nil {
 			return nil
 		}
