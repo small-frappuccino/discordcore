@@ -170,31 +170,7 @@ func (s *Server) handleGlobalSettingsPut(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	current := s.configManager.SnapshotConfig()
-	if payload.ConfigVersion == nil {
-		http.Error(w, "optimistic concurrency control: config_version required", http.StatusPreconditionRequired)
-		return
-	} else if *payload.ConfigVersion != current.ConfigVersion {
-		http.Error(w, "optimistic concurrency control: config_version mismatch", http.StatusPreconditionFailed)
-		return
-	}
-
-	updated, err := s.configManager.UpdateConfig(func(cfg *files.BotConfig) error {
-		if payload.ConfigVersion != nil {
-			cfg.ConfigVersion++
-		}
-		if payload.Features != nil {
-			cfg.Features = *payload.Features
-		}
-		if payload.Runtime != nil {
-			next, err := files.NormalizeRuntimeConfig(flattenRuntimeSettingsSections(*payload.Runtime))
-			if err != nil {
-				return fmt.Errorf("Server.handleGlobalSettingsPut: %w", err)
-			}
-			cfg.RuntimeConfig = next
-		}
-		return nil
-	})
+	updated, err := s.applyGlobalSettingsUpdate(payload)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to update global settings: %v", err), statusForSettingsMutationError(err))
 		return
@@ -259,29 +235,16 @@ func (s *Server) handleGuildRegistrationPost(w http.ResponseWriter, r *http.Requ
 		})
 		return
 	}
-	if s.guildRegistration == nil {
-		err := fmt.Errorf("%w: bootstrap is not configured for guild_id=%s", errGuildRegistrationUnavailable, guildID)
-		logSettingsRegistrationResult(auth, guildID, "control.settings.guild_registry.register.unavailable", err)
-		http.Error(w, fmt.Sprintf("failed to register guild settings: %v", err), statusForSettingsMutationError(err))
-		return
-	}
 
 	logSettingsRegistrationAttempt(auth, guildID)
-	if err := s.guildRegistration(r.Context(), guildID); err != nil {
+	updated, err := s.registerGuildSettings(r.Context(), auth, guildID)
+	if err != nil {
 		logSettingsRegistrationResult(auth, guildID, "control.settings.guild_registry.register.failed", err)
 		http.Error(w, fmt.Sprintf("failed to register guild settings: %v", err), statusForSettingsMutationError(err))
 		return
 	}
 
-	updated := s.configManager.SnapshotConfig()
-	guild, ok := findGuildSettings(updated, guildID)
-	if !ok {
-		err := fmt.Errorf("registered guild settings not found for %s", guildID)
-		logSettingsRegistrationResult(auth, guildID, "control.settings.guild_registry.register.missing", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
+	guild, _ := findGuildSettings(updated, guildID)
 	logSettingsRegistrationResult(auth, guildID, "control.settings.guild_registry.register.success", nil)
 	writeJSON(w, http.StatusCreated, guildRegistrationResponse{
 		Status:    "ok",
@@ -321,7 +284,6 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 	var (
 		availableBotInstanceIDs []string
 		updateBotInstanceTokens bool
-		invalidateAccessCache   bool
 	)
 	if payload.BotInstanceTokens != nil {
 		available, err := s.resolveAvailableBotInstanceIDsForGuild(r.Context(), requestAuthorization{mode: requestAuthModeBearer}, guildID)
@@ -332,105 +294,8 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 		availableBotInstanceIDs = available
 		updateBotInstanceTokens = true
 	}
-	current := s.configManager.SnapshotConfig()
-	if guildDisk, ok := findGuildSettings(current, guildID); !ok {
-		if s.guildRegistration != nil {
-			if err := s.guildRegistration(r.Context(), guildID); err != nil {
-				http.Error(w, fmt.Sprintf("failed to auto-register guild settings: %v", err), statusForSettingsMutationError(err))
-				return
-			}
-		} else {
-			http.Error(w, fmt.Sprintf("guild settings not found for %s and registration is unavailable", guildID), http.StatusBadRequest)
-			return
-		}
-	} else if payload.ConfigVersion == nil {
-		http.Error(w, "optimistic concurrency control: config_version required", http.StatusPreconditionRequired)
-		return
-	} else if *payload.ConfigVersion != guildDisk.ConfigVersion {
-		http.Error(w, "optimistic concurrency control: config_version mismatch", http.StatusPreconditionFailed)
-		return
-	}
 
-	updated, err := s.configManager.UpdateConfig(func(cfg *files.BotConfig) error {
-		guild, ok := findGuildSettingsMutable(cfg, guildID)
-		if !ok {
-			return fmt.Errorf("%w: register this guild first (guild_id=%s)", errGuildRegistrationRequired, guildID)
-		}
-		if payload.ConfigVersion != nil {
-			guild.ConfigVersion++
-		}
-		if updateBotInstanceTokens {
-			if guild.BotInstanceTokens == nil {
-				guild.BotInstanceTokens = make(map[string]files.EncryptedString)
-			}
-			for k, v := range *payload.BotInstanceTokens {
-				if v == "" {
-					delete(guild.BotInstanceTokens, k)
-				} else {
-					guild.BotInstanceTokens[k] = files.EncryptedString(v)
-				}
-			}
-		}
-		if payload.BotInstanceStatuses != nil {
-			if guild.BotInstanceStatuses == nil {
-				guild.BotInstanceStatuses = make(map[string]string)
-			}
-			for k, v := range *payload.BotInstanceStatuses {
-				if v == "" {
-					delete(guild.BotInstanceStatuses, k)
-				} else {
-					guild.BotInstanceStatuses[k] = v
-				}
-			}
-		}
-		if payload.FeatureRouting != nil {
-			guild.FeatureRouting = *payload.FeatureRouting
-		}
-		if payload.Features != nil {
-			guild.Features = *payload.Features
-		}
-		if payload.Channels != nil {
-			guild.Channels = *payload.Channels
-		}
-		if payload.Roles != nil {
-			invalidateAccessCache = dashboardAccessRolesChanged(guild.Roles, *payload.Roles)
-			guild.Roles = *payload.Roles
-		}
-		if payload.Stats != nil {
-			guild.Stats = *payload.Stats
-		}
-		if payload.Cache != nil {
-			guild.RolesCacheTTL = payload.Cache.RolesCacheTTL
-			guild.MemberCacheTTL = payload.Cache.MemberCacheTTL
-			guild.GuildCacheTTL = payload.Cache.GuildCacheTTL
-			guild.ChannelCacheTTL = payload.Cache.ChannelCacheTTL
-		}
-		if payload.UserPrune != nil {
-			guild.UserPrune = *payload.UserPrune
-		}
-		if payload.PartnerBoard != nil {
-			next, err := files.NormalizePartnerBoardConfig(*payload.PartnerBoard)
-			if err != nil {
-				return fmt.Errorf("Server.handleGuildSettingsPut: %w", err)
-			}
-			guild.PartnerBoard = next
-		}
-		if payload.Runtime != nil {
-			next, err := files.NormalizeRuntimeConfig(flattenRuntimeSettingsSections(*payload.Runtime))
-			if err != nil {
-				return fmt.Errorf("Server.handleGuildSettingsPut: %w", err)
-			}
-			guild.RuntimeConfig = next
-		}
-
-		for feature, instanceID := range guild.FeatureRouting {
-			if _, ok := guild.BotInstanceTokens[instanceID]; !ok {
-				delete(guild.FeatureRouting, feature)
-			}
-		}
-
-		return nil
-	})
+	updated, invalidateAccessCache, err := s.applyGuildSettingsUpdate(r.Context(), requestAuthorization{mode: requestAuthModeBearer}, guildID, payload, updateBotInstanceTokens)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to update guild settings: %v", err), statusForSettingsMutationError(err))
 		return
@@ -439,11 +304,7 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 		s.invalidateAccessibleGuildsCache()
 	}
 
-	guild, ok := findGuildSettings(updated, guildID)
-	if !ok {
-		http.Error(w, fmt.Sprintf("updated guild settings not found for %s", guildID), http.StatusInternalServerError)
-		return
-	}
+	guild, _ := findGuildSettings(updated, guildID)
 	if payload.BotInstanceTokens == nil {
 		availableBotInstanceIDs, err = s.resolveAvailableBotInstanceIDsForGuild(r.Context(), requestAuthorization{mode: requestAuthModeBearer}, guildID)
 		if err != nil && !errors.Is(err, errBotGuildIDsProviderUnavailable) && !errors.Is(err, errGuildDiscoveryRequired) {
@@ -464,18 +325,8 @@ func (s *Server) handleGuildSettingsDelete(w http.ResponseWriter, r *http.Reques
 		http.Error(w, fmt.Sprintf("failed to resolve guild bot instances: %v", err), statusForManageableGuildsError(err))
 		return
 	}
-	invalidateAccessCache := false
-	_, err := s.configManager.UpdateConfig(func(cfg *files.BotConfig) error {
-		for idx := range cfg.Guilds {
-			if cfg.Guilds[idx].GuildID != guildID {
-				continue
-			}
-			invalidateAccessCache = dashboardAccessRolesConfigured(cfg.Guilds[idx].Roles)
-			cfg.Guilds = slices.Delete(cfg.Guilds, idx, idx+1)
-			return nil
-		}
-		return fmt.Errorf("%w: guild_id=%s", files.ErrGuildConfigNotFound, guildID)
-	})
+
+	invalidateAccessCache, err := s.deleteGuildSettings(guildID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to delete guild settings: %v", err), statusForSettingsMutationError(err))
 		return
