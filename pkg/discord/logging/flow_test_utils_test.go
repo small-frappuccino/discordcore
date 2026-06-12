@@ -54,8 +54,7 @@ func newLoggingConfigManager(t *testing.T, guildID string, channels files.Channe
 	mgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := mgr.AddGuildConfig(files.GuildConfig{
 		GuildID:  guildID,
-		Channels: channels,
-	}); err != nil {
+		Channels: channels}); err != nil {
 		t.Fatalf("add guild config: %v", err)
 	}
 	return mgr

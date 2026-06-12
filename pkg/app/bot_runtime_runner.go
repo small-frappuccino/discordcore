@@ -7,6 +7,7 @@ import (
 
 	"github.com/small-frappuccino/discordgo"
 
+	"github.com/small-frappuccino/discordcore/pkg/clock"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
@@ -19,6 +20,7 @@ import (
 	applicationqotd "github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordcore/pkg/service"
+	"github.com/small-frappuccino/discordcore/pkg/stats"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/task"
 )
@@ -34,6 +36,7 @@ type botRuntimeOptions struct {
 	moderationMetrics        moderation.Metrics
 	startupTasks             *StartupTaskOrchestrator
 	profile                  RunProfile
+	appClock                 clock.Clock
 }
 
 var openBotDiscordSession = session.OpenSession
@@ -127,7 +130,12 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 		return err
 	}
 
-	if commandHandler := setupRuntimeCommandHandler(runtime, opts, cfg, monitoringService); commandHandler != nil {
+	statsService := stats.NewStatsService(runtime.session, opts.configManager, opts.store, log.DiscordLogger(), runtime.instanceID, "")
+	if err := runtime.serviceManager.Register(statsService); err != nil {
+		return fmt.Errorf("register stats service for %s: %w", runtime.instanceID, err)
+	}
+
+	if commandHandler := setupRuntimeCommandHandler(runtime, opts, cfg, monitoringService, statsService); commandHandler != nil {
 		if err := runtime.serviceManager.Register(commandHandler); err != nil {
 			return fmt.Errorf("register command handler service for %s: %w", runtime.instanceID, err)
 		}
@@ -240,6 +248,9 @@ func registerQOTDRuntimeService(runtime *botRuntime, opts botRuntimeOptions) err
 		runtime.instanceID,
 		"",
 	)
+	if opts.appClock != nil {
+		qotdRuntimeService.SetClock(opts.appClock)
+	}
 	if err := runtime.serviceManager.Register(qotdRuntimeService); err != nil {
 		return fmt.Errorf("register qotd runtime service for %s: %w", runtime.instanceID, err)
 	}
@@ -249,7 +260,7 @@ func registerQOTDRuntimeService(runtime *botRuntime, opts botRuntimeOptions) err
 
 // setupRuntimeCommandHandler builds and registers the slash-command handler for runtimes
 // that expose commands; otherwise it logs why commands were skipped.
-func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg *files.BotConfig, monitoringService *logging.MonitoringService) service.Service {
+func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg *files.BotConfig, monitoringService *logging.MonitoringService, statsService *stats.StatsService) service.Service {
 	if !runtime.capabilities.HasCommands() {
 		logRuntimeCommandsSkipped(runtime, opts, cfg)
 
@@ -274,6 +285,7 @@ func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg
 	})
 	commandHandler.SetQOTDService(opts.qotdCommandService)
 	commandHandler.SetModerationMetrics(opts.moderationMetrics)
+	commandHandler.SetStatsService(statsService)
 	// Cache observability flows through /v1/health/cache via the control server's
 	// runtime resolver, not the admin command catalog.
 	commandHandler.SetAdminCommandServices(runtime.serviceManager)

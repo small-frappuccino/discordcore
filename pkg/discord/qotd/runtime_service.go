@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/small-frappuccino/discordcore/pkg/clock"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/service"
@@ -109,6 +110,16 @@ func (s *RuntimeService) SetDependencies(deps []string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.dependencies = append([]string(nil), deps...)
+}
+
+// SetClock injects a custom clock into the service.
+func (s *RuntimeService) SetClock(c clock.Clock) {
+	if c == nil {
+		c = clock.RealClock{}
+	}
+	s.now = func() time.Time {
+		return c.Now().UTC()
+	}
 }
 
 // Name returns the service name.

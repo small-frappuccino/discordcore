@@ -13,6 +13,8 @@ import (
 	"github.com/small-frappuccino/discordgo"
 )
 
+func testBoolPtr(b bool) *bool { return &b }
+
 func TestMonitoringServiceRestartRebuildsTaskPipeline(t *testing.T) {
 	store, _ := newLoggingStore(t, "monitoring-restart.db")
 	if err := store.SetHeartbeatForBot(context.Background(), "default", time.Now().UTC()); err != nil {
@@ -33,10 +35,8 @@ func TestMonitoringServiceRestartRebuildsTaskPipeline(t *testing.T) {
 		BotInstanceTokens: map[string]files.EncryptedString{"default": "test-token"},
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
-				Monitoring: testBoolPtr(true),
-			},
-			StatsChannels: testBoolPtr(true),
-		},
+				Monitoring: testBoolPtr(true)},
+			StatsChannels: testBoolPtr(true)},
 		Stats: files.StatsConfig{
 			Enabled:            true,
 			UpdateIntervalMins: 1,
@@ -44,10 +44,7 @@ func TestMonitoringServiceRestartRebuildsTaskPipeline(t *testing.T) {
 				ChannelID:    "c-restart",
 				Label:        "Members",
 				NameTemplate: "{label} | {count}",
-				MemberType:   "all",
-			}},
-		},
-	}); err != nil {
+				MemberType:   "all"}}}}); err != nil {
 		t.Fatalf("add guild config: %v", err)
 	}
 
@@ -64,16 +61,6 @@ func TestMonitoringServiceRestartRebuildsTaskPipeline(t *testing.T) {
 	ms, err := NewMonitoringServiceForBot(session, cfgMgr, store, "default", "default", slog.Default())
 	if err != nil {
 		t.Fatalf("new monitoring service: %v", err)
-	}
-	ms.statsService.lastRun = map[string]time.Time{
-		"g-restart": time.Now().UTC(),
-	}
-	preseeded := newStatsGuildState("", nil)
-	preseeded.initialized = true
-	preseeded.dirty = false
-	preseeded.lastReconciled = time.Now().UTC()
-	ms.statsService.guilds = map[string]*statsGuildState{
-		"g-restart": preseeded,
 	}
 
 	firstRouter := ms.TaskRouter()

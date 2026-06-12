@@ -35,14 +35,12 @@ func TestMonitoringService_HandleGuildUpdatePersistsOwnerID(t *testing.T) {
 	if err := store.SetGuildOwnerID(guildID, "owner-old"); err != nil {
 		t.Fatalf("seed old owner id: %v", err)
 	}
-	ms := &MonitoringService{store: store, statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil)}
+	ms := &MonitoringService{store: store}
 
 	ms.handleGuildUpdate(nil, &discordgo.GuildUpdate{
 		Guild: &discordgo.Guild{
 			ID:      guildID,
-			OwnerID: ownerID,
-		},
-	})
+			OwnerID: ownerID}})
 
 	gotOwnerID, ok, err := store.GetGuildOwnerID(guildID)
 	if err != nil {
@@ -66,8 +64,7 @@ func TestMonitoringService_HandleMemberUpdate_AuditPathUpdatesRoleSnapshot(t *te
 	}
 
 	cfgMgr := newLoggingConfigManager(t, guildID, files.ChannelsConfig{
-		RoleUpdate: channelID,
-	})
+		RoleUpdate: channelID})
 
 	var embedPosts int32
 	session := newDiscordSessionWithAPI(t, func(w http.ResponseWriter, r *http.Request) {
@@ -85,19 +82,11 @@ func TestMonitoringService_HandleMemberUpdate_AuditPathUpdatesRoleSnapshot(t *te
 							{
 								"key": discordgo.AuditLogChangeKeyRoleAdd,
 								"new_value": []map[string]any{
-									{"id": "role-new", "name": "Role New"},
-								},
-							},
+									{"id": "role-new", "name": "Role New"}}},
 							{
 								"key": discordgo.AuditLogChangeKeyRoleRemove,
 								"new_value": []map[string]any{
-									{"id": "role-old", "name": "Role Old"},
-								},
-							},
-						},
-					},
-				},
-			})
+									{"id": "role-old", "name": "Role Old"}}}}}}})
 		case r.Method == http.MethodPost && r.URL.Path == fmt.Sprintf("/channels/%s/messages", channelID):
 			atomic.AddInt32(&embedPosts, 1)
 			_ = json.NewEncoder(w).Encode(map[string]any{"id": "embed-1"})
@@ -113,12 +102,8 @@ func TestMonitoringService_HandleMemberUpdate_AuditPathUpdatesRoleSnapshot(t *te
 		store:         store,
 		changeDebounce: changeDebouncer{
 			entries: map[string]time.Time{
-				guildID + ":" + userID + ":default": time.Now().UTC(),
-			},
-		},
-		rolesCacheService: NewRolesCacheService(nil),
-		statsService:      NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
-	}
+				guildID + ":" + userID + ":default": time.Now().UTC()}},
+		rolesCacheService: NewRolesCacheService(nil)}
 
 	ms.handleMemberUpdate(session, &discordgo.GuildMemberUpdate{
 		Member: &discordgo.Member{
@@ -126,11 +111,8 @@ func TestMonitoringService_HandleMemberUpdate_AuditPathUpdatesRoleSnapshot(t *te
 			User: &discordgo.User{
 				ID:       userID,
 				Username: "member-audit",
-				Avatar:   "",
-			},
-			Roles: []string{"role-new"},
-		},
-	})
+				Avatar:   ""},
+			Roles: []string{"role-new"}}})
 
 	var roles []string
 	for r, err := range store.GetMemberRoles(guildID, userID) {
@@ -161,8 +143,7 @@ func TestMonitoringService_HandleMemberUpdate_FallbackPathUpdatesRoleSnapshot(t 
 	}
 
 	cfgMgr := newLoggingConfigManager(t, guildID, files.ChannelsConfig{
-		RoleUpdate: channelID,
-	})
+		RoleUpdate: channelID})
 
 	var embedPosts int32
 	session := newDiscordSessionWithAPI(t, func(w http.ResponseWriter, r *http.Request) {
@@ -170,8 +151,7 @@ func TestMonitoringService_HandleMemberUpdate_FallbackPathUpdatesRoleSnapshot(t 
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == fmt.Sprintf("/guilds/%s/audit-logs", guildID):
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"audit_log_entries": []any{},
-			})
+				"audit_log_entries": []any{}})
 		case r.Method == http.MethodPost && r.URL.Path == fmt.Sprintf("/channels/%s/messages", channelID):
 			atomic.AddInt32(&embedPosts, 1)
 			_ = json.NewEncoder(w).Encode(map[string]any{"id": "embed-2"})
@@ -187,12 +167,8 @@ func TestMonitoringService_HandleMemberUpdate_FallbackPathUpdatesRoleSnapshot(t 
 		store:         store,
 		changeDebounce: changeDebouncer{
 			entries: map[string]time.Time{
-				guildID + ":" + userID + ":default": time.Now().UTC(),
-			},
-		},
-		rolesCacheService: NewRolesCacheService(nil),
-		statsService:      NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
-	}
+				guildID + ":" + userID + ":default": time.Now().UTC()}},
+		rolesCacheService: NewRolesCacheService(nil)}
 
 	ms.handleMemberUpdate(session, &discordgo.GuildMemberUpdate{
 		Member: &discordgo.Member{
@@ -200,11 +176,8 @@ func TestMonitoringService_HandleMemberUpdate_FallbackPathUpdatesRoleSnapshot(t 
 			User: &discordgo.User{
 				ID:       userID,
 				Username: "member-fallback",
-				Avatar:   "",
-			},
-			Roles: []string{"role-new"},
-		},
-	})
+				Avatar:   ""},
+			Roles: []string{"role-new"}}})
 
 	var roles []string
 	for r, err := range store.GetMemberRoles(guildID, userID) {
@@ -245,15 +218,12 @@ func TestMonitoringService_StartHeartbeatTickerPersistsPeriodicUpdates(t *testin
 		Now: func() time.Time {
 			return base.Add(time.Duration(calls.Add(1)) * time.Second)
 		},
-		OnHeartbeatTick: ticks.Hook,
-	})
+		OnHeartbeatTick: ticks.Hook})
 
 	ms := &MonitoringService{
 		store:     store,
 		controlCh: make(chan func()), stopChan: make(chan struct{}),
-		activity:     activity,
-		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
-	}
+		activity: activity}
 
 	origInterval := heartbeatTickInterval
 	// 25ms (rather than the prior 5ms) keeps the test fast while reducing

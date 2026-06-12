@@ -302,7 +302,6 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 		return
 	}
 
-	ms.statsService.ApplyStatsMemberUpdate(m.GuildID, m.User.ID, m.User.Bot, m.Roles)
 	ms.checkAvatarChange(m.GuildID, m.User.ID, m.User.Avatar, m.User.Username)
 
 	emit := logpolicy.ShouldEmitLogEvent(ms.session, ms.configManager, logpolicy.LogEventRoleChange, m.GuildID)

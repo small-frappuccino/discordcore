@@ -11,7 +11,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	qotdcmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/qotd"
-	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
 	"github.com/small-frappuccino/discordcore/pkg/discord/tickets"
 	"github.com/small-frappuccino/discordcore/pkg/embeds"
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -19,6 +18,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/partners"
 	"github.com/small-frappuccino/discordcore/pkg/roles"
 	"github.com/small-frappuccino/discordcore/pkg/service"
+	"github.com/small-frappuccino/discordcore/pkg/stats"
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -31,7 +31,7 @@ type CommandHandler struct {
 	catalogRegistrars   []CommandCatalogRegistrar
 	commandManager      *core.CommandManager
 	qotdService         qotdcmd.QuestionCatalogService
-	statsService        *logging.StatsService
+	statsService        *stats.StatsService
 	moderationMetrics   moderation.Metrics
 	adminServiceManager *service.ServiceManager
 	ticketService       *tickets.TicketService
@@ -209,7 +209,7 @@ func (ch *CommandHandler) SetQOTDService(service qotdcmd.QuestionCatalogService)
 }
 
 // SetStatsService injects the StatsService for immediate channel updates from the /stats command tree.
-func (ch *CommandHandler) SetStatsService(service *logging.StatsService) {
+func (ch *CommandHandler) SetStatsService(service *stats.StatsService) {
 	ch.statsService = service
 }
 

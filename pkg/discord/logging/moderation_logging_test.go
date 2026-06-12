@@ -18,9 +18,7 @@ func TestResolveModerationLogChannelShared(t *testing.T) {
 		GuildID: guildID,
 		Channels: files.ChannelsConfig{
 			ModerationCase: channelID,
-			AvatarLogging:  channelID,
-		},
-	}); err != nil {
+			AvatarLogging:  channelID}}); err != nil {
 		t.Fatalf("AddGuildConfig: %v", err)
 	}
 
@@ -41,9 +39,7 @@ func TestResolveModerationLogChannelValid(t *testing.T) {
 	if err := cm.AddGuildConfig(files.GuildConfig{
 		GuildID: guildID,
 		Channels: files.ChannelsConfig{
-			ModerationCase: channelID,
-		},
-	}); err != nil {
+			ModerationCase: channelID}}); err != nil {
 		t.Fatalf("AddGuildConfig: %v", err)
 	}
 
@@ -65,20 +61,16 @@ func testSessionWithChannel(guildID, channelID, botID string, perms int64) *disc
 	guild := &discordgo.Guild{
 		ID: guildID,
 		Roles: []*discordgo.Role{
-			{ID: roleID, Permissions: perms},
-		},
-	}
+			{ID: roleID, Permissions: perms}}}
 	_ = state.GuildAdd(guild)
 	_ = state.ChannelAdd(&discordgo.Channel{
 		ID:      channelID,
 		GuildID: guildID,
-		Type:    discordgo.ChannelTypeGuildText,
-	})
+		Type:    discordgo.ChannelTypeGuildText})
 	_ = state.MemberAdd(&discordgo.Member{
 		GuildID: guildID,
 		User:    &discordgo.User{ID: botID},
-		Roles:   []string{roleID},
-	})
+		Roles:   []string{roleID}})
 
 	return &discordgo.Session{State: state}
 }

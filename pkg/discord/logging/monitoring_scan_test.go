@@ -14,8 +14,7 @@ import (
 
 func testGuildMember(id string) *discordgo.Member {
 	return &discordgo.Member{
-		User: &discordgo.User{ID: id},
-	}
+		User: &discordgo.User{ID: id}}
 }
 
 func TestStreamGuildMembersContext_ProcessesPagesInOrder(t *testing.T) {
@@ -27,8 +26,7 @@ func TestStreamGuildMembersContext_ProcessesPagesInOrder(t *testing.T) {
 	page2 := []*discordgo.Member{testGuildMember("u1001")}
 	pages := map[string][]*discordgo.Member{
 		"":      page1,
-		"u1000": page2,
-	}
+		"u1000": page2}
 
 	session := newDiscordSessionWithAPI(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -37,8 +35,7 @@ func TestStreamGuildMembersContext_ProcessesPagesInOrder(t *testing.T) {
 	})
 
 	ms := &MonitoringService{
-		session: session,
-	}
+		session: session}
 
 	var got []string
 	total := 0
@@ -70,8 +67,7 @@ func TestStreamGuildMembersContext_StopsOnError(t *testing.T) {
 	})
 
 	ms := &MonitoringService{
-		session: session,
-	}
+		session: session}
 
 	total := 0
 	var outErr error

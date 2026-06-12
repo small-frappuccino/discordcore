@@ -27,9 +27,7 @@ func TestMonitoringService_SetupAndRemoveEventHandlersFromRuntimeConfig(t *testi
 	ms := &MonitoringService{
 		session:       session,
 		configManager: cfgMgr,
-		eventHandlers: make([]func(), 0),
-		statsService:  NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
-	}
+		eventHandlers: make([]func(), 0)}
 
 	ms.setupEventHandlersFromRuntimeConfig(files.RuntimeConfig{DisableUserLogs: true})
 	if got := len(ms.eventHandlers); got != 4 {
@@ -63,9 +61,7 @@ func TestMonitoringService_ApplyRuntimeTogglesStartsAndStopsServices(t *testing.
 		reactionEventService: NewReactionEventService(session, cfgMgr, nil, slog.Default()),
 		router:               router,
 		controlCh:            make(chan func()), stopChan: make(chan struct{}),
-		eventHandlers: make([]func(), 0),
-		statsService:  NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
-	}
+		eventHandlers: make([]func(), 0)}
 	ms.runState.Store(&monitoringRunState{running: true, ctx: context.Background()})
 	go ms.serveControl()
 	t.Cleanup(func() { close(ms.stopChan) })
@@ -84,8 +80,7 @@ func TestMonitoringService_ApplyRuntimeTogglesStartsAndStopsServices(t *testing.
 		DisableEntryExitLogs: true,
 		DisableMessageLogs:   true,
 		DisableReactionLogs:  true,
-		DisableUserLogs:      true,
-	}
+		DisableUserLogs:      true}
 	if err := ms.ApplyRuntimeToggles(context.Background(), disabledRC); err != nil {
 		t.Fatalf("apply disabled runtime toggles: %v", err)
 	}
@@ -128,9 +123,7 @@ func TestMonitoringService_ApplyRuntimeTogglesStartsAndStopsServices(t *testing.
 	if ms.rolesRefreshCronCancel == nil {
 		t.Fatalf("roles refresh schedule should be active after enable toggles")
 	}
-	if ms.statsCronCancel != nil {
-		t.Fatalf("stats schedule should remain inactive without stats config")
-	}
+
 	if got := len(ms.eventHandlers); got != 7 {
 		t.Fatalf("expected 7 handlers after enable toggles, got %d", got)
 	}
@@ -156,9 +149,7 @@ func TestResolveMonitoringWorkloadStateKeepsReactionServiceForReactionBlocks(t *
 			TargetUserID:  "target",
 			Emojis: []files.ReactionBlockEmojiConfig{{
 				Kind:  files.ReactionBlockEmojiKindUnicode,
-				Value: "❌",
-			}},
-		}}}
+				Value: "❌"}}}}}
 		return nil
 	}); err != nil {
 		t.Fatalf("update config: %v", err)
@@ -182,9 +173,7 @@ func TestMonitoringService_SyncSchedulesLockedReactivatesSchedules(t *testing.T)
 		session:       session,
 		configManager: cfgMgr,
 		router:        router,
-		controlCh:     make(chan func()), stopChan: make(chan struct{}),
-		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
-	}
+		controlCh:     make(chan func()), stopChan: make(chan struct{})}
 	ms.runState.Store(&monitoringRunState{running: true, ctx: context.Background()})
 	// Note: syncSchedulesLocked runs synchronously without doControl, so serveControl isn't strictly necessary here, but added for safety
 	go ms.serveControl()
@@ -192,31 +181,25 @@ func TestMonitoringService_SyncSchedulesLockedReactivatesSchedules(t *testing.T)
 
 	state := monitoringWorkloadState{
 		avatarScan:   true,
-		statsUpdates: true,
-		rolesRefresh: true,
-	}
+		rolesRefresh: true}
 
 	ms.syncSchedulesLocked(runCtx, state)
 	if ms.cronCancel == nil {
 		t.Fatalf("avatar scan schedule should be created")
 	}
-	if ms.statsCronCancel == nil {
-		t.Fatalf("stats schedule should be created")
-	}
+
 	if ms.rolesRefreshCronCancel == nil {
 		t.Fatalf("roles refresh schedule should be created")
 	}
-	if got := router.Stats().RegisteredTypes; got != 3 {
-		t.Fatalf("expected 3 registered task handlers, got %d", got)
+	if got := router.Stats().RegisteredTypes; got != 2 {
+		t.Fatalf("expected 2 registered task handlers, got %d", got)
 	}
 
 	ms.syncSchedulesLocked(runCtx, monitoringWorkloadState{})
 	if ms.cronCancel != nil {
 		t.Fatalf("avatar scan schedule should be removed")
 	}
-	if ms.statsCronCancel != nil {
-		t.Fatalf("stats schedule should be removed")
-	}
+
 	if ms.rolesRefreshCronCancel != nil {
 		t.Fatalf("roles refresh schedule should be removed")
 	}
@@ -225,9 +208,7 @@ func TestMonitoringService_SyncSchedulesLockedReactivatesSchedules(t *testing.T)
 	if ms.cronCancel == nil {
 		t.Fatalf("avatar scan schedule should be recreated")
 	}
-	if ms.statsCronCancel == nil {
-		t.Fatalf("stats schedule should be recreated")
-	}
+
 	if ms.rolesRefreshCronCancel == nil {
 		t.Fatalf("roles refresh schedule should be recreated")
 	}
@@ -253,14 +234,11 @@ func TestMonitoringService_SetupEventHandlersKeepsPresenceWatchWhenUserLogsDisab
 	ms := &MonitoringService{
 		session:       session,
 		configManager: cfgMgr,
-		eventHandlers: make([]func(), 0),
-		statsService:  NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
-	}
+		eventHandlers: make([]func(), 0)}
 
 	ms.setupEventHandlersFromRuntimeConfig(files.RuntimeConfig{
 		DisableUserLogs:  true,
-		PresenceWatchBot: true,
-	})
+		PresenceWatchBot: true})
 	if got := len(ms.eventHandlers); got != 3 {
 		t.Fatalf("expected 3 handlers with presence watch only, got %d", got)
 	}

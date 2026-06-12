@@ -20,9 +20,7 @@ func TestShouldEmitLogEventAutomodActionToggles(t *testing.T) {
 	if err := cm.AddGuildConfig(files.GuildConfig{
 		GuildID: guildID,
 		Channels: files.ChannelsConfig{
-			AutomodAction: channelID,
-		},
-	}); err != nil {
+			AutomodAction: channelID}}); err != nil {
 		t.Fatalf("AddGuildConfig: %v", err)
 	}
 
@@ -83,9 +81,7 @@ func TestShouldEmitLogEventAutomodActionChannelResolution(t *testing.T) {
 		if err := cm.AddGuildConfig(files.GuildConfig{
 			GuildID: guildID,
 			Channels: files.ChannelsConfig{
-				AutomodAction: automodChannelID,
-			},
-		}); err != nil {
+				AutomodAction: automodChannelID}}); err != nil {
 			t.Fatalf("AddGuildConfig: %v", err)
 		}
 
@@ -105,8 +101,7 @@ func TestShouldEmitLogEventAutomodActionChannelResolution(t *testing.T) {
 
 		cm := newTestConfigManager(t)
 		if err := cm.AddGuildConfig(files.GuildConfig{
-			GuildID: guildID,
-		}); err != nil {
+			GuildID: guildID}); err != nil {
 			t.Fatalf("AddGuildConfig: %v", err)
 		}
 

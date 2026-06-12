@@ -47,6 +47,7 @@ flowchart TD
     Embeds["pkg/embeds"]
     Partners["pkg/partners"]
     Tickets["pkg/tickets"]
+    Stats["pkg/stats"]
     
     %% Core Domain
     Files["pkg/files (Config & State)"]
@@ -90,6 +91,7 @@ flowchart TD
     App --> Persistence
     App --> RPC
     App --> Service
+    App --> Stats
     
     %% Additional Adapter Connections
     App --> Webhook
@@ -128,6 +130,7 @@ flowchart TD
     Commands --> Embeds
     Commands --> Partners
     Commands --> Tickets
+    Commands --> Stats
     
     %% Discord Domain to Adapters
     AdapterQOTD --> QOTD
@@ -151,6 +154,8 @@ flowchart TD
     Embeds --> Files
     Partners --> Files
     Tickets --> Files
+    Stats --> Files
+    Stats --> Storage
     
     Persistence --> Storage
     RuntimeApply --> Files
@@ -165,7 +170,7 @@ flowchart TD
     
     class Files,Storage,Persistence,RuntimeApply core;
     class Control,Task,RPC,Commands,Logging,Cache,Session,DualSDK,Webhook,Perf,Cleanup,Maintenance,MessageUpdate,AdapterQOTD,AdapterTickets adapter;
-    class QOTD,Roles,Embeds,Partners,Tickets feature;
+    class QOTD,Roles,Embeds,Partners,Tickets,Stats feature;
     class Service,Log,LogPolicy,Observability,Clock,Theme,TestDB infra;
     class DiscordGo,Arikawa,DiscordAPI,DiscordGateway external;
     class UI ui;

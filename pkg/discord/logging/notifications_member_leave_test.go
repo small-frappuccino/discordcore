@@ -58,8 +58,7 @@ func TestSendMemberLeaveNotification_UnknownServerTimeRendersNA(t *testing.T) {
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"id":         "m1",
-				"channel_id": "c1",
-			})
+				"channel_id": "c1"})
 			return
 		}
 		w.WriteHeader(http.StatusOK)
@@ -71,9 +70,7 @@ func TestSendMemberLeaveNotification_UnknownServerTimeRendersNA(t *testing.T) {
 		"c1",
 		&discordgo.GuildMemberRemove{
 			Member: &discordgo.Member{
-				User: &discordgo.User{ID: "u1", Username: "user-1"},
-			},
-		},
+				User: &discordgo.User{ID: "u1", Username: "user-1"}}},
 		unknownServerTimeSentinel,
 		0,
 	)

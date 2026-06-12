@@ -26,8 +26,7 @@ func TestBuildAutomodEmbed_MemberProfile_OmitsChannelField(t *testing.T) {
 		RuleTriggerType: automodTriggerMemberProfile,
 		MatchedKeyword:  "ass",
 		MatchedContent:  "BigAss",
-		Action:          discordgo.AutoModerationAction{Type: discordgo.AutoModerationActionType(automodActionBlockMemberInteraction)},
-	})
+		Action:          discordgo.AutoModerationAction{Type: discordgo.AutoModerationActionType(automodActionBlockMemberInteraction)}})
 
 	if embed.Title != "AutoMod • Member Profile Quarantined" {
 		t.Fatalf("unexpected title: %q", embed.Title)
@@ -64,8 +63,7 @@ func TestBuildAutomodEmbed_Message_IncludesChannelAndJumpLink(t *testing.T) {
 		UserID:          "u1",
 		RuleTriggerType: automodTriggerKeyword,
 		MatchedKeyword:  "spam",
-		Content:         "hello spam world",
-	})
+		Content:         "hello spam world"})
 
 	if embed.Title != "AutoMod • Message Blocked" {
 		t.Fatalf("unexpected title: %q", embed.Title)
@@ -92,8 +90,7 @@ func TestBuildAutomodEmbed_Message_NoJumpLinkWhenMessageIDMissing(t *testing.T) 
 		ChannelID:       "c1",
 		RuleID:          "r1",
 		UserID:          "u1",
-		RuleTriggerType: automodTriggerSpam,
-	})
+		RuleTriggerType: automodTriggerSpam})
 
 	if strings.Contains(embed.Description, "Jump to message") {
 		t.Fatalf("expected no jump link without MessageID, got %q", embed.Description)
@@ -107,8 +104,7 @@ func TestBuildAutomodEmbed_OmitsEmptyOptionalFields(t *testing.T) {
 		GuildID:         "g1",
 		RuleID:          "",
 		UserID:          "u1",
-		RuleTriggerType: automodTriggerMemberProfile,
-	})
+		RuleTriggerType: automodTriggerMemberProfile})
 
 	if findField(embed.Fields, "Rule ID") != nil {
 		t.Fatal("Rule ID field must be omitted when RuleID is empty")
@@ -131,8 +127,7 @@ func TestBuildAutomodEmbed_TruncatesLongExcerpt(t *testing.T) {
 		RuleID:          "r1",
 		UserID:          "u1",
 		RuleTriggerType: automodTriggerKeyword,
-		Content:         long,
-	})
+		Content:         long})
 
 	f := findField(embed.Fields, "Excerpt")
 	if f == nil {

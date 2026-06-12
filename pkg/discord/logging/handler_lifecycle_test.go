@@ -35,8 +35,7 @@ func TestMemberEventService_StartStopDoesNotLeakHandlers(t *testing.T) {
 	store, dbPath := newLoggingStore(t, "lifecycle-member.db")
 	cfgMgr := newLoggingConfigManager(t, guildID, files.ChannelsConfig{
 		MemberJoin:  channelID,
-		MemberLeave: channelID,
-	})
+		MemberLeave: channelID})
 
 	var notificationPosts int32
 	session := newDiscordSessionWithAPI(t, func(w http.ResponseWriter, r *http.Request) {
@@ -69,11 +68,8 @@ func TestMemberEventService_StartStopDoesNotLeakHandlers(t *testing.T) {
 			GuildID: guildID,
 			User: &discordgo.User{
 				ID:       firstUserID,
-				Username: "first-user",
-			},
-			JoinedAt: firstJoinedAt,
-		},
-	})
+				Username: "first-user"},
+			JoinedAt: firstJoinedAt}})
 	if got := atomic.LoadInt32(&notificationPosts); got != 1 {
 		t.Fatalf("expected one notification after first dispatch, got %d", got)
 	}
@@ -90,11 +86,8 @@ func TestMemberEventService_StartStopDoesNotLeakHandlers(t *testing.T) {
 			GuildID: guildID,
 			User: &discordgo.User{
 				ID:       "333333333333333333",
-				Username: "stopped-user",
-			},
-			JoinedAt: time.Now().UTC().Add(-10 * time.Minute),
-		},
-	})
+				Username: "stopped-user"},
+			JoinedAt: time.Now().UTC().Add(-10 * time.Minute)}})
 	if got := atomic.LoadInt32(&notificationPosts); got != 1 {
 		t.Fatalf("expected no event processing while service is stopped, got %d notification sends", got)
 	}
@@ -112,11 +105,8 @@ func TestMemberEventService_StartStopDoesNotLeakHandlers(t *testing.T) {
 			GuildID: guildID,
 			User: &discordgo.User{
 				ID:       secondUserID,
-				Username: "second-user",
-			},
-			JoinedAt: secondJoinedAt,
-		},
-	})
+				Username: "second-user"},
+			JoinedAt: secondJoinedAt}})
 
 	if got := atomic.LoadInt32(&notificationPosts); got != 2 {
 		t.Fatalf("expected exactly one notification per dispatched event, got %d", got)
@@ -163,10 +153,7 @@ func TestMessageEventService_StartStopDoesNotLeakHandlers(t *testing.T) {
 			Content:   "first",
 			Author: &discordgo.User{
 				ID:       userID,
-				Username: "lifecycle-user",
-			},
-		},
-	})
+				Username: "lifecycle-user"}}})
 	waitForDailyMessageMetricCount(t, dbPath, guildID, channelID, userID, time.Now().UTC(), 1)
 
 	if err := service.Stop(context.Background()); err != nil {
@@ -184,10 +171,7 @@ func TestMessageEventService_StartStopDoesNotLeakHandlers(t *testing.T) {
 			Content:   "should-not-be-processed",
 			Author: &discordgo.User{
 				ID:       userID,
-				Username: "lifecycle-user",
-			},
-		},
-	})
+				Username: "lifecycle-user"}}})
 	if got := dailyMessageMetricCount(t, dbPath, guildID, channelID, userID, time.Now().UTC()); got != 1 {
 		t.Fatalf("expected no extra processing while stopped, daily metric=%d", got)
 	}
@@ -207,10 +191,7 @@ func TestMessageEventService_StartStopDoesNotLeakHandlers(t *testing.T) {
 			Content:   "second",
 			Author: &discordgo.User{
 				ID:       userID,
-				Username: "lifecycle-user",
-			},
-		},
-	})
+				Username: "lifecycle-user"}}})
 	waitForDailyMessageMetricCount(t, dbPath, guildID, channelID, userID, time.Now().UTC(), 2)
 
 	if err := service.Stop(context.Background()); err != nil {
@@ -244,10 +225,7 @@ func TestReactionEventService_StartStopDoesNotLeakHandlers(t *testing.T) {
 			ChannelID: channelID,
 			UserID:    userID,
 			Emoji: discordgo.Emoji{
-				Name: "thumbsup",
-			},
-		},
-	})
+				Name: "thumbsup"}}})
 	if got := dailyReactionMetricCount(t, dbPath, guildID, channelID, userID, time.Now().UTC()); got != 1 {
 		t.Fatalf("expected one reaction metric after first dispatch, got %d", got)
 	}
@@ -265,10 +243,7 @@ func TestReactionEventService_StartStopDoesNotLeakHandlers(t *testing.T) {
 			ChannelID: channelID,
 			UserID:    userID,
 			Emoji: discordgo.Emoji{
-				Name: "thumbsup",
-			},
-		},
-	})
+				Name: "thumbsup"}}})
 	if got := dailyReactionMetricCount(t, dbPath, guildID, channelID, userID, time.Now().UTC()); got != 1 {
 		t.Fatalf("expected no extra processing while stopped, reaction metric=%d", got)
 	}
@@ -286,10 +261,7 @@ func TestReactionEventService_StartStopDoesNotLeakHandlers(t *testing.T) {
 			ChannelID: channelID,
 			UserID:    userID,
 			Emoji: discordgo.Emoji{
-				Name: "thumbsup",
-			},
-		},
-	})
+				Name: "thumbsup"}}})
 	if got := dailyReactionMetricCount(t, dbPath, guildID, channelID, userID, time.Now().UTC()); got != 2 {
 		t.Fatalf("expected one processed reaction per dispatch after restart, got metric=%d", got)
 	}

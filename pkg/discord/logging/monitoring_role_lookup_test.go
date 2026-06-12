@@ -47,14 +47,13 @@ func TestMonitoringRoleLookupFunctions(t *testing.T) {
 		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/guilds/g1/roles") {
 			_ = json.NewEncoder(w).Encode([]map[string]any{
 				{"id": "r1", "name": "regular", "managed": false, "permissions": "0", "position": 1},
-				{"id": "r2", "name": "managed", "managed": true, "permissions": "0", "position": 2},
-			})
+				{"id": "r2", "name": "managed", "managed": true, "permissions": "0", "position": 2}})
 			return
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{})
 	})
 
-	ms := &MonitoringService{session: session, statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil)}
+	ms := &MonitoringService{session: session}
 
 	if ms.isBotManagedRole("g1", "r1") {
 		t.Fatalf("expected r1 to be non-managed")

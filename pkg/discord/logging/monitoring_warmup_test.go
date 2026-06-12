@@ -30,9 +30,7 @@ func TestScheduleStartupMemberWarmupDispatchesToTaskRouter(t *testing.T) {
 	ms := &MonitoringService{
 		router:    router,
 		controlCh: make(chan func()), stopChan: make(chan struct{}),
-		unifiedCache: &cache.UnifiedCache{},
-		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
-	}
+		unifiedCache: &cache.UnifiedCache{}}
 	ms.runState.Store(&monitoringRunState{running: true, ctx: context.Background()})
 	go ms.serveControl()
 	t.Cleanup(func() { close(ms.stopChan) })
@@ -43,8 +41,7 @@ func TestScheduleStartupMemberWarmupDispatchesToTaskRouter(t *testing.T) {
 		FetchMissingGuilds:   false,
 		FetchMissingRoles:    false,
 		FetchMissingChannels: false,
-		MaxMembersPerGuild:   500,
-	}
+		MaxMembersPerGuild:   500}
 	if !ms.ScheduleStartupMemberWarmup(config) {
 		t.Fatalf("expected member warmup to be scheduled")
 	}

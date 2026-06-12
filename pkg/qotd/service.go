@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/small-frappuccino/discordcore/pkg/clock"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
@@ -196,4 +197,14 @@ func NewServiceWithMetrics(configManager *files.ConfigManager, store *storage.St
 // SetPublisher injects the Publisher after service construction.
 func (s *Service) SetPublisher(p Publisher) {
 	s.publisher = p
+}
+
+// SetClock injects a custom clock into the service.
+func (s *Service) SetClock(c clock.Clock) {
+	if c == nil {
+		c = clock.RealClock{}
+	}
+	s.now = func() time.Time {
+		return c.Now().UTC()
+	}
 }

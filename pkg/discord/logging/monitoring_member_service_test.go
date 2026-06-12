@@ -18,113 +18,76 @@ func TestShouldRunMemberEventService(t *testing.T) {
 		{
 			name: "nil config",
 			cfg:  nil,
-			want: false,
-		},
+			want: false},
 		{
 			name: "global entry exit enabled",
 			cfg: &files.BotConfig{
 				Features: files.FeatureToggles{
 					Logging: files.FeatureLoggingToggles{
-						MemberJoin: boolPtr(true),
-					},
-				},
-			},
-			want: true,
-		},
+						MemberJoin: boolPtr(true)}}},
+			want: true},
 		{
 			name: "global entry exit disabled and no auto role",
 			cfg: &files.BotConfig{
 				Features: files.FeatureToggles{
 					Logging: files.FeatureLoggingToggles{
 						MemberJoin:  boolPtr(false),
-						MemberLeave: boolPtr(false),
-					},
-					AutoRoleAssign: boolPtr(false),
-				},
+						MemberLeave: boolPtr(false)},
+					AutoRoleAssign: boolPtr(false)},
 				Guilds: []files.GuildConfig{
 					{
 						GuildID: "1",
 						Roles: files.RolesConfig{
-							AutoAssignment: files.AutoAssignmentConfig{Enabled: false},
-						},
-					},
-				},
-			},
-			want: false,
-		},
+							AutoAssignment: files.AutoAssignmentConfig{Enabled: false}}}}},
+			want: false},
 		{
 			name: "auto role enabled by guild even with entry exit disabled",
 			cfg: &files.BotConfig{
 				Features: files.FeatureToggles{
 					Logging: files.FeatureLoggingToggles{
 						MemberJoin:  boolPtr(false),
-						MemberLeave: boolPtr(false),
-					},
-					AutoRoleAssign: boolPtr(false),
-				},
+						MemberLeave: boolPtr(false)},
+					AutoRoleAssign: boolPtr(false)},
 				Guilds: []files.GuildConfig{
 					{
 						GuildID: "1",
 						Features: files.FeatureToggles{
-							AutoRoleAssign: boolPtr(true),
-						},
+							AutoRoleAssign: boolPtr(true)},
 						Roles: files.RolesConfig{
-							AutoAssignment: files.AutoAssignmentConfig{Enabled: true},
-						},
-					},
-				},
-			},
+							AutoAssignment: files.AutoAssignmentConfig{Enabled: true}}}}},
 			globalRC: files.RuntimeConfig{DisableEntryExitLogs: true},
-			want:     true,
-		},
+			want:     true},
 		{
 			name: "auto role disabled by guild feature",
 			cfg: &files.BotConfig{
 				Features: files.FeatureToggles{
 					Logging: files.FeatureLoggingToggles{
 						MemberJoin:  boolPtr(false),
-						MemberLeave: boolPtr(false),
-					},
-					AutoRoleAssign: boolPtr(false),
-				},
+						MemberLeave: boolPtr(false)},
+					AutoRoleAssign: boolPtr(false)},
 				Guilds: []files.GuildConfig{
 					{
 						GuildID: "1",
 						Features: files.FeatureToggles{
-							AutoRoleAssign: boolPtr(false),
-						},
+							AutoRoleAssign: boolPtr(false)},
 						Roles: files.RolesConfig{
-							AutoAssignment: files.AutoAssignmentConfig{Enabled: true},
-						},
-					},
-				},
-			},
+							AutoAssignment: files.AutoAssignmentConfig{Enabled: true}}}}},
 			globalRC: files.RuntimeConfig{DisableEntryExitLogs: true},
-			want:     false,
-		},
+			want:     false},
 		{
 			name: "guild entry exit override enabled while global disabled",
 			cfg: &files.BotConfig{
 				Features: files.FeatureToggles{
 					Logging: files.FeatureLoggingToggles{
 						MemberJoin:  boolPtr(false),
-						MemberLeave: boolPtr(false),
-					},
-				},
+						MemberLeave: boolPtr(false)}},
 				Guilds: []files.GuildConfig{
 					{
 						GuildID: "1",
 						Features: files.FeatureToggles{
 							Logging: files.FeatureLoggingToggles{
-								MemberJoin: boolPtr(true),
-							},
-						},
-					},
-				},
-			},
-			want: true,
-		},
-	}
+								MemberJoin: boolPtr(true)}}}}},
+			want: true}}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

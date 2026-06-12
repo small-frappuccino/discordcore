@@ -11,8 +11,7 @@ import (
 
 func TestParseEntryExitBackfillMessage_MimuWelcome(t *testing.T) {
 	m := &discordgo.Message{
-		Content: "<@1234567890> Welcome to Alice Mains!",
-	}
+		Content: "<@1234567890> Welcome to Alice Mains!"}
 	gotEvt, gotUserID, ok := parseEntryExitBackfillMessage(m, "", files.RuntimeConfig{})
 	if !ok {
 		t.Fatalf("expected ok=true")
@@ -27,8 +26,7 @@ func TestParseEntryExitBackfillMessage_MimuWelcome(t *testing.T) {
 
 func TestParseEntryExitBackfillMessage_MimuGoodbye(t *testing.T) {
 	m := &discordgo.Message{
-		Content: "<@!987654321> goodbye!",
-	}
+		Content: "<@!987654321> goodbye!"}
 	gotEvt, gotUserID, ok := parseEntryExitBackfillMessage(m, "", files.RuntimeConfig{})
 	if !ok {
 		t.Fatalf("expected ok=true")
@@ -45,9 +43,7 @@ func TestParseEntryExitBackfillMessage_EmbedJoin_ByBot(t *testing.T) {
 	m := &discordgo.Message{
 		Author: &discordgo.User{ID: "42"},
 		Embeds: []*discordgo.MessageEmbed{
-			{Title: "Member Joined", Description: "**u** (<@123>, `123`)"},
-		},
-	}
+			{Title: "Member Joined", Description: "**u** (<@123>, `123`)"}}}
 	gotEvt, gotUserID, ok := parseEntryExitBackfillMessage(m, "42", files.RuntimeConfig{})
 	if !ok {
 		t.Fatalf("expected ok=true")
@@ -63,8 +59,7 @@ func TestParseEntryExitBackfillMessage_EmbedJoin_ByBot(t *testing.T) {
 func TestParseEntryExitBackfillMessage_NewFormats(t *testing.T) {
 	t.Run("welcome to alice mains! @user", func(t *testing.T) {
 		m := &discordgo.Message{
-			Content: "welcome to alice mains! <@1234567890>",
-		}
+			Content: "welcome to alice mains! <@1234567890>"}
 		gotEvt, gotUserID, ok := parseEntryExitBackfillMessage(m, "", files.RuntimeConfig{})
 		if !ok {
 			t.Fatalf("expected ok=true")
@@ -79,8 +74,7 @@ func TestParseEntryExitBackfillMessage_NewFormats(t *testing.T) {
 
 	t.Run("@user has left the server... :(", func(t *testing.T) {
 		m := &discordgo.Message{
-			Content: "<@987654321> has left the server... :(",
-		}
+			Content: "<@987654321> has left the server... :("}
 		gotEvt, gotUserID, ok := parseEntryExitBackfillMessage(m, "", files.RuntimeConfig{})
 		if !ok {
 			t.Fatalf("expected ok=true")
@@ -144,8 +138,7 @@ func TestApplyBackfillPage_NoStartReachedProcessesAll(t *testing.T) {
 
 	msgs := []*discordgo.Message{
 		{ID: "1", Timestamp: time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)},
-		{ID: "2", Timestamp: time.Date(2024, 5, 1, 0, 0, 0, 0, time.UTC)},
-	}
+		{ID: "2", Timestamp: time.Date(2024, 5, 1, 0, 0, 0, 0, time.UTC)}}
 
 	res, err := ms.applyBackfillPage(context.Background(), backfillScope{GuildID: "g", ChannelID: "c", BotID: "bot", Mode: "day"}, msgs, start, end)
 	if err != nil {
@@ -167,8 +160,7 @@ func TestApplyBackfillPage_CanceledContextReturnsError(t *testing.T) {
 	cancel()
 
 	msgs := []*discordgo.Message{
-		{ID: "1", Timestamp: time.Now().UTC()},
-	}
+		{ID: "1", Timestamp: time.Now().UTC()}}
 
 	if _, err := ms.applyBackfillPage(ctx, backfillScope{GuildID: "g", ChannelID: "c", BotID: "bot", Mode: "day"}, msgs, time.Time{}, time.Now().Add(time.Hour)); err == nil {
 		t.Fatalf("expected error from canceled context")

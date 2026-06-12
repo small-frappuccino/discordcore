@@ -25,8 +25,7 @@ func TestMonitoringService_HandleMemberUpdateSkipsAuditWhenLocalDiffEmpty(t *tes
 	}
 
 	cfgMgr := newLoggingConfigManager(t, guildID, files.ChannelsConfig{
-		RoleUpdate: channelID,
-	})
+		RoleUpdate: channelID})
 
 	var auditGets int32
 	var embedPosts int32
@@ -50,11 +49,8 @@ func TestMonitoringService_HandleMemberUpdateSkipsAuditWhenLocalDiffEmpty(t *tes
 		configManager: cfgMgr,
 		store:         store,
 		changeDebounce: changeDebouncer{
-			entries: map[string]time.Time{guildID + ":" + userID + ":default": time.Now().UTC()},
-		},
-		rolesCacheService: NewRolesCacheService(nil),
-		statsService:      NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
-	}
+			entries: map[string]time.Time{guildID + ":" + userID + ":default": time.Now().UTC()}},
+		rolesCacheService: NewRolesCacheService(nil)}
 
 	ms.handleMemberUpdate(session, &discordgo.GuildMemberUpdate{
 		Member: &discordgo.Member{
@@ -62,11 +58,8 @@ func TestMonitoringService_HandleMemberUpdateSkipsAuditWhenLocalDiffEmpty(t *tes
 			User: &discordgo.User{
 				ID:       userID,
 				Username: "member-one",
-				Avatar:   "",
-			},
-			Roles: []string{"role-same"},
-		},
-	})
+				Avatar:   ""},
+			Roles: []string{"role-same"}}})
 
 	if got := atomic.LoadInt32(&auditGets); got != 0 {
 		t.Fatalf("expected no audit log fetch when local diff is empty, got %d", got)
@@ -89,8 +82,7 @@ func TestMonitoringService_HandleMemberUpdateFallbackHandlesEmptyRoleSet(t *test
 	}
 
 	cfgMgr := newLoggingConfigManager(t, guildID, files.ChannelsConfig{
-		RoleUpdate: channelID,
-	})
+		RoleUpdate: channelID})
 
 	var auditGets int32
 	var embedPosts int32
@@ -114,11 +106,8 @@ func TestMonitoringService_HandleMemberUpdateFallbackHandlesEmptyRoleSet(t *test
 		configManager: cfgMgr,
 		store:         store,
 		changeDebounce: changeDebouncer{
-			entries: map[string]time.Time{guildID + ":" + userID + ":default": time.Now().UTC()},
-		},
-		rolesCacheService: NewRolesCacheService(nil),
-		statsService:      NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
-	}
+			entries: map[string]time.Time{guildID + ":" + userID + ":default": time.Now().UTC()}},
+		rolesCacheService: NewRolesCacheService(nil)}
 
 	ms.handleMemberUpdate(session, &discordgo.GuildMemberUpdate{
 		Member: &discordgo.Member{
@@ -126,11 +115,8 @@ func TestMonitoringService_HandleMemberUpdateFallbackHandlesEmptyRoleSet(t *test
 			User: &discordgo.User{
 				ID:       userID,
 				Username: "member-one",
-				Avatar:   "",
-			},
-			Roles: []string{},
-		},
-	})
+				Avatar:   ""},
+			Roles: []string{}}})
 
 	var roles []string
 	for r, err := range store.GetMemberRoles(guildID, userID) {
@@ -170,8 +156,7 @@ func TestMonitoringService_HandleMemberUpdateReusesGuildAuditCache(t *testing.T)
 	}
 
 	cfgMgr := newLoggingConfigManager(t, guildID, files.ChannelsConfig{
-		RoleUpdate: channelID,
-	})
+		RoleUpdate: channelID})
 
 	var auditGets int32
 	var embedPosts int32
@@ -191,11 +176,7 @@ func TestMonitoringService_HandleMemberUpdateReusesGuildAuditCache(t *testing.T)
 							{
 								"key": discordgo.AuditLogChangeKeyRoleAdd,
 								"new_value": []map[string]any{
-									{"id": "role-new-1", "name": "Role New 1"},
-								},
-							},
-						},
-					},
+									{"id": "role-new-1", "name": "Role New 1"}}}}},
 					{
 						"id":          "role-cache-entry-2",
 						"user_id":     "moderator-2",
@@ -205,13 +186,7 @@ func TestMonitoringService_HandleMemberUpdateReusesGuildAuditCache(t *testing.T)
 							{
 								"key": discordgo.AuditLogChangeKeyRoleAdd,
 								"new_value": []map[string]any{
-									{"id": "role-new-2", "name": "Role New 2"},
-								},
-							},
-						},
-					},
-				},
-			})
+									{"id": "role-new-2", "name": "Role New 2"}}}}}}})
 		case r.Method == http.MethodPost && r.URL.Path == fmt.Sprintf("/channels/%s/messages", channelID):
 			atomic.AddInt32(&embedPosts, 1)
 			_ = json.NewEncoder(w).Encode(map[string]any{"id": fmt.Sprintf("msg-%d", atomic.LoadInt32(&embedPosts))})
@@ -229,13 +204,10 @@ func TestMonitoringService_HandleMemberUpdateReusesGuildAuditCache(t *testing.T)
 		changeDebounce: changeDebouncer{
 			entries: map[string]time.Time{
 				guildID + ":" + userOne + ":default": time.Now().UTC(),
-				guildID + ":" + userTwo + ":default": time.Now().UTC(),
-			},
-		},
+				guildID + ":" + userTwo + ":default": time.Now().UTC()}},
 		rolesCacheService: NewRolesCacheService(nil),
-		statsService:      NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
-		metrics:           metrics,
-	}
+
+		metrics: metrics}
 
 	ms.handleMemberUpdate(session, &discordgo.GuildMemberUpdate{
 		Member: &discordgo.Member{
@@ -243,22 +215,16 @@ func TestMonitoringService_HandleMemberUpdateReusesGuildAuditCache(t *testing.T)
 			User: &discordgo.User{
 				ID:       userOne,
 				Username: "member-one",
-				Avatar:   "",
-			},
-			Roles: []string{"role-new-1"},
-		},
-	})
+				Avatar:   ""},
+			Roles: []string{"role-new-1"}}})
 	ms.handleMemberUpdate(session, &discordgo.GuildMemberUpdate{
 		Member: &discordgo.Member{
 			GuildID: guildID,
 			User: &discordgo.User{
 				ID:       userTwo,
 				Username: "member-two",
-				Avatar:   "",
-			},
-			Roles: []string{"role-new-2"},
-		},
-	})
+				Avatar:   ""},
+			Roles: []string{"role-new-2"}}})
 
 	if got := atomic.LoadInt32(&auditGets); got != 1 {
 		t.Fatalf("expected one shared audit log fetch for both users, got %d", got)
@@ -284,8 +250,7 @@ func TestMonitoringService_HandleMemberUpdateDebouncesAuditRefreshByUser(t *test
 	}
 
 	cfgMgr := newLoggingConfigManager(t, guildID, files.ChannelsConfig{
-		RoleUpdate: channelID,
-	})
+		RoleUpdate: channelID})
 
 	var auditGets int32
 	var embedPosts int32
@@ -309,11 +274,8 @@ func TestMonitoringService_HandleMemberUpdateDebouncesAuditRefreshByUser(t *test
 		configManager: cfgMgr,
 		store:         store,
 		changeDebounce: changeDebouncer{
-			entries: map[string]time.Time{guildID + ":" + userID + ":default": time.Now().UTC()},
-		},
-		rolesCacheService: NewRolesCacheService(nil),
-		statsService:      NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
-	}
+			entries: map[string]time.Time{guildID + ":" + userID + ":default": time.Now().UTC()}},
+		rolesCacheService: NewRolesCacheService(nil)}
 
 	ms.handleMemberUpdate(session, &discordgo.GuildMemberUpdate{
 		Member: &discordgo.Member{
@@ -321,22 +283,16 @@ func TestMonitoringService_HandleMemberUpdateDebouncesAuditRefreshByUser(t *test
 			User: &discordgo.User{
 				ID:       userID,
 				Username: "member-one",
-				Avatar:   "",
-			},
-			Roles: []string{"role-mid"},
-		},
-	})
+				Avatar:   ""},
+			Roles: []string{"role-mid"}}})
 	ms.handleMemberUpdate(session, &discordgo.GuildMemberUpdate{
 		Member: &discordgo.Member{
 			GuildID: guildID,
 			User: &discordgo.User{
 				ID:       userID,
 				Username: "member-one",
-				Avatar:   "",
-			},
-			Roles: []string{"role-new"},
-		},
-	})
+				Avatar:   ""},
+			Roles: []string{"role-new"}}})
 
 	var roles []string
 	for r, err := range store.GetMemberRoles(guildID, userID) {

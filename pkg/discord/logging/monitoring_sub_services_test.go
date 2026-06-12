@@ -25,8 +25,7 @@ func TestStartSubServicesRollbackTopology(t *testing.T) {
 				atomic.AddInt32(&s0Stopped, 1)
 				return nil
 			},
-			isRunning: func() bool { return atomic.LoadInt32(&s0Started) > atomic.LoadInt32(&s0Stopped) },
-		},
+			isRunning: func() bool { return atomic.LoadInt32(&s0Started) > atomic.LoadInt32(&s0Stopped) }},
 		{
 			name:        "s1",
 			shouldStart: true,
@@ -38,8 +37,7 @@ func TestStartSubServicesRollbackTopology(t *testing.T) {
 				atomic.AddInt32(&s1Stopped, 1)
 				return nil
 			},
-			isRunning: func() bool { return atomic.LoadInt32(&s1Started) > atomic.LoadInt32(&s1Stopped) },
-		},
+			isRunning: func() bool { return atomic.LoadInt32(&s1Started) > atomic.LoadInt32(&s1Stopped) }},
 		{
 			name:        "s2",
 			shouldStart: true,
@@ -51,9 +49,7 @@ func TestStartSubServicesRollbackTopology(t *testing.T) {
 				atomic.AddInt32(&s2Stopped, 1)
 				return nil
 			},
-			isRunning: func() bool { return atomic.LoadInt32(&s2Started) > atomic.LoadInt32(&s2Stopped) },
-		},
-	}
+			isRunning: func() bool { return atomic.LoadInt32(&s2Started) > atomic.LoadInt32(&s2Stopped) }}}
 
 	err := executeStartSubServices(context.Background(), entries)
 	if err == nil || !strings.Contains(err.Error(), "synthetic fault") {
@@ -109,8 +105,7 @@ func TestApplySubServiceTogglesStateTransitions(t *testing.T) {
 				return nil
 			},
 			isRunning: func() bool { return atomic.LoadInt32(&s1Started) > 0 }, // Simulates it is stopped
-		},
-	}
+		}}
 
 	errs := executeApplySubServiceToggles(context.Background(), entries)
 	if len(errs) > 0 {
@@ -142,25 +137,21 @@ func TestStopSubServicesTeardownOrder(t *testing.T) {
 			stop: func() error {
 				stopOrder = append(stopOrder, "member_event_service")
 				return nil
-			},
-		},
+			}},
 		{
 			name:      "message_event_service",
 			isRunning: func() bool { return true },
 			stop: func() error {
 				stopOrder = append(stopOrder, "message_event_service")
 				return nil
-			},
-		},
+			}},
 		{
 			name:      "reaction_event_service",
 			isRunning: func() bool { return true },
 			stop: func() error {
 				stopOrder = append(stopOrder, "reaction_event_service")
 				return nil
-			},
-		},
-	}
+			}}}
 
 	errs := executeStopSubServices(context.Background(), entries)
 	if len(errs) > 0 {
@@ -184,8 +175,7 @@ func TestBuildSubServiceEntriesClosures(t *testing.T) {
 		workload := monitoringWorkloadState{
 			memberEventService:   true,
 			messageEventService:  true,
-			reactionEventService: true,
-		}
+			reactionEventService: true}
 
 		entries := ms.buildSubServiceEntries(ctx, workload)
 		for _, entry := range entries {
@@ -202,8 +192,7 @@ func TestBuildSubServiceEntriesClosures(t *testing.T) {
 		ms := &MonitoringService{
 			memberEventService:   &MemberEventService{},
 			messageEventService:  &MessageEventService{},
-			reactionEventService: &ReactionEventService{},
-		}
+			reactionEventService: &ReactionEventService{}}
 
 		entries := ms.buildSubServiceEntries(ctx, monitoringWorkloadState{})
 		for _, entry := range entries {

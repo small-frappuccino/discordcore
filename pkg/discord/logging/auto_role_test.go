@@ -46,24 +46,19 @@ func TestEvaluateAutoRoleDecision(t *testing.T) {
 		{
 			name:  "add target when member has role A and role B",
 			roles: []string{"role-a", "role-b"},
-			want:  autoRoleAddTarget,
-		},
+			want:  autoRoleAddTarget},
 		{
 			name:  "remove target when role A is missing",
 			roles: []string{"role-target", "role-b"},
-			want:  autoRoleRemoveTarget,
-		},
+			want:  autoRoleRemoveTarget},
 		{
 			name:  "noop when member already has target and still has role A",
 			roles: []string{"role-a", "role-target"},
-			want:  autoRoleNoop,
-		},
+			want:  autoRoleNoop},
 		{
 			name:  "noop when only role A is present",
 			roles: []string{"role-a"},
-			want:  autoRoleNoop,
-		},
-	}
+			want:  autoRoleNoop}}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -11,8 +11,7 @@ import (
 func TestCalculateServerTime_ReturnsErrorWhenStoreReadFails(t *testing.T) {
 	service := &MemberEventService{
 		store:  storagetest.NewFailingStore(),
-		logger: slog.Default(),
-	}
+		logger: slog.Default()}
 
 	got, ok, err := service.calculateServerTime(context.Background(), "g1", "u1")
 	if err == nil {

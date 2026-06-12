@@ -17,13 +17,10 @@ func TestMonitoringServiceHandleGuildCreatePersistsDormantGuild(t *testing.T) {
 	ms := &MonitoringService{
 		session:       session,
 		configManager: cfgMgr,
-		botInstanceID: "companion",
-		statsService:  NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
-	}
+		botInstanceID: "companion"}
 
 	ms.handleGuildCreate(session, &discordgo.GuildCreate{
-		Guild: &discordgo.Guild{ID: guildID},
-	})
+		Guild: &discordgo.Guild{ID: guildID}})
 
 	cfg := cfgMgr.SnapshotConfig()
 	if len(cfg.Guilds) != 1 {

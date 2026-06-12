@@ -28,8 +28,7 @@ func TestMessageEventService_ProcessMessageUpdateQueuesAsyncPersistence(t *testi
 
 	store, db := newLoggingStore(t, "message-writer-update.db")
 	cfgMgr := newMessageWriterConfigManager(t, guildID, files.ChannelsConfig{
-		MessageEdit: logChannelID,
-	})
+		MessageEdit: logChannelID})
 
 	session := newMessageWriterTestSession(t, guildID, logChannelID)
 	session.Identify.Intents = discordgo.IntentsGuildMessages
@@ -61,10 +60,7 @@ func TestMessageEventService_ProcessMessageUpdateQueuesAsyncPersistence(t *testi
 			Content:   "before",
 			Author: &discordgo.User{
 				ID:       userID,
-				Username: "before-user",
-			},
-		},
-	})
+				Username: "before-user"}}})
 
 	cachedBeforeFlush, err := store.GetMessage(guildID, messageID)
 	if err != nil {
@@ -82,10 +78,7 @@ func TestMessageEventService_ProcessMessageUpdateQueuesAsyncPersistence(t *testi
 			Content:   "after",
 			Author: &discordgo.User{
 				ID:       userID,
-				Username: "before-user",
-			},
-		},
-	}, false); err != nil {
+				Username: "before-user"}}}, false); err != nil {
 		t.Fatalf("process update: %v", err)
 	}
 
@@ -142,8 +135,7 @@ func TestMessageEventService_ProcessMessageDeleteQueuesAsyncPersistenceWhenDelet
 	store, db := newLoggingStore(t, "message-writer-delete.db")
 	deleteOnLog := true
 	cfgMgr := newMessageWriterConfigManager(t, guildID, files.ChannelsConfig{
-		MessageDelete: logChannelID,
-	}, func(cfg *files.GuildConfig) {
+		MessageDelete: logChannelID}, func(cfg *files.GuildConfig) {
 		cfg.Features.MessageCache.DeleteOnLog = &deleteOnLog
 	})
 
@@ -177,18 +169,13 @@ func TestMessageEventService_ProcessMessageDeleteQueuesAsyncPersistenceWhenDelet
 			Content:   "before-delete",
 			Author: &discordgo.User{
 				ID:       userID,
-				Username: "delete-user",
-			},
-		},
-	})
+				Username: "delete-user"}}})
 
 	if err := service.processMessageDelete(context.Background(), session, &discordgo.MessageDelete{
 		Message: &discordgo.Message{
 			ID:        messageID,
 			GuildID:   guildID,
-			ChannelID: channelID,
-		},
-	}, false); err != nil {
+			ChannelID: channelID}}, false); err != nil {
 		t.Fatalf("process delete: %v", err)
 	}
 	if pending := service.lookupCachedMessage(context.Background(), guildID, messageID, false); pending != nil {
@@ -231,8 +218,7 @@ func TestMessageEventService_WriterDrainKeepsCreateEditDeleteVersionsContiguous(
 	deleteOnLog := true
 	cfgMgr := newMessageWriterConfigManager(t, guildID, files.ChannelsConfig{
 		MessageEdit:   editLogID,
-		MessageDelete: deleteLogID,
-	}, func(cfg *files.GuildConfig) {
+		MessageDelete: deleteLogID}, func(cfg *files.GuildConfig) {
 		cfg.Features.MessageCache.DeleteOnLog = &deleteOnLog
 	})
 
@@ -276,10 +262,7 @@ func TestMessageEventService_WriterDrainKeepsCreateEditDeleteVersionsContiguous(
 			Content:   "before",
 			Author: &discordgo.User{
 				ID:       userID,
-				Username: "writer-sequence-user",
-			},
-		},
-	})
+				Username: "writer-sequence-user"}}})
 
 	if err := service.processMessageUpdate(context.Background(), session, &discordgo.MessageUpdate{
 		Message: &discordgo.Message{
@@ -289,10 +272,7 @@ func TestMessageEventService_WriterDrainKeepsCreateEditDeleteVersionsContiguous(
 			Content:   "after",
 			Author: &discordgo.User{
 				ID:       userID,
-				Username: "writer-sequence-user",
-			},
-		},
-	}, false); err != nil {
+				Username: "writer-sequence-user"}}}, false); err != nil {
 		t.Fatalf("process update: %v", err)
 	}
 
@@ -300,9 +280,7 @@ func TestMessageEventService_WriterDrainKeepsCreateEditDeleteVersionsContiguous(
 		Message: &discordgo.Message{
 			ID:        messageID,
 			GuildID:   guildID,
-			ChannelID: channelID,
-		},
-	}, false); err != nil {
+			ChannelID: channelID}}, false); err != nil {
 		t.Fatalf("process delete: %v", err)
 	}
 
@@ -344,8 +322,7 @@ func TestMessageEventService_ProcessMessageDeleteSkipsRetryWhenMessageProcessDis
 	store, _ := newLoggingStore(t, "message-delete-no-process.db")
 	messageProcess := false
 	cfgMgr := newMessageWriterConfigManager(t, guildID, files.ChannelsConfig{
-		MessageDelete: "c-message-delete-log",
-	}, func(cfg *files.GuildConfig) {
+		MessageDelete: "c-message-delete-log"}, func(cfg *files.GuildConfig) {
 		cfg.Features.Logging.MessageProcess = &messageProcess
 	})
 
@@ -360,9 +337,7 @@ func TestMessageEventService_ProcessMessageDeleteSkipsRetryWhenMessageProcessDis
 		Message: &discordgo.Message{
 			ID:        messageID,
 			GuildID:   guildID,
-			ChannelID: channelID,
-		},
-	}, false)
+			ChannelID: channelID}}, false)
 	if err != nil {
 		t.Fatalf("expected no retry error when message processing is disabled, got %v", err)
 	}
@@ -378,8 +353,7 @@ func TestMessageEventService_ProcessMessageDeleteSkipsRetryForBotMessageInState(
 
 	store, _ := newLoggingStore(t, "message-delete-bot.db")
 	cfgMgr := newMessageWriterConfigManager(t, guildID, files.ChannelsConfig{
-		MessageDelete: logChannelID,
-	})
+		MessageDelete: logChannelID})
 
 	session := newMessageWriterTestSession(t, guildID, logChannelID)
 	session.Identify.Intents = discordgo.IntentsGuildMessages
@@ -396,9 +370,7 @@ func TestMessageEventService_ProcessMessageDeleteSkipsRetryForBotMessageInState(
 		ChannelID: channelID,
 		Author: &discordgo.User{
 			ID:  "bot-user",
-			Bot: true,
-		},
-	})
+			Bot: true}})
 
 	service := NewMessageEventService(session, cfgMgr, NewNotificationSender(session, slog.Default()), store, slog.Default())
 	service.cacheEnabled = true
@@ -408,9 +380,7 @@ func TestMessageEventService_ProcessMessageDeleteSkipsRetryForBotMessageInState(
 		Message: &discordgo.Message{
 			ID:        messageID,
 			GuildID:   guildID,
-			ChannelID: channelID,
-		},
-	}, false)
+			ChannelID: channelID}}, false)
 	if err != nil {
 		t.Fatalf("expected no retry error for bot message found in state, got %v", err)
 	}
@@ -427,8 +397,7 @@ func TestMessageCreateWriterEnqueueAfterStopReturnsStopped(t *testing.T) {
 
 	err := writer.Enqueue(storage.MessageRecord{
 		GuildID:   "guild",
-		MessageID: "message",
-	}, nil, storage.DailyMessageCountDelta{})
+		MessageID: "message"}, nil, storage.DailyMessageCountDelta{})
 	if !errors.Is(err, errMessageCreateWriterStopped) {
 		t.Fatalf("expected stopped error after shutdown, got %v", err)
 	}
@@ -439,8 +408,7 @@ func newMessageWriterConfigManager(t *testing.T, guildID string, channels files.
 
 	cfg := files.GuildConfig{
 		GuildID:  guildID,
-		Channels: channels,
-	}
+		Channels: channels}
 	for _, opt := range opts {
 		opt(&cfg)
 	}
@@ -462,8 +430,7 @@ func newMessageWriterTestSession(t *testing.T, guildID, logChannelID string) *di
 			_ = json.NewEncoder(w).Encode(map[string]any{"id": "log-message"})
 		case r.Method == http.MethodGet && r.URL.Path == fmt.Sprintf("/guilds/%s/audit-logs", guildID):
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"audit_log_entries": []any{},
-			})
+				"audit_log_entries": []any{}})
 		default:
 			_, _ = w.Write([]byte(`{}`))
 		}

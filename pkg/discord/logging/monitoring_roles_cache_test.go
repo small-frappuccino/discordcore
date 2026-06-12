@@ -6,9 +6,7 @@ import (
 
 func TestMonitoringService_CacheRolesSetClearsEntryOnEmptySnapshot(t *testing.T) {
 	ms := &MonitoringService{
-		rolesCacheService: NewRolesCacheService(nil),
-		statsService:      NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
-	}
+		rolesCacheService: NewRolesCacheService(nil)}
 
 	ms.rolesCacheService.CacheRolesSet("g1", "u1", []string{"r1", "r2"})
 	if got, ok := ms.rolesCacheService.CacheRolesGet("g1", "u1"); !ok || !sameStringSet(got, []string{"r1", "r2"}) {

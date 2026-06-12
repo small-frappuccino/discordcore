@@ -25,9 +25,8 @@ func TestMonitoringServiceMetricsRowsOrderAndLabels(t *testing.T) {
 
 	ms := &MonitoringService{
 		rolesCacheService: NewRolesCacheService(nil),
-		statsService:      NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
-		metrics:           metrics,
-	}
+
+		metrics: metrics}
 
 	rows := ms.metricsRows()
 
@@ -43,8 +42,7 @@ func TestMonitoringServiceMetricsRowsOrderAndLabels(t *testing.T) {
 		"State member cache hits",
 		"Roles cache memory hits",
 		"Roles cache store hits",
-		"Roles audit cache hits",
-	}
+		"Roles audit cache hits"}
 
 	if len(rows) < len(wantPrefixes) {
 		t.Fatalf("expected at least %d rows, got %d (%+v)", len(wantPrefixes), len(rows), rows)
@@ -72,9 +70,8 @@ func TestMonitoringServiceMetricsRowsMirrorObservability(t *testing.T) {
 
 	ms := &MonitoringService{
 		rolesCacheService: NewRolesCacheService(nil),
-		statsService:      NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
-		metrics:           metrics,
-	}
+
+		metrics: metrics}
 
 	rows := ms.metricsRows()
 
@@ -101,7 +98,7 @@ func TestMonitoringServiceMetricsRowsWithoutObservability(t *testing.T) {
 
 	ms := &MonitoringService{
 		rolesCacheService: NewRolesCacheService(nil),
-		statsService:      NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
+
 		// metrics intentionally nil — observability() yields NopMetrics.
 	}
 
@@ -133,9 +130,8 @@ func TestMonitoringServiceStatsReturnsTypedMetrics(t *testing.T) {
 
 	ms := &MonitoringService{
 		rolesCacheService: NewRolesCacheService(nil),
-		statsService:      NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
-		metrics:           &InMemoryMetrics{},
-	}
+
+		metrics: &InMemoryMetrics{}}
 
 	stats := ms.Stats()
 	if len(stats.Metrics) == 0 {

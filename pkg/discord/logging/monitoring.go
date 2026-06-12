@@ -96,7 +96,6 @@ type MonitoringService struct {
 	stopOnce               sync.Once
 	wg                     sync.WaitGroup
 	cronCancel             func()
-	statsCronCancel        func()
 	rolesRefreshCronCancel func()
 	persistStop            chan struct{}
 	changeDebounce         changeDebouncer
@@ -107,7 +106,6 @@ type MonitoringService struct {
 
 	// Sub-services for domain separation
 	rolesCacheService *RolesCacheService
-	statsService      *StatsService
 
 	// Event handler references for cleanup
 
@@ -375,13 +373,9 @@ func NewMonitoringServiceForBotWithMetrics(
 		stopChan:             make(chan struct{}),
 		rolesCacheService:    NewRolesCacheService(configManager),
 		eventHandlers:        make([]func(), 0),
-		statsService:         NewStatsService(session, configManager, store, logger, botInstanceID, defaultBotInstanceID, nil, nil, nil),
 		metrics:              metrics,
 		logger:               logger,
 	}
-	ms.statsService.currentRunCtx = ms.currentRunCtx
-	ms.statsService.getHeartbeat = ms.getHeartbeat
-	ms.statsService.fetchMembers = ms.StreamGuildMembersContext
 	ms.runState.Store(&monitoringRunState{})
 	go ms.serveControl()
 	ms.rebuildTaskPipeline()
@@ -492,15 +486,6 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 			ms.removeEventHandlers()
 			ms.recordLifecycleErrorLocked()
 			return fmt.Errorf("failed to start roles cache service: %w", err)
-		}
-
-		if err := startMonitoringSubService(lifecycleCtx, "monitoring.start.stats", "stats_service", func() error {
-			return ms.statsService.Start(lifecycleCtx)
-		}); err != nil {
-			cancelLifecycle()
-			ms.removeEventHandlers()
-			ms.recordLifecycleErrorLocked()
-			return fmt.Errorf("failed to start stats service: %w", err)
 		}
 
 		serviceCtx := lifecycleCtx
@@ -672,8 +657,6 @@ func (ms *MonitoringService) Stop(ctx context.Context) error {
 		})
 		cronCancel := ms.cronCancel
 		ms.cronCancel = nil
-		statsCronCancel := ms.statsCronCancel
-		ms.statsCronCancel = nil
 		rolesRefreshCronCancel := ms.rolesRefreshCronCancel
 		ms.rolesRefreshCronCancel = nil
 		persistStop := ms.persistStop
@@ -701,9 +684,6 @@ func (ms *MonitoringService) Stop(ctx context.Context) error {
 		}
 		if cronCancel != nil {
 			cronCancel()
-		}
-		if statsCronCancel != nil {
-			statsCronCancel()
 		}
 		if rolesRefreshCronCancel != nil {
 			rolesRefreshCronCancel()
@@ -1085,16 +1065,6 @@ func (ms *MonitoringService) runAvatarScanTask(runCtx context.Context) error {
 		return fmt.Errorf("MonitoringService.runAvatarScanTask: %w", err)
 	}
 	return ms.performPeriodicCheck(runCtx)
-}
-
-func (ms *MonitoringService) runStatsUpdateTask(runCtx context.Context) error {
-	if runCtx == nil {
-		return nil
-	}
-	if err := runCtx.Err(); err != nil {
-		return fmt.Errorf("MonitoringService.runStatsUpdateTask: %w", err)
-	}
-	return ms.statsService.UpdateStatsChannels(runCtx)
 }
 
 func (ms *MonitoringService) runRolesRefreshTask(runCtx context.Context) error {

@@ -54,10 +54,8 @@ func TestEventTimestampPersistenceErrorBranches(t *testing.T) {
 	memberService := NewMemberEventService(nil, nil, nil, failingStore, slog.Default())
 	messageService := NewMessageEventService(nil, nil, nil, failingStore, slog.Default())
 	monitoringService := &MonitoringService{
-		store:        failingStore,
-		activity:     newMonitoringRuntimeActivity(failingStore),
-		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
-	}
+		store:    failingStore,
+		activity: newMonitoringRuntimeActivity(failingStore)}
 
 	memberService.markEvent(context.Background())
 	messageService.markEvent(context.Background())
@@ -69,9 +67,7 @@ func TestMonitoringServiceStartHeartbeatPersistenceErrorBranch(t *testing.T) {
 	ms := &MonitoringService{
 		store:     failingStore,
 		controlCh: make(chan func()), stopChan: make(chan struct{}),
-		activity:     newMonitoringRuntimeActivity(failingStore),
-		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
-	}
+		activity: newMonitoringRuntimeActivity(failingStore)}
 
 	ms.startHeartbeat(context.Background())
 	if ms.activity == nil {
@@ -107,9 +103,7 @@ func TestMaybeRestoreBotRolePermissionsLogsEditError(t *testing.T) {
 					"id":          roleID,
 					"name":        "managed-role",
 					"managed":     true,
-					"permissions": "8",
-				},
-			})
+					"permissions": "8"}})
 		case r.Method == http.MethodPatch && r.URL.Path == roleEditPath:
 			atomic.AddInt32(&roleEditCalls, 1)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -155,10 +149,8 @@ func TestMaybeRestoreBotRolePermissionsLogsEditError(t *testing.T) {
 	})
 
 	ms := &MonitoringService{
-		session:      session,
-		store:        store,
-		statsService: NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
-	}
+		session: session,
+		store:   store}
 
 	ms.saveBotRolePermSnapshot(guildID, roleID, 8, "tester")
 	ms.maybeRestoreBotRolePermissions(guildID, roleID, 4)

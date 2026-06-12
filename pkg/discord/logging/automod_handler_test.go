@@ -26,8 +26,7 @@ func TestAutomodHandleRawEvent_IgnoresUnrelatedTypes(t *testing.T) {
 	as.handleRawEvent(nil, &discordgo.Event{
 		Type:     "MESSAGE_CREATE",
 		Sequence: 42,
-		Struct:   &discordgo.MessageCreate{},
-	})
+		Struct:   &discordgo.MessageCreate{}})
 }
 
 // TestAutomodHandleRawEvent_NilEnvelope guards against nil dispatch from any
@@ -53,8 +52,7 @@ func TestAutomodHandleRawEvent_AbortsOnEmptyGuildID(t *testing.T) {
 	as.handleRawEvent(nil, &discordgo.Event{
 		Type:     automodActionExecutionEventType,
 		Sequence: 7,
-		Struct:   &discordgo.AutoModerationActionExecution{},
-	})
+		Struct:   &discordgo.AutoModerationActionExecution{}})
 }
 
 // TestAutomodHandleRawEvent_FallbackUnmarshalsFromRawData covers the canary
@@ -82,8 +80,7 @@ func TestAutomodHandleRawEvent_FallbackUnmarshalsFromRawData(t *testing.T) {
 		Sequence: 1234,
 		RawData:  raw,
 		// Struct is a wrong-type sentinel to exercise the fallback branch.
-		Struct: &discordgo.MessageCreate{},
-	})
+		Struct: &discordgo.MessageCreate{}})
 }
 
 // TestAutomodHandleRawEvent_FallbackOnInvalidRawData confirms the handler
@@ -99,8 +96,7 @@ func TestAutomodHandleRawEvent_FallbackOnInvalidRawData(t *testing.T) {
 		Type:     automodActionExecutionEventType,
 		Sequence: 1,
 		RawData:  []byte("not valid json"),
-		Struct:   &discordgo.MessageCreate{},
-	})
+		Struct:   &discordgo.MessageCreate{}})
 }
 
 // TestAutomodHandleRawEvent_DedupsSecondEventWithSameSequence is the
@@ -123,8 +119,7 @@ func TestAutomodHandleRawEvent_DedupsSecondEventWithSameSequence(t *testing.T) {
 	cm := newTestConfigManager(t)
 	if err := cm.AddGuildConfig(files.GuildConfig{
 		GuildID:  guildID,
-		Channels: files.ChannelsConfig{AutomodAction: channelID},
-	}); err != nil {
+		Channels: files.ChannelsConfig{AutomodAction: channelID}}); err != nil {
 		t.Fatalf("AddGuildConfig: %v", err)
 	}
 
@@ -139,8 +134,7 @@ func TestAutomodHandleRawEvent_DedupsSecondEventWithSameSequence(t *testing.T) {
 		GroupBuffer:        8,
 		GroupIdleTTL:       200 * time.Millisecond,
 		CleanupInterval:    20 * time.Millisecond,
-		GroupMaxParallel:   1,
-	}
+		GroupMaxParallel:   1}
 	router := task.NewRouter(cfg)
 	t.Cleanup(router.Close)
 
@@ -158,13 +152,11 @@ func TestAutomodHandleRawEvent_DedupsSecondEventWithSameSequence(t *testing.T) {
 		RuleID:    "r1",
 		UserID:    "u1",
 		ChannelID: channelID,
-		MessageID: "m1",
-	}
+		MessageID: "m1"}
 	envelope := &discordgo.Event{
 		Type:     automodActionExecutionEventType,
 		Sequence: 4242,
-		Struct:   payload,
-	}
+		Struct:   payload}
 
 	// First delivery enqueues; second delivery (same Sequence) must hit the
 	// router's inflight map and be dropped before the handler runs.
@@ -205,8 +197,7 @@ func TestAutomodHandleRawEvent_CoalescesPerActionStream(t *testing.T) {
 	cm := newTestConfigManager(t)
 	if err := cm.AddGuildConfig(files.GuildConfig{
 		GuildID:  guildID,
-		Channels: files.ChannelsConfig{AutomodAction: channelID},
-	}); err != nil {
+		Channels: files.ChannelsConfig{AutomodAction: channelID}}); err != nil {
 		t.Fatalf("AddGuildConfig: %v", err)
 	}
 
@@ -221,8 +212,7 @@ func TestAutomodHandleRawEvent_CoalescesPerActionStream(t *testing.T) {
 		GroupBuffer:        8,
 		GroupIdleTTL:       200 * time.Millisecond,
 		CleanupInterval:    20 * time.Millisecond,
-		GroupMaxParallel:   1,
-	}
+		GroupMaxParallel:   1}
 	router := task.NewRouter(cfg)
 	t.Cleanup(router.Close)
 
@@ -259,13 +249,11 @@ func TestAutomodHandleRawEvent_CoalescesPerActionStream(t *testing.T) {
 	svc.handleRawEvent(session, &discordgo.Event{
 		Type:     automodActionExecutionEventType,
 		Sequence: 100,
-		Struct:   blockEvent,
-	})
+		Struct:   blockEvent})
 	svc.handleRawEvent(session, &discordgo.Event{
 		Type:     automodActionExecutionEventType,
 		Sequence: 101,
-		Struct:   timeoutEvent,
-	})
+		Struct:   timeoutEvent})
 
 	deadline := time.Now().Add(500 * time.Millisecond)
 	for time.Now().Before(deadline) {
@@ -297,8 +285,7 @@ func TestAutomodHandleRawEvent_DistinctViolationsBothRun(t *testing.T) {
 	cm := newTestConfigManager(t)
 	if err := cm.AddGuildConfig(files.GuildConfig{
 		GuildID:  guildID,
-		Channels: files.ChannelsConfig{AutomodAction: channelID},
-	}); err != nil {
+		Channels: files.ChannelsConfig{AutomodAction: channelID}}); err != nil {
 		t.Fatalf("AddGuildConfig: %v", err)
 	}
 
@@ -313,8 +300,7 @@ func TestAutomodHandleRawEvent_DistinctViolationsBothRun(t *testing.T) {
 		GroupBuffer:        8,
 		GroupIdleTTL:       200 * time.Millisecond,
 		CleanupInterval:    20 * time.Millisecond,
-		GroupMaxParallel:   1,
-	}
+		GroupMaxParallel:   1}
 	router := task.NewRouter(cfg)
 	t.Cleanup(router.Close)
 
@@ -332,25 +318,21 @@ func TestAutomodHandleRawEvent_DistinctViolationsBothRun(t *testing.T) {
 		RuleID:    "r1",
 		UserID:    "u1",
 		ChannelID: channelID,
-		MessageID: "m-a",
-	}
+		MessageID: "m-a"}
 	violationB := &discordgo.AutoModerationActionExecution{
 		GuildID:   guildID,
 		RuleID:    "r1",
 		UserID:    "u1",
 		ChannelID: channelID,
-		MessageID: "m-b",
-	}
+		MessageID: "m-b"}
 	svc.handleRawEvent(session, &discordgo.Event{
 		Type:     automodActionExecutionEventType,
 		Sequence: 100,
-		Struct:   violationA,
-	})
+		Struct:   violationA})
 	svc.handleRawEvent(session, &discordgo.Event{
 		Type:     automodActionExecutionEventType,
 		Sequence: 101,
-		Struct:   violationB,
-	})
+		Struct:   violationB})
 
 	deadline := time.Now().Add(500 * time.Millisecond)
 	for time.Now().Before(deadline) {
@@ -384,8 +366,7 @@ func TestAutomodHandleRawEvent_DropsSendAlertMessageEvents(t *testing.T) {
 	cm := newTestConfigManager(t)
 	if err := cm.AddGuildConfig(files.GuildConfig{
 		GuildID:  guildID,
-		Channels: files.ChannelsConfig{AutomodAction: channelID},
-	}); err != nil {
+		Channels: files.ChannelsConfig{AutomodAction: channelID}}); err != nil {
 		t.Fatalf("AddGuildConfig: %v", err)
 	}
 
@@ -400,8 +381,7 @@ func TestAutomodHandleRawEvent_DropsSendAlertMessageEvents(t *testing.T) {
 		GroupBuffer:        8,
 		GroupIdleTTL:       200 * time.Millisecond,
 		CleanupInterval:    20 * time.Millisecond,
-		GroupMaxParallel:   1,
-	}
+		GroupMaxParallel:   1}
 	router := task.NewRouter(cfg)
 	t.Cleanup(router.Close)
 
@@ -426,8 +406,7 @@ func TestAutomodHandleRawEvent_DropsSendAlertMessageEvents(t *testing.T) {
 	svc.handleRawEvent(session, &discordgo.Event{
 		Type:     automodActionExecutionEventType,
 		Sequence: 100,
-		Struct:   alertEvent,
-	})
+		Struct:   alertEvent})
 
 	// Give the worker enough time to drain anything that was (incorrectly)
 	// enqueued; the assertion is that nothing was enqueued in the first place.

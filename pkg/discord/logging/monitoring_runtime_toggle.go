@@ -16,11 +16,9 @@ type monitoringWorkloadState struct {
 	reactionEventService  bool
 	presenceHandler       bool
 	memberUpdateHandler   bool
-	statsMemberHandlers   bool
 	userUpdateHandler     bool
 	botPermMirrorHandlers bool
 	avatarScan            bool
-	statsUpdates          bool
 	rolesRefresh          bool
 	backfill              bool
 }
@@ -38,8 +36,6 @@ func resolveMonitoringWorkloadState(cfg *files.BotConfig) monitoringWorkloadStat
 			continue
 		}
 		rc := cfg.ResolveRuntimeConfig(guildCfg.GuildID)
-		statsEnabledForGuild := features.StatsChannels && statsEnabled(guildCfg.Stats)
-
 		avatarEnabled := !rc.DisableUserLogs && features.Logging.AvatarLogging
 		roleEnabled := !rc.DisableUserLogs && features.Logging.RoleUpdate
 		presenceWatchEnabled := (features.PresenceWatch.User && strings.TrimSpace(rc.PresenceWatchUserID) != "") ||
@@ -48,7 +44,7 @@ func resolveMonitoringWorkloadState(cfg *files.BotConfig) monitoringWorkloadStat
 		if avatarEnabled || presenceWatchEnabled {
 			state.presenceHandler = true
 		}
-		if avatarEnabled || roleEnabled || statsEnabledForGuild {
+		if avatarEnabled || roleEnabled {
 			state.memberUpdateHandler = true
 		}
 		if avatarEnabled {
@@ -60,10 +56,6 @@ func resolveMonitoringWorkloadState(cfg *files.BotConfig) monitoringWorkloadStat
 		}
 		if (!rc.DisableReactionLogs && features.Logging.ReactionMetric) || !guildCfg.ReactionBlocks.IsZero() {
 			state.reactionEventService = true
-		}
-		if statsEnabledForGuild {
-			state.statsUpdates = true
-			state.statsMemberHandlers = true
 		}
 		if features.Backfill.Enabled && strings.TrimSpace(rc.BackfillChannelID) != "" {
 			state.backfill = true
@@ -96,10 +88,7 @@ func (ms *MonitoringService) syncSchedulesLocked(runCtx context.Context, state m
 		ms.cronCancel()
 		ms.cronCancel = nil
 	}
-	if !state.statsUpdates && ms.statsCronCancel != nil {
-		ms.statsCronCancel()
-		ms.statsCronCancel = nil
-	}
+
 	if !state.rolesRefresh && ms.rolesRefreshCronCancel != nil {
 		ms.rolesRefreshCronCancel()
 		ms.rolesRefreshCronCancel = nil
@@ -118,19 +107,6 @@ func (ms *MonitoringService) syncSchedulesLocked(runCtx context.Context, state m
 		})
 		if ms.cronCancel == nil {
 			ms.cronCancel = ms.router.ScheduleEvery(2*time.Hour, task.Task{Type: "monitor.scan_avatars", Payload: task.EmptyPayload{}})
-		}
-	}
-
-	if state.statsUpdates {
-		ms.router.RegisterHandler("monitor.update_stats_channels", func(ctx context.Context, payload any) error {
-			if _, ok := payload.(task.EmptyPayload); !ok {
-				return fmt.Errorf("invalid payload type for monitor.update_stats_channels")
-			}
-			return ms.runStatsUpdateTask(runCtx)
-		})
-		if ms.statsCronCancel == nil {
-			ms.statsCronCancel = ms.router.ScheduleEvery(5*time.Minute, task.Task{Type: "monitor.update_stats_channels", Payload: task.EmptyPayload{}})
-			ms.dispatchMonitorTaskLocked(runCtx, "monitor.update_stats_channels")
 		}
 	}
 

@@ -16,8 +16,7 @@ func TestCreateAvatarChangeEmbed_UsesSingleEmbedWithNewAvatarAndOldLink(t *testi
 		Username:  "bluetowels",
 		OldAvatar: "oldhash",
 		NewAvatar: "newhash",
-		Timestamp: time.Date(2026, 2, 16, 14, 48, 0, 0, time.UTC),
-	}
+		Timestamp: time.Date(2026, 2, 16, 14, 48, 0, 0, time.UTC)}
 
 	embed := ns.createAvatarChangeEmbed(change)
 	if embed == nil {

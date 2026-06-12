@@ -25,8 +25,7 @@ func TestMemberEventService_HandleGuildMemberAddRemovePersistsData(t *testing.T)
 	store, dbPath := newLoggingStore(t, "member-events.db")
 	cfgMgr := newLoggingConfigManager(t, guildID, files.ChannelsConfig{
 		MemberJoin:  logChannelID,
-		MemberLeave: logChannelID,
-	})
+		MemberLeave: logChannelID})
 
 	var messagePosts int32
 	session := newDiscordSessionWithAPI(t, func(w http.ResponseWriter, r *http.Request) {
@@ -40,11 +39,9 @@ func TestMemberEventService_HandleGuildMemberAddRemovePersistsData(t *testing.T)
 				"user": map[string]any{
 					"id":       botID,
 					"username": "alice-bot",
-					"bot":      true,
-				},
+					"bot":      true},
 				"joined_at": time.Now().UTC().Add(-24 * time.Hour).Format(time.RFC3339),
-				"roles":     []string{},
-			})
+				"roles":     []string{}})
 		default:
 			_, _ = w.Write([]byte(`{}`))
 		}
@@ -60,11 +57,8 @@ func TestMemberEventService_HandleGuildMemberAddRemovePersistsData(t *testing.T)
 			GuildID: guildID,
 			User: &discordgo.User{
 				ID:       userID,
-				Username: "member-one",
-			},
-			JoinedAt: joinedAt,
-		},
-	})
+				Username: "member-one"},
+			JoinedAt: joinedAt}})
 
 	gotJoin, ok, err := store.MemberJoin(context.Background(), guildID, userID)
 	if err != nil {
@@ -90,10 +84,7 @@ func TestMemberEventService_HandleGuildMemberAddRemovePersistsData(t *testing.T)
 			GuildID: guildID,
 			User: &discordgo.User{
 				ID:       userID,
-				Username: "member-one",
-			},
-		},
-	})
+				Username: "member-one"}}})
 
 	// Same UTC-day caveat as the join metric.
 	if got := dailyMemberMetricCount(t, dbPath, "daily_member_leaves", guildID, userID, leftAt); got != 1 {
@@ -116,8 +107,7 @@ func TestMessageEventService_PersistsCreateUpdateDeleteFlows(t *testing.T) {
 	store, dbPath := newLoggingStore(t, "message-events.db")
 	cfgMgr := newLoggingConfigManager(t, guildID, files.ChannelsConfig{
 		MessageEdit:   logChannelID,
-		MessageDelete: logChannelID,
-	})
+		MessageDelete: logChannelID})
 
 	var notificationPosts int32
 	session := newDiscordSessionWithAPI(t, func(w http.ResponseWriter, r *http.Request) {
@@ -128,8 +118,7 @@ func TestMessageEventService_PersistsCreateUpdateDeleteFlows(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]any{"id": "log-msg"})
 		case r.Method == http.MethodGet && r.URL.Path == fmt.Sprintf("/guilds/%s/audit-logs", guildID):
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"audit_log_entries": []any{},
-			})
+				"audit_log_entries": []any{}})
 		default:
 			_, _ = w.Write([]byte(`{}`))
 		}
@@ -149,10 +138,7 @@ func TestMessageEventService_PersistsCreateUpdateDeleteFlows(t *testing.T) {
 			Content:   "before",
 			Author: &discordgo.User{
 				ID:       userID,
-				Username: "member-one",
-			},
-		},
-	})
+				Username: "member-one"}}})
 
 	cachedBefore, err := store.GetMessage(guildID, messageID)
 	if err != nil {
@@ -170,10 +156,7 @@ func TestMessageEventService_PersistsCreateUpdateDeleteFlows(t *testing.T) {
 			Content:   "after",
 			Author: &discordgo.User{
 				ID:       userID,
-				Username: "member-one",
-			},
-		},
-	}, false); err != nil {
+				Username: "member-one"}}}, false); err != nil {
 		t.Fatalf("process update: %v", err)
 	}
 
@@ -189,9 +172,7 @@ func TestMessageEventService_PersistsCreateUpdateDeleteFlows(t *testing.T) {
 		Message: &discordgo.Message{
 			ID:        messageID,
 			GuildID:   guildID,
-			ChannelID: channelID,
-		},
-	}, false); err != nil {
+			ChannelID: channelID}}, false); err != nil {
 		t.Fatalf("process delete: %v", err)
 	}
 
@@ -243,12 +224,9 @@ func TestMonitoringService_InitializeGuildCachePersistsOwnerBotAndRoles(t *testi
 					"user": map[string]any{
 						"id":       userID,
 						"username": "member-one",
-						"avatar":   "",
-					},
+						"avatar":   ""},
 					"joined_at": memberJoinedAt.Format(time.RFC3339),
-					"roles":     []string{"role-a", "role-b"},
-				},
-			})
+					"roles":     []string{"role-a", "role-b"}}})
 		default:
 			_, _ = w.Write([]byte(`{}`))
 		}
@@ -258,8 +236,7 @@ func TestMonitoringService_InitializeGuildCachePersistsOwnerBotAndRoles(t *testi
 	if err := session.State.GuildAdd(&discordgo.Guild{
 		ID:      guildID,
 		Name:    "Guild Cache",
-		OwnerID: ownerID,
-	}); err != nil {
+		OwnerID: ownerID}); err != nil {
 		t.Fatalf("add guild to state: %v", err)
 	}
 	if err := session.State.MemberAdd(&discordgo.Member{
@@ -267,10 +244,8 @@ func TestMonitoringService_InitializeGuildCachePersistsOwnerBotAndRoles(t *testi
 		User: &discordgo.User{
 			ID:       botID,
 			Username: "alice-bot",
-			Bot:      true,
-		},
-		JoinedAt: botJoinedAt,
-	}); err != nil {
+			Bot:      true},
+		JoinedAt: botJoinedAt}); err != nil {
 		t.Fatalf("add bot member to state: %v", err)
 	}
 
@@ -279,9 +254,7 @@ func TestMonitoringService_InitializeGuildCachePersistsOwnerBotAndRoles(t *testi
 		configManager:     cfgMgr,
 		store:             store,
 		changeDebounce:    changeDebouncer{},
-		rolesCacheService: NewRolesCacheService(nil),
-		statsService:      NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
-	}
+		rolesCacheService: NewRolesCacheService(nil)}
 
 	ms.initializeGuildCache(guildID)
 
@@ -349,8 +322,7 @@ func TestMonitoringService_HandleMemberUpdateUpdatesSnapshotWhenAuditDeltaFilter
 	}
 
 	cfgMgr := newLoggingConfigManager(t, guildID, files.ChannelsConfig{
-		RoleUpdate: channelID,
-	})
+		RoleUpdate: channelID})
 
 	var embedPosts int32
 	session := newDiscordSessionWithAPI(t, func(w http.ResponseWriter, r *http.Request) {
@@ -368,13 +340,7 @@ func TestMonitoringService_HandleMemberUpdateUpdatesSnapshotWhenAuditDeltaFilter
 							{
 								"key": discordgo.AuditLogChangeKeyRoleAdd,
 								"new_value": []map[string]any{
-									{"id": "role-from-audit", "name": "Audit Role"},
-								},
-							},
-						},
-					},
-				},
-			})
+									{"id": "role-from-audit", "name": "Audit Role"}}}}}}})
 		case r.Method == http.MethodPost && r.URL.Path == fmt.Sprintf("/channels/%s/messages", channelID):
 			atomic.AddInt32(&embedPosts, 1)
 			_ = json.NewEncoder(w).Encode(map[string]any{"id": "unexpected-send"})
@@ -390,12 +356,8 @@ func TestMonitoringService_HandleMemberUpdateUpdatesSnapshotWhenAuditDeltaFilter
 		store:         store,
 		changeDebounce: changeDebouncer{
 			entries: map[string]time.Time{
-				guildID + ":" + userID + ":default": time.Now().UTC(),
-			},
-		},
-		rolesCacheService: NewRolesCacheService(nil),
-		statsService:      NewStatsService(nil, nil, nil, nil, "", "", nil, nil, nil),
-	}
+				guildID + ":" + userID + ":default": time.Now().UTC()}},
+		rolesCacheService: NewRolesCacheService(nil)}
 
 	ms.handleMemberUpdate(session, &discordgo.GuildMemberUpdate{
 		Member: &discordgo.Member{
@@ -403,11 +365,8 @@ func TestMonitoringService_HandleMemberUpdateUpdatesSnapshotWhenAuditDeltaFilter
 			User: &discordgo.User{
 				ID:       userID,
 				Username: "member-one",
-				Avatar:   "",
-			},
-			Roles: []string{"role-new"},
-		},
-	})
+				Avatar:   ""},
+			Roles: []string{"role-new"}}})
 
 	var roles []string
 	for r, err := range store.GetMemberRoles(guildID, userID) {

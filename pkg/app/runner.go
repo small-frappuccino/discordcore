@@ -14,6 +14,7 @@ import (
 	"github.com/small-frappuccino/discordgo"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/small-frappuccino/discordcore/pkg/clock"
 	"github.com/small-frappuccino/discordcore/pkg/control"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
@@ -179,6 +180,11 @@ func runWithOptions(appName string, opts RunOptions) error {
 	// always uses the in-memory implementation.
 	qotdMetrics := &qotd.InMemoryMetrics{}
 	qotdService := qotd.NewServiceWithMetrics(configManager, store, nil, qotdMetrics)
+
+	// Provision an edge-synced clock to perfectly align internal timers
+	appClock := clock.NewHTTPClock("https://discord.com")
+	qotdService.SetClock(appClock)
+
 	// Mirror QOTD: wire the in-memory moderation metrics so /v1/health/moderation
 	// has counters to expose. NopMetrics is a valid fallback for tests, but
 	// production startup always uses the in-memory implementation.
@@ -211,6 +217,7 @@ func runWithOptions(appName string, opts RunOptions) error {
 		moderationMetrics:        moderationMetrics,
 		startupTasks:             startupTasks,
 		profile:                  opts.Profile,
+		appClock:                 appClock,
 	}
 
 	botSupervisor := NewBotSupervisor(configManager, botOpts)

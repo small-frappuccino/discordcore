@@ -1,4 +1,4 @@
-package logging
+package stats
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	svc "github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordgo"
 )
@@ -21,6 +22,8 @@ const (
 	defaultStatsReconcileInterval = 6 * time.Hour
 	maxStatsReconcileInterval     = 24 * time.Hour
 	statsSeedMetadataPrefix       = "stats_channels.seeded:"
+	heartbeatInterval             = 5 * time.Minute
+	monitoringDependencyTimeout   = 15 * time.Second
 )
 
 // StatsService manages the stats-channel state. guilds and lastRun are protected by mu.
@@ -37,9 +40,9 @@ type StatsService struct {
 	guilds  map[string]*statsGuildState
 	lastRun map[string]time.Time
 
-	currentRunCtx func() context.Context
-	getHeartbeat  func(context.Context) (time.Time, bool, error)
-	fetchMembers  func(context.Context, string) iter.Seq2[*discordgo.Member, error]
+	cancel        context.CancelFunc
+	wg            sync.WaitGroup
+	eventHandlers []func()
 }
 
 // NewStatsService news stats service.
@@ -50,9 +53,6 @@ func NewStatsService(
 	logger *slog.Logger,
 	botInstanceID string,
 	defaultBotInstanceID string,
-	currentRunCtx func() context.Context,
-	getHeartbeat func(context.Context) (time.Time, bool, error),
-	fetchMembers func(context.Context, string) iter.Seq2[*discordgo.Member, error],
 ) *StatsService {
 	return &StatsService{
 		session:              session,
@@ -63,19 +63,114 @@ func NewStatsService(
 		defaultBotInstanceID: defaultBotInstanceID,
 		guilds:               make(map[string]*statsGuildState),
 		lastRun:              make(map[string]time.Time),
-		currentRunCtx:        currentRunCtx,
-		getHeartbeat:         getHeartbeat,
-		fetchMembers:         fetchMembers,
 	}
+}
+
+// Name names.
+func (s *StatsService) Name() string {
+	return "stats"
+}
+
+// Type types.
+func (s *StatsService) Type() svc.ServiceType {
+	return svc.TypeMonitoring
+}
+
+// Priority prioritys.
+func (s *StatsService) Priority() svc.ServicePriority {
+	return svc.PriorityLow
+}
+
+// Dependencies dependencies.
+func (s *StatsService) Dependencies() []string {
+	return nil
+}
+
+// IsRunning is running.
+func (s *StatsService) IsRunning() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cancel != nil
+}
+
+// HealthCheck healths check.
+func (s *StatsService) HealthCheck(ctx context.Context) svc.HealthStatus {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return svc.HealthStatus{
+		Healthy:   s.cancel != nil,
+		Message:   "Stats service health check",
+		LastCheck: time.Now(),
+	}
+}
+
+// Stats stats.
+func (s *StatsService) Stats() svc.ServiceStats {
+	return svc.ServiceStats{}
 }
 
 // Start starts.
 func (s *StatsService) Start(ctx context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.cancel != nil {
+		return nil // already running
+	}
+
+	runCtx, cancel := context.WithCancel(context.Background())
+	if ctx != nil {
+		runCtx, cancel = context.WithCancel(context.WithoutCancel(ctx))
+	}
+	s.cancel = cancel
+	s.wg.Add(1)
+
+	go s.runCron(runCtx)
+
+	s.eventHandlers = append(s.eventHandlers,
+		s.session.AddHandler(s.HandleStatsMemberAdd),
+		s.session.AddHandler(s.HandleStatsMemberRemove),
+		s.session.AddHandler(s.HandleStatsMemberUpdate),
+	)
 	return nil
+}
+
+func (s *StatsService) runCron(ctx context.Context) {
+	defer s.wg.Done()
+
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	// initial run
+	_ = s.UpdateStatsChannels(ctx)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			_ = s.UpdateStatsChannels(ctx)
+		}
+	}
 }
 
 // Stop stops.
 func (s *StatsService) Stop(ctx context.Context) error {
+	s.mu.Lock()
+	if s.cancel == nil {
+		s.mu.Unlock()
+		return nil
+	}
+	s.cancel()
+	s.cancel = nil
+	for _, h := range s.eventHandlers {
+		if h != nil {
+			h()
+		}
+	}
+	s.eventHandlers = nil
+	s.mu.Unlock()
+
+	s.wg.Wait()
 	return nil
 }
 
@@ -268,7 +363,7 @@ func (s *StatsService) UpdateStatsChannels(ctx context.Context) error {
 			return fmt.Errorf("MonitoringService.updateStatsChannels: %w", err)
 		}
 		features := cfg.ResolveFeatures(gcfg.GuildID)
-		if !features.Services.Monitoring || !features.StatsChannels || !statsEnabled(gcfg.Stats) {
+		if !features.Services.Monitoring || !features.StatsChannels || !Enabled(gcfg.Stats) {
 			continue
 		}
 		activeGuilds[gcfg.GuildID] = struct{}{}
@@ -313,7 +408,7 @@ func (s *StatsService) UpdateStatsChannels(ctx context.Context) error {
 	return nil
 }
 
-func statsEnabled(cfg files.StatsConfig) bool {
+func Enabled(cfg files.StatsConfig) bool {
 	if !cfg.Enabled {
 		return false
 	}
@@ -372,7 +467,7 @@ func (s *StatsService) reconcileStatsForGuild(ctx context.Context, gcfg files.Gu
 	trackedRoles, trackedRolesKey := statsTrackedRoles(gcfg.Stats.Channels)
 	state := newStatsGuildState(trackedRolesKey, s.statsPublishedChannels(gcfg.GuildID))
 
-	for member, err := range s.fetchMembers(ctx, gcfg.GuildID) {
+	for member, err := range s.streamGuildMembers(ctx, gcfg.GuildID) {
 		if err != nil {
 			return fmt.Errorf("fetch guild members: %w", err)
 		}
@@ -787,6 +882,17 @@ func (s *StatsService) HandleStatsMemberRemove(_ *discordgo.Session, m *discordg
 	s.applyStatsMemberRemove(m.GuildID, m.User.ID)
 }
 
+// HandleStatsMemberUpdate handles stats member update.
+func (s *StatsService) HandleStatsMemberUpdate(_ *discordgo.Session, m *discordgo.GuildMemberUpdate) {
+	if m == nil || m.User == nil {
+		return
+	}
+	if !s.handlesGuild(m.GuildID) {
+		return
+	}
+	s.ApplyStatsMemberUpdate(m.GuildID, m.User.ID, m.User.Bot, m.Roles)
+}
+
 func (s *StatsService) applyStatsMemberAdd(member *discordgo.Member) {
 	if member == nil || member.User == nil {
 		return
@@ -887,7 +993,7 @@ func (s *StatsService) persistStatsMemberActive(guildID, userID string, joinedAt
 		return
 	}
 
-	err := runErrWithTimeoutContext(s.currentRunCtx(), monitoringPersistenceTimeout, func(runCtx context.Context) error {
+	err := runErrWithTimeoutContext(context.Background(), monitoringPersistenceTimeout, func(runCtx context.Context) error {
 		if err := s.store.UpsertMemberPresenceContext(runCtx, storage.MemberPresenceInput{GuildID: guildID, UserID: userID, JoinedAt: joinedAt, SeenAt: time.Now().UTC(), IsBot: isBot}); err != nil {
 			return fmt.Errorf("upsert member presence: %w", err)
 		}
@@ -917,7 +1023,7 @@ func (s *StatsService) persistStatsMemberLeft(guildID, userID string) {
 		return
 	}
 
-	err := runErrWithTimeoutContext(s.currentRunCtx(), monitoringPersistenceTimeout, func(runCtx context.Context) error {
+	err := runErrWithTimeoutContext(context.Background(), monitoringPersistenceTimeout, func(runCtx context.Context) error {
 		return s.store.MarkMemberLeftContext(runCtx, guildID, userID, time.Now().UTC())
 	})
 	if err != nil {
@@ -941,7 +1047,7 @@ func (s *StatsService) statsGuildConfig(guildID string) (files.GuildConfig, map[
 			continue
 		}
 		features := cfg.ResolveFeatures(guildID)
-		if !features.Services.Monitoring || !features.StatsChannels || !statsEnabled(gcfg.Stats) {
+		if !features.Services.Monitoring || !features.StatsChannels || !Enabled(gcfg.Stats) {
 			return gcfg, nil, "", false
 		}
 		trackedRoles, trackedRolesKey := statsTrackedRoles(gcfg.Stats.Channels)
@@ -1045,4 +1151,108 @@ func (s *StatsService) pruneStatsGuildState(activeGuilds map[string]struct{}) {
 		}
 		delete(s.guilds, guildID)
 	}
+}
+
+const monitoringPersistenceTimeout = 10 * time.Second
+
+func runWithTimeout[T any](ctx context.Context, timeout time.Duration, fn func() (T, error)) (T, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	resCh := make(chan T, 1)
+	go func() {
+		res, err := fn()
+		if err != nil {
+			errCh <- err
+		} else {
+			resCh <- res
+		}
+	}()
+	select {
+	case <-ctx.Done():
+		var zero T
+		return zero, ctx.Err()
+	case err := <-errCh:
+		var zero T
+		return zero, err
+	case res := <-resCh:
+		return res, nil
+	}
+}
+
+func runErrWithTimeoutContext(ctx context.Context, timeout time.Duration, fn func(context.Context) error) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- fn(ctx)
+	}()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-errCh:
+		return err
+	}
+}
+
+func (s *StatsService) streamGuildMembers(ctx context.Context, guildID string) iter.Seq2[*discordgo.Member, error] {
+	return func(yield func(*discordgo.Member, error) bool) {
+		if s == nil || s.session == nil {
+			yield(nil, fmt.Errorf("discord session is unavailable"))
+			return
+		}
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		pageSize := 1000
+
+		after := ""
+		for {
+			if err := ctx.Err(); err != nil {
+				yield(nil, fmt.Errorf("streamGuildMembers: %w", err))
+				return
+			}
+			members, err := runWithTimeout(ctx, monitoringDependencyTimeout, func() ([]*discordgo.Member, error) {
+				return s.session.GuildMembers(guildID, after, pageSize)
+			})
+			if err != nil {
+				yield(nil, fmt.Errorf("streamGuildMembers: %w", err))
+				return
+			}
+			if len(members) == 0 {
+				return
+			}
+			for _, m := range members {
+				if !yield(m, nil) {
+					return
+				}
+			}
+			if len(members) < pageSize {
+				return
+			}
+			last := members[len(members)-1]
+			if last == nil || last.User == nil || strings.TrimSpace(last.User.ID) == "" {
+				yield(nil, fmt.Errorf("stream guild members: invalid page tail for guild %s", guildID))
+				return
+			}
+			after = last.User.ID
+		}
+	}
+}
+
+func (s *StatsService) getHeartbeat(ctx context.Context) (time.Time, bool, error) {
+	if s == nil || s.store == nil {
+		return time.Time{}, false, nil
+	}
+	// We read the heartbeat from the monitoring service since stats used to be part of it,
+	// and monitoring is what asserts the cache is warm.
+	return s.store.HeartbeatForBot(ctx, s.botInstanceID)
 }

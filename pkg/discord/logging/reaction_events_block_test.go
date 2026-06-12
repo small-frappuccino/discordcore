@@ -41,9 +41,7 @@ func TestReactionEventServiceRemovesBlockedReactionWithoutMetricsStore(t *testin
 				"channel_id": channelID,
 				"author": map[string]any{
 					"id":       targetUserID,
-					"username": "target-user",
-				},
-			})
+					"username": "target-user"}})
 		case r.Method == http.MethodDelete && r.URL.Path == fmt.Sprintf("/channels/%s/messages/%s/reactions/%s/%s", channelID, messageID, emojiID, reactorUserID):
 			atomic.AddInt32(&reactionDeletes, 1)
 			mu.Lock()
@@ -63,9 +61,7 @@ func TestReactionEventServiceRemovesBlockedReactionWithoutMetricsStore(t *testin
 			Emojis: []files.ReactionBlockEmojiConfig{{
 				Kind:  files.ReactionBlockEmojiKindCustom,
 				Value: emojiID,
-				Name:  emojiName,
-			}},
-		}}}
+				Name:  emojiName}}}}}
 		return nil
 	}); err != nil {
 		t.Fatalf("update config: %v", err)
@@ -80,10 +76,7 @@ func TestReactionEventServiceRemovesBlockedReactionWithoutMetricsStore(t *testin
 			UserID:    reactorUserID,
 			Emoji: discordgo.Emoji{
 				ID:   emojiID,
-				Name: emojiName,
-			},
-		},
-	})
+				Name: emojiName}}})
 
 	if got := atomic.LoadInt32(&messageLookups); got != 1 {
 		t.Fatalf("expected one message lookup, got %d", got)

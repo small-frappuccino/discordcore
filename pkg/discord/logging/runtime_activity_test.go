@@ -18,8 +18,7 @@ func TestRuntimeActivityMarkEventPersistsTimestamp(t *testing.T) {
 		EventTimeout: time.Second,
 		Now: func() time.Time {
 			return expected
-		},
-	})
+		}})
 
 	activity.MarkEvent(context.Background(), "test")
 
@@ -45,8 +44,7 @@ func TestRuntimeActivityMarkEventPersistsTimestampPerBot(t *testing.T) {
 		BotInstanceID: "companion",
 		Now: func() time.Time {
 			return expected
-		},
-	})
+		}})
 
 	activity.MarkEvent(context.Background(), "test")
 
@@ -74,8 +72,7 @@ func TestRuntimeActivityStartHeartbeatPersistsImmediatelyAndPeriodically(t *test
 		Now: func() time.Time {
 			return base.Add(time.Duration(calls.Add(1)) * time.Second)
 		},
-		OnHeartbeatTick: ticks.Hook,
-	})
+		OnHeartbeatTick: ticks.Hook})
 
 	// 25ms (rather than 5ms) leaves enough room for the second ticker fire
 	// to land within tickRecorder.Next's 2s safety timeout when the package
@@ -112,8 +109,7 @@ func TestRuntimeActivityStartHeartbeatNoopsWhenAlreadyRunning(t *testing.T) {
 	store, _ := newLoggingStore(t, "runtime-activity-heartbeat-noop.db")
 	activity := newRuntimeActivity(store, runtimeActivityOptions{
 		RunErr:           runErrWithTimeoutContext,
-		HeartbeatTimeout: time.Second,
-	})
+		HeartbeatTimeout: time.Second})
 
 	activity.StartHeartbeat(context.Background(), 10*time.Millisecond)
 	t.Cleanup(func() {
@@ -138,8 +134,7 @@ func TestRuntimeActivityStopHeartbeatIsIdempotent(t *testing.T) {
 	store, _ := newLoggingStore(t, "runtime-activity-heartbeat-stop.db")
 	activity := newRuntimeActivity(store, runtimeActivityOptions{
 		RunErr:           runErrWithTimeoutContext,
-		HeartbeatTimeout: time.Second,
-	})
+		HeartbeatTimeout: time.Second})
 
 	if err := activity.StopHeartbeat(context.Background()); err != nil {
 		t.Fatalf("stop heartbeat before start: %v", err)
@@ -172,8 +167,7 @@ func TestRuntimeActivityHeartbeatStartupContinuesAfterInitialPersistenceFailure(
 		Now: func() time.Time {
 			return base.Add(time.Duration(calls.Load()) * time.Second)
 		},
-		OnHeartbeatTick: ticks.Hook,
-	})
+		OnHeartbeatTick: ticks.Hook})
 
 	activity.StartHeartbeat(context.Background(), 5*time.Millisecond)
 	t.Cleanup(func() {
@@ -225,8 +219,7 @@ func TestRuntimeActivityStartHeartbeatReturnsWhenStartupPersistenceWedges(t *tes
 			<-release
 			return nil
 		},
-		HeartbeatTimeout: time.Second,
-	})
+		HeartbeatTimeout: time.Second})
 
 	startReturned := make(chan struct{})
 	go func() {
@@ -290,8 +283,7 @@ func newTickRecorder(t *testing.T, wantTicks int) *tickRecorder {
 		cancel: cancel,
 		ticks:  make(chan error),
 		verify: make(chan error, wantTicks),
-		done:   make(chan struct{}),
-	}
+		done:   make(chan struct{})}
 	go func() {
 		defer close(r.done)
 		forwarded := 0
