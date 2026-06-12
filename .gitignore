@@ -19,6 +19,7 @@ tmp/
 # Root-only files
 /*.txt
 /*.html
+/*.json
 /*.log
 /*.exe
 /*.ps1
