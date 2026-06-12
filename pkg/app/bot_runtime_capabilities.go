@@ -49,14 +49,6 @@ func resolveBotRuntimeCapabilities(
 			}
 		}
 
-		if features.StatsChannels {
-			resolvedID, _ := guild.ResolveFeatureBotInstanceID("stats", defaultBotInstanceID)
-			if resolvedID == botInstanceID {
-				capabilities.stats = true
-				capabilities.hasCommands = true
-			}
-		}
-
 		if features.Services.Commands {
 			cmdResolvedID, _ := guild.ResolveFeatureBotInstanceID("commands", defaultBotInstanceID)
 			if cmdResolvedID == botInstanceID {
@@ -93,6 +85,12 @@ func resolveBotRuntimeCapabilities(
 
 			ticketsResolvedID, _ := guild.ResolveFeatureBotInstanceID("tickets", cmdResolvedID)
 			if ticketsResolvedID == botInstanceID {
+				capabilities.hasCommands = true
+			}
+
+			statsResolvedID, _ := guild.ResolveFeatureBotInstanceID("stats", cmdResolvedID)
+			if statsResolvedID == botInstanceID {
+				capabilities.stats = true
 				capabilities.hasCommands = true
 			}
 		}
