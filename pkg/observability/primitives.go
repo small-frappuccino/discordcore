@@ -101,3 +101,30 @@ func GetOrCreateLabeledCounter[K comparable](mu *sync.RWMutex, m *map[K]*atomic.
 	(*m)[key] = c
 	return c
 }
+
+// GetOrCreateLabeledSummary is the lazy-init helper used by in-memory
+// metrics implementations that hold labeled summaries (e.g. per-task latencies).
+// The double-checked pattern keeps the hot path on a read lock plus a map lookup;
+// only the first observer of a new key pays for the write lock.
+func GetOrCreateLabeledSummary[K comparable](mu *sync.RWMutex, m *map[K]*Summary, key K) *Summary {
+	mu.RLock()
+	if *m != nil {
+		if s, ok := (*m)[key]; ok {
+			mu.RUnlock()
+			return s
+		}
+	}
+	mu.RUnlock()
+
+	mu.Lock()
+	defer mu.Unlock()
+	if *m == nil {
+		*m = make(map[K]*Summary)
+	}
+	if s, ok := (*m)[key]; ok {
+		return s
+	}
+	s := &Summary{}
+	(*m)[key] = s
+	return s
+}

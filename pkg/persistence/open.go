@@ -77,3 +77,48 @@ func Open(ctx context.Context, cfg Config) (*pgxpool.Pool, error) {
 	}
 	return db, nil
 }
+
+// Metrics is the narrow observability seam for connection pool telemetry.
+type Metrics interface {
+	Snapshot() MetricsSnapshot
+}
+
+// MetricsSnapshot is the JSON-friendly view of pool saturation.
+type MetricsSnapshot struct {
+	AcquiredConns     int32 `json:"acquired_conns"`
+	IdleConns         int32 `json:"idle_conns"`
+	ConstructingConns int32 `json:"constructing_conns"`
+	MaxConns          int32 `json:"max_conns"`
+}
+
+// InMemoryMetrics implements Metrics by delegating to a pgxpool.Pool.
+type InMemoryMetrics struct {
+	pool *pgxpool.Pool
+}
+
+// NewInMemoryMetrics constructs the pool telemetry accessor.
+func NewInMemoryMetrics(pool *pgxpool.Pool) *InMemoryMetrics {
+	return &InMemoryMetrics{pool: pool}
+}
+
+// Snapshot returns the real-time pool metrics.
+func (m *InMemoryMetrics) Snapshot() MetricsSnapshot {
+	if m == nil || m.pool == nil {
+		return MetricsSnapshot{}
+	}
+	stat := m.pool.Stat()
+	return MetricsSnapshot{
+		AcquiredConns:     stat.AcquiredConns(),
+		IdleConns:         stat.IdleConns(),
+		ConstructingConns: stat.ConstructingConns(),
+		MaxConns:          stat.MaxConns(),
+	}
+}
+
+// NopMetrics implements Metrics for environments without a database pool.
+type NopMetrics struct{}
+
+// Snapshot implements Metrics.
+func (NopMetrics) Snapshot() MetricsSnapshot {
+	return MetricsSnapshot{}
+}

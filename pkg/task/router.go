@@ -14,6 +14,7 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/clock"
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/observability"
 )
 
 // TaskHandler is a function that processes a task payload.
@@ -220,6 +221,9 @@ type TaskRouter struct {
 	cronDispatchAttempts int64
 	cronDispatchSuccess  int64
 	cronDispatchFailures int64
+
+	latencyMu       sync.RWMutex
+	latenciesByType map[string]*observability.Summary
 }
 
 type groupWorker struct {
@@ -681,6 +685,7 @@ func (tr *TaskRouter) groupLoop(gw *groupWorker) {
 		// Execute with global concurrency control. The handler receives the
 		// router lifecycle context so Close can cancel in-flight work.
 		tr.acquireExecSlot()
+		startExec := tr.cfg.Clock.Now()
 		err := func() error {
 			defer tr.releaseExecSlot()
 			ctx := tr.ctx
@@ -689,6 +694,18 @@ func (tr *TaskRouter) groupLoop(gw *groupWorker) {
 			}
 			return handler(ctx, enq.task.Payload)
 		}()
+		execDuration := tr.cfg.Clock.Now().Sub(startExec)
+
+		summary := observability.GetOrCreateLabeledSummary(&tr.latencyMu, &tr.latenciesByType, enq.task.Type)
+		summary.Observe(execDuration)
+
+		if execDuration > 5*time.Second {
+			log.ApplicationLogger().Warn("slow background task execution",
+				"type", enq.task.Type,
+				"duration", execDuration.String(),
+				"duration_ms", execDuration.Milliseconds(),
+			)
+		}
 		gw.endWork(tr.nowNs())
 
 		if err != nil {
