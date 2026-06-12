@@ -2,10 +2,11 @@ package cache_test
 
 import (
 	"errors"
-	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"testing"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
+
+	"github.com/small-frappuccino/discordgo"
 )
 
 // funcWarmupSession replaced with cache.WarmupSession inline closures

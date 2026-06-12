@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
+	"github.com/small-frappuccino/discordgo"
 	"golang.org/x/sync/singleflight"
 )
 

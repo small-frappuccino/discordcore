@@ -1,7 +1,6 @@
 package cache_test
 
 import (
-	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"io"
 	"net/http"
 	"strings"
@@ -10,7 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
+
+	"github.com/small-frappuccino/discordgo"
 )
 
 func TestCachedSessionGuildMemberUsesStateAndCaches(t *testing.T) {

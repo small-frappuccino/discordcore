@@ -7,12 +7,12 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/storage/storagetest"
 	"github.com/small-frappuccino/discordcore/pkg/testdb"
+	"github.com/small-frappuccino/discordgo"
 )
 
 func newPermissionCheckerWithCache(t *testing.T, session *discordgo.Session) (*PermissionChecker, *cache.UnifiedCache) {

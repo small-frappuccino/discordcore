@@ -3,8 +3,8 @@ package moderation
 import (
 	"fmt"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordgo"
 )
 
 type banCommand struct{}

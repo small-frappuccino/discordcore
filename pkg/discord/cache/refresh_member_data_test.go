@@ -3,7 +3,6 @@ package cache_test
 import (
 	"context"
 	"encoding/json"
-	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"net/http"
 	"net/http/httptest"
 	"path"
@@ -11,9 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
+
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/testdb"
+	"github.com/small-frappuccino/discordgo"
 )
 
 type memberResponse struct {

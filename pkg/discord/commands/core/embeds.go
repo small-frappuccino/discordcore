@@ -3,8 +3,8 @@ package core
 import (
 	"time"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
+	"github.com/small-frappuccino/discordgo"
 )
 
 // SuccessEmbed creates a success embed

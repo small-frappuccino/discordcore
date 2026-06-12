@@ -1,8 +1,8 @@
 package partner
 
 import (
-	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordgo"
 )
 
 type partnerVisibilityClass string

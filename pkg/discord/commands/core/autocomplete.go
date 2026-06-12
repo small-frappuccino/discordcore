@@ -3,7 +3,7 @@ package core
 import (
 	"strings"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordgo"
 )
 
 // FilterChoices filters choices based on user input

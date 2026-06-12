@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
+	"github.com/small-frappuccino/discordgo"
 )
 
 // This file contains examples of how to use the core infrastructure

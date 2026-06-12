@@ -3,9 +3,9 @@ package core
 import (
 	"context"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordgo"
 )
 
 // InteractionKind identifies the normalized interaction surface being routed.

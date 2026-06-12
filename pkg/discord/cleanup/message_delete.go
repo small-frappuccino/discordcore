@@ -1,6 +1,6 @@
 package cleanup
 
-import "github.com/bwmarrin/discordgo"
+import "github.com/small-frappuccino/discordgo"
 
 // DeleteMode controls how messages are removed.
 type DeleteMode int

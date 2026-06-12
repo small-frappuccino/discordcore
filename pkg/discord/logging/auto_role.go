@@ -1,6 +1,6 @@
 package logging
 
-import "github.com/bwmarrin/discordgo"
+import "github.com/small-frappuccino/discordgo"
 
 type autoRoleDecision int
 

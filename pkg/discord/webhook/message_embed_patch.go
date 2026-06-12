@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordgo"
 )
 
 // MessageEmbedPatch defines the payload for editing an existing webhook message.

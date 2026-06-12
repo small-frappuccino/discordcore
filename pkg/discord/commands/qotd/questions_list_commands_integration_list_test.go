@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	applicationqotd "github.com/small-frappuccino/discordcore/pkg/qotd"
+	"github.com/small-frappuccino/discordgo"
 )
 
 func TestQuestionsListCommandUsesRequestedDeck(t *testing.T) {

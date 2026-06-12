@@ -3,7 +3,7 @@ package logging
 import (
 	"sync"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordgo"
 )
 
 type presenceSnapshot struct {

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordgo"
 )
 
 // DefaultPasteProviderURL is the default provider used for uploading JSON embeds.

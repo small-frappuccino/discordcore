@@ -1,6 +1,6 @@
 package control
 
-import "github.com/bwmarrin/discordgo"
+import "github.com/small-frappuccino/discordgo"
 
 func (s *Server) discordSessionForGuild(guildID string) (*discordgo.Session, error) {
 	if s == nil || s.discordSession == nil {

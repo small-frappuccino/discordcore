@@ -11,8 +11,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordgo"
 )
 
 func TestReactionEventServiceRemovesBlockedReactionWithoutMetricsStore(t *testing.T) {

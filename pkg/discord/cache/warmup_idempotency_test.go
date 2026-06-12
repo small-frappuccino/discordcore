@@ -2,11 +2,12 @@ package cache_test
 
 import (
 	"fmt"
-	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"testing"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
+
+	"github.com/small-frappuccino/discordgo"
 )
 
 func TestIntelligentWarmupIdempotent(t *testing.T) {

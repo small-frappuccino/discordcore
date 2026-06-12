@@ -6,9 +6,9 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordgo"
 )
 
 func handleComponent(s *discordgo.Session, i *discordgo.InteractionCreate, configManager *files.ConfigManager, applier runtimeConfigApplier) {
@@ -281,7 +281,7 @@ func (c runtimeComponentContext) handleEdit(rc files.RuntimeConfig, st panelStat
 							Style:       discordgo.TextInputShort,
 							Placeholder: sp.DefaultHint,
 							Value:       cur,
-							Required:    false,
+							Required:    new(bool),
 							MinLength:   0,
 							MaxLength:   maxLen,
 						},

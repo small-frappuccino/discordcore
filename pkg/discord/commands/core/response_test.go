@@ -3,8 +3,8 @@ package core
 import (
 	"testing"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
+	"github.com/small-frappuccino/discordgo"
 )
 
 func TestResponseBuilder(t *testing.T) {

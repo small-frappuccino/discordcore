@@ -1,8 +1,8 @@
 package roles
 
 import (
-	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordgo"
 )
 
 // rolePanelVisibilityClass classifies the outward visibility of a role panel

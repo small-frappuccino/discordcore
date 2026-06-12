@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordgo"
 )
 
 type patchRecorder struct {

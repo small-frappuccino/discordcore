@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordgo"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/small-frappuccino/discordcore/pkg/control"

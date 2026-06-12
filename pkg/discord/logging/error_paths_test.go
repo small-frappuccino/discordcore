@@ -11,10 +11,10 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/storage/storagetest"
 	"github.com/small-frappuccino/discordcore/pkg/testdb"
+	"github.com/small-frappuccino/discordgo"
 )
 
 func newDiscordSessionWithAPI(t *testing.T, handler http.HandlerFunc) *discordgo.Session {

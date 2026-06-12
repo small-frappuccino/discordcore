@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bwmarrin/discordgo"
 	applicationqotd "github.com/small-frappuccino/discordcore/pkg/qotd"
+	"github.com/small-frappuccino/discordgo"
 )
 
 func TestQOTDActionRoutesResolveDiscordSessionForQOTDDomain(t *testing.T) {

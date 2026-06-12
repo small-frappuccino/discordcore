@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordgo"
 )
 
 func findField(fields []*discordgo.MessageEmbedField, name string) *discordgo.MessageEmbedField {

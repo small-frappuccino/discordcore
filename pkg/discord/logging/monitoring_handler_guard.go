@@ -3,7 +3,7 @@ package logging
 import (
 	"context"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordgo"
 )
 
 // guardedHandler creates a discordgo event handler that enforces the monitoring

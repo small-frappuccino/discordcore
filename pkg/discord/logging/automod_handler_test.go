@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/task"
+	"github.com/small-frappuccino/discordgo"
 )
 
 // TestAutomodHandleRawEvent_IgnoresUnrelatedTypes confirms the raw handler

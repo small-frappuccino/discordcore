@@ -3,7 +3,7 @@ package control
 import (
 	"testing"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordgo"
 )
 
 func TestServerDiscordSessionForGuildUsesGuildRegistrationResolver(t *testing.T) {

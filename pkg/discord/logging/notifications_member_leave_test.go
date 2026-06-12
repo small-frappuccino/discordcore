@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordgo"
 )
 
 func newNotificationTestSession(t *testing.T, handler http.HandlerFunc) *discordgo.Session {

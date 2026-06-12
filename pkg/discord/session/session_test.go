@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordgo"
 )
 
 func restoreSessionStubs(t *testing.T, newFn func(string) (*discordgo.Session, error), openFn func(*discordgo.Session) error, closeFn func(*discordgo.Session) error, addHandlerFn func(*discordgo.Session, interface{}) func()) {

@@ -3,7 +3,7 @@ package core
 import (
 	"encoding/json"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordgo"
 )
 
 // normalizeCommandOptions ensures required options come before optional options,

@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/storage/storagetest"
+	"github.com/small-frappuccino/discordgo"
 )
 
 func TestPersistDirtySnapshots_RollbackOnFailure(t *testing.T) {

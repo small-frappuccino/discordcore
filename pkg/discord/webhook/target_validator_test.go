@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordgo"
 )
 
 func TestValidateMessageTarget(t *testing.T) {

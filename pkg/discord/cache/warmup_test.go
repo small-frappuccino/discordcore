@@ -2,12 +2,13 @@ package cache_test
 
 import (
 	"fmt"
-	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
+
+	"github.com/small-frappuccino/discordgo"
 )
 
 func newTestCache(t *testing.T) *cache.UnifiedCache {

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordgo"
 )
 
 // TestEnqueueAutomodActionWithKey_DedupOnExplicitKey confirms two enqueues

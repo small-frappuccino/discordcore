@@ -6,8 +6,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordgo"
 )
 
 // --- Initialization & Persistence ---

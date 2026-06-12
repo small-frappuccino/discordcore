@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordgo"
 )
 
 func TestHandleTranscript_Streaming(t *testing.T) {

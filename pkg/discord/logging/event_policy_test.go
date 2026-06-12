@@ -3,9 +3,9 @@ package logging
 import (
 	"testing"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
+	"github.com/small-frappuccino/discordgo"
 )
 
 func TestShouldEmitLogEventRoleChange(t *testing.T) {

@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordgo"
 )
 
 // RolesCacheService encapsulates role-related caching primitives and their lifecycles.

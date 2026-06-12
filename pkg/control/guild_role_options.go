@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordgo"
 )
 
 type guildRoleOption struct {

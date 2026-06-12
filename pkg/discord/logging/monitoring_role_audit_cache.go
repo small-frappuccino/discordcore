@@ -6,7 +6,7 @@ import (
 	"time"
 	"weak"
 
-	"github.com/bwmarrin/discordgo"
+	"github.com/small-frappuccino/discordgo"
 )
 
 type cachedRoleUpdateAudit struct {

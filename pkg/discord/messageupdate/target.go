@@ -7,8 +7,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/discord/webhook"
+	"github.com/small-frappuccino/discordgo"
 )
 
 // TargetTypeChannelMessage defines target type channel message.
