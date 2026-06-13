@@ -9,7 +9,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/small-frappuccino/discordgo"
+	"github.com/diamondburned/arikawa/v3/api"
+	"github.com/diamondburned/arikawa/v3/state"
 )
 
 // TestBulkDeleteAgeRejectionFallsBackToSingleDeletes covers the 14-day race:
@@ -18,8 +19,8 @@ import (
 // chunk one message at a time so the rest of the chunk is not marked as
 // failed.
 func TestBulkDeleteAgeRejectionFallsBackToSingleDeletes(t *testing.T) {
-	const channelID = "c1"
-	chunkIDs := []string{"m1", "m2", "m3"}
+	const channelID = "1001"
+	chunkIDs := []string{"2001", "2002", "2003"}
 
 	var (
 		mu                 sync.Mutex
@@ -38,7 +39,7 @@ func TestBulkDeleteAgeRejectionFallsBackToSingleDeletes(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"code":    discordgo.ErrCodeMessageProvidedTooOldForBulkDelete,
+				"code":    50034,
 				"message": "You can only bulk delete messages that are under 14 days old.",
 			})
 		case req.Method == http.MethodDelete && strings.Contains(req.URL.Path, "/messages/"):
@@ -59,7 +60,8 @@ func TestBulkDeleteAgeRejectionFallsBackToSingleDeletes(t *testing.T) {
 
 	deleted, failed := DeleteMessages(session, channelID, chunkIDs, DeleteOptions{
 		Mode: DeleteModeBulkPreferred,
-		OnDeleteError: func(_ string, _ error, _ FailureClass) {
+		OnDeleteError: func(_ string, err error, _ FailureClass) {
+			t.Logf("OnDeleteError: %v", err)
 			mu.Lock()
 			singleErrorIDs = append(singleErrorIDs, "called")
 			mu.Unlock()
@@ -93,8 +95,8 @@ func TestBulkDeleteAgeRejectionFallsBackToSingleDeletes(t *testing.T) {
 // chunk-level error instead of one per-message log line, and counts the
 // chunk size as failed.
 func TestBulkDeleteForbiddenFiresChunkErrorOnce(t *testing.T) {
-	const channelID = "c1"
-	chunkIDs := []string{"m1", "m2", "m3", "m4"}
+	const channelID = "1001"
+	chunkIDs := []string{"2001", "2002", "2003", "2004"}
 
 	var (
 		mu              sync.Mutex
@@ -110,7 +112,7 @@ func TestBulkDeleteForbiddenFiresChunkErrorOnce(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"code":    discordgo.ErrCodeMissingPermissions,
+				"code":    50013,
 				"message": "Missing Permissions",
 			})
 		default:
@@ -159,8 +161,8 @@ func TestBulkDeleteForbiddenFiresChunkErrorOnce(t *testing.T) {
 // single-delete is treated as deletion success (the message is gone, the
 // cleanup goal is satisfied) and does not bubble as a failure.
 func TestSingleDeleteMissingMessageCountsAsDeleted(t *testing.T) {
-	const channelID = "c1"
-	ids := []string{"m1", "m2"}
+	const channelID = "1001"
+	ids := []string{"2001", "2002"}
 
 	var (
 		mu        sync.Mutex
@@ -177,11 +179,11 @@ func TestSingleDeleteMissingMessageCountsAsDeleted(t *testing.T) {
 		mu.Lock()
 		callOrder = append(callOrder, id)
 		mu.Unlock()
-		if id == "m2" {
+		if id == "2002" {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusNotFound)
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"code":    discordgo.ErrCodeUnknownMessage,
+				"code":    10008,
 				"message": "Unknown Message",
 			})
 			return
@@ -196,7 +198,8 @@ func TestSingleDeleteMissingMessageCountsAsDeleted(t *testing.T) {
 	var errCalls int
 	deleted, failed := DeleteMessages(session, channelID, ids, DeleteOptions{
 		Mode: DeleteModeSingleOnly,
-		OnDeleteError: func(_ string, _ error, _ FailureClass) {
+		OnDeleteError: func(_ string, err error, _ FailureClass) {
+			t.Logf("OnDeleteError missing message: %v", err)
 			errCalls++
 		},
 	})
@@ -224,21 +227,17 @@ func TestClassifyDeleteErrorWrapsRetainBranchClassification(t *testing.T) {
 
 func withDiscordEndpoints(t *testing.T, baseURL string) {
 	t.Helper()
-	oldAPI := discordgo.EndpointAPI
-	oldChannels := discordgo.EndpointChannels
-	discordgo.EndpointAPI = baseURL + "/"
-	discordgo.EndpointChannels = discordgo.EndpointAPI + "channels/"
+	oldEndpoint := api.Endpoint
+	oldChannels := api.EndpointChannels
+	api.Endpoint = baseURL + "/"
+	api.EndpointChannels = api.Endpoint + "channels/"
 	t.Cleanup(func() {
-		discordgo.EndpointAPI = oldAPI
-		discordgo.EndpointChannels = oldChannels
+		api.Endpoint = oldEndpoint
+		api.EndpointChannels = oldChannels
 	})
 }
 
-func newTestSession(t *testing.T) *discordgo.Session {
+func newTestSession(t *testing.T) *state.State {
 	t.Helper()
-	session, err := discordgo.New("Bot test-token")
-	if err != nil {
-		t.Fatalf("discordgo.New: %v", err)
-	}
-	return session
+	return state.New("Bot test-token")
 }

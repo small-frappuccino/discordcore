@@ -1,6 +1,10 @@
 package cleanup
 
-import "github.com/small-frappuccino/discordgo"
+import (
+	"github.com/diamondburned/arikawa/v3/api"
+	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/state"
+)
 
 // DeleteMode controls how messages are removed.
 type DeleteMode int
@@ -28,25 +32,33 @@ type DeleteOptions struct {
 }
 
 // DeleteMessages removes messages from a channel, returning deleted and failed counts.
-func DeleteMessages(session *discordgo.Session, channelID string, messageIDs []string, opts DeleteOptions) (int, int) {
-	if session == nil || channelID == "" || len(messageIDs) == 0 {
+func DeleteMessages(st *state.State, channelID string, messageIDs []string, opts DeleteOptions) (int, int) {
+	if st == nil || channelID == "" || len(messageIDs) == 0 {
 		return 0, 0
 	}
 
 	if opts.Mode == DeleteModeSingleOnly {
-		return deleteSingle(session, channelID, messageIDs, opts)
+		return deleteSingle(st, channelID, messageIDs, opts)
 	}
-	return deleteBulkPreferred(session, channelID, messageIDs, opts)
+	return deleteBulkPreferred(st, channelID, messageIDs, opts)
 }
 
-func deleteSingle(session *discordgo.Session, channelID string, messageIDs []string, opts DeleteOptions) (int, int) {
+func deleteSingle(st *state.State, channelID string, messageIDs []string, opts DeleteOptions) (int, int) {
 	deleted := 0
 	failed := 0
 	for _, id := range messageIDs {
 		if id == "" {
 			continue
 		}
-		if err := session.ChannelMessageDelete(channelID, id); err != nil {
+		cID, err := discord.ParseSnowflake(channelID)
+		if err != nil {
+			continue
+		}
+		mID, err := discord.ParseSnowflake(id)
+		if err != nil {
+			continue
+		}
+		if err := st.DeleteMessage(discord.ChannelID(cID), discord.MessageID(mID), api.AuditLogReason("")); err != nil {
 			class := ClassifyDeleteError(err)
 			// A 404 means the message was already gone — the cleanup goal
 			// is satisfied, so do not count it as a failure or report it.
@@ -65,7 +77,7 @@ func deleteSingle(session *discordgo.Session, channelID string, messageIDs []str
 	return deleted, failed
 }
 
-func deleteBulkPreferred(session *discordgo.Session, channelID string, messageIDs []string, opts DeleteOptions) (int, int) {
+func deleteBulkPreferred(st *state.State, channelID string, messageIDs []string, opts DeleteOptions) (int, int) {
 	deleted := 0
 	failed := 0
 	for _, chunk := range chunkStrings(messageIDs, 100) {
@@ -73,12 +85,21 @@ func deleteBulkPreferred(session *discordgo.Session, channelID string, messageID
 			continue
 		}
 		if len(chunk) == 1 {
-			d, f := deleteSingle(session, channelID, chunk, opts)
+			d, f := deleteSingle(st, channelID, chunk, opts)
 			deleted += d
 			failed += f
 			continue
 		}
-		if err := session.ChannelMessagesBulkDelete(channelID, chunk); err != nil {
+		cID, err := discord.ParseSnowflake(channelID)
+		if err != nil {
+			continue
+		}
+		var mIDs []discord.MessageID
+		for _, id := range chunk {
+			m, _ := discord.ParseSnowflake(id)
+			mIDs = append(mIDs, discord.MessageID(m))
+		}
+		if err := st.DeleteMessages(discord.ChannelID(cID), mIDs, api.AuditLogReason("")); err != nil {
 			class := ClassifyDeleteError(err)
 			if class == FailureClassBulkDeleteAge {
 				// Discord refused the chunk because at least one message
@@ -87,7 +108,7 @@ func deleteBulkPreferred(session *discordgo.Session, channelID string, messageID
 				// per-message classification (the rest of the chunk is
 				// usually still valid) instead of marking 100 messages
 				// failed for one borderline message.
-				d, f := deleteSingle(session, channelID, chunk, opts)
+				d, f := deleteSingle(st, channelID, chunk, opts)
 				deleted += d
 				failed += f
 				continue

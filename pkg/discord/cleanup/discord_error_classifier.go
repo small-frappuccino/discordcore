@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/small-frappuccino/discordgo"
+	"github.com/diamondburned/arikawa/v3/utils/httputil"
 )
 
 // FailureClass labels a Discord delete failure so callers can branch on the
@@ -46,36 +46,32 @@ func ClassifyDeleteError(err error) FailureClass {
 	if err == nil {
 		return FailureClassUnknown
 	}
-	var restErr *discordgo.RESTError
+	var restErr *httputil.HTTPError
 	if !errors.As(err, &restErr) || restErr == nil {
 		return FailureClassTransient
 	}
 
-	if restErr.Message != nil {
-		switch restErr.Message.Code {
-		case discordgo.ErrCodeUnknownMessage:
-			return FailureClassMissingMessage
-		case discordgo.ErrCodeUnknownChannel:
-			return FailureClassMissingChannel
-		case discordgo.ErrCodeMissingAccess, discordgo.ErrCodeMissingPermissions:
-			return FailureClassForbidden
-		case discordgo.ErrCodeMessageProvidedTooOldForBulkDelete:
-			return FailureClassBulkDeleteAge
-		}
+	switch restErr.Code {
+	case 10008: // Unknown Message
+		return FailureClassMissingMessage
+	case 10003: // Unknown Channel
+		return FailureClassMissingChannel
+	case 50001, 50013: // Missing Access, Missing Permissions
+		return FailureClassForbidden
+	case 50034: // Message provided was too old to bulk delete
+		return FailureClassBulkDeleteAge
 	}
 
-	if restErr.Response != nil {
-		switch restErr.Response.StatusCode {
-		case http.StatusNotFound:
-			return FailureClassMissingMessage
-		case http.StatusForbidden, http.StatusUnauthorized:
-			return FailureClassForbidden
-		case http.StatusTooManyRequests:
-			return FailureClassRateLimited
-		}
-		if restErr.Response.StatusCode >= 500 {
-			return FailureClassTransient
-		}
+	switch restErr.Status {
+	case http.StatusNotFound:
+		return FailureClassMissingMessage
+	case http.StatusForbidden, http.StatusUnauthorized:
+		return FailureClassForbidden
+	case http.StatusTooManyRequests:
+		return FailureClassRateLimited
+	}
+	if restErr.Status >= 500 {
+		return FailureClassTransient
 	}
 
 	return FailureClassUnknown
@@ -93,32 +89,28 @@ func ClassifyFetchError(err error) FailureClass {
 	if err == nil {
 		return FailureClassUnknown
 	}
-	var restErr *discordgo.RESTError
+	var restErr *httputil.HTTPError
 	if !errors.As(err, &restErr) || restErr == nil {
 		return FailureClassTransient
 	}
 
-	if restErr.Message != nil {
-		switch restErr.Message.Code {
-		case discordgo.ErrCodeUnknownChannel:
-			return FailureClassMissingChannel
-		case discordgo.ErrCodeMissingAccess, discordgo.ErrCodeMissingPermissions:
-			return FailureClassForbidden
-		}
+	switch restErr.Code {
+	case 10003: // Unknown Channel
+		return FailureClassMissingChannel
+	case 50001, 50013: // Missing Access, Missing Permissions
+		return FailureClassForbidden
 	}
 
-	if restErr.Response != nil {
-		switch restErr.Response.StatusCode {
-		case http.StatusNotFound:
-			return FailureClassMissingChannel
-		case http.StatusForbidden, http.StatusUnauthorized:
-			return FailureClassForbidden
-		case http.StatusTooManyRequests:
-			return FailureClassRateLimited
-		}
-		if restErr.Response.StatusCode >= 500 {
-			return FailureClassTransient
-		}
+	switch restErr.Status {
+	case http.StatusNotFound:
+		return FailureClassMissingChannel
+	case http.StatusForbidden, http.StatusUnauthorized:
+		return FailureClassForbidden
+	case http.StatusTooManyRequests:
+		return FailureClassRateLimited
+	}
+	if restErr.Status >= 500 {
+		return FailureClassTransient
 	}
 
 	return FailureClassUnknown
