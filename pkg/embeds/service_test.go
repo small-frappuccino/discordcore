@@ -6,7 +6,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
-
 func TestCustomEmbedPostingSyncer(t *testing.T) {
 	t.Parallel()
 
@@ -72,7 +71,6 @@ func TestCustomEmbedPostingSyncer(t *testing.T) {
 		t.Fatalf("expected only msg1 to remain in custom embed postings, got %+v", updated.Postings)
 	}
 }
-
 
 type mockPublisher struct {
 	updateFn func(channelID, messageID string, embed files.CustomEmbedConfig) error

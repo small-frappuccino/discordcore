@@ -1,4 +1,4 @@
-﻿package partners
+package partners
 
 import "github.com/small-frappuccino/discordcore/pkg/files"
 
@@ -14,4 +14,3 @@ type BoardEmbed struct {
 type BoardPublisher interface {
 	Publish(guildID string, postings []files.CustomEmbedPostingConfig, embeds []BoardEmbed) PartnerSyncResult
 }
-

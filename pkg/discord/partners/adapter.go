@@ -1,4 +1,4 @@
-﻿package partners
+package partners
 
 import (
 	"errors"
@@ -55,7 +55,7 @@ func (p *DiscordgoBoardPublisher) Publish(guildID string, postings []files.Custo
 		} else {
 			err = p.editMessage(edit)
 		}
-		
+
 		if err == nil {
 			result.Edited++
 			continue

@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
-	embedspkg "github.com/small-frappuccino/discordcore/pkg/embeds"
 	discordembeds "github.com/small-frappuccino/discordcore/pkg/discord/embeds"
+	embedspkg "github.com/small-frappuccino/discordcore/pkg/embeds"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordgo"
 )

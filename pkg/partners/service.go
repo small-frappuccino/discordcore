@@ -1,4 +1,4 @@
-﻿package partners
+package partners
 
 import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -47,4 +47,3 @@ func (s *PartnerService) FormatSyncSummary(result PartnerSyncResult, action stri
 func (s *PartnerService) SyncConfig(guildID string) error {
 	return s.syncer.SyncConfig(guildID)
 }
-

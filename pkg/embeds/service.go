@@ -28,7 +28,6 @@ func (s *EmbedService) Sync(
 	return s.syncer.Sync(guildID, key, postings, embed)
 }
 
-
 // FormatSyncSummary returns a human-readable summary of the sync operation.
 func (s *EmbedService) FormatSyncSummary(result customEmbedSyncResult, action string) string {
 	return formatCustomEmbedSyncSummary(result, action)

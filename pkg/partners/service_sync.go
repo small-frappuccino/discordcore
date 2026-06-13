@@ -1,4 +1,4 @@
-﻿package partners
+package partners
 
 import (
 	"errors"
@@ -138,4 +138,3 @@ func defaultPartnerDropPostings(cm *files.ConfigManager, guildID string, message
 	}
 	return cm.RemovePartnerBoardPostings(guildID, messageIDs)
 }
-

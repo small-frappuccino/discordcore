@@ -25,9 +25,9 @@ func (a *ControlAdapter) BotUser() (*control.User, error) {
 		return nil, err
 	}
 	return &control.User{
-		ID:            u.ID.String(),
-		Username:      u.Username,
-		Avatar:        string(u.Avatar),
+		ID:       u.ID.String(),
+		Username: u.Username,
+		Avatar:   string(u.Avatar),
 	}, nil
 }
 
@@ -41,7 +41,7 @@ func (a *ControlAdapter) Guild(guildID string) (*control.Guild, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	roles := make([]*control.Role, len(g.Roles))
 	for i, r := range g.Roles {
 		roles[i] = &control.Role{
@@ -68,12 +68,12 @@ func (a *ControlAdapter) Guild(guildID string) (*control.Guild, error) {
 	}
 
 	return &control.Guild{
-		ID:          g.ID.String(),
-		Name:        g.Name,
-		OwnerID:     g.OwnerID.String(),
-		Icon:        string(g.Icon),
-		Roles:       roles,
-		Channels:    cChannels,
+		ID:       g.ID.String(),
+		Name:     g.Name,
+		OwnerID:  g.OwnerID.String(),
+		Icon:     string(g.Icon),
+		Roles:    roles,
+		Channels: cChannels,
 	}, nil
 }
 
@@ -91,7 +91,7 @@ func (a *ControlAdapter) GuildMember(guildID, userID string) (*control.Member, e
 	if err != nil {
 		return nil, err
 	}
-	
+
 	roles := make([]string, len(m.RoleIDs))
 	for i, r := range m.RoleIDs {
 		roles[i] = r.String()
@@ -99,9 +99,9 @@ func (a *ControlAdapter) GuildMember(guildID, userID string) (*control.Member, e
 
 	return &control.Member{
 		User: &control.User{
-			ID:            m.User.ID.String(),
-			Username:      m.User.Username,
-			Avatar:        string(m.User.Avatar),
+			ID:       m.User.ID.String(),
+			Username: m.User.Username,
+			Avatar:   string(m.User.Avatar),
 		},
 		Nick:  m.Nick,
 		Roles: roles,
@@ -125,7 +125,7 @@ func (a *ControlAdapter) GuildMembers(guildID, after string, limit int) ([]*cont
 	if err != nil {
 		return nil, err
 	}
-	
+
 	res := make([]*control.Member, len(members))
 	for i, m := range members {
 		roles := make([]string, len(m.RoleIDs))
@@ -134,9 +134,9 @@ func (a *ControlAdapter) GuildMembers(guildID, after string, limit int) ([]*cont
 		}
 		res[i] = &control.Member{
 			User: &control.User{
-				ID:            m.User.ID.String(),
-				Username:      m.User.Username,
-				Avatar:        string(m.User.Avatar),
+				ID:       m.User.ID.String(),
+				Username: m.User.Username,
+				Avatar:   string(m.User.Avatar),
 			},
 			Nick:  m.Nick,
 			Roles: roles,
@@ -155,5 +155,3 @@ func (a *ControlAdapter) HasIntent(intentMask int) bool {
 	// Not straightforward to check in Arikawa v3 state directly, return true for dashboard needs
 	return true
 }
-
-

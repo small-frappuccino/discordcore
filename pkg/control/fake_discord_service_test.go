@@ -73,5 +73,5 @@ func (f *fakeDiscordService) HasIntent(intentMask int) bool {
 }
 
 func (f *fakeDiscordService) BotUser() (*User, error) {
-	return &User{Username:"TestBot"}, nil
+	return &User{Username: "TestBot"}, nil
 }

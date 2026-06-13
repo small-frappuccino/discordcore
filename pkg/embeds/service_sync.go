@@ -9,8 +9,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
-
-
 type customEmbedSyncFailure struct {
 	Posting files.CustomEmbedPostingConfig
 	Err     error
@@ -109,8 +107,6 @@ func formatCustomEmbedSyncSummary(result customEmbedSyncResult, action string) s
 	}
 	return strings.Join(lines, "\n")
 }
-
-
 
 func defaultCustomEmbedDropPostings(cm *files.ConfigManager, guildID, key string, messageIDs []string) error {
 	if cm == nil {

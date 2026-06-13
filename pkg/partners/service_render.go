@@ -10,7 +10,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/small-frappuccino/discordcore/pkg/theme"
-	
 )
 
 const (
@@ -585,5 +584,3 @@ func truncateToRuneLimit(in string, limit int) string {
 func runeLen(in string) int {
 	return utf8.RuneCountInString(in)
 }
-
-

@@ -11,14 +11,14 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	qotdcmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/qotd"
+	discordembeds "github.com/small-frappuccino/discordcore/pkg/discord/embeds"
+	discordpartners "github.com/small-frappuccino/discordcore/pkg/discord/partners"
 	discordroles "github.com/small-frappuccino/discordcore/pkg/discord/roles"
 	"github.com/small-frappuccino/discordcore/pkg/discord/tickets"
 	"github.com/small-frappuccino/discordcore/pkg/embeds"
-	discordembeds "github.com/small-frappuccino/discordcore/pkg/discord/embeds"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/partners"
-	discordpartners "github.com/small-frappuccino/discordcore/pkg/discord/partners"
 	"github.com/small-frappuccino/discordcore/pkg/roles"
 	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/stats"
@@ -356,4 +356,3 @@ func (ch *CommandHandler) matchesGuildBotInstance(guildID string, feature string
 	resolvedID, _ := guild.ResolveFeatureBotInstanceID(feature, "")
 	return ch.botInstanceID == resolvedID
 }
-

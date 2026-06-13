@@ -606,7 +606,7 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 			return newTestDiscordSessionWithGuildMembers("g1",
 				&Member{
 
-					Nick:    "Alice Alpha",
+					Nick: "Alice Alpha",
 					User: &User{
 						ID:       "user-alice",
 						Username: "alice",
@@ -614,7 +614,7 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 				},
 				&Member{
 
-					Nick:    "Bob",
+					Nick: "Bob",
 					User: &User{
 						ID:       "user-bob",
 						Username: "bob",
@@ -622,7 +622,7 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 				},
 				&Member{
 
-					Nick:    "Carol",
+					Nick: "Carol",
 					User: &User{
 						ID:       "user-carol",
 						Username: "carol",

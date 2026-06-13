@@ -9,8 +9,8 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/discord"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
-	embedsvc "github.com/small-frappuccino/discordcore/pkg/embeds"
 	discordembeds "github.com/small-frappuccino/discordcore/pkg/discord/embeds"
+	embedsvc "github.com/small-frappuccino/discordcore/pkg/embeds"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordgo"
 )
