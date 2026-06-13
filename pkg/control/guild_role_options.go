@@ -5,8 +5,6 @@ import (
 	"net/http"
 	"slices"
 	"strings"
-
-	"github.com/small-frappuccino/discordgo"
 )
 
 type guildRoleOption struct {
@@ -18,7 +16,7 @@ type guildRoleOption struct {
 }
 
 func (s *Server) handleGuildRoleOptionsGet(w http.ResponseWriter, guildID string) {
-	session, err := s.discordSessionForGuild(guildID)
+	session, err := s.discordServiceForGuild(guildID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to resolve guild role options: %v", err), http.StatusServiceUnavailable)
 		return
@@ -37,7 +35,7 @@ func (s *Server) handleGuildRoleOptionsGet(w http.ResponseWriter, guildID string
 	})
 }
 
-func buildGuildRoleOptions(session *discordgo.Session, guildID string) ([]guildRoleOption, error) {
+func buildGuildRoleOptions(session DiscordService, guildID string) ([]guildRoleOption, error) {
 	guild, err := resolveGuildFromDiscordSession(session, guildID)
 	if err != nil {
 		return nil, fmt.Errorf("buildGuildRoleOptions: %w", err)
@@ -61,7 +59,7 @@ func buildGuildRoleOptions(session *discordgo.Session, guildID string) ([]guildR
 	return options, nil
 }
 
-func guildRoleOptionIndex(session *discordgo.Session, guildID string) (map[string]guildRoleOption, error) {
+func guildRoleOptionIndex(session DiscordService, guildID string) (map[string]guildRoleOption, error) {
 	options, err := buildGuildRoleOptions(session, guildID)
 	if err != nil {
 		return nil, fmt.Errorf("guildRoleOptionIndex: %w", err)
@@ -74,24 +72,17 @@ func guildRoleOptionIndex(session *discordgo.Session, guildID string) (map[strin
 	return index, nil
 }
 
-func resolveGuildFromDiscordSession(session *discordgo.Session, guildID string) (*discordgo.Guild, error) {
+func resolveGuildFromDiscordSession(session DiscordService, guildID string) (*Guild, error) {
 	if session == nil {
-		return nil, fmt.Errorf("discord session unavailable")
-	}
-
-	if session.State != nil {
-		guild, err := session.State.Guild(guildID)
-		if err == nil && guild != nil {
-			return guild, nil
-		}
+		return nil, fmt.Errorf("discord service unavailable")
 	}
 
 	guild, err := session.Guild(guildID)
 	if err != nil {
-		return nil, fmt.Errorf("load guild %s from discord session: %w", guildID, err)
+		return nil, fmt.Errorf("load guild %s from discord service: %w", guildID, err)
 	}
 	if guild == nil {
-		return nil, fmt.Errorf("guild %s unavailable in discord session", guildID)
+		return nil, fmt.Errorf("guild %s unavailable in discord service", guildID)
 	}
 	return guild, nil
 }

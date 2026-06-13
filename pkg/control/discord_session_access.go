@@ -1,10 +1,8 @@
 package control
 
-import "github.com/small-frappuccino/discordgo"
-
-func (s *Server) discordSessionForGuild(guildID string) (*discordgo.Session, error) {
-	if s == nil || s.discordSession == nil {
+func (s *Server) discordServiceForGuild(guildID string) (DiscordService, error) {
+	if s == nil || s.discordService == nil {
 		return nil, nil
 	}
-	return s.discordSession(guildID)
+	return s.discordService(guildID)
 }

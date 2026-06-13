@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordgo"
 )
 
 type featureCatalogResponse struct {
@@ -386,8 +385,8 @@ func TestLoggingFeatureReadinessStates(t *testing.T) {
 		if err != nil {
 			t.Fatalf("seed member_join channel: %v", err)
 		}
-		srv.SetDiscordSessionProvider(func() *discordgo.Session {
-			return &discordgo.Session{Identify: discordgo.Identify{Intents: 0}}
+		srv.SetDiscordServiceProvider(func() DiscordService {
+			return &fakeDiscordService{intents: 0}
 		})
 
 		rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodGet, "/v1/guilds/g1/features/logging.member_join", nil)
@@ -460,8 +459,8 @@ func TestLoggingFeatureReadinessStates(t *testing.T) {
 		t.Parallel()
 
 		srv, _ := newControlTestServer(t)
-		srv.SetDiscordSessionProvider(func() *discordgo.Session {
-			return &discordgo.Session{Identify: discordgo.Identify{Intents: discordgo.IntentsGuildMessages}}
+		srv.SetDiscordServiceProvider(func() DiscordService {
+			return &fakeDiscordService{intents: IntentsGuildMessages}
 		})
 
 		rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodGet, "/v1/features/logging.message_process", nil)
@@ -538,11 +537,11 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 		t.Parallel()
 
 		srv, _ := newControlTestServer(t)
-		srv.SetDiscordSessionProvider(func() *discordgo.Session {
+		srv.SetDiscordServiceProvider(func() DiscordService {
 			return newTestDiscordSessionWithGuildRoles("g1",
-				&discordgo.Role{ID: "g1", Name: "@everyone", Position: 0},
-				&discordgo.Role{ID: "booster-role", Name: "Booster", Position: 9},
-				&discordgo.Role{ID: "target-role", Name: "Partner", Position: 3},
+				&Role{ID: "g1", Name: "@everyone", Position: 0},
+				&Role{ID: "booster-role", Name: "Booster", Position: 9},
+				&Role{ID: "target-role", Name: "Partner", Position: 3},
 			)
 		})
 
@@ -567,12 +566,12 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 		t.Parallel()
 
 		srv, _ := newControlTestServer(t)
-		srv.SetDiscordSessionProvider(func() *discordgo.Session {
+		srv.SetDiscordServiceProvider(func() DiscordService {
 			return newTestDiscordSessionWithGuildChannels("g1",
-				&discordgo.Channel{ID: "cat-ops", Name: "Operations", Type: discordgo.ChannelTypeGuildCategory, Position: 5},
-				&discordgo.Channel{ID: "logs", Name: "logs", Type: discordgo.ChannelTypeGuildText, Position: 4, ParentID: "cat-ops"},
-				&discordgo.Channel{ID: "alerts", Name: "alerts", Type: discordgo.ChannelTypeGuildNews, Position: 3, ParentID: "cat-ops"},
-				&discordgo.Channel{ID: "voice-hub", Name: "Voice Hub", Type: discordgo.ChannelTypeGuildVoice, Position: 2},
+				&Channel{ID: "cat-ops", Name: "Operations", Type: ChannelTypeGuildCategory, Position: 5},
+				&Channel{ID: "logs", Name: "logs", Type: ChannelTypeGuildText, Position: 4, ParentID: "cat-ops"},
+				&Channel{ID: "alerts", Name: "alerts", Type: ChannelTypeGuildNews, Position: 3, ParentID: "cat-ops"},
+				&Channel{ID: "voice-hub", Name: "Voice Hub", Type: ChannelTypeGuildVoice, Position: 2},
 			)
 		})
 
@@ -603,28 +602,28 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 		t.Parallel()
 
 		srv, _ := newControlTestServer(t)
-		srv.SetDiscordSessionProvider(func() *discordgo.Session {
+		srv.SetDiscordServiceProvider(func() DiscordService {
 			return newTestDiscordSessionWithGuildMembers("g1",
-				&discordgo.Member{
-					GuildID: "g1",
+				&Member{
+
 					Nick:    "Alice Alpha",
-					User: &discordgo.User{
+					User: &User{
 						ID:       "user-alice",
 						Username: "alice",
 					},
 				},
-				&discordgo.Member{
-					GuildID: "g1",
+				&Member{
+
 					Nick:    "Bob",
-					User: &discordgo.User{
+					User: &User{
 						ID:       "user-bob",
 						Username: "bob",
 					},
 				},
-				&discordgo.Member{
-					GuildID: "g1",
+				&Member{
+
 					Nick:    "Carol",
-					User: &discordgo.User{
+					User: &User{
 						ID:       "user-carol",
 						Username: "carol",
 					},
@@ -692,10 +691,10 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 			t.Fatalf("seed mute role config: %v", err)
 		}
 
-		srv.SetDiscordSessionProvider(func() *discordgo.Session {
+		srv.SetDiscordServiceProvider(func() DiscordService {
 			return newTestDiscordSessionWithGuildRoles("g1",
-				&discordgo.Role{ID: "g1", Name: "@everyone", Position: 0},
-				&discordgo.Role{ID: "helper-role", Name: "Helper", Position: 4},
+				&Role{ID: "g1", Name: "@everyone", Position: 0},
+				&Role{ID: "helper-role", Name: "Helper", Position: 4},
 			)
 		})
 
@@ -723,10 +722,10 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 			t.Fatalf("seed mute role config: %v", err)
 		}
 
-		srv.SetDiscordSessionProvider(func() *discordgo.Session {
+		srv.SetDiscordServiceProvider(func() DiscordService {
 			return newTestDiscordSessionWithGuildRoles("g1",
-				&discordgo.Role{ID: "g1", Name: "@everyone", Position: 0},
-				&discordgo.Role{ID: "mute-role", Name: "Muted", Position: 2},
+				&Role{ID: "g1", Name: "@everyone", Position: 0},
+				&Role{ID: "mute-role", Name: "Muted", Position: 2},
 			)
 		})
 
@@ -823,11 +822,11 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 			t.Fatalf("seed auto role config: %v", err)
 		}
 
-		srv.SetDiscordSessionProvider(func() *discordgo.Session {
+		srv.SetDiscordServiceProvider(func() DiscordService {
 			return newTestDiscordSessionWithGuildRoles("g1",
-				&discordgo.Role{ID: "g1", Name: "@everyone", Position: 0},
-				&discordgo.Role{ID: "level-role", Name: "Level", Position: 8},
-				&discordgo.Role{ID: "booster-role", Name: "Booster", Position: 7},
+				&Role{ID: "g1", Name: "@everyone", Position: 0},
+				&Role{ID: "level-role", Name: "Level", Position: 8},
+				&Role{ID: "booster-role", Name: "Booster", Position: 7},
 			)
 		})
 
@@ -865,10 +864,10 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 			t.Fatalf("seed permission mirror config: %v", err)
 		}
 
-		srv.SetDiscordSessionProvider(func() *discordgo.Session {
+		srv.SetDiscordServiceProvider(func() DiscordService {
 			return newTestDiscordSessionWithGuildRoles("g1",
-				&discordgo.Role{ID: "g1", Name: "@everyone", Position: 0},
-				&discordgo.Role{ID: "helper-role", Name: "Helper", Position: 4},
+				&Role{ID: "g1", Name: "@everyone", Position: 0},
+				&Role{ID: "helper-role", Name: "Helper", Position: 4},
 			)
 		})
 
@@ -894,42 +893,29 @@ func decodeFeatureResponse[T any](t *testing.T, rec *httptest.ResponseRecorder) 
 	return out
 }
 
-func newTestDiscordSessionWithGuildRoles(guildID string, roles ...*discordgo.Role) *discordgo.Session {
-	session := &discordgo.Session{
-		State: discordgo.NewState(),
-	}
-	_ = session.State.GuildAdd(&discordgo.Guild{
+func newTestDiscordSessionWithGuildRoles(guildID string, roles ...*Role) DiscordService {
+	f := newFakeDiscordService()
+	f.addGuild(&Guild{
 		ID:    guildID,
 		Roles: roles,
 	})
-	return session
+	return f
 }
 
-func newTestDiscordSessionWithGuildMembers(guildID string, members ...*discordgo.Member) *discordgo.Session {
-	session := &discordgo.Session{
-		State: discordgo.NewState(),
-	}
-	_ = session.State.GuildAdd(&discordgo.Guild{
+func newTestDiscordSessionWithGuildMembers(guildID string, members ...*Member) DiscordService {
+	f := newFakeDiscordService()
+	f.addGuild(&Guild{
 		ID:      guildID,
 		Members: members,
 	})
-	for _, member := range members {
-		if member == nil {
-			continue
-		}
-		member.GuildID = guildID
-		_ = session.State.MemberAdd(member)
-	}
-	return session
+	return f
 }
 
-func newTestDiscordSessionWithGuildChannels(guildID string, channels ...*discordgo.Channel) *discordgo.Session {
-	session := &discordgo.Session{
-		State: discordgo.NewState(),
-	}
-	_ = session.State.GuildAdd(&discordgo.Guild{
+func newTestDiscordSessionWithGuildChannels(guildID string, channels ...*Channel) DiscordService {
+	f := newFakeDiscordService()
+	f.addGuild(&Guild{
 		ID:       guildID,
 		Channels: channels,
 	})
-	return session
+	return f
 }

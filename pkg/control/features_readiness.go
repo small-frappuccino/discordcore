@@ -6,7 +6,6 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
-	"github.com/small-frappuccino/discordgo"
 )
 
 // readinessInput carries everything a per-feature readiness checker needs,
@@ -15,7 +14,7 @@ type readinessInput struct {
 	cfg     *files.BotConfig
 	guildID string
 	rc      files.RuntimeConfig
-	session *discordgo.Session
+	session DiscordService
 }
 
 func buildFeatureReadiness(
@@ -24,7 +23,7 @@ func buildFeatureReadiness(
 	guildID string,
 	def featureDefinition,
 	effectiveEnabled bool,
-	session *discordgo.Session,
+	session DiscordService,
 ) (string, []featureBlocker) {
 	if !effectiveEnabled {
 		return "disabled", nil
@@ -68,7 +67,7 @@ func withGuildSettings(
 // longer present in the guild role index. An unavailable session or index
 // yields no blocker, matching the prior "if ...; err == nil" guard.
 func requireRolesExist(
-	session *discordgo.Session,
+	session DiscordService,
 	guildID, code, message, field string,
 	roleIDs ...string,
 ) (featureBlocker, bool) {
@@ -214,7 +213,7 @@ func buildLogFeatureReadiness(
 	configManager *files.ConfigManager,
 	guildID string,
 	eventType logpolicy.LogEventType,
-	session *discordgo.Session,
+	session DiscordService,
 ) (string, []featureBlocker) {
 	if guildID == "" {
 		return buildGlobalLogFeatureReadiness(cfg, eventType, session)
@@ -233,7 +232,7 @@ func buildLogFeatureReadiness(
 func buildGlobalLogFeatureReadiness(
 	cfg *files.BotConfig,
 	eventType logpolicy.LogEventType,
-	session *discordgo.Session,
+	session DiscordService,
 ) (string, []featureBlocker) {
 	if blocker, ok := globalLogRuntimeBlocker(cfg.ResolveRuntimeConfig(""), eventType); ok {
 		return "blocked", []featureBlocker{blocker}
@@ -241,13 +240,8 @@ func buildGlobalLogFeatureReadiness(
 
 	capability, ok := logpolicy.LogEventCapabilities()[eventType]
 	if ok && capability.RequiredIntentsMask != 0 && session != nil {
-		currentMask := int(session.Identify.Intents)
-		missing := capability.RequiredIntentsMask &^ currentMask
-		if missing != 0 {
-			return "blocked", []featureBlocker{{
-				Code:    "missing_intent",
-				Message: fmt.Sprintf("Gateway intents mask %d is missing required bits %d.", currentMask, missing),
-			}}
+		if !session.HasIntent(capability.RequiredIntentsMask) {
+			return "blocked", []featureBlocker{{Code: "missing_intent", Message: fmt.Sprintf("Gateway intents are missing required bits %d.", capability.RequiredIntentsMask)}}
 		}
 	}
 	return "ready", nil

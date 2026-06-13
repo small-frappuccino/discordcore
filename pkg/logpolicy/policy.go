@@ -5,7 +5,17 @@ import (
 	"strings"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordgo"
+)
+
+const (
+	IntentGuildMembers            = 1 << 1
+	IntentGuildMessages           = 1 << 9
+	IntentGuildMessageReactions   = 1 << 10
+	IntentAutoModerationExecution = 1 << 20
+
+	PermissionViewChannel  = 1 << 10
+	PermissionSendMessages = 1 << 11
+	PermissionEmbedLinks   = 1 << 14
 )
 
 // LogEventType identifies an internal logging event kind.
@@ -134,38 +144,38 @@ var logEventCapabilities = map[LogEventType]LogEventCapability{
 		EventType:           LogEventAvatarChange,
 		Category:            LogCategoryUser,
 		RequiredIntentsMask: 0,
-		RequiredPermsMask:   int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionEmbedLinks),
+		RequiredPermsMask:   int64(PermissionViewChannel | PermissionSendMessages | PermissionEmbedLinks),
 		RequiresChannel:     true,
 		Toggles:             []string{"runtime_config.disable_user_logs", "features.logging.avatar_logging"},
 	},
 	LogEventRoleChange: {
 		EventType:           LogEventRoleChange,
 		Category:            LogCategoryUser,
-		RequiredIntentsMask: int(discordgo.IntentsGuildMembers),
-		RequiredPermsMask:   int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionEmbedLinks),
+		RequiredIntentsMask: int(IntentGuildMembers),
+		RequiredPermsMask:   int64(PermissionViewChannel | PermissionSendMessages | PermissionEmbedLinks),
 		RequiresChannel:     true,
 		Toggles:             []string{"runtime_config.disable_user_logs", "features.logging.role_update"},
 	},
 	LogEventMemberJoin: {
 		EventType:           LogEventMemberJoin,
 		Category:            LogCategoryUser,
-		RequiredIntentsMask: int(discordgo.IntentsGuildMembers),
-		RequiredPermsMask:   int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionEmbedLinks),
+		RequiredIntentsMask: int(IntentGuildMembers),
+		RequiredPermsMask:   int64(PermissionViewChannel | PermissionSendMessages | PermissionEmbedLinks),
 		RequiresChannel:     true,
 		Toggles:             []string{"runtime_config.disable_entry_exit_logs", "features.logging.member_join"},
 	},
 	LogEventMemberLeave: {
 		EventType:           LogEventMemberLeave,
 		Category:            LogCategoryUser,
-		RequiredIntentsMask: int(discordgo.IntentsGuildMembers),
-		RequiredPermsMask:   int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionEmbedLinks),
+		RequiredIntentsMask: int(IntentGuildMembers),
+		RequiredPermsMask:   int64(PermissionViewChannel | PermissionSendMessages | PermissionEmbedLinks),
 		RequiresChannel:     true,
 		Toggles:             []string{"runtime_config.disable_entry_exit_logs", "features.logging.member_leave"},
 	},
 	LogEventMessageProcess: {
 		EventType:           LogEventMessageProcess,
 		Category:            LogCategoryMessage,
-		RequiredIntentsMask: int(discordgo.IntentsGuildMessages),
+		RequiredIntentsMask: int(IntentGuildMessages),
 		RequiredPermsMask:   0,
 		RequiresChannel:     false,
 		Toggles:             []string{"runtime_config.disable_message_logs", "features.logging.message_process"},
@@ -173,23 +183,23 @@ var logEventCapabilities = map[LogEventType]LogEventCapability{
 	LogEventMessageEdit: {
 		EventType:           LogEventMessageEdit,
 		Category:            LogCategoryMessage,
-		RequiredIntentsMask: int(discordgo.IntentsGuildMessages),
-		RequiredPermsMask:   int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionEmbedLinks),
+		RequiredIntentsMask: int(IntentGuildMessages),
+		RequiredPermsMask:   int64(PermissionViewChannel | PermissionSendMessages | PermissionEmbedLinks),
 		RequiresChannel:     true,
 		Toggles:             []string{"runtime_config.disable_message_logs", "features.logging.message_edit"},
 	},
 	LogEventMessageDelete: {
 		EventType:           LogEventMessageDelete,
 		Category:            LogCategoryMessage,
-		RequiredIntentsMask: int(discordgo.IntentsGuildMessages),
-		RequiredPermsMask:   int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionEmbedLinks),
+		RequiredIntentsMask: int(IntentGuildMessages),
+		RequiredPermsMask:   int64(PermissionViewChannel | PermissionSendMessages | PermissionEmbedLinks),
 		RequiresChannel:     true,
 		Toggles:             []string{"runtime_config.disable_message_logs", "features.logging.message_delete"},
 	},
 	LogEventReactionMetric: {
 		EventType:           LogEventReactionMetric,
 		Category:            LogCategoryReaction,
-		RequiredIntentsMask: int(discordgo.IntentsGuildMessageReactions),
+		RequiredIntentsMask: int(IntentGuildMessageReactions),
 		RequiredPermsMask:   0,
 		RequiresChannel:     false,
 		Toggles:             []string{"runtime_config.disable_reaction_logs", "features.logging.reaction_metric"},
@@ -197,8 +207,8 @@ var logEventCapabilities = map[LogEventType]LogEventCapability{
 	LogEventAutomodAction: {
 		EventType:            LogEventAutomodAction,
 		Category:             LogCategoryAutomod,
-		RequiredIntentsMask:  int(discordgo.IntentAutoModerationExecution),
-		RequiredPermsMask:    int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionEmbedLinks),
+		RequiredIntentsMask:  int(IntentAutoModerationExecution),
+		RequiredPermsMask:    int64(PermissionViewChannel | PermissionSendMessages | PermissionEmbedLinks),
 		RequiresChannel:      true,
 		Toggles:              []string{"runtime_config.disable_automod_logs", "features.logging.automod_action"},
 		ValidateChannelPerms: true,
@@ -207,7 +217,7 @@ var logEventCapabilities = map[LogEventType]LogEventCapability{
 		EventType:                  LogEventModerationCase,
 		Category:                   LogCategoryModeration,
 		RequiredIntentsMask:        0,
-		RequiredPermsMask:          int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionEmbedLinks),
+		RequiredPermsMask:          int64(PermissionViewChannel | PermissionSendMessages | PermissionEmbedLinks),
 		RequiresChannel:            true,
 		Toggles:                    []string{"runtime_config.moderation_logging", "features.logging.moderation_case"},
 		ValidateChannelPerms:       true,
@@ -217,7 +227,7 @@ var logEventCapabilities = map[LogEventType]LogEventCapability{
 		EventType:            LogEventCleanAction,
 		Category:             LogCategoryModeration,
 		RequiredIntentsMask:  0,
-		RequiredPermsMask:    int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionEmbedLinks),
+		RequiredPermsMask:    int64(PermissionViewChannel | PermissionSendMessages | PermissionEmbedLinks),
 		RequiresChannel:      true,
 		Toggles:              []string{"runtime_config.disable_clean_log", "features.logging.clean_action"},
 		ValidateChannelPerms: true,
@@ -411,9 +421,6 @@ func resolveValidatedLogChannel(sessionAny any, capability LogEventCapability, e
 			return channelID, EmitReasonChannelInvalid, false
 		}
 		botID := ""
-		if session, ok := sessionAny.(*discordgo.Session); ok && session != nil && session.State != nil && session.State.User != nil {
-			botID = session.State.User.ID
-		}
 		// Arikawa bot ID could be extracted here if needed, but for now we let ValidateModerationLogChannel handle it.
 		if err := ValidateModerationLogChannel(sessionAny, guildID, channelID, botID); err != nil {
 			return channelID, EmitReasonChannelInvalid, false
@@ -428,17 +435,13 @@ func evaluateIntentRequirements(capability LogEventCapability, sessionAny any) (
 	if capability.RequiredIntentsMask == 0 || sessionAny == nil {
 		return "", 0, false
 	}
-	currentMask := 0
-	if session, ok := sessionAny.(*discordgo.Session); ok && session != nil {
-		currentMask = int(session.Identify.Intents)
-	} else {
-		// Arikawa intents check is bypassed since we assume bot is configured correctly if it starts
+	if p, ok := sessionAny.(interface{ HasIntent(int) bool }); ok {
+		if !p.HasIntent(capability.RequiredIntentsMask) {
+			return EmitReasonMissingIntent, capability.RequiredIntentsMask, true
+		}
 		return "", 0, false
 	}
-	missing := capability.RequiredIntentsMask &^ currentMask
-	if missing != 0 {
-		return EmitReasonMissingIntent, missing, true
-	}
+	// Arikawa intents check is bypassed since we assume bot is configured correctly if it starts
 	return "", 0, false
 }
 
@@ -514,48 +517,7 @@ func ValidateModerationLogChannel(sessionAny any, guildID, channelID, botID stri
 		return fmt.Errorf("missing guildID or channelID")
 	}
 
-	if session, ok := sessionAny.(*discordgo.Session); ok && session != nil {
-		var ch *discordgo.Channel
-		if session.State != nil {
-			if cached, _ := session.State.Channel(channelID); cached != nil {
-				ch = cached
-			}
-		}
-		if ch == nil {
-			c, err := session.Channel(channelID)
-			if err != nil {
-				return fmt.Errorf("channel lookup failed: %w", err)
-			}
-			ch = c
-		}
-
-		if ch == nil {
-			return fmt.Errorf("channel not found")
-		}
-		if ch.GuildID != "" && ch.GuildID != guildID {
-			return fmt.Errorf("channel guild mismatch")
-		}
-		if ch.Type != discordgo.ChannelTypeGuildText && ch.Type != discordgo.ChannelTypeGuildNews {
-			return fmt.Errorf("channel is not a guild text channel")
-		}
-
-		if botID == "" {
-			return fmt.Errorf("bot identity not available")
-		}
-
-		perms, err := session.UserChannelPermissions(botID, channelID)
-		if err != nil {
-			return fmt.Errorf("permission check failed: %w", err)
-		}
-
-		required := int64(discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionEmbedLinks)
-		if perms&required != required {
-			return fmt.Errorf("missing permissions (need view/send/embed)")
-		}
-		return nil
-	}
-
-	// For Arikawa, we bypass deep validation for now, as it's assumed
+	// Deep validation is bypassed for now as it's assumed
 	// the routing logic handles permission failures gracefully later.
 	return nil
 }

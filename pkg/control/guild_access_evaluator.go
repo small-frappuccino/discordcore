@@ -4,17 +4,16 @@ import (
 	"strings"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordgo"
 )
 
 type guildAccessEvaluator struct {
 	configManager   *files.ConfigManager
-	discordSessions discordSessionResolver
+	discordSessions discordServiceResolver
 }
 
 func newGuildAccessEvaluator(
 	configManager *files.ConfigManager,
-	discordSessions discordSessionResolver,
+	discordSessions discordServiceResolver,
 ) *guildAccessEvaluator {
 	return &guildAccessEvaluator{
 		configManager:   configManager,
@@ -100,10 +99,10 @@ func isGuildManageableByUser(guild discordOAuthGuild) bool {
 	if guild.Owner {
 		return true
 	}
-	if guild.Permissions&discordgo.PermissionAdministrator == discordgo.PermissionAdministrator {
+	if guild.Permissions&PermissionAdministrator == PermissionAdministrator {
 		return true
 	}
-	if guild.Permissions&discordgo.PermissionManageGuild == discordgo.PermissionManageGuild {
+	if guild.Permissions&PermissionManageGuild == PermissionManageGuild {
 		return true
 	}
 	return false

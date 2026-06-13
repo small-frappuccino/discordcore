@@ -4,11 +4,10 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
-	"github.com/small-frappuccino/discordgo"
 )
 
 // ResolveModerationLogChannel validates and returns the configured moderation log channel.
-func ResolveModerationLogChannel(session *discordgo.Session, configManager *files.ConfigManager, guildID string) (string, bool) {
+func ResolveModerationLogChannel(sessionAny any, configManager *files.ConfigManager, guildID string) (string, bool) {
 	if configManager == nil {
 		return "", false
 	}
@@ -27,11 +26,7 @@ func ResolveModerationLogChannel(session *discordgo.Session, configManager *file
 	}
 
 	botID := ""
-	if session != nil && session.State != nil && session.State.User != nil {
-		botID = session.State.User.ID
-	}
-
-	if err := logpolicy.ValidateModerationLogChannel(session, guildID, channelID, botID); err != nil {
+	if err := logpolicy.ValidateModerationLogChannel(sessionAny, guildID, channelID, botID); err != nil {
 		log.ErrorLoggerRaw().Error("Moderation log channel validation failed", "guildID", guildID, "channelID", channelID, "err", err)
 		return "", false
 	}

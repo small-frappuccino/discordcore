@@ -14,7 +14,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/testdb"
-	"github.com/small-frappuccino/discordgo"
 )
 
 const (
@@ -52,7 +51,7 @@ func routeQOTDSchedule() files.QOTDPublishScheduleConfig {
 	}
 }
 
-func (routeFakePublisher) PublishOfficialPost(_ context.Context, _ *discordgo.Session, params discordqotd.PublishOfficialPostParams) (*discordqotd.PublishedOfficialPost, error) {
+func (routeFakePublisher) PublishOfficialPost(_ context.Context, _ DiscordService, params discordqotd.PublishOfficialPostParams) (*discordqotd.PublishedOfficialPost, error) {
 	messageID := "message-" + params.PublishDateUTC.Format("20060102")
 	threadID := "thread-" + params.PublishDateUTC.Format("20060102")
 	return &discordqotd.PublishedOfficialPost{
@@ -64,7 +63,7 @@ func (routeFakePublisher) PublishOfficialPost(_ context.Context, _ *discordgo.Se
 	}, nil
 }
 
-func (routeFakePublisher) SetThreadState(context.Context, *discordgo.Session, string, discordqotd.ThreadState) error {
+func (routeFakePublisher) SetThreadState(context.Context, DiscordService, string, discordqotd.ThreadState) error {
 	return nil
 }
 
@@ -110,8 +109,8 @@ func newQOTDControlTestServer(t *testing.T) (*Server, *qotd.Service, *storage.St
 	publisher := &routeFakePublisher{}
 	service := qotd.NewService(cm, store, publisher)
 	srv.SetQOTDService(service)
-	srv.SetDiscordSessionResolver(func(string) (*discordgo.Session, error) {
-		return &discordgo.Session{}, nil
+	srv.SetDiscordServiceResolver(func(string) (DiscordService, error) {
+		return newFakeDiscordService(), nil
 	})
 	return srv, service, store, publisher
 }

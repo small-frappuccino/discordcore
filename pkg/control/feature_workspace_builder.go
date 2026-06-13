@@ -7,21 +7,20 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
-	"github.com/small-frappuccino/discordgo"
 )
 
 type featureWorkspaceBuilder struct {
 	configManager   *files.ConfigManager
-	discordSessions discordSessionResolver
+	discordServices discordServiceResolver
 }
 
 func newFeatureWorkspaceBuilder(
 	configManager *files.ConfigManager,
-	discordSessions discordSessionResolver,
+	discordServices discordServiceResolver,
 ) *featureWorkspaceBuilder {
 	return &featureWorkspaceBuilder{
 		configManager:   configManager,
-		discordSessions: discordSessions,
+		discordServices: discordServices,
 	}
 }
 
@@ -38,7 +37,7 @@ func (builder *featureWorkspaceBuilder) Workspace(guildID string) (featureWorksp
 		}
 	}
 
-	session, err := builder.discordSessionForGuild(guildID)
+	session, err := builder.discordServiceForGuild(guildID)
 	if err != nil {
 		return featureWorkspace{}, fmt.Errorf("featureWorkspaceBuilder.Workspace: %w", err)
 	}
@@ -67,24 +66,24 @@ func (builder *featureWorkspaceBuilder) FeatureFromConfig(
 		}
 	}
 
-	session, err := builder.discordSessionForGuild(guildID)
+	session, err := builder.discordServiceForGuild(guildID)
 	if err != nil {
 		return featureRecord{}, fmt.Errorf("featureWorkspaceBuilder.FeatureFromConfig: %w", err)
 	}
 	return builder.buildSingleFeatureRecord(cfg, guildID, featureID, session)
 }
 
-func (builder *featureWorkspaceBuilder) discordSessionForGuild(guildID string) (*discordgo.Session, error) {
-	if builder == nil || builder.discordSessions == nil {
+func (builder *featureWorkspaceBuilder) discordServiceForGuild(guildID string) (DiscordService, error) {
+	if builder == nil || builder.discordServices == nil {
 		return nil, nil
 	}
-	return builder.discordSessions(guildID)
+	return builder.discordServices(guildID)
 }
 
 func (builder *featureWorkspaceBuilder) buildWorkspace(
 	cfg files.BotConfig,
 	guildID string,
-	session *discordgo.Session,
+	session DiscordService,
 ) (featureWorkspace, error) {
 	records := make([]featureRecord, 0, len(featureDefinitions))
 	for _, def := range featureDefinitions {
@@ -110,7 +109,7 @@ func (builder *featureWorkspaceBuilder) buildSingleFeatureRecord(
 	cfg files.BotConfig,
 	guildID string,
 	featureID string,
-	session *discordgo.Session,
+	session DiscordService,
 ) (featureRecord, error) {
 	def, ok := featureDefinitionsByID[featureID]
 	if !ok {
@@ -123,7 +122,7 @@ func (builder *featureWorkspaceBuilder) buildFeatureRecord(
 	cfg files.BotConfig,
 	guildID string,
 	def featureDefinition,
-	session *discordgo.Session,
+	session DiscordService,
 ) (featureRecord, error) {
 	if guildID != "" {
 		if _, ok := findGuildSettings(cfg, guildID); !ok {

@@ -22,19 +22,32 @@ const (
 	PermissionManageGuild   int64 = 1 << 5
 )
 
+const (
+	IntentsGuildMessages = 1 << 9
+)
+
 // User represents a Discord user.
 type User struct {
-	ID         string
-	Username   string
-	GlobalName string
-	Bot        bool
+	ID         string `json:"id"`
+	Username   string `json:"username"`
+	GlobalName string `json:"global_name"`
+	Bot        bool   `json:"bot"`
+	Avatar     string `json:"avatar"`
+}
+
+// AvatarURL returns the user's avatar URL.
+func (u *User) AvatarURL() string {
+	if u.Avatar == "" {
+		return ""
+	}
+	return "https://cdn.discordapp.com/avatars/" + u.ID + "/" + u.Avatar + ".png"
 }
 
 // Member represents a guild member.
 type Member struct {
-	User  *User
-	Nick  string
-	Roles []string
+	User  *User    `json:"user"`
+	Nick  string   `json:"nick"`
+	Roles []string `json:"roles"`
 }
 
 // DisplayName returns the highest priority display name for the member.
@@ -53,36 +66,40 @@ func (m *Member) DisplayName() string {
 
 // Role represents a guild role.
 type Role struct {
-	ID       string
-	Name     string
-	Position int
-	Managed  bool
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Position    int    `json:"position"`
+	Managed     bool   `json:"managed"`
+	Permissions int64  `json:"permissions,string"`
 }
 
 // Channel represents a guild channel.
 type Channel struct {
-	ID       string
-	Name     string
-	Type     ChannelType
-	Position int
+	ID       string      `json:"id"`
+	Name     string      `json:"name"`
+	Type     ChannelType `json:"type"`
+	Position int         `json:"position"`
+	ParentID string      `json:"parent_id"`
 }
 
 // Guild represents a Discord guild.
 type Guild struct {
-	ID       string
-	Name     string
-	Icon     string
-	OwnerID  string
-	Roles    []*Role
-	Members  []*Member
-	Channels []*Channel
+	ID       string     `json:"id"`
+	Name     string     `json:"name"`
+	Icon     string     `json:"icon"`
+	OwnerID  string     `json:"owner_id"`
+	Roles    []*Role    `json:"roles"`
+	Members  []*Member  `json:"members"`
+	Channels []*Channel `json:"channels"`
 }
 
 // DiscordService defines the strictly consumer-side contract for retrieving live
 // Discord runtime state, completely decoupling the control plane from external SDK types.
 type DiscordService interface {
+	BotUser() (*User, error)
 	Guild(guildID string) (*Guild, error)
 	GuildMember(guildID, userID string) (*Member, error)
 	GuildMembers(guildID, after string, limit int) ([]*Member, error)
 	GuildMembersSearch(guildID, query string, limit int) ([]*Member, error)
+	HasIntent(intentMask int) bool
 }

@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordgo"
 )
 
 func TestDiscordOAuthRoutesRequireConfig(t *testing.T) {
@@ -990,11 +989,11 @@ func TestGuildRoutesAllowReadOnlyOAuthAccessForGetAndDenyWrites(t *testing.T) {
 	srv.SetBotGuildIDsProvider(func(_ context.Context) ([]string, error) {
 		return []string{"g1"}, nil
 	})
-	srv.SetDiscordSessionProvider(func() *discordgo.Session {
+	srv.SetDiscordServiceProvider(func() DiscordService {
 		return newTestDiscordSessionWithGuildMembers("g1",
-			&discordgo.Member{
-				GuildID: "g1",
-				User: &discordgo.User{
+			&Member{
+
+				User: &User{
 					ID:       "u1",
 					Username: "alice",
 				},
@@ -1012,7 +1011,7 @@ func TestGuildRoutesAllowReadOnlyOAuthAccessForGetAndDenyWrites(t *testing.T) {
 			return nil
 		}
 		cfg.Guilds = append(cfg.Guilds, files.GuildConfig{
-			GuildID: "g1",
+
 			Roles: files.RolesConfig{
 				DashboardRead: []string{"reader-role"},
 			},
@@ -1106,11 +1105,11 @@ func TestGuildAccessRoleUpdatesInvalidateAccessibleGuildCache(t *testing.T) {
 	srv.SetBotGuildIDsProvider(func(_ context.Context) ([]string, error) {
 		return []string{"g1"}, nil
 	})
-	srv.SetDiscordSessionProvider(func() *discordgo.Session {
+	srv.SetDiscordServiceProvider(func() DiscordService {
 		return newTestDiscordSessionWithGuildMembers("g1",
-			&discordgo.Member{
-				GuildID: "g1",
-				User: &discordgo.User{
+			&Member{
+
+				User: &User{
 					ID:       "u1",
 					Username: "alice",
 				},
@@ -1590,7 +1589,7 @@ func TestDiscordOAuthGuildAccessEndpoints(t *testing.T) {
 					if i == 20 {
 						guild.ID = "g-admin"
 						guild.Name = "Admin Guild"
-						guild.Permissions = discordgo.PermissionAdministrator
+						guild.Permissions = PermissionAdministrator
 					}
 					page = append(page, guild)
 				}
@@ -1599,7 +1598,7 @@ func TestDiscordOAuthGuildAccessEndpoints(t *testing.T) {
 				}
 			case "p199":
 				page := []discordOAuthGuild{
-					{ID: "g-manage", Name: "Manage Guild", Permissions: discordgo.PermissionManageGuild},
+					{ID: "g-manage", Name: "Manage Guild", Permissions: PermissionManageGuild},
 					{ID: "g-read", Name: "Read Only", Permissions: 0},
 					{ID: "g-other", Name: "Other Guild", Owner: true},
 				}
@@ -1619,11 +1618,11 @@ func TestDiscordOAuthGuildAccessEndpoints(t *testing.T) {
 	srv.SetBotGuildIDsProvider(func(_ context.Context) ([]string, error) {
 		return []string{"g-owner", "g-admin", "g-manage", "g-read"}, nil
 	})
-	srv.SetDiscordSessionProvider(func() *discordgo.Session {
+	srv.SetDiscordServiceProvider(func() DiscordService {
 		return newTestDiscordSessionWithGuildMembers("g-read",
-			&discordgo.Member{
-				GuildID: "g-read",
-				User: &discordgo.User{
+			&Member{
+
+				User: &User{
 					ID:       "u1",
 					Username: "alice",
 				},

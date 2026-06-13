@@ -19,7 +19,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
-	"github.com/small-frappuccino/discordgo"
 )
 
 // CacheSnapshotResolver returns the primary Cabinet the control server
@@ -46,7 +45,7 @@ var ErrControlServerBind = errors.New("control server bind failed")
 type botGuildIDsProvider func(context.Context) ([]string, error)
 type botGuildBindingsProvider func(context.Context) ([]BotGuildBinding, error)
 type guildRegistrationFunc func(context.Context, string) error
-type discordSessionResolver func(string) (*discordgo.Session, error)
+type discordServiceResolver func(string) (DiscordService, error)
 
 // BotGuildBinding associates a guild visible to the control plane with a bot
 // instance identifier from the host runtime catalog.
@@ -90,7 +89,7 @@ type Server struct {
 	qotdService          *qotd.Service
 	health               healthSources
 	guildRegistration    guildRegistrationFunc
-	discordSession       discordSessionResolver
+	discordService       discordServiceResolver
 	discordOAuth         *discordOAuthProvider
 	publicOrigin         controlPublicOrigin
 	runtimeApplier       *runtimeapply.Manager
@@ -116,17 +115,17 @@ func NewServer(addr string, configManager *files.ConfigManager, runtimeApplier *
 		configManager:  configManager,
 		runtimeApplier: runtimeApplier,
 	}
-	discordSessions := func(guildID string) (*discordgo.Session, error) {
-		return s.discordSessionForGuild(guildID)
+	discordServices := func(guildID string) (DiscordService, error) {
+		return s.discordServiceForGuild(guildID)
 	}
 	providerSource := func() *discordOAuthProvider {
 		return s.discordOAuth
 	}
 	s.botGuildSource = newBotGuildBindingSource()
 	s.accessibleGuildCache = newAccessibleGuildCache(defaultAccessibleGuildsCache, time.Now)
-	guildAccessEvaluator := newGuildAccessEvaluator(configManager, discordSessions)
+	guildAccessEvaluator := newGuildAccessEvaluator(configManager, discordServices)
 	guildAccessResolver := newAccessibleGuildResolver(providerSource, s.botGuildSource, s.accessibleGuildCache, guildAccessEvaluator)
-	featureBuilder := newFeatureWorkspaceBuilder(configManager, discordSessions)
+	featureBuilder := newFeatureWorkspaceBuilder(configManager, discordServices)
 	featureApplier := newFeatureMutationApplier(configManager)
 	s.featureControlSvc = newFeatureControlService(featureBuilder, featureApplier)
 	s.discordOAuthSvc = newDiscordOAuthControlService(
@@ -253,23 +252,23 @@ func (s *Server) SetKnownBotInstanceIDs(ids []string) {
 	s.knownBotInstanceIDs = normalizeBotInstanceIDs(ids)
 }
 
-// SetDiscordSessionProvider exposes a fallback Discord session for readiness inspection.
-func (s *Server) SetDiscordSessionProvider(provider func() *discordgo.Session) {
+// SetDiscordServiceProvider exposes a fallback Discord service for readiness inspection.
+func (s *Server) SetDiscordServiceProvider(provider func() DiscordService) {
 	if s == nil || provider == nil {
 		return
 	}
-	s.discordSession = func(string) (*discordgo.Session, error) {
+	s.discordService = func(string) (DiscordService, error) {
 		return provider(), nil
 	}
 }
 
-// SetDiscordSessionResolver exposes a guild-aware Discord session resolver for
+// SetDiscordServiceResolver exposes a guild-aware Discord service resolver for
 // readiness inspection.
-func (s *Server) SetDiscordSessionResolver(resolver func(string) (*discordgo.Session, error)) {
+func (s *Server) SetDiscordServiceResolver(resolver func(string) (DiscordService, error)) {
 	if s == nil || resolver == nil {
 		return
 	}
-	s.discordSession = func(guildID string) (*discordgo.Session, error) {
+	s.discordService = func(guildID string) (DiscordService, error) {
 		return resolver(guildID)
 	}
 }

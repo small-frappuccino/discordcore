@@ -51,13 +51,16 @@ func (s *Server) handleLiveHealthRoute(w http.ResponseWriter, r *http.Request) {
 		}
 		botUser := strings.TrimSpace(files.DiscordBotName)
 		botAvatarURL := ""
-		if s.discordSession != nil {
-			session, err := s.discordSession("")
-			if err == nil && session != nil && session.State != nil && session.State.User != nil {
-				if session.State.User.Username != "" {
-					botUser = session.State.User.Username
+		if s.discordService != nil {
+			session, err := s.discordService("")
+			if err == nil && session != nil {
+				user, err := session.BotUser()
+				if err == nil && user != nil {
+					if user.Username != "" {
+						botUser = user.Username
+					}
+					botAvatarURL = user.AvatarURL()
 				}
-				botAvatarURL = session.State.User.AvatarURL("")
 			}
 		}
 

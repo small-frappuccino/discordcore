@@ -5,8 +5,6 @@ import (
 	"net/http"
 	"slices"
 	"strings"
-
-	"github.com/small-frappuccino/discordgo"
 )
 
 type guildChannelOption struct {
@@ -19,7 +17,7 @@ type guildChannelOption struct {
 }
 
 func (s *Server) handleGuildChannelOptionsGet(w http.ResponseWriter, r *http.Request, guildID string) {
-	session, err := s.discordSessionForGuild(guildID)
+	session, err := s.discordServiceForGuild(guildID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to resolve guild channel options: %v", err), http.StatusServiceUnavailable)
 		return
@@ -38,7 +36,7 @@ func (s *Server) handleGuildChannelOptionsGet(w http.ResponseWriter, r *http.Req
 	})
 }
 
-func buildGuildChannelOptions(session *discordgo.Session, guildID string) ([]guildChannelOption, error) {
+func buildGuildChannelOptions(session DiscordService, guildID string) ([]guildChannelOption, error) {
 	guild, err := resolveGuildFromDiscordSession(session, guildID)
 	if err != nil {
 		return nil, fmt.Errorf("buildGuildChannelOptions: %w", err)
@@ -56,7 +54,7 @@ func buildGuildChannelOptions(session *discordgo.Session, guildID string) ([]gui
 			continue
 		}
 
-		if channel.Type == discordgo.ChannelTypeGuildCategory {
+		if channel.Type == ChannelTypeGuildCategory {
 			continue
 		}
 
@@ -101,27 +99,27 @@ func compareGuildChannelOptions(left, right guildChannelOption) int {
 	return strings.Compare(left.ID, right.ID)
 }
 
-func guildChannelKind(channelType discordgo.ChannelType) string {
+func guildChannelKind(channelType ChannelType) string {
 	switch channelType {
-	case discordgo.ChannelTypeGuildText:
+	case ChannelTypeGuildText:
 		return "text"
-	case discordgo.ChannelTypeGuildVoice:
+	case ChannelTypeGuildVoice:
 		return "voice"
-	case discordgo.ChannelTypeGuildNews:
+	case ChannelTypeGuildNews:
 		return "announcement"
-	case discordgo.ChannelTypeGuildStageVoice:
+	case ChannelTypeGuildStageVoice:
 		return "stage"
-	case discordgo.ChannelTypeGuildForum:
+	case ChannelTypeGuildForum:
 		return "forum"
-	case discordgo.ChannelTypeGuildNewsThread:
+	case ChannelTypeGuildNewsThread:
 		return "announcement_thread"
-	case discordgo.ChannelTypeGuildPublicThread:
+	case ChannelTypeGuildPublicThread:
 		return "public_thread"
-	case discordgo.ChannelTypeGuildPrivateThread:
+	case ChannelTypeGuildPrivateThread:
 		return "private_thread"
-	case discordgo.ChannelTypeGuildDirectory:
+	case ChannelTypeGuildDirectory:
 		return "directory"
-	case discordgo.ChannelTypeGuildMedia:
+	case ChannelTypeGuildMedia:
 		return "media"
 	default:
 		return "other"
@@ -147,9 +145,9 @@ func guildChannelKindRank(kind string) int {
 	}
 }
 
-func channelSupportsMessageRoute(channelType discordgo.ChannelType) bool {
+func channelSupportsMessageRoute(channelType ChannelType) bool {
 	switch channelType {
-	case discordgo.ChannelTypeGuildText, discordgo.ChannelTypeGuildNews:
+	case ChannelTypeGuildText, ChannelTypeGuildNews:
 		return true
 	default:
 		return false

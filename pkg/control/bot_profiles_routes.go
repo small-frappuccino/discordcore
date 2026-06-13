@@ -2,13 +2,14 @@ package control
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/log"
-	"github.com/small-frappuccino/discordgo"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -91,20 +92,15 @@ func getBotProfileCached(ctx context.Context, guildID, logicalKey, token string)
 			return cached.Profile, nil
 		}
 
-		session, err := discordgo.New("Bot " + token)
-		if err != nil {
-			return BotProfileResponse{}, err
-		}
-
-		user, err := session.User("@me", discordgo.WithContext(ctx))
+		user, err := fetchDiscordUser(ctx, token)
 		if err != nil {
 			return BotProfileResponse{}, err
 		}
 
 		var perms int64
-		member, memberErr := session.GuildMember(guildID, user.ID, discordgo.WithContext(ctx))
+		member, memberErr := fetchDiscordGuildMember(ctx, token, guildID, user.ID)
 		if memberErr == nil {
-			if guildRoles, rolesErr := session.GuildRoles(guildID, discordgo.WithContext(ctx)); rolesErr == nil {
+			if guildRoles, rolesErr := fetchDiscordGuildRoles(ctx, token, guildID); rolesErr == nil {
 				for _, r := range guildRoles {
 					if r.ID == guildID {
 						perms |= r.Permissions
@@ -117,8 +113,9 @@ func getBotProfileCached(ctx context.Context, guildID, logicalKey, token string)
 						}
 					}
 				}
-				if (perms & discordgo.PermissionAdministrator) == discordgo.PermissionAdministrator {
-					perms |= discordgo.PermissionAllText | discordgo.PermissionAllVoice | discordgo.PermissionAllChannel
+				if (perms & PermissionAdministrator) == PermissionAdministrator {
+					// We just use a large bitmask if admin
+					perms |= (1 << 3) | (1 << 4) | (1 << 5) // Admin, ManageChannels, ManageGuild
 				}
 			}
 		}
@@ -127,8 +124,8 @@ func getBotProfileCached(ctx context.Context, guildID, logicalKey, token string)
 			ID:            user.ID,
 			LogicalKey:    logicalKey,
 			Username:      user.Username,
-			Discriminator: user.Discriminator,
-			AvatarURL:     user.AvatarURL(""),
+			Discriminator: "", // Not used anymore by Discord mostly, but we can leave empty
+			AvatarURL:     user.AvatarURL(),
 			Permissions:   perms,
 			BotPresent:    memberErr == nil,
 		}
@@ -153,4 +150,67 @@ func getBotProfileCached(ctx context.Context, guildID, logicalKey, token string)
 	prof := v.(BotProfileResponse)
 	prof.LogicalKey = logicalKey
 	return prof, nil
+}
+
+func fetchDiscordUser(ctx context.Context, token string) (*User, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://discord.com/api/v10/users/@me", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bot "+token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("status %d", resp.StatusCode)
+	}
+	var u User
+	if err := json.NewDecoder(resp.Body).Decode(&u); err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
+func fetchDiscordGuildMember(ctx context.Context, token, guildID, userID string) (*Member, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://discord.com/api/v10/guilds/"+guildID+"/members/"+userID, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bot "+token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("status %d", resp.StatusCode)
+	}
+	var m Member
+	if err := json.NewDecoder(resp.Body).Decode(&m); err != nil {
+		return nil, err
+	}
+	return &m, nil
+}
+
+func fetchDiscordGuildRoles(ctx context.Context, token, guildID string) ([]*Role, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://discord.com/api/v10/guilds/"+guildID+"/roles", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bot "+token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("status %d", resp.StatusCode)
+	}
+	var roles []*Role
+	if err := json.NewDecoder(resp.Body).Decode(&roles); err != nil {
+		return nil, err
+	}
+	return roles, nil
 }

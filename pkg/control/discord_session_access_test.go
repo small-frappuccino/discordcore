@@ -2,28 +2,26 @@ package control
 
 import (
 	"testing"
-
-	"github.com/small-frappuccino/discordgo"
 )
 
 func TestServerDiscordSessionForGuildUsesGuildRegistrationResolver(t *testing.T) {
 	t.Parallel()
 
 	server := &Server{}
-	wantSession := &discordgo.Session{}
+	wantSession := newFakeDiscordService()
 	var gotGuildID string
 
-	server.SetDiscordSessionResolver(func(guildID string) (*discordgo.Session, error) {
+	server.SetDiscordServiceResolver(func(guildID string) (DiscordService, error) {
 		gotGuildID = guildID
 		return wantSession, nil
 	})
 
-	got, err := server.discordSessionForGuild("guild-1")
+	got, err := server.discordServiceForGuild("guild-1")
 	if err != nil {
-		t.Fatalf("discordSessionForGuild() error = %v", err)
+		t.Fatalf("discordServiceForGuild() error = %v", err)
 	}
 	if got != wantSession {
-		t.Fatalf("discordSessionForGuild() session = %p, want %p", got, wantSession)
+		t.Fatalf("discordServiceForGuild() session = %p, want %p", got, wantSession)
 	}
 	if gotGuildID != "guild-1" {
 		t.Fatalf("resolver called with guild=%q, want guild-1", gotGuildID)

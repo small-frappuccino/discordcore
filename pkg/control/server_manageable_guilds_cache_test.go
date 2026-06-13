@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordgo"
 )
 
 func TestResolveManageableGuildsCachesDiscordLookup(t *testing.T) {
@@ -175,12 +174,12 @@ func TestResolveAccessibleGuildsRecomputesDiscordRoleAccessOnCacheHit(t *testing
 	}
 
 	currentSession := newTestDiscordSessionWithGuildMembers("g1",
-		&discordgo.Member{
-			User:  &discordgo.User{ID: "u1", Username: "alice"},
+		&Member{
+			User:  &User{ID: "u1", Username: "alice"},
 			Roles: nil,
 		},
 	)
-	srv.SetDiscordSessionProvider(func() *discordgo.Session {
+	srv.SetDiscordServiceProvider(func() DiscordService {
 		return currentSession
 	})
 
@@ -219,8 +218,8 @@ func TestResolveAccessibleGuildsRecomputesDiscordRoleAccessOnCacheHit(t *testing
 	}
 
 	currentSession = newTestDiscordSessionWithGuildMembers("g1",
-		&discordgo.Member{
-			User:  &discordgo.User{ID: "u1", Username: "alice"},
+		&Member{
+			User:  &User{ID: "u1", Username: "alice"},
 			Roles: []string{"writer-role"},
 		},
 	)

@@ -1,8 +1,9 @@
 package control
 
 import (
-	"github.com/small-frappuccino/discordcore/pkg/monitoring"
 	"net/http"
+
+	"github.com/small-frappuccino/discordcore/pkg/monitoring"
 )
 
 // handleMonitoringHealthRoute serves the GET /v1/health/monitoring snapshot.

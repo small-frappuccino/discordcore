@@ -7,8 +7,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-
-	"github.com/small-frappuccino/discordgo"
 )
 
 const (
@@ -24,7 +22,7 @@ type guildMemberOption struct {
 }
 
 func (s *Server) handleGuildMemberOptionsGet(w http.ResponseWriter, r *http.Request, guildID string) {
-	session, err := s.discordSessionForGuild(guildID)
+	session, err := s.discordServiceForGuild(guildID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to resolve guild member options: %v", err), http.StatusServiceUnavailable)
 		return
@@ -52,7 +50,7 @@ func (s *Server) handleGuildMemberOptionsGet(w http.ResponseWriter, r *http.Requ
 	})
 }
 
-func buildGuildMemberOptions(session *discordgo.Session, guildID, query, selectedID string, limit int) ([]guildMemberOption, error) {
+func buildGuildMemberOptions(session DiscordService, guildID, query, selectedID string, limit int) ([]guildMemberOption, error) {
 	if session == nil {
 		return nil, fmt.Errorf("discord session unavailable")
 	}
@@ -124,7 +122,7 @@ func clampGuildMemberOptionsLimit(limit int) int {
 	return limit
 }
 
-func lookupGuildMembers(session *discordgo.Session, guildID, query string, limit int) ([]*discordgo.Member, error) {
+func lookupGuildMembers(session DiscordService, guildID, query string, limit int) ([]*Member, error) {
 	normalizedLimit := clampGuildMemberOptionsLimit(limit)
 	normalizedQuery := strings.TrimSpace(query)
 
@@ -151,14 +149,14 @@ func lookupGuildMembers(session *discordgo.Session, guildID, query string, limit
 	return members, nil
 }
 
-func guildMembersFromState(session *discordgo.Session, guildID, query string, limit int) []*discordgo.Member {
+func guildMembersFromState(session DiscordService, guildID, query string, limit int) []*Member {
 	guild, err := resolveGuildFromDiscordSession(session, guildID)
 	if err != nil || guild == nil || len(guild.Members) == 0 {
 		return nil
 	}
 
 	normalizedQuery := strings.ToLower(strings.TrimSpace(query))
-	matches := make([]*discordgo.Member, 0, len(guild.Members))
+	matches := make([]*Member, 0, len(guild.Members))
 	for _, member := range guild.Members {
 		if member == nil || member.User == nil {
 			continue
@@ -176,22 +174,15 @@ func guildMembersFromState(session *discordgo.Session, guildID, query string, li
 	return matches
 }
 
-func resolveGuildMemberFromDiscordSession(session *discordgo.Session, guildID, userID string) (*discordgo.Member, error) {
+func resolveGuildMemberFromDiscordSession(session DiscordService, guildID, userID string) (*Member, error) {
 	if session == nil {
-		return nil, fmt.Errorf("discord session unavailable")
+		return nil, fmt.Errorf("discord service unavailable")
 	}
 
 	normalizedGuildID := strings.TrimSpace(guildID)
 	normalizedUserID := strings.TrimSpace(userID)
 	if normalizedGuildID == "" || normalizedUserID == "" {
 		return nil, fmt.Errorf("guild member lookup requires guild_id and user_id")
-	}
-
-	if session.State != nil {
-		member, err := session.State.Member(normalizedGuildID, normalizedUserID)
-		if err == nil && member != nil {
-			return member, nil
-		}
 	}
 
 	member, err := session.GuildMember(normalizedGuildID, normalizedUserID)
@@ -204,7 +195,7 @@ func resolveGuildMemberFromDiscordSession(session *discordgo.Session, guildID, u
 	return member, nil
 }
 
-func appendGuildMemberOption(options *[]guildMemberOption, seen map[string]struct{}, member *discordgo.Member) {
+func appendGuildMemberOption(options *[]guildMemberOption, seen map[string]struct{}, member *Member) {
 	option, ok := buildGuildMemberOption(member)
 	if !ok {
 		return
@@ -228,7 +219,7 @@ func prependGuildMemberOption(options []guildMemberOption, selected guildMemberO
 	return filtered
 }
 
-func buildGuildMemberOption(member *discordgo.Member) (guildMemberOption, bool) {
+func buildGuildMemberOption(member *Member) (guildMemberOption, bool) {
 	if member == nil || member.User == nil {
 		return guildMemberOption{}, false
 	}
@@ -251,7 +242,7 @@ func buildGuildMemberOption(member *discordgo.Member) (guildMemberOption, bool) 
 	}, true
 }
 
-func guildMemberMatchesQuery(member *discordgo.Member, query string) bool {
+func guildMemberMatchesQuery(member *Member, query string) bool {
 	if member == nil || member.User == nil {
 		return false
 	}
@@ -279,7 +270,7 @@ func guildMemberMatchesQuery(member *discordgo.Member, query string) bool {
 	return false
 }
 
-func compareGuildMembers(left, right *discordgo.Member) int {
+func compareGuildMembers(left, right *Member) int {
 	leftOption, _ := buildGuildMemberOption(left)
 	rightOption, _ := buildGuildMemberOption(right)
 
