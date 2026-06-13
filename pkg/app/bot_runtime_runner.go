@@ -18,6 +18,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/maintenance"
 	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/discord/session"
+	discordstats "github.com/small-frappuccino/discordcore/pkg/discord/stats"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/monitoring"
@@ -148,7 +149,9 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 		return err
 	}
 
-	statsService := stats.NewStatsService(runtime.session, opts.configManager, opts.store, log.DiscordLogger(), runtime.instanceID, "")
+	statsPublisher := discordstats.NewDiscordgoPublisher(runtime.session)
+	statsService := stats.NewStatsService(statsPublisher, opts.configManager, opts.store, log.DiscordLogger(), runtime.instanceID, "")
+	discordstats.RegisterEventHandlers(runtime.session, statsService)
 	if err := runtime.serviceManager.Register(statsService); err != nil {
 		return fmt.Errorf("register stats service for %s: %w", runtime.instanceID, err)
 	}
