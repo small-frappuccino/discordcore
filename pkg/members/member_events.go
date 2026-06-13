@@ -305,7 +305,14 @@ func (mes *MemberEventService) handleGuildMemberAdd(ctx context.Context, s *disc
 		}
 	} else if mes.notifier != nil {
 		if err := monitoring.RunErrWithTimeout(ctx, monitoring.DependencyTimeout, func() error {
-			return mes.notifier.SendMemberJoinNotification(logChannelID, m, accountAge)
+			joinEvent := &notifications.MemberJoin{
+				User: &notifications.User{
+					ID:       m.User.ID,
+					Username: m.User.Username,
+					Avatar:   m.User.Avatar,
+				},
+			}
+			return mes.notifier.SendMemberJoinNotification(logChannelID, joinEvent, accountAge)
 		}); err != nil {
 			mes.logger.Error(fmt.Sprintf("Failed to send member join notification: guildID=%s, userID=%s, channelID=%s, error=%v", m.GuildID, m.User.ID, logChannelID, err))
 		} else {
@@ -386,7 +393,14 @@ func (mes *MemberEventService) handleGuildMemberRemove(ctx context.Context, s *d
 		}
 	} else if mes.notifier != nil {
 		if err := monitoring.RunErrWithTimeout(ctx, monitoring.DependencyTimeout, func() error {
-			return mes.notifier.SendMemberLeaveNotification(logChannelID, m, serverTimeForNotification, botTime)
+			leaveEvent := &notifications.MemberLeave{
+				User: &notifications.User{
+					ID:       m.User.ID,
+					Username: m.User.Username,
+					Avatar:   m.User.Avatar,
+				},
+			}
+			return mes.notifier.SendMemberLeaveNotification(logChannelID, leaveEvent, serverTimeForNotification, botTime)
 		}); err != nil {
 			mes.logger.Error(fmt.Sprintf("Failed to send member leave notification: guildID=%s, userID=%s, channelID=%s, error=%v", m.GuildID, m.User.ID, logChannelID, err))
 		} else {

@@ -217,7 +217,7 @@ func TestScheduleRuntimeWarmup(t *testing.T) {
 		}
 		return nil
 	}
-	monitoringUnifiedCacheFn = func(ms *monitoring.MonitoringService) *cache.UnifiedCache {
+	monitoringUnifiedCacheFn = func(runtime *botRuntime) *cache.UnifiedCache {
 		return cache.NewUnifiedCache(cache.CacheConfig{})
 	}
 	scheduleStartupMemberWarmupFn = func(ms *monitoring.MonitoringService, config cache.WarmupConfig) bool {

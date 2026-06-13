@@ -10,10 +10,8 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
-	"github.com/small-frappuccino/discordcore/pkg/storage"
-	"github.com/small-frappuccino/discordgo"
-
 	"github.com/small-frappuccino/discordcore/pkg/monitoring"
+	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
 // ReactionEventService listens to reaction add events, enforces configured
@@ -22,7 +20,7 @@ import (
 // event or in the session state. It only falls back to REST if strictly
 // necessary.
 type ReactionEventService struct {
-	session       *discordgo.Session
+	adapter       ReactionAdapter
 	configManager *files.ConfigManager
 	botInstanceID string
 	defaultBotID  string
@@ -30,19 +28,17 @@ type ReactionEventService struct {
 	activity      *monitoring.RuntimeActivity
 	lifecycle     monitoring.ServiceLifecycle
 
-	// handlerCancels keeps unsubscribe functions for all registered handlers
-	handlerCancels []func()
-	logger         *slog.Logger
+	logger *slog.Logger
 }
 
 // NewReactionEventService creates a new ReactionEventService.
-func NewReactionEventService(session *discordgo.Session, configManager *files.ConfigManager, store *storage.Store, logger *slog.Logger) *ReactionEventService {
-	return NewReactionEventServiceForBot(session, configManager, store, "", "", logger)
+func NewReactionEventService(adapter ReactionAdapter, configManager *files.ConfigManager, store *storage.Store, logger *slog.Logger) *ReactionEventService {
+	return NewReactionEventServiceForBot(adapter, configManager, store, "", "", logger)
 }
 
 // NewReactionEventServiceForBot creates a ReactionEventService scoped to one bot instance.
 func NewReactionEventServiceForBot(
-	session *discordgo.Session,
+	adapter ReactionAdapter,
 	configManager *files.ConfigManager,
 	store *storage.Store,
 	botInstanceID string,
@@ -50,7 +46,7 @@ func NewReactionEventServiceForBot(
 	logger *slog.Logger,
 ) *ReactionEventService {
 	return &ReactionEventService{
-		session:       session,
+		adapter:       adapter,
 		configManager: configManager,
 		botInstanceID: files.NormalizeBotInstanceID(botInstanceID),
 		defaultBotID:  files.NormalizeBotInstanceID(defaultBotInstanceID),
@@ -62,47 +58,27 @@ func NewReactionEventServiceForBot(
 			BotInstanceID: files.NormalizeBotInstanceID(botInstanceID),
 			Warn:          slog.Warn,
 		}),
-		lifecycle:      monitoring.NewServiceLifecycle("reaction event service"),
-		handlerCancels: make([]func(), 0, 2),
+		lifecycle: monitoring.NewServiceLifecycle("reaction event service"),
 	}
 }
 
-// Start registers Discord event handlers for reaction handling.
+// Start registers the service lifecycle. The caller is responsible for wiring Discord events.
 func (rs *ReactionEventService) Start(ctx context.Context) error {
-	if rs.session == nil {
-		return fmt.Errorf("reaction event service discord session is nil")
-	}
 	if _, err := rs.lifecycle.Start(ctx); err != nil {
 		return fmt.Errorf("ReactionEventService.Start: %w", err)
 	}
-
-	rs.handlerCancels = rs.handlerCancels[:0]
-
-	// Register only the add handler for now (count "reactions added").
-	// If you want to also track removals, add another counter/table or logic accordingly.
-	unsubAdd := rs.session.AddHandler(monitoring.GuardedHandler(&rs.lifecycle, rs.handleReactionAdd))
-	rs.handlerCancels = append(rs.handlerCancels, unsubAdd)
-
 	rs.logger.Info("Reaction event service started")
 	return nil
 }
 
-// Stop unregisters handlers and stops the service.
+// Stop stops the service lifecycle.
 func (rs *ReactionEventService) Stop(ctx context.Context) error {
 	if err := rs.lifecycle.Cancel(); err != nil {
 		return fmt.Errorf("ReactionEventService.Stop: %w", err)
 	}
-	for _, cancel := range rs.handlerCancels {
-		if cancel != nil {
-			cancel()
-		}
-	}
-	rs.handlerCancels = nil
-
 	if err := rs.lifecycle.Wait(ctx); err != nil {
 		return fmt.Errorf("ReactionEventService.Stop: %w", err)
 	}
-
 	rs.logger.Info("Reaction event service stopped")
 	return nil
 }
@@ -112,9 +88,10 @@ func (rs *ReactionEventService) IsRunning() bool {
 	return rs.lifecycle.IsRunning()
 }
 
-// handleReactionAdd processes MessageReactionAdd events, removing blocked
+
+// HandleReactionAdd processes MessageReactionAdd events, removing blocked
 // reactions first and then recording daily metrics when enabled.
-func (rs *ReactionEventService) handleReactionAdd(ctx context.Context, s *discordgo.Session, e *discordgo.MessageReactionAdd) {
+func (rs *ReactionEventService) HandleReactionAdd(ctx context.Context, e *MessageReactionAdd) {
 	if e == nil {
 		return
 	}
@@ -122,14 +99,10 @@ func (rs *ReactionEventService) handleReactionAdd(ctx context.Context, s *discor
 		return
 	}
 
-	// Determine guild ID with minimal API usage.
 	guildID := e.GuildID
 	if guildID == "" {
-		// Try the state cache first
-		if s != nil && s.State != nil {
-			if ch, _ := s.State.Channel(e.ChannelID); ch != nil {
-				guildID = ch.GuildID
-			}
+		if id, err := rs.adapter.GetGuildIDForChannel(e.ChannelID); err == nil && id != "" {
+			guildID = id
 		}
 	}
 
@@ -153,7 +126,7 @@ func (rs *ReactionEventService) handleReactionAdd(ctx context.Context, s *discor
 	// Mark that we processed an event (best effort).
 	rs.markEvent(ctx)
 
-	blocked, err := rs.enforceBlockedReaction(s, e, guildID)
+	blocked, err := rs.enforceBlockedReaction(e, guildID)
 	if err != nil {
 		rs.logger.Warn("ReactionAdd: failed to enforce blocked reaction", "guildID", guildID, "channelID", e.ChannelID, "messageID", e.MessageID, "userID", e.UserID, "err", err)
 	}
@@ -166,7 +139,7 @@ func (rs *ReactionEventService) handleReactionAdd(ctx context.Context, s *discor
 		return
 	}
 
-	emit := logpolicy.ShouldEmitLogEvent(rs.session, rs.configManager, logpolicy.LogEventReactionMetric, guildID)
+	emit := logpolicy.ShouldEmitLogEvent(nil, rs.configManager, logpolicy.LogEventReactionMetric, guildID)
 	if !emit.Enabled {
 		rs.logger.Debug("ReactionAdd: metrics suppressed by policy", "guildID", guildID, "channelID", e.ChannelID, "userID", e.UserID, "reason", emit.Reason)
 		return
@@ -184,18 +157,17 @@ func (rs *ReactionEventService) handleReactionAdd(ctx context.Context, s *discor
 }
 
 func (rs *ReactionEventService) enforceBlockedReaction(
-	s *discordgo.Session,
-	e *discordgo.MessageReactionAdd,
+	e *MessageReactionAdd,
 	guildID string,
 ) (bool, error) {
-	if rs == nil || rs.configManager == nil || s == nil || e == nil || e.MessageReaction == nil {
+	if rs == nil || rs.configManager == nil || rs.adapter == nil || e == nil {
 		return false, nil
 	}
 	guildConfig := rs.configManager.GuildConfig(guildID)
 	if guildConfig == nil || guildConfig.ReactionBlocks.IsZero() {
 		return false, nil
 	}
-	targetUserID, found, err := resolveReactionMessageAuthorID(s, e)
+	targetUserID, found, err := rs.adapter.GetMessageAuthorID(e.ChannelID, e.MessageID)
 	if err != nil {
 		return false, fmt.Errorf("ReactionEventService.enforceBlockedReaction: %w", err)
 	}
@@ -206,39 +178,14 @@ func (rs *ReactionEventService) enforceBlockedReaction(
 	if emoji.IsZero() || !guildConfig.ReactionBlocks.BlocksEmojiForPair(e.UserID, targetUserID, emoji) {
 		return false, nil
 	}
-	if err := s.MessageReactionRemove(e.ChannelID, e.MessageID, reactionRemovalEmojiID(e.Emoji), e.UserID); err != nil {
+	if err := rs.adapter.RemoveReaction(e.ChannelID, e.MessageID, reactionRemovalEmojiID(e.Emoji), e.UserID); err != nil {
 		return false, fmt.Errorf("remove blocked reaction: %w", err)
 	}
 	rs.logger.Info("ReactionAdd: removed blocked reaction", "guildID", guildID, "channelID", e.ChannelID, "messageID", e.MessageID, "userID", e.UserID, "targetUserID", targetUserID, "emoji", emojiName(e.Emoji))
 	return true, nil
 }
 
-func resolveReactionMessageAuthorID(s *discordgo.Session, e *discordgo.MessageReactionAdd) (string, bool, error) {
-	if s == nil || e == nil || e.MessageReaction == nil || e.ChannelID == "" || e.MessageID == "" {
-		return "", false, nil
-	}
-	if s.State != nil {
-		if message, err := s.State.Message(e.ChannelID, e.MessageID); err == nil && message != nil && message.Author != nil {
-			if authorID := strings.TrimSpace(message.Author.ID); authorID != "" {
-				return authorID, true, nil
-			}
-		}
-	}
-	message, err := s.ChannelMessage(e.ChannelID, e.MessageID)
-	if err != nil {
-		return "", false, fmt.Errorf("load reacted message: %w", err)
-	}
-	if message == nil || message.Author == nil {
-		return "", false, nil
-	}
-	authorID := strings.TrimSpace(message.Author.ID)
-	if authorID == "" {
-		return "", false, nil
-	}
-	return authorID, true, nil
-}
-
-func reactionBlockEmojiFromDiscord(emoji discordgo.Emoji) files.ReactionBlockEmojiConfig {
+func reactionBlockEmojiFromDiscord(emoji Emoji) files.ReactionBlockEmojiConfig {
 	if emoji.ID != "" {
 		return files.ReactionBlockEmojiConfig{
 			Kind:     files.ReactionBlockEmojiKindCustom,
@@ -256,7 +203,7 @@ func reactionBlockEmojiFromDiscord(emoji discordgo.Emoji) files.ReactionBlockEmo
 	}
 }
 
-func reactionRemovalEmojiID(emoji discordgo.Emoji) string {
+func reactionRemovalEmojiID(emoji Emoji) string {
 	if emoji.ID != "" {
 		return strings.TrimSpace(emoji.ID)
 	}
@@ -272,7 +219,7 @@ func (rs *ReactionEventService) markEvent(ctx context.Context) {
 }
 
 // emojiName provides a compact string for logs.
-func emojiName(e discordgo.Emoji) string {
+func emojiName(e Emoji) string {
 	if e.Name != "" {
 		return e.Name
 	}

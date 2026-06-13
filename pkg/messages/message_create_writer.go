@@ -11,13 +11,12 @@ import (
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/storage"
-	"github.com/small-frappuccino/discordgo"
 )
 
 const (
-	messageCreateWriterQueueSize     = 2048
-	messageCreateWriterFlushInterval = 250 * time.Millisecond
-	messageCreateWriterMaxBatch      = 128
+	MessageCreateWriterQueueSize     = 2048
+	MessageCreateWriterFlushInterval = 250 * time.Millisecond
+	MessageCreateWriterMaxBatch      = 128
 )
 
 var errMessageCreateWriterStopped = errors.New("message create writer is stopped")
@@ -58,7 +57,7 @@ type pendingMessageToken struct {
 	token uint64
 }
 
-type messageCreateWriter struct {
+type MessageCreateWriter struct {
 	store         *storage.Store
 	queue         chan messageWriteRequest
 	stopCh        chan struct{}
@@ -76,17 +75,17 @@ type messageCreateWriter struct {
 	logger    *slog.Logger
 }
 
-func newMessageCreateWriter(store *storage.Store, metrics MessageWriterMetrics, logger *slog.Logger) *messageCreateWriter {
+func NewMessageCreateWriter(store *storage.Store, metrics MessageWriterMetrics, logger *slog.Logger) *MessageCreateWriter {
 	if metrics == nil {
 		metrics = NopMessageWriterMetrics{}
 	}
-	writer := &messageCreateWriter{
+	writer := &MessageCreateWriter{
 		store:         store,
-		queue:         make(chan messageWriteRequest, messageCreateWriterQueueSize),
+		queue:         make(chan messageWriteRequest, MessageCreateWriterQueueSize),
 		stopCh:        make(chan struct{}),
 		done:          make(chan struct{}),
-		flushInterval: messageCreateWriterFlushInterval,
-		maxBatch:      messageCreateWriterMaxBatch,
+		flushInterval: MessageCreateWriterFlushInterval,
+		maxBatch:      MessageCreateWriterMaxBatch,
 		metrics:       metrics,
 		pending:       make(map[string]pendingMessageState),
 		logger:        logger,
@@ -96,7 +95,7 @@ func newMessageCreateWriter(store *storage.Store, metrics MessageWriterMetrics, 
 }
 
 // Start starts.
-func (w *messageCreateWriter) Start() {
+func (w *MessageCreateWriter) Start() {
 	if w == nil {
 		return
 	}
@@ -104,7 +103,7 @@ func (w *messageCreateWriter) Start() {
 }
 
 // Stop stops.
-func (w *messageCreateWriter) Stop(ctx context.Context) error {
+func (w *MessageCreateWriter) Stop(ctx context.Context) error {
 	if w == nil {
 		return nil
 	}
@@ -123,14 +122,14 @@ func (w *messageCreateWriter) Stop(ctx context.Context) error {
 	}
 }
 
-func (w *messageCreateWriter) stateValue() writerState {
+func (w *MessageCreateWriter) stateValue() writerState {
 	if w == nil {
 		return writerStateClosed
 	}
 	return writerState(w.state.Load())
 }
 
-func (w *messageCreateWriter) beginStop() {
+func (w *MessageCreateWriter) beginStop() {
 	if w == nil {
 		return
 	}
@@ -138,7 +137,7 @@ func (w *messageCreateWriter) beginStop() {
 }
 
 // Enqueue enqueues.
-func (w *messageCreateWriter) Enqueue(record storage.MessageRecord, version *storage.MessageVersion, metric storage.DailyMessageCountDelta) error {
+func (w *MessageCreateWriter) Enqueue(record storage.MessageRecord, version *storage.MessageVersion, metric storage.DailyMessageCountDelta) error {
 	if w == nil {
 		return fmt.Errorf("message create writer is nil")
 	}
@@ -158,13 +157,13 @@ func (w *messageCreateWriter) Enqueue(record storage.MessageRecord, version *sto
 	}
 	if err := w.enqueueRequest(req); err != nil {
 		w.clearPendingToken(key, token)
-		return fmt.Errorf("messageCreateWriter.Enqueue: %w", err)
+		return fmt.Errorf("MessageCreateWriter.Enqueue: %w", err)
 	}
 	return nil
 }
 
 // EnqueueDelete enqueues delete.
-func (w *messageCreateWriter) EnqueueDelete(guildID, messageID string, version *storage.MessageVersion) error {
+func (w *MessageCreateWriter) EnqueueDelete(guildID, messageID string, version *storage.MessageVersion) error {
 	if w == nil {
 		return fmt.Errorf("message create writer is nil")
 	}
@@ -182,13 +181,13 @@ func (w *messageCreateWriter) EnqueueDelete(guildID, messageID string, version *
 	}
 	if err := w.enqueueRequest(req); err != nil {
 		w.clearPendingToken(key, token)
-		return fmt.Errorf("messageCreateWriter.EnqueueDelete: %w", err)
+		return fmt.Errorf("MessageCreateWriter.EnqueueDelete: %w", err)
 	}
 	return nil
 }
 
 // EnqueueVersion enqueues version.
-func (w *messageCreateWriter) EnqueueVersion(version storage.MessageVersion) error {
+func (w *MessageCreateWriter) EnqueueVersion(version storage.MessageVersion) error {
 	if w == nil {
 		return fmt.Errorf("message create writer is nil")
 	}
@@ -207,11 +206,11 @@ func cloneMessageVersion(version *storage.MessageVersion) *storage.MessageVersio
 	return &cloned
 }
 
-func (w *messageCreateWriter) enqueueRequest(req messageWriteRequest) error {
+func (w *MessageCreateWriter) enqueueRequest(req messageWriteRequest) error {
 	sent, err := w.trySendRequest(req)
 	if err != nil {
 		w.metrics.RecordEnqueueFailure(MessageWriterEnqueueFailureStopped)
-		return fmt.Errorf("messageCreateWriter.enqueueRequest: %w", err)
+		return fmt.Errorf("MessageCreateWriter.enqueueRequest: %w", err)
 	}
 	if !sent {
 		w.metrics.RecordEnqueueFailure(MessageWriterEnqueueFailureQueueFull)
@@ -221,7 +220,7 @@ func (w *messageCreateWriter) enqueueRequest(req messageWriteRequest) error {
 	return nil
 }
 
-func (w *messageCreateWriter) trySendRequest(req messageWriteRequest) (sent bool, err error) {
+func (w *MessageCreateWriter) trySendRequest(req messageWriteRequest) (sent bool, err error) {
 	if w.stateValue() != writerStateOpen {
 		return false, errMessageCreateWriterStopped
 	}
@@ -233,7 +232,7 @@ func (w *messageCreateWriter) trySendRequest(req messageWriteRequest) (sent bool
 	}
 }
 
-func (w *messageCreateWriter) recordEnqueue(req messageWriteRequest) {
+func (w *MessageCreateWriter) recordEnqueue(req messageWriteRequest) {
 	switch req.recordOp {
 	case messageWriteRecordOpUpsert:
 		w.metrics.RecordEnqueueUpsert(req.version != nil, req.metric.Count != 0)
@@ -248,7 +247,7 @@ func (w *messageCreateWriter) recordEnqueue(req messageWriteRequest) {
 }
 
 // Lookup lookups.
-func (w *messageCreateWriter) Lookup(guildID, messageID string) *CachedMessage {
+func (w *MessageCreateWriter) Lookup(guildID, messageID string) *CachedMessage {
 	if w == nil {
 		return nil
 	}
@@ -267,7 +266,7 @@ func (w *messageCreateWriter) Lookup(guildID, messageID string) *CachedMessage {
 	return &CachedMessage{
 		ID:      record.MessageID,
 		Content: record.Content,
-		Author: &discordgo.User{
+		Author: &User{
 			ID:       record.AuthorID,
 			Username: record.AuthorUsername,
 			Avatar:   record.AuthorAvatar,
@@ -278,7 +277,7 @@ func (w *messageCreateWriter) Lookup(guildID, messageID string) *CachedMessage {
 	}
 }
 
-func (w *messageCreateWriter) run() {
+func (w *MessageCreateWriter) run() {
 	defer func() {
 		w.state.Store(uint32(writerStateClosed))
 		close(w.done)
@@ -322,7 +321,7 @@ func (w *messageCreateWriter) run() {
 	}
 }
 
-func (w *messageCreateWriter) flushBatch(batch []messageWriteRequest) {
+func (w *MessageCreateWriter) flushBatch(batch []messageWriteRequest) {
 	if w == nil || w.store == nil || len(batch) == 0 {
 		return
 	}
@@ -429,7 +428,7 @@ func (w *messageCreateWriter) flushBatch(batch []messageWriteRequest) {
 	}
 }
 
-func (w *messageCreateWriter) flushMessagesSequentially(records []storage.MessageRecord, tokens []pendingMessageToken) {
+func (w *MessageCreateWriter) flushMessagesSequentially(records []storage.MessageRecord, tokens []pendingMessageToken) {
 	for i, record := range records {
 		if err := w.store.UpsertMessage(record); err != nil {
 			w.logger.Warn("MessageCreate writer: sequential message upsert failed", "operation", "message_create_writer.flush_messages_fallback", "guildID", record.GuildID, "channelID", record.ChannelID, "messageID", record.MessageID, "userID", record.AuthorID, "error", err)
@@ -442,7 +441,7 @@ func (w *messageCreateWriter) flushMessagesSequentially(records []storage.Messag
 	}
 }
 
-func (w *messageCreateWriter) flushDeletesSequentially(keys []storage.MessageDeleteKey, tokens []pendingMessageToken) {
+func (w *MessageCreateWriter) flushDeletesSequentially(keys []storage.MessageDeleteKey, tokens []pendingMessageToken) {
 	for i, key := range keys {
 		if err := w.store.DeleteMessage(key.GuildID, key.MessageID); err != nil {
 			w.logger.Warn("MessageCreate writer: sequential message delete failed", "operation", "message_create_writer.flush_deletes_fallback", "guildID", key.GuildID, "messageID", key.MessageID, "error", err)
@@ -455,7 +454,7 @@ func (w *messageCreateWriter) flushDeletesSequentially(keys []storage.MessageDel
 	}
 }
 
-func (w *messageCreateWriter) flushVersionsSequentially(versions []storage.MessageVersion, operation string) {
+func (w *MessageCreateWriter) flushVersionsSequentially(versions []storage.MessageVersion, operation string) {
 	for _, version := range versions {
 		if err := w.store.InsertMessageVersion(version); err != nil {
 			w.logger.Warn("MessageCreate writer: sequential history insert failed", "operation", operation, "guildID", version.GuildID, "channelID", version.ChannelID, "messageID", version.MessageID, "userID", version.AuthorID, "eventType", version.EventType, "error", err)
@@ -465,7 +464,7 @@ func (w *messageCreateWriter) flushVersionsSequentially(versions []storage.Messa
 	}
 }
 
-func (w *messageCreateWriter) storePendingRecord(key string, record storage.MessageRecord) uint64 {
+func (w *MessageCreateWriter) storePendingRecord(key string, record storage.MessageRecord) uint64 {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.nextToken++
@@ -478,7 +477,7 @@ func (w *messageCreateWriter) storePendingRecord(key string, record storage.Mess
 	return token
 }
 
-func (w *messageCreateWriter) storePendingDelete(key string) uint64 {
+func (w *MessageCreateWriter) storePendingDelete(key string) uint64 {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.nextToken++
@@ -494,20 +493,20 @@ func (w *messageCreateWriter) storePendingDelete(key string) uint64 {
 	return token
 }
 
-func (w *messageCreateWriter) pendingStateMatches(key string, token uint64, deleted bool) bool {
+func (w *MessageCreateWriter) pendingStateMatches(key string, token uint64, deleted bool) bool {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 	current, ok := w.pending[key]
 	return ok && current.token == token && current.deleted == deleted
 }
 
-func (w *messageCreateWriter) clearPendingTokens(tokens []pendingMessageToken) {
+func (w *MessageCreateWriter) clearPendingTokens(tokens []pendingMessageToken) {
 	for _, token := range tokens {
 		w.clearPendingToken(token.key, token.token)
 	}
 }
 
-func (w *messageCreateWriter) clearPendingToken(key string, token uint64) {
+func (w *MessageCreateWriter) clearPendingToken(key string, token uint64) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	current, ok := w.pending[key]

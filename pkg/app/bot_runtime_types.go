@@ -36,6 +36,7 @@ type botRuntime struct {
 	instanceID        string
 	capabilities      botRuntimeCapabilities
 	session           *discordgo.Session
+	unifiedCache      *cache.UnifiedCache
 	serviceManager    *service.ServiceManager
 	monitoringService *monitoring.MonitoringService
 	commandHandler    *commands.CommandHandler
@@ -130,8 +131,8 @@ func (r *botRuntimeResolver) aggregateUnifiedCaches() map[string]*cache.UnifiedC
 
 	caches := make(map[string]*cache.UnifiedCache)
 	for id, runtime := range r.runtimes {
-		if runtime.monitoringService != nil && runtime.monitoringService.GetUnifiedCache() != nil {
-			caches[id] = runtime.monitoringService.GetUnifiedCache()
+		if runtime.unifiedCache != nil {
+			caches[id] = runtime.unifiedCache
 		}
 	}
 	if len(caches) == 0 {

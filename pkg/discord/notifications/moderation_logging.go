@@ -1,4 +1,4 @@
-package notifications
+package discordnotifications
 
 import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
