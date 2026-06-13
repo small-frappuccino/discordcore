@@ -84,7 +84,7 @@ func ModerationCommandCatalogRegistrar() CommandCatalogRegistrar {
 func RolesCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
 		Register: func(ch *CommandHandler, router *core.CommandRouter) {
-			rolescmd.NewRolePanelCommands(ch.configManager, ch.rolePanelService).RegisterCommands(router)
+			rolescmd.NewRolePanelCommands(ch.configManager, ch.rolePanelPublisher).RegisterCommands(router)
 		},
 	}
 }
