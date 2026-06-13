@@ -10,6 +10,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	embedsvc "github.com/small-frappuccino/discordcore/pkg/embeds"
+	discordembeds "github.com/small-frappuccino/discordcore/pkg/discord/embeds"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordgo"
 )
@@ -166,7 +167,7 @@ func (c *embedPostSubCommand) Handle(ctx *core.Context) error {
 		}
 	}
 
-	embed := c.embedService.Render(ce)
+	embed := discordembeds.RenderCustomEmbed(ce)
 	message, err := ctx.Session.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
 		Embeds: []*discordgo.MessageEmbed{embed},
 	})
@@ -238,7 +239,7 @@ func (c *embedPreviewSubCommand) Handle(ctx *core.Context) error {
 		return fmt.Errorf("embedPreviewSubCommand.Handle: %w", err)
 	}
 
-	embed := c.embedService.Render(ce)
+	embed := discordembeds.RenderCustomEmbed(ce)
 	return customEmbedResponseBuilder(ctx.Session).Build().Custom(ctx.Interaction, "", []*discordgo.MessageEmbed{embed})
 }
 
@@ -501,11 +502,10 @@ func (c *embedRefreshSubCommand) Handle(ctx *core.Context) error {
 	ctx.Acknowledged = true
 
 	result := c.embedService.Sync(
-		ctx.Session,
 		ctx.GuildID,
 		ce.Key,
 		ce.Postings,
-		c.embedService.Render(ce),
+		ce,
 	)
 	summary := c.embedService.FormatSyncSummary(result, "Refreshed")
 	if summary == "" {
@@ -803,13 +803,7 @@ func refreshCustomEmbedPostingsBestEffort(cm *files.ConfigManager, svc *embedsvc
 	if len(ce.Postings) == 0 {
 		return ""
 	}
-	result := svc.Sync(
-		ctx.Session,
-		ctx.GuildID,
-		ce.Key,
-		ce.Postings,
-		svc.Render(ce),
-	)
+	result := svc.Sync(ctx.GuildID, key, ce.Postings, ce)
 	if !result.HasIssues() && result.Edited == 0 {
 		return ""
 	}
