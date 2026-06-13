@@ -1,8 +1,7 @@
-package partners
+﻿package partners
 
 import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordgo"
 )
 
 // PartnerService manages the rendering and synchronization of partner boards.
@@ -13,23 +12,21 @@ type PartnerService struct {
 }
 
 // NewPartnerService creates a new partner domain service.
-func NewPartnerService(configManager *files.ConfigManager) *PartnerService {
+func NewPartnerService(configManager *files.ConfigManager, publisher BoardPublisher) *PartnerService {
 	return &PartnerService{
 		configManager: configManager,
-		syncer:        newPartnerPostingSyncer(configManager),
+		syncer:        newPartnerPostingSyncer(configManager, publisher),
 		renderer:      NewBoardRenderer(),
 	}
 }
 
 // Sync updates all active postings of a partner board to match the provided layout.
 func (s *PartnerService) Sync(
-	session *discordgo.Session,
 	guildID string,
 	postings []files.CustomEmbedPostingConfig,
-	embeds []*discordgo.MessageEmbed,
-) partnerSyncResult {
+	embeds []BoardEmbed,
+) PartnerSyncResult {
 	return s.syncer.Sync(
-		session,
 		guildID,
 		postings,
 		embeds,
@@ -37,16 +34,17 @@ func (s *PartnerService) Sync(
 }
 
 // Render returns the Discord embed payloads for a partner board.
-func (s *PartnerService) Render(template PartnerBoardTemplate, partners []PartnerRecord) ([]*discordgo.MessageEmbed, error) {
+func (s *PartnerService) Render(template PartnerBoardTemplate, partners []PartnerRecord) ([]BoardEmbed, error) {
 	return s.renderer.Render(template, partners)
 }
 
 // FormatSyncSummary returns a human-readable summary of the sync operation.
-func (s *PartnerService) FormatSyncSummary(result partnerSyncResult, action string) string {
+func (s *PartnerService) FormatSyncSummary(result PartnerSyncResult, action string) string {
 	return formatPartnerSyncSummary(result, action)
 }
 
 // SyncConfig performs a full render and sync for the guild's current config.
-func (s *PartnerService) SyncConfig(guildID string, session *discordgo.Session) error {
-	return s.syncer.SyncConfig(guildID, session)
+func (s *PartnerService) SyncConfig(guildID string) error {
+	return s.syncer.SyncConfig(guildID)
 }
+
