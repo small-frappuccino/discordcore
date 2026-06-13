@@ -11,6 +11,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	qotdcmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/qotd"
+	discordroles "github.com/small-frappuccino/discordcore/pkg/discord/roles"
 	"github.com/small-frappuccino/discordcore/pkg/discord/tickets"
 	"github.com/small-frappuccino/discordcore/pkg/embeds"
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -36,7 +37,7 @@ type CommandHandler struct {
 	adminServiceManager *service.ServiceManager
 	ticketService       *tickets.TicketService
 	embedService        *embeds.EmbedService
-	rolePanelService    *roles.RolePanelService
+	rolePanelPublisher  roles.PanelPublisher
 	partnerService      *partners.PartnerService
 
 	mu           sync.RWMutex
@@ -171,7 +172,7 @@ func (ch *CommandHandler) SetupCommands() error {
 	// Create the command manager
 	ch.commandManager = core.NewCommandManager(ch.session, ch.configManager)
 	ch.embedService = embeds.NewEmbedService(ch.configManager)
-	ch.rolePanelService = roles.NewRolePanelService(ch.configManager)
+	ch.rolePanelPublisher = discordroles.NewPublisher(ch.session, ch.configManager)
 	ch.partnerService = partners.NewPartnerService(ch.configManager)
 
 	if router := ch.commandManager.GetRouter(); router != nil {

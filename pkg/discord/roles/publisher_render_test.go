@@ -1,10 +1,11 @@
-package roles
+package discordroles
 
 import (
 	"strings"
 	"testing"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/roles"
 	"github.com/small-frappuccino/discordgo"
 	"github.com/stretchr/testify/assert"
 )
@@ -12,11 +13,11 @@ import (
 func TestRolePanelButtonCustomIDRoundTrip(t *testing.T) {
 	t.Parallel()
 	roleID := "1380646673482518639"
-	customID := RolePanelButtonCustomID(roleID)
-	assert.True(t, strings.HasPrefix(customID, RolePanelComponentRouteID+rolePanelCustomIDSeparator))
-	got := RolePanelButtonRoleIDFromCustomID(customID)
+	customID := roles.RolePanelButtonCustomID(roleID)
+	assert.True(t, strings.HasPrefix(customID, roles.RolePanelComponentRouteID+"|"))
+	got := roles.RolePanelButtonRoleIDFromCustomID(customID)
 	assert.Equal(t, roleID, got)
-	got = RolePanelButtonRoleIDFromCustomID("invalid_prefix|123456789")
+	got = roles.RolePanelButtonRoleIDFromCustomID("invalid_prefix|123456789")
 	assert.Equal(t, "", got)
 }
 
@@ -28,7 +29,7 @@ func TestRenderRolePanelEmbedHonorsConfig(t *testing.T) {
 		Description: "Please select some of our optional roles below!",
 		Color:       16753104,
 	}
-	embed := renderRolePanelEmbed(panel)
+	embed := RenderEmbed(panel)
 	if embed.Title != panel.Title {
 		t.Fatalf("embed title = %q want %q", embed.Title, panel.Title)
 	}
@@ -52,7 +53,7 @@ func TestRenderRolePanelComponentsLayout(t *testing.T) {
 			{RoleID: "1391513234091151430", Label: "server events", EmojiName: "bugcatalice", EmojiID: "1390839396936454315"},
 		},
 	}
-	components := renderRolePanelComponents(panel)
+	components := RenderComponents(panel)
 	if len(components) != 1 {
 		t.Fatalf("expected one ActionsRow for five buttons, got %d", len(components))
 	}
@@ -74,7 +75,7 @@ func TestRenderRolePanelComponentsLayout(t *testing.T) {
 		if button.Emoji == nil || button.Emoji.ID == "" {
 			t.Fatalf("button %d missing custom emoji", i)
 		}
-		expected := RolePanelButtonCustomID(panel.Buttons[i].RoleID)
+		expected := roles.RolePanelButtonCustomID(panel.Buttons[i].RoleID)
 		if button.CustomID != expected {
 			t.Fatalf("button %d custom id = %q want %q", i, button.CustomID, expected)
 		}
@@ -91,7 +92,7 @@ func TestRenderRolePanelComponentsChunksAcrossRows(t *testing.T) {
 		}
 	}
 	panel := files.RolePanelConfig{Key: "k", Buttons: buttons}
-	components := renderRolePanelComponents(panel)
+	components := RenderComponents(panel)
 	if len(components) != 2 {
 		t.Fatalf("expected 2 ActionsRows for %d buttons, got %d", len(buttons), len(components))
 	}
@@ -107,7 +108,7 @@ func TestRenderRolePanelComponentsChunksAcrossRows(t *testing.T) {
 
 func TestFormatRolePanelButtonForListContainsAllFields(t *testing.T) {
 	t.Parallel()
-	line := FormatRolePanelButtonForList(files.RolePanelButtonConfig{
+	line := roles.FormatRolePanelButtonForList(files.RolePanelButtonConfig{
 		RoleID:    "1380646673482518639",
 		Label:     "Announcements",
 		EmojiName: "clouud",
