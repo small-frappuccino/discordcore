@@ -97,6 +97,16 @@ func (c *partnerPostSubCommand) Handle(ctx *core.Context) error {
 		return partnerDetailedCommandError(fmt.Sprintf("Failed to render partner board: %v", err))
 	}
 
+	var discordEmbeds []*discordgo.MessageEmbed
+	for _, e := range embeds {
+		discordEmbeds = append(discordEmbeds, &discordgo.MessageEmbed{
+			Title:       e.Title,
+			Description: e.Description,
+			Color:       e.Color,
+			Footer:      &discordgo.MessageEmbedFooter{Text: e.FooterText},
+		})
+	}
+
 	var posting files.CustomEmbedPostingConfig
 	postingNote := ""
 
@@ -106,7 +116,7 @@ func (c *partnerPostSubCommand) Handle(ctx *core.Context) error {
 			return partnerDetailedCommandError("Invalid webhook URL.")
 		}
 		message, err := ctx.Session.WebhookExecute(wID, wToken, true, &discordgo.WebhookParams{
-			Embeds: embeds,
+			Embeds: discordEmbeds,
 		})
 		if err != nil {
 			return partnerDetailedCommandError(fmt.Sprintf("Failed to post the embed via webhook: %v", err))
@@ -121,7 +131,7 @@ func (c *partnerPostSubCommand) Handle(ctx *core.Context) error {
 		}
 	} else {
 		message, err := ctx.Session.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
-			Embeds: embeds,
+			Embeds: discordEmbeds,
 		})
 		if err != nil {
 			return partnerDetailedCommandError(fmt.Sprintf("Failed to post the embed: %v", err))

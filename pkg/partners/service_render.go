@@ -1,4 +1,4 @@
-﻿package partners
+package partners
 
 import (
 	"errors"
@@ -110,10 +110,10 @@ func (r *BoardRenderer) Render(template PartnerBoardTemplate, partners []Partner
 	embeds := make([]BoardEmbed, 0, len(descriptions))
 	for embedIndex, chunk := range descriptions {
 		embeds = append(embeds, BoardEmbed{
-			Title:       title,
+			Title:       tpl.Title,
 			Description: chunk,
 			Color:       template.Color,
-			FooterText:  buildFooter(template.FooterTemplate, len(partners), len(fandoms), embedIndex+1, totalEmbeds),
+			FooterText:  buildFooter(template.FooterTemplate, len(partners), totalFandoms, embedIndex+1, len(descriptions)),
 		})
 	}
 

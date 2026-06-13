@@ -81,7 +81,7 @@ func (c *partnerAddSubCommand) Handle(ctx *core.Context) error {
 		return partnerDetailedCommandError(fmt.Sprintf("Failed to add partner: %v", err))
 	}
 
-	_ = c.partnerService.SyncConfig(ctx.GuildID, ctx.Session)
+	_ = c.partnerService.SyncConfig(ctx.GuildID)
 	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, "Partner added successfully.")
 }
 
@@ -151,7 +151,7 @@ func (c *partnerRemoveSubCommand) Handle(ctx *core.Context) error {
 		return partnerDetailedCommandError(fmt.Sprintf("Failed to remove partner: %v", err))
 	}
 
-	_ = c.partnerService.SyncConfig(ctx.GuildID, ctx.Session)
+	_ = c.partnerService.SyncConfig(ctx.GuildID)
 	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, "Partner removed successfully.")
 }
 
@@ -221,7 +221,7 @@ func (c *partnerLinkSubCommand) Handle(ctx *core.Context) error {
 		return partnerDetailedCommandError(fmt.Sprintf("Failed to update partner link: %v", err))
 	}
 
-	_ = c.partnerService.SyncConfig(ctx.GuildID, ctx.Session)
+	_ = c.partnerService.SyncConfig(ctx.GuildID)
 	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, "Partner link updated successfully.")
 }
 
@@ -314,7 +314,7 @@ func (c *partnerRenameSubCommand) Handle(ctx *core.Context) error {
 		return partnerDetailedCommandError(fmt.Sprintf("Failed to update partner: %v", err))
 	}
 
-	_ = c.partnerService.SyncConfig(ctx.GuildID, ctx.Session)
+	_ = c.partnerService.SyncConfig(ctx.GuildID)
 	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, "Partner renamed successfully.")
 }
 
@@ -399,7 +399,7 @@ func (c *partnerRefreshSubCommand) Handle(ctx *core.Context) error {
 	}
 	ctx.Acknowledged = true
 
-	if err := c.partnerService.SyncConfig(ctx.GuildID, ctx.Session); err != nil {
+	if err := c.partnerService.SyncConfig(ctx.GuildID); err != nil {
 		return builder.WithContext(ctx).Error(ctx.Interaction, fmt.Sprintf("Failed to sync partner board: %v", err))
 	}
 	return builder.WithContext(ctx).Success(ctx.Interaction, "Partner board refreshed successfully.")

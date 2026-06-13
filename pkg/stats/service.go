@@ -895,7 +895,7 @@ func (s *StatsService) ApplyStatsMemberUpdate(guildID, userID string, isBot bool
 	}
 }
 
-func (s *StatsService) applyStatsMemberRemove(guildID, userID string) {
+func (s *StatsService) ApplyStatsMemberRemove(guildID, userID string) {
 	guildID = strings.TrimSpace(guildID)
 	userID = strings.TrimSpace(userID)
 	if guildID == "" || userID == "" {
