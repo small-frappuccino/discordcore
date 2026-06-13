@@ -5,13 +5,11 @@ import (
 	"sync"
 	"time"
 	"weak"
-
-	"github.com/small-frappuccino/discordgo"
 )
 
 type cachedRoleUpdateAudit struct {
 	fetchedAt time.Time
-	entries   []*discordgo.AuditLogEntry
+	entries   []*AuditLogEntry
 }
 
 // roleUpdateAuditStore is a short-lived, self-evicting cache of per-guild
@@ -36,14 +34,14 @@ func (s *roleUpdateAuditStore) ensureLocked() {
 // cachedEntries returns a copy of the entries cached for guildID when present
 // and younger than monitoringRoleAuditCacheTTL relative to now. The boolean
 // reports a cache hit.
-func (s *roleUpdateAuditStore) cachedEntries(guildID string, now time.Time) ([]*discordgo.AuditLogEntry, bool) {
+func (s *roleUpdateAuditStore) cachedEntries(guildID string, now time.Time) ([]*AuditLogEntry, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.ensureLocked()
 	if weakPtr, ok := s.cache[guildID]; ok {
 		if entry := weakPtr.Value(); entry != nil {
 			if now.Sub(entry.fetchedAt) < monitoringRoleAuditCacheTTL {
-				return append([]*discordgo.AuditLogEntry(nil), entry.entries...), true
+				return append([]*AuditLogEntry(nil), entry.entries...), true
 			}
 		}
 	}
@@ -52,14 +50,14 @@ func (s *roleUpdateAuditStore) cachedEntries(guildID string, now time.Time) ([]*
 
 // storeEntries records entries for guildID stamped at now, copying the slice.
 // Map eviction is tied to the lifecycle of the pointer utilizing runtime.AddCleanup.
-func (s *roleUpdateAuditStore) storeEntries(guildID string, now time.Time, entries []*discordgo.AuditLogEntry) {
+func (s *roleUpdateAuditStore) storeEntries(guildID string, now time.Time, entries []*AuditLogEntry) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.ensureLocked()
 
 	entry := &cachedRoleUpdateAudit{
 		fetchedAt: now,
-		entries:   append([]*discordgo.AuditLogEntry(nil), entries...),
+		entries:   append([]*AuditLogEntry(nil), entries...),
 	}
 
 	s.cache[guildID] = weak.Make(entry)

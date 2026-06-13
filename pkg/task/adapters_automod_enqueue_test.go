@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/small-frappuccino/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/automod"
 )
 
 // TestEnqueueAutomodActionWithKey_DedupOnExplicitKey confirms two enqueues
@@ -40,7 +40,7 @@ func TestEnqueueAutomodActionWithKey_DedupOnExplicitKey(t *testing.T) {
 
 	adapters := &NotificationAdapters{Router: router}
 
-	event := &discordgo.AutoModerationActionExecution{
+	event := &automod.ActionExecution{
 		GuildID:   "g1",
 		RuleID:    "r1",
 		UserID:    "u1",
@@ -62,7 +62,7 @@ func TestEnqueueAutomodActionWithKey_DedupOnExplicitKey(t *testing.T) {
 func TestEnqueueAutomodAction_DefaultKeyUsesMsgPrecedence(t *testing.T) {
 	t.Parallel()
 
-	event := &discordgo.AutoModerationActionExecution{
+	event := &automod.ActionExecution{
 		GuildID:   "g1",
 		RuleID:    "r1",
 		UserID:    "u1",

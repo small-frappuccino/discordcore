@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/diamondburned/arikawa/v3/gateway"
+	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordgo"
 
-	"github.com/small-frappuccino/discordcore/pkg/automod"
 	"github.com/small-frappuccino/discordcore/pkg/clock"
+	discordautomod "github.com/small-frappuccino/discordcore/pkg/discord/automod"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
@@ -25,6 +27,9 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/stats"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/task"
+
+	discordmonitoring "github.com/small-frappuccino/discordcore/pkg/discord/monitoring"
+	discordnotifications "github.com/small-frappuccino/discordcore/pkg/discord/notifications"
 )
 
 type botRuntimeOptions struct {
@@ -55,6 +60,10 @@ func openBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabil
 		return nil, fmt.Errorf("create discord session for %s: %w", instance.ID, err)
 	}
 
+	arikawaState := state.New("Bot " + instance.Token)
+	// Arikawa intents must match discordgo for the hybrid gateway
+	arikawaState.AddIntents(gateway.Intents(capabilities.intents))
+
 	if instance.DiscordStatus != "" {
 		discordSession.Identify.Presence = discordgo.GatewayStatusUpdate{
 			Status: instance.DiscordStatus,
@@ -83,6 +92,7 @@ func openBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabil
 		instanceID:   instance.ID,
 		capabilities: capabilities,
 		session:      discordSession,
+		arikawaState: arikawaState,
 	}, nil
 }
 
@@ -105,11 +115,13 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 	)
 
 	runtime.serviceManager = service.NewServiceManager()
+	runtime.unifiedCache = cache.NewUnifiedCache(cache.DefaultCacheConfig())
 
 	monitoringService, err := setupMonitoringService(runtime, opts, routerConfig)
 	if err != nil {
 		return err
 	}
+
 	if opts.runtimeApplier != nil {
 		opts.runtimeApplier.AddRuntime(runtime.serviceManager, monitoringService)
 	}
@@ -162,14 +174,18 @@ func setupMonitoringService(runtime *botRuntime, opts botRuntimeOptions, routerC
 		return nil, nil
 	}
 
-	// Per-runtime metrics: each bot's monitoring service writes to its
-	// own InMemoryMetrics. The control plane reads via the default
-	// runtime's MonitoringMetricsResolver, mirroring the cache
-	// observability resolver pattern.
+	dataProvider := discordmonitoring.NewSessionDataProvider(runtime.arikawaState)
+	policyChecker := discordmonitoring.NewDefaultLogPolicyChecker(runtime.arikawaState, opts.configManager)
+	discordPublisher := discordnotifications.NewDiscordPublisher(runtime.session)
+	notificationSender := notifications.NewNotificationSender(discordPublisher, log.DiscordLogger())
+	notifier := discordmonitoring.NewSessionNotifier(notificationSender)
+
 	monitoringService, err := monitoring.NewMonitoringServiceForBotWithMetrics(
-		runtime.session,
+		dataProvider,
 		opts.configManager,
 		opts.store,
+		notifier,
+		policyChecker,
 		runtime.instanceID,
 		"",
 		&monitoring.InMemoryMetrics{},
@@ -178,7 +194,6 @@ func setupMonitoringService(runtime *botRuntime, opts botRuntimeOptions, routerC
 	if err != nil {
 		return nil, fmt.Errorf("create monitoring service for %s: %w", runtime.instanceID, err)
 	}
-	monitoringService.SetTaskRouterConfig(routerConfig)
 	runtime.monitoringService = monitoringService
 	return monitoringService, nil
 }
@@ -196,12 +211,10 @@ func buildAutomodService(runtime *botRuntime, opts botRuntimeOptions, routerConf
 		return nil
 	}
 
-	automodService := automod.NewAutomodService(runtime.session, opts.configManager, runtime.instanceID, "")
+	automodService := discordautomod.NewAutomodService(runtime.arikawaState, opts.configManager, runtime.instanceID, "")
 	automodRouter := task.NewRouter(routerConfig)
-	notifier := notifications.NewNotificationSender(runtime.session, log.DiscordLogger())
-	if monitoringService != nil {
-		notifier = monitoringService.Notifier()
-	}
+	publisher := discordnotifications.NewDiscordPublisher(runtime.session)
+	notifier := notifications.NewNotificationSender(publisher, log.DiscordLogger())
 	automodAdapters := &task.NotificationAdapters{
 		Router:   automodRouter,
 		Session:  runtime.session,
@@ -295,8 +308,10 @@ func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg
 	if cm := commandHandler.GetCommandManager(); cm != nil {
 		if router := cm.GetRouter(); router != nil {
 			router.SetStore(opts.store)
+			if runtime.unifiedCache != nil {
+				router.SetCache(runtime.unifiedCache)
+			}
 			if monitoringService != nil {
-				router.SetCache(monitoringService.GetUnifiedCache())
 				router.SetTaskRouter(monitoringService.TaskRouter())
 			}
 			router.SetRuntimeApplier(opts.runtimeApplier)
@@ -318,17 +333,16 @@ func logRuntimeCommandsSkipped(runtime *botRuntime, opts botRuntimeOptions, cfg 
 }
 
 var intelligentWarmupFn = cache.IntelligentWarmupContext
-var monitoringUnifiedCacheFn = func(ms *monitoring.MonitoringService) *cache.UnifiedCache {
-	if ms == nil {
+var monitoringUnifiedCacheFn = func(runtime *botRuntime) *cache.UnifiedCache {
+	if runtime == nil {
 		return nil
 	}
-	return ms.GetUnifiedCache()
+	return runtime.unifiedCache
 }
+
+// ScheduleStartupMemberWarmup moved/removed; skipping
 var scheduleStartupMemberWarmupFn = func(ms *monitoring.MonitoringService, config cache.WarmupConfig) bool {
-	if ms == nil {
-		return false
-	}
-	return ms.ScheduleStartupMemberWarmup(config)
+	return false
 }
 
 func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *storage.Store, startupTasks *StartupTaskOrchestrator) {
@@ -336,7 +350,7 @@ func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *stor
 		return
 	}
 
-	unifiedCache := monitoringUnifiedCacheFn(runtime.monitoringService)
+	unifiedCache := monitoringUnifiedCacheFn(runtime)
 	if unifiedCache == nil {
 		return
 	}

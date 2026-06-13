@@ -33,7 +33,7 @@ func TestScheduleRuntimeWarmupWithoutWorkerRunsPhasesSequentially(t *testing.T) 
 		wg.Done()
 		return nil
 	}
-	monitoringUnifiedCacheFn = func(ms *monitoring.MonitoringService) *cache.UnifiedCache {
+	monitoringUnifiedCacheFn = func(runtime *botRuntime) *cache.UnifiedCache {
 		return &cache.UnifiedCache{}
 	}
 	scheduleStartupMemberWarmupFn = func(ms *monitoring.MonitoringService, config cache.WarmupConfig) bool {
@@ -86,7 +86,7 @@ func TestScheduleRuntimeWarmupQueuesMemberPhaseAfterBasePhase(t *testing.T) {
 		baseDone <- struct{}{}
 		return nil
 	}
-	monitoringUnifiedCacheFn = func(ms *monitoring.MonitoringService) *cache.UnifiedCache {
+	monitoringUnifiedCacheFn = func(runtime *botRuntime) *cache.UnifiedCache {
 		return &cache.UnifiedCache{}
 	}
 	scheduleStartupMemberWarmupFn = func(ms *monitoring.MonitoringService, config cache.WarmupConfig) bool {

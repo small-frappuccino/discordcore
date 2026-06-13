@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"iter"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,8 +15,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/task"
 	"github.com/small-frappuccino/discordgo"
-
-	"github.com/small-frappuccino/discordcore/pkg/notifications"
 )
 
 func (ms *MonitoringService) markEvent(ctx context.Context) {
@@ -74,20 +71,6 @@ func (ms *MonitoringService) metricsRows() []svc.ServiceMetric {
 			svc.ServiceMetric{Label: "Roles cache memory hits", Value: strconv.FormatInt(snap.Cache.RolesMemoryHitsTotal, 10)},
 			svc.ServiceMetric{Label: "Roles cache store hits", Value: strconv.FormatInt(snap.Cache.RolesStoreHitsTotal, 10)},
 			svc.ServiceMetric{Label: "Roles audit cache hits", Value: strconv.FormatInt(snap.Cache.RolesAuditHitsTotal, 10)},
-		)
-	}
-
-	if ms.unifiedCache != nil {
-		// Snapshot is intentionally called without a store: persisted cache
-		// totals belong on /v1/health/cache, not on the monitoring rows. The
-		// in-memory segment summaries are what makes /admin status useful,
-		// and they require no DB call.
-		uc := ms.unifiedCache.Snapshot(context.Background(), nil)
-		rows = append(rows,
-			svc.ServiceMetric{Label: "Cache members", Value: formatSegmentSummary(uc.Members)},
-			svc.ServiceMetric{Label: "Cache guilds", Value: formatSegmentSummary(uc.Guilds)},
-			svc.ServiceMetric{Label: "Cache roles", Value: formatSegmentSummary(uc.Roles)},
-			svc.ServiceMetric{Label: "Cache channels", Value: formatSegmentSummary(uc.Channels)},
 		)
 	}
 
@@ -161,55 +144,7 @@ type guildMemberPageFetcher func(ctx context.Context, guildID, after string, lim
 
 // StreamGuildMembersContext returns an iterator yielding individual guild members.
 // The backing slice of []*discordgo.Member is allocated freshly per page by the discord client,
-// and this wrapper yields them incrementally to eliminate inner loop nesting for consumers.
-func (ms *MonitoringService) StreamGuildMembersContext(ctx context.Context, guildID string) iter.Seq2[*discordgo.Member, error] {
-	return func(yield func(*discordgo.Member, error) bool) {
-		if ms == nil || ms.session == nil {
-			yield(nil, fmt.Errorf("discord session is unavailable"))
-			return
-		}
-		if ctx == nil {
-			ctx = context.Background()
-		}
-		pageSize := monitoringGuildMembersPageSize
-
-		after := ""
-		total := 0
-		for {
-			if err := ctx.Err(); err != nil {
-				yield(nil, fmt.Errorf("StreamGuildMembersContext: %w", err))
-				return
-			}
-			members, err := RunWithTimeout(ctx, DependencyTimeout, func() ([]*discordgo.Member, error) {
-				return ms.session.GuildMembers(guildID, after, pageSize)
-			})
-			if err != nil {
-				yield(nil, fmt.Errorf("StreamGuildMembersContext: %w", err))
-				return
-			}
-			if len(members) == 0 {
-				log.ApplicationLogger().Info("Pagination completed successfully", "guildID", guildID, "total_members_fetched", total)
-				return
-			}
-			total += len(members)
-			for _, m := range members {
-				if !yield(m, nil) {
-					return
-				}
-			}
-			if len(members) < pageSize {
-				log.ApplicationLogger().Info("Pagination completed successfully", "guildID", guildID, "total_members_fetched", total)
-				return
-			}
-			last := members[len(members)-1]
-			if last == nil || last.User == nil || strings.TrimSpace(last.User.ID) == "" {
-				yield(nil, fmt.Errorf("stream guild members: invalid page tail for guild %s", guildID))
-				return
-			}
-			after = last.User.ID
-		}
-	}
-}
+// StreamGuildMembersContext is removed. Use dataProvider.StreamGuildMembers instead.
 
 func (ms *MonitoringService) performPeriodicCheck(ctx context.Context) error {
 	log.ApplicationLogger().Info("Running periodic avatar check...")
@@ -238,29 +173,29 @@ func (ms *MonitoringService) performPeriodicCheck(ctx context.Context) error {
 			joinSnapshots = joinSnapshots[:0]
 		}
 
-		for member, err := range ms.StreamGuildMembersContext(ctx, gcfg.GuildID) {
+		for member, err := range ms.dataProvider.StreamGuildMembers(ctx, gcfg.GuildID) {
 			if err != nil {
 				log.ErrorLoggerRaw().Error("Error getting members for guild", "guildID", gcfg.GuildID, "err", err)
 				continue
 			}
-			if member == nil || member.User == nil {
+			if member == nil {
 				continue
 			}
 
 			if ms.store != nil && !member.JoinedAt.IsZero() {
 				joinSnapshots = append(joinSnapshots, storage.GuildMemberSnapshot{
-					UserID:   member.User.ID,
+					UserID:   member.UserID,
 					JoinedAt: member.JoinedAt,
-					IsBot:    member.User.Bot,
+					IsBot:    member.IsBot,
 					HasBot:   true,
 				})
 			}
 
-			avatarHash := member.User.Avatar
+			avatarHash := member.AvatarHash
 			if avatarHash == "" {
 				avatarHash = "default"
 			}
-			ms.checkAvatarChange(gcfg.GuildID, member.User.ID, avatarHash, member.User.Username)
+			ms.checkAvatarChange(gcfg.GuildID, member.UserID, avatarHash, member.Username)
 
 			if len(joinSnapshots) >= monitoringGuildMembersPageSize {
 				flush()
@@ -321,19 +256,11 @@ func runGuildTasksWithLimit(ctx context.Context, guildIDs []string, limit int, f
 }
 
 // Notifier exposes the notification sender used by monitoring.
-func (ms *MonitoringService) Notifier() *notifications.NotificationSender {
+func (ms *MonitoringService) Notifier() Notifier {
 	return ms.notifier
 }
 
-// CacheManager exposes the avatar cache manager used by monitoring.
-func (ms *MonitoringService) Store() *storage.Store {
-	return ms.store
-}
-
-// GetUnifiedCache exposes the unified cache for use by other components
-func (ms *MonitoringService) GetUnifiedCache() *cache.UnifiedCache {
-	return ms.unifiedCache
-}
+// UnifiedCache method removed.
 
 // TaskRouter tasks router.
 func (ms *MonitoringService) TaskRouter() *task.TaskRouter {

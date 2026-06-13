@@ -17,19 +17,10 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/task"
 	"github.com/small-frappuccino/discordgo"
 
+	domainmessages "github.com/small-frappuccino/discordcore/pkg/messages"
 	"github.com/small-frappuccino/discordcore/pkg/monitoring"
 	"github.com/small-frappuccino/discordcore/pkg/notifications"
 )
-
-// CachedMessage stores message data for comparison
-type CachedMessage struct {
-	ID        string
-	Content   string
-	Author    *discordgo.User
-	ChannelID string
-	GuildID   string
-	Timestamp time.Time
-}
 
 type auditCacheEntry struct {
 	fetchedAt time.Time
@@ -119,8 +110,8 @@ type MessageEventService struct {
 
 	taskRouter *task.TaskRouter
 
-	messageCreateWriter *messageCreateWriter
-	writerMetrics       MessageWriterMetrics
+	messageCreateWriter *domainmessages.MessageCreateWriter
+	writerMetrics       domainmessages.MessageWriterMetrics
 }
 
 const (
@@ -227,7 +218,7 @@ func (mes *MessageEventService) Start(ctx context.Context) error {
 		}
 	}
 	if mes.store != nil {
-		mes.messageCreateWriter = newMessageCreateWriter(mes.store, mes.writerMetrics, mes.logger)
+		mes.messageCreateWriter = domainmessages.NewMessageCreateWriter(mes.store, mes.writerMetrics, mes.logger)
 		mes.messageCreateWriter.Start()
 	}
 
@@ -471,7 +462,7 @@ func (mes *MessageEventService) deleteOnLogEnabled(guildID string) bool {
 // SetWriterMetrics attaches a metrics implementation for the async message
 // persistence writer. Must be called before Start; if unset the writer uses
 // NopMessageWriterMetrics, matching the qotd/moderation pattern.
-func (mes *MessageEventService) SetWriterMetrics(metrics MessageWriterMetrics) {
+func (mes *MessageEventService) SetWriterMetrics(metrics domainmessages.MessageWriterMetrics) {
 	mes.writerMetrics = metrics
 }
 
@@ -637,9 +628,13 @@ func (mes *MessageEventService) processMessageUpdate(ctx context.Context, s *dis
 	// Send edit notification
 	if mes.adapters != nil {
 		tCached := &task.CachedMessage{
-			ID:        cached.ID,
-			Content:   cached.Content,
-			Author:    cached.Author,
+			ID:      cached.ID,
+			Content: cached.Content,
+			Author: &discordgo.User{
+				ID:       cached.Author.ID,
+				Username: cached.Author.Username,
+				Avatar:   cached.Author.Avatar,
+			},
 			ChannelID: cached.ChannelID,
 			GuildID:   cached.GuildID,
 			Timestamp: cached.Timestamp,
@@ -650,15 +645,23 @@ func (mes *MessageEventService) processMessageUpdate(ctx context.Context, s *dis
 			mes.logger.Info("Message edit notification sent successfully", "guildID", cached.GuildID, "messageID", m.ID, "channelID", logChannelID)
 		}
 	} else {
-		tCached := &task.CachedMessage{
-			ID:        cached.ID,
-			Content:   cached.Content,
-			Author:    cached.Author,
+		tCached := &notifications.CachedMessage{
+			ID:      cached.ID,
+			Content: cached.Content,
+			Author: &notifications.User{
+				ID:       cached.Author.ID,
+				Username: cached.Author.Username,
+				Avatar:   cached.Author.Avatar,
+			},
 			ChannelID: cached.ChannelID,
 			GuildID:   cached.GuildID,
 			Timestamp: cached.Timestamp,
 		}
-		if err := mes.notifier.SendMessageEditNotification(logChannelID, tCached, m); err != nil {
+		updateEvent := &notifications.MessageUpdate{
+			ID:      m.ID,
+			Content: m.Content,
+		}
+		if err := mes.notifier.SendMessageEditNotification(logChannelID, tCached, updateEvent); err != nil {
 			mes.logger.Error("Failed to send message edit notification", "guildID", cached.GuildID, "messageID", m.ID, "channelID", logChannelID, "error", err)
 		} else {
 			mes.logger.Info("Message edit notification sent successfully", "guildID", cached.GuildID, "messageID", m.ID, "channelID", logChannelID)
@@ -666,7 +669,7 @@ func (mes *MessageEventService) processMessageUpdate(ctx context.Context, s *dis
 	}
 
 	// Update persistence with new content
-	updated := &CachedMessage{
+	updated := &domainmessages.CachedMessage{
 		ID:        cached.ID,
 		Content:   m.Content,
 		Author:    cached.Author,
@@ -748,9 +751,13 @@ func (mes *MessageEventService) processMessageDelete(ctx context.Context, s *dis
 	// Send deletion notification
 	if mes.adapters != nil {
 		tCached := &task.CachedMessage{
-			ID:        cached.ID,
-			Content:   cached.Content,
-			Author:    cached.Author,
+			ID:      cached.ID,
+			Content: cached.Content,
+			Author: &discordgo.User{
+				ID:       cached.Author.ID,
+				Username: cached.Author.Username,
+				Avatar:   cached.Author.Avatar,
+			},
 			ChannelID: cached.ChannelID,
 			GuildID:   cached.GuildID,
 			Timestamp: cached.Timestamp,
@@ -761,10 +768,14 @@ func (mes *MessageEventService) processMessageDelete(ctx context.Context, s *dis
 			mes.logger.Info("Message delete notification sent successfully", "guildID", cached.GuildID, "messageID", m.ID, "channelID", logChannelID)
 		}
 	} else {
-		tCached := &task.CachedMessage{
-			ID:        cached.ID,
-			Content:   cached.Content,
-			Author:    cached.Author,
+		tCached := &notifications.CachedMessage{
+			ID:      cached.ID,
+			Content: cached.Content,
+			Author: &notifications.User{
+				ID:       cached.Author.ID,
+				Username: cached.Author.Username,
+				Avatar:   cached.Author.Avatar,
+			},
 			ChannelID: cached.ChannelID,
 			GuildID:   cached.GuildID,
 			Timestamp: cached.Timestamp,
@@ -811,7 +822,7 @@ const (
 	cachedMessageRetryDelay2 = 400 * time.Millisecond
 )
 
-func (mes *MessageEventService) lookupCachedMessage(ctx context.Context, guildID, messageID string, allowWait bool) *CachedMessage {
+func (mes *MessageEventService) lookupCachedMessage(ctx context.Context, guildID, messageID string, allowWait bool) *domainmessages.CachedMessage {
 	if mes.store == nil || guildID == "" || messageID == "" {
 		return nil
 	}
@@ -820,12 +831,12 @@ func (mes *MessageEventService) lookupCachedMessage(ctx context.Context, guildID
 			return cached
 		}
 	}
-	tryFetch := func() *CachedMessage {
+	tryFetch := func() *domainmessages.CachedMessage {
 		if rec, err := mes.store.GetMessage(guildID, messageID); err == nil && rec != nil {
-			return &CachedMessage{
+			return &domainmessages.CachedMessage{
 				ID:        rec.MessageID,
 				Content:   rec.Content,
-				Author:    &discordgo.User{ID: rec.AuthorID, Username: rec.AuthorUsername, Avatar: rec.AuthorAvatar},
+				Author:    &domainmessages.User{ID: rec.AuthorID, Username: rec.AuthorUsername, Avatar: rec.AuthorAvatar},
 				ChannelID: rec.ChannelID,
 				GuildID:   rec.GuildID,
 				Timestamp: rec.CachedAt,
@@ -917,7 +928,7 @@ func (mes *MessageEventService) persistMessageCreate(guildID string, m *discordg
 	}
 }
 
-func (mes *MessageEventService) persistMessageUpdate(updated *CachedMessage, content string) {
+func (mes *MessageEventService) persistMessageUpdate(updated *domainmessages.CachedMessage, content string) {
 	if mes == nil || mes.store == nil || updated == nil || updated.Author == nil {
 		return
 	}
@@ -967,7 +978,7 @@ func (mes *MessageEventService) persistMessageUpdate(updated *CachedMessage, con
 	}
 }
 
-func (mes *MessageEventService) persistMessageDelete(cached *CachedMessage, deleteFromStore bool, includeVersion bool, operation string) {
+func (mes *MessageEventService) persistMessageDelete(cached *domainmessages.CachedMessage, deleteFromStore bool, includeVersion bool, operation string) {
 	if mes == nil || mes.store == nil || cached == nil {
 		return
 	}

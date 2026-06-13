@@ -6,89 +6,90 @@ import (
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/theme"
-	"github.com/small-frappuccino/discordgo"
 )
+
+const automodExcerptMaxLen = 200
 
 // BuildAutomodEmbed dispatches to the trigger-specific embed builder.
 // MEMBER_PROFILE events have no message context and get a distinct embed; all
 // other triggers reuse the message-keyword shape.
-func BuildAutomodEmbed(e *discordgo.AutoModerationActionExecution) *discordgo.MessageEmbed {
-	if int(e.RuleTriggerType) == automodTriggerMemberProfile {
+func BuildAutomodEmbed(e *ActionExecution) *Embed {
+	if e.TriggerType == TriggerMemberProfile {
 		return buildAutomodMemberProfileEmbed(e)
 	}
 	return buildAutomodMessageEmbed(e)
 }
 
-func buildAutomodMessageEmbed(e *discordgo.AutoModerationActionExecution) *discordgo.MessageEmbed {
+func buildAutomodMessageEmbed(e *ActionExecution) *Embed {
 	desc := "Blocked content detected in a message."
 	if e.GuildID != "" && e.ChannelID != "" && e.MessageID != "" {
 		desc += "\n[Jump to message](https://discord.com/channels/" + e.GuildID + "/" + e.ChannelID + "/" + e.MessageID + ")"
 	}
-	embed := &discordgo.MessageEmbed{
+	embed := &Embed{
 		Title:       "AutoMod • Message Blocked",
 		Description: desc,
 		Color:       theme.AutomodAction(),
-		Timestamp:   time.Now().Format(time.RFC3339),
-		Fields: []*discordgo.MessageEmbedField{
+		Timestamp:   time.Now(),
+		Fields: []EmbedField{
 			{Name: "User", Value: formatUserRef(e.UserID), Inline: true},
 			{Name: "Channel", Value: automodChannelLabel(e.ChannelID), Inline: true},
 		},
 	}
-	if label := automodTriggerLabel(e.RuleTriggerType); label != "" {
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Trigger", Value: label, Inline: true})
+	if label := automodTriggerLabel(e.TriggerType); label != "" {
+		embed.Fields = append(embed.Fields, EmbedField{Name: "Trigger", Value: label, Inline: true})
 	}
 	if e.RuleID != "" {
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Rule ID", Value: "`" + e.RuleID + "`", Inline: true})
+		embed.Fields = append(embed.Fields, EmbedField{Name: "Rule ID", Value: "`" + e.RuleID + "`", Inline: true})
 	}
 	if e.MatchedKeyword != "" {
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Matched keyword", Value: "`" + e.MatchedKeyword + "`", Inline: true})
+		embed.Fields = append(embed.Fields, EmbedField{Name: "Matched keyword", Value: "`" + e.MatchedKeyword + "`", Inline: true})
 	}
 	if excerpt := automodExcerpt(e); excerpt != "" {
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Excerpt", Value: "```" + excerpt + "```", Inline: false})
+		embed.Fields = append(embed.Fields, EmbedField{Name: "Excerpt", Value: "```" + excerpt + "```", Inline: false})
 	}
 	return embed
 }
 
-func buildAutomodMemberProfileEmbed(e *discordgo.AutoModerationActionExecution) *discordgo.MessageEmbed {
+func buildAutomodMemberProfileEmbed(e *ActionExecution) *Embed {
 	// The per-action Action.Type is intentionally not surfaced on the
 	// embed: the package-level coalescing collapses Block Member
 	// Interactions + Send Alert Message into a single embed per violation,
 	// and "user is quarantined" is already conveyed by the description.
-	embed := &discordgo.MessageEmbed{
+	embed := &Embed{
 		Title:       "AutoMod • Member Profile Quarantined",
 		Description: "Blocked words detected in this member's profile. The user is quarantined until the profile is updated.",
 		Color:       theme.AutomodAction(),
-		Timestamp:   time.Now().Format(time.RFC3339),
-		Fields: []*discordgo.MessageEmbedField{
+		Timestamp:   time.Now(),
+		Fields: []EmbedField{
 			{Name: "Member", Value: formatUserRef(e.UserID), Inline: true},
 			{Name: "Trigger", Value: "Member profile", Inline: true},
 		},
 	}
 	if e.RuleID != "" {
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Rule ID", Value: "`" + e.RuleID + "`", Inline: true})
+		embed.Fields = append(embed.Fields, EmbedField{Name: "Rule ID", Value: "`" + e.RuleID + "`", Inline: true})
 	}
 	if e.MatchedKeyword != "" {
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Matched keyword", Value: "`" + e.MatchedKeyword + "`", Inline: true})
+		embed.Fields = append(embed.Fields, EmbedField{Name: "Matched keyword", Value: "`" + e.MatchedKeyword + "`", Inline: true})
 	}
 	if excerpt := automodExcerpt(e); excerpt != "" {
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Offending fragment", Value: "```" + excerpt + "```", Inline: false})
+		embed.Fields = append(embed.Fields, EmbedField{Name: "Offending fragment", Value: "```" + excerpt + "```", Inline: false})
 	}
 	return embed
 }
 
-func automodTriggerLabel(t discordgo.AutoModerationRuleTriggerType) string {
-	switch int(t) {
-	case automodTriggerKeyword:
+func automodTriggerLabel(t int) string {
+	switch t {
+	case TriggerKeyword:
 		return "Keyword"
-	case automodTriggerHarmfulLink:
+	case TriggerHarmfulLink:
 		return "Harmful link"
-	case automodTriggerSpam:
+	case TriggerSpam:
 		return "Spam"
-	case automodTriggerKeywordPreset:
+	case TriggerKeywordPreset:
 		return "Keyword preset"
-	case automodTriggerMentionSpam:
+	case TriggerMentionSpam:
 		return "Mention spam"
-	case automodTriggerMemberProfile:
+	case TriggerMemberProfile:
 		return "Member profile"
 	}
 	return ""
@@ -98,15 +99,15 @@ func automodTriggerLabel(t discordgo.AutoModerationRuleTriggerType) string {
 // action type. The standard embed builders deliberately do not
 // surface this label because the per-action stream is coalesced into one
 // embed per violation. See the package-level "AutoMod logging" comment block.
-func automodActionLabel(t discordgo.AutoModerationActionType) string {
-	switch int(t) {
-	case automodActionBlockMessage:
+func automodActionLabel(t int) string {
+	switch t {
+	case ActionBlockMessage:
 		return "Block message"
-	case automodActionSendAlert:
+	case ActionSendAlert:
 		return "Send alert"
-	case automodActionTimeout:
+	case ActionTimeout:
 		return "Timeout"
-	case automodActionBlockMemberInteraction:
+	case ActionBlockMemberInteraction:
 		return "Block member interactions"
 	}
 	return ""
@@ -119,7 +120,7 @@ func automodChannelLabel(channelID string) string {
 	return formatChannelLabel(channelID)
 }
 
-func automodExcerpt(e *discordgo.AutoModerationActionExecution) string {
+func automodExcerpt(e *ActionExecution) string {
 	content := strings.TrimSpace(e.Content)
 	if content == "" {
 		content = strings.TrimSpace(e.MatchedContent)

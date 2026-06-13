@@ -5,6 +5,16 @@ import (
 	"time"
 )
 
+// automodFallbackDedupTTL mirrors the router-level IdempotencyTTL configured in
+// EnqueueAutomodAction. The fallback map only kicks in when the router-backed
+// adapter is unavailable or has failed, so dedup behavior stays consistent
+// across the normal and fallback paths.
+const automodFallbackDedupTTL = 10 * time.Second
+
+// automodFallbackDedupCleanupThreshold caps the in-process fallback map size
+// before lazy cleanup runs.
+const automodFallbackDedupCleanupThreshold = 64
+
 // FallbackDedupCache manages a time-based deduplication cache used by the Automod
 // synchronous fallback path when the router is unavailable or fails. It drops
 // duplicate raw events based on an idempotency key.

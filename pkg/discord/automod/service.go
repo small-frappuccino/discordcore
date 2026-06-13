@@ -1,14 +1,16 @@
-package automod
+package discordautomod
 
 import (
 	"context"
 	"sync"
 	"time"
 
+	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/state"
+	"github.com/small-frappuccino/discordcore/pkg/automod"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/task"
-	"github.com/small-frappuccino/discordgo"
 )
 
 // automodActionExecutionEventType is the gateway event type Discord uses for
@@ -34,26 +36,14 @@ const (
 	automodActionBlockMemberInteraction = 4
 )
 
-const automodExcerptMaxLen = 200
-
-// automodFallbackDedupTTL mirrors the router-level IdempotencyTTL configured in
-// EnqueueAutomodAction. The fallback map only kicks in when the router-backed
-// adapter is unavailable or has failed, so dedup behavior stays consistent
-// across the normal and fallback paths.
-const automodFallbackDedupTTL = 10 * time.Second
-
-// automodFallbackDedupCleanupThreshold caps the in-process fallback map size
-// before lazy cleanup runs.
-const automodFallbackDedupCleanupThreshold = 64
-
 // Notifier defines the interface for outbound moderation alerts.
 type Notifier interface {
-	Send(channelID string, embed *discordgo.MessageEmbed) error
+	Send(channelID string, embed *discord.Embed) error
 }
 
 // AutomodService listens for Discord native AutoMod executions and routes them to logging.
 type AutomodService struct {
-	session       *discordgo.Session
+	state         *state.State
 	configManager *files.ConfigManager
 	adapters      *task.NotificationAdapters
 	notifier      Notifier
@@ -67,17 +57,17 @@ type AutomodService struct {
 	defaultBotInstanceID string
 
 	// Fallback dedup cache
-	dedupCache *FallbackDedupCache
+	dedupCache *automod.FallbackDedupCache
 }
 
 // NewAutomodService news automod service.
-func NewAutomodService(session *discordgo.Session, configManager *files.ConfigManager, botInstanceID string, defaultBotInstanceID string) *AutomodService {
+func NewAutomodService(s *state.State, configManager *files.ConfigManager, botInstanceID string, defaultBotInstanceID string) *AutomodService {
 	return &AutomodService{
-		session:              session,
+		state:                s,
 		configManager:        configManager,
 		botInstanceID:        files.NormalizeBotInstanceID(botInstanceID),
 		defaultBotInstanceID: files.NormalizeBotInstanceID(defaultBotInstanceID),
-		dedupCache:           NewFallbackDedupCache(),
+		dedupCache:           automod.NewFallbackDedupCache(),
 	}
 }
 
@@ -149,8 +139,8 @@ func (as *AutomodService) Start(ctx context.Context) error {
 	as.isRunning = true
 	as.startTime = time.Now()
 
-	if as.session != nil {
-		as.handlerCancel = as.session.AddHandler(as.handleRawEvent)
+	if as.state != nil {
+		as.handlerCancel = as.state.AddHandler(as.handleRawEvent)
 	}
 	return nil
 }

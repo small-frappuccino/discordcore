@@ -1,20 +1,14 @@
-//go:build ignore
-
 package reactions
 
 import (
-	"log/slog"
-
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"testing"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordgo"
 )
 
 func TestReactionEventServiceRemovesBlockedReactionWithoutMetricsStore(t *testing.T) {
@@ -33,27 +27,25 @@ func TestReactionEventServiceRemovesBlockedReactionWithoutMetricsStore(t *testin
 	var mu sync.Mutex
 	lastDeletePath := ""
 
-	session := newDiscordSessionWithAPI(t, func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		switch {
-		case r.Method == http.MethodGet && r.URL.Path == fmt.Sprintf("/channels/%s/messages/%s", channelID, messageID):
+	adapter := &mockReactionAdapter{
+		getGuildIDForChannel: func(chID string) (string, error) {
+			return guildID, nil
+		},
+		getMessageAuthorID: func(chID, msgID string) (string, bool, error) {
 			atomic.AddInt32(&messageLookups, 1)
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id":         messageID,
-				"channel_id": channelID,
-				"author": map[string]any{
-					"id":       targetUserID,
-					"username": "target-user"}})
-		case r.Method == http.MethodDelete && r.URL.Path == fmt.Sprintf("/channels/%s/messages/%s/reactions/%s/%s", channelID, messageID, emojiID, reactorUserID):
+			if chID == channelID && msgID == messageID {
+				return targetUserID, true, nil
+			}
+			return "", false, nil
+		},
+		removeReaction: func(chID, msgID, emID, usrID string) error {
 			atomic.AddInt32(&reactionDeletes, 1)
 			mu.Lock()
-			lastDeletePath = r.URL.Path
+			lastDeletePath = fmt.Sprintf("/channels/%s/messages/%s/reactions/%s/%s", chID, msgID, emID, usrID)
 			mu.Unlock()
-			w.WriteHeader(http.StatusNoContent)
-		default:
-			_, _ = w.Write([]byte(`{}`))
-		}
-	})
+			return nil
+		},
+	}
 
 	cfgMgr := newLoggingConfigManager(t, guildID, files.ChannelsConfig{})
 	if _, err := cfgMgr.UpdateConfig(func(cfg *files.BotConfig) error {
@@ -69,16 +61,15 @@ func TestReactionEventServiceRemovesBlockedReactionWithoutMetricsStore(t *testin
 		t.Fatalf("update config: %v", err)
 	}
 
-	service := NewReactionEventService(session, cfgMgr, nil, slog.Default())
-	service.handleReactionAdd(context.Background(), session, &discordgo.MessageReactionAdd{
-		MessageReaction: &discordgo.MessageReaction{
-			GuildID:   guildID,
-			ChannelID: channelID,
-			MessageID: messageID,
-			UserID:    reactorUserID,
-			Emoji: discordgo.Emoji{
-				ID:   emojiID,
-				Name: emojiName}}})
+	service := NewReactionEventService(adapter, cfgMgr, nil, slog.Default())
+	service.HandleReactionAdd(context.Background(), &MessageReactionAdd{
+		GuildID:   guildID,
+		ChannelID: channelID,
+		MessageID: messageID,
+		UserID:    reactorUserID,
+		Emoji: Emoji{
+			ID:   emojiID,
+			Name: emojiName}})
 
 	if got := atomic.LoadInt32(&messageLookups); got != 1 {
 		t.Fatalf("expected one message lookup, got %d", got)

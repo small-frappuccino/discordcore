@@ -9,7 +9,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/task"
-	"github.com/small-frappuccino/discordgo"
 )
 
 const (
@@ -125,8 +124,8 @@ func (ms *MonitoringService) runEntryExitBackfill(serviceCtx context.Context, ch
 	log.ApplicationLogger().Info("📥 Starting entry/exit backfill", "mode", mode, "channelID", channelID, "guildID", guildID, "start", start.Format(time.RFC3339), "end", end.Format(time.RFC3339))
 
 	botID := ""
-	if ms.session != nil && ms.session.State != nil && ms.session.State.User != nil {
-		botID = ms.session.State.User.ID
+	if ms.dataProvider != nil {
+		botID = ms.dataProvider.BotUserID()
 	}
 
 	var before string
@@ -138,8 +137,8 @@ func (ms *MonitoringService) runEntryExitBackfill(serviceCtx context.Context, ch
 		if err := serviceCtx.Err(); err != nil {
 			return fmt.Errorf("MonitoringService.runEntryExitBackfill: %w", err)
 		}
-		msgs, err := RunWithTimeout(serviceCtx, DependencyTimeout, func() ([]*discordgo.Message, error) {
-			return ms.session.ChannelMessages(channelID, 100, before, "", "")
+		msgs, err := RunWithTimeout(serviceCtx, DependencyTimeout, func() ([]*Message, error) {
+			return ms.dataProvider.GetChannelMessages(serviceCtx, channelID, 100, before)
 		})
 		if err != nil {
 			log.ErrorLoggerRaw().Error("Failed to fetch channel messages for backfill", "mode", mode, "channelID", channelID, "err", err)
@@ -194,7 +193,7 @@ type backfillScope struct {
 // returns as soon as it encounters a message older than start, with reachedStart set,
 // so the caller can stop paging without a separate loop-control flag. A canceled
 // serviceCtx aborts mid-page and surfaces the wrapped context error.
-func (ms *MonitoringService) applyBackfillPage(serviceCtx context.Context, scope backfillScope, msgs []*discordgo.Message, start, end time.Time) (backfillPageResult, error) {
+func (ms *MonitoringService) applyBackfillPage(serviceCtx context.Context, scope backfillScope, msgs []*Message, start, end time.Time) (backfillPageResult, error) {
 	var res backfillPageResult
 	for _, m := range msgs {
 		if err := serviceCtx.Err(); err != nil {
@@ -220,7 +219,7 @@ func (ms *MonitoringService) applyBackfillPage(serviceCtx context.Context, scope
 // persistBackfillMessage parses a single backfilled log message and, when it encodes
 // a member join or leave, updates the corresponding counters and the per-channel
 // progress marker. It reports whether the message yielded a recognized event.
-func (ms *MonitoringService) persistBackfillMessage(serviceCtx context.Context, scope backfillScope, m *discordgo.Message, t time.Time) bool {
+func (ms *MonitoringService) persistBackfillMessage(serviceCtx context.Context, scope backfillScope, m *Message, t time.Time) bool {
 	if ms.store == nil {
 		return false
 	}
@@ -259,11 +258,11 @@ func (ms *MonitoringService) persistBackfillMessage(serviceCtx context.Context, 
 // memberStillInGuild reports whether userID is currently a member of guildID,
 // treating any lookup failure as "not present".
 func (ms *MonitoringService) memberStillInGuild(serviceCtx context.Context, guildID, userID string) bool {
-	if ms.session == nil {
+	if ms.dataProvider == nil {
 		return false
 	}
-	mem, err := RunWithTimeout(serviceCtx, DependencyTimeout, func() (*discordgo.Member, error) {
-		return ms.session.GuildMember(guildID, userID)
+	mem, err := RunWithTimeout(serviceCtx, DependencyTimeout, func() (*Member, error) {
+		return ms.dataProvider.GetMember(serviceCtx, guildID, userID)
 	})
 	return err == nil && mem != nil
 }
@@ -272,16 +271,24 @@ func (ms *MonitoringService) memberStillInGuild(serviceCtx context.Context, guil
 // session state cache and falling back to a REST lookup. It returns "" when the
 // channel cannot be resolved.
 func (ms *MonitoringService) resolveGuildIDForChannel(channelID string) string {
-	if ms.session == nil {
-		return ""
-	}
-	if ms.session.State != nil {
-		if ch, _ := ms.session.State.Channel(channelID); ch != nil && ch.GuildID != "" {
-			return ch.GuildID
+	// For backfill, if dataProvider doesn't support resolving channel,
+	// we assume the caller configures backfill only for valid guilds.
+	// Since we don't have GetChannel in DataProvider, we could add it,
+	// but actually we only call this to find the guildID for the channel.
+	// Let's add ResolveGuildIDForChannel to DataProvider, but for now just return "" if unsupported,
+	// wait, we need the guildID! We can look it up in ConfigManager if the channel matches a known guild.
+	if ms.configManager != nil {
+		cfg := ms.configManager.Config()
+		if cfg != nil {
+			for _, g := range cfg.Guilds {
+				if g.Channels.BackfillChannelID() == channelID {
+					return g.GuildID
+				}
+			}
+			if cfg.RuntimeConfig.BackfillChannelID == channelID {
+				// Global backfill channel, maybe not associated with a single guild.
+			}
 		}
-	}
-	if ch, err := ms.session.Channel(channelID); err == nil && ch != nil {
-		return ch.GuildID
 	}
 	return ""
 }
@@ -455,4 +462,51 @@ func (ms *MonitoringService) dispatchBackfillTask(serviceCtx context.Context, t 
 	dispatchCtx, cancel := context.WithTimeout(serviceCtx, monitoringStartupDispatchLimit)
 	defer cancel()
 	return ms.router.Dispatch(dispatchCtx, t)
+}
+
+func parseEntryExitBackfillMessage(m *Message, botID string, rc files.RuntimeConfig) (string, string, bool) {
+	if m == nil {
+		return "", "", false
+	}
+
+	// System message join
+	if m.Type == 7 {
+		return "join", m.AuthorID, true
+	}
+
+	content := strings.ToLower(m.Content)
+	var userID string
+
+	// Extract <@id> or <@!id>
+	startIdx := strings.Index(m.Content, "<@")
+	if startIdx != -1 {
+		endIdx := strings.Index(m.Content[startIdx:], ">")
+		if endIdx != -1 {
+			id := m.Content[startIdx+2 : startIdx+endIdx]
+			id = strings.TrimPrefix(id, "!")
+			userID = id
+		}
+	}
+
+	// If sent by bot, might be an embed
+	if botID != "" && m.AuthorID == botID {
+		if strings.Contains(content, "welcome") || strings.Contains(content, "joined") {
+			if userID != "" {
+				return "join", userID, true
+			}
+		}
+	}
+
+	if strings.Contains(content, "welcome") {
+		if userID != "" {
+			return "join", userID, true
+		}
+	}
+	if strings.Contains(content, "goodbye") || strings.Contains(content, "left") {
+		if userID != "" {
+			return "leave", userID, true
+		}
+	}
+
+	return "", "", false
 }

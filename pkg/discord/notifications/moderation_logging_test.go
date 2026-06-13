@@ -1,6 +1,6 @@
 //go:build ignore
 
-package notifications
+package discordnotifications
 
 import (
 	"testing"

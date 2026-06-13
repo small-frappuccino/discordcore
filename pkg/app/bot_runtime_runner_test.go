@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -71,6 +72,7 @@ func TestInitializeBotRuntimeSkipsCommandHandlerWhenCommandsDisabled(t *testing.
 		instanceID:   "main",
 		capabilities: botRuntimeCapabilities{qotdRuntime: true},
 		session:      session,
+		arikawaState: state.New("Bot fake"),
 	}
 	err = initializeBotRuntime(context.Background(), runtime, botRuntimeOptions{
 		runtimeCount:  1,
@@ -148,7 +150,8 @@ func TestInitializeBotRuntime_FullCapabilities(t *testing.T) {
 			admin:       true,
 			hasCommands: true,
 		},
-		session: session,
+		session:      session,
+		arikawaState: state.New("Bot fake"),
 	}
 
 	err := initializeBotRuntime(context.Background(), rt, botRuntimeOptions{
@@ -217,7 +220,7 @@ func TestScheduleRuntimeWarmup(t *testing.T) {
 		}
 		return nil
 	}
-	monitoringUnifiedCacheFn = func(ms *monitoring.MonitoringService) *cache.UnifiedCache {
+	monitoringUnifiedCacheFn = func(runtime *botRuntime) *cache.UnifiedCache {
 		return cache.NewUnifiedCache(cache.CacheConfig{})
 	}
 	scheduleStartupMemberWarmupFn = func(ms *monitoring.MonitoringService, config cache.WarmupConfig) bool {

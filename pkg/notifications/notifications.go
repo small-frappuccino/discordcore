@@ -8,10 +8,8 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/automod"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/task"
 
 	"github.com/small-frappuccino/discordcore/pkg/theme"
-	"github.com/small-frappuccino/discordgo"
 )
 
 // ErrSuccessTitle defines err success title.
@@ -26,15 +24,15 @@ const (
 // NotificationSender renders and sends operational log notifications (such as
 // avatar-change embeds) to configured guild channels over a Discord session.
 type NotificationSender struct {
-	session *discordgo.Session
-	logger  *slog.Logger
+	publisher NotificationPublisher
+	logger    *slog.Logger
 }
 
 // NewNotificationSender news notification sender.
-func NewNotificationSender(session *discordgo.Session, logger *slog.Logger) *NotificationSender {
+func NewNotificationSender(publisher NotificationPublisher, logger *slog.Logger) *NotificationSender {
 	return &NotificationSender{
-		session: session,
-		logger:  logger,
+		publisher: publisher,
+		logger:    logger,
 	}
 }
 
@@ -92,7 +90,7 @@ func (ns *NotificationSender) SendAvatarChangeNotification(channelID string, cha
 
 	embed := ns.createAvatarChangeEmbed(change)
 
-	_, err := ns.session.ChannelMessageSendEmbed(channelID, embed)
+	err := ns.publisher.SendEmbed(channelID, embed)
 	if err != nil {
 		return fmt.Errorf(ErrSendMessage, err)
 	}
@@ -100,19 +98,19 @@ func (ns *NotificationSender) SendAvatarChangeNotification(channelID string, cha
 	return nil
 }
 
-func (ns *NotificationSender) createAvatarChangeEmbed(change files.AvatarChange) *discordgo.MessageEmbed {
+func (ns *NotificationSender) createAvatarChangeEmbed(change files.AvatarChange) *Embed {
 	// Build avatar URLs
 	oldAvatarURL := ns.buildAvatarURL(change.UserID, change.OldAvatar)
 	newAvatarURL := ns.buildAvatarURL(change.UserID, change.NewAvatar)
 
-	embed := &discordgo.MessageEmbed{
+	embed := &Embed{
 		Color:       theme.AvatarChange(),
 		Description: "Avatar updated",
 		Timestamp:   change.Timestamp.Format(time.RFC3339),
-		Author: &discordgo.MessageEmbedAuthor{
+		Author: &EmbedAuthor{
 			Name: "Avatar Updated",
 		},
-		Fields: []*discordgo.MessageEmbedField{
+		Fields: []*EmbedField{
 			{
 				Name:   "User",
 				Value:  FormatUserLabel(change.Username, change.UserID),
@@ -127,7 +125,7 @@ func (ns *NotificationSender) createAvatarChangeEmbed(change files.AvatarChange)
 	}
 
 	// Show only the new avatar in the embed media.
-	embed.Thumbnail = &discordgo.MessageEmbedThumbnail{
+	embed.Thumbnail = &EmbedThumbnail{
 		URL: newAvatarURL,
 	}
 
@@ -163,50 +161,50 @@ func (ns *NotificationSender) buildAvatarURL(userID, avatarHash string) string {
 }
 
 // SendMemberJoinNotification sends member join notification
-func (ns *NotificationSender) SendMemberJoinNotification(channelID string, member *discordgo.GuildMemberAdd, accountAge time.Duration) error {
+func (ns *NotificationSender) SendMemberJoinNotification(channelID string, member *MemberJoin, accountAge time.Duration) error {
 	joinAgeText := formatDurationSmart(accountAge)
 	if joinAgeText == "" {
 		joinAgeText = "- ago"
 	} else {
 		joinAgeText = joinAgeText + " ago"
 	}
-	embed := &discordgo.MessageEmbed{
+	embed := &Embed{
 		Title:       "Member Joined",
 		Color:       theme.MemberJoin(),
 		Description: FormatUserLabel(member.User.Username, member.User.ID),
-		Fields: []*discordgo.MessageEmbedField{
+		Fields: []*EmbedField{
 			{
 				Name:   "Account Created",
 				Value:  joinAgeText,
 				Inline: true,
 			},
 		},
-		Thumbnail: &discordgo.MessageEmbedThumbnail{
+		Thumbnail: &EmbedThumbnail{
 			URL: ns.buildAvatarURL(member.User.ID, member.User.Avatar),
 		},
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
 
-	_, err := ns.session.ChannelMessageSendEmbed(channelID, embed)
+	err := ns.publisher.SendEmbed(channelID, embed)
 	return err
 }
 
 // SendMemberLeaveNotification sends member leave notification
-func (ns *NotificationSender) SendMemberLeaveNotification(channelID string, member *discordgo.GuildMemberRemove, serverTime time.Duration, botTime time.Duration) error {
-	embed := &discordgo.MessageEmbed{
+func (ns *NotificationSender) SendMemberLeaveNotification(channelID string, member *MemberLeave, serverTime time.Duration, botTime time.Duration) error {
+	embed := &Embed{
 		Title:       "Member Left",
 		Color:       theme.MemberLeave(),
 		Description: FormatUserLabel(member.User.Username, member.User.ID),
-		Thumbnail: &discordgo.MessageEmbedThumbnail{
+		Thumbnail: &EmbedThumbnail{
 			URL: ns.buildAvatarURL(member.User.ID, member.User.Avatar),
 		},
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
 
-	var fields []*discordgo.MessageEmbedField
+	var fields []*EmbedField
 
 	if serverTime < 0 {
-		fields = append(fields, &discordgo.MessageEmbedField{
+		fields = append(fields, &EmbedField{
 			Name:   "Time on Server",
 			Value:  "N/A",
 			Inline: true,
@@ -219,56 +217,33 @@ func (ns *NotificationSender) SendMemberLeaveNotification(channelID string, memb
 		} else {
 			serverTimeText = serverTimeText + " ago"
 		}
-		fields = append(fields, &discordgo.MessageEmbedField{
+		fields = append(fields, &EmbedField{
 			Name:   "Time on Server",
 			Value:  serverTimeText,
 			Inline: true,
 		})
 	} else {
-		fields = append(fields, &discordgo.MessageEmbedField{
+		fields = append(fields, &EmbedField{
 			Name:   "Time on Server",
 			Value:  "- ago",
 			Inline: true,
 		})
 	}
 
-	// if botTime > 0 {
-	// 	fields = append(fields, &discordgo.MessageEmbedField{
-	// 		Name:   "Bot time on server",
-	// 		Value:  formatDuration(botTime),
-	// 		Inline: true,
-	// 	})
-	// } else {
-	// 	fields = append(fields, &discordgo.MessageEmbedField{
-	// 		Name:   "Bot time on server",
-	// 		Value:  "Unknown time",
-	// 		Inline: true,
-	// 	})
-	// }
-
 	if len(fields) > 0 {
 		embed.Fields = fields
 	}
 
-	_, err := ns.session.ChannelMessageSendEmbed(channelID, embed)
+	err := ns.publisher.SendEmbed(channelID, embed)
 	return err
 }
 
 // SendMessageEditNotification sends message edit notification
-func (ns *NotificationSender) SendMessageEditNotification(channelID string, original *task.CachedMessage, edited *discordgo.MessageUpdate) error {
+func (ns *NotificationSender) SendMessageEditNotification(channelID string, original *CachedMessage, edited *MessageUpdate) error {
 	// Build jump link (best effort)
 	var jumpURL string
 	if original.GuildID != "" && original.ChannelID != "" && edited.ID != "" {
 		jumpURL = fmt.Sprintf("https://discord.com/channels/%s/%s/%s", original.GuildID, original.ChannelID, edited.ID)
-	}
-
-	// Resolve channel name (best effort; avoid API call by using session state)
-	channelName := ""
-	_ = channelName
-	if ns.session != nil && ns.session.State != nil {
-		if ch, _ := ns.session.State.Channel(original.ChannelID); ch != nil {
-			channelName = ch.Name
-		}
 	}
 
 	userField := FormatUserLabel(original.Author.Username, original.Author.ID)
@@ -280,14 +255,14 @@ func (ns *NotificationSender) SendMessageEditNotification(channelID string, orig
 		desc = "[Jump to message](" + jumpURL + ")"
 	}
 
-	embed := &discordgo.MessageEmbed{
+	embed := &Embed{
 		Color:       theme.MessageEdit(),
 		Description: desc,
-		Author: &discordgo.MessageEmbedAuthor{
+		Author: &EmbedAuthor{
 			Name:    "Message Edited",
 			IconURL: ns.buildAvatarURL(original.Author.ID, original.Author.Avatar),
 		},
-		Fields: []*discordgo.MessageEmbedField{
+		Fields: []*EmbedField{
 			{
 				Name:   "User",
 				Value:  userField,
@@ -315,26 +290,17 @@ func (ns *NotificationSender) SendMessageEditNotification(channelID string, orig
 			},
 		},
 		Timestamp: time.Now().Format(time.RFC3339),
-		Footer: &discordgo.MessageEmbedFooter{
+		Footer: &EmbedFooter{
 			Text: "Message ID: " + edited.ID,
 		},
 	}
 
-	_, err := ns.session.ChannelMessageSendEmbed(channelID, embed)
+	err := ns.publisher.SendEmbed(channelID, embed)
 	return err
 }
 
 // SendMessageDeleteNotification sends message deletion notification
-func (ns *NotificationSender) SendMessageDeleteNotification(channelID string, deleted *task.CachedMessage, deletedBy string) error {
-	// Resolve channel name (best effort; avoid API call by using session state)
-	channelName := ""
-	_ = channelName
-	if ns.session != nil && ns.session.State != nil {
-		if ch, _ := ns.session.State.Channel(deleted.ChannelID); ch != nil {
-			channelName = ch.Name
-		}
-	}
-
+func (ns *NotificationSender) SendMessageDeleteNotification(channelID string, deleted *CachedMessage, deletedBy string) error {
 	userField := FormatUserLabel(deleted.Author.Username, deleted.Author.ID)
 	channelField := formatChannelLabel(deleted.ChannelID)
 	messageTime := deleted.Timestamp.Format("January 2, 2006 at 3:04 PM")
@@ -344,7 +310,7 @@ func (ns *NotificationSender) SendMessageDeleteNotification(channelID string, de
 		showModerator = false
 	}
 
-	fields := []*discordgo.MessageEmbedField{
+	fields := []*EmbedField{
 		{
 			Name:   "User",
 			Value:  userField,
@@ -367,27 +333,27 @@ func (ns *NotificationSender) SendMessageDeleteNotification(channelID string, de
 		},
 	}
 	if showModerator {
-		fields = append(fields, &discordgo.MessageEmbedField{
+		fields = append(fields, &EmbedField{
 			Name:   "Responsible Moderator",
 			Value:  FormatUserRef(moderatorID),
 			Inline: true,
 		})
 	}
 
-	embed := &discordgo.MessageEmbed{
+	embed := &Embed{
 		Color: theme.MessageDelete(),
-		Author: &discordgo.MessageEmbedAuthor{
+		Author: &EmbedAuthor{
 			Name:    "Message Deleted",
 			IconURL: ns.buildAvatarURL(deleted.Author.ID, deleted.Author.Avatar),
 		},
 		Fields:    fields,
 		Timestamp: time.Now().Format(time.RFC3339),
-		Footer: &discordgo.MessageEmbedFooter{
+		Footer: &EmbedFooter{
 			Text: "Message ID: " + deleted.ID,
 		},
 	}
 
-	_, err := ns.session.ChannelMessageSendEmbed(channelID, embed)
+	err := ns.publisher.SendEmbed(channelID, embed)
 	return err
 }
 
@@ -542,30 +508,30 @@ func truncateString(s string, maxLen int) string {
 
 // SendInfoMessage sends info message.
 func (ns *NotificationSender) SendInfoMessage(channelID, message string) error {
-	embed := &discordgo.MessageEmbed{
+	embed := &Embed{
 		Title:       "Info",
 		Description: message,
 		Color:       theme.MemberRoleUpdate(),
 		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 
-	_, err := ns.session.ChannelMessageSendEmbed(channelID, embed)
+	err := ns.publisher.SendEmbed(channelID, embed)
 	return err
 }
 
-// memberRoleUpdateNotice describes a single role add/remove to announce.
-type memberRoleUpdateNotice struct {
+// MemberRoleUpdateNotice describes a single role add/remove to announce.
+type MemberRoleUpdateNotice struct {
 	ChannelID      string // destination log channel
 	ActorID        string // actor who performed the action (moderator/admin)
-	TargetID       string // target user
-	TargetUsername string // target user's name (optional, may be empty)
+	TargetID       string // target user ID
+	TargetUsername string // target username
 	RoleID         string // affected role ID
 	RoleName       string // role name (fallback when mention is not desired)
 	Action         string // "add" | "remove" | "added" | "removed"
 }
 
 // SendMemberRoleUpdateNotification sends role update notification (add/remove)
-func (ns *NotificationSender) SendMemberRoleUpdateNotification(notice memberRoleUpdateNotice) error {
+func (ns *NotificationSender) SendMemberRoleUpdateNotification(notice MemberRoleUpdateNotice) error {
 	if notice.ChannelID == "" || notice.TargetID == "" || (notice.RoleID == "" && notice.RoleName == "") {
 		return nil
 	}
@@ -581,11 +547,11 @@ func (ns *NotificationSender) SendMemberRoleUpdateNotification(notice memberRole
 	roleDisplay := formatRoleLabel(notice.RoleID, notice.RoleName)
 	targetLabel := FormatUserLabel(notice.TargetUsername, notice.TargetID)
 	actorLabel := FormatUserRef(notice.ActorID)
-	embed := &discordgo.MessageEmbed{
+	embed := &Embed{
 		Title:       "Role Updated",
 		Color:       theme.MemberRoleUpdate(),
 		Description: targetLabel,
-		Fields: []*discordgo.MessageEmbedField{
+		Fields: []*EmbedField{
 			{
 				Name:   "Actor",
 				Value:  actorLabel,
@@ -605,41 +571,58 @@ func (ns *NotificationSender) SendMemberRoleUpdateNotification(notice memberRole
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
 
-	_, err := ns.session.ChannelMessageSendEmbed(notice.ChannelID, embed)
+	err := ns.publisher.SendEmbed(notice.ChannelID, embed)
 	return err
 }
 
 // SendErrorMessage sends error message.
 func (ns *NotificationSender) SendErrorMessage(channelID, message string) error {
-	embed := &discordgo.MessageEmbed{
+	embed := &Embed{
 		Title:       ErrErrorTitle,
 		Description: message,
 		Color:       theme.MessageDelete(),
 		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 
-	_, err := ns.session.ChannelMessageSendEmbed(channelID, embed)
+	err := ns.publisher.SendEmbed(channelID, embed)
 	return err
 }
 
 // SendSuccessMessage sends success message.
 func (ns *NotificationSender) SendSuccessMessage(channelID, message string) error {
-	embed := &discordgo.MessageEmbed{
+	embed := &Embed{
 		Title:       ErrSuccessTitle,
 		Description: message,
 		Color:       theme.MemberJoin(),
 		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 
-	_, err := ns.session.ChannelMessageSendEmbed(channelID, embed)
+	err := ns.publisher.SendEmbed(channelID, embed)
 	return err
 }
 
 // SendAutomodActionNotification sends automod action notification.
-func (ns *NotificationSender) SendAutomodActionNotification(channelID string, e *discordgo.AutoModerationActionExecution) error {
+func (ns *NotificationSender) SendAutomodActionNotification(channelID string, e *automod.ActionExecution) error {
 	if e == nil || channelID == "" {
 		return nil
 	}
-	_, err := ns.session.ChannelMessageSendEmbed(channelID, automod.BuildAutomodEmbed(e))
+
+	domainEmbed := automod.BuildAutomodEmbed(e)
+
+	embed := &Embed{
+		Title:       domainEmbed.Title,
+		Description: domainEmbed.Description,
+		Color:       domainEmbed.Color,
+		Timestamp:   domainEmbed.Timestamp.Format(time.RFC3339),
+	}
+	for _, f := range domainEmbed.Fields {
+		embed.Fields = append(embed.Fields, &EmbedField{
+			Name:   f.Name,
+			Value:  f.Value,
+			Inline: f.Inline,
+		})
+	}
+
+	err := ns.publisher.SendEmbed(channelID, embed)
 	return err
 }

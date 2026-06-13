@@ -3,14 +3,12 @@ package automod
 import (
 	"strings"
 	"testing"
-
-	"github.com/small-frappuccino/discordgo"
 )
 
-func findField(fields []*discordgo.MessageEmbedField, name string) *discordgo.MessageEmbedField {
-	for _, f := range fields {
-		if f != nil && f.Name == name {
-			return f
+func findField(fields []EmbedField, name string) *EmbedField {
+	for i := range fields {
+		if fields[i].Name == name {
+			return &fields[i]
 		}
 	}
 	return nil
@@ -19,14 +17,14 @@ func findField(fields []*discordgo.MessageEmbedField, name string) *discordgo.Me
 func TestBuildAutomodEmbed_MemberProfile_OmitsChannelField(t *testing.T) {
 	t.Parallel()
 
-	embed := BuildAutomodEmbed(&discordgo.AutoModerationActionExecution{
-		GuildID:         "g1",
-		RuleID:          "r1",
-		UserID:          "u1",
-		RuleTriggerType: automodTriggerMemberProfile,
-		MatchedKeyword:  "ass",
-		MatchedContent:  "BigAss",
-		Action:          discordgo.AutoModerationAction{Type: discordgo.AutoModerationActionType(automodActionBlockMemberInteraction)}})
+	embed := BuildAutomodEmbed(&ActionExecution{
+		GuildID:        "g1",
+		RuleID:         "r1",
+		UserID:         "u1",
+		TriggerType:    TriggerMemberProfile,
+		MatchedKeyword: "ass",
+		MatchedContent: "BigAss",
+		ActionType:     ActionBlockMemberInteraction})
 
 	if embed.Title != "AutoMod • Member Profile Quarantined" {
 		t.Fatalf("unexpected title: %q", embed.Title)
@@ -55,15 +53,15 @@ func TestBuildAutomodEmbed_MemberProfile_OmitsChannelField(t *testing.T) {
 func TestBuildAutomodEmbed_Message_IncludesChannelAndJumpLink(t *testing.T) {
 	t.Parallel()
 
-	embed := BuildAutomodEmbed(&discordgo.AutoModerationActionExecution{
-		GuildID:         "g1",
-		ChannelID:       "c1",
-		MessageID:       "m1",
-		RuleID:          "r1",
-		UserID:          "u1",
-		RuleTriggerType: automodTriggerKeyword,
-		MatchedKeyword:  "spam",
-		Content:         "hello spam world"})
+	embed := BuildAutomodEmbed(&ActionExecution{
+		GuildID:        "g1",
+		ChannelID:      "c1",
+		MessageID:      "m1",
+		RuleID:         "r1",
+		UserID:         "u1",
+		TriggerType:    TriggerKeyword,
+		MatchedKeyword: "spam",
+		Content:        "hello spam world"})
 
 	if embed.Title != "AutoMod • Message Blocked" {
 		t.Fatalf("unexpected title: %q", embed.Title)
@@ -85,12 +83,12 @@ func TestBuildAutomodEmbed_Message_IncludesChannelAndJumpLink(t *testing.T) {
 func TestBuildAutomodEmbed_Message_NoJumpLinkWhenMessageIDMissing(t *testing.T) {
 	t.Parallel()
 
-	embed := BuildAutomodEmbed(&discordgo.AutoModerationActionExecution{
-		GuildID:         "g1",
-		ChannelID:       "c1",
-		RuleID:          "r1",
-		UserID:          "u1",
-		RuleTriggerType: automodTriggerSpam})
+	embed := BuildAutomodEmbed(&ActionExecution{
+		GuildID:     "g1",
+		ChannelID:   "c1",
+		RuleID:      "r1",
+		UserID:      "u1",
+		TriggerType: TriggerSpam})
 
 	if strings.Contains(embed.Description, "Jump to message") {
 		t.Fatalf("expected no jump link without MessageID, got %q", embed.Description)
@@ -100,11 +98,11 @@ func TestBuildAutomodEmbed_Message_NoJumpLinkWhenMessageIDMissing(t *testing.T) 
 func TestBuildAutomodEmbed_OmitsEmptyOptionalFields(t *testing.T) {
 	t.Parallel()
 
-	embed := BuildAutomodEmbed(&discordgo.AutoModerationActionExecution{
-		GuildID:         "g1",
-		RuleID:          "",
-		UserID:          "u1",
-		RuleTriggerType: automodTriggerMemberProfile})
+	embed := BuildAutomodEmbed(&ActionExecution{
+		GuildID:     "g1",
+		RuleID:      "",
+		UserID:      "u1",
+		TriggerType: TriggerMemberProfile})
 
 	if findField(embed.Fields, "Rule ID") != nil {
 		t.Fatal("Rule ID field must be omitted when RuleID is empty")
@@ -121,13 +119,13 @@ func TestBuildAutomodEmbed_TruncatesLongExcerpt(t *testing.T) {
 	t.Parallel()
 
 	long := strings.Repeat("x", automodExcerptMaxLen+50)
-	embed := BuildAutomodEmbed(&discordgo.AutoModerationActionExecution{
-		GuildID:         "g1",
-		ChannelID:       "c1",
-		RuleID:          "r1",
-		UserID:          "u1",
-		RuleTriggerType: automodTriggerKeyword,
-		Content:         long})
+	embed := BuildAutomodEmbed(&ActionExecution{
+		GuildID:     "g1",
+		ChannelID:   "c1",
+		RuleID:      "r1",
+		UserID:      "u1",
+		TriggerType: TriggerKeyword,
+		Content:     long})
 
 	f := findField(embed.Fields, "Excerpt")
 	if f == nil {

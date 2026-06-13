@@ -8,7 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/small-frappuccino/discordcore/pkg/automod"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/notifications"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordgo"
 )
@@ -17,19 +19,19 @@ import (
 // MemberNotificationSender defines methods for sending member-related notifications.
 type MemberNotificationSender interface {
 	SendAvatarChangeNotification(channelID string, change files.AvatarChange) error
-	SendMemberJoinNotification(channelID string, member *discordgo.GuildMemberAdd, accountAge time.Duration) error
-	SendMemberLeaveNotification(channelID string, member *discordgo.GuildMemberRemove, serverTime time.Duration, botTime time.Duration) error
+	SendMemberJoinNotification(channelID string, member *notifications.MemberJoin, accountAge time.Duration) error
+	SendMemberLeaveNotification(channelID string, member *notifications.MemberLeave, serverTime time.Duration, botTime time.Duration) error
 }
 
 // MessageNotificationSender defines methods for sending message-related notifications.
 type MessageNotificationSender interface {
-	SendMessageEditNotification(channelID string, original *CachedMessage, edited *discordgo.MessageUpdate) error
-	SendMessageDeleteNotification(channelID string, deleted *CachedMessage, deletedBy string) error
+	SendMessageEditNotification(channelID string, original *notifications.CachedMessage, edited *notifications.MessageUpdate) error
+	SendMessageDeleteNotification(channelID string, deleted *notifications.CachedMessage, deletedBy string) error
 }
 
 // ModerationNotificationSender defines methods for sending automod-related notifications.
 type ModerationNotificationSender interface {
-	SendAutomodActionNotification(channelID string, event *discordgo.AutoModerationActionExecution) error
+	SendAutomodActionNotification(channelID string, event *automod.ActionExecution) error
 }
 
 // NotificationSender defines dependency-free methods for sending notifications.
@@ -104,7 +106,7 @@ type MessageDeletePayload struct {
 // AutomodActionPayload holds information for an automod action notification task.
 type AutomodActionPayload struct {
 	ChannelID string
-	Event     *discordgo.AutoModerationActionExecution
+	Event     *automod.ActionExecution
 }
 
 // FlushAvatarCachePayload holds information for flushing the avatar cache.
@@ -249,7 +251,7 @@ func (a *NotificationAdapters) EnqueueMessageDelete(channelID string, deleted *C
 // EnqueueAutomodAction enqueues an automod action notification using the
 // default idempotency key (computed without a gateway sequence number). Kept
 // for callers that do not have access to the raw *discordgo.Event envelope.
-func (a *NotificationAdapters) EnqueueAutomodAction(channelID string, event *discordgo.AutoModerationActionExecution) error {
+func (a *NotificationAdapters) EnqueueAutomodAction(channelID string, event *automod.ActionExecution) error {
 	return a.EnqueueAutomodActionWithKey(channelID, event, AutomodIdempotencyKey(event))
 }
 
@@ -260,7 +262,7 @@ func (a *NotificationAdapters) EnqueueAutomodAction(channelID string, event *dis
 // AUTO_MODERATION_ACTION_EXECUTION events Discord fires for a single rule
 // trigger collapse to one notification. An empty key disables router-level
 // dedup for this event.
-func (a *NotificationAdapters) EnqueueAutomodActionWithKey(channelID string, event *discordgo.AutoModerationActionExecution, idempotencyKey string) error {
+func (a *NotificationAdapters) EnqueueAutomodActionWithKey(channelID string, event *automod.ActionExecution, idempotencyKey string) error {
 	if event == nil {
 		return nil
 	}
@@ -310,11 +312,11 @@ const automodCoalesceBucketSec = 3
 // Exported so the synchronous fallback path in pkg/discord/logging can
 // compute the same key the router would and apply its own dedup before
 // sending.
-func AutomodIdempotencyKey(event *discordgo.AutoModerationActionExecution) string {
+func AutomodIdempotencyKey(event *automod.ActionExecution) string {
 	return automodIdempotencyKeyAt(event, time.Now())
 }
 
-func automodIdempotencyKeyAt(event *discordgo.AutoModerationActionExecution, now time.Time) string {
+func automodIdempotencyKeyAt(event *automod.ActionExecution, now time.Time) string {
 	if event == nil {
 		return ""
 	}
@@ -395,7 +397,14 @@ func (a *NotificationAdapters) handleSendMemberJoin(ctx context.Context, payload
 	if !ok || p.Member == nil || p.Member.User == nil {
 		return fmt.Errorf("invalid payload for %s", TaskTypeSendMemberJoin)
 	}
-	err := a.Notifier.SendMemberJoinNotification(p.ChannelID, p.Member, p.AccountAge)
+	joinEvent := &notifications.MemberJoin{
+		User: &notifications.User{
+			ID:       p.Member.User.ID,
+			Username: p.Member.User.Username,
+			Avatar:   p.Member.User.Avatar,
+		},
+	}
+	err := a.Notifier.SendMemberJoinNotification(p.ChannelID, joinEvent, p.AccountAge)
 	if err != nil {
 		return fmt.Errorf("NotificationAdapters.handleSendMemberJoin: %w", err)
 	}
@@ -410,7 +419,14 @@ func (a *NotificationAdapters) handleSendMemberLeave(ctx context.Context, payloa
 	if !ok || p.Member == nil || p.Member.User == nil {
 		return fmt.Errorf("invalid payload for %s", TaskTypeSendMemberLeave)
 	}
-	err := a.Notifier.SendMemberLeaveNotification(p.ChannelID, p.Member, p.ServerTime, p.BotTime)
+	leaveEvent := &notifications.MemberLeave{
+		User: &notifications.User{
+			ID:       p.Member.User.ID,
+			Username: p.Member.User.Username,
+			Avatar:   p.Member.User.Avatar,
+		},
+	}
+	err := a.Notifier.SendMemberLeaveNotification(p.ChannelID, leaveEvent, p.ServerTime, p.BotTime)
 	if err != nil {
 		return fmt.Errorf("NotificationAdapters.handleSendMemberLeave: %w", err)
 	}
@@ -425,7 +441,23 @@ func (a *NotificationAdapters) handleSendMessageEdit(ctx context.Context, payloa
 	if !ok || p.Original == nil || p.Edited == nil {
 		return fmt.Errorf("invalid payload for %s", TaskTypeSendMessageEdit)
 	}
-	err := a.Notifier.SendMessageEditNotification(p.ChannelID, p.Original, p.Edited)
+	updateEvent := &notifications.MessageUpdate{
+		ID:      p.Edited.ID,
+		Content: p.Edited.Content,
+	}
+	originalMessage := &notifications.CachedMessage{
+		ID:      p.Original.ID,
+		Content: p.Original.Content,
+		Author: &notifications.User{
+			ID:       p.Original.Author.ID,
+			Username: p.Original.Author.Username,
+			Avatar:   p.Original.Author.Avatar,
+		},
+		ChannelID: p.Original.ChannelID,
+		GuildID:   p.Original.GuildID,
+		Timestamp: p.Original.Timestamp,
+	}
+	err := a.Notifier.SendMessageEditNotification(p.ChannelID, originalMessage, updateEvent)
 	if err != nil {
 		return fmt.Errorf("NotificationAdapters.handleSendMessageEdit: %w", err)
 	}
@@ -440,7 +472,19 @@ func (a *NotificationAdapters) handleSendMessageDelete(ctx context.Context, payl
 	if !ok || p.Deleted == nil {
 		return fmt.Errorf("invalid payload for %s", TaskTypeSendMessageDelete)
 	}
-	err := a.Notifier.SendMessageDeleteNotification(p.ChannelID, p.Deleted, p.DeletedBy)
+	deletedMessage := &notifications.CachedMessage{
+		ID:      p.Deleted.ID,
+		Content: p.Deleted.Content,
+		Author: &notifications.User{
+			ID:       p.Deleted.Author.ID,
+			Username: p.Deleted.Author.Username,
+			Avatar:   p.Deleted.Author.Avatar,
+		},
+		ChannelID: p.Deleted.ChannelID,
+		GuildID:   p.Deleted.GuildID,
+		Timestamp: p.Deleted.Timestamp,
+	}
+	err := a.Notifier.SendMessageDeleteNotification(p.ChannelID, deletedMessage, p.DeletedBy)
 	if err != nil {
 		return fmt.Errorf("NotificationAdapters.handleSendMessageDelete: %w", err)
 	}
