@@ -5,11 +5,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordcore/pkg/automod"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/task"
-	"github.com/small-frappuccino/discordgo"
 )
 
 // automodActionExecutionEventType is the gateway event type Discord uses for
@@ -37,12 +38,12 @@ const (
 
 // Notifier defines the interface for outbound moderation alerts.
 type Notifier interface {
-	Send(channelID string, embed *discordgo.MessageEmbed) error
+	Send(channelID string, embed *discord.Embed) error
 }
 
 // AutomodService listens for Discord native AutoMod executions and routes them to logging.
 type AutomodService struct {
-	session       *discordgo.Session
+	state         *state.State
 	configManager *files.ConfigManager
 	adapters      *task.NotificationAdapters
 	notifier      Notifier
@@ -60,9 +61,9 @@ type AutomodService struct {
 }
 
 // NewAutomodService news automod service.
-func NewAutomodService(session *discordgo.Session, configManager *files.ConfigManager, botInstanceID string, defaultBotInstanceID string) *AutomodService {
+func NewAutomodService(s *state.State, configManager *files.ConfigManager, botInstanceID string, defaultBotInstanceID string) *AutomodService {
 	return &AutomodService{
-		session:              session,
+		state:                s,
 		configManager:        configManager,
 		botInstanceID:        files.NormalizeBotInstanceID(botInstanceID),
 		defaultBotInstanceID: files.NormalizeBotInstanceID(defaultBotInstanceID),
@@ -138,8 +139,8 @@ func (as *AutomodService) Start(ctx context.Context) error {
 	as.isRunning = true
 	as.startTime = time.Now()
 
-	if as.session != nil {
-		as.handlerCancel = as.session.AddHandler(as.handleRawEvent)
+	if as.state != nil {
+		as.handlerCancel = as.state.AddHandler(as.handleRawEvent)
 	}
 	return nil
 }

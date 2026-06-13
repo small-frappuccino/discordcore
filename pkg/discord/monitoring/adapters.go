@@ -5,36 +5,36 @@ import (
 	"iter"
 	"time"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
+	"github.com/diamondburned/arikawa/v3/api"
+	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/gateway"
+	"github.com/diamondburned/arikawa/v3/state"
+
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
 	"github.com/small-frappuccino/discordcore/pkg/monitoring"
 	"github.com/small-frappuccino/discordcore/pkg/notifications"
-	"github.com/small-frappuccino/discordgo"
 )
 
-// SessionDataProvider implements monitoring.DataProvider using discordgo.Session.
+// SessionDataProvider implements monitoring.DataProvider using arikawa state.State.
 type SessionDataProvider struct {
-	session      *discordgo.Session
-	unifiedCache *cache.UnifiedCache
+	state *state.State
 }
 
-func NewSessionDataProvider(session *discordgo.Session, unifiedCache *cache.UnifiedCache) *SessionDataProvider {
-	return &SessionDataProvider{session: session, unifiedCache: unifiedCache}
+func NewSessionDataProvider(st *state.State) *SessionDataProvider {
+	return &SessionDataProvider{state: st}
 }
 
 func (p *SessionDataProvider) GetMember(ctx context.Context, guildID, userID string) (*monitoring.Member, error) {
-	var m *discordgo.Member
-	var err error
-	var ok bool
-	if p.unifiedCache != nil {
-		m, ok = p.unifiedCache.GetMember(guildID, userID)
-		if !ok {
-			m, err = p.session.GuildMember(guildID, userID)
-		}
-	} else {
-		m, err = p.session.GuildMember(guildID, userID)
+	gID, err := discord.ParseSnowflake(guildID)
+	if err != nil {
+		return nil, err
 	}
+	uID, err := discord.ParseSnowflake(userID)
+	if err != nil {
+		return nil, err
+	}
+	m, err := p.state.Member(discord.GuildID(gID), discord.UserID(uID))
 	if err != nil {
 		return nil, err
 	}
@@ -42,87 +42,98 @@ func (p *SessionDataProvider) GetMember(ctx context.Context, guildID, userID str
 }
 
 func (p *SessionDataProvider) BotUserID() string {
-	if p.session.State != nil && p.session.State.User != nil {
-		return p.session.State.User.ID
+	u, err := p.state.Me()
+	if err == nil {
+		return u.ID.String()
 	}
 	return ""
 }
 
 func (p *SessionDataProvider) GetRole(ctx context.Context, guildID, roleID string) (*monitoring.Role, error) {
-	roles, err := p.session.GuildRoles(guildID)
+	gID, err := discord.ParseSnowflake(guildID)
 	if err != nil {
 		return nil, err
 	}
-	for _, r := range roles {
-		if r.ID == roleID {
-			return &monitoring.Role{
-				ID:          r.ID,
-				GuildID:     guildID,
-				Managed:     r.Managed,
-				Permissions: r.Permissions,
-			}, nil
-		}
+	rID, err := discord.ParseSnowflake(roleID)
+	if err != nil {
+		return nil, err
 	}
-	return nil, nil // Or an error depending on expectations
+	r, err := p.state.Role(discord.GuildID(gID), discord.RoleID(rID))
+	if err != nil {
+		return nil, err
+	}
+	return &monitoring.Role{
+		ID:          r.ID.String(),
+		GuildID:     guildID,
+		Managed:     r.Managed,
+		Permissions: int64(r.Permissions),
+	}, nil
 }
 
 func (p *SessionDataProvider) GetGuildRoles(ctx context.Context, guildID string) ([]*monitoring.Role, error) {
-	roles, err := p.session.GuildRoles(guildID)
+	gID, err := discord.ParseSnowflake(guildID)
+	if err != nil {
+		return nil, err
+	}
+	roles, err := p.state.Roles(discord.GuildID(gID))
 	if err != nil {
 		return nil, err
 	}
 	var res []*monitoring.Role
 	for _, r := range roles {
 		res = append(res, &monitoring.Role{
-			ID:          r.ID,
+			ID:          r.ID.String(),
 			GuildID:     guildID,
 			Managed:     r.Managed,
-			Permissions: r.Permissions,
+			Permissions: int64(r.Permissions),
 		})
 	}
 	return res, nil
 }
 
 func (p *SessionDataProvider) GetGuild(ctx context.Context, guildID string) (*monitoring.Guild, error) {
-	g, err := p.session.Guild(guildID)
+	gID, err := discord.ParseSnowflake(guildID)
+	if err != nil {
+		return nil, err
+	}
+	g, err := p.state.Guild(discord.GuildID(gID))
 	if err != nil {
 		return nil, err
 	}
 	return &monitoring.Guild{
-		ID:      g.ID,
+		ID:      g.ID.String(),
 		Name:    g.Name,
-		OwnerID: g.OwnerID,
+		OwnerID: g.OwnerID.String(),
 	}, nil
 }
 
 func (p *SessionDataProvider) GetGuildAuditLog(ctx context.Context, guildID string, actionType int, limit int) (*monitoring.AuditLog, error) {
-	al, err := p.session.GuildAuditLog(guildID, "", "", actionType, limit)
+	gID, err := discord.ParseSnowflake(guildID)
+	if err != nil {
+		return nil, err
+	}
+	al, err := p.state.AuditLog(discord.GuildID(gID), api.AuditLogData{
+		ActionType: discord.AuditLogEvent(actionType),
+		Limit:      uint(limit),
+	})
 	if err != nil {
 		return nil, err
 	}
 	var res monitoring.AuditLog
-	for _, e := range al.AuditLogEntries {
+	for _, e := range al.Entries {
 		var changes []monitoring.AuditLogChange
 		for _, c := range e.Changes {
-			key := ""
-			if c.Key != nil {
-				key = string(*c.Key)
-			}
 			changes = append(changes, monitoring.AuditLogChange{
-				Key:      key,
+				Key:      string(c.Key),
 				OldValue: c.OldValue,
 				NewValue: c.NewValue,
 			})
 		}
-		var actionType int
-		if e.ActionType != nil {
-			actionType = int(*e.ActionType)
-		}
 		res.Entries = append(res.Entries, monitoring.AuditLogEntry{
-			ID:         e.ID,
-			UserID:     e.UserID,
-			ActionType: actionType,
-			TargetID:   e.TargetID,
+			ID:         e.ID.String(),
+			UserID:     e.UserID.String(),
+			ActionType: int(e.ActionType),
+			TargetID:   e.TargetID.String(),
 			Changes:    changes,
 		})
 	}
@@ -130,15 +141,31 @@ func (p *SessionDataProvider) GetGuildAuditLog(ctx context.Context, guildID stri
 }
 
 func (p *SessionDataProvider) EditGuildRolePermissions(ctx context.Context, guildID, roleID string, permissions int64) error {
-	_, err := p.session.GuildRoleEdit(guildID, roleID, &discordgo.RoleParams{Permissions: &permissions})
+	gID, err := discord.ParseSnowflake(guildID)
+	if err != nil {
+		return err
+	}
+	rID, err := discord.ParseSnowflake(roleID)
+	if err != nil {
+		return err
+	}
+	pArikawa := discord.Permissions(permissions)
+	_, err = p.state.ModifyRole(discord.GuildID(gID), discord.RoleID(rID), api.ModifyRoleData{
+		Permissions: &pArikawa,
+	})
 	return err
 }
 
 func (p *SessionDataProvider) StreamGuildMembers(ctx context.Context, guildID string) iter.Seq2[*monitoring.Member, error] {
 	return func(yield func(*monitoring.Member, error) bool) {
-		lastID := "0"
+		gID, err := discord.ParseSnowflake(guildID)
+		if err != nil {
+			yield(nil, err)
+			return
+		}
+		var lastID discord.UserID
 		for {
-			members, err := p.session.GuildMembers(guildID, lastID, 1000)
+			members, err := p.state.MembersAfter(discord.GuildID(gID), lastID, 1000)
 			if err != nil {
 				yield(nil, err)
 				return
@@ -147,7 +174,7 @@ func (p *SessionDataProvider) StreamGuildMembers(ctx context.Context, guildID st
 				return
 			}
 			for _, m := range members {
-				if !yield(p.mapMember(m, guildID), nil) {
+				if !yield(p.mapMember(&m, guildID), nil) {
 					return
 				}
 				lastID = m.User.ID
@@ -157,44 +184,84 @@ func (p *SessionDataProvider) StreamGuildMembers(ctx context.Context, guildID st
 }
 
 func (p *SessionDataProvider) AddGuildMemberRole(ctx context.Context, guildID, userID, roleID string) error {
-	return p.session.GuildMemberRoleAdd(guildID, userID, roleID)
+	gID, err := discord.ParseSnowflake(guildID)
+	if err != nil {
+		return err
+	}
+	uID, err := discord.ParseSnowflake(userID)
+	if err != nil {
+		return err
+	}
+	rID, err := discord.ParseSnowflake(roleID)
+	if err != nil {
+		return err
+	}
+	return p.state.AddRole(discord.GuildID(gID), discord.UserID(uID), discord.RoleID(rID), api.AddRoleData{})
 }
 
 func (p *SessionDataProvider) RemoveGuildMemberRole(ctx context.Context, guildID, userID, roleID string) error {
-	return p.session.GuildMemberRoleRemove(guildID, userID, roleID)
+	gID, err := discord.ParseSnowflake(guildID)
+	if err != nil {
+		return err
+	}
+	uID, err := discord.ParseSnowflake(userID)
+	if err != nil {
+		return err
+	}
+	rID, err := discord.ParseSnowflake(roleID)
+	if err != nil {
+		return err
+	}
+	return p.state.RemoveRole(discord.GuildID(gID), discord.UserID(uID), discord.RoleID(rID), api.AuditLogReason(""))
 }
 
 func (p *SessionDataProvider) GetChannelMessages(ctx context.Context, channelID string, limit int, beforeID string) ([]*monitoring.Message, error) {
-	msgs, err := p.session.ChannelMessages(channelID, limit, beforeID, "", "")
+	cID, err := discord.ParseSnowflake(channelID)
+	if err != nil {
+		return nil, err
+	}
+	var bID discord.MessageID
+	if beforeID != "" {
+		b, err := discord.ParseSnowflake(beforeID)
+		if err != nil {
+			return nil, err
+		}
+		bID = discord.MessageID(b)
+	}
+	msgs, err := p.state.MessagesBefore(discord.ChannelID(cID), bID, uint(limit))
 	if err != nil {
 		return nil, err
 	}
 	var res []*monitoring.Message
 	for _, m := range msgs {
 		res = append(res, &monitoring.Message{
-			ID:        m.ID,
-			ChannelID: m.ChannelID,
+			ID:        m.ID.String(),
+			ChannelID: m.ChannelID.String(),
 			Content:   m.Content,
-			AuthorID:  m.Author.ID,
+			AuthorID:  m.Author.ID.String(),
 			Type:      int(m.Type),
-			Timestamp: m.Timestamp,
+			Timestamp: m.Timestamp.Time(),
 		})
 	}
 	return res, nil
 }
 
-func (p *SessionDataProvider) mapMember(m *discordgo.Member, guildID string) *monitoring.Member {
-	if m == nil || m.User == nil {
+func (p *SessionDataProvider) mapMember(m *discord.Member, guildID string) *monitoring.Member {
+	if m == nil {
 		return nil
 	}
+	roles := make([]string, len(m.RoleIDs))
+	for i, r := range m.RoleIDs {
+		roles[i] = r.String()
+	}
 	return &monitoring.Member{
-		UserID:     m.User.ID,
+		UserID:     m.User.ID.String(),
 		Username:   m.User.Username,
 		GuildID:    guildID,
 		IsBot:      m.User.Bot,
 		AvatarHash: m.User.Avatar,
-		JoinedAt:   m.JoinedAt,
-		Roles:      m.Roles,
+		JoinedAt:   m.Joined.Time(),
+		Roles:      roles,
 	}
 }
 
@@ -235,19 +302,83 @@ func (n *SessionNotifier) SendAvatarChangeNotification(channelID string, userID,
 
 // DefaultLogPolicyChecker implements monitoring.LogPolicyChecker
 type DefaultLogPolicyChecker struct {
-	session *discordgo.Session
-	config  *files.ConfigManager
+	state  *state.State
+	config *files.ConfigManager
 }
 
-func NewDefaultLogPolicyChecker(session *discordgo.Session, config *files.ConfigManager) *DefaultLogPolicyChecker {
-	return &DefaultLogPolicyChecker{session: session, config: config}
+func NewDefaultLogPolicyChecker(st *state.State, config *files.ConfigManager) *DefaultLogPolicyChecker {
+	return &DefaultLogPolicyChecker{state: st, config: config}
 }
 
 func (c *DefaultLogPolicyChecker) ShouldEmitLogEvent(eventType string, guildID string) monitoring.LogEmitDecision {
-	res := logpolicy.ShouldEmitLogEvent(c.session, c.config, logpolicy.LogEventType(eventType), guildID)
+	res := logpolicy.ShouldEmitLogEvent(nil, c.config, logpolicy.LogEventType(eventType), guildID)
+
+	if res.Enabled && res.Capability.RequiredIntentsMask != 0 {
+		requiredIntents := gateway.Intents(res.Capability.RequiredIntentsMask)
+		if !c.state.HasIntents(requiredIntents) {
+			res.Enabled = false
+			res.Reason = logpolicy.EmitReasonMissingIntent
+		}
+	}
+
+	if !res.Enabled && res.Reason == logpolicy.EmitReasonChannelInvalid {
+		gcfg := c.config.GuildConfig(guildID)
+		if gcfg != nil && res.Capability.RequireExclusiveModeration && logpolicy.IsSharedModerationChannel(res.ChannelID, gcfg) {
+			// Leave as channel_invalid
+		} else {
+			if c.validateChannel(guildID, res.ChannelID) {
+				res.Enabled = true
+				res.Reason = logpolicy.EmitReasonEnabled
+
+				if res.Capability.RequiredIntentsMask != 0 {
+					requiredIntents := gateway.Intents(res.Capability.RequiredIntentsMask)
+					if !c.state.HasIntents(requiredIntents) {
+						res.Enabled = false
+						res.Reason = logpolicy.EmitReasonMissingIntent
+					}
+				}
+			}
+		}
+	}
+
 	return monitoring.LogEmitDecision{
 		Enabled:   res.Enabled,
 		ChannelID: res.ChannelID,
 		Reason:    string(res.Reason),
 	}
+}
+
+func (c *DefaultLogPolicyChecker) validateChannel(guildID, channelID string) bool {
+	_, err := discord.ParseSnowflake(guildID)
+	if err != nil {
+		return false
+	}
+	cID, err := discord.ParseSnowflake(channelID)
+	if err != nil {
+		return false
+	}
+
+	me, err := c.state.Me()
+	if err != nil {
+		return false
+	}
+
+	ch, err := c.state.Channel(discord.ChannelID(cID))
+	if err != nil {
+		return false
+	}
+	if ch.GuildID.String() != guildID {
+		return false
+	}
+	if ch.Type != discord.GuildText && ch.Type != discord.GuildNews {
+		return false
+	}
+
+	perms, err := c.state.Permissions(discord.ChannelID(cID), me.ID)
+	if err != nil {
+		return false
+	}
+
+	req := discord.PermissionViewChannel | discord.PermissionSendMessages | discord.PermissionEmbedLinks
+	return perms.Has(req)
 }

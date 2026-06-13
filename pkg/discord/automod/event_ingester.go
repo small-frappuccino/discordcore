@@ -1,84 +1,52 @@
 package discordautomod
 
 import (
-	"encoding/json"
 	"errors"
 	"log/slog"
-	"time"
 
+	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/small-frappuccino/discordcore/pkg/automod"
 	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
 	"github.com/small-frappuccino/discordcore/pkg/task"
-	"github.com/small-frappuccino/discordgo"
 )
 
-// handleRawEvent decomposes a raw gateway envelope, filters for AutoMod action
-// executions, and forwards the typed payload alongside the envelope's gateway
-// sequence number to handleAutoModerationAction. The sequence is preserved
-// across Discord re-deliveries (including RESUME), so it is the most reliable
-// dedup key available to the bot.
-func (as *AutomodService) handleRawEvent(s *discordgo.Session, evt *discordgo.Event) {
-	if evt == nil || evt.Type != automodActionExecutionEventType {
+// handleRawEvent handles the auto moderation action execution event.
+func (as *AutomodService) handleRawEvent(e *AutoModerationActionExecutionEvent) {
+	if e == nil {
 		return
 	}
 
-	e, ok := evt.Struct.(*discordgo.AutoModerationActionExecution)
-	if !ok || e == nil {
-		// discordgo guarantees registeredInterfaceProviders[evt.Type] populates
-		// evt.Struct before dispatch, but documents that the struct may be
-		// "partially populated or at default values" if unmarshalling failed
-		// (wsapi.go:665-669). Fall back to a fresh unmarshal of RawData so we
-		// don't silently drop events when discordgo changes the registered
-		// type — small cost, defends the future-bump path.
-		fallback := &discordgo.AutoModerationActionExecution{}
-		if err := json.Unmarshal(evt.RawData, fallback); err != nil {
-			log.ErrorLoggerRaw().Error("Failed to decode automod action execution payload", "type", evt.Type, "seq", evt.Sequence, "err", err)
-			return
-		}
-		e = fallback
-	}
-
-	as.handleAutoModerationAction(s, e, evt.Sequence)
+	as.handleAutoModerationAction(e)
 }
 
 // handleAutoModerationAction logs native AutoMod events to the configured
-// automod log channel. The sequence argument is the gateway sequence number
-// from the *Event envelope and is recorded for observability only; the
-// idempotency key is derived from per-violation payload fields so the
-// multiple action events Discord fires for one trigger coalesce to a single
-// log embed.
-//
-// SEND_ALERT_MESSAGE action events are dropped here as a belt-and-suspenders
-// complement to the per-violation key: Discord posts its own native rich
-// alert message to the configured alert channel for those, and dropping
-// them at the handler guarantees no sibling embed leaks through even if a
-// future trigger type's payload shape breaks the key-level coalescing.
-func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *discordgo.AutoModerationActionExecution, sequence int64) {
-	if e == nil || e.GuildID == "" {
+// automod log channel.
+func (as *AutomodService) handleAutoModerationAction(e *AutoModerationActionExecutionEvent) {
+	if e == nil || !e.GuildID.IsValid() {
 		return
 	}
+	guildIDStr := e.GuildID.String()
 
 	done := perf.StartGatewayEvent(
 		"auto_moderation_action_execution",
-		slog.String("guildID", e.GuildID),
-		slog.String("channelID", e.ChannelID),
-		slog.String("userID", e.UserID),
-		slog.String("ruleID", e.RuleID),
-		slog.Int64("seq", sequence),
+		slog.String("guildID", guildIDStr),
+		slog.String("channelID", e.ChannelID.String()),
+		slog.String("userID", e.UserID.String()),
+		slog.String("ruleID", e.RuleID.String()),
 	)
 	defer done()
 
 	if int(e.Action.Type) == automodActionSendAlert {
-		log.ApplicationLogger().Debug("Dropping SEND_ALERT_MESSAGE automod event; Discord posts its own native alert", "guildID", e.GuildID, "ruleID", e.RuleID, "userID", e.UserID, "seq", sequence)
+		log.ApplicationLogger().Debug("Dropping SEND_ALERT_MESSAGE automod event; Discord posts its own native alert", "guildID", guildIDStr, "ruleID", e.RuleID.String(), "userID", e.UserID.String())
 		return
 	}
 
 	if as.configManager == nil {
 		return
 	}
-	guildConfig := as.configManager.GuildConfig(e.GuildID)
+	guildConfig := as.configManager.GuildConfig(guildIDStr)
 	if guildConfig == nil {
 		return
 	}
@@ -90,22 +58,47 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 		return
 	}
 
-	emit := logpolicy.ShouldEmitLogEvent(s, as.configManager, logpolicy.LogEventAutomodAction, e.GuildID)
+	// We pass the Arikawa state so it can check permissions if needed.
+	emit := logpolicy.ShouldEmitLogEvent(as.state, as.configManager, logpolicy.LogEventAutomodAction, guildIDStr)
 	if !emit.Enabled {
-		log.ApplicationLogger().Debug("Automod action notification suppressed by policy", "guildID", e.GuildID, "channelID", e.ChannelID, "userID", e.UserID, "seq", sequence, "reason", emit.Reason)
+		log.ApplicationLogger().Debug("Automod action notification suppressed by policy", "guildID", guildIDStr, "channelID", e.ChannelID.String(), "userID", e.UserID.String(), "reason", emit.Reason)
 		return
 	}
 	logChannelID := emit.ChannelID
-	idempotencyKey := task.AutomodIdempotencyKey(e)
+
+	msgID := ""
+	if e.MessageID.IsValid() {
+		msgID = e.MessageID.String()
+	}
+	alertSysMsgID := ""
+	if e.AlertSystemMessageID.IsValid() {
+		alertSysMsgID = e.AlertSystemMessageID.String()
+	}
+
+	domainExec := &automod.ActionExecution{
+		GuildID:              guildIDStr,
+		ChannelID:            e.ChannelID.String(),
+		UserID:               e.UserID.String(),
+		RuleID:               e.RuleID.String(),
+		ActionType:           int(e.Action.Type),
+		TriggerType:          int(e.RuleTriggerType),
+		MessageID:            msgID,
+		AlertSystemMessageID: alertSysMsgID,
+		MatchedKeyword:       e.MatchedKeyword,
+		Content:              e.Content,
+		MatchedContent:       e.MatchedContent,
+	}
+
+	idempotencyKey := task.AutomodIdempotencyKey(domainExec)
 
 	// If adapters are wired, enqueue via TaskRouter for retries/backoff
 	if as.adapters != nil {
-		if err := as.adapters.EnqueueAutomodActionWithKey(logChannelID, e, idempotencyKey); err != nil {
+		if err := as.adapters.EnqueueAutomodActionWithKey(logChannelID, domainExec, idempotencyKey); err != nil {
 			if errors.Is(err, task.ErrDuplicateTask) {
-				log.ApplicationLogger().Debug("Dropped duplicate automod log task", "guildID", e.GuildID, "channelID", logChannelID, "userID", e.UserID, "ruleID", e.RuleID, "seq", sequence, "messageID", e.MessageID, "alertSystemMessageID", e.AlertSystemMessageID)
+				log.ApplicationLogger().Debug("Dropped duplicate automod log task", "guildID", guildIDStr, "channelID", logChannelID, "userID", e.UserID.String(), "ruleID", e.RuleID.String(), "messageID", msgID, "alertSystemMessageID", alertSysMsgID)
 				return
 			}
-			log.ErrorLoggerRaw().Error("Failed to enqueue automod log task; falling back to synchronous send", "guildID", e.GuildID, "channelID", logChannelID, "userID", e.UserID, "seq", sequence, "err", err)
+			log.ErrorLoggerRaw().Error("Failed to enqueue automod log task; falling back to synchronous send", "guildID", guildIDStr, "channelID", logChannelID, "userID", e.UserID.String(), "err", err)
 		} else {
 			return
 		}
@@ -114,34 +107,20 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 	// Synchronous fallback (adapters nil or router enqueue failed). Apply an
 	// in-process dedup so Gateway re-deliveries do not duplicate the embed.
 	if as.dedupCache.ShouldDedup(idempotencyKey, as.isRunning) {
-		log.ApplicationLogger().Debug("Dropped duplicate automod log task on fallback path", "guildID", e.GuildID, "channelID", logChannelID, "userID", e.UserID, "ruleID", e.RuleID, "seq", sequence)
+		log.ApplicationLogger().Debug("Dropped duplicate automod log task on fallback path", "guildID", guildIDStr, "channelID", logChannelID, "userID", e.UserID.String(), "ruleID", e.RuleID.String())
 		return
-	}
-
-	domainExec := &automod.ActionExecution{
-		GuildID:              e.GuildID,
-		ChannelID:            e.ChannelID,
-		UserID:               e.UserID,
-		RuleID:               e.RuleID,
-		ActionType:           int(e.Action.Type),
-		TriggerType:          int(e.RuleTriggerType),
-		MessageID:            e.MessageID,
-		AlertSystemMessageID: e.AlertSystemMessageID,
-		MatchedKeyword:       e.MatchedKeyword,
-		Content:              e.Content,
-		MatchedContent:       e.MatchedContent,
 	}
 
 	domainEmbed := automod.BuildAutomodEmbed(domainExec)
 
-	embed := &discordgo.MessageEmbed{
+	embed := &discord.Embed{
 		Title:       domainEmbed.Title,
 		Description: domainEmbed.Description,
-		Color:       domainEmbed.Color,
-		Timestamp:   domainEmbed.Timestamp.Format(time.RFC3339),
+		Color:       discord.Color(domainEmbed.Color),
+		Timestamp:   discord.NewTimestamp(domainEmbed.Timestamp),
 	}
 	for _, f := range domainEmbed.Fields {
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+		embed.Fields = append(embed.Fields, discord.EmbedField{
 			Name:   f.Name,
 			Value:  f.Value,
 			Inline: f.Inline,
@@ -150,11 +129,12 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 
 	if as.notifier != nil {
 		if err := as.notifier.Send(logChannelID, embed); err != nil {
-			log.ErrorLoggerRaw().Error("Failed to send native automod log message via notifier", "guildID", e.GuildID, "channelID", logChannelID, "userID", e.UserID, "seq", sequence, "err", err)
+			log.ErrorLoggerRaw().Error("Failed to send native automod log message via notifier", "guildID", guildIDStr, "channelID", logChannelID, "userID", e.UserID.String(), "err", err)
 		}
 	} else {
-		if _, err := s.ChannelMessageSendEmbed(logChannelID, embed); err != nil {
-			log.ErrorLoggerRaw().Error("Failed to send native automod log message", "guildID", e.GuildID, "channelID", logChannelID, "userID", e.UserID, "seq", sequence, "err", err)
+		chID, _ := discord.ParseSnowflake(logChannelID)
+		if _, err := as.state.SendEmbeds(discord.ChannelID(chID), *embed); err != nil {
+			log.ErrorLoggerRaw().Error("Failed to send native automod log message", "guildID", guildIDStr, "channelID", logChannelID, "userID", e.UserID.String(), "err", err)
 		}
 	}
 }

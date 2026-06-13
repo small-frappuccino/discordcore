@@ -178,8 +178,8 @@ func setupMonitoringService(runtime *botRuntime, opts botRuntimeOptions, routerC
 		return nil, nil
 	}
 
-	dataProvider := discordmonitoring.NewSessionDataProvider(runtime.session, runtime.unifiedCache)
-	policyChecker := discordmonitoring.NewDefaultLogPolicyChecker(runtime.session, opts.configManager)
+	dataProvider := discordmonitoring.NewSessionDataProvider(runtime.arikawaState)
+	policyChecker := discordmonitoring.NewDefaultLogPolicyChecker(runtime.arikawaState, opts.configManager)
 	discordPublisher := discordnotifications.NewDiscordPublisher(runtime.session)
 	notificationSender := notifications.NewNotificationSender(discordPublisher, log.DiscordLogger())
 	notifier := discordmonitoring.NewSessionNotifier(notificationSender)
@@ -215,7 +215,7 @@ func buildAutomodService(runtime *botRuntime, opts botRuntimeOptions, routerConf
 		return nil
 	}
 
-	automodService := discordautomod.NewAutomodService(runtime.session, opts.configManager, runtime.instanceID, "")
+	automodService := discordautomod.NewAutomodService(runtime.arikawaState, opts.configManager, runtime.instanceID, "")
 	automodRouter := task.NewRouter(routerConfig)
 	publisher := discordnotifications.NewDiscordPublisher(runtime.session)
 	notifier := notifications.NewNotificationSender(publisher, log.DiscordLogger())
