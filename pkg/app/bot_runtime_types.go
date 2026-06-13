@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordgo"
 
 	"github.com/small-frappuccino/discordcore/pkg/control"
@@ -36,6 +37,7 @@ type botRuntime struct {
 	instanceID        string
 	capabilities      botRuntimeCapabilities
 	session           *discordgo.Session
+	arikawaState      *state.State
 	unifiedCache      *cache.UnifiedCache
 	serviceManager    *service.ServiceManager
 	monitoringService *monitoring.MonitoringService

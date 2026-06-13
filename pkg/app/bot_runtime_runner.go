@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/diamondburned/arikawa/v3/gateway"
+	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordgo"
 
 	"github.com/small-frappuccino/discordcore/pkg/clock"
@@ -58,6 +60,10 @@ func openBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabil
 		return nil, fmt.Errorf("create discord session for %s: %w", instance.ID, err)
 	}
 
+	arikawaState := state.New("Bot " + instance.Token)
+	// Arikawa intents must match discordgo for the hybrid gateway
+	arikawaState.AddIntents(gateway.Intents(capabilities.intents))
+
 	if instance.DiscordStatus != "" {
 		discordSession.Identify.Presence = discordgo.GatewayStatusUpdate{
 			Status: instance.DiscordStatus,
@@ -86,6 +92,7 @@ func openBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabil
 		instanceID:   instance.ID,
 		capabilities: capabilities,
 		session:      discordSession,
+		arikawaState: arikawaState,
 	}, nil
 }
 
@@ -113,6 +120,11 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 	monitoringService, err := setupMonitoringService(runtime, opts, routerConfig)
 	if err != nil {
 		return err
+	}
+	
+	// Connect Arikawa State (hybrid gateway)
+	if err := runtime.arikawaState.Open(ctx); err != nil {
+		return fmt.Errorf("open arikawa state for %s: %w", runtime.instanceID, err)
 	}
 	if opts.runtimeApplier != nil {
 		opts.runtimeApplier.AddRuntime(runtime.serviceManager, monitoringService)
@@ -331,6 +343,7 @@ var monitoringUnifiedCacheFn = func(runtime *botRuntime) *cache.UnifiedCache {
 	}
 	return runtime.unifiedCache
 }
+
 // ScheduleStartupMemberWarmup moved/removed; skipping
 var scheduleStartupMemberWarmupFn = func(ms *monitoring.MonitoringService, config cache.WarmupConfig) bool {
 	return false
