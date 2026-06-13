@@ -250,7 +250,6 @@ func TestRolePanelPostingSyncer_BatchDrops(t *testing.T) {
 	postings, _ := cm.ListRolePanelPostings("guild", "pings")
 	result := syncer.Sync("guild", "pings", postings, &files.RolePanelConfig{Buttons: []files.RolePanelButtonConfig{{Label: "ping"}}})
 
-
 	if dropCallCount != 1 {
 		t.Fatalf("expected exactly 1 call to dropPostings, got %d", dropCallCount)
 	}

@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	RolePanelComponentRouteID = "roles_panel:toggle"
+	RolePanelComponentRouteID  = "roles_panel:toggle"
 	rolePanelCustomIDSeparator = "|"
 )
 
