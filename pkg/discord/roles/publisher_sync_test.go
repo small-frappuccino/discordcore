@@ -1,4 +1,4 @@
-package roles
+package discordroles
 
 import (
 	"errors"
@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/roles"
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -42,7 +43,7 @@ func TestRolePanelSyncEditsEachPosting(t *testing.T) {
 
 	var mu sync.Mutex
 	var edits []capturedEdit
-	syncer := newRolePanelPostingSyncer(cm)
+	syncer := NewPublisher(nil, cm)
 	syncer.editMessage = func(_ *discordgo.Session, edit *discordgo.MessageEdit) error {
 		mu.Lock()
 		defer mu.Unlock()
@@ -58,10 +59,9 @@ func TestRolePanelSyncEditsEachPosting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list postings: %v", err)
 	}
-	embed := &discordgo.MessageEmbed{Title: "Pings"}
-	components := []discordgo.MessageComponent{discordgo.ActionsRow{}}
 
-	result := syncer.Sync(rolePanelSyncRequest{GuildID: "guild", Key: "pings", Postings: postings, Embed: embed, Components: components})
+	result := syncer.Sync("guild", "pings", postings, &files.RolePanelConfig{Buttons: []files.RolePanelButtonConfig{{Label: "ping"}}})
+
 	if result.Edited != 2 || len(result.Dropped) != 0 || len(result.Failed) != 0 {
 		t.Fatalf("unexpected sync result: %+v", result)
 	}
@@ -96,7 +96,7 @@ func TestRolePanelSyncDropsMissingPostings(t *testing.T) {
 		}
 	}
 
-	syncer := newRolePanelPostingSyncer(cm)
+	syncer := NewPublisher(nil, cm)
 	syncer.editMessage = func(_ *discordgo.Session, edit *discordgo.MessageEdit) error {
 		switch edit.ID {
 		case goneMsg:
@@ -109,7 +109,8 @@ func TestRolePanelSyncDropsMissingPostings(t *testing.T) {
 	}
 
 	postings, _ := cm.ListRolePanelPostings("guild", "pings")
-	result := syncer.Sync(rolePanelSyncRequest{GuildID: "guild", Key: "pings", Postings: postings, Embed: &discordgo.MessageEmbed{}})
+	result := syncer.Sync("guild", "pings", postings, &files.RolePanelConfig{Buttons: []files.RolePanelButtonConfig{{Label: "ping"}}})
+
 	if result.Edited != 1 {
 		t.Fatalf("expected 1 edited, got %d", result.Edited)
 	}
@@ -136,7 +137,7 @@ func TestRolePanelSyncRecordsNonTerminalFailures(t *testing.T) {
 		t.Fatalf("seed posting: %v", err)
 	}
 
-	syncer := newRolePanelPostingSyncer(cm)
+	syncer := NewPublisher(nil, cm)
 	syncer.editMessage = func(_ *discordgo.Session, _ *discordgo.MessageEdit) error {
 		return &discordgo.RESTError{Message: &discordgo.APIErrorMessage{Code: 50013, Message: "Missing Permissions"}}
 	}
@@ -146,7 +147,8 @@ func TestRolePanelSyncRecordsNonTerminalFailures(t *testing.T) {
 	}
 
 	postings, _ := cm.ListRolePanelPostings("guild", "pings")
-	result := syncer.Sync(rolePanelSyncRequest{GuildID: "guild", Key: "pings", Postings: postings, Embed: &discordgo.MessageEmbed{}})
+	result := syncer.Sync("guild", "pings", postings, &files.RolePanelConfig{Buttons: []files.RolePanelButtonConfig{{Label: "ping"}}})
+
 	if result.Edited != 0 || len(result.Dropped) != 0 {
 		t.Fatalf("unexpected counts in result: %+v", result)
 	}
@@ -166,22 +168,22 @@ func TestRolePanelSyncRecordsNonTerminalFailures(t *testing.T) {
 
 func TestFormatRolePanelSyncSummaryEdgeCases(t *testing.T) {
 	t.Parallel()
-	empty := rolePanelSyncResult{}
-	if formatRolePanelSyncSummary(empty, "Refreshed") != "" {
+	empty := roles.SyncResult{}
+	if roles.FormatSyncSummary(empty, "Refreshed") != "" {
 		t.Fatalf("empty result should yield empty summary")
 	}
 
-	good := rolePanelSyncResult{Edited: 3}
-	if got := formatRolePanelSyncSummary(good, "Refreshed"); !strings.Contains(got, "Refreshed 3 posting(s)") {
+	good := roles.SyncResult{Edited: 3}
+	if got := roles.FormatSyncSummary(good, "Refreshed"); !strings.Contains(got, "Refreshed 3 posting(s)") {
 		t.Fatalf("unexpected good summary: %q", got)
 	}
 
-	mixed := rolePanelSyncResult{
+	mixed := roles.SyncResult{
 		Edited:  1,
 		Dropped: []files.RolePanelPostingConfig{{MessageID: "G1"}},
-		Failed:  []rolePanelSyncFailure{{Posting: files.RolePanelPostingConfig{MessageID: "F1"}, Err: errors.New("boom")}},
+		Failed:  []roles.SyncFailure{{Posting: files.RolePanelPostingConfig{MessageID: "F1"}, Err: errors.New("boom")}},
 	}
-	got := formatRolePanelSyncSummary(mixed, "Stripped buttons from")
+	got := roles.FormatSyncSummary(mixed, "Stripped buttons from")
 	for _, want := range []string{"Stripped buttons from 1 posting(s)", "Dropped 1 orphaned", "G1", "F1", "boom"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("summary missing %q: %s", want, got)
@@ -227,7 +229,7 @@ func TestRolePanelPostingSyncer_BatchDrops(t *testing.T) {
 		}
 	}
 
-	syncer := newRolePanelPostingSyncer(cm)
+	syncer := NewPublisher(nil, cm)
 	syncer.editMessage = func(_ *discordgo.Session, edit *discordgo.MessageEdit) error {
 		switch edit.ID {
 		case goneMsg1, goneMsg2:
@@ -246,7 +248,8 @@ func TestRolePanelPostingSyncer_BatchDrops(t *testing.T) {
 	}
 
 	postings, _ := cm.ListRolePanelPostings("guild", "pings")
-	result := syncer.Sync(rolePanelSyncRequest{GuildID: "guild", Key: "pings", Postings: postings, Embed: &discordgo.MessageEmbed{}})
+	result := syncer.Sync("guild", "pings", postings, &files.RolePanelConfig{Buttons: []files.RolePanelButtonConfig{{Label: "ping"}}})
+
 
 	if dropCallCount != 1 {
 		t.Fatalf("expected exactly 1 call to dropPostings, got %d", dropCallCount)
