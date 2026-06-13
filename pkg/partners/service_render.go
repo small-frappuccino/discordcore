@@ -1,4 +1,4 @@
-package partners
+﻿package partners
 
 import (
 	"errors"
@@ -10,7 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/small-frappuccino/discordcore/pkg/theme"
-	"github.com/small-frappuccino/discordgo"
+	
 )
 
 const (
@@ -84,7 +84,7 @@ func newBoardRendererWithLimits(maxDescriptionChars, maxEmbeds int) *BoardRender
 }
 
 // Render transforms template + partner list into one or more embeds.
-func (r *BoardRenderer) Render(template PartnerBoardTemplate, partners []PartnerRecord) ([]*discordgo.MessageEmbed, error) {
+func (r *BoardRenderer) Render(template PartnerBoardTemplate, partners []PartnerRecord) ([]BoardEmbed, error) {
 	limits := normalizeRendererLimits(r)
 	tpl := normalizeTemplate(template)
 
@@ -107,24 +107,14 @@ func (r *BoardRenderer) Render(template PartnerBoardTemplate, partners []Partner
 		)
 	}
 
-	embeds := make([]*discordgo.MessageEmbed, 0, len(descriptions))
-	for i, description := range descriptions {
-		title := tpl.Title
-		if i > 0 {
-			title = tpl.ContinuationTitle
-		}
-
-		embed := &discordgo.MessageEmbed{
+	embeds := make([]BoardEmbed, 0, len(descriptions))
+	for embedIndex, chunk := range descriptions {
+		embeds = append(embeds, BoardEmbed{
 			Title:       title,
-			Description: description,
-			Color:       tpl.Color,
-		}
-		if footer := buildFooter(tpl.FooterTemplate, len(normalizedPartners), totalFandoms, i+1, len(descriptions)); footer != "" {
-			embed.Footer = &discordgo.MessageEmbedFooter{
-				Text: footer,
-			}
-		}
-		embeds = append(embeds, embed)
+			Description: chunk,
+			Color:       template.Color,
+			FooterText:  buildFooter(template.FooterTemplate, len(partners), len(fandoms), embedIndex+1, totalEmbeds),
+		})
 	}
 
 	return embeds, nil
@@ -595,3 +585,5 @@ func truncateToRuneLimit(in string, limit int) string {
 func runeLen(in string) int {
 	return utf8.RuneCountInString(in)
 }
+
+

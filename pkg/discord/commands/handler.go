@@ -18,6 +18,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/partners"
+	discordpartners "github.com/small-frappuccino/discordcore/pkg/discord/partners"
 	"github.com/small-frappuccino/discordcore/pkg/roles"
 	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/stats"
@@ -174,7 +175,7 @@ func (ch *CommandHandler) SetupCommands() error {
 	ch.commandManager = core.NewCommandManager(ch.session, ch.configManager)
 	ch.embedService = embeds.NewEmbedService(ch.configManager, &discordembeds.Adapter{Session: ch.session})
 	ch.rolePanelPublisher = discordroles.NewPublisher(ch.session, ch.configManager)
-	ch.partnerService = partners.NewPartnerService(ch.configManager)
+	ch.partnerService = partners.NewPartnerService(ch.configManager, discordpartners.NewDiscordgoBoardPublisher(ch.session))
 
 	if router := ch.commandManager.GetRouter(); router != nil {
 		router.SetGuildRouteFilter(ch.handlesGuildRoute)
@@ -355,3 +356,4 @@ func (ch *CommandHandler) matchesGuildBotInstance(guildID string, feature string
 	resolvedID, _ := guild.ResolveFeatureBotInstanceID(feature, "")
 	return ch.botInstanceID == resolvedID
 }
+

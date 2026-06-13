@@ -1,4 +1,4 @@
-package partners
+﻿package partners
 
 import (
 	"errors"
@@ -7,86 +7,47 @@ import (
 	"strings"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordgo"
 )
 
-const (
-	discordErrUnknownChannel = 10003
-	discordErrUnknownMessage = 10008
-)
-
-type partnerSyncFailure struct {
+type PartnerSyncFailure struct {
 	Posting files.CustomEmbedPostingConfig
 	Err     error
 }
 
-type partnerSyncResult struct {
+type PartnerSyncResult struct {
 	Edited  int
 	Dropped []files.CustomEmbedPostingConfig
-	Failed  []partnerSyncFailure
+	Failed  []PartnerSyncFailure
 }
 
-// HasIssues has issues.
-func (r partnerSyncResult) HasIssues() bool {
+func (r PartnerSyncResult) HasIssues() bool {
 	return len(r.Dropped) > 0 || len(r.Failed) > 0
 }
 
 type partnerPostingSyncer struct {
-	configManager      *files.ConfigManager
-	editMessage        func(s *discordgo.Session, edit *discordgo.MessageEdit) error
-	editWebhookMessage func(s *discordgo.Session, edit *discordgo.MessageEdit, webhookID, webhookToken string) error
-	dropPostings       func(cm *files.ConfigManager, guildID string, messageIDs []string) error
+	configManager *files.ConfigManager
+	publisher     BoardPublisher
+	dropPostings  func(cm *files.ConfigManager, guildID string, messageIDs []string) error
 }
 
-func newPartnerPostingSyncer(cm *files.ConfigManager) *partnerPostingSyncer {
+func newPartnerPostingSyncer(cm *files.ConfigManager, publisher BoardPublisher) *partnerPostingSyncer {
 	return &partnerPostingSyncer{
-		configManager:      cm,
-		editMessage:        defaultPartnerEditMessage,
-		editWebhookMessage: defaultPartnerEditWebhookMessage,
-		dropPostings:       defaultPartnerDropPostings,
+		configManager: cm,
+		publisher:     publisher,
+		dropPostings:  defaultPartnerDropPostings,
 	}
 }
 
-// Sync syncs.
 func (s *partnerPostingSyncer) Sync(
-	session *discordgo.Session,
 	guildID string,
 	postings []files.CustomEmbedPostingConfig,
-	embeds []*discordgo.MessageEmbed,
-) partnerSyncResult {
-	var result partnerSyncResult
+	embeds []BoardEmbed,
+) PartnerSyncResult {
 	if len(postings) == 0 {
-		return result
+		return PartnerSyncResult{}
 	}
 
-	if embeds == nil {
-		embeds = []*discordgo.MessageEmbed{}
-	}
-
-	for _, posting := range postings {
-		edit := &discordgo.MessageEdit{
-			ID:      strings.TrimSpace(posting.MessageID),
-			Channel: strings.TrimSpace(posting.ChannelID),
-			Embeds:  &embeds,
-		}
-		var err error
-		if posting.WebhookID != "" && posting.WebhookToken != "" {
-			err = s.editWebhookMessage(session, edit, posting.WebhookID, posting.WebhookToken)
-		} else {
-			err = s.editMessage(session, edit)
-		}
-		if err == nil {
-			result.Edited++
-			continue
-		}
-
-		if isPartnerPostingMissingError(err) {
-			result.Dropped = append(result.Dropped, posting)
-			continue
-		}
-
-		result.Failed = append(result.Failed, partnerSyncFailure{Posting: posting, Err: err})
-	}
+	result := s.publisher.Publish(guildID, postings, embeds)
 
 	if len(result.Dropped) > 0 {
 		ids := make([]string, 0, len(result.Dropped))
@@ -104,8 +65,7 @@ func (s *partnerPostingSyncer) Sync(
 	return result
 }
 
-// SyncConfig syncs config.
-func (s *partnerPostingSyncer) SyncConfig(guildID string, session *discordgo.Session) error {
+func (s *partnerPostingSyncer) SyncConfig(guildID string) error {
 	cfg := s.configManager.GuildConfig(guildID)
 	if cfg == nil {
 		return errors.New("guild config not found")
@@ -143,11 +103,11 @@ func (s *partnerPostingSyncer) SyncConfig(guildID string, session *discordgo.Ses
 		return fmt.Errorf("partnerPostingSyncer.SyncConfig: %w", err)
 	}
 
-	s.Sync(session, guildID, boardCfg.Postings, embeds)
+	s.Sync(guildID, boardCfg.Postings, embeds)
 	return nil
 }
 
-func formatPartnerSyncSummary(result partnerSyncResult, action string) string {
+func formatPartnerSyncSummary(result PartnerSyncResult, action string) string {
 	if !result.HasIssues() && result.Edited == 0 {
 		return ""
 	}
@@ -172,39 +132,10 @@ func formatPartnerSyncSummary(result partnerSyncResult, action string) string {
 	return strings.Join(lines, "\n")
 }
 
-func isPartnerPostingMissingError(err error) bool {
-	var rest *discordgo.RESTError
-	if !errors.As(err, &rest) || rest.Message == nil {
-		return false
-	}
-	switch rest.Message.Code {
-	case discordErrUnknownChannel, discordErrUnknownMessage:
-		return true
-	}
-	return false
-}
-
-func defaultPartnerEditMessage(s *discordgo.Session, edit *discordgo.MessageEdit) error {
-	if s == nil {
-		return errors.New("discord session is nil")
-	}
-	_, err := s.ChannelMessageEditComplex(edit)
-	return err
-}
-
-func defaultPartnerEditWebhookMessage(s *discordgo.Session, edit *discordgo.MessageEdit, webhookID, webhookToken string) error {
-	if s == nil {
-		return errors.New("discord session is nil")
-	}
-	_, err := s.WebhookMessageEdit(webhookID, webhookToken, edit.ID, &discordgo.WebhookEdit{
-		Embeds: edit.Embeds,
-	})
-	return err
-}
-
 func defaultPartnerDropPostings(cm *files.ConfigManager, guildID string, messageIDs []string) error {
 	if cm == nil {
 		return errors.New("config manager is nil")
 	}
 	return cm.RemovePartnerBoardPostings(guildID, messageIDs)
 }
+
