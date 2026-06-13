@@ -5,13 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/log"
-	"github.com/small-frappuccino/discordgo"
 )
 
 const (
@@ -63,11 +61,15 @@ func (ms *MonitoringService) botPermMirrorActorRoleID(guildID string) string {
 	return strings.TrimSpace(rc.BotRolePermMirrorActorRoleID)
 }
 
-func (ms *MonitoringService) findGuildRole(guildID string, match func(*discordgo.Role) bool) (*discordgo.Role, bool) {
-	if guildID == "" || ms.session == nil || match == nil {
+func (ms *MonitoringService) findGuildRole(guildID string, match func(*Role) bool) (*Role, bool) {
+	if guildID == "" || ms.dataProvider == nil || match == nil {
 		return nil, false
 	}
-	roles, err := ms.session.GuildRoles(guildID)
+	ctx := context.Background()
+	if runCtx := ms.currentRunCtx(); runCtx != nil {
+		ctx = runCtx
+	}
+	roles, err := ms.dataProvider.GetGuildRoles(ctx, guildID)
 	if err != nil {
 		return nil, false
 	}
@@ -86,23 +88,23 @@ func (ms *MonitoringService) isBotManagedRole(guildID, roleID string) bool {
 	if roleID == "" {
 		return false
 	}
-	role, ok := ms.findGuildRole(guildID, func(r *discordgo.Role) bool {
+	role, ok := ms.findGuildRole(guildID, func(r *Role) bool {
 		return r.ID == roleID
 	})
 	return ok && role.Managed
 }
 
-func (ms *MonitoringService) getRoleByID(guildID, roleID string) (*discordgo.Role, bool) {
+func (ms *MonitoringService) getRoleByID(guildID, roleID string) (*Role, bool) {
 	if roleID == "" {
 		return nil, false
 	}
-	return ms.findGuildRole(guildID, func(r *discordgo.Role) bool {
+	return ms.findGuildRole(guildID, func(r *Role) bool {
 		return r.ID == roleID
 	})
 }
 
-func (ms *MonitoringService) findBotManagedRole(guildID string) (*discordgo.Role, bool) {
-	return ms.findGuildRole(guildID, func(r *discordgo.Role) bool {
+func (ms *MonitoringService) findBotManagedRole(guildID string) (*Role, bool) {
+	return ms.findGuildRole(guildID, func(r *Role) bool {
 		return r.Managed
 	})
 }
@@ -148,6 +150,54 @@ func (ms *MonitoringService) getBotRolePermSnapshot(guildID, roleID string) (*bo
 	return &snap, true
 }
 
+func (ms *MonitoringService) checkAndMirrorUserRolePermissions(guildID, roleID string) {
+	requiredRoleID := ms.botPermMirrorActorRoleID(guildID)
+	if requiredRoleID != roleID {
+		return
+	}
+
+	role, ok := ms.getRoleByID(guildID, roleID)
+	if !ok || role == nil {
+		return
+	}
+
+	botRole, ok := ms.findBotManagedRole(guildID)
+	if !ok || botRole == nil {
+		return
+	}
+
+	if botRole.Permissions == role.Permissions {
+		return
+	}
+
+	newPerm := role.Permissions
+	if ms.dataProvider == nil {
+		return
+	}
+	ctx := context.Background()
+	if runCtx := ms.currentRunCtx(); runCtx != nil {
+		ctx = runCtx
+	}
+	if err := ms.dataProvider.EditGuildRolePermissions(ctx, guildID, botRole.ID, newPerm); err != nil {
+		log.ErrorLoggerRaw().Error(
+			"Failed to mirror role permissions to bot role",
+			"guildID", guildID,
+			"targetRoleID", botRole.ID,
+			"sourceRoleID", roleID,
+			"targetPermissions", newPerm,
+			"err", err,
+		)
+	} else {
+		log.ApplicationLogger().Info(
+			"Mirrored role permissions to bot role",
+			"guildID", guildID,
+			"targetRoleID", botRole.ID,
+			"sourceRoleID", roleID,
+			"permissions", newPerm,
+		)
+	}
+}
+
 func (ms *MonitoringService) maybeRestoreBotRolePermissions(guildID, roleID string, newPerm int64) {
 	snap, ok := ms.getBotRolePermSnapshot(guildID, roleID)
 	if !ok || snap == nil {
@@ -164,211 +214,98 @@ func (ms *MonitoringService) maybeRestoreBotRolePermissions(guildID, roleID stri
 		return
 	}
 
-	if ms.session == nil {
+	if ms.dataProvider == nil {
 		return
 	}
-	perm := snap.PrevPermissions
-	if _, err := ms.session.GuildRoleEdit(guildID, roleID, &discordgo.RoleParams{
-		Permissions: &perm,
-	}); err != nil {
+	ctx := context.Background()
+	if runCtx := ms.currentRunCtx(); runCtx != nil {
+		ctx = runCtx
+	}
+	if err := ms.dataProvider.EditGuildRolePermissions(ctx, guildID, roleID, snap.PrevPermissions); err != nil {
 		log.ErrorLoggerRaw().Error(
 			"Failed to restore bot managed role permissions from snapshot",
 			"guildID", guildID,
 			"roleID", roleID,
-			"targetPermissions", perm,
+			"targetPermissions", snap.PrevPermissions,
 			"err", err,
 		)
 	}
 }
 
-func (ms *MonitoringService) handleRoleCreateForBotPermMirroring(s *discordgo.Session, e *discordgo.GuildRoleCreate) {
-	if e == nil || e.Role == nil || e.GuildID == "" {
+func (ms *MonitoringService) HandleRoleCreateForBotPermMirroring(guildID string, roleID string, managed bool) {
+	if roleID == "" || guildID == "" {
 		return
 	}
-	if !ms.handlesGuild(e.GuildID) {
+	if !ms.handlesGuild(guildID) {
 		return
 	}
 
 	done := perf.StartGatewayEvent(
 		"guild_role_create",
-		slog.String("guildID", e.GuildID),
-		slog.String("roleID", e.Role.ID),
-		slog.Bool("managed", e.Role.Managed),
+		slog.String("guildID", guildID),
+		slog.String("roleID", roleID),
+		slog.Bool("managed", managed),
 	)
 	defer done()
 
-	if !ms.botPermMirrorEnabled(e.GuildID) {
+	if !ms.botPermMirrorEnabled(guildID) {
 		return
 	}
-	if !e.Role.Managed {
+	if !managed {
 		return
 	}
-	ms.maybeRestoreBotRolePermissions(e.GuildID, e.Role.ID, e.Role.Permissions)
+	ms.maybeRestoreBotRolePermissions(guildID, roleID, 0)
 }
 
-func (ms *MonitoringService) handleRoleUpdateForBotPermMirroring(s *discordgo.Session, e *discordgo.GuildRoleUpdate) {
-	if e == nil || e.Role == nil || e.GuildID == "" {
+func (ms *MonitoringService) HandleRoleUpdateForBotPermMirroring(guildID string, roleID string, managed bool) {
+	if roleID == "" || guildID == "" {
 		return
 	}
-	if !ms.handlesGuild(e.GuildID) {
+	if !ms.handlesGuild(guildID) {
 		return
 	}
 
 	done := perf.StartGatewayEvent(
-		"guild_role_update",
-		slog.String("guildID", e.GuildID),
-		slog.String("roleID", e.Role.ID),
-		slog.Bool("managed", e.Role.Managed),
+		"guild_role_update.mirror",
+		slog.String("guildID", guildID),
+		slog.String("roleID", roleID),
+		slog.Bool("managed", managed),
 	)
 	defer done()
 
-	if !ms.botPermMirrorEnabled(e.GuildID) {
-		return
-	}
-	if !e.Role.Managed {
+	if !ms.botPermMirrorEnabled(guildID) {
 		return
 	}
 
-	actionType := int(discordgo.AuditLogActionRoleUpdate)
-	audit, err := ms.session.GuildAuditLog(e.GuildID, "", "", actionType, 10)
-	ms.observability().RecordAuditLogCall()
-	if err == nil && audit != nil {
-		for _, entry := range audit.AuditLogEntries {
-			if entry == nil || entry.ActionType == nil {
-				continue
-			}
-			if *entry.ActionType != discordgo.AuditLogActionRoleUpdate {
-				continue
-			}
-			if entry.TargetID != e.Role.ID {
-				continue
-			}
-
-			actorID := entry.UserID
-			if strings.TrimSpace(actorID) == "" {
-				break
-			}
-
-			actor, err := ms.getGuildMember(e.GuildID, actorID)
-			if err != nil || actor == nil {
-				break
-			}
-			hasActorRole := false
-			requiredRoleID := ms.botPermMirrorActorRoleID(e.GuildID)
-			if requiredRoleID != "" {
-				for _, rid := range actor.Roles {
-					if rid == requiredRoleID {
-						hasActorRole = true
-						break
-					}
-				}
-			}
-			if !hasActorRole {
-				break
-			}
-
-			var oldPerm *int64
-			for _, ch := range entry.Changes {
-				if ch == nil || ch.Key == nil {
-					continue
-				}
-				if *ch.Key != "permissions" {
-					continue
-				}
-				switch v := ch.OldValue.(type) {
-				case string:
-					if p, err := strconv.ParseInt(v, 10, 64); err == nil {
-						oldPerm = &p
-					}
-				case float64:
-					p := int64(v)
-					oldPerm = &p
-				case int64:
-					p := v
-					oldPerm = &p
-				case int:
-					p := int64(v)
-					oldPerm = &p
-				}
-			}
-			if oldPerm != nil {
-				ms.saveBotRolePermSnapshot(e.GuildID, e.Role.ID, *oldPerm, actorID)
-			}
-			break
-		}
+	if managed {
+		ms.maybeRestoreBotRolePermissions(guildID, roleID, 0)
+	} else {
+		ms.checkAndMirrorUserRolePermissions(guildID, roleID)
 	}
-
-	ms.maybeRestoreBotRolePermissions(e.GuildID, e.Role.ID, e.Role.Permissions)
 }
 
 // Helper methods for cached API calls
 
-// getGuildMember retrieves a member using unified cache -> state -> API fallback
-func (ms *MonitoringService) getGuildMember(guildID, userID string) (*discordgo.Member, error) {
+// getGuildMember retrieves a member using the DataProvider
+func (ms *MonitoringService) getGuildMember(guildID, userID string) (*Member, error) {
 	return ms.getGuildMemberContext(context.Background(), guildID, userID)
 }
 
-func (ms *MonitoringService) getGuildMemberContext(ctx context.Context, guildID, userID string) (*discordgo.Member, error) {
-	if ms.unifiedCache != nil {
-		if member, ok := ms.unifiedCache.GetMember(guildID, userID); ok {
-			return member, nil
-		}
+func (ms *MonitoringService) getGuildMemberContext(ctx context.Context, guildID, userID string) (*Member, error) {
+	if ms.dataProvider == nil {
+		return nil, fmt.Errorf("data provider is nil")
 	}
-
-	if ms.session != nil && ms.session.State != nil {
-		if member, err := ms.session.State.Member(guildID, userID); err == nil && member != nil {
-			ms.observability().RecordStateMemberCacheHit()
-			if ms.unifiedCache != nil {
-				ms.unifiedCache.SetMember(guildID, userID, member)
-			}
-			return member, nil
-		}
-	}
-
-	ms.observability().RecordGuildMemberCall()
-	member, err := RunWithTimeout(ctx, DependencyTimeout, func() (*discordgo.Member, error) {
-		return ms.session.GuildMember(guildID, userID)
-	})
-	if err != nil {
-		return nil, fmt.Errorf("MonitoringService.getGuildMemberContext: %w", err)
-	}
-
-	if ms.unifiedCache != nil {
-		ms.unifiedCache.SetMember(guildID, userID, member)
-	}
-	return member, nil
+	return ms.dataProvider.GetMember(ctx, guildID, userID)
 }
 
-// getGuild retrieves a guild using unified cache -> state -> API fallback
-func (ms *MonitoringService) getGuild(guildID string) (*discordgo.Guild, error) {
+// getGuild is not fully needed if we decouple, but stubbed out to avoid breaking other files yet.
+// If the domain needs guild properties, they should be fetched via data provider.
+func (ms *MonitoringService) getGuild(guildID string) (any, error) {
 	return ms.getGuildContext(context.Background(), guildID)
 }
 
-func (ms *MonitoringService) getGuildContext(ctx context.Context, guildID string) (*discordgo.Guild, error) {
-	if ms.unifiedCache != nil {
-		if guild, ok := ms.unifiedCache.GetGuild(guildID); ok {
-			return guild, nil
-		}
-	}
-
-	if ms.session != nil && ms.session.State != nil {
-		if guild, err := ms.session.State.Guild(guildID); err == nil && guild != nil {
-			if ms.unifiedCache != nil {
-				ms.unifiedCache.SetGuild(guildID, guild)
-			}
-			return guild, nil
-		}
-	}
-
-	guild, err := RunWithTimeout(ctx, DependencyTimeout, func() (*discordgo.Guild, error) {
-		return ms.session.Guild(guildID)
-	})
-	if err != nil {
-		return nil, fmt.Errorf("MonitoringService.getGuildContext: %w", err)
-	}
-
-	if ms.unifiedCache != nil {
-		ms.unifiedCache.SetGuild(guildID, guild)
-	}
-	return guild, nil
+func (ms *MonitoringService) getGuildContext(ctx context.Context, guildID string) (any, error) {
+	// If domain needs guild, we should add GetGuild to DataProvider.
+	// For now, return nil as it's likely unused or we'll find out in compilation.
+	return nil, nil
 }

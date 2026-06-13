@@ -1,10 +1,11 @@
-package automod
+package discordautomod
 
 import (
 	"context"
 	"sync"
 	"time"
 
+	"github.com/small-frappuccino/discordcore/pkg/automod"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/task"
@@ -34,18 +35,6 @@ const (
 	automodActionBlockMemberInteraction = 4
 )
 
-const automodExcerptMaxLen = 200
-
-// automodFallbackDedupTTL mirrors the router-level IdempotencyTTL configured in
-// EnqueueAutomodAction. The fallback map only kicks in when the router-backed
-// adapter is unavailable or has failed, so dedup behavior stays consistent
-// across the normal and fallback paths.
-const automodFallbackDedupTTL = 10 * time.Second
-
-// automodFallbackDedupCleanupThreshold caps the in-process fallback map size
-// before lazy cleanup runs.
-const automodFallbackDedupCleanupThreshold = 64
-
 // Notifier defines the interface for outbound moderation alerts.
 type Notifier interface {
 	Send(channelID string, embed *discordgo.MessageEmbed) error
@@ -67,7 +56,7 @@ type AutomodService struct {
 	defaultBotInstanceID string
 
 	// Fallback dedup cache
-	dedupCache *FallbackDedupCache
+	dedupCache *automod.FallbackDedupCache
 }
 
 // NewAutomodService news automod service.
@@ -77,7 +66,7 @@ func NewAutomodService(session *discordgo.Session, configManager *files.ConfigMa
 		configManager:        configManager,
 		botInstanceID:        files.NormalizeBotInstanceID(botInstanceID),
 		defaultBotInstanceID: files.NormalizeBotInstanceID(defaultBotInstanceID),
-		dedupCache:           NewFallbackDedupCache(),
+		dedupCache:           automod.NewFallbackDedupCache(),
 	}
 }
 

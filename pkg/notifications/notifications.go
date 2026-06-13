@@ -640,6 +640,37 @@ func (ns *NotificationSender) SendAutomodActionNotification(channelID string, e 
 	if e == nil || channelID == "" {
 		return nil
 	}
-	_, err := ns.session.ChannelMessageSendEmbed(channelID, automod.BuildAutomodEmbed(e))
+
+	domainExec := &automod.ActionExecution{
+		GuildID:              e.GuildID,
+		ChannelID:            e.ChannelID,
+		UserID:               e.UserID,
+		RuleID:               e.RuleID,
+		ActionType:           int(e.Action.Type),
+		TriggerType:          int(e.RuleTriggerType),
+		MessageID:            e.MessageID,
+		AlertSystemMessageID: e.AlertSystemMessageID,
+		MatchedKeyword:       e.MatchedKeyword,
+		Content:              e.Content,
+		MatchedContent:       e.MatchedContent,
+	}
+
+	domainEmbed := automod.BuildAutomodEmbed(domainExec)
+
+	embed := &discordgo.MessageEmbed{
+		Title:       domainEmbed.Title,
+		Description: domainEmbed.Description,
+		Color:       domainEmbed.Color,
+		Timestamp:   domainEmbed.Timestamp.Format(time.RFC3339),
+	}
+	for _, f := range domainEmbed.Fields {
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+			Name:   f.Name,
+			Value:  f.Value,
+			Inline: f.Inline,
+		})
+	}
+
+	_, err := ns.session.ChannelMessageSendEmbed(channelID, embed)
 	return err
 }

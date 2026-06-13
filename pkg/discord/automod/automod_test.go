@@ -1,4 +1,4 @@
-package automod
+package discordautomod
 
 import (
 	"testing"

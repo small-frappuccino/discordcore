@@ -2,13 +2,11 @@ package monitoring
 
 import (
 	"sync"
-
-	"github.com/small-frappuccino/discordgo"
 )
 
 type presenceSnapshot struct {
-	Status       discordgo.Status
-	ClientStatus discordgo.ClientStatus
+	Status       string
+	ClientStatus ClientStatusSnapshot
 }
 
 // presenceWatcher records the last presence snapshot seen for each watched

@@ -1,10 +1,12 @@
-package automod
+package discordautomod
 
 import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"time"
 
+	"github.com/small-frappuccino/discordcore/pkg/automod"
 	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
@@ -116,7 +118,35 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 		return
 	}
 
-	embed := BuildAutomodEmbed(e)
+	domainExec := &automod.ActionExecution{
+		GuildID:              e.GuildID,
+		ChannelID:            e.ChannelID,
+		UserID:               e.UserID,
+		RuleID:               e.RuleID,
+		ActionType:           int(e.Action.Type),
+		TriggerType:          int(e.RuleTriggerType),
+		MessageID:            e.MessageID,
+		AlertSystemMessageID: e.AlertSystemMessageID,
+		MatchedKeyword:       e.MatchedKeyword,
+		Content:              e.Content,
+		MatchedContent:       e.MatchedContent,
+	}
+
+	domainEmbed := automod.BuildAutomodEmbed(domainExec)
+
+	embed := &discordgo.MessageEmbed{
+		Title:       domainEmbed.Title,
+		Description: domainEmbed.Description,
+		Color:       domainEmbed.Color,
+		Timestamp:   domainEmbed.Timestamp.Format(time.RFC3339),
+	}
+	for _, f := range domainEmbed.Fields {
+		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
+			Name:   f.Name,
+			Value:  f.Value,
+			Inline: f.Inline,
+		})
+	}
 
 	if as.notifier != nil {
 		if err := as.notifier.Send(logChannelID, embed); err != nil {

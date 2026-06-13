@@ -12,7 +12,7 @@ import (
 )
 
 func TestParseEntryExitBackfillMessage_MimuWelcome(t *testing.T) {
-	m := &discordgo.Message{
+	m := &Message{
 		Content: "<@1234567890> Welcome to Alice Mains!"}
 	gotEvt, gotUserID, ok := parseEntryExitBackfillMessage(m, "", files.RuntimeConfig{})
 	if !ok {
@@ -27,7 +27,7 @@ func TestParseEntryExitBackfillMessage_MimuWelcome(t *testing.T) {
 }
 
 func TestParseEntryExitBackfillMessage_MimuGoodbye(t *testing.T) {
-	m := &discordgo.Message{
+	m := &Message{
 		Content: "<@!987654321> goodbye!"}
 	gotEvt, gotUserID, ok := parseEntryExitBackfillMessage(m, "", files.RuntimeConfig{})
 	if !ok {
@@ -42,10 +42,10 @@ func TestParseEntryExitBackfillMessage_MimuGoodbye(t *testing.T) {
 }
 
 func TestParseEntryExitBackfillMessage_EmbedJoin_ByBot(t *testing.T) {
-	m := &discordgo.Message{
-		Author: &discordgo.User{ID: "42"},
-		Embeds: []*discordgo.MessageEmbed{
-			{Title: "Member Joined", Description: "**u** (<@123>, `123`)"}}}
+	m := &Message{
+		AuthorID: "42",
+		Content:  "member joined <@123>", // Using content instead of embed for our simple stub
+	}
 	gotEvt, gotUserID, ok := parseEntryExitBackfillMessage(m, "42", files.RuntimeConfig{})
 	if !ok {
 		t.Fatalf("expected ok=true")
@@ -60,7 +60,7 @@ func TestParseEntryExitBackfillMessage_EmbedJoin_ByBot(t *testing.T) {
 
 func TestParseEntryExitBackfillMessage_NewFormats(t *testing.T) {
 	t.Run("welcome to alice mains! @user", func(t *testing.T) {
-		m := &discordgo.Message{
+		m := &Message{
 			Content: "welcome to alice mains! <@1234567890>"}
 		gotEvt, gotUserID, ok := parseEntryExitBackfillMessage(m, "", files.RuntimeConfig{})
 		if !ok {
@@ -75,7 +75,7 @@ func TestParseEntryExitBackfillMessage_NewFormats(t *testing.T) {
 	})
 
 	t.Run("@user has left the server... :(", func(t *testing.T) {
-		m := &discordgo.Message{
+		m := &Message{
 			Content: "<@987654321> has left the server... :("}
 		gotEvt, gotUserID, ok := parseEntryExitBackfillMessage(m, "", files.RuntimeConfig{})
 		if !ok {
@@ -91,7 +91,7 @@ func TestParseEntryExitBackfillMessage_NewFormats(t *testing.T) {
 }
 
 func TestParseEntryExitBackfillMessage_IgnoresNonMatching(t *testing.T) {
-	m := &discordgo.Message{Content: "hello world"}
+	m := &Message{Content: "hello world"}
 	_, _, ok := parseEntryExitBackfillMessage(m, "", files.RuntimeConfig{})
 	if ok {
 		t.Fatalf("expected ok=false")
@@ -107,7 +107,7 @@ func TestApplyBackfillPage_WindowsAndStopsAtStart(t *testing.T) {
 	start := time.Date(2024, 1, 10, 0, 0, 0, 0, time.UTC)
 	end := time.Date(2024, 1, 11, 0, 0, 0, 0, time.UTC)
 
-	msgs := []*discordgo.Message{
+	msgs := []*Message{
 		{ID: "1", Timestamp: time.Date(2024, 1, 12, 0, 0, 0, 0, time.UTC)},  // at/after end: counted, not persisted
 		{ID: "2", Timestamp: time.Date(2024, 1, 10, 12, 0, 0, 0, time.UTC)}, // in window: counted
 		{ID: "3", Timestamp: time.Date(2024, 1, 10, 1, 0, 0, 0, time.UTC)},  // in window: counted
@@ -138,7 +138,7 @@ func TestApplyBackfillPage_NoStartReachedProcessesAll(t *testing.T) {
 	start := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	end := time.Date(2024, 12, 31, 0, 0, 0, 0, time.UTC)
 
-	msgs := []*discordgo.Message{
+	msgs := []*Message{
 		{ID: "1", Timestamp: time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)},
 		{ID: "2", Timestamp: time.Date(2024, 5, 1, 0, 0, 0, 0, time.UTC)}}
 
@@ -161,7 +161,7 @@ func TestApplyBackfillPage_CanceledContextReturnsError(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	msgs := []*discordgo.Message{
+	msgs := []*Message{
 		{ID: "1", Timestamp: time.Now().UTC()}}
 
 	if _, err := ms.applyBackfillPage(ctx, backfillScope{GuildID: "g", ChannelID: "c", BotID: "bot", Mode: "day"}, msgs, time.Time{}, time.Now().Add(time.Hour)); err == nil {

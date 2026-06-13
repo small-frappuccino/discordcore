@@ -1,6 +1,6 @@
 //go:build ignore
 
-package automod
+package discordautomod
 
 import (
 	"context"
