@@ -9,6 +9,7 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/state/store"
 	"github.com/small-frappuccino/discordcore/pkg/control"
+	"github.com/small-frappuccino/discordcore/pkg/discord"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	"github.com/small-frappuccino/discordcore/pkg/discord/webhook"
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -238,8 +239,15 @@ func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskO
 		}
 		return nil
 	})
-	controlServer.SetDiscordSessionResolver(func(guildID string) (*discordgo.Session, error) {
-		return opts.runtimeResolver.sessionForGuild(guildID)
+	controlServer.SetDiscordServiceResolver(func(guildID string) (control.DiscordService, error) {
+		runtime, _, err := opts.runtimeResolver.runtimeForGuild(guildID)
+		if err != nil {
+			return nil, err
+		}
+		if runtime.arikawaState == nil {
+			return nil, fmt.Errorf("discord service unavailable: arikawa state is nil")
+		}
+		return discord.NewControlAdapter(runtime.arikawaState), nil
 	})
 	controlServer.SetBotGuildBindingsProvider(func(ctx context.Context) ([]control.BotGuildBinding, error) {
 		return opts.runtimeResolver.guildBindings(ctx)
