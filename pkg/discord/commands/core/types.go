@@ -1,6 +1,8 @@
 package core
 
 import (
+	"github.com/diamondburned/arikawa/v3/state"
+
 	"context"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -108,15 +110,16 @@ type DefaultMemberPermissionsProvider interface {
 }
 
 type Context struct {
-	Session     *discordgo.Session
-	Interaction *discordgo.InteractionCreate
-	Config      *files.ConfigManager
-	Logger      *log.Logger
-	GuildID     string
-	UserID      string
-	IsOwner     bool
-	GuildConfig *files.GuildConfig
-	RouteKey    InteractionRouteKey
+	Session      *discordgo.Session
+	ArikawaState *state.State
+	Interaction  *discordgo.InteractionCreate
+	Config       *files.ConfigManager
+	Logger       *log.Logger
+	GuildID      string
+	UserID       string
+	IsOwner      bool
+	GuildConfig  *files.GuildConfig
+	RouteKey     InteractionRouteKey
 	// Acknowledged is true once the router has sent an ack response for this
 	// interaction (e.g. a deferred channel message). Follow-up writes must use
 	// InteractionResponseEdit / FollowupMessageCreate instead of a fresh

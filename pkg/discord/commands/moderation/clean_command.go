@@ -375,12 +375,12 @@ func (c *cleanCommand) executeClean(ctx *core.Context, request cleanRequest, sta
 		)
 	}
 
-	result.deletedBulk, result.failed = cleanup.DeleteMessages(ctx.Session, request.channelID, bulkIDs, cleanup.DeleteOptions{
+	result.deletedBulk, result.failed = cleanup.DeleteMessages(ctx.ArikawaState, request.channelID, bulkIDs, cleanup.DeleteOptions{
 		Mode:          cleanup.DeleteModeBulkPreferred,
 		OnDeleteError: onDeleteError,
 		OnChunkError:  onChunkError,
 	})
-	deletedSingle, failedSingle := cleanup.DeleteMessages(ctx.Session, request.channelID, singleIDs, cleanup.DeleteOptions{
+	deletedSingle, failedSingle := cleanup.DeleteMessages(ctx.ArikawaState, request.channelID, singleIDs, cleanup.DeleteOptions{
 		Mode:          cleanup.DeleteModeSingleOnly,
 		OnDeleteError: onDeleteError,
 	})

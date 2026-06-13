@@ -9,6 +9,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordgo"
 
+	"github.com/diamondburned/arikawa/v3/state/store"
 	"github.com/small-frappuccino/discordcore/pkg/clock"
 	discordautomod "github.com/small-frappuccino/discordcore/pkg/discord/automod"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
@@ -115,13 +116,12 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 	)
 
 	runtime.serviceManager = service.NewServiceManager()
-	runtime.unifiedCache = cache.NewUnifiedCache(cache.DefaultCacheConfig())
 
 	monitoringService, err := setupMonitoringService(runtime, opts, routerConfig)
 	if err != nil {
 		return err
 	}
-	
+
 	// Connect Arikawa State (hybrid gateway)
 	if err := runtime.arikawaState.Open(ctx); err != nil {
 		return fmt.Errorf("open arikawa state for %s: %w", runtime.instanceID, err)
@@ -312,9 +312,6 @@ func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg
 	if cm := commandHandler.GetCommandManager(); cm != nil {
 		if router := cm.GetRouter(); router != nil {
 			router.SetStore(opts.store)
-			if runtime.unifiedCache != nil {
-				router.SetCache(runtime.unifiedCache)
-			}
 			if monitoringService != nil {
 				router.SetTaskRouter(monitoringService.TaskRouter())
 			}
@@ -337,11 +334,11 @@ func logRuntimeCommandsSkipped(runtime *botRuntime, opts botRuntimeOptions, cfg 
 }
 
 var intelligentWarmupFn = cache.IntelligentWarmupContext
-var monitoringUnifiedCacheFn = func(runtime *botRuntime) *cache.UnifiedCache {
-	if runtime == nil {
+var monitoringCabinetFn = func(runtime *botRuntime) *store.Cabinet {
+	if runtime == nil || runtime.arikawaState == nil {
 		return nil
 	}
-	return runtime.unifiedCache
+	return runtime.arikawaState.Cabinet
 }
 
 // ScheduleStartupMemberWarmup moved/removed; skipping
@@ -354,18 +351,14 @@ func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *stor
 		return
 	}
 
-	unifiedCache := monitoringUnifiedCacheFn(runtime)
-	if unifiedCache == nil {
-		return
-	}
-	if unifiedCache.WasWarmedUpRecently(10 * time.Minute) {
-		log.ApplicationLogger().Info("Skipping cache warmup (recently warmed up)", "botInstanceID", runtime.instanceID)
+	cabinet := monitoringCabinetFn(runtime)
+	if cabinet == nil {
 		return
 	}
 
 	baseWarmupConfig, memberWarmupConfig := runtimeWarmupPhases()
 	runWarmup := func(ctx context.Context, config cache.WarmupConfig) error {
-		return intelligentWarmupFn(ctx, runtime.session, unifiedCache, store, config)
+		return intelligentWarmupFn(ctx, runtime.arikawaState, store, config)
 	}
 
 	if startupTasks == nil {

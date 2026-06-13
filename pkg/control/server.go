@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
+	"github.com/diamondburned/arikawa/v3/state/store"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
@@ -22,11 +22,9 @@ import (
 	"github.com/small-frappuccino/discordgo"
 )
 
-// CacheSnapshotResolver returns the primary UnifiedCache the control server
-// should snapshot for /v1/health/cache. The resolver is called per request so
-// it sees whichever cache the runtime layer has installed; returning nil keeps
-// the route in its 503 "cache observability not wired" state without panic.
-type CacheSnapshotResolver func() *cache.UnifiedCache
+// CacheSnapshotResolver returns the primary Cabinet the control server
+// should query when answering /v1/health/cache requests.
+type CacheSnapshotResolver func() *store.Cabinet
 
 // MonitoringMetricsResolver returns the monitoring observability sink the
 // control server should snapshot for /v1/health/monitoring. Mirrors

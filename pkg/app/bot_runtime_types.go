@@ -11,8 +11,8 @@ import (
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordgo"
 
+	"github.com/diamondburned/arikawa/v3/state/store"
 	"github.com/small-frappuccino/discordcore/pkg/control"
-	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/monitoring"
@@ -38,7 +38,6 @@ type botRuntime struct {
 	capabilities      botRuntimeCapabilities
 	session           *discordgo.Session
 	arikawaState      *state.State
-	unifiedCache      *cache.UnifiedCache
 	serviceManager    *service.ServiceManager
 	monitoringService *monitoring.MonitoringService
 	commandHandler    *commands.CommandHandler
@@ -123,18 +122,18 @@ func newBotRuntimeResolver(configManager *files.ConfigManager, initialRuntimes m
 	}
 }
 
-// aggregateUnifiedCaches collects the UnifiedCache of all active bot instances.
-func (r *botRuntimeResolver) aggregateUnifiedCaches() map[string]*cache.UnifiedCache {
+// aggregateCabinets collects the Arikawa Cabinet of all active bot instances.
+func (r *botRuntimeResolver) aggregateCabinets() map[string]*store.Cabinet {
 	if r == nil {
 		return nil
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	caches := make(map[string]*cache.UnifiedCache)
+	caches := make(map[string]*store.Cabinet)
 	for id, runtime := range r.runtimes {
-		if runtime.unifiedCache != nil {
-			caches[id] = runtime.unifiedCache
+		if runtime.arikawaState != nil && runtime.arikawaState.Cabinet != nil {
+			caches[id] = runtime.arikawaState.Cabinet
 		}
 	}
 	if len(caches) == 0 {

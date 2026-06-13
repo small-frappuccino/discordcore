@@ -6,7 +6,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
@@ -47,7 +46,7 @@ func NewCommandRouter(
 	}
 
 	permChecker := NewPermissionChecker(session, configManager)
-	contextBuilder := NewContextBuilder(session, configManager, permChecker)
+	contextBuilder := NewContextBuilder(session, nil, configManager, permChecker)
 
 	router := &CommandRouter{
 		registry:       registry,
@@ -821,13 +820,6 @@ func (cr *CommandRouter) SetStore(store *storage.Store) {
 // GetStore returns the shared store used by the router, if any.
 func (cr *CommandRouter) GetStore() *storage.Store {
 	return cr.store
-}
-
-// SetCache sets the unified cache for the permission checker to reduce API calls.
-func (cr *CommandRouter) SetCache(unifiedCache *cache.UnifiedCache) {
-	if cr.permChecker != nil {
-		cr.permChecker.SetCache(unifiedCache)
-	}
 }
 
 // SetRuntimeApplier sets the shared runtime hot-apply manager.

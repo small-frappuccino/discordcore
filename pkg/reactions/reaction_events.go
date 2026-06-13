@@ -88,7 +88,6 @@ func (rs *ReactionEventService) IsRunning() bool {
 	return rs.lifecycle.IsRunning()
 }
 
-
 // HandleReactionAdd processes MessageReactionAdd events, removing blocked
 // reactions first and then recording daily metrics when enabled.
 func (rs *ReactionEventService) HandleReactionAdd(ctx context.Context, e *MessageReactionAdd) {

@@ -1,8 +1,8 @@
 package reactions
 
 import (
-	"testing"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"testing"
 )
 
 func newLoggingConfigManager(t *testing.T, guildID string, channels files.ChannelsConfig) *files.ConfigManager {

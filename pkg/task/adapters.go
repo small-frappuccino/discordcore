@@ -106,7 +106,7 @@ type MessageDeletePayload struct {
 // AutomodActionPayload holds information for an automod action notification task.
 type AutomodActionPayload struct {
 	ChannelID string
-	Event     *discordgo.AutoModerationActionExecution
+	Event     *automod.ActionExecution
 }
 
 // FlushAvatarCachePayload holds information for flushing the avatar cache.
@@ -250,8 +250,8 @@ func (a *NotificationAdapters) EnqueueMessageDelete(channelID string, deleted *C
 
 // EnqueueAutomodAction enqueues an automod action notification using the
 // default idempotency key (computed without a gateway sequence number). Kept
-// for callers that do not have access to the raw *discordgo.Event envelope.
-func (a *NotificationAdapters) EnqueueAutomodAction(channelID string, event *discordgo.AutoModerationActionExecution) error {
+// for callers that do not have access to the raw envelope.
+func (a *NotificationAdapters) EnqueueAutomodAction(channelID string, event *automod.ActionExecution) error {
 	return a.EnqueueAutomodActionWithKey(channelID, event, AutomodIdempotencyKey(event))
 }
 
@@ -262,7 +262,7 @@ func (a *NotificationAdapters) EnqueueAutomodAction(channelID string, event *dis
 // AUTO_MODERATION_ACTION_EXECUTION events Discord fires for a single rule
 // trigger collapse to one notification. An empty key disables router-level
 // dedup for this event.
-func (a *NotificationAdapters) EnqueueAutomodActionWithKey(channelID string, event *discordgo.AutoModerationActionExecution, idempotencyKey string) error {
+func (a *NotificationAdapters) EnqueueAutomodActionWithKey(channelID string, event *automod.ActionExecution, idempotencyKey string) error {
 	if event == nil {
 		return nil
 	}
@@ -312,11 +312,11 @@ const automodCoalesceBucketSec = 3
 // Exported so the synchronous fallback path in pkg/discord/logging can
 // compute the same key the router would and apply its own dedup before
 // sending.
-func AutomodIdempotencyKey(event *discordgo.AutoModerationActionExecution) string {
+func AutomodIdempotencyKey(event *automod.ActionExecution) string {
 	return automodIdempotencyKeyAt(event, time.Now())
 }
 
-func automodIdempotencyKeyAt(event *discordgo.AutoModerationActionExecution, now time.Time) string {
+func automodIdempotencyKeyAt(event *automod.ActionExecution, now time.Time) string {
 	if event == nil {
 		return ""
 	}
@@ -446,9 +446,9 @@ func (a *NotificationAdapters) handleSendMessageEdit(ctx context.Context, payloa
 		Content: p.Edited.Content,
 	}
 	originalMessage := &notifications.CachedMessage{
-		ID:        p.Original.ID,
-		Content:   p.Original.Content,
-		Author:    &notifications.User{
+		ID:      p.Original.ID,
+		Content: p.Original.Content,
+		Author: &notifications.User{
 			ID:       p.Original.Author.ID,
 			Username: p.Original.Author.Username,
 			Avatar:   p.Original.Author.Avatar,
@@ -473,9 +473,9 @@ func (a *NotificationAdapters) handleSendMessageDelete(ctx context.Context, payl
 		return fmt.Errorf("invalid payload for %s", TaskTypeSendMessageDelete)
 	}
 	deletedMessage := &notifications.CachedMessage{
-		ID:        p.Deleted.ID,
-		Content:   p.Deleted.Content,
-		Author:    &notifications.User{
+		ID:      p.Deleted.ID,
+		Content: p.Deleted.Content,
+		Author: &notifications.User{
 			ID:       p.Deleted.Author.ID,
 			Username: p.Deleted.Author.Username,
 			Avatar:   p.Deleted.Author.Avatar,
@@ -499,21 +499,7 @@ func (a *NotificationAdapters) handleSendAutomodAction(ctx context.Context, payl
 	if !ok || p.Event == nil {
 		return fmt.Errorf("invalid payload for %s", TaskTypeSendAutomodAction)
 	}
-	e := p.Event
-	domainExec := &automod.ActionExecution{
-		GuildID:              e.GuildID,
-		ChannelID:            e.ChannelID,
-		UserID:               e.UserID,
-		RuleID:               e.RuleID,
-		ActionType:           int(e.Action.Type),
-		TriggerType:          int(e.RuleTriggerType),
-		MessageID:            e.MessageID,
-		AlertSystemMessageID: e.AlertSystemMessageID,
-		MatchedKeyword:       e.MatchedKeyword,
-		Content:              e.Content,
-		MatchedContent:       e.MatchedContent,
-	}
-	return a.Notifier.SendAutomodActionNotification(p.ChannelID, domainExec)
+	return a.Notifier.SendAutomodActionNotification(p.ChannelID, p.Event)
 }
 
 func (a *NotificationAdapters) handleProcessAvatarChange(ctx context.Context, payload any) error {

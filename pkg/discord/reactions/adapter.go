@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/small-frappuccino/discordgo"
 	"github.com/small-frappuccino/discordcore/pkg/monitoring"
 	domain "github.com/small-frappuccino/discordcore/pkg/reactions"
+	"github.com/small-frappuccino/discordgo"
 )
 
 // Adapter implements the domain.ReactionAdapter interface using discordgo.

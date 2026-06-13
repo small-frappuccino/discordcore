@@ -45,6 +45,7 @@ flowchart TD
         MessageUpdate["pkg/discord/messageupdate"]
         AdapterQOTD["pkg/discord/qotd"]
         AdapterTickets["pkg/discord/tickets"]
+        AdapterMonitoring["pkg/discord/monitoring"]
     end
 
     subgraph Features["Vertical Features (Domain)"]
@@ -164,6 +165,9 @@ flowchart TD
     AdapterTickets --> Commands
     AdapterTickets --> Storage
     
+    AdapterMonitoring --> Monitoring
+    AdapterMonitoring --> Log
+    
     %% The Monolith and Adapters
     Logging --> Files
     Logging --> Storage
@@ -202,7 +206,7 @@ flowchart TD
     classDef ui fill:#A3BE8C,stroke:#8FBCBB,stroke-width:2px,color:#2E3440;
     
     class Files,Storage,Persistence,RuntimeApply core;
-    class Control,Task,RPC,Commands,Logging,Cache,Session,DualSDK,Webhook,Perf,Cleanup,Maintenance,MessageUpdate,AdapterQOTD,AdapterTickets adapter;
+    class Control,Task,RPC,Commands,Logging,Cache,Session,DualSDK,Webhook,Perf,Cleanup,Maintenance,MessageUpdate,AdapterQOTD,AdapterTickets,AdapterMonitoring adapter;
     class QOTD,Roles,Embeds,Partners,Tickets,Stats,Automod,Monitoring,Messages,Members,Reactions,Notifications feature;
     class Service,Log,LogPolicy,Observability,Clock,Theme,TestDB infra;
     class DiscordGo,Arikawa,DiscordAPI,DiscordGateway external;

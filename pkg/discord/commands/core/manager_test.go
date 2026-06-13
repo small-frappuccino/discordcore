@@ -54,7 +54,7 @@ func TestSimpleCommandAndManager(t *testing.T) {
 	if cr.GetStore() != nil {
 		t.Fatal("store")
 	}
-	cr.SetCache(nil)
+
 	cr.SetRuntimeApplier(nil)
 	if cr.GetRuntimeApplier() != nil {
 		t.Fatal("applier")

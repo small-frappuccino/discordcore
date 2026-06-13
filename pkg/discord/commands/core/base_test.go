@@ -8,7 +8,7 @@ import (
 )
 
 func TestBaseFunctions(t *testing.T) {
-	cb := NewContextBuilder(nil, nil, nil)
+	cb := NewContextBuilder(nil, nil, nil, nil)
 
 	i := &discordgo.InteractionCreate{
 		Interaction: &discordgo.Interaction{

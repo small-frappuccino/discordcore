@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/diamondburned/arikawa/v3/state/store"
 	"github.com/small-frappuccino/discordcore/pkg/control"
-	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	"github.com/small-frappuccino/discordcore/pkg/discord/webhook"
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -211,11 +211,11 @@ func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskO
 	}
 	controlServer.SetQOTDService(opts.qotdService)
 	controlServer.SetModerationMetrics(opts.moderationMetrics)
-	controlServer.SetCacheObservability(func() *cache.UnifiedCache {
+	controlServer.SetCacheObservability(func() *store.Cabinet {
 		if opts.runtimeResolver == nil {
 			return nil
 		}
-		caches := opts.runtimeResolver.aggregateUnifiedCaches()
+		caches := opts.runtimeResolver.aggregateCabinets()
 		if len(caches) == 0 {
 			return nil
 		}

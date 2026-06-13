@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"slices"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
@@ -18,7 +17,6 @@ type PermissionChecker struct {
 	session *discordgo.Session
 	config  *files.ConfigManager
 	store   *storage.Store
-	cache   *cache.UnifiedCache
 }
 
 // NewPermissionChecker news permission checker.
@@ -29,11 +27,6 @@ func NewPermissionChecker(session *discordgo.Session, config *files.ConfigManage
 // SetStore sets store.
 func (pc *PermissionChecker) SetStore(store *storage.Store) {
 	pc.store = store
-}
-
-// SetCache sets cache.
-func (pc *PermissionChecker) SetCache(unifiedCache *cache.UnifiedCache) {
-	pc.cache = unifiedCache
 }
 
 // HasPermission checks whether the user has permission to use commands
@@ -197,17 +190,8 @@ func (pc *PermissionChecker) ResolveOwnerID(guildID string) (string, bool, error
 		return "", false, nil
 	}
 
-	if pc.cache != nil {
-		if g, ok := pc.cache.GetGuild(guildID); ok && g != nil && g.OwnerID != "" {
-			return g.OwnerID, true, nil
-		}
-	}
-
 	if pc.session != nil && pc.session.State != nil {
 		if g, _ := pc.session.State.Guild(guildID); g != nil && g.OwnerID != "" {
-			if pc.cache != nil {
-				pc.cache.SetGuild(guildID, g)
-			}
 			if pc.store != nil {
 				if err := pc.store.SetGuildOwnerID(guildID, g.OwnerID); err != nil {
 					log.ErrorLoggerRaw().Error(
@@ -253,9 +237,6 @@ func (pc *PermissionChecker) ResolveOwnerID(guildID string) (string, bool, error
 		return "", false, nil
 	}
 
-	if pc.cache != nil {
-		pc.cache.SetGuild(guildID, guild)
-	}
 	if pc.store != nil {
 		if err := pc.store.SetGuildOwnerID(guildID, guild.OwnerID); err != nil {
 			log.ErrorLoggerRaw().Error(
@@ -280,17 +261,8 @@ func (pc *PermissionChecker) ResolveMember(guildID, userID string) (*discordgo.M
 		return nil, false, nil
 	}
 
-	if pc.cache != nil {
-		if member, ok := pc.cache.GetMember(guildID, userID); ok && member != nil {
-			return member, true, nil
-		}
-	}
-
 	if pc.session != nil && pc.session.State != nil {
 		if member, _ := pc.session.State.Member(guildID, userID); member != nil {
-			if pc.cache != nil {
-				pc.cache.SetMember(guildID, userID, member)
-			}
 			return member, true, nil
 		}
 	}
@@ -310,9 +282,6 @@ func (pc *PermissionChecker) ResolveMember(guildID, userID string) (*discordgo.M
 		return nil, false, nil
 	}
 
-	if pc.cache != nil {
-		pc.cache.SetMember(guildID, userID, member)
-	}
 	return member, true, nil
 }
 
@@ -322,18 +291,8 @@ func (pc *PermissionChecker) ResolveRoles(guildID string) ([]*discordgo.Role, er
 		return nil, nil
 	}
 
-	if pc.cache != nil {
-		if roles, ok := pc.cache.GetRoles(guildID); ok && len(roles) > 0 {
-			return roles, nil
-		}
-	}
-
 	if pc.session != nil && pc.session.State != nil {
 		if g, _ := pc.session.State.Guild(guildID); g != nil && len(g.Roles) > 0 {
-			if pc.cache != nil {
-				pc.cache.SetRoles(guildID, g.Roles)
-				pc.cache.SetGuild(guildID, g)
-			}
 			return g.Roles, nil
 		}
 	}
@@ -348,9 +307,6 @@ func (pc *PermissionChecker) ResolveRoles(guildID string) ([]*discordgo.Role, er
 			return nil, nil
 		}
 		return nil, fmt.Errorf("resolve roles via rest for guild %s: %w", guildID, err)
-	}
-	if pc.cache != nil && len(roles) > 0 {
-		pc.cache.SetRoles(guildID, roles)
 	}
 	return roles, nil
 }

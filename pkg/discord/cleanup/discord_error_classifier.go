@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/diamondburned/arikawa/v3/utils/httputil"
+	"github.com/small-frappuccino/discordgo"
 )
 
 // FailureClass labels a Discord delete failure so callers can branch on the
@@ -90,6 +91,32 @@ func ClassifyFetchError(err error) FailureClass {
 		return FailureClassUnknown
 	}
 	var restErr *httputil.HTTPError
+	var dgRestErr *discordgo.RESTError
+	if errors.As(err, &dgRestErr) && dgRestErr != nil {
+		if dgRestErr.Message != nil {
+			switch dgRestErr.Message.Code {
+			case 10003:
+				return FailureClassMissingChannel
+			case 50001, 50013:
+				return FailureClassForbidden
+			}
+		}
+		if dgRestErr.Response != nil {
+			switch dgRestErr.Response.StatusCode {
+			case http.StatusNotFound:
+				return FailureClassMissingChannel
+			case http.StatusForbidden, http.StatusUnauthorized:
+				return FailureClassForbidden
+			case http.StatusTooManyRequests:
+				return FailureClassRateLimited
+			}
+			if dgRestErr.Response.StatusCode >= 500 {
+				return FailureClassTransient
+			}
+		}
+		return FailureClassUnknown
+	}
+
 	if !errors.As(err, &restErr) || restErr == nil {
 		return FailureClassTransient
 	}

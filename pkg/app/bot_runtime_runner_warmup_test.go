@@ -1,6 +1,9 @@
 package app
 
 import (
+	"github.com/diamondburned/arikawa/v3/state"
+	"github.com/diamondburned/arikawa/v3/state/store"
+
 	"context"
 	"sync"
 	"testing"
@@ -14,11 +17,11 @@ import (
 
 func TestScheduleRuntimeWarmupWithoutWorkerRunsPhasesSequentially(t *testing.T) {
 	origWarmup := intelligentWarmupFn
-	origCache := monitoringUnifiedCacheFn
+	origCache := monitoringCabinetFn
 	origSchedule := scheduleStartupMemberWarmupFn
 	t.Cleanup(func() {
 		intelligentWarmupFn = origWarmup
-		monitoringUnifiedCacheFn = origCache
+		monitoringCabinetFn = origCache
 		scheduleStartupMemberWarmupFn = origSchedule
 	})
 
@@ -26,15 +29,15 @@ func TestScheduleRuntimeWarmupWithoutWorkerRunsPhasesSequentially(t *testing.T) 
 	var calls []cache.WarmupConfig
 	var wg sync.WaitGroup
 	wg.Add(2)
-	intelligentWarmupFn = func(ctx context.Context, session *discordgo.Session, unifiedCache *cache.UnifiedCache, store *storage.Store, config cache.WarmupConfig) error {
+	intelligentWarmupFn = func(ctx context.Context, st *state.State, store *storage.Store, config cache.WarmupConfig) error {
 		mu.Lock()
 		calls = append(calls, config)
 		mu.Unlock()
 		wg.Done()
 		return nil
 	}
-	monitoringUnifiedCacheFn = func(runtime *botRuntime) *cache.UnifiedCache {
-		return &cache.UnifiedCache{}
+	monitoringCabinetFn = func(runtime *botRuntime) *store.Cabinet {
+		return &store.Cabinet{}
 	}
 	scheduleStartupMemberWarmupFn = func(ms *monitoring.MonitoringService, config cache.WarmupConfig) bool {
 		return false
@@ -66,11 +69,11 @@ func TestScheduleRuntimeWarmupWithoutWorkerRunsPhasesSequentially(t *testing.T) 
 
 func TestScheduleRuntimeWarmupQueuesMemberPhaseAfterBasePhase(t *testing.T) {
 	origWarmup := intelligentWarmupFn
-	origCache := monitoringUnifiedCacheFn
+	origCache := monitoringCabinetFn
 	origSchedule := scheduleStartupMemberWarmupFn
 	t.Cleanup(func() {
 		intelligentWarmupFn = origWarmup
-		monitoringUnifiedCacheFn = origCache
+		monitoringCabinetFn = origCache
 		scheduleStartupMemberWarmupFn = origSchedule
 	})
 
@@ -79,15 +82,15 @@ func TestScheduleRuntimeWarmupQueuesMemberPhaseAfterBasePhase(t *testing.T) {
 	var queued []cache.WarmupConfig
 	baseDone := make(chan struct{}, 1)
 	queueDone := make(chan struct{}, 1)
-	intelligentWarmupFn = func(ctx context.Context, session *discordgo.Session, unifiedCache *cache.UnifiedCache, store *storage.Store, config cache.WarmupConfig) error {
+	intelligentWarmupFn = func(ctx context.Context, st *state.State, store *storage.Store, config cache.WarmupConfig) error {
 		mu.Lock()
 		baseCalls = append(baseCalls, config)
 		mu.Unlock()
 		baseDone <- struct{}{}
 		return nil
 	}
-	monitoringUnifiedCacheFn = func(runtime *botRuntime) *cache.UnifiedCache {
-		return &cache.UnifiedCache{}
+	monitoringCabinetFn = func(runtime *botRuntime) *store.Cabinet {
+		return &store.Cabinet{}
 	}
 	scheduleStartupMemberWarmupFn = func(ms *monitoring.MonitoringService, config cache.WarmupConfig) bool {
 		mu.Lock()

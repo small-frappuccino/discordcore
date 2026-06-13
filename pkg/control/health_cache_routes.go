@@ -1,6 +1,10 @@
 package control
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
+)
 
 // handleCacheHealthRoute serves the GET /v1/health/cache snapshot. The
 // payload mirrors the JSON shape of cache.CacheMetricsSnapshot so operators
@@ -21,10 +25,10 @@ func (s *Server) handleCacheHealthRoute(w http.ResponseWriter, r *http.Request) 
 		if s.health.cacheSnapshotResolve == nil {
 			return nil, "cache observability not wired"
 		}
-		uc := s.health.cacheSnapshotResolve()
-		if uc == nil {
+		cab := s.health.cacheSnapshotResolve()
+		if cab == nil {
 			return nil, "cache observability not available"
 		}
-		return uc.Snapshot(r.Context(), s.health.cacheSnapshotStore), ""
+		return cache.SnapshotCabinet(r.Context(), cab, s.health.cacheSnapshotStore), ""
 	})
 }

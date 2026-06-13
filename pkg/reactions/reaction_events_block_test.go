@@ -1,4 +1,3 @@
-
 package reactions
 
 import (
@@ -11,7 +10,6 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
-
 
 func TestReactionEventServiceRemovesBlockedReactionWithoutMetricsStore(t *testing.T) {
 	const (

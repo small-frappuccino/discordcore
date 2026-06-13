@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordgo"
@@ -13,14 +14,16 @@ import (
 // ContextBuilder creates contexts for command execution
 type ContextBuilder struct {
 	session       *discordgo.Session
+	arikawaState  *state.State
 	configManager *files.ConfigManager
 	checker       *PermissionChecker
 }
 
 // NewContextBuilder creates a new context builder
-func NewContextBuilder(session *discordgo.Session, configManager *files.ConfigManager, checker *PermissionChecker) *ContextBuilder {
+func NewContextBuilder(session *discordgo.Session, arikawaState *state.State, configManager *files.ConfigManager, checker *PermissionChecker) *ContextBuilder {
 	return &ContextBuilder{
 		session:       session,
+		arikawaState:  arikawaState,
 		configManager: configManager,
 		checker:       checker,
 	}

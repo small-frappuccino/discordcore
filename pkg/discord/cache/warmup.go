@@ -5,70 +5,35 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
-	"github.com/small-frappuccino/discordgo"
 )
-
-// WarmupSession holds function closures to interact with Discord API, enabling easy mocking without interface bloat.
-type WarmupSession struct {
-	StateGuilds   func() []*discordgo.Guild
-	Guild         func(id string, options ...discordgo.RequestOption) (*discordgo.Guild, error)
-	GuildRoles    func(id string, options ...discordgo.RequestOption) ([]*discordgo.Role, error)
-	GuildChannels func(id string, options ...discordgo.RequestOption) ([]*discordgo.Channel, error)
-	GuildMembers  func(guildID, after string, limit int, options ...discordgo.RequestOption) ([]*discordgo.Member, error)
-}
-
-var NewWarmupSession = func(s *discordgo.Session) WarmupSession {
-	return WarmupSession{
-		StateGuilds: func() []*discordgo.Guild {
-			if s == nil || s.State == nil {
-				return nil
-			}
-			return s.State.Guilds
-		},
-		Guild:         s.Guild,
-		GuildRoles:    s.GuildRoles,
-		GuildChannels: s.GuildChannels,
-		GuildMembers:  s.GuildMembers,
-	}
-}
 
 // WarmupConfig configures the intelligent warmup behavior
 type WarmupConfig struct {
-	// FetchMissingMembers fetches members from Discord if not in cache
-	FetchMissingMembers bool
-	// FetchMissingRoles fetches roles from Discord if not in cache
-	FetchMissingRoles bool
-	// FetchMissingGuilds fetches guilds from Discord if not in cache
-	FetchMissingGuilds bool
-	// FetchMissingChannels fetches channels from Discord if not in cache
+	FetchMissingMembers  bool
+	FetchMissingRoles    bool
+	FetchMissingGuilds   bool
 	FetchMissingChannels bool
-	// MaxMembersPerGuild limits how many members to fetch per guild (0 = all)
-	MaxMembersPerGuild int
-	// GuildIDs restricts warmup to specific guilds (nil = all guilds)
-	GuildIDs []string
+	MaxMembersPerGuild   int
+	GuildIDs             []string
 }
 
-// DefaultWarmupConfig returns a sensible default warmup configuration
 func DefaultWarmupConfig() WarmupConfig {
 	return WarmupConfig{
 		FetchMissingMembers:  true,
 		FetchMissingRoles:    true,
 		FetchMissingGuilds:   true,
 		FetchMissingChannels: true,
-		MaxMembersPerGuild:   1000, // Limit to 1000 most recent members per guild
-		GuildIDs:             nil,  // All guilds
+		MaxMembersPerGuild:   1000,
+		GuildIDs:             nil,
 	}
 }
 
-// IntelligentWarmup performs cache warmup by loading persisted cache and fetching missing data
-func IntelligentWarmup(session *discordgo.Session, cache *UnifiedCache, store *storage.Store, config WarmupConfig) error {
-	return IntelligentWarmupContext(context.Background(), session, cache, store, config)
-}
-
-// IntelligentWarmupContext performs cache warmup with cooperative cancellation checks.
-func IntelligentWarmupContext(ctx context.Context, session *discordgo.Session, cache *UnifiedCache, store *storage.Store, config WarmupConfig) error {
+// IntelligentWarmupContext performs cache warmup with cooperative cancellation checks using Arikawa's Cabinet.
+func IntelligentWarmupContext(ctx context.Context, st *state.State, store *storage.Store, config WarmupConfig) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -77,35 +42,17 @@ func IntelligentWarmupContext(ctx context.Context, session *discordgo.Session, c
 	}
 
 	startTime := time.Now()
-	log.ApplicationLogger().Info("🚀 Starting cache warmup (persistent preload + Discord backfill)...")
+	log.ApplicationLogger().Info("🚀 Starting cache warmup (Discord backfill via Arikawa)...")
 
-	ws := NewWarmupSession(session)
-
-	// Step 1: Load persisted cache entries from the persistent store
-	if err := cache.Warmup(); err != nil {
-		log.ApplicationLogger().Warn(fmt.Sprintf("Failed to warmup from persistent cache: %v", err))
-	} else {
-		members := cache.MemberCount()
-		guilds := cache.GuildCount()
-		roles := cache.RolesCount()
-		channels := cache.ChannelCount()
-		preloadMsg := fmt.Sprintf("💾 Restored from persistent cache: %d members, %d guilds, %d roles, %d channels",
-			members, guilds, roles, channels)
-		if members == 0 && guilds == 0 && roles == 0 && channels == 0 {
-			preloadMsg += " (normal on first run or after expiration; Discord backfill comes next)"
-		}
-		log.ApplicationLogger().Info(preloadMsg)
-	}
-
-	// Step 2: Determine which guilds to warmup
-	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("IntelligentWarmupContext: %w", err)
-	}
+	// Step 1: Determine which guilds to warmup
 	guildIDs := config.GuildIDs
 	if len(guildIDs) == 0 {
 		// Get all guilds the bot is in
-		for _, guild := range ws.StateGuilds() {
-			guildIDs = append(guildIDs, guild.ID)
+		guilds, err := st.Cabinet.Guilds()
+		if err == nil {
+			for _, guild := range guilds {
+				guildIDs = append(guildIDs, guild.ID.String())
+			}
 		}
 	}
 
@@ -116,60 +63,104 @@ func IntelligentWarmupContext(ctx context.Context, session *discordgo.Session, c
 
 	log.ApplicationLogger().Info(fmt.Sprintf("🔄 Backfilling cache for %d guild(s) from Discord...", len(guildIDs)))
 
-	// Step 3: Warmup each guild
 	var totalMembers, totalRoles, totalChannels, totalGuilds int
-	for _, guildID := range guildIDs {
+	for _, guildIDStr := range guildIDs {
 		if err := ctx.Err(); err != nil {
 			return fmt.Errorf("IntelligentWarmupContext: %w", err)
 		}
+
+		guildID, err := discord.ParseSnowflake(guildIDStr)
+		if err != nil {
+			continue
+		}
+		gID := discord.GuildID(guildID)
+
 		// Fetch missing guild data
 		if config.FetchMissingGuilds {
-			if err := WarmupGuild(ws, cache, guildID); err != nil {
-				if ctx.Err() != nil {
-					return ctx.Err()
+			_, err := st.Cabinet.Guild(gID)
+			if err != nil { // not found
+				guild, err := st.Client.Guild(gID)
+				if err == nil {
+					st.Cabinet.GuildSet(guild, false)
+					totalGuilds++
 				}
-				log.ApplicationLogger().Warn(fmt.Sprintf("Failed to warmup guild %s: %v", guildID, err))
-			} else {
-				totalGuilds++
 			}
 		}
 
 		// Fetch missing roles
 		if config.FetchMissingRoles {
-			rolesCount, err := WarmupGuildRoles(ws, cache, store, guildID)
-			if err != nil {
-				if ctx.Err() != nil {
-					return ctx.Err()
+			roles, err := st.Client.Roles(gID)
+			if err == nil {
+				for i := range roles {
+					st.Cabinet.RoleSet(gID, &roles[i], false)
 				}
-				log.ApplicationLogger().Warn(fmt.Sprintf("Failed to warmup roles for guild %s: %v", guildID, err))
-			} else {
-				totalRoles += rolesCount
+				totalRoles += len(roles)
 			}
 		}
 
 		// Fetch missing channels
 		if config.FetchMissingChannels {
-			channelsCount, err := WarmupGuildChannels(ws, cache, guildID)
-			if err != nil {
-				if ctx.Err() != nil {
-					return ctx.Err()
+			channels, err := st.Client.Channels(gID)
+			if err == nil {
+				for i := range channels {
+					st.Cabinet.ChannelSet(&channels[i], false)
 				}
-				log.ApplicationLogger().Warn(fmt.Sprintf("Failed to warmup channels for guild %s: %v", guildID, err))
-			} else {
-				totalChannels += channelsCount
+				totalChannels += len(channels)
 			}
 		}
 
-		// Fetch missing members (can be expensive, so we limit it)
+		// Fetch missing members
 		if config.FetchMissingMembers {
-			membersCount, err := WarmupGuildMembersContext(ctx, ws, cache, store, guildID, config.MaxMembersPerGuild)
-			if err != nil {
-				if ctx.Err() != nil {
-					return ctx.Err()
+			limit := uint(1000)
+			var after discord.UserID = 0
+			fetchedCount := 0
+
+			for {
+				if err := ctx.Err(); err != nil {
+					return fmt.Errorf("warmup members: %w", err)
 				}
-				log.ApplicationLogger().Warn(fmt.Sprintf("Failed to warmup members for guild %s: %v", guildID, err))
-			} else {
-				totalMembers += membersCount
+				if config.MaxMembersPerGuild > 0 && fetchedCount >= config.MaxMembersPerGuild {
+					break
+				}
+
+				currentLimit := limit
+				if config.MaxMembersPerGuild > 0 && fetchedCount+int(limit) > config.MaxMembersPerGuild {
+					currentLimit = uint(config.MaxMembersPerGuild - fetchedCount)
+				}
+
+				members, err := st.Client.MembersAfter(gID, after, currentLimit)
+				if err != nil || len(members) == 0 {
+					break
+				}
+
+				for i := range members {
+					if err := ctx.Err(); err != nil {
+						return err
+					}
+					st.Cabinet.MemberSet(gID, &members[i], false)
+					fetchedCount++
+
+					if store != nil {
+						joinedAt := time.Now().UTC()
+						if members[i].Joined.IsValid() {
+							joinedAt = members[i].Joined.Time()
+						}
+						_ = store.UpsertMemberJoin(guildIDStr, members[i].User.ID.String(), joinedAt)
+						if len(members[i].RoleIDs) > 0 {
+							var roleStrs []string
+							for _, rid := range members[i].RoleIDs {
+								roleStrs = append(roleStrs, rid.String())
+							}
+							_ = store.UpsertMemberRoles(guildIDStr, members[i].User.ID.String(), roleStrs, time.Now().UTC())
+						}
+					}
+				}
+
+				totalMembers += len(members)
+				if uint(len(members)) < currentLimit {
+					break
+				}
+				after = members[len(members)-1].User.ID
 			}
 		}
 	}
@@ -181,186 +172,47 @@ func IntelligentWarmupContext(ctx context.Context, session *discordgo.Session, c
 	return nil
 }
 
-// WarmupGuild fetches guild data if not in cache
-func WarmupGuild(session WarmupSession, cache *UnifiedCache, guildID string) error {
-	// Check if already cached
-	if _, ok := cache.GetGuild(guildID); ok {
-		return nil // Already cached
-	}
-
-	// Fetch from Discord
-	guild, err := session.Guild(guildID)
-	if err != nil {
-		return fmt.Errorf("fetch guild: %w", err)
-	}
-
-	// Cache it
-	cache.SetGuild(guildID, guild)
-	return nil
-}
-
-// WarmupGuildRoles fetches roles if not in cache and stores in persistent storage
-func WarmupGuildRoles(session WarmupSession, cache *UnifiedCache, store *storage.Store, guildID string) (int, error) {
-	// Check if already cached
-	if roles, ok := cache.GetRoles(guildID); ok && len(roles) > 0 {
-		return 0, nil // Already cached
-	}
-
-	// Fetch from Discord
-	roles, err := session.GuildRoles(guildID)
-	if err != nil {
-		return 0, fmt.Errorf("fetch roles: %w", err)
-	}
-
-	// Cache it
-	cache.SetRoles(guildID, roles)
-
-	// Store member roles mapping if available
-	if store != nil {
-		// This is handled by member warmup
-	}
-
-	return len(roles), nil
-}
-
-// WarmupGuildChannels fetches channels if not in cache
-func WarmupGuildChannels(session WarmupSession, cache *UnifiedCache, guildID string) (int, error) {
-	// Fetch from Discord (discordgo doesn't provide a simple cache check)
-	channels, err := session.GuildChannels(guildID)
-	if err != nil {
-		return 0, fmt.Errorf("fetch channels: %w", err)
-	}
-
-	// Cache each channel
-	cachedCount := 0
-	for _, channel := range channels {
-		// Check if already cached
-		if _, ok := cache.GetChannel(channel.ID); !ok {
-			cache.SetChannel(channel.ID, channel)
-			cachedCount++
-		}
-	}
-
-	return cachedCount, nil
-}
-
-// WarmupGuildMembers fetches members if missing from storage and caches them
-func WarmupGuildMembers(session WarmupSession, cache *UnifiedCache, store *storage.Store, guildID string, maxMembers int) (int, error) {
-	return WarmupGuildMembersContext(context.Background(), session, cache, store, guildID, maxMembers)
-}
-
-func WarmupGuildMembersContext(ctx context.Context, session WarmupSession, cache *UnifiedCache, store *storage.Store, guildID string, maxMembers int) (int, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
-	// Fetch members from Discord
-	// Use chunking for large guilds
-	after := ""
-	fetchedCount := 0
-	cachedCount := 0
-	limit := 1000 // Discord API limit
-
-	for {
-		if err := ctx.Err(); err != nil {
-			return cachedCount, fmt.Errorf("warmupGuildMembersContext: %w", err)
-		}
-		if maxMembers > 0 && fetchedCount >= maxMembers {
-			break
-		}
-
-		// Adjust limit for last batch
-		currentLimit := limit
-		if maxMembers > 0 && fetchedCount+limit > maxMembers {
-			currentLimit = maxMembers - fetchedCount
-		}
-
-		members, err := session.GuildMembers(guildID, after, currentLimit)
-		if err != nil {
-			return cachedCount, fmt.Errorf("fetch members: %w", err)
-		}
-
-		if len(members) == 0 {
-			break
-		}
-
-		// Process each member
-		for _, member := range members {
-			if err := ctx.Err(); err != nil {
-				return cachedCount, fmt.Errorf("warmupGuildMembersContext: %w", err)
-			}
-			fetchedCount++
-
-			// Cache the member
-			if _, ok := cache.GetMember(guildID, member.User.ID); !ok {
-				cache.SetMember(guildID, member.User.ID, member)
-				cachedCount++
-			}
-
-			if store != nil {
-				joinedAt := time.Now().UTC()
-				if !member.JoinedAt.IsZero() {
-					joinedAt = member.JoinedAt
-				}
-
-				// Preserve historical joins while still repairing rows that were
-				// previously rewritten to newer values.
-				if err := store.UpsertMemberJoin(guildID, member.User.ID, joinedAt); err != nil {
-					log.ApplicationLogger().Warn(fmt.Sprintf("Failed to store member join: %v", err))
-				}
-
-				if len(member.Roles) > 0 {
-					if err := store.UpsertMemberRoles(guildID, member.User.ID, member.Roles, time.Now().UTC()); err != nil {
-						log.ApplicationLogger().Warn(fmt.Sprintf("Failed to store member roles: %v", err))
-					}
-				}
-			}
-		}
-
-		// Check if we got all members
-		if len(members) < currentLimit {
-			break
-		}
-
-		// Set after for next batch
-		after = members[len(members)-1].User.ID
-	}
-
-	return cachedCount, nil
-}
-
 // RefreshMemberData refreshes member data for active members in a guild
-func RefreshMemberData(session *discordgo.Session, cache *UnifiedCache, store *storage.Store, guildID string, userIDs []string) error {
+func RefreshMemberData(st *state.State, store *storage.Store, guildIDStr string, userIDs []string) error {
 	if len(userIDs) == 0 {
 		return nil
 	}
 
-	log.ApplicationLogger().Info(fmt.Sprintf("🔄 Refreshing %d members in guild %s", len(userIDs), guildID))
+	gSnowflake, err := discord.ParseSnowflake(guildIDStr)
+	if err != nil {
+		return err
+	}
+	gID := discord.GuildID(gSnowflake)
 
-	for _, userID := range userIDs {
-		member, err := session.GuildMember(guildID, userID)
+	log.ApplicationLogger().Info(fmt.Sprintf("🔄 Refreshing %d members in guild %s", len(userIDs), guildIDStr))
+
+	for _, userIDStr := range userIDs {
+		uSnowflake, err := discord.ParseSnowflake(userIDStr)
 		if err != nil {
-			log.ApplicationLogger().Warn(fmt.Sprintf("Failed to refresh member %s: %v", userID, err))
+			continue
+		}
+		uID := discord.UserID(uSnowflake)
+
+		member, err := st.Client.Member(gID, uID)
+		if err != nil {
 			continue
 		}
 
-		// Update cache
-		cache.SetMember(guildID, userID, member)
+		st.Cabinet.MemberSet(gID, member, true)
 
-		// Update storage
 		if store != nil {
 			joinedAt := time.Now().UTC()
-			if !member.JoinedAt.IsZero() {
-				joinedAt = member.JoinedAt
+			if member.Joined.IsValid() {
+				joinedAt = member.Joined.Time()
 			}
-			if err := store.UpsertMemberJoin(guildID, userID, joinedAt); err != nil {
-				log.ApplicationLogger().Warn(fmt.Sprintf("Failed to update member join: %v", err))
-			}
+			_ = store.UpsertMemberJoin(guildIDStr, userIDStr, joinedAt)
 
-			if len(member.Roles) > 0 {
-				if err := store.UpsertMemberRoles(guildID, userID, member.Roles, time.Now().UTC()); err != nil {
-					log.ApplicationLogger().Warn(fmt.Sprintf("Failed to update member roles: %v", err))
+			if len(member.RoleIDs) > 0 {
+				var roleStrs []string
+				for _, rid := range member.RoleIDs {
+					roleStrs = append(roleStrs, rid.String())
 				}
+				_ = store.UpsertMemberRoles(guildIDStr, userIDStr, roleStrs, time.Now().UTC())
 			}
 		}
 	}
@@ -369,18 +221,14 @@ func RefreshMemberData(session *discordgo.Session, cache *UnifiedCache, store *s
 }
 
 // SchedulePeriodicCleanup starts a background goroutine that periodically cleans up obsolete data.
-// Pass interval <= 0 to disable cleanup (returns nil).
 func SchedulePeriodicCleanup(store *storage.Store, interval time.Duration) chan struct{} {
 	if interval <= 0 {
 		return nil
 	}
-
 	stopChan := make(chan struct{})
-
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
-
 		for {
 			select {
 			case <-ticker.C:
@@ -388,12 +236,10 @@ func SchedulePeriodicCleanup(store *storage.Store, interval time.Duration) chan 
 					log.ErrorLoggerRaw().Error(fmt.Sprintf("Periodic cleanup failed: %v", err))
 				}
 			case <-stopChan:
-
 				return
 			}
 		}
 	}()
-
 	return stopChan
 }
 
@@ -402,15 +248,9 @@ func KeepMemberDataFresh(store *storage.Store, guildID string, userIDs []string)
 	if store == nil || len(userIDs) == 0 {
 		return nil
 	}
-
 	for _, userID := range userIDs {
-		if err := store.TouchMemberJoin(guildID, userID); err != nil {
-			log.ApplicationLogger().Warn(fmt.Sprintf("Failed to touch member join freshness for %s: %v", userID, err))
-		}
-		if err := store.TouchMemberRoles(guildID, userID); err != nil {
-			log.ApplicationLogger().Warn(fmt.Sprintf("Failed to touch member roles for %s: %v", userID, err))
-		}
+		_ = store.TouchMemberJoin(guildID, userID)
+		_ = store.TouchMemberRoles(guildID, userID)
 	}
-
 	return nil
 }

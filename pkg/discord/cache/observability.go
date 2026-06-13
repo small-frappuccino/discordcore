@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/diamondburned/arikawa/v3/state/store"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
@@ -33,47 +34,35 @@ type CacheMetricsSnapshot struct {
 	LastWarmup time.Time                    `json:"last_warmup"`
 }
 
-// Snapshot returns a typed point-in-time view of every observable counter on
-// the cache. When store is non-nil the persisted totals are queried under the
+// SnapshotCabinet returns a typed point-in-time view of every observable counter on
+// the cache. When pgStore is non-nil the persisted totals are queried under the
 // caller's context; query errors are swallowed so the in-memory counters still
 // reach the caller — the route layer can decide whether to surface the partial
 // snapshot or fail loud.
-//
-// Snapshot is safe to call concurrently; segment Stats() takes its own locks
-// and the Postgres query is read-only.
-func (uc *UnifiedCache) Snapshot(ctx context.Context, store *storage.Store) CacheMetricsSnapshot {
-	if uc == nil {
-		return CacheMetricsSnapshot{}
+func SnapshotCabinet(ctx context.Context, cab *store.Cabinet, pgStore *storage.Store) CacheMetricsSnapshot {
+	out := CacheMetricsSnapshot{}
+
+	if cab != nil {
+		gSlice, _ := cab.Guilds()
+		out.Guilds.Entries = len(gSlice)
+
+		for _, g := range gSlice {
+			mSlice, _ := cab.Members(g.ID)
+			out.Members.Entries += len(mSlice)
+			rSlice, _ := cab.Roles(g.ID)
+			out.Roles.Entries += len(rSlice)
+			cSlice, _ := cab.Channels(g.ID)
+			out.Channels.Entries += len(cSlice)
+		}
+
+		pcSlice, _ := cab.PrivateChannels()
+		out.Channels.Entries += len(pcSlice)
 	}
-	out := CacheMetricsSnapshot{LastWarmup: uc.lastWarmup}
-	if uc.members != nil {
-		out.Members = buildSegmentSnapshot(uc.members.Stats())
-	}
-	if uc.guilds != nil {
-		out.Guilds = buildSegmentSnapshot(uc.guilds.Stats())
-	}
-	if uc.roles != nil {
-		out.Roles = buildSegmentSnapshot(uc.roles.Stats())
-	}
-	if uc.channels != nil {
-		out.Channels = buildSegmentSnapshot(uc.channels.Stats())
-	}
-	if store != nil {
-		if persisted, err := store.GetCacheStatsContext(ctx); err == nil {
+
+	if pgStore != nil {
+		if persisted, err := pgStore.GetCacheStatsContext(ctx); err == nil {
 			out.Persisted = persisted
 		}
 	}
 	return out
-}
-
-func buildSegmentSnapshot(s segmentStats) SegmentSnapshot {
-	return SegmentSnapshot{
-		Entries:    s.Size,
-		Hits:       s.Hits,
-		Misses:     s.Misses,
-		Evictions:  s.Evictions,
-		HitRate:    s.HitRate,
-		TTLSeconds: int(s.TTL / time.Second),
-		Limit:      s.Limit,
-	}
 }

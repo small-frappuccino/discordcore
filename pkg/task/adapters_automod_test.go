@@ -5,13 +5,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/small-frappuccino/discordgo"
+	"github.com/small-frappuccino/discordcore/pkg/automod"
 )
 
 func TestAutomodIdempotencyKey_UsesMessageIDWhenAvailable(t *testing.T) {
 	t.Parallel()
 
-	key := AutomodIdempotencyKey(&discordgo.AutoModerationActionExecution{
+	key := AutomodIdempotencyKey(&automod.ActionExecution{
 		GuildID:   "g1",
 		RuleID:    "r1",
 		UserID:    "u1",
@@ -32,7 +32,7 @@ func TestAutomodIdempotencyKey_AlertOnlyEventFallsToTBucket(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 5, 19, 9, 13, 0, 0, time.UTC)
-	key := automodIdempotencyKeyAt(&discordgo.AutoModerationActionExecution{
+	key := automodIdempotencyKeyAt(&automod.ActionExecution{
 		GuildID:              "g1",
 		RuleID:               "r1",
 		UserID:               "u1",
@@ -51,7 +51,7 @@ func TestAutomodIdempotencyKey_FallsBackToTBucketWhenNoStableID(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 5, 19, 9, 13, 0, 0, time.UTC)
-	key := automodIdempotencyKeyAt(&discordgo.AutoModerationActionExecution{
+	key := automodIdempotencyKeyAt(&automod.ActionExecution{
 		GuildID: "g1",
 		RuleID:  "r1",
 		UserID:  "u1",
@@ -64,7 +64,7 @@ func TestAutomodIdempotencyKey_FallsBackToTBucketWhenNoStableID(t *testing.T) {
 func TestAutomodIdempotencyKey_HashesMatchedContentWhenNoMessageID(t *testing.T) {
 	t.Parallel()
 
-	key := AutomodIdempotencyKey(&discordgo.AutoModerationActionExecution{
+	key := AutomodIdempotencyKey(&automod.ActionExecution{
 		GuildID:        "g1",
 		RuleID:         "r1",
 		UserID:         "u1",
@@ -78,7 +78,7 @@ func TestAutomodIdempotencyKey_HashesMatchedContentWhenNoMessageID(t *testing.T)
 func TestAutomodIdempotencyKey_FallsBackToMatchedKeyword(t *testing.T) {
 	t.Parallel()
 
-	key := AutomodIdempotencyKey(&discordgo.AutoModerationActionExecution{
+	key := AutomodIdempotencyKey(&automod.ActionExecution{
 		GuildID:        "g1",
 		RuleID:         "r1",
 		UserID:         "u1",
@@ -92,7 +92,7 @@ func TestAutomodIdempotencyKey_FallsBackToMatchedKeyword(t *testing.T) {
 func TestAutomodIdempotencyKey_MatchedContentDoesNotBucket(t *testing.T) {
 	t.Parallel()
 
-	base := &discordgo.AutoModerationActionExecution{
+	base := &automod.ActionExecution{
 		GuildID:        "g1",
 		RuleID:         "r1",
 		UserID:         "u1",
@@ -110,7 +110,7 @@ func TestAutomodIdempotencyKey_MatchedContentDoesNotBucket(t *testing.T) {
 func TestAutomodIdempotencyKey_MatchedKeywordBucketsBySecond(t *testing.T) {
 	t.Parallel()
 
-	base := &discordgo.AutoModerationActionExecution{
+	base := &automod.ActionExecution{
 		GuildID:        "g1",
 		RuleID:         "r1",
 		UserID:         "u1",
@@ -136,13 +136,13 @@ func TestAutomodIdempotencyKey_DifferentContentProducesDifferentKey(t *testing.T
 	t.Parallel()
 
 	now := time.Date(2026, 5, 19, 9, 13, 0, 0, time.UTC)
-	k1 := automodIdempotencyKeyAt(&discordgo.AutoModerationActionExecution{
+	k1 := automodIdempotencyKeyAt(&automod.ActionExecution{
 		GuildID:        "g1",
 		RuleID:         "r1",
 		UserID:         "u1",
 		MatchedContent: "BigAss",
 	}, now)
-	k2 := automodIdempotencyKeyAt(&discordgo.AutoModerationActionExecution{
+	k2 := automodIdempotencyKeyAt(&automod.ActionExecution{
 		GuildID:        "g1",
 		RuleID:         "r1",
 		UserID:         "u1",
@@ -156,7 +156,7 @@ func TestAutomodIdempotencyKey_DifferentContentProducesDifferentKey(t *testing.T
 func TestAutomodIdempotencyKey_MessageIDPrecedenceOverFragment(t *testing.T) {
 	t.Parallel()
 
-	key := AutomodIdempotencyKey(&discordgo.AutoModerationActionExecution{
+	key := AutomodIdempotencyKey(&automod.ActionExecution{
 		GuildID:        "g1",
 		RuleID:         "r1",
 		UserID:         "u1",
@@ -172,7 +172,7 @@ func TestAutomodIdempotencyKey_ContentPrecedenceOverKeyword(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 5, 19, 9, 13, 0, 0, time.UTC)
-	key := automodIdempotencyKeyAt(&discordgo.AutoModerationActionExecution{
+	key := automodIdempotencyKeyAt(&automod.ActionExecution{
 		GuildID:        "g1",
 		RuleID:         "r1",
 		UserID:         "u1",
@@ -191,7 +191,7 @@ func TestAutomodIdempotencyKey_ContentPrecedenceOverKeyword(t *testing.T) {
 func TestAutomodIdempotencyKey_TBucketCoalescesWithinWindow(t *testing.T) {
 	t.Parallel()
 
-	event := &discordgo.AutoModerationActionExecution{
+	event := &automod.ActionExecution{
 		GuildID: "g1",
 		RuleID:  "r1",
 		UserID:  "u1",
@@ -212,7 +212,7 @@ func TestAutomodIdempotencyKey_TBucketCoalescesWithinWindow(t *testing.T) {
 func TestAutomodIdempotencyKey_TBucketDistinctAcrossWindows(t *testing.T) {
 	t.Parallel()
 
-	event := &discordgo.AutoModerationActionExecution{
+	event := &automod.ActionExecution{
 		GuildID: "g1",
 		RuleID:  "r1",
 		UserID:  "u1",
@@ -234,22 +234,22 @@ func TestAutomodIdempotencyKey_TBucketDistinctAcrossWindows(t *testing.T) {
 func TestAutomodIdempotencyKey_CoalescesActionsForMessageViolation(t *testing.T) {
 	t.Parallel()
 
-	block := &discordgo.AutoModerationActionExecution{
+	block := &automod.ActionExecution{
 		GuildID:        "g1",
 		RuleID:         "r1",
 		UserID:         "u1",
 		MessageID:      "m1",
 		MatchedKeyword: "spam",
-		Action:         discordgo.AutoModerationAction{Type: discordgo.AutoModerationActionType(1)}, // BLOCK_MESSAGE
+		ActionType:     1,
 	}
-	alert := &discordgo.AutoModerationActionExecution{
+	alert := &automod.ActionExecution{
 		GuildID:              "g1",
 		RuleID:               "r1",
 		UserID:               "u1",
 		MessageID:            "m1",
 		MatchedKeyword:       "spam",
 		AlertSystemMessageID: "a1",
-		Action:               discordgo.AutoModerationAction{Type: discordgo.AutoModerationActionType(2)}, // SEND_ALERT_MESSAGE
+		ActionType:           2,
 	}
 	if k1, k2 := AutomodIdempotencyKey(block), AutomodIdempotencyKey(alert); k1 != k2 || k1 == "" {
 		t.Fatalf("per-action events for the same message violation must share a key, got %q vs %q", k1, k2)
@@ -264,22 +264,22 @@ func TestAutomodIdempotencyKey_CoalescesActionsForMessageViolation(t *testing.T)
 func TestAutomodIdempotencyKey_CoalescesActionsForProfileViolation(t *testing.T) {
 	t.Parallel()
 
-	block := &discordgo.AutoModerationActionExecution{
+	block := &automod.ActionExecution{
 		GuildID:        "g1",
 		RuleID:         "r1",
 		UserID:         "u1",
 		MatchedKeyword: "tits",
 		MatchedContent: "Itsuki's Tits",
-		Action:         discordgo.AutoModerationAction{Type: discordgo.AutoModerationActionType(4)}, // BLOCK_MEMBER_INTERACTION
+		ActionType:     2,
 	}
-	alert := &discordgo.AutoModerationActionExecution{
+	alert := &automod.ActionExecution{
 		GuildID:              "g1",
 		RuleID:               "r1",
 		UserID:               "u1",
 		MatchedKeyword:       "tits",
 		MatchedContent:       "Itsuki's Tits",
 		AlertSystemMessageID: "a1",
-		Action:               discordgo.AutoModerationAction{Type: discordgo.AutoModerationActionType(2)}, // SEND_ALERT_MESSAGE
+		ActionType:           2,
 	}
 	if k1, k2 := AutomodIdempotencyKey(block), AutomodIdempotencyKey(alert); k1 != k2 || k1 == "" {
 		t.Fatalf("per-action events for the same profile violation must share a key, got %q vs %q", k1, k2)
