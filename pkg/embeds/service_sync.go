@@ -7,13 +7,9 @@ import (
 	"strings"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordgo"
 )
 
-const (
-	discordErrUnknownChannel = 10003
-	discordErrUnknownMessage = 10008
-)
+
 
 type customEmbedSyncFailure struct {
 	Posting files.CustomEmbedPostingConfig
@@ -33,49 +29,38 @@ func (r customEmbedSyncResult) HasIssues() bool {
 
 type customEmbedPostingSyncer struct {
 	configManager *files.ConfigManager
-	editMessage   func(s *discordgo.Session, edit *discordgo.MessageEdit) error
+	publisher     Publisher
 	dropPostings  func(cm *files.ConfigManager, guildID, key string, messageIDs []string) error
 }
 
-func newCustomEmbedPostingSyncer(cm *files.ConfigManager) *customEmbedPostingSyncer {
+func newCustomEmbedPostingSyncer(cm *files.ConfigManager, publisher Publisher) *customEmbedPostingSyncer {
 	return &customEmbedPostingSyncer{
 		configManager: cm,
-		editMessage:   defaultCustomEmbedEditMessage,
+		publisher:     publisher,
 		dropPostings:  defaultCustomEmbedDropPostings,
 	}
 }
 
 // Sync syncs.
 func (s *customEmbedPostingSyncer) Sync(
-	session *discordgo.Session,
 	guildID string,
 	key string,
 	postings []files.CustomEmbedPostingConfig,
-	embed *discordgo.MessageEmbed,
+	embed files.CustomEmbedConfig,
 ) customEmbedSyncResult {
 	var result customEmbedSyncResult
 	if len(postings) == 0 {
 		return result
 	}
 
-	embeds := []*discordgo.MessageEmbed{}
-	if embed != nil {
-		embeds = []*discordgo.MessageEmbed{embed}
-	}
-
 	for _, posting := range postings {
-		edit := &discordgo.MessageEdit{
-			ID:      strings.TrimSpace(posting.MessageID),
-			Channel: strings.TrimSpace(posting.ChannelID),
-			Embeds:  &embeds,
-		}
-		err := s.editMessage(session, edit)
+		err := s.publisher.UpdatePosting(strings.TrimSpace(posting.ChannelID), strings.TrimSpace(posting.MessageID), embed)
 		if err == nil {
 			result.Edited++
 			continue
 		}
 
-		if isCustomEmbedPostingMissingError(err) {
+		if errors.Is(err, ErrPostingMissing) {
 			result.Dropped = append(result.Dropped, posting)
 			continue
 		}
@@ -125,25 +110,7 @@ func formatCustomEmbedSyncSummary(result customEmbedSyncResult, action string) s
 	return strings.Join(lines, "\n")
 }
 
-func isCustomEmbedPostingMissingError(err error) bool {
-	var rest *discordgo.RESTError
-	if !errors.As(err, &rest) || rest.Message == nil {
-		return false
-	}
-	switch rest.Message.Code {
-	case discordErrUnknownChannel, discordErrUnknownMessage:
-		return true
-	}
-	return false
-}
 
-func defaultCustomEmbedEditMessage(s *discordgo.Session, edit *discordgo.MessageEdit) error {
-	if s == nil {
-		return errors.New("discord session is nil")
-	}
-	_, err := s.ChannelMessageEditComplex(edit)
-	return err
-}
 
 func defaultCustomEmbedDropPostings(cm *files.ConfigManager, guildID, key string, messageIDs []string) error {
 	if cm == nil {

@@ -13,6 +13,7 @@ import (
 	qotdcmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/discord/tickets"
 	"github.com/small-frappuccino/discordcore/pkg/embeds"
+	discordembeds "github.com/small-frappuccino/discordcore/pkg/discord/embeds"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/partners"
@@ -170,7 +171,7 @@ func (ch *CommandHandler) SetupCommands() error {
 
 	// Create the command manager
 	ch.commandManager = core.NewCommandManager(ch.session, ch.configManager)
-	ch.embedService = embeds.NewEmbedService(ch.configManager)
+	ch.embedService = embeds.NewEmbedService(ch.configManager, &discordembeds.Adapter{Session: ch.session})
 	ch.rolePanelService = roles.NewRolePanelService(ch.configManager)
 	ch.partnerService = partners.NewPartnerService(ch.configManager)
 

@@ -9,6 +9,7 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	embedspkg "github.com/small-frappuccino/discordcore/pkg/embeds"
+	discordembeds "github.com/small-frappuccino/discordcore/pkg/discord/embeds"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordgo"
 )
@@ -106,7 +107,7 @@ func TestEmbedCommandsIntegration(t *testing.T) {
 	}
 
 	router := core.NewCommandRouter(session, cm)
-	embedService := embedspkg.NewEmbedService(cm)
+	embedService := embedspkg.NewEmbedService(cm, &discordembeds.Adapter{Session: session})
 	embedCommands := NewEmbedCommands(cm, embedService)
 	embedCommands.RegisterCommands(router)
 
