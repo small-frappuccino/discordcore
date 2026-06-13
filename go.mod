@@ -34,4 +34,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/small-frappuccino/discordgo => ../discordgo
+replace github.com/small-frappuccino/discordgo => D:/Users/alice/git/discordgo
