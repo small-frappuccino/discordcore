@@ -25,6 +25,7 @@ tmp/
 /*.ps1
 /*.py
 /*.go
+/.gemini
 /*.js
 /*.out
 /c
@@ -32,6 +33,3 @@ tmp/
 /bun.lockb
 /package.json
 /package-lock.json
-
-# AI configuration
-.gemini
