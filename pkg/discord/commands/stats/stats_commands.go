@@ -1,22 +1,28 @@
 package stats
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	domainstats "github.com/small-frappuccino/discordcore/pkg/stats"
 	"github.com/small-frappuccino/discordgo"
 )
 
 // StatsCommands wiring.
 type StatsCommands struct {
 	configManager *files.ConfigManager
+	statsService  *domainstats.StatsService
 }
 
 // NewStatsCommands returns the root stats command tree.
-func NewStatsCommands(configManager *files.ConfigManager) *StatsCommands {
-	return &StatsCommands{configManager: configManager}
+func NewStatsCommands(configManager *files.ConfigManager, statsService *domainstats.StatsService) *StatsCommands {
+	return &StatsCommands{
+		configManager: configManager,
+		statsService:  statsService,
+	}
 }
 
 // RegisterCommands registers the commands.
@@ -33,10 +39,10 @@ func (c *StatsCommands) RegisterCommands(router *core.CommandRouter) {
 		checker,
 	)
 
-	statsGroup.AddSubCommand(newStatsAddSubCommand(c.configManager))
-	statsGroup.AddSubCommand(newStatsRemoveSubCommand(c.configManager))
+	statsGroup.AddSubCommand(newStatsAddSubCommand(c.configManager, c.statsService))
+	statsGroup.AddSubCommand(newStatsRemoveSubCommand(c.configManager, c.statsService))
 	statsGroup.AddSubCommand(newStatsListSubCommand(c.configManager))
-	statsGroup.AddSubCommand(newStatsSettingsSubCommand(c.configManager))
+	statsGroup.AddSubCommand(newStatsSettingsSubCommand(c.configManager, c.statsService))
 
 	router.RegisterSlashCommand(statsGroup)
 }
@@ -58,10 +64,11 @@ func ensureStatsEnabled(ctx *core.Context) error {
 
 type statsAddSubCommand struct {
 	configManager *files.ConfigManager
+	statsService  *domainstats.StatsService
 }
 
-func newStatsAddSubCommand(cm *files.ConfigManager) *statsAddSubCommand {
-	return &statsAddSubCommand{configManager: cm}
+func newStatsAddSubCommand(cm *files.ConfigManager, ss *domainstats.StatsService) *statsAddSubCommand {
+	return &statsAddSubCommand{configManager: cm, statsService: ss}
 }
 
 func (c *statsAddSubCommand) Name() string              { return "add" }
@@ -145,15 +152,20 @@ func (c *statsAddSubCommand) Handle(ctx *core.Context) error {
 		return err
 	}
 
+	if c.statsService != nil {
+		_ = c.statsService.UpdateStatsChannels(context.WithoutCancel(context.Background()))
+	}
+
 	return core.NewResponseBuilder(ctx.Session).Ephemeral().Success(ctx.Interaction, fmt.Sprintf("Updated stats configuration for <#%s>.", channelID))
 }
 
 type statsRemoveSubCommand struct {
 	configManager *files.ConfigManager
+	statsService  *domainstats.StatsService
 }
 
-func newStatsRemoveSubCommand(cm *files.ConfigManager) *statsRemoveSubCommand {
-	return &statsRemoveSubCommand{configManager: cm}
+func newStatsRemoveSubCommand(cm *files.ConfigManager, ss *domainstats.StatsService) *statsRemoveSubCommand {
+	return &statsRemoveSubCommand{configManager: cm, statsService: ss}
 }
 
 func (c *statsRemoveSubCommand) Name() string              { return "remove" }
@@ -203,6 +215,11 @@ func (c *statsRemoveSubCommand) Handle(ctx *core.Context) error {
 	if !removed {
 		return core.NewResponseBuilder(ctx.Session).Ephemeral().Error(ctx.Interaction, fmt.Sprintf("<#%s> is not configured as a stats channel.", channelID))
 	}
+
+	if c.statsService != nil {
+		_ = c.statsService.UpdateStatsChannels(context.WithoutCancel(context.Background()))
+	}
+
 	return core.NewResponseBuilder(ctx.Session).Ephemeral().Success(ctx.Interaction, fmt.Sprintf("Removed <#%s> from stats channels.", channelID))
 }
 
@@ -269,10 +286,11 @@ func (c *statsListSubCommand) Handle(ctx *core.Context) error {
 
 type statsSettingsSubCommand struct {
 	configManager *files.ConfigManager
+	statsService  *domainstats.StatsService
 }
 
-func newStatsSettingsSubCommand(cm *files.ConfigManager) *statsSettingsSubCommand {
-	return &statsSettingsSubCommand{configManager: cm}
+func newStatsSettingsSubCommand(cm *files.ConfigManager, ss *domainstats.StatsService) *statsSettingsSubCommand {
+	return &statsSettingsSubCommand{configManager: cm, statsService: ss}
 }
 
 func (c *statsSettingsSubCommand) Name() string              { return "settings" }
@@ -320,6 +338,10 @@ func (c *statsSettingsSubCommand) Handle(ctx *core.Context) error {
 	})
 	if err != nil {
 		return err
+	}
+
+	if c.statsService != nil {
+		_ = c.statsService.UpdateStatsChannels(context.WithoutCancel(context.Background()))
 	}
 
 	return core.NewResponseBuilder(ctx.Session).Ephemeral().Success(ctx.Interaction, "Stats settings updated successfully.")

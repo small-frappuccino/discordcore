@@ -35,9 +35,9 @@ type StatsService struct {
 	botInstanceID        string
 	defaultBotInstanceID string
 
-	mu      sync.RWMutex
-	guilds  map[string]*statsGuildState
-	lastRun map[string]time.Time
+	cancelMu sync.Mutex
+	guilds   sync.Map
+	lastRun  sync.Map
 
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -59,8 +59,6 @@ func NewStatsService(
 		logger:               logger,
 		botInstanceID:        botInstanceID,
 		defaultBotInstanceID: defaultBotInstanceID,
-		guilds:               make(map[string]*statsGuildState),
-		lastRun:              make(map[string]time.Time),
 	}
 }
 
@@ -86,15 +84,15 @@ func (s *StatsService) Dependencies() []string {
 
 // IsRunning is running.
 func (s *StatsService) IsRunning() bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.cancelMu.Lock()
+	defer s.cancelMu.Unlock()
 	return s.cancel != nil
 }
 
 // HealthCheck healths check.
 func (s *StatsService) HealthCheck(ctx context.Context) svc.HealthStatus {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.cancelMu.Lock()
+	defer s.cancelMu.Unlock()
 	return svc.HealthStatus{
 		Healthy:   s.cancel != nil,
 		Message:   "Stats service health check",
@@ -109,8 +107,8 @@ func (s *StatsService) Stats() svc.ServiceStats {
 
 // Start starts.
 func (s *StatsService) Start(ctx context.Context) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.cancelMu.Lock()
+	defer s.cancelMu.Unlock()
 	if s.cancel != nil {
 		return nil // already running
 	}
@@ -148,14 +146,14 @@ func (s *StatsService) runCron(ctx context.Context) {
 
 // Stop stops.
 func (s *StatsService) Stop(ctx context.Context) error {
-	s.mu.Lock()
+	s.cancelMu.Lock()
 	if s.cancel == nil {
-		s.mu.Unlock()
+		s.cancelMu.Unlock()
 		return nil
 	}
 	s.cancel()
 	s.cancel = nil
-	s.mu.Unlock()
+	s.cancelMu.Unlock()
 
 	s.wg.Wait()
 	return nil
@@ -240,6 +238,7 @@ type statsPublishedChannel struct {
 }
 
 type statsGuildState struct {
+	mu              sync.Mutex
 	initialized     bool
 	dirty           bool
 	trackedRolesKey string
@@ -429,17 +428,14 @@ func (s *StatsService) shouldRunStatsUpdate(guildID string, interval time.Durati
 	}
 	now := time.Now()
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.lastRun == nil {
-		s.lastRun = make(map[string]time.Time)
+	var last time.Time
+	if v, ok := s.lastRun.Load(guildID); ok {
+		last = v.(time.Time)
 	}
-	last, ok := s.lastRun[guildID]
-	if ok && now.Sub(last) < interval {
+	if !last.IsZero() && now.Sub(last) < interval {
 		return false
 	}
-	s.lastRun[guildID] = now
+	s.lastRun.Store(guildID, now)
 	return true
 }
 
@@ -487,8 +483,8 @@ func (s *StatsService) reconcileStatsForGuild(ctx context.Context, gcfg files.Gu
 func (s *StatsService) prepareStatsState(ctx context.Context, gcfg files.GuildConfig) (bool, error) {
 	_, trackedRolesKey := statsTrackedRoles(gcfg.Stats.Channels)
 
-	s.mu.Lock()
-	state := s.ensureStatsGuildStateLocked(gcfg.GuildID)
+	state := s.getOrInitStatsGuildState(gcfg.GuildID)
+	state.mu.Lock()
 	keysMatch := state.trackedRolesKey == trackedRolesKey
 	var needsReconcile, skipRest bool
 	if state.initialized && keysMatch && !state.dirty {
@@ -496,7 +492,7 @@ func (s *StatsService) prepareStatsState(ctx context.Context, gcfg files.GuildCo
 		needsReconcile = time.Since(lastReconciled) >= statsReconcileInterval(gcfg.Stats)
 		skipRest = true
 	}
-	s.mu.Unlock()
+	state.mu.Unlock()
 
 	if skipRest {
 		return needsReconcile, nil
@@ -853,10 +849,9 @@ func (s *StatsService) ApplyMemberAdd(guildID string, userID string, joinedAt ti
 		trackedRoles: filterTrackedRoles(roles, trackedRoles),
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	state := s.ensureStatsGuildStateLocked(guildID)
+	state := s.getOrInitStatsGuildState(guildID)
+	state.mu.Lock()
+	defer state.mu.Unlock()
 	if !state.initialized || state.trackedRolesKey != trackedRolesKey {
 		state.dirty = true
 		return
@@ -884,10 +879,9 @@ func (s *StatsService) ApplyStatsMemberUpdate(guildID, userID string, isBot bool
 		trackedRoles: filterTrackedRoles(roles, trackedRoles),
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	state := s.ensureStatsGuildStateLocked(guildID)
+	state := s.getOrInitStatsGuildState(guildID)
+	state.mu.Lock()
+	defer state.mu.Unlock()
 	if !state.initialized || state.trackedRolesKey != trackedRolesKey {
 		state.dirty = true
 		return
@@ -911,10 +905,9 @@ func (s *StatsService) ApplyMemberRemove(guildID, userID string) {
 	}
 	s.persistStatsMemberLeft(guildID, userID)
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	state := s.ensureStatsGuildStateLocked(guildID)
+	state := s.getOrInitStatsGuildState(guildID)
+	state.mu.Lock()
+	defer state.mu.Unlock()
 	if !state.initialized || state.trackedRolesKey != trackedRolesKey {
 		state.dirty = true
 		return
@@ -997,49 +990,49 @@ func (s *StatsService) statsGuildConfig(guildID string) (files.GuildConfig, map[
 	return files.GuildConfig{}, nil, "", false
 }
 
-func (s *StatsService) ensureStatsGuildStateLocked(guildID string) *statsGuildState {
-	if s.guilds == nil {
-		s.guilds = make(map[string]*statsGuildState)
+func (s *StatsService) getOrInitStatsGuildState(guildID string) *statsGuildState {
+	if s == nil {
+		return nil
 	}
-	state := s.guilds[guildID]
-	if state != nil {
-		return state
+	v, ok := s.guilds.Load(guildID)
+	if ok {
+		return v.(*statsGuildState)
 	}
-	state = newStatsGuildState("", nil)
-	s.guilds[guildID] = state
-	return state
+	newState := newStatsGuildState("", nil)
+	v, _ = s.guilds.LoadOrStore(guildID, newState)
+	return v.(*statsGuildState)
 }
 
 func (s *StatsService) replaceStatsGuildState(guildID string, state *statsGuildState) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.guilds == nil {
-		s.guilds = make(map[string]*statsGuildState)
-	}
-	s.guilds[guildID] = state
+	s.guilds.Store(guildID, state)
 }
 
 func (s *StatsService) statsPublishedChannels(guildID string) map[string]statsPublishedChannel {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	if s.guilds == nil {
+	v, ok := s.guilds.Load(guildID)
+	if !ok {
 		return nil
 	}
-	state := s.guilds[guildID]
-	if state == nil {
-		return nil
+	state := v.(*statsGuildState)
+	state.mu.Lock()
+	defer state.mu.Unlock()
+
+	res := make(map[string]statsPublishedChannel, len(state.published))
+	for k, v := range state.published {
+		res[k] = v
 	}
-	return cloneStatsPublishedChannels(state.published)
+	return res
 }
 
 func (s *StatsService) statsPublishedChannel(guildID, channelID string) (statsPublishedChannel, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	if s.guilds == nil {
+	v, ok := s.guilds.Load(guildID)
+	if !ok {
 		return statsPublishedChannel{}, false
 	}
-	state := s.guilds[guildID]
-	if state == nil || state.published == nil {
+	state := v.(*statsGuildState)
+	state.mu.Lock()
+	defer state.mu.Unlock()
+
+	if state.published == nil {
 		return statsPublishedChannel{}, false
 	}
 	published, ok := state.published[channelID]
@@ -1047,9 +1040,9 @@ func (s *StatsService) statsPublishedChannel(guildID, channelID string) (statsPu
 }
 
 func (s *StatsService) recordStatsPublishedChannel(guildID, channelID string, published statsPublishedChannel) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	state := s.ensureStatsGuildStateLocked(guildID)
+	state := s.getOrInitStatsGuildState(guildID)
+	state.mu.Lock()
+	defer state.mu.Unlock()
 	if state.published == nil {
 		state.published = make(map[string]statsPublishedChannel)
 	}
@@ -1057,13 +1050,16 @@ func (s *StatsService) recordStatsPublishedChannel(guildID, channelID string, pu
 }
 
 func (s *StatsService) statsSnapshot(guildID string) (statsGuildSnapshot, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	if s.guilds == nil {
+	v, ok := s.guilds.Load(guildID)
+	if !ok {
 		return statsGuildSnapshot{}, false
 	}
-	state := s.guilds[guildID]
-	if state == nil || !state.initialized {
+	state := v.(*statsGuildState)
+
+	state.mu.Lock()
+	defer state.mu.Unlock()
+
+	if !state.initialized {
 		return statsGuildSnapshot{}, false
 	}
 
@@ -1078,20 +1074,20 @@ func (s *StatsService) statsSnapshot(guildID string) (statsGuildSnapshot, bool) 
 }
 
 func (s *StatsService) pruneStatsGuildState(activeGuilds map[string]struct{}) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for guildID := range s.lastRun {
-		if _, ok := activeGuilds[guildID]; ok {
-			continue
+	s.lastRun.Range(func(key, value any) bool {
+		guildID := key.(string)
+		if _, ok := activeGuilds[guildID]; !ok {
+			s.lastRun.Delete(guildID)
 		}
-		delete(s.lastRun, guildID)
-	}
-	for guildID := range s.guilds {
-		if _, ok := activeGuilds[guildID]; ok {
-			continue
+		return true
+	})
+	s.guilds.Range(func(key, value any) bool {
+		guildID := key.(string)
+		if _, ok := activeGuilds[guildID]; !ok {
+			s.guilds.Delete(guildID)
 		}
-		delete(s.guilds, guildID)
-	}
+		return true
+	})
 }
 
 const monitoringPersistenceTimeout = 10 * time.Second

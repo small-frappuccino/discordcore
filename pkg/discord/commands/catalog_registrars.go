@@ -141,7 +141,7 @@ func StatsCommandCatalogRegistrar() CommandCatalogRegistrar {
 			Stats: true,
 		},
 		Register: func(ch *CommandHandler, router *core.CommandRouter) {
-			stats.NewStatsCommands(ch.configManager).RegisterCommands(router)
+			stats.NewStatsCommands(ch.configManager, ch.statsService).RegisterCommands(router)
 		},
 	}
 }
