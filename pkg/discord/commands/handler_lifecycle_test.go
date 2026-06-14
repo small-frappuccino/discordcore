@@ -9,10 +9,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	applicationqotd "github.com/small-frappuccino/discordcore/pkg/qotd"
-	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordgo"
 )
@@ -199,34 +197,5 @@ func TestCommandHandlerSkipsGuildWithoutCommandsFeature(t *testing.T) {
 	handler := NewCommandHandlerForBot(nil, cfgMgr, "main")
 	if handler.handlesGuild("guild-1") {
 		t.Fatal("expected slash command handler to remain disabled for commands-off guild")
-	}
-}
-
-func TestCommandHandlerRegistersAdminCatalogOnlyWhenCapabilityEnabled(t *testing.T) {
-	t.Parallel()
-
-	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
-
-	withoutCapability := NewCommandHandlerForBot(nil, cfgMgr, "test-bot")
-	withoutCapability.commandManager = core.NewCommandManager(nil, cfgMgr)
-	withoutCapability.SetCommandCatalogRegistrars(AdminCommandCatalogRegistrar())
-	withoutCapability.SetAdminCommandServices(service.NewServiceManager())
-	if err := withoutCapability.registerCommandCatalog(); err != nil {
-		t.Fatalf("register admin catalog without capability: %v", err)
-	}
-	if _, ok := withoutCapability.commandManager.GetRouter().GetRegistry().GetCommand("admin"); ok {
-		t.Fatal("expected admin catalog to stay disabled without admin capability")
-	}
-
-	withCapability := NewCommandHandler(nil, cfgMgr)
-	withCapability.commandManager = core.NewCommandManager(nil, cfgMgr)
-	withCapability.SetCommandCatalogRegistrars(AdminCommandCatalogRegistrar())
-	withCapability.SetCommandCatalogCapabilities(CommandCatalogCapabilities{Admin: true})
-	withCapability.SetAdminCommandServices(service.NewServiceManager())
-	if err := withCapability.registerCommandCatalog(); err != nil {
-		t.Fatalf("register admin catalog with capability: %v", err)
-	}
-	if _, ok := withCapability.commandManager.GetRouter().GetRegistry().GetCommand("admin"); !ok {
-		t.Fatal("expected admin catalog to register when admin capability is enabled")
 	}
 }

@@ -26,14 +26,13 @@ import (
 type CommandHandler struct {
 	session             *discordgo.Session
 	configManager       *files.ConfigManager
-	botInstanceID       string
+	tokenHash           string
 	catalogCapabilities CommandCatalogCapabilities
 	catalogRegistrars   []CommandCatalogRegistrar
 	commandManager      *core.CommandManager
 	qotdService         qotdcmd.QuestionCatalogService
 	statsService        *stats.StatsService
 	moderationMetrics   moderation.Metrics
-	adminServiceManager *service.ServiceManager
 	ticketService       *tickets.TicketService
 	embedService        *embeds.EmbedService
 	rolePanelService    *roles.RolePanelService
@@ -57,12 +56,12 @@ func NewCommandHandler(
 func NewCommandHandlerForBot(
 	session *discordgo.Session,
 	configManager *files.ConfigManager,
-	botInstanceID string,
+	tokenHash string,
 ) *CommandHandler {
 	return &CommandHandler{
 		session:           session,
 		configManager:     configManager,
-		botInstanceID:     files.NormalizeBotInstanceID(botInstanceID),
+		tokenHash:         tokenHash,
 		catalogRegistrars: DefaultCommandCatalogRegistrars(),
 	}
 }
@@ -231,17 +230,6 @@ func (ch *CommandHandler) SetTicketService(service *tickets.TicketService) {
 	ch.ticketService = service
 }
 
-// SetAdminCommandServices injects runtime services consumed by the admin
-// command catalog. Cache and persistent-store observability moved to
-// /v1/health/cache, so this seam now carries only the service manager used by
-// /admin status/list/restart/health.
-func (ch *CommandHandler) SetAdminCommandServices(serviceManager *service.ServiceManager) {
-	if ch == nil {
-		return
-	}
-	ch.adminServiceManager = serviceManager
-}
-
 // SetCommandCatalogRegistrars overrides the slash command catalogs registered by
 // this handler.
 func (ch *CommandHandler) SetCommandCatalogRegistrars(registrars ...CommandCatalogRegistrar) {
@@ -284,9 +272,6 @@ func (ch *CommandHandler) commandCatalogRegistrarsForSetup() []CommandCatalogReg
 }
 
 func (ch *CommandHandler) supportsCatalogCapabilities(required CommandCatalogCapabilities) bool {
-	if required.Admin && !ch.catalogCapabilities.Admin {
-		return false
-	}
 	if required.Stats && !ch.catalogCapabilities.Stats {
 		return false
 	}
@@ -345,11 +330,20 @@ func (ch *CommandHandler) matchesGuildBotInstance(guildID string, feature string
 		return false
 	}
 
-	// Commands feature is now universally available to all active bots in the guild.
+	// Commands feature is universally available to all active bots in the guild.
 	if feature == "commands" {
-		return guild.BelongsToBotInstance(ch.botInstanceID)
+		for _, tokenEnc := range guild.BotInstanceTokens {
+			if string(tokenEnc) != "" && files.TokenHash(string(tokenEnc)) == ch.tokenHash {
+				return true
+			}
+		}
+		return false
 	}
 
 	resolvedID, _ := guild.ResolveFeatureBotInstanceID(feature)
-	return ch.botInstanceID == resolvedID
+	tokenEnc, ok := guild.BotInstanceTokens[resolvedID]
+	if !ok || string(tokenEnc) == "" {
+		return false
+	}
+	return files.TokenHash(string(tokenEnc)) == ch.tokenHash
 }

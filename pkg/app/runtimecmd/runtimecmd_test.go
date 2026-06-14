@@ -38,17 +38,11 @@ func TestRunUsesMainProfileOptions(t *testing.T) {
 		t.Fatalf("expected control plane to stay enabled for main runtime, got %+v", called.opts)
 	}
 
-	if len(called.opts.CommandCatalogRegistrars) != 9 {
+	if len(called.opts.CommandCatalogRegistrars) != 8 {
 		t.Fatalf("unexpected main command registrars: %+v", called.opts.CommandCatalogRegistrars)
 	}
-	if called.opts.CommandCatalogRegistrars[0].RequiredCapabilities.Admin {
+	if called.opts.CommandCatalogRegistrars[0].RequiredCapabilities.Stats {
 		t.Fatalf("expected runtime registrar first, got %+v", called.opts.CommandCatalogRegistrars)
-	}
-	if !called.opts.CommandCatalogRegistrars[7].RequiredCapabilities.Admin {
-		t.Fatalf("expected admin registrar eighth, got %+v", called.opts.CommandCatalogRegistrars)
-	}
-	if called.opts.CommandCatalogRegistrars[8].RequiredCapabilities.Admin {
-		// Just a basic check that the 9th one is qotd (no explicit capability required for now)
 	}
 	if !called.opts.Control.LocalHTTPS.Enabled || !called.opts.Control.LocalHTTPS.AutoTrust {
 		t.Fatalf("expected local https control options, got %+v", called.opts.Control)

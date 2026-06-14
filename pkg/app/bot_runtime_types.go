@@ -190,14 +190,22 @@ func (r *botRuntimeResolver) runtimeForGuild(guildID string, feature string) (*b
 	}
 
 	if bestInstanceID != "" {
-		if runtime, ok := runtimes[bestInstanceID]; ok && runtime != nil {
-			return runtime, bestInstanceID, nil
+		tokenEnc, ok := guild.BotInstanceTokens[bestInstanceID]
+		if ok && string(tokenEnc) != "" {
+			th := files.TokenHash(string(tokenEnc))
+			if runtime, ok := runtimes[th]; ok && runtime != nil {
+				return runtime, bestInstanceID, nil
+			}
 		}
 	}
 
 	if len(guild.BotInstanceTokens) > 0 {
-		for id := range guild.BotInstanceTokens {
-			if runtime, ok := runtimes[id]; ok && runtime != nil {
+		for id, tokenEnc := range guild.BotInstanceTokens {
+			if string(tokenEnc) == "" {
+				continue
+			}
+			th := files.TokenHash(string(tokenEnc))
+			if runtime, ok := runtimes[th]; ok && runtime != nil {
 				return runtime, id, nil
 			}
 		}
@@ -240,15 +248,35 @@ func (r *botRuntimeResolver) guildBindings(context.Context) ([]control.BotGuildB
 
 	out := make([]control.BotGuildBinding, 0)
 	runtimes := r.getRuntimes()
-	for botInstanceID, runtime := range runtimes {
-		if runtime == nil || runtime.session == nil {
-			continue
+	if len(runtimes) == 0 {
+		return out, nil
+	}
+
+	cfg := r.configManager.Config()
+	if cfg == nil {
+		return out, nil
+	}
+
+	for _, guild := range cfg.Guilds {
+		for botInstanceID, tokenEnc := range guild.BotInstanceTokens {
+			token := string(tokenEnc)
+			if token == "" {
+				continue
+			}
+			th := files.TokenHash(token)
+			runtime, ok := runtimes[th]
+			if !ok || runtime == nil || runtime.session == nil {
+				continue
+			}
+
+			// Check if this token's runtime actually sees this guild
+			if _, err := runtime.session.State.Guild(guild.GuildID); err == nil {
+				out = append(out, control.BotGuildBinding{
+					GuildID:       guild.GuildID,
+					BotInstanceID: botInstanceID,
+				})
+			}
 		}
-		bindings, err := listBotGuildBindingsFromSessionState(botInstanceID, runtime.session)
-		if err != nil {
-			return nil, fmt.Errorf("botRuntimeResolver.guildBindings: %w", err)
-		}
-		out = append(out, bindings...)
 	}
 
 	sort.Slice(out, func(i, j int) bool {

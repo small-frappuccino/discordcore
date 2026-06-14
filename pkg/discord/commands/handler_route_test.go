@@ -31,8 +31,8 @@ func TestCommandHandlerRoutesFeaturesToCorrectBotInstance(t *testing.T) {
 		t.Fatalf("seed config: %v", err)
 	}
 
-	mainHandler := NewCommandHandlerForBot(nil, cfgMgr, "main")
-	customHandler := NewCommandHandlerForBot(nil, cfgMgr, "custom")
+	mainHandler := NewCommandHandlerForBot(nil, cfgMgr, files.TokenHash("a"))
+	customHandler := NewCommandHandlerForBot(nil, cfgMgr, files.TokenHash("s"))
 
 	tests := []struct {
 		name       string

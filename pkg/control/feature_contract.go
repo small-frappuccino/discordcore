@@ -13,7 +13,6 @@ const (
 
 const (
 	featureTagCommandsPrimary        = "commands.primary"
-	featureTagCommandsAdmin          = "commands.admin"
 	featureTagModerationAutomod      = "moderation.automod"
 	featureTagModerationMuteRole     = "moderation.mute_role"
 	featureTagModerationCommand      = "moderation.command"
@@ -25,7 +24,6 @@ const (
 	featureTagRolesPermissionMirror  = "roles.permission_mirror"
 	featureTagStatsPrimary           = "stats.primary"
 	featureTagHomeCommands           = "home.commands"
-	featureTagHomeAdminCommands      = "home.admin_commands"
 	featureTagHomeStats              = "home.stats"
 	featureTagHomeAutoRole           = "home.auto_role"
 )

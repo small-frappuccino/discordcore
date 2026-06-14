@@ -210,18 +210,7 @@ var featureDetailBuilders = map[string]func(*files.BotConfig, string) *featureDe
 		}
 		return nil
 	},
-	"services.admin_commands": func(cfg *files.BotConfig, guildID string) *featureDetails {
-		if guildID == "" {
-			return nil
-		}
-		if guild, ok := findGuildSettings(*cfg, guildID); ok {
-			return &featureDetails{
-				AllowedRoleIDs:   slices.Clone(guild.Roles.Allowed),
-				AllowedRoleCount: len(guild.Roles.Allowed),
-			}
-		}
-		return nil
-	},
+
 	"message_cache.cleanup_on_startup": func(cfg *files.BotConfig, guildID string) *featureDetails {
 		return &featureDetails{RuntimeEnabled: cfg.ResolveRuntimeConfig(guildID).MessageCacheCleanup}
 	},

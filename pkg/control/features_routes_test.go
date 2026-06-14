@@ -207,7 +207,7 @@ func TestGuildFeaturePatchPersistsConfigDetails(t *testing.T) {
 		payload map[string]any
 	}{
 		{path: "/v1/guilds/g1/features/services.commands", payload: map[string]any{"channel_id": "cmd-channel"}},
-		{path: "/v1/guilds/g1/features/services.admin_commands", payload: map[string]any{"allowed_role_ids": []string{"admin-a", "admin-b", "admin-a", ""}}},
+
 		{path: "/v1/guilds/g1/features/moderation.mute_role", payload: map[string]any{"role_id": "mute-role"}},
 		{path: "/v1/guilds/g1/features/moderation.ban", payload: map[string]any{"enabled": true}},
 		{path: "/v1/guilds/g1/features/moderation.massban", payload: map[string]any{"enabled": true}},
@@ -254,9 +254,7 @@ func TestGuildFeaturePatchPersistsConfigDetails(t *testing.T) {
 	if guild.Channels.Commands != "cmd-channel" {
 		t.Fatalf("expected commands channel persisted, got %+v", guild.Channels)
 	}
-	if got := strings.Join(guild.Roles.Allowed, ","); got != "admin-a,admin-b" {
-		t.Fatalf("expected allowed roles persisted without duplicates, got %q", got)
-	}
+
 	if guild.Roles.MuteRole != "mute-role" {
 		t.Fatalf("expected mute role persisted, got %+v", guild.Roles)
 	}

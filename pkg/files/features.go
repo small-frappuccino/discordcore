@@ -8,10 +8,9 @@ import (
 // FeatureServiceToggles holds optional overrides for runtime behavior.
 // When unset, defaults preserve current behavior.
 type FeatureServiceToggles struct {
-	Monitoring    *bool `json:"monitoring,omitempty"`
-	Automod       *bool `json:"automod,omitempty"`
-	Commands      *bool `json:"commands,omitempty"`
-	AdminCommands *bool `json:"admin_commands,omitempty"`
+	Monitoring *bool `json:"monitoring,omitempty"`
+	Automod    *bool `json:"automod,omitempty"`
+	Commands   *bool `json:"commands,omitempty"`
 }
 
 // FeatureLoggingToggles overrides individual log-event categories. A nil field
@@ -110,10 +109,9 @@ func (ft *FeatureToggles) UnmarshalJSON(data []byte) error {
 // by runtime code that must not deal with nil-means-default semantics.
 type ResolvedFeatureToggles struct {
 	Services struct {
-		Monitoring    bool
-		Automod       bool
-		Commands      bool
-		AdminCommands bool
+		Monitoring bool
+		Automod    bool
+		Commands   bool
 	}
 	Logging struct {
 		AvatarLogging  bool

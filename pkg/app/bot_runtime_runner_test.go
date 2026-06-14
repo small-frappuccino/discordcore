@@ -145,7 +145,6 @@ func TestInitializeBotRuntime_FullCapabilities(t *testing.T) {
 			automod:     true,
 			userPrune:   false,
 			qotdRuntime: true,
-			admin:       true,
 			hasCommands: true,
 		},
 		session: session,

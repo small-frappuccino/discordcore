@@ -34,10 +34,9 @@ func TestRun_MidBootSabotageTriggersTeardown(t *testing.T) {
 		},
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
-				Monitoring:    new(bool(false)),
-				Automod:       new(bool(false)),
-				Commands:      new(bool(true)),
-				AdminCommands: new(bool(false)),
+				Monitoring: new(bool(false)),
+				Automod:    new(bool(false)),
+				Commands:   new(bool(true)),
 			},
 			Maintenance: files.FeatureMaintenanceToggles{
 				DBCleanup: new(bool(false)),
@@ -166,10 +165,9 @@ func TestRun_CascadingRollbackFailures(t *testing.T) {
 		},
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
-				Monitoring:    new(bool(false)),
-				Automod:       new(bool(false)),
-				Commands:      new(bool(true)),
-				AdminCommands: new(bool(false)),
+				Monitoring: new(bool(false)),
+				Automod:    new(bool(false)),
+				Commands:   new(bool(true)),
 			},
 			Maintenance: files.FeatureMaintenanceToggles{
 				DBCleanup: new(bool(false)),

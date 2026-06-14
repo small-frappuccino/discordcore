@@ -31,7 +31,6 @@ func TestNewMinimalGuildConfigDisablesAllFeatures(t *testing.T) {
 	if resolved.Services.Monitoring ||
 		resolved.Services.Automod ||
 		resolved.Services.Commands ||
-		resolved.Services.AdminCommands ||
 		resolved.Logging.AvatarLogging ||
 		resolved.Logging.RoleUpdate ||
 		resolved.Logging.MemberJoin ||

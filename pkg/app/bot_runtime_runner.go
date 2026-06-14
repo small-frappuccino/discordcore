@@ -291,15 +291,13 @@ func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg
 		commandHandler.SetCommandCatalogRegistrars(opts.commandCatalogRegistrars...)
 	}
 	commandHandler.SetCommandCatalogCapabilities(commands.CommandCatalogCapabilities{
-		Admin: runtime.capabilities.admin,
 		Stats: runtime.capabilities.stats,
 	})
 	commandHandler.SetQOTDService(opts.qotdCommandService)
 	commandHandler.SetModerationMetrics(opts.moderationMetrics)
 	commandHandler.SetStatsService(statsService)
 	// Cache observability flows through /v1/health/cache via the control server's
-	// runtime resolver, not the admin command catalog.
-	commandHandler.SetAdminCommandServices(runtime.serviceManager)
+	// runtime resolver.
 
 	if cm := commandHandler.GetCommandManager(); cm != nil {
 		if router := cm.GetRouter(); router != nil {

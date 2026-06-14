@@ -81,7 +81,6 @@ func buildMainRunOptions() discordcoreapp.RunOptions {
 			discordcommands.RolesCommandCatalogRegistrar(),
 			discordcommands.EmbedsCommandCatalogRegistrar(),
 			discordcommands.TicketsCommandCatalogRegistrar(),
-			discordcommands.AdminCommandCatalogRegistrar(),
 			discordcommands.QOTDCommandCatalogRegistrar(),
 		},
 	}

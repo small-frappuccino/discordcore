@@ -17,6 +17,7 @@ flowchart TD
     %% Entrypoints
     CmdMain["cmd/discordcore"]
     CmdClean["cmd/clean-config"]
+    CmdTSGen["cmd/tsgen"]
     
     %% Application Bootstrapper
     App["pkg/app (Bootstrapper)"]
@@ -30,6 +31,7 @@ flowchart TD
     Commands["pkg/discord/commands"]
     Cache["pkg/discord/cache"]
     Control["pkg/control (HTTP API)"]
+    ControlTLS["pkg/control/localtls"]
     Task["pkg/task (Background Jobs)"]
     RPC["pkg/discordrpc (Local IPC)"]
     Webhook["pkg/discord/webhook"]
@@ -39,13 +41,13 @@ flowchart TD
     MessageUpdate["pkg/discord/messageupdate"]
     AdapterQOTD["pkg/discord/qotd"]
     AdapterTickets["pkg/discord/tickets"]
+    AdapterStats["pkg/discord/stats"]
 
     %% Vertical Features (Domain)
     QOTD["pkg/qotd"]
     Roles["pkg/roles"]
     Embeds["pkg/embeds"]
     Partners["pkg/partners"]
-    Tickets["pkg/tickets"]
     Stats["pkg/stats"]
     Automod["pkg/automod"]
     Monitoring["pkg/monitoring"]
@@ -68,6 +70,7 @@ flowchart TD
     Clock["pkg/clock"]
     Theme["pkg/theme"]
     TestDB["pkg/testdb"]
+    IDGen["pkg/idgen"]
 
     %% SDK & API Flow
     DiscordGateway -. WebSocket .-> DiscordGo
@@ -106,6 +109,7 @@ flowchart TD
     App --> Webhook
     App --> Maintenance
     App --> MessageUpdate
+    App --> AdapterStats
     Commands --> Perf
     Monitoring --> Perf
     Messages --> Perf
@@ -141,7 +145,7 @@ flowchart TD
     Commands --> Roles
     Commands --> Embeds
     Commands --> Partners
-    Commands --> Tickets
+    Commands --> AdapterTickets
     Commands --> Stats
     
     %% Discord Domain to Adapters
@@ -152,9 +156,11 @@ flowchart TD
     AdapterQOTD --> Clock
     AdapterQOTD --> Service
     
-    AdapterTickets --> Tickets
     AdapterTickets --> Commands
     AdapterTickets --> Storage
+
+    AdapterStats --> Stats
+    AdapterStats --> Arikawa
     
     Monitoring --> Files
     Monitoring --> Storage
@@ -168,6 +174,9 @@ flowchart TD
     Control --> Files
     Control --> Storage
     Control --> QOTD
+    Control --> AdapterQOTD
+    Control --> Commands
+    Control --> ControlTLS
     
     Task --> Files
     Task --> Storage
@@ -178,7 +187,6 @@ flowchart TD
     Roles --> Files
     Embeds --> Files
     Partners --> Files
-    Tickets --> Files
     Stats --> Files
     Stats --> Storage
     Automod --> Files
@@ -196,16 +204,16 @@ flowchart TD
     classDef ui fill:#A3BE8C,stroke:#8FBCBB,stroke-width:2px,color:#2E3440;
     
     class Files,Storage,Persistence,RuntimeApply core;
-    class Control,Task,RPC,Commands,Cache,Session,DualSDK,Webhook,Perf,Cleanup,Maintenance,MessageUpdate,AdapterQOTD,AdapterTickets adapter;
-    class QOTD,Roles,Embeds,Partners,Tickets,Stats,Automod,Monitoring,Messages,Members,Reactions,Notifications feature;
-    class Service,Log,LogPolicy,Observability,Clock,Theme,TestDB infra;
+    class Control,ControlTLS,Task,RPC,Commands,Cache,Session,DualSDK,Webhook,Perf,Cleanup,Maintenance,MessageUpdate,AdapterQOTD,AdapterTickets,AdapterStats adapter;
+    class QOTD,Roles,Embeds,Partners,Stats,Automod,Monitoring,Messages,Members,Reactions,Notifications feature;
+    class Service,Log,LogPolicy,Observability,Clock,Theme,TestDB,IDGen infra;
     class DiscordGo,Arikawa,DiscordAPI,DiscordGateway external;
     class UI ui;
 ```
 
 ## Layer Breakdown
 
-- **Entrypoints (`cmd/*`)**: Contains the `main` package binaries that bootstrap the environment and start the application.
+- **Entrypoints (`cmd/*`)**: Contains the `main` package binaries (`discordcore`, `clean-config`, `tsgen`) that bootstrap the environment and start the application, or generate typescript types.
 - **Bootstrapper (`pkg/app`)**: The glue that connects the configuration, the database, and the discord sessions together into a runnable state.
 - **Discord Adapters (`pkg/discord/*`)**: Connects Discord SDK behavior (e.g., DiscordGo commands, events, caching) into the core bot systems.
 - **Control & Background Tasks (`pkg/control`, `pkg/task`)**: Orchestrates HTTP APIs for the dashboard and scheduled tasks independent of Discord gateway events.

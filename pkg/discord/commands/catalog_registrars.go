@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/admin"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/analytics"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	embedscmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/embeds"
@@ -17,7 +16,6 @@ import (
 // CommandCatalogCapabilities captures runtime capabilities that can gate
 // catalog registration.
 type CommandCatalogCapabilities struct {
-	Admin bool
 	Stats bool
 }
 
@@ -114,22 +112,6 @@ func QOTDCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
 		Register: func(ch *CommandHandler, router *core.CommandRouter) {
 			qotdcmd.NewCommands(ch.qotdService).RegisterCommands(router)
-		},
-	}
-}
-
-// AdminCommandCatalogRegistrar registers the default-domain admin command
-// surface when the runtime exposes admin capability.
-func AdminCommandCatalogRegistrar() CommandCatalogRegistrar {
-	return CommandCatalogRegistrar{
-		RequiredCapabilities: CommandCatalogCapabilities{
-			Admin: true,
-		},
-		Register: func(ch *CommandHandler, router *core.CommandRouter) {
-			if ch.adminServiceManager == nil {
-				return
-			}
-			admin.NewAdminCommands(ch.adminServiceManager).RegisterCommands(router)
 		},
 	}
 }

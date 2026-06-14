@@ -86,10 +86,9 @@ func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 		},
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
-				Monitoring:    new(bool(false)),
-				Automod:       new(bool(false)),
-				Commands:      new(bool(true)),
-				AdminCommands: new(bool(false)),
+				Monitoring: new(bool(false)),
+				Automod:    new(bool(false)),
+				Commands:   new(bool(true)),
 			},
 			Maintenance: files.FeatureMaintenanceToggles{
 				DBCleanup: new(bool(false)),
@@ -196,10 +195,9 @@ func TestRun_ShutdownAggregatesStoreAndSessionCloseErrors(t *testing.T) {
 		},
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
-				Monitoring:    new(bool(false)),
-				Automod:       new(bool(false)),
-				Commands:      new(bool(false)),
-				AdminCommands: new(bool(false)),
+				Monitoring: new(bool(false)),
+				Automod:    new(bool(false)),
+				Commands:   new(bool(false)),
 			},
 			Maintenance: files.FeatureMaintenanceToggles{
 				DBCleanup: new(bool(false)),
@@ -307,10 +305,9 @@ func TestRun_ControlServerBindFailureIsNonFatal(t *testing.T) {
 		},
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
-				Monitoring:    new(bool(false)),
-				Automod:       new(bool(false)),
-				Commands:      new(bool(false)),
-				AdminCommands: new(bool(false)),
+				Monitoring: new(bool(false)),
+				Automod:    new(bool(false)),
+				Commands:   new(bool(false)),
 			},
 			Maintenance: files.FeatureMaintenanceToggles{
 				DBCleanup: new(bool(false)),

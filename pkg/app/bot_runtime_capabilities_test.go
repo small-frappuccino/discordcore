@@ -13,10 +13,9 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 	cfg := &files.BotConfig{
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
-				Monitoring:    new(bool(false)),
-				Automod:       new(bool(false)),
-				Commands:      new(bool(false)),
-				AdminCommands: new(bool(false)),
+				Monitoring: new(bool(false)),
+				Automod:    new(bool(false)),
+				Commands:   new(bool(false)),
 			},
 			Logging: files.FeatureLoggingToggles{
 				AvatarLogging:  new(bool(false)),
@@ -66,16 +65,14 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 				GuildID:           "custom-guild",
 				BotInstanceTokens: map[string]files.EncryptedString{"custom": "a"},
 				FeatureRouting: map[string]string{
-					"roles":          "custom",
-					"moderation":     "custom",
-					"commands":       "custom",
-					"admin_commands": "custom",
+					"roles":      "custom",
+					"moderation": "custom",
+					"commands":   "custom",
 				},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
-						Monitoring:    new(bool(true)),
-						Commands:      new(bool(true)),
-						AdminCommands: new(bool(true)),
+						Monitoring: new(bool(true)),
+						Commands:   new(bool(true)),
 					},
 					Logging: files.FeatureLoggingToggles{
 						ReactionMetric: new(bool(true)),
@@ -103,9 +100,7 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 	if !capabilities.HasCommands() {
 		t.Fatal("expected commands capability for custom runtime")
 	}
-	if !capabilities.admin {
-		t.Fatal("expected admin commands capability for custom runtime")
-	}
+
 	if !capabilities.userPrune {
 		t.Fatal("expected user prune capability for custom runtime")
 	}
@@ -132,7 +127,7 @@ func TestResolveBotRuntimeCapabilitiesWithoutGuildBindingsIsIdle(t *testing.T) {
 	t.Parallel()
 
 	capabilities := resolveBotRuntimeCapabilities(&files.BotConfig{}, "custom")
-	if capabilities.monitoring || capabilities.HasCommands() || capabilities.admin || capabilities.automod || capabilities.userPrune || capabilities.qotdRuntime {
+	if capabilities.monitoring || capabilities.HasCommands() || capabilities.automod || capabilities.userPrune || capabilities.qotdRuntime {
 		t.Fatalf("expected idle capabilities for unbound bot, got %+v", capabilities)
 	}
 	if capabilities.intents != discordgo.IntentsGuilds {

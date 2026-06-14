@@ -9,7 +9,6 @@ import (
 
 type botRuntimeCapabilities struct {
 	monitoring  bool
-	admin       bool
 	automod     bool
 	userPrune   bool
 	qotdRuntime bool
@@ -47,9 +46,6 @@ func resolveBotRuntimeCapabilities(
 
 		if features.Services.Commands {
 			capabilities.hasCommands = true
-			if features.Services.AdminCommands {
-				capabilities.admin = true
-			}
 
 			rolesResolvedID, _ := guild.ResolveFeatureBotInstanceID("roles")
 			if rolesResolvedID == botInstanceID {

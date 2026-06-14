@@ -201,14 +201,7 @@ var guildFeaturePatchHandlers = map[string]guildFeaturePatchHandler{
 		}
 		return nil
 	},
-	"services.admin_commands": func(_ *files.BotConfig, guild *files.GuildConfig, remaining map[string]json.RawMessage) error {
-		if present, value, err := consumeStringSlice(remaining, "allowed_role_ids"); err != nil {
-			return fmt.Errorf("featureMutationApplier.applyGuildPatch: %w", err)
-		} else if present {
-			guild.Roles.Allowed = normalizeStringList(value)
-		}
-		return nil
-	},
+
 	"moderation.mute_role": func(_ *files.BotConfig, guild *files.GuildConfig, remaining map[string]json.RawMessage) error {
 		if present, value, err := consumeString(remaining, "role_id"); err != nil {
 			return fmt.Errorf("featureMutationApplier.applyGuildPatch: %w", err)

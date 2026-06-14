@@ -6,11 +6,21 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 )
+
+// TokenHash returns a 16-character SHA-256 hash of the token for deduplication.
+func TokenHash(token string) string {
+	if token == "" {
+		return ""
+	}
+	hash := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(hash[:16])
+}
 
 // getEncryptionKey derives a 32-byte key from environment variables.
 func getEncryptionKey() []byte {

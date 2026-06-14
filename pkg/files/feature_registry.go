@@ -51,13 +51,7 @@ var featureRegistry = []toggleSpec{
 		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.Services.Commands },
 		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Services.Commands = val },
 	},
-	{
-		ID: "services.admin_commands", Default: true,
-		Get:         func(ft *FeatureToggles) *bool { return ft.Services.AdminCommands },
-		Set:         func(ft *FeatureToggles, val *bool) { ft.Services.AdminCommands = cloneBoolPtr(val) },
-		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.Services.AdminCommands },
-		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Services.AdminCommands = val },
-	},
+
 	{
 		ID: "logging.avatar_logging", Default: true,
 		Get:         func(ft *FeatureToggles) *bool { return ft.Logging.AvatarLogging },
