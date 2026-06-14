@@ -39,7 +39,7 @@ func resolveBotRuntimeCapabilities(
 		runtimeConfig := cfg.ResolveRuntimeConfig(guild.GuildID)
 
 		if !guild.QOTD.IsZero() {
-			resolvedID, _ := guild.ResolveFeatureBotInstanceID("qotd", "")
+			resolvedID, _ := guild.ResolveFeatureBotInstanceID("qotd")
 			if resolvedID == botInstanceID {
 				capabilities.qotdRuntime = true
 			}
@@ -51,20 +51,20 @@ func resolveBotRuntimeCapabilities(
 				capabilities.admin = true
 			}
 
-			rolesResolvedID, _ := guild.ResolveFeatureBotInstanceID("roles", "")
+			rolesResolvedID, _ := guild.ResolveFeatureBotInstanceID("roles")
 			if rolesResolvedID == botInstanceID {
 				capabilities.intents |= discordgo.IntentsGuildMembers
 				capabilities.warmup = true
 			}
 
-			statsResolvedID, _ := guild.ResolveFeatureBotInstanceID("stats", "")
+			statsResolvedID, _ := guild.ResolveFeatureBotInstanceID("stats")
 			if statsResolvedID == botInstanceID {
 				capabilities.stats = true
 			}
 		}
 
 		if features.Services.Automod && features.Logging.AutomodAction && !runtimeConfig.DisableAutomodLogs {
-			resolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation", "")
+			resolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation")
 			if resolvedID == botInstanceID {
 				capabilities.automod = true
 				capabilities.intents |= discordgo.IntentAutoModerationExecution
@@ -72,7 +72,7 @@ func resolveBotRuntimeCapabilities(
 		}
 
 		if features.UserPrune && guild.UserPrune.Enabled {
-			resolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation", "")
+			resolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation")
 			if resolvedID == botInstanceID {
 				capabilities.userPrune = true
 				capabilities.intents |= discordgo.IntentsGuildMembers
@@ -84,8 +84,8 @@ func resolveBotRuntimeCapabilities(
 			continue
 		}
 
-		rolesResolvedID, _ := guild.ResolveFeatureBotInstanceID("roles", "")
-		modResolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation", "")
+		rolesResolvedID, _ := guild.ResolveFeatureBotInstanceID("roles")
+		modResolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation")
 
 		isRolesBot := rolesResolvedID == botInstanceID
 		isModBot := modResolvedID == botInstanceID

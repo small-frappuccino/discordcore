@@ -36,8 +36,7 @@ type pruneResponse struct {
 type UserPruneService struct {
 	session       *discordgo.Session
 	configManager *files.ConfigManager
-	botInstanceID string
-	defaultBotID  string
+	botID         string
 	store         *storage.Store
 
 	stopOnce sync.Once
@@ -51,19 +50,17 @@ type UserPruneService struct {
 	dependencies []string
 }
 
-// NewUserPruneServiceForBot news user prune service for bot.
-func NewUserPruneServiceForBot(
+// NewUserPruneService news user prune service for bot.
+func NewUserPruneService(
 	session *discordgo.Session,
 	configManager *files.ConfigManager,
 	store *storage.Store,
 	botInstanceID string,
-	defaultBotInstanceID string,
 ) *UserPruneService {
 	return &UserPruneService{
 		session:       session,
 		configManager: configManager,
-		botInstanceID: files.NormalizeBotInstanceID(botInstanceID),
-		defaultBotID:  files.NormalizeBotInstanceID(defaultBotInstanceID),
+		botID:         files.NormalizeBotInstanceID(botInstanceID),
 		store:         store,
 		stopCh:        make(chan struct{}),
 	}
@@ -192,7 +189,7 @@ func (s *UserPruneService) runIfDue(now time.Time) {
 	if cfg == nil {
 		return
 	}
-	guilds := cfg.GuildsForBotInstance(s.botInstanceID)
+	guilds := cfg.GuildsForBotInstance(s.botID)
 	if len(guilds) == 0 {
 		return
 	}
@@ -213,8 +210,8 @@ func (s *UserPruneService) runIfDue(now time.Time) {
 		if !gcfg.UserPrune.Enabled {
 			continue
 		}
-		resolvedID, _ := gcfg.ResolveFeatureBotInstanceID("moderation", s.defaultBotID)
-		if resolvedID != s.botInstanceID {
+		resolvedID, _ := gcfg.ResolveFeatureBotInstanceID("moderation")
+		if resolvedID != s.botID {
 			continue
 		}
 		if s.didRunGuildPruneThisMonth(runCtx, gcfg.GuildID, now) {

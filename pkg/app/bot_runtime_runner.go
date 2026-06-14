@@ -142,7 +142,7 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 	}
 	arikawaState := state.New(token)
 	statsGateway := discordstats.NewArikawaGateway(arikawaState)
-	statsService := stats.NewStatsService(statsGateway, opts.configManager, opts.store, log.DiscordLogger(), runtime.instanceID, "")
+	statsService := stats.NewStatsService(statsGateway, opts.configManager, opts.store, log.DiscordLogger(), runtime.instanceID)
 	discordstats.RegisterDiscordGoEventHandlers(runtime.session, statsService)
 	if err := runtime.serviceManager.Register(statsService); err != nil {
 		return fmt.Errorf("register stats service for %s: %w", runtime.instanceID, err)
@@ -182,7 +182,6 @@ func setupMonitoringService(runtime *botRuntime, opts botRuntimeOptions, routerC
 		opts.configManager,
 		opts.store,
 		runtime.instanceID,
-		"",
 		&monitoring.InMemoryMetrics{},
 		log.DiscordLogger(),
 	)
@@ -207,7 +206,7 @@ func buildAutomodService(runtime *botRuntime, opts botRuntimeOptions, routerConf
 		return nil
 	}
 
-	automodService := automod.NewAutomodService(runtime.session, opts.configManager, runtime.instanceID, "")
+	automodService := automod.NewAutomodService(runtime.session, opts.configManager, runtime.instanceID)
 	automodRouter := task.NewRouter(routerConfig)
 	notifier := notifications.NewNotificationSender(runtime.session, log.DiscordLogger())
 	if monitoringService != nil {
@@ -234,7 +233,7 @@ func registerUserPruneService(runtime *botRuntime, opts botRuntimeOptions, monit
 	if !runtime.capabilities.userPrune {
 		return nil
 	}
-	userPruneService := maintenance.NewUserPruneServiceForBot(runtime.session, opts.configManager, opts.store, runtime.instanceID, "")
+	userPruneService := maintenance.NewUserPruneService(runtime.session, opts.configManager, opts.store, runtime.instanceID)
 	userPruneDependencies := []string{}
 	if monitoringService != nil {
 		userPruneDependencies = []string{"monitoring"}
@@ -259,7 +258,6 @@ func registerQOTDRuntimeService(runtime *botRuntime, opts botRuntimeOptions) err
 		opts.configManager,
 		opts.qotdLifecycleService,
 		runtime.instanceID,
-		"",
 	)
 	if opts.appClock != nil {
 		qotdRuntimeService.SetClock(opts.appClock)

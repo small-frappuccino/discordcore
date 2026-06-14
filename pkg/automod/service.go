@@ -118,8 +118,7 @@ type AutomodService struct {
 	mu        sync.RWMutex
 	startTime time.Time
 
-	botInstanceID        string
-	defaultBotInstanceID string
+	botInstanceID string
 
 	// Fallback dedup cache
 	dedupMu    sync.Mutex
@@ -127,12 +126,11 @@ type AutomodService struct {
 }
 
 // NewAutomodService news automod service.
-func NewAutomodService(session *discordgo.Session, configManager *files.ConfigManager, botInstanceID string, defaultBotInstanceID string) *AutomodService {
+func NewAutomodService(session *discordgo.Session, configManager *files.ConfigManager, botInstanceID string) *AutomodService {
 	return &AutomodService{
-		session:              session,
-		configManager:        configManager,
-		botInstanceID:        files.NormalizeBotInstanceID(botInstanceID),
-		defaultBotInstanceID: files.NormalizeBotInstanceID(defaultBotInstanceID),
+		session:       session,
+		configManager: configManager,
+		botInstanceID: files.NormalizeBotInstanceID(botInstanceID),
 	}
 }
 
@@ -297,7 +295,7 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 	if !guildConfig.BelongsToBotInstance(as.botInstanceID) {
 		return
 	}
-	resolvedID, _ := guildConfig.ResolveFeatureBotInstanceID("moderation", as.defaultBotInstanceID)
+	resolvedID, _ := guildConfig.ResolveFeatureBotInstanceID("moderation")
 	if resolvedID != as.botInstanceID {
 		return
 	}

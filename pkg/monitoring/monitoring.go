@@ -75,19 +75,18 @@ var heartbeatTickInterval = heartbeatInterval
 
 // MonitoringService coordinates multi-guild handlers and delegates specific tasks (e.g., user).
 type MonitoringService struct {
-	session              *discordgo.Session
-	configManager        *files.ConfigManager
-	botInstanceID        string
-	defaultBotInstanceID string
-	store                *storage.Store
-	activity             *RuntimeActivity
-	notifier             *notifications.NotificationSender
-	adapters             *task.NotificationAdapters
-	router               *task.TaskRouter
-	routerConfig         task.RouterConfig
-	userWatcher          *UserWatcher
-	controlCh            chan func()
-	runState             atomic.Pointer[monitoringRunState]
+	session       *discordgo.Session
+	configManager *files.ConfigManager
+	botInstanceID string
+	store         *storage.Store
+	activity      *RuntimeActivity
+	notifier      *notifications.NotificationSender
+	adapters      *task.NotificationAdapters
+	router        *task.TaskRouter
+	routerConfig  task.RouterConfig
+	userWatcher   *UserWatcher
+	controlCh     chan func()
+	runState      atomic.Pointer[monitoringRunState]
 
 	// Control loop exclusive fields
 	cancel                 context.CancelFunc
@@ -304,7 +303,7 @@ func (ms *MonitoringService) recordLifecycleErrorLocked() {
 
 // NewMonitoringService creates the multi-guild monitoring service. Returns error if any dependency is nil.
 func NewMonitoringService(session *discordgo.Session, configManager *files.ConfigManager, store *storage.Store, logger *slog.Logger) (*MonitoringService, error) {
-	return NewMonitoringServiceForBot(session, configManager, store, "", "", logger)
+	return NewMonitoringServiceForBot(session, configManager, store, "", logger)
 }
 
 // NewMonitoringServiceForBot creates a monitoring service scoped to the
@@ -317,10 +316,9 @@ func NewMonitoringServiceForBot(
 	configManager *files.ConfigManager,
 	store *storage.Store,
 	botInstanceID string,
-	defaultBotInstanceID string,
 	logger *slog.Logger,
 ) (*MonitoringService, error) {
-	return NewMonitoringServiceForBotWithMetrics(session, configManager, store, botInstanceID, defaultBotInstanceID, nil, logger)
+	return NewMonitoringServiceForBotWithMetrics(session, configManager, store, botInstanceID, nil, logger)
 }
 
 // NewMonitoringServiceForBotWithMetrics is the constructor production startup
@@ -335,7 +333,6 @@ func NewMonitoringServiceForBotWithMetrics(
 	configManager *files.ConfigManager,
 	store *storage.Store,
 	botInstanceID string,
-	defaultBotInstanceID string,
 	metrics Metrics,
 	logger *slog.Logger,
 ) (*MonitoringService, error) {
@@ -357,21 +354,20 @@ func NewMonitoringServiceForBotWithMetrics(
 	unifiedCache := cache.NewUnifiedCache(cacheConfig)
 
 	ms := &MonitoringService{
-		session:              session,
-		configManager:        configManager,
-		botInstanceID:        files.NormalizeBotInstanceID(botInstanceID),
-		defaultBotInstanceID: files.NormalizeBotInstanceID(defaultBotInstanceID),
-		store:                store,
-		activity:             NewMonitoringRuntimeActivity(store, files.NormalizeBotInstanceID(botInstanceID)),
-		notifier:             n,
-		unifiedCache:         unifiedCache,
-		userWatcher:          NewUserWatcher(session, configManager, store, n, unifiedCache),
-		controlCh:            make(chan func()),
-		stopChan:             make(chan struct{}),
-		rolesCacheService:    NewRolesCacheService(configManager),
-		eventHandlers:        make([]func(), 0),
-		metrics:              metrics,
-		logger:               logger,
+		session:           session,
+		configManager:     configManager,
+		botInstanceID:     files.NormalizeBotInstanceID(botInstanceID),
+		store:             store,
+		activity:          NewMonitoringRuntimeActivity(store, files.NormalizeBotInstanceID(botInstanceID)),
+		notifier:          n,
+		unifiedCache:      unifiedCache,
+		userWatcher:       NewUserWatcher(session, configManager, store, n, unifiedCache),
+		controlCh:         make(chan func()),
+		stopChan:          make(chan struct{}),
+		rolesCacheService: NewRolesCacheService(configManager),
+		eventHandlers:     make([]func(), 0),
+		metrics:           metrics,
+		logger:            logger,
 	}
 	ms.runState.Store(&monitoringRunState{})
 	go ms.serveControl()
@@ -539,7 +535,7 @@ func (ms *MonitoringService) scopedConfig() *files.BotConfig {
 	if cfg == nil {
 		return nil
 	}
-	scopedGuilds := cfg.GuildsForBotInstanceFeature(ms.botInstanceID, "monitoring", ms.defaultBotInstanceID)
+	scopedGuilds := cfg.GuildsForBotInstanceFeature(ms.botInstanceID, "monitoring")
 	if len(scopedGuilds) == len(cfg.Guilds) {
 		return cfg
 	}
@@ -552,7 +548,7 @@ func (ms *MonitoringService) handlesGuild(guildID string) bool {
 	if ms == nil || ms.configManager == nil {
 		return false
 	}
-	if files.NormalizeBotInstanceID(ms.botInstanceID) == "" && files.NormalizeBotInstanceID(ms.defaultBotInstanceID) == "" {
+	if files.NormalizeBotInstanceID(ms.botInstanceID) == "" {
 		return true
 	}
 	guildID = strings.TrimSpace(guildID)
@@ -566,8 +562,8 @@ func (ms *MonitoringService) handlesGuild(guildID string) bool {
 	if !guild.BelongsToBotInstance(ms.botInstanceID) {
 		return false
 	}
-	rolesResolvedID, _ := guild.ResolveFeatureBotInstanceID("roles", ms.defaultBotInstanceID)
-	modResolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation", ms.defaultBotInstanceID)
+	rolesResolvedID, _ := guild.ResolveFeatureBotInstanceID("roles")
+	modResolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation")
 	return rolesResolvedID == ms.botInstanceID || modResolvedID == ms.botInstanceID
 }
 
@@ -575,7 +571,7 @@ func (ms *MonitoringService) isFeatureBot(guildID string, feature string) bool {
 	if ms == nil || ms.configManager == nil {
 		return false
 	}
-	if files.NormalizeBotInstanceID(ms.botInstanceID) == "" && files.NormalizeBotInstanceID(ms.defaultBotInstanceID) == "" {
+	if files.NormalizeBotInstanceID(ms.botInstanceID) == "" {
 		return true
 	}
 	guildID = strings.TrimSpace(guildID)
@@ -589,7 +585,7 @@ func (ms *MonitoringService) isFeatureBot(guildID string, feature string) bool {
 	if !guild.BelongsToBotInstance(ms.botInstanceID) {
 		return false
 	}
-	resolvedID, _ := guild.ResolveFeatureBotInstanceID(feature, ms.defaultBotInstanceID)
+	resolvedID, _ := guild.ResolveFeatureBotInstanceID(feature)
 	return resolvedID == ms.botInstanceID
 }
 
@@ -597,7 +593,7 @@ func (ms *MonitoringService) getLastEvent(ctx context.Context) (time.Time, bool,
 	if ms == nil || ms.store == nil {
 		return time.Time{}, false, fmt.Errorf("store unavailable")
 	}
-	if ts, ok, err := ms.store.LastEventForBot(ctx, ms.botInstanceID); err != nil || ok || strings.TrimSpace(ms.botInstanceID) == "" || ms.botInstanceID != ms.defaultBotInstanceID {
+	if ts, ok, err := ms.store.LastEventForBot(ctx, ms.botInstanceID); err != nil || ok || strings.TrimSpace(ms.botInstanceID) == "" {
 		return ts, ok, err
 	}
 	return ms.store.LastEvent(ctx)
@@ -607,7 +603,7 @@ func (ms *MonitoringService) getHeartbeat(ctx context.Context) (time.Time, bool,
 	if ms == nil || ms.store == nil {
 		return time.Time{}, false, fmt.Errorf("store unavailable")
 	}
-	if ts, ok, err := ms.store.HeartbeatForBot(ctx, ms.botInstanceID); err != nil || ok || strings.TrimSpace(ms.botInstanceID) == "" || ms.botInstanceID != ms.defaultBotInstanceID {
+	if ts, ok, err := ms.store.HeartbeatForBot(ctx, ms.botInstanceID); err != nil || ok || strings.TrimSpace(ms.botInstanceID) == "" {
 		return ts, ok, err
 	}
 	return ms.store.Heartbeat(ctx)

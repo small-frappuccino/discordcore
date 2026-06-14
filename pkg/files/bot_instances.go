@@ -43,7 +43,7 @@ func (cfg *BotConfig) GuildsForBotInstance(botInstanceID string) []GuildConfig {
 
 // GuildsForBotInstanceFeature returns the guild subset assigned to the provided bot instance for a specific feature,
 // preserving config order.
-func (cfg *BotConfig) GuildsForBotInstanceFeature(botInstanceID string, feature string, fallbackID string) []GuildConfig {
+func (cfg *BotConfig) GuildsForBotInstanceFeature(botInstanceID string, feature string) []GuildConfig {
 	if cfg == nil || len(cfg.Guilds) == 0 {
 		return nil
 	}
@@ -60,7 +60,7 @@ func (cfg *BotConfig) GuildsForBotInstanceFeature(botInstanceID string, feature 
 		if !guild.BelongsToBotInstance(target) {
 			continue
 		}
-		resolvedID, _ := guild.ResolveFeatureBotInstanceID(feature, fallbackID)
+		resolvedID, _ := guild.ResolveFeatureBotInstanceID(feature)
 		if resolvedID == target {
 			out = append(out, guild)
 		}
@@ -69,23 +69,19 @@ func (cfg *BotConfig) GuildsForBotInstanceFeature(botInstanceID string, feature 
 }
 
 // ResolveFeatureBotInstanceID returns the designated bot instance for a given feature.
-// It explicitly parses FeatureRouting and falls back to fallbackID.
+// It explicitly parses FeatureRouting and falls back to "".
 // It returns the resolved instance ID and a boolean fallbackFlag
 // indicating if the designated bot token was revoked, invalid, or missing, necessitating
-// a degradation to the fallback bot.
-func (gc GuildConfig) ResolveFeatureBotInstanceID(feature string, fallbackID string) (resolvedID string, fallback bool) {
+// a degradation to the default fallback bot.
+func (gc GuildConfig) ResolveFeatureBotInstanceID(feature string) (resolvedID string, fallback bool) {
 	route := gc.FeatureRouting[feature]
-	if route == "" {
-		route = fallbackID
-	}
-
 	if route == "" {
 		return "", false
 	}
 
 	token, ok := gc.BotInstanceTokens[route]
 	if !ok || len(token) == 0 {
-		return fallbackID, true
+		return "", true
 	}
 	return route, false
 }

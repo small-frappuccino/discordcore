@@ -9,7 +9,7 @@ import (
 func TestAutomodFallbackShouldDedup_EmptyKeyNeverDedups(t *testing.T) {
 	t.Parallel()
 
-	as := NewAutomodService(nil, nil, "", "")
+	as := NewAutomodService(nil, nil, "")
 	as.Start(context.Background())
 	defer as.Stop(context.Background())
 
@@ -25,7 +25,7 @@ func TestAutomodFallbackShouldDedup_EmptyKeyNeverDedups(t *testing.T) {
 func TestAutomodFallbackShouldDedup_SecondCallWithinTTLReturnsTrue(t *testing.T) {
 	t.Parallel()
 
-	as := NewAutomodService(nil, nil, "", "")
+	as := NewAutomodService(nil, nil, "")
 	as.Start(context.Background())
 	defer as.Stop(context.Background())
 
@@ -43,7 +43,7 @@ func TestAutomodFallbackShouldDedup_SecondCallWithinTTLReturnsTrue(t *testing.T)
 func TestAutomodFallbackShouldDedup_CallAfterTTLReturnsFalse(t *testing.T) {
 	t.Parallel()
 
-	as := NewAutomodService(nil, nil, "", "")
+	as := NewAutomodService(nil, nil, "")
 	as.Start(context.Background())
 	defer as.Stop(context.Background())
 
@@ -61,7 +61,7 @@ func TestAutomodFallbackShouldDedup_CallAfterTTLReturnsFalse(t *testing.T) {
 func TestAutomodFallbackShouldDedup_DistinctKeysDoNotInterfere(t *testing.T) {
 	t.Parallel()
 
-	as := NewAutomodService(nil, nil, "", "")
+	as := NewAutomodService(nil, nil, "")
 	as.Start(context.Background())
 	defer as.Stop(context.Background())
 
@@ -81,7 +81,7 @@ func TestAutomodFallbackShouldDedup_DistinctKeysDoNotInterfere(t *testing.T) {
 func TestAutomodFallbackShouldDedup_LazyCleanupBoundsMap(t *testing.T) {
 	t.Parallel()
 
-	as := NewAutomodService(nil, nil, "", "")
+	as := NewAutomodService(nil, nil, "")
 	as.Start(context.Background())
 	defer as.Stop(context.Background())
 

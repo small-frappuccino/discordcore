@@ -126,8 +126,9 @@ func TestStatsServiceHandlesGuild(t *testing.T) {
 	}
 
 	logger := slog.Default()
-	mainSvc := NewStatsService(nil, cm, nil, logger, "main", "main")
-	companionSvc := NewStatsService(nil, cm, nil, logger, "companion", "main")
+	mainSvc := NewStatsService(nil, cm, nil, logger, "main")
+	companionSvc := NewStatsService(nil, cm, nil, logger, "companion")
+	defaultSvc := NewStatsService(nil, cm, nil, logger, "")
 
 	if !mainSvc.handlesGuild("guild-stats-main") {
 		t.Errorf("expected main service to handle guild-stats-main")
@@ -143,11 +144,11 @@ func TestStatsServiceHandlesGuild(t *testing.T) {
 		t.Errorf("expected companion service to handle guild-stats-companion")
 	}
 
-	if !mainSvc.handlesGuild("guild-stats-default") {
-		t.Errorf("expected main service to handle guild-stats-default (default bot instance)")
+	if mainSvc.handlesGuild("guild-stats-default") {
+		t.Errorf("expected main service to NOT handle guild-stats-default")
 	}
-	if companionSvc.handlesGuild("guild-stats-default") {
-		t.Errorf("expected companion service to NOT handle guild-stats-default")
+	if !defaultSvc.handlesGuild("guild-stats-default") {
+		t.Errorf("expected default service to handle guild-stats-default")
 	}
 }
 

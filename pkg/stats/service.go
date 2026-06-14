@@ -28,12 +28,11 @@ const (
 // StatsService manages the stats-channel state. guilds and lastRun are protected by mu.
 // Construct with NewStatsService; the zero value has nil maps.
 type StatsService struct {
-	gateway              Gateway
-	configManager        *files.ConfigManager
-	store                *storage.Store
-	logger               *slog.Logger
-	botInstanceID        string
-	defaultBotInstanceID string
+	gateway       Gateway
+	configManager *files.ConfigManager
+	store         *storage.Store
+	logger        *slog.Logger
+	botInstanceID string
 
 	cancelMu sync.Mutex
 	guilds   sync.Map
@@ -50,15 +49,13 @@ func NewStatsService(
 	store *storage.Store,
 	logger *slog.Logger,
 	botInstanceID string,
-	defaultBotInstanceID string,
 ) *StatsService {
 	return &StatsService{
-		gateway:              gateway,
-		configManager:        configManager,
-		store:                store,
-		logger:               logger,
-		botInstanceID:        botInstanceID,
-		defaultBotInstanceID: defaultBotInstanceID,
+		gateway:       gateway,
+		configManager: configManager,
+		store:         store,
+		logger:        logger,
+		botInstanceID: botInstanceID,
 	}
 }
 
@@ -170,7 +167,7 @@ func (s *StatsService) handlesGuild(guildID string) bool {
 	if !cfg.BelongsToBotInstance(s.botInstanceID) {
 		return false
 	}
-	resolvedID, _ := cfg.ResolveFeatureBotInstanceID("stats", s.defaultBotInstanceID)
+	resolvedID, _ := cfg.ResolveFeatureBotInstanceID("stats")
 	return resolvedID == s.botInstanceID
 }
 

@@ -350,6 +350,6 @@ func (ch *CommandHandler) matchesGuildBotInstance(guildID string, feature string
 		return guild.BelongsToBotInstance(ch.botInstanceID)
 	}
 
-	resolvedID, _ := guild.ResolveFeatureBotInstanceID(feature, "")
+	resolvedID, _ := guild.ResolveFeatureBotInstanceID(feature)
 	return ch.botInstanceID == resolvedID
 }

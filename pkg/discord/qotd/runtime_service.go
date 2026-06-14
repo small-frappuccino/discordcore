@@ -61,7 +61,6 @@ type RuntimeService struct {
 	configManager    *files.ConfigManager
 	lifecycleService GuildLifecycleService
 	botInstanceID    string
-	defaultBotID     string
 	now              func() time.Time
 	publishInterval  time.Duration
 	reconcileEvery   time.Duration
@@ -79,7 +78,7 @@ type RuntimeService struct {
 
 // NewRuntimeService news runtime service.
 func NewRuntimeService(session *discordgo.Session, configManager *files.ConfigManager, lifecycleService GuildLifecycleService) *RuntimeService {
-	return NewRuntimeServiceForBot(session, configManager, lifecycleService, "", "")
+	return NewRuntimeServiceForBot(session, configManager, lifecycleService, "")
 }
 
 // NewRuntimeServiceForBot news runtime service for bot.
@@ -88,14 +87,12 @@ func NewRuntimeServiceForBot(
 	configManager *files.ConfigManager,
 	lifecycleService GuildLifecycleService,
 	botInstanceID string,
-	defaultBotInstanceID string,
 ) *RuntimeService {
 	return &RuntimeService{
 		session:          session,
 		configManager:    configManager,
 		lifecycleService: lifecycleService,
 		botInstanceID:    files.NormalizeBotInstanceID(botInstanceID),
-		defaultBotID:     files.NormalizeBotInstanceID(defaultBotInstanceID),
 		now: func() time.Time {
 			return time.Now().UTC()
 		},
@@ -382,10 +379,7 @@ func (s *RuntimeService) configuredGuildIDs(requireEnabled bool) []string {
 			continue
 		}
 
-		route := guild.FeatureRouting["qotd"]
-		if route == "" {
-			route = s.defaultBotID
-		}
+		route, _ := guild.ResolveFeatureBotInstanceID("qotd")
 		if route != s.botInstanceID {
 			continue
 		}

@@ -176,7 +176,7 @@ func (r *botRuntimeResolver) runtimeForGuild(guildID string) (*botRuntime, strin
 		return nil, "", fmt.Errorf("guild %s is not configured", guildID)
 	}
 
-	bestInstanceID, _ := guild.ResolveFeatureBotInstanceID("dashboard", "")
+	bestInstanceID, _ := guild.ResolveFeatureBotInstanceID("dashboard")
 
 	r.mu.RLock()
 	defer r.mu.RUnlock()

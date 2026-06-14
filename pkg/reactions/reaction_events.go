@@ -24,8 +24,7 @@ import (
 type ReactionEventService struct {
 	session       *discordgo.Session
 	configManager *files.ConfigManager
-	botInstanceID string
-	defaultBotID  string
+	botID         string
 	store         *storage.Store
 	activity      *monitoring.RuntimeActivity
 	lifecycle     monitoring.ServiceLifecycle
@@ -37,7 +36,7 @@ type ReactionEventService struct {
 
 // NewReactionEventService creates a new ReactionEventService.
 func NewReactionEventService(session *discordgo.Session, configManager *files.ConfigManager, store *storage.Store, logger *slog.Logger) *ReactionEventService {
-	return NewReactionEventServiceForBot(session, configManager, store, "", "", logger)
+	return NewReactionEventServiceForBot(session, configManager, store, "", logger)
 }
 
 // NewReactionEventServiceForBot creates a ReactionEventService scoped to one bot instance.
@@ -46,14 +45,12 @@ func NewReactionEventServiceForBot(
 	configManager *files.ConfigManager,
 	store *storage.Store,
 	botInstanceID string,
-	defaultBotInstanceID string,
 	logger *slog.Logger,
 ) *ReactionEventService {
 	return &ReactionEventService{
 		session:       session,
 		configManager: configManager,
-		botInstanceID: files.NormalizeBotInstanceID(botInstanceID),
-		defaultBotID:  files.NormalizeBotInstanceID(defaultBotInstanceID),
+		botID:         files.NormalizeBotInstanceID(botInstanceID),
 		store:         store,
 		logger:        logger,
 		activity: monitoring.NewRuntimeActivity(store, monitoring.RuntimeActivityOptions{
@@ -286,7 +283,7 @@ func (rs *ReactionEventService) handlesGuild(guildID string) bool {
 	if rs == nil || rs.configManager == nil {
 		return false
 	}
-	if files.NormalizeBotInstanceID(rs.botInstanceID) == "" && files.NormalizeBotInstanceID(rs.defaultBotID) == "" {
+	if rs.botID == "" {
 		return true
 	}
 	guildID = strings.TrimSpace(guildID)
@@ -297,9 +294,9 @@ func (rs *ReactionEventService) handlesGuild(guildID string) bool {
 	if guild == nil {
 		return false
 	}
-	if !guild.BelongsToBotInstance(rs.botInstanceID) {
+	if !guild.BelongsToBotInstance(rs.botID) {
 		return false
 	}
-	resolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation", rs.defaultBotID)
-	return resolvedID == rs.botInstanceID
+	resolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation")
+	return resolvedID == rs.botID
 }

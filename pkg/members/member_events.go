@@ -30,7 +30,6 @@ type MemberEventService struct {
 	session        *discordgo.Session
 	configManager  *files.ConfigManager
 	botInstanceID  string
-	defaultBotID   string
 	notifier       *notifications.NotificationSender
 	adapters       *task.NotificationAdapters
 	activity       *monitoring.RuntimeActivity
@@ -48,16 +47,15 @@ type MemberEventService struct {
 }
 
 // eventServiceDeps bundles the shared dependencies for the bot-scoped logging
-// event services. BotInstanceID/DefaultBotInstanceID are normalized by the
+// event services. BotInstanceID is normalized by the
 // constructors via files.NormalizeBotInstanceID.
 type eventServiceDeps struct {
-	Session              *discordgo.Session
-	ConfigManager        *files.ConfigManager
-	Notifier             *notifications.NotificationSender
-	Store                *storage.Store
-	BotInstanceID        string
-	DefaultBotInstanceID string
-	Logger               *slog.Logger
+	Session       *discordgo.Session
+	ConfigManager *files.ConfigManager
+	Notifier      *notifications.NotificationSender
+	Store         *storage.Store
+	BotInstanceID string
+	Logger        *slog.Logger
 }
 
 // NewMemberEventService creates a new instance of the member events service
@@ -77,7 +75,6 @@ func NewMemberEventServiceForBot(deps eventServiceDeps) *MemberEventService {
 		session:       deps.Session,
 		configManager: deps.ConfigManager,
 		botInstanceID: files.NormalizeBotInstanceID(deps.BotInstanceID),
-		defaultBotID:  files.NormalizeBotInstanceID(deps.DefaultBotInstanceID),
 		notifier:      deps.Notifier,
 		store:         deps.Store,
 		logger:        deps.Logger,
@@ -602,7 +599,7 @@ func (mes *MemberEventService) handlesGuild(guildID string) bool {
 	if mes == nil || mes.configManager == nil {
 		return false
 	}
-	if files.NormalizeBotInstanceID(mes.botInstanceID) == "" && files.NormalizeBotInstanceID(mes.defaultBotID) == "" {
+	if files.NormalizeBotInstanceID(mes.botInstanceID) == "" {
 		return true
 	}
 	guildID = strings.TrimSpace(guildID)
@@ -616,6 +613,6 @@ func (mes *MemberEventService) handlesGuild(guildID string) bool {
 	if !guild.BelongsToBotInstance(mes.botInstanceID) {
 		return false
 	}
-	resolvedID, _ := guild.ResolveFeatureBotInstanceID("roles", mes.defaultBotID)
+	resolvedID, _ := guild.ResolveFeatureBotInstanceID("roles")
 	return resolvedID == mes.botInstanceID
 }

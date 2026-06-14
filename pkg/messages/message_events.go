@@ -97,7 +97,6 @@ type MessageEventService struct {
 	session        *discordgo.Session
 	configManager  *files.ConfigManager
 	botInstanceID  string
-	defaultBotID   string
 	notifier       *notifications.NotificationSender
 	adapters       *task.NotificationAdapters
 	store          *storage.Store
@@ -150,13 +149,12 @@ type MessageDeleteTaskPayload struct {
 }
 
 type eventServiceDeps struct {
-	Session              *discordgo.Session
-	ConfigManager        *files.ConfigManager
-	Notifier             *notifications.NotificationSender
-	Store                *storage.Store
-	BotInstanceID        string
-	DefaultBotInstanceID string
-	Logger               *slog.Logger
+	Session       *discordgo.Session
+	ConfigManager *files.ConfigManager
+	Notifier      *notifications.NotificationSender
+	Store         *storage.Store
+	BotInstanceID string
+	Logger        *slog.Logger
 }
 
 // NewMessageEventServiceForBot creates a message event service scoped to a bot
@@ -166,7 +164,6 @@ func NewMessageEventServiceForBot(deps eventServiceDeps) *MessageEventService {
 		session:       deps.Session,
 		configManager: deps.ConfigManager,
 		botInstanceID: files.NormalizeBotInstanceID(deps.BotInstanceID),
-		defaultBotID:  files.NormalizeBotInstanceID(deps.DefaultBotInstanceID),
 		notifier:      deps.Notifier,
 		store:         deps.Store,
 		logger:        deps.Logger,
@@ -1058,7 +1055,7 @@ func (mes *MessageEventService) handlesGuild(guildID string) bool {
 	if mes == nil || mes.configManager == nil {
 		return false
 	}
-	if files.NormalizeBotInstanceID(mes.botInstanceID) == "" && files.NormalizeBotInstanceID(mes.defaultBotID) == "" {
+	if files.NormalizeBotInstanceID(mes.botInstanceID) == "" {
 		return true
 	}
 	guildID = strings.TrimSpace(guildID)
@@ -1072,7 +1069,7 @@ func (mes *MessageEventService) handlesGuild(guildID string) bool {
 	if !guild.BelongsToBotInstance(mes.botInstanceID) {
 		return false
 	}
-	resolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation", mes.defaultBotID)
+	resolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation")
 	return resolvedID == mes.botInstanceID
 }
 
