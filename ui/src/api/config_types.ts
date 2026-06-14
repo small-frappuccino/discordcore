@@ -39,6 +39,143 @@ export interface rawQOTDConfig {
   qotd_time_minute_utc?: number;
 }
 
+export interface CustomEmbedFieldConfig {
+  name: string;
+  value: string;
+  inline?: boolean;
+}
+
+export interface CustomEmbedPostingConfig {
+  channel_id: string;
+  message_id: string;
+  webhook_id?: string;
+  webhook_token?: string;
+}
+
+export interface CustomEmbedConfig {
+  key: string;
+  title?: string;
+  description?: string;
+  color?: number;
+  author_name?: string;
+  author_icon_url?: string;
+  footer_text?: string;
+  footer_icon_url?: string;
+  image_url?: string;
+  thumbnail_url?: string;
+  fields?: CustomEmbedFieldConfig[];
+  postings?: CustomEmbedPostingConfig[];
+}
+
+export interface FeatureServiceToggles {
+  monitoring?: boolean;
+  automod?: boolean;
+  commands?: boolean;
+}
+
+export interface FeatureLoggingToggles {
+  avatar_logging?: boolean;
+  role_update?: boolean;
+  member_join?: boolean;
+  member_leave?: boolean;
+  message_process?: boolean;
+  message_edit?: boolean;
+  message_delete?: boolean;
+  reaction_metric?: boolean;
+  automod_action?: boolean;
+  moderation_case?: boolean;
+  clean_action?: boolean;
+}
+
+export interface FeatureModerationToggles {
+  ban?: boolean;
+  massban?: boolean;
+  kick?: boolean;
+  timeout?: boolean;
+  warn?: boolean;
+  warnings?: boolean;
+  clean?: boolean;
+}
+
+export interface FeatureMessageCacheToggles {
+  cleanup_on_startup?: boolean;
+  delete_on_log?: boolean;
+}
+
+export interface FeaturePresenceWatchToggles {
+  bot?: boolean;
+  user?: boolean;
+}
+
+export interface FeatureMaintenanceToggles {
+  db_cleanup?: boolean;
+}
+
+export interface FeatureSafetyToggles {
+  bot_role_perm_mirror?: boolean;
+}
+
+export interface FeatureBackfillToggles {
+  enabled?: boolean;
+}
+
+export interface FeatureToggles {
+  services?: FeatureServiceToggles;
+  logging?: FeatureLoggingToggles;
+  moderation?: FeatureModerationToggles;
+  message_cache?: FeatureMessageCacheToggles;
+  presence_watch?: FeaturePresenceWatchToggles;
+  maintenance?: FeatureMaintenanceToggles;
+  safety?: FeatureSafetyToggles;
+  backfill?: FeatureBackfillToggles;
+  mute_role?: boolean;
+  stats_channels?: boolean;
+  auto_role_assignment?: boolean;
+  user_prune?: boolean;
+  role_panels?: boolean;
+}
+
+export interface RolePanelEmbedFieldConfig {
+  name: string;
+  value: string;
+  inline?: boolean;
+}
+
+export interface RolePanelButtonConfig {
+  role_id: string;
+  label: string;
+  emoji_name?: string;
+  emoji_id?: string;
+  emoji_animated?: boolean;
+}
+
+export interface RolePanelPostingConfig {
+  channel_id: string;
+  message_id: string;
+  webhook_id?: string;
+  webhook_token?: string;
+}
+
+export interface RolePanelConfig {
+  key: string;
+  title?: string;
+  description?: string;
+  color?: number;
+  author_name?: string;
+  author_icon_url?: string;
+  footer_text?: string;
+  footer_icon_url?: string;
+  image_url?: string;
+  thumbnail_url?: string;
+  fields?: RolePanelEmbedFieldConfig[];
+  buttons?: RolePanelButtonConfig[];
+  postings?: RolePanelPostingConfig[];
+}
+
+export interface testConfigContainer {
+  secret: string;
+}
+
 export interface RuntimeConfig {
   database?: DatabaseRuntimeConfig;
   bot_theme?: string;
@@ -367,145 +504,8 @@ export interface DiscohookField {
   inline?: boolean;
 }
 
-export interface testConfigContainer {
-  secret: string;
-}
-
 export interface payload {
   name: string;
   count: number;
-}
-
-export interface FeatureServiceToggles {
-  monitoring?: boolean;
-  automod?: boolean;
-  commands?: boolean;
-}
-
-export interface FeatureLoggingToggles {
-  avatar_logging?: boolean;
-  role_update?: boolean;
-  member_join?: boolean;
-  member_leave?: boolean;
-  message_process?: boolean;
-  message_edit?: boolean;
-  message_delete?: boolean;
-  reaction_metric?: boolean;
-  automod_action?: boolean;
-  moderation_case?: boolean;
-  clean_action?: boolean;
-}
-
-export interface FeatureModerationToggles {
-  ban?: boolean;
-  massban?: boolean;
-  kick?: boolean;
-  timeout?: boolean;
-  warn?: boolean;
-  warnings?: boolean;
-  clean?: boolean;
-}
-
-export interface FeatureMessageCacheToggles {
-  cleanup_on_startup?: boolean;
-  delete_on_log?: boolean;
-}
-
-export interface FeaturePresenceWatchToggles {
-  bot?: boolean;
-  user?: boolean;
-}
-
-export interface FeatureMaintenanceToggles {
-  db_cleanup?: boolean;
-}
-
-export interface FeatureSafetyToggles {
-  bot_role_perm_mirror?: boolean;
-}
-
-export interface FeatureBackfillToggles {
-  enabled?: boolean;
-}
-
-export interface FeatureToggles {
-  services?: FeatureServiceToggles;
-  logging?: FeatureLoggingToggles;
-  moderation?: FeatureModerationToggles;
-  message_cache?: FeatureMessageCacheToggles;
-  presence_watch?: FeaturePresenceWatchToggles;
-  maintenance?: FeatureMaintenanceToggles;
-  safety?: FeatureSafetyToggles;
-  backfill?: FeatureBackfillToggles;
-  mute_role?: boolean;
-  stats_channels?: boolean;
-  auto_role_assignment?: boolean;
-  user_prune?: boolean;
-  role_panels?: boolean;
-}
-
-export interface RolePanelEmbedFieldConfig {
-  name: string;
-  value: string;
-  inline?: boolean;
-}
-
-export interface RolePanelButtonConfig {
-  role_id: string;
-  label: string;
-  emoji_name?: string;
-  emoji_id?: string;
-  emoji_animated?: boolean;
-}
-
-export interface RolePanelPostingConfig {
-  channel_id: string;
-  message_id: string;
-  webhook_id?: string;
-  webhook_token?: string;
-}
-
-export interface RolePanelConfig {
-  key: string;
-  title?: string;
-  description?: string;
-  color?: number;
-  author_name?: string;
-  author_icon_url?: string;
-  footer_text?: string;
-  footer_icon_url?: string;
-  image_url?: string;
-  thumbnail_url?: string;
-  fields?: RolePanelEmbedFieldConfig[];
-  buttons?: RolePanelButtonConfig[];
-  postings?: RolePanelPostingConfig[];
-}
-
-export interface CustomEmbedFieldConfig {
-  name: string;
-  value: string;
-  inline?: boolean;
-}
-
-export interface CustomEmbedPostingConfig {
-  channel_id: string;
-  message_id: string;
-  webhook_id?: string;
-  webhook_token?: string;
-}
-
-export interface CustomEmbedConfig {
-  key: string;
-  title?: string;
-  description?: string;
-  color?: number;
-  author_name?: string;
-  author_icon_url?: string;
-  footer_text?: string;
-  footer_icon_url?: string;
-  image_url?: string;
-  thumbnail_url?: string;
-  fields?: CustomEmbedFieldConfig[];
-  postings?: CustomEmbedPostingConfig[];
 }
 

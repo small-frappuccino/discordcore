@@ -74,13 +74,7 @@ export function CorePage() {
     const profileName = newProfileName.trim();
     if (!profileName) return;
 
-    const sanitized = profileName.toLowerCase().replace(/[^a-z0-9_]/g, '');
-    if (!sanitized) {
-      alert("Invalid name. Use only letters, numbers, and underscores.");
-      return;
-    }
-
-    setAddedProfiles(prev => Array.from(new Set([...prev, sanitized])));
+    setAddedProfiles(prev => Array.from(new Set([...prev, profileName])));
 
     setIsCreatingProfile(false);
     setNewProfileName("");
@@ -156,14 +150,14 @@ export function CorePage() {
                         <div className="flex flex-col">
                           <div className="flex items-center gap-2">
                             <span className="font-semibold text-text-primary">
-                              {profile ? profile.username : `Instance: ${instanceId}`}
+                              {profile ? profile.username : `Profile: ${instanceId}`}
                             </span>
                             {profile?.discriminator && profile.discriminator !== "0" && (
                               <span className="text-sm text-text-muted">#{profile.discriminator}</span>
                             )}
                           </div>
                           <span className="text-sm text-text-secondary">
-                            Logical ID: {instanceId}
+                            Profile: {instanceId}
                           </span>
                         </div>
                         <div className="ml-auto relative">
