@@ -55,9 +55,16 @@ func (s *Server) handleGuildBotProfilesGet(w http.ResponseWriter, r *http.Reques
 
 		profile, err := getBotProfileCached(r.Context(), guildID, instanceID, token)
 		if err != nil {
+			errStr := err.Error()
+			if strings.Contains(errStr, "401") || strings.Contains(errStr, "4004") || strings.Contains(strings.ToLower(errStr), "authentication failed") {
+				log.ApplicationLogger().Warn("Bot token rejected by Discord, revoking from configuration", "guildID", guildID, "instanceID", instanceID, "err", err)
+				_ = s.configManager.RevokeBotInstance(instanceID, token)
+				continue
+			}
+
 			log.ApplicationLogger().Warn("Failed to fetch bot profile", "guildID", guildID, "instanceID", instanceID, "err", err)
 			status := http.StatusBadGateway
-			if strings.Contains(err.Error(), "429") {
+			if strings.Contains(errStr, "429") {
 				status = http.StatusTooManyRequests
 			}
 			http.Error(w, "Failed to fetch bot profile", status)

@@ -49,3 +49,37 @@ func runtimeConfigForScope(cfg *BotConfig, scopeGuildID string) (*RuntimeConfig,
 	}
 	return &guildConfig.RuntimeConfig, nil
 }
+
+// RevokeBotInstance removes the given instance from the configuration across all guilds,
+// provided that its configured token exactly matches the revoked token.
+func (mgr *ConfigManager) RevokeBotInstance(instanceID, token string) error {
+	_, err := mgr.UpdateConfig(func(cfg *BotConfig) error {
+		for i := range cfg.Guilds {
+			guild := &cfg.Guilds[i]
+			encToken, exists := guild.BotInstanceTokens[instanceID]
+			if !exists {
+				continue
+			}
+			if string(encToken) != token {
+				continue
+			}
+
+			// Token matches exactly. Remove it.
+			delete(guild.BotInstanceTokens, instanceID)
+
+			if guild.BotInstanceStatuses != nil {
+				delete(guild.BotInstanceStatuses, instanceID)
+			}
+
+			if guild.FeatureRouting != nil {
+				for feature, route := range guild.FeatureRouting {
+					if route == instanceID {
+						delete(guild.FeatureRouting, feature)
+					}
+				}
+			}
+		}
+		return nil
+	})
+	return err
+}

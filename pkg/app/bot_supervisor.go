@@ -382,6 +382,13 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token, status str
 			break
 		}
 
+		errStr := err.Error()
+		if strings.Contains(errStr, "401") || strings.Contains(errStr, "4004") || strings.Contains(strings.ToLower(errStr), "authentication failed") {
+			log.ApplicationLogger().Warn("Bot authentication failed permanently, revoking token from configuration", "botInstanceID", instanceID, "error", err)
+			_ = s.configManager.RevokeBotInstance(instanceID, token)
+			break
+		}
+
 		log.ApplicationLogger().Warn("failed to open bot runtime, retrying", "botInstanceID", instanceID, "attempt", attempt+1, "error", err)
 
 		delay := float64(baseDelay) * float64(uint(1)<<attempt)
