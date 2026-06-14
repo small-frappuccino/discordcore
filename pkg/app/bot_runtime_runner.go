@@ -7,6 +7,9 @@ import (
 
 	"github.com/small-frappuccino/discordgo"
 
+	"strings"
+
+	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordcore/pkg/automod"
 	"github.com/small-frappuccino/discordcore/pkg/clock"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
@@ -15,6 +18,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/maintenance"
 	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/discord/session"
+	discordstats "github.com/small-frappuccino/discordcore/pkg/discord/stats"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/monitoring"
@@ -132,7 +136,14 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 		return err
 	}
 
-	statsService := stats.NewStatsService(runtime.session, opts.configManager, opts.store, log.DiscordLogger(), runtime.instanceID, "")
+	token := runtime.session.Token
+	if !strings.HasPrefix(token, "Bot ") {
+		token = "Bot " + token
+	}
+	arikawaState := state.New(token)
+	statsGateway := discordstats.NewArikawaGateway(arikawaState)
+	statsService := stats.NewStatsService(statsGateway, opts.configManager, opts.store, log.DiscordLogger(), runtime.instanceID, "")
+	discordstats.RegisterDiscordGoEventHandlers(runtime.session, statsService)
 	if err := runtime.serviceManager.Register(statsService); err != nil {
 		return fmt.Errorf("register stats service for %s: %w", runtime.instanceID, err)
 	}

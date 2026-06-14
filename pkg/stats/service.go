@@ -14,7 +14,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	svc "github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
-	"github.com/small-frappuccino/discordgo"
 )
 
 const (
@@ -29,7 +28,7 @@ const (
 // StatsService manages the stats-channel state. guilds and lastRun are protected by mu.
 // Construct with NewStatsService; the zero value has nil maps.
 type StatsService struct {
-	session              *discordgo.Session
+	gateway              Gateway
 	configManager        *files.ConfigManager
 	store                *storage.Store
 	logger               *slog.Logger
@@ -40,14 +39,13 @@ type StatsService struct {
 	guilds  map[string]*statsGuildState
 	lastRun map[string]time.Time
 
-	cancel        context.CancelFunc
-	wg            sync.WaitGroup
-	eventHandlers []func()
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
 }
 
 // NewStatsService news stats service.
 func NewStatsService(
-	session *discordgo.Session,
+	gateway Gateway,
 	configManager *files.ConfigManager,
 	store *storage.Store,
 	logger *slog.Logger,
@@ -55,7 +53,7 @@ func NewStatsService(
 	defaultBotInstanceID string,
 ) *StatsService {
 	return &StatsService{
-		session:              session,
+		gateway:              gateway,
 		configManager:        configManager,
 		store:                store,
 		logger:               logger,
@@ -126,11 +124,6 @@ func (s *StatsService) Start(ctx context.Context) error {
 
 	go s.runCron(runCtx)
 
-	s.eventHandlers = append(s.eventHandlers,
-		s.session.AddHandler(s.HandleStatsMemberAdd),
-		s.session.AddHandler(s.HandleStatsMemberRemove),
-		s.session.AddHandler(s.HandleStatsMemberUpdate),
-	)
 	return nil
 }
 
@@ -162,12 +155,6 @@ func (s *StatsService) Stop(ctx context.Context) error {
 	}
 	s.cancel()
 	s.cancel = nil
-	for _, h := range s.eventHandlers {
-		if h != nil {
-			h()
-		}
-	}
-	s.eventHandlers = nil
 	s.mu.Unlock()
 
 	s.wg.Wait()
@@ -348,7 +335,7 @@ func (state *statsGuildState) addContribution(snapshot statsMemberSnapshot, delt
 
 // UpdateStatsChannels updates stats channels.
 func (s *StatsService) UpdateStatsChannels(ctx context.Context) error {
-	if s == nil || s.session == nil || s.configManager == nil {
+	if s == nil || s.gateway == nil || s.configManager == nil {
 		return nil
 	}
 	cfg := s.scopedConfig()
@@ -474,7 +461,7 @@ func (s *StatsService) reconcileStatsForGuild(ctx context.Context, gcfg files.Gu
 		if err := ctx.Err(); err != nil {
 			return fmt.Errorf("MonitoringService.reconcileStatsForGuild: %w", err)
 		}
-		userID, snapshot, ok := statsSnapshotFromMember(member, trackedRoles)
+		userID, snapshot, ok := statsSnapshotFromGatewayMember(member, trackedRoles)
 		if !ok {
 			continue
 		}
@@ -674,16 +661,13 @@ func statsTrackedRoles(channels []files.StatsChannelConfig) (map[string]struct{}
 	return tracked, strings.Join(roleIDs, ",")
 }
 
-func statsSnapshotFromMember(member *discordgo.Member, trackedRoles map[string]struct{}) (string, statsMemberSnapshot, bool) {
-	if member == nil || member.User == nil {
-		return "", statsMemberSnapshot{}, false
-	}
-	userID := strings.TrimSpace(member.User.ID)
+func statsSnapshotFromGatewayMember(member MemberSnapshot, trackedRoles map[string]struct{}) (string, statsMemberSnapshot, bool) {
+	userID := strings.TrimSpace(member.UserID)
 	if userID == "" {
 		return "", statsMemberSnapshot{}, false
 	}
 	return userID, statsMemberSnapshot{
-		isBot:        member.User.Bot,
+		isBot:        member.IsBot,
 		trackedRoles: filterTrackedRoles(member.Roles, trackedRoles),
 	}, true
 }
@@ -810,9 +794,7 @@ func (s *StatsService) updateStatsChannelName(ctx context.Context, guildID strin
 		return nil
 	}
 
-	if _, err := runWithTimeout(ctx, monitoringDependencyTimeout, func() (*discordgo.Channel, error) {
-		return s.session.ChannelEdit(channelID, &discordgo.ChannelEdit{Name: newName})
-	}); err != nil {
+	if err := s.gateway.UpdateChannelName(ctx, channelID, newName); err != nil {
 		return fmt.Errorf("channel edit: %w", err)
 	}
 
@@ -832,18 +814,11 @@ func (s *StatsService) updateStatsChannelName(ctx context.Context, guildID strin
 	return nil
 }
 
-func (s *StatsService) resolveChannel(ctx context.Context, channelID string) (*discordgo.Channel, error) {
-	if s.session == nil || channelID == "" {
-		return nil, fmt.Errorf("session not available or channel id empty")
+func (s *StatsService) resolveChannel(ctx context.Context, channelID string) (*Channel, error) {
+	if s.gateway == nil || channelID == "" {
+		return nil, fmt.Errorf("gateway not available or channel id empty")
 	}
-	if s.session.State != nil {
-		if ch, err := s.session.State.Channel(channelID); err == nil && ch != nil {
-			return ch, nil
-		}
-	}
-	return runWithTimeout(ctx, monitoringDependencyTimeout, func() (*discordgo.Channel, error) {
-		return s.session.Channel(channelID)
-	})
+	return s.gateway.GetChannel(ctx, channelID)
 }
 
 func renderStatsChannelName(label, template string, count int) string {
@@ -860,45 +835,10 @@ func renderStatsChannelName(label, template string, count int) string {
 	return strings.TrimSpace(out)
 }
 
-// HandleStatsMemberAdd handles stats member add.
-func (s *StatsService) HandleStatsMemberAdd(_ *discordgo.Session, m *discordgo.GuildMemberAdd) {
-	if m == nil || m.Member == nil || m.Member.User == nil {
-		return
-	}
-	if !s.handlesGuild(m.GuildID) {
-		return
-	}
-	s.applyStatsMemberAdd(m.Member)
-}
-
-// HandleStatsMemberRemove handles stats member remove.
-func (s *StatsService) HandleStatsMemberRemove(_ *discordgo.Session, m *discordgo.GuildMemberRemove) {
-	if m == nil || m.User == nil {
-		return
-	}
-	if !s.handlesGuild(m.GuildID) {
-		return
-	}
-	s.applyStatsMemberRemove(m.GuildID, m.User.ID)
-}
-
-// HandleStatsMemberUpdate handles stats member update.
-func (s *StatsService) HandleStatsMemberUpdate(_ *discordgo.Session, m *discordgo.GuildMemberUpdate) {
-	if m == nil || m.User == nil {
-		return
-	}
-	if !s.handlesGuild(m.GuildID) {
-		return
-	}
-	s.ApplyStatsMemberUpdate(m.GuildID, m.User.ID, m.User.Bot, m.Roles)
-}
-
-func (s *StatsService) applyStatsMemberAdd(member *discordgo.Member) {
-	if member == nil || member.User == nil {
-		return
-	}
-	guildID := strings.TrimSpace(member.GuildID)
-	userID := strings.TrimSpace(member.User.ID)
+// ApplyMemberAdd is called by the adapter when a member joins.
+func (s *StatsService) ApplyMemberAdd(guildID string, userID string, joinedAt time.Time, isBot bool, roles []string) {
+	guildID = strings.TrimSpace(guildID)
+	userID = strings.TrimSpace(userID)
 	if guildID == "" || userID == "" {
 		return
 	}
@@ -907,10 +847,10 @@ func (s *StatsService) applyStatsMemberAdd(member *discordgo.Member) {
 	if !enabled {
 		return
 	}
-	s.persistStatsMemberActive(guildID, userID, member.JoinedAt, member.User.Bot, member.Roles)
+	s.persistStatsMemberActive(guildID, userID, joinedAt, isBot, roles)
 	snapshot := statsMemberSnapshot{
-		isBot:        member.User.Bot,
-		trackedRoles: filterTrackedRoles(member.Roles, trackedRoles),
+		isBot:        isBot,
+		trackedRoles: filterTrackedRoles(roles, trackedRoles),
 	}
 
 	s.mu.Lock()
@@ -957,7 +897,8 @@ func (s *StatsService) ApplyStatsMemberUpdate(guildID, userID string, isBot bool
 	}
 }
 
-func (s *StatsService) applyStatsMemberRemove(guildID, userID string) {
+// ApplyMemberRemove is called by the adapter when a member leaves.
+func (s *StatsService) ApplyMemberRemove(guildID, userID string) {
 	guildID = strings.TrimSpace(guildID)
 	userID = strings.TrimSpace(userID)
 	if guildID == "" || userID == "" {
@@ -1203,47 +1144,19 @@ func runErrWithTimeoutContext(ctx context.Context, timeout time.Duration, fn fun
 	}
 }
 
-func (s *StatsService) streamGuildMembers(ctx context.Context, guildID string) iter.Seq2[*discordgo.Member, error] {
-	return func(yield func(*discordgo.Member, error) bool) {
-		if s == nil || s.session == nil {
-			yield(nil, fmt.Errorf("discord session is unavailable"))
+func (s *StatsService) streamGuildMembers(ctx context.Context, guildID string) iter.Seq2[MemberSnapshot, error] {
+	return func(yield func(MemberSnapshot, error) bool) {
+		if s == nil || s.gateway == nil {
+			yield(MemberSnapshot{}, fmt.Errorf("discord gateway is unavailable"))
 			return
 		}
 		if ctx == nil {
 			ctx = context.Background()
 		}
-		pageSize := 1000
-
-		after := ""
-		for {
-			if err := ctx.Err(); err != nil {
-				yield(nil, fmt.Errorf("streamGuildMembers: %w", err))
+		for m, err := range s.gateway.StreamGuildMembers(ctx, guildID) {
+			if !yield(m, err) {
 				return
 			}
-			members, err := runWithTimeout(ctx, monitoringDependencyTimeout, func() ([]*discordgo.Member, error) {
-				return s.session.GuildMembers(guildID, after, pageSize)
-			})
-			if err != nil {
-				yield(nil, fmt.Errorf("streamGuildMembers: %w", err))
-				return
-			}
-			if len(members) == 0 {
-				return
-			}
-			for _, m := range members {
-				if !yield(m, nil) {
-					return
-				}
-			}
-			if len(members) < pageSize {
-				return
-			}
-			last := members[len(members)-1]
-			if last == nil || last.User == nil || strings.TrimSpace(last.User.ID) == "" {
-				yield(nil, fmt.Errorf("stream guild members: invalid page tail for guild %s", guildID))
-				return
-			}
-			after = last.User.ID
 		}
 	}
 }

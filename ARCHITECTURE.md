@@ -11,7 +11,7 @@ flowchart TD
     DiscordAPI((Discord API))
 
     %% SDKs
-    DiscordGo(("DiscordGo SDK"))
+    DiscordGo(("DiscordGo SDK (Fork)"))
     Arikawa(("Arikawa SDK"))
     
     %% Entrypoints
@@ -107,7 +107,10 @@ flowchart TD
     App --> Maintenance
     App --> MessageUpdate
     Commands --> Perf
-    Logging --> Perf
+    Monitoring --> Perf
+    Messages --> Perf
+    Members --> Perf
+    Reactions --> Perf
     Cache --> Perf
     Commands --> Cleanup
     Control --> Cleanup
@@ -126,7 +129,7 @@ flowchart TD
     UI -- Fetches via Control API --> Control
     UI -. Configures .-> Partners
     UI -. Configures .-> Roles
-    UI -. Configures .-> Logging
+    UI -. Configures .-> Monitoring
     
     %% Dual SDK Injection into Vertical Features
     DualSDK == Injected as Publisher ==> QOTD
@@ -153,9 +156,14 @@ flowchart TD
     AdapterTickets --> Commands
     AdapterTickets --> Storage
     
-    %% The Monolith and Adapters
-    Logging --> Files
-    Logging --> Storage
+    Monitoring --> Files
+    Monitoring --> Storage
+    Messages --> Files
+    Messages --> Storage
+    Members --> Files
+    Members --> Storage
+    Reactions --> Files
+    Reactions --> Storage
     
     Control --> Files
     Control --> Storage
@@ -188,8 +196,8 @@ flowchart TD
     classDef ui fill:#A3BE8C,stroke:#8FBCBB,stroke-width:2px,color:#2E3440;
     
     class Files,Storage,Persistence,RuntimeApply core;
-    class Control,Task,RPC,Commands,Logging,Cache,Session,DualSDK,Webhook,Perf,Cleanup,Maintenance,MessageUpdate,AdapterQOTD,AdapterTickets adapter;
-    class QOTD,Roles,Embeds,Partners,Tickets,Stats,Automod feature;
+    class Control,Task,RPC,Commands,Cache,Session,DualSDK,Webhook,Perf,Cleanup,Maintenance,MessageUpdate,AdapterQOTD,AdapterTickets adapter;
+    class QOTD,Roles,Embeds,Partners,Tickets,Stats,Automod,Monitoring,Messages,Members,Reactions,Notifications feature;
     class Service,Log,LogPolicy,Observability,Clock,Theme,TestDB infra;
     class DiscordGo,Arikawa,DiscordAPI,DiscordGateway external;
     class UI ui;
