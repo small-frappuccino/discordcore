@@ -21,13 +21,13 @@ func TestGuildConfigLegacyMigration(t *testing.T) {
 		},
 		{
 			name:       "migrates domain_bot_instance_ids",
-			jsonInput:  `{"guild_id": "g2", "domain_bot_instance_ids": {"qotd": "companion", "moderation": "admin"}}`,
-			wantTokens: []string{"companion", "admin"},
+			jsonInput:  `{"guild_id": "g2", "domain_bot_instance_ids": {"qotd": "custom", "moderation": "admin"}}`,
+			wantTokens: []string{"custom", "admin"},
 		},
 		{
 			name:       "combines both legacy fields",
-			jsonInput:  `{"guild_id": "g3", "bot_instance_id": "main", "domain_bot_instance_ids": {"qotd": "companion"}}`,
-			wantTokens: []string{"main", "companion"},
+			jsonInput:  `{"guild_id": "g3", "bot_instance_id": "main", "domain_bot_instance_ids": {"qotd": "custom"}}`,
+			wantTokens: []string{"main", "custom"},
 		},
 		{
 			name:       "normalizes legacy names",
@@ -103,8 +103,8 @@ func TestGuildConfigLegacyMigration(t *testing.T) {
 			if _, ok := m["main"]; ok {
 				t.Errorf("Marshaled JSON should not contain top-level 'main'")
 			}
-			if _, ok := m["companion"]; ok {
-				t.Errorf("Marshaled JSON should not contain top-level 'companion'")
+			if _, ok := m["custom"]; ok {
+				t.Errorf("Marshaled JSON should not contain top-level 'custom'")
 			}
 		})
 	}

@@ -163,7 +163,7 @@ func (r *botRuntimeResolver) aggregateMonitoringMetrics() map[string]monitoring.
 	return metrics
 }
 
-func (r *botRuntimeResolver) runtimeForGuild(guildID string) (*botRuntime, string, error) {
+func (r *botRuntimeResolver) runtimeForGuild(guildID string, feature string) (*botRuntime, string, error) {
 	if r == nil {
 		return nil, "", fmt.Errorf("bot runtime resolver is unavailable")
 	}
@@ -176,7 +176,10 @@ func (r *botRuntimeResolver) runtimeForGuild(guildID string) (*botRuntime, strin
 		return nil, "", fmt.Errorf("guild %s is not configured", guildID)
 	}
 
-	bestInstanceID, _ := guild.ResolveFeatureBotInstanceID("dashboard")
+	if feature == "" {
+		feature = "dashboard"
+	}
+	bestInstanceID, _ := guild.ResolveFeatureBotInstanceID(feature)
 
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -208,8 +211,8 @@ func (r *botRuntimeResolver) runtimeForGuild(guildID string) (*botRuntime, strin
 	return nil, "", fmt.Errorf("guild %s does not resolve to a running bot instance", guildID)
 }
 
-func (r *botRuntimeResolver) sessionForGuild(guildID string) (*discordgo.Session, error) {
-	runtime, botInstanceID, err := r.runtimeForGuild(guildID)
+func (r *botRuntimeResolver) sessionForGuild(guildID string, feature string) (*discordgo.Session, error) {
+	runtime, botInstanceID, err := r.runtimeForGuild(guildID, feature)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrSessionUnavailable, err)
 	}

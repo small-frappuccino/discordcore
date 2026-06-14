@@ -557,38 +557,38 @@ func TestHeartbeatMetadataRoundTrip(t *testing.T) {
 func TestRuntimeMetadataIsNamespacedByBot(t *testing.T) {
 	store := newTempStore(t)
 	aliceHeartbeat := time.Now().UTC().Add(-time.Minute).Truncate(time.Second)
-	companionHeartbeat := time.Now().UTC().Truncate(time.Second)
+	customHeartbeat := time.Now().UTC().Truncate(time.Second)
 	aliceLastEvent := time.Now().UTC().Add(-2 * time.Minute).Truncate(time.Second)
-	companionLastEvent := time.Now().UTC().Add(-30 * time.Second).Truncate(time.Second)
+	customLastEvent := time.Now().UTC().Add(-30 * time.Second).Truncate(time.Second)
 
 	if err := store.SetHeartbeatForBot(context.Background(), "alice", aliceHeartbeat); err != nil {
 		t.Fatalf("set alice heartbeat: %v", err)
 	}
-	if err := store.SetHeartbeatForBot(context.Background(), "companion", companionHeartbeat); err != nil {
-		t.Fatalf("set companion heartbeat: %v", err)
+	if err := store.SetHeartbeatForBot(context.Background(), "custom", customHeartbeat); err != nil {
+		t.Fatalf("set custom heartbeat: %v", err)
 	}
 	if err := store.SetLastEventForBot(context.Background(), "alice", aliceLastEvent); err != nil {
 		t.Fatalf("set alice last event: %v", err)
 	}
-	if err := store.SetLastEventForBot(context.Background(), "companion", companionLastEvent); err != nil {
-		t.Fatalf("set companion last event: %v", err)
+	if err := store.SetLastEventForBot(context.Background(), "custom", customLastEvent); err != nil {
+		t.Fatalf("set custom last event: %v", err)
 	}
 
 	gotAliceHeartbeat, ok, err := store.HeartbeatForBot(context.Background(), "alice")
 	if err != nil || !ok || !gotAliceHeartbeat.Equal(aliceHeartbeat) {
 		t.Fatalf("unexpected alice heartbeat: got=%v ok=%v err=%v", gotAliceHeartbeat, ok, err)
 	}
-	gotCompanionHeartbeat, ok, err := store.HeartbeatForBot(context.Background(), "companion")
-	if err != nil || !ok || !gotCompanionHeartbeat.Equal(companionHeartbeat) {
-		t.Fatalf("unexpected companion heartbeat: got=%v ok=%v err=%v", gotCompanionHeartbeat, ok, err)
+	gotCustomHeartbeat, ok, err := store.HeartbeatForBot(context.Background(), "custom")
+	if err != nil || !ok || !gotCustomHeartbeat.Equal(customHeartbeat) {
+		t.Fatalf("unexpected custom heartbeat: got=%v ok=%v err=%v", gotCustomHeartbeat, ok, err)
 	}
 	gotAliceLastEvent, ok, err := store.LastEventForBot(context.Background(), "alice")
 	if err != nil || !ok || !gotAliceLastEvent.Equal(aliceLastEvent) {
 		t.Fatalf("unexpected alice last event: got=%v ok=%v err=%v", gotAliceLastEvent, ok, err)
 	}
-	gotCompanionLastEvent, ok, err := store.LastEventForBot(context.Background(), "companion")
-	if err != nil || !ok || !gotCompanionLastEvent.Equal(companionLastEvent) {
-		t.Fatalf("unexpected companion last event: got=%v ok=%v err=%v", gotCompanionLastEvent, ok, err)
+	gotCustomLastEvent, ok, err := store.LastEventForBot(context.Background(), "custom")
+	if err != nil || !ok || !gotCustomLastEvent.Equal(customLastEvent) {
+		t.Fatalf("unexpected custom last event: got=%v ok=%v err=%v", gotCustomLastEvent, ok, err)
 	}
 }
 

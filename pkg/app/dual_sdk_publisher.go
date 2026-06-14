@@ -29,7 +29,7 @@ func newDualSDKPublisher(resolver *botRuntimeResolver) *dualSDKPublisher {
 
 // getArikawaPublisher resolves the guild's bot instance and returns a cached Arikawa publisher.
 func (p *dualSDKPublisher) getArikawaPublisher(guildID string) (domain.Publisher, error) {
-	_, botInstanceID, err := p.resolver.runtimeForGuild(guildID)
+	_, botInstanceID, err := p.resolver.runtimeForGuild(guildID, "qotd")
 	if err != nil {
 		return nil, fmt.Errorf("resolve bot instance for guild %s: %w", guildID, err)
 	}
@@ -41,7 +41,7 @@ func (p *dualSDKPublisher) getArikawaPublisher(guildID string) (domain.Publisher
 		return qotd.NewArikawaPublisher(st), nil
 	}
 
-	session, err := p.resolver.sessionForGuild(guildID)
+	session, err := p.resolver.sessionForGuild(guildID, "qotd")
 	if err != nil {
 		return nil, fmt.Errorf("resolve discord session for guild %s: %w", guildID, err)
 	}

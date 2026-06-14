@@ -239,7 +239,7 @@ func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskO
 		return nil
 	})
 	controlServer.SetDiscordSessionResolver(func(guildID string) (*discordgo.Session, error) {
-		return opts.runtimeResolver.sessionForGuild(guildID)
+		return opts.runtimeResolver.sessionForGuild(guildID, "dashboard")
 	})
 	controlServer.SetBotGuildBindingsProvider(func(ctx context.Context) ([]control.BotGuildBinding, error) {
 		return opts.runtimeResolver.guildBindings(ctx)

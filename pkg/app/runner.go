@@ -274,7 +274,7 @@ func runWithOptions(appName string, opts RunOptions) error {
 
 		controlBearerToken := strings.TrimSpace(files.EnvString(controlBearerTokenEnv, ""))
 		scheduleStartupWebhookEmbedUpdates(startupTasks, configManager.Config(), func(guildID string) *discordgo.Session {
-			sess, _ := runtimeResolver.sessionForGuild(guildID)
+			sess, _ := runtimeResolver.sessionForGuild(guildID, "")
 			return sess
 		})
 		scheduleControlServerStartup(startupTasks, controlStartupTaskOptions{

@@ -79,13 +79,13 @@ func TestStatsServiceHandlesGuild(t *testing.T) {
 				},
 			},
 			{
-				GuildID: "guild-stats-companion",
+				GuildID: "guild-stats-custom",
 				BotInstanceTokens: map[string]files.EncryptedString{
-					"companion": "token",
-					"main":      "token",
+					"custom": "token",
+					"main":   "token",
 				},
 				FeatureRouting: map[string]string{
-					"stats": "companion",
+					"stats": "custom",
 				},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
@@ -127,21 +127,21 @@ func TestStatsServiceHandlesGuild(t *testing.T) {
 
 	logger := slog.Default()
 	mainSvc := NewStatsService(nil, cm, nil, logger, "main")
-	companionSvc := NewStatsService(nil, cm, nil, logger, "companion")
+	customSvc := NewStatsService(nil, cm, nil, logger, "custom")
 	defaultSvc := NewStatsService(nil, cm, nil, logger, "")
 
 	if !mainSvc.handlesGuild("guild-stats-main") {
 		t.Errorf("expected main service to handle guild-stats-main")
 	}
-	if companionSvc.handlesGuild("guild-stats-main") {
-		t.Errorf("expected companion service to NOT handle guild-stats-main")
+	if customSvc.handlesGuild("guild-stats-main") {
+		t.Errorf("expected custom service to NOT handle guild-stats-main")
 	}
 
-	if mainSvc.handlesGuild("guild-stats-companion") {
-		t.Errorf("expected main service to NOT handle guild-stats-companion")
+	if mainSvc.handlesGuild("guild-stats-custom") {
+		t.Errorf("expected main service to NOT handle guild-stats-custom")
 	}
-	if !companionSvc.handlesGuild("guild-stats-companion") {
-		t.Errorf("expected companion service to handle guild-stats-companion")
+	if !customSvc.handlesGuild("guild-stats-custom") {
+		t.Errorf("expected custom service to handle guild-stats-custom")
 	}
 
 	if mainSvc.handlesGuild("guild-stats-default") {

@@ -349,6 +349,9 @@ func (s *StatsService) UpdateStatsChannels(ctx context.Context) error {
 		if !features.Services.Monitoring || !features.StatsChannels || !Enabled(gcfg.Stats) {
 			continue
 		}
+		if !s.handlesGuild(gcfg.GuildID) {
+			continue
+		}
 		activeGuilds[gcfg.GuildID] = struct{}{}
 
 		needsReconcile, prepErr := s.prepareStatsState(ctx, gcfg)

@@ -290,8 +290,8 @@ func TestRuntimeServiceCyclesUseQOTDDomainScopedGuilds(t *testing.T) {
 	for _, guild := range []files.GuildConfig{
 		{
 			GuildID:           "g-qotd-enabled",
-			BotInstanceTokens: map[string]files.EncryptedString{"companion": "a"},
-			FeatureRouting:    map[string]string{"qotd": "companion"},
+			BotInstanceTokens: map[string]files.EncryptedString{"custom": "a"},
+			FeatureRouting:    map[string]string{"qotd": "custom"},
 			QOTD: files.QOTDConfig{
 				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 				Decks: []files.QOTDDeckConfig{{
@@ -304,8 +304,8 @@ func TestRuntimeServiceCyclesUseQOTDDomainScopedGuilds(t *testing.T) {
 		},
 		{
 			GuildID:           "g-qotd-configured-disabled",
-			BotInstanceTokens: map[string]files.EncryptedString{"companion": "a"},
-			FeatureRouting:    map[string]string{"qotd": "companion"},
+			BotInstanceTokens: map[string]files.EncryptedString{"custom": "a"},
+			FeatureRouting:    map[string]string{"qotd": "custom"},
 			QOTD: files.QOTDConfig{
 				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 				Decks: []files.QOTDDeckConfig{{
@@ -336,7 +336,7 @@ func TestRuntimeServiceCyclesUseQOTDDomainScopedGuilds(t *testing.T) {
 	}
 
 	fake := &fakeGuildLifecycleService{}
-	service := NewRuntimeServiceForBot(&discordgo.Session{}, configManager, fake, "companion")
+	service := NewRuntimeServiceForBot(&discordgo.Session{}, configManager, fake, "custom")
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}
@@ -345,10 +345,10 @@ func TestRuntimeServiceCyclesUseQOTDDomainScopedGuilds(t *testing.T) {
 	service.runReconcileCycle(service.clock())
 
 	if len(fake.publishCalls) != 1 || fake.publishCalls[0] != "g-qotd-enabled" {
-		t.Fatalf("expected publish cycle to include only enabled qotd-domain guilds for companion, got %v", fake.publishCalls)
+		t.Fatalf("expected publish cycle to include only enabled qotd-domain guilds for custom, got %v", fake.publishCalls)
 	}
 	if len(fake.reconcileCalls) != 2 {
-		t.Fatalf("expected reconcile cycle to include configured qotd-domain guilds for companion, got %v", fake.reconcileCalls)
+		t.Fatalf("expected reconcile cycle to include configured qotd-domain guilds for custom, got %v", fake.reconcileCalls)
 	}
 	if fake.reconcileCalls[0] != "g-qotd-enabled" || fake.reconcileCalls[1] != "g-qotd-configured-disabled" {
 		t.Fatalf("unexpected reconcile target order: %v", fake.reconcileCalls)
@@ -365,8 +365,8 @@ func TestRuntimeServiceIdentityDoesNotDriftDuringPublish(t *testing.T) {
 	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := configManager.AddGuildConfig(files.GuildConfig{
 		GuildID:           "g-identity-lock",
-		BotInstanceTokens: map[string]files.EncryptedString{"companion": "a", "main": "b"},
-		FeatureRouting:    map[string]string{"qotd": "companion"},
+		BotInstanceTokens: map[string]files.EncryptedString{"custom": "a", "main": "b"},
+		FeatureRouting:    map[string]string{"qotd": "custom"},
 		QOTD: files.QOTDConfig{
 			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 			Decks: []files.QOTDDeckConfig{{
@@ -381,7 +381,7 @@ func TestRuntimeServiceIdentityDoesNotDriftDuringPublish(t *testing.T) {
 	}
 
 	fake := &fakeGuildLifecycleService{}
-	service := NewRuntimeServiceForBot(&discordgo.Session{}, configManager, fake, "companion")
+	service := NewRuntimeServiceForBot(&discordgo.Session{}, configManager, fake, "custom")
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}
@@ -389,13 +389,13 @@ func TestRuntimeServiceIdentityDoesNotDriftDuringPublish(t *testing.T) {
 	// Run multiple cycles to ensure the identity doesn't drift after the first pass
 	for i := 0; i < 5; i++ {
 		service.runPublishCycle(service.clock())
-		if service.botInstanceID != "companion" {
+		if service.botInstanceID != "custom" {
 			t.Fatalf("CRITICAL REGRESSION: service.botInstanceID drifted to %q", service.botInstanceID)
 		}
 	}
 
 	if len(fake.publishCalls) != 5 || fake.publishCalls[0] != "g-identity-lock" {
-		t.Fatalf("expected 5 publish cycles correctly routed to companion, got %v", fake.publishCalls)
+		t.Fatalf("expected 5 publish cycles correctly routed to custom, got %v", fake.publishCalls)
 	}
 }
 

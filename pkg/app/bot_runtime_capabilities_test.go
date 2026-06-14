@@ -63,14 +63,13 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 				},
 			},
 			{
-				GuildID:           "companion-guild",
-				BotInstanceTokens: map[string]files.EncryptedString{"companion": "a"},
+				GuildID:           "custom-guild",
+				BotInstanceTokens: map[string]files.EncryptedString{"custom": "a"},
 				FeatureRouting: map[string]string{
-					"qotd":           "companion",
-					"roles":          "companion",
-					"moderation":     "companion",
-					"commands":       "companion",
-					"admin_commands": "companion",
+					"roles":          "custom",
+					"moderation":     "custom",
+					"commands":       "custom",
+					"admin_commands": "custom",
 				},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
@@ -90,28 +89,28 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 						ID:        files.LegacyQOTDDefaultDeckID,
 						Name:      files.LegacyQOTDDefaultDeckName,
 						Enabled:   true,
-						ChannelID: "question-companion",
+						ChannelID: "question-custom",
 					}},
 				},
 			},
 		},
 	}
 
-	capabilities := resolveBotRuntimeCapabilities(cfg, "companion")
+	capabilities := resolveBotRuntimeCapabilities(cfg, "custom")
 	if !capabilities.monitoring {
-		t.Fatal("expected monitoring capability for companion runtime")
+		t.Fatal("expected monitoring capability for custom runtime")
 	}
 	if !capabilities.HasCommands() {
-		t.Fatal("expected commands capability for companion runtime")
+		t.Fatal("expected commands capability for custom runtime")
 	}
 	if !capabilities.admin {
-		t.Fatal("expected admin commands capability for companion runtime")
+		t.Fatal("expected admin commands capability for custom runtime")
 	}
 	if !capabilities.userPrune {
-		t.Fatal("expected user prune capability for companion runtime")
+		t.Fatal("expected user prune capability for custom runtime")
 	}
-	if !capabilities.qotdRuntime {
-		t.Fatal("expected qotd runtime capability for companion runtime")
+	if capabilities.qotdRuntime {
+		t.Fatal("expected qotd runtime capability to be false for custom runtime since qotd is unrouted")
 	}
 
 	required := discordgo.IntentsGuilds | discordgo.IntentsGuildMembers | discordgo.IntentsGuildMessageReactions
@@ -132,7 +131,7 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 func TestResolveBotRuntimeCapabilitiesWithoutGuildBindingsIsIdle(t *testing.T) {
 	t.Parallel()
 
-	capabilities := resolveBotRuntimeCapabilities(&files.BotConfig{}, "companion")
+	capabilities := resolveBotRuntimeCapabilities(&files.BotConfig{}, "custom")
 	if capabilities.monitoring || capabilities.HasCommands() || capabilities.admin || capabilities.automod || capabilities.userPrune || capabilities.qotdRuntime {
 		t.Fatalf("expected idle capabilities for unbound bot, got %+v", capabilities)
 	}
