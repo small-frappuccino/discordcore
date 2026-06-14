@@ -722,4 +722,25 @@ var postgresMigrations = []migration{
 			`ALTER TABLE roles_current DROP COLUMN IF EXISTS deleted_at`,
 		},
 	},
+	{
+		Version: 25,
+		UpSQL: []string{
+			`CREATE TABLE IF NOT EXISTS guild_configs (
+				guild_id TEXT PRIMARY KEY,
+				config_version BIGINT NOT NULL DEFAULT 1,
+				config_json JSONB NOT NULL,
+				updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+			)`,
+			`INSERT INTO guild_configs (guild_id, config_version, config_json)
+			 SELECT
+			 	g->>'guild_id',
+			 	COALESCE((g->>'config_version')::bigint, 1),
+			 	g
+			 FROM bot_config_state, jsonb_array_elements(config_json->'guilds') AS g
+			 ON CONFLICT (guild_id) DO NOTHING`,
+		},
+		DownSQL: []string{
+			`DROP TABLE IF EXISTS guild_configs`,
+		},
+	},
 }
