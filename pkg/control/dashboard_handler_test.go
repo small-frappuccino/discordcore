@@ -298,7 +298,7 @@ func TestControlServerCanonicalizesRootRequestsToPublicOrigin(t *testing.T) {
 	t.Parallel()
 
 	srv, _ := newControlTestServer(t)
-	if err := srv.SetPublicOrigin("https://alice.localhost:8443"); err != nil {
+	if err := srv.SetPublicOrigin("https://bot.localhost:8443"); err != nil {
 		t.Fatalf("set public origin: %v", err)
 	}
 
@@ -309,7 +309,7 @@ func TestControlServerCanonicalizesRootRequestsToPublicOrigin(t *testing.T) {
 	if rec.Code != http.StatusFound {
 		t.Fatalf("expected canonical redirect, got %d body=%q", rec.Code, rec.Body.String())
 	}
-	if location := strings.TrimSpace(rec.Header().Get("Location")); location != "https://alice.localhost:8443/" {
+	if location := strings.TrimSpace(rec.Header().Get("Location")); location != "https://bot.localhost:8443/" {
 		t.Fatalf("unexpected canonical root redirect: %q", location)
 	}
 }
@@ -318,13 +318,13 @@ func TestControlServerCanonicalizesDashboardRequestsToPublicOrigin(t *testing.T)
 	t.Parallel()
 
 	srv, _ := newControlTestServer(t)
-	if err := srv.SetPublicOrigin("https://alice.localhost:8443"); err != nil {
+	if err := srv.SetPublicOrigin("https://bot.localhost:8443"); err != nil {
 		t.Fatalf("set public origin: %v", err)
 	}
 	if err := srv.SetDiscordOAuthConfig(withTestOAuthSessionStorePath(t, DiscordOAuthConfig{
 		ClientID:     "1234567890",
 		ClientSecret: "super-secret",
-		RedirectURI:  "https://alice.localhost:8443/auth/discord/callback",
+		RedirectURI:  "https://bot.localhost:8443/auth/discord/callback",
 	})); err != nil {
 		t.Fatalf("configure oauth: %v", err)
 	}
@@ -335,11 +335,11 @@ func TestControlServerCanonicalizesDashboardRequestsToPublicOrigin(t *testing.T)
 	}{
 		{
 			requestURL: "https://localhost:8443/manage/settings/guilds?tab=access",
-			wantURL:    "https://alice.localhost:8443/manage/settings/guilds?tab=access",
+			wantURL:    "https://bot.localhost:8443/manage/settings/guilds?tab=access",
 		},
 		{
 			requestURL: "https://localhost:8443/dashboard/settings/guilds?tab=access",
-			wantURL:    "https://alice.localhost:8443/dashboard/settings/guilds?tab=access",
+			wantURL:    "https://bot.localhost:8443/dashboard/settings/guilds?tab=access",
 		},
 	}
 
@@ -491,7 +491,7 @@ func configureDashboardSession(t *testing.T, srv *Server) *http.Cookie {
 	}
 
 	session, err := srv.discordOAuth.sessions.Create(discordOAuthSessionCreateParams{
-		User:         discordOAuthUser{ID: "u1", Username: "alice"},
+		User:         discordOAuthUser{ID: "u1", Username: "testuser"},
 		Scopes:       []string{discordOAuthScopeIdentify, discordOAuthScopeGuilds},
 		AccessToken:  "access-token",
 		RefreshToken: "refresh-token",

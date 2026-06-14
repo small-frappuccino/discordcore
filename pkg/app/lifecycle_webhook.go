@@ -19,7 +19,7 @@ const (
 	// disables the notification path; production deployments set this
 	// alongside the OS-level supervisor (NSSM/Task Scheduler) so a
 	// graceful stop emits a chat message before the supervisor relaunches.
-	lifecycleWebhookEnv = "ALICE_LIFECYCLE_WEBHOOK_URL"
+	lifecycleWebhookEnv = "DISCORDCORE_LIFECYCLE_WEBHOOK_URL"
 
 	// lifecycleWebhookTimeout caps how long the shutdown notification
 	// blocks the actual process exit. Three seconds is enough for one

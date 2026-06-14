@@ -59,7 +59,7 @@ func TestRun_MidBootSabotageTriggersTeardown(t *testing.T) {
 	}
 	session.State.User = &discordgo.User{
 		ID:            "bot-id",
-		Username:      "alice-test",
+		Username:      "testuser",
 		Discriminator: "0001",
 		Bot:           true,
 	}
@@ -190,7 +190,7 @@ func TestRun_CascadingRollbackFailures(t *testing.T) {
 	}
 	session.State.User = &discordgo.User{
 		ID:            "bot-id",
-		Username:      "alice-test",
+		Username:      "testuser",
 		Discriminator: "0001",
 		Bot:           true,
 	}

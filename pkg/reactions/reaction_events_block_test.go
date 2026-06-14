@@ -25,7 +25,7 @@ func TestReactionEventServiceRemovesBlockedReactionWithoutMetricsStore(t *testin
 		reactorUserID = "222222222222222222"
 		targetUserID  = "111111111111111111"
 		emojiID       = "987654321098765432"
-		emojiName     = "skrunklyalice"
+		emojiName     = "skrunklytest"
 	)
 
 	var messageLookups int32

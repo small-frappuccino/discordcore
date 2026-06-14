@@ -11,6 +11,7 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordgo"
 )
 
 var (
@@ -322,6 +323,7 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 		availableBotInstanceIDs []string
 		updateBotInstanceTokens bool
 		invalidateAccessCache   bool
+		deletedTokens           []string
 	)
 	if payload.BotInstanceTokens != nil {
 		available, err := s.resolveAvailableBotInstanceIDsForGuild(r.Context(), requestAuthorization{mode: requestAuthModeBearer}, guildID)
@@ -365,6 +367,9 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 			}
 			for k, v := range *payload.BotInstanceTokens {
 				if v == "" {
+					if encToken, exists := guild.BotInstanceTokens[k]; exists {
+						deletedTokens = append(deletedTokens, string(encToken))
+					}
 					delete(guild.BotInstanceTokens, k)
 				} else {
 					guild.BotInstanceTokens[k] = files.EncryptedString(v)
@@ -437,6 +442,17 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 	}
 	if invalidateAccessCache {
 		s.invalidateAccessibleGuildsCache()
+	}
+
+	for _, token := range deletedTokens {
+		go func(t string) {
+			session, err := discordgo.New("Bot " + t)
+			if err == nil {
+				if err := session.GuildLeave(guildID); err != nil {
+					log.ApplicationLogger().Warn("Failed to leave guild for removed bot profile", "guildID", guildID, "err", err)
+				}
+			}
+		}(token)
 	}
 
 	guild, ok := findGuildSettings(updated, guildID)

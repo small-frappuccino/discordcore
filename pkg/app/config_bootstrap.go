@@ -7,13 +7,13 @@ import (
 )
 
 const (
-	databaseDriverEnv              = "ALICE_DATABASE_DRIVER"
-	databaseURLEnv                 = "ALICE_DATABASE_URL"
-	databaseMaxOpenConnsEnv        = "ALICE_DATABASE_MAX_OPEN_CONNS"
-	databaseMaxIdleConnsEnv        = "ALICE_DATABASE_MAX_IDLE_CONNS"
-	databaseConnMaxLifetimeSecsEnv = "ALICE_DATABASE_CONN_MAX_LIFETIME_SECS"
-	databaseConnMaxIdleTimeSecsEnv = "ALICE_DATABASE_CONN_MAX_IDLE_TIME_SECS"
-	databasePingTimeoutMSEnv       = "ALICE_DATABASE_PING_TIMEOUT_MS"
+	databaseDriverEnv              = "DISCORDCORE_DATABASE_DRIVER"
+	databaseURLEnv                 = "DISCORDCORE_DATABASE_URL"
+	databaseMaxOpenConnsEnv        = "DISCORDCORE_DATABASE_MAX_OPEN_CONNS"
+	databaseMaxIdleConnsEnv        = "DISCORDCORE_DATABASE_MAX_IDLE_CONNS"
+	databaseConnMaxLifetimeSecsEnv = "DISCORDCORE_DATABASE_CONN_MAX_LIFETIME_SECS"
+	databaseConnMaxIdleTimeSecsEnv = "DISCORDCORE_DATABASE_CONN_MAX_IDLE_TIME_SECS"
+	databasePingTimeoutMSEnv       = "DISCORDCORE_DATABASE_PING_TIMEOUT_MS"
 )
 
 type resolvedDatabaseBootstrap struct {

@@ -24,7 +24,7 @@ production**, not just one.
 | Layer | Where it lives | Covers |
 |-------|----------------|--------|
 | 1. `pgx` body-size cap | `pkg/persistence/open.go` (`maxPostgresMessageBodyBytes`) | Corrupted Postgres protocol streams that would otherwise allocate gigabytes and trigger `runtime.throw`. The driver returns an `error` instead of crashing. |
-| 2. Lifecycle webhook | `pkg/app/lifecycle_webhook.go`, env `ALICE_LIFECYCLE_WEBHOOK_URL` | Graceful stops and recoverable panics. Posts a chat message before the deferred path unwinds. Does **not** cover `runtime.throw`. |
+| 2. Lifecycle webhook | `pkg/app/lifecycle_webhook.go`, env `DISCORDCORE_LIFECYCLE_WEBHOOK_URL` | Graceful stops and recoverable panics. Posts a chat message before the deferred path unwinds. Does **not** cover `runtime.throw`. |
 | 3. External liveness poller | `GET /v1/health/live` + an off-host poller (NSSM/Task Scheduler/UptimeRobot/etc.) | Any crash mode, including the ones Layer 2 misses. The only signal that survives `runtime.throw`, OOM kill, machine reboot, lost network. |
 
 ## Layer 1 — Postgres message size cap
@@ -54,7 +54,7 @@ read in chat.
    process:
 
    ```powershell
-   setx ALICE_LIFECYCLE_WEBHOOK_URL "https://discord.com/api/webhooks/.../..."
+   setx DISCORDCORE_LIFECYCLE_WEBHOOK_URL "https://discord.com/api/webhooks/.../..."
    ```
 
    `setx` persists into the user/machine environment. For a service
@@ -85,7 +85,7 @@ its version, and its uptime. It requires the same bearer auth as the
 rest of `/v1/*`.
 
 ```bash
-curl -sf -H "Authorization: Bearer $ALICE_CONTROL_BEARER_TOKEN" \
+curl -sf -H "Authorization: Bearer $DISCORDCORE_CONTROL_BEARER_TOKEN" \
      https://your-host:8376/v1/health/live
 # {"status":"ok","app":"discordmain","app_version":"v0.146.0",...}
 ```
@@ -104,7 +104,7 @@ you already have.
    50 monitors, 5-minute interval).
 2. URL: `https://your-host:8376/v1/health/live`.
 3. Advanced settings → HTTP headers:
-   `Authorization: Bearer <ALICE_CONTROL_BEARER_TOKEN>`.
+   `Authorization: Bearer <DISCORDCORE_CONTROL_BEARER_TOKEN>`.
 4. Keyword: `"status":"ok"`.
 5. Alert contacts: Discord webhook integration (built-in).
 
@@ -121,7 +121,7 @@ If you have any second machine, the script is one line:
 TARGET="https://your-host:8376/v1/health/live"
 ALERT="https://discord.com/api/webhooks/.../..."
 if ! curl -fsS --max-time 10 \
-     -H "Authorization: Bearer $ALICE_CONTROL_BEARER_TOKEN" \
+     -H "Authorization: Bearer $DISCORDCORE_CONTROL_BEARER_TOKEN" \
      "$TARGET" >/dev/null; then
   curl -s -H "Content-Type: application/json" \
        -d "{\"content\":\"🚨 Bot at $TARGET not responding\"}" \
@@ -179,8 +179,8 @@ choco install nssm  # or download from nssm.cc
 nssm install discordmain "D:\path\to\discordmain.exe"
 nssm set discordmain AppDirectory "D:\path\to"
 nssm set discordmain AppEnvironmentExtra ^
-     "ALICE_LIFECYCLE_WEBHOOK_URL=https://discord.com/api/webhooks/.../..." ^
-     "ALICE_CONTROL_BEARER_TOKEN=..."
+     "DISCORDCORE_LIFECYCLE_WEBHOOK_URL=https://discord.com/api/webhooks/.../..." ^
+     "DISCORDCORE_CONTROL_BEARER_TOKEN=..."
 nssm set discordmain AppStdout "D:\path\to\logs\discordmain.log"
 nssm set discordmain AppStderr "D:\path\to\logs\discordmain.err.log"
 nssm set discordmain AppRotateFiles 1

@@ -35,12 +35,12 @@ func TestRuntimeConfigUnmarshalMigratesLegacyModerationLogMode(t *testing.T) {
 		t.Fatalf("expected legacy moderation_log_mode=off to migrate to moderation_logging=false, got %+v", off.ModerationLogging)
 	}
 
-	var aliceOnly RuntimeConfig
-	if err := json.Unmarshal([]byte(`{"moderation_log_mode":"alice_only"}`), &aliceOnly); err != nil {
-		t.Fatalf("unmarshal legacy alice_only: %v", err)
+	var botOnly RuntimeConfig
+	if err := json.Unmarshal([]byte(`{"moderation_log_mode":"bot_only"}`), &botOnly); err != nil {
+		t.Fatalf("unmarshal legacy bot_only: %v", err)
 	}
-	if aliceOnly.ModerationLogging == nil || !*aliceOnly.ModerationLogging {
-		t.Fatalf("expected legacy moderation_log_mode=alice_only to migrate to moderation_logging=true, got %+v", aliceOnly.ModerationLogging)
+	if botOnly.ModerationLogging == nil || !*botOnly.ModerationLogging {
+		t.Fatalf("expected legacy moderation_log_mode=bot_only to migrate to moderation_logging=true, got %+v", botOnly.ModerationLogging)
 	}
 
 	// Canonical value wins over the legacy key when both are present.

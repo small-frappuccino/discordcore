@@ -25,8 +25,8 @@ func TestBuildMassBanLogDetails(t *testing.T) {
 func TestBuildBanCommandMessageUsesUsername(t *testing.T) {
 	t.Parallel()
 
-	got := buildBanCommandMessage("alice", "rule violation", false)
-	if !containsAll(got, []string{"alice", "rule violation"}) {
+	got := buildBanCommandMessage("testuser", "rule violation", false)
+	if !containsAll(got, []string{"testuser", "rule violation"}) {
 		t.Fatalf("unexpected message: %q", got)
 	}
 }
@@ -291,7 +291,7 @@ func TestResolveConfiguredMuteRole(t *testing.T) {
 func TestBuildWarningsCommandMessage(t *testing.T) {
 	t.Parallel()
 
-	message := buildWarningsCommandMessage("alice", []storage.ModerationWarning{
+	message := buildWarningsCommandMessage("testuser", []storage.ModerationWarning{
 		{
 			CaseNumber:  3,
 			ModeratorID: "mod-1",
@@ -304,7 +304,7 @@ func TestBuildWarningsCommandMessage(t *testing.T) {
 		},
 	})
 
-	if !containsAll(message, []string{"alice", "#3", "Spam", "#2", "Off-topic flood"}) {
+	if !containsAll(message, []string{"testuser", "#3", "Spam", "#2", "Off-topic flood"}) {
 		t.Fatalf("unexpected warnings message: %q", message)
 	}
 }

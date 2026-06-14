@@ -325,7 +325,7 @@ func TestRuntimeServiceCyclesUseQOTDDomainScopedGuilds(t *testing.T) {
 					ID:        files.LegacyQOTDDefaultDeckID,
 					Name:      files.LegacyQOTDDefaultDeckName,
 					Enabled:   true,
-					ChannelID: "question-alice",
+					ChannelID: "question-test",
 				}},
 			},
 		},

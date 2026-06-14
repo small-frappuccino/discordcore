@@ -18,9 +18,9 @@ const (
 	defaultDiscordOAuthUserInfoURL      = "https://discord.com/api/users/@me"
 	defaultDiscordOAuthUserGuildsURL    = "https://discord.com/api/users/@me/guilds"
 	discordOAuthCSRFHeaderName          = "X-CSRF-Token"
-	defaultDiscordOAuthStateCookieName  = "alice_discord_oauth_state"
-	defaultDiscordOAuthNextCookieName   = "alice_discord_oauth_next"
-	defaultDiscordOAuthSessionCookie    = "alice_control_session"
+	defaultDiscordOAuthStateCookieName  = "bot_discord_oauth_state"
+	defaultDiscordOAuthNextCookieName   = "bot_discord_oauth_next"
+	defaultDiscordOAuthSessionCookie    = "bot_control_session"
 	defaultDiscordOAuthStateTTL         = 10 * time.Minute
 	defaultDiscordOAuthSessionTTL       = 12 * time.Hour
 	defaultDiscordOAuthExchangeTimeout  = 10 * time.Second

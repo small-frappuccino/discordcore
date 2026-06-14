@@ -99,14 +99,14 @@ func TestLoadControlDiscordOAuthConfigFromEnv(t *testing.T) {
 		t.Setenv(controlDiscordOAuthIncludeGuildMembersReadEnv, "false")
 		t.Setenv(controlDiscordOAuthSessionStorePathEnv, "")
 
-		cfg, err := loadControlDiscordOAuthConfigFromEnv("https://alice.localhost:8443")
+		cfg, err := loadControlDiscordOAuthConfigFromEnv("https://bot.localhost:8443")
 		if err != nil {
 			t.Fatalf("expected missing redirect to derive from public origin, got %v", err)
 		}
 		if cfg == nil {
 			t.Fatal("expected non-nil oauth config")
 		}
-		if cfg.RedirectURI != "https://alice.localhost:8443/auth/discord/callback" {
+		if cfg.RedirectURI != "https://bot.localhost:8443/auth/discord/callback" {
 			t.Fatalf("unexpected derived redirect URI: %+v", cfg)
 		}
 	})

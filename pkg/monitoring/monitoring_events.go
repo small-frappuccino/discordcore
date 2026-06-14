@@ -12,7 +12,7 @@ var mentionRe = regexp.MustCompile(`<@!?(\d+)>`)
 
 // parseEntryExitBackfillMessage extracts (eventType, userID) from messages in a welcome/entry-leave channel.
 // It supports:
-// - Alice embeds (sent by our bot) with title "Member Joined" / "Member Left".
+// - Bot embeds (sent by our bot) with title "Member Joined" / "Member Left".
 // - Plain text messages containing a user mention and configurable keywords.
 func parseEntryExitBackfillMessage(m *discordgo.Message, botID string, rc files.RuntimeConfig) (string, string, bool) {
 	if m == nil {
@@ -56,6 +56,8 @@ func parseEntryExitBackfillMessage(m *discordgo.Message, botID string, rc files.
 
 	lc := strings.ToLower(content)
 
+	// TODO(future): The hardcoded "alice mains" string here should be updated in a near future
+	// perhaps transitioning this to a slash command configurable setting or a generic default.
 	welcomeStr := "welcome to alice mains!"
 	if rc.MimuWelcomeString != "" {
 		welcomeStr = strings.ToLower(rc.MimuWelcomeString)

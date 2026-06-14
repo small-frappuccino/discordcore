@@ -64,12 +64,12 @@ func TestControlServerListenAddrAndDashboardURLUsesPublicOrigin(t *testing.T) {
 	gotListen, gotDashboard := controlServerListenAddrAndDashboardURL(
 		&net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 8443},
 		true,
-		controlPublicOrigin{scheme: "https", host: "alice.localhost:8443"},
+		controlPublicOrigin{scheme: "https", host: "bot.localhost:8443"},
 	)
 	if gotListen != "127.0.0.1:8443" {
 		t.Fatalf("unexpected listen addr: %q", gotListen)
 	}
-	if gotDashboard != "https://alice.localhost:8443/" {
+	if gotDashboard != "https://bot.localhost:8443/" {
 		t.Fatalf("unexpected dashboard url: %q", gotDashboard)
 	}
 }

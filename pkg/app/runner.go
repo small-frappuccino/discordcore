@@ -47,14 +47,14 @@ var (
 const (
 	defaultControlAddr                            = "127.0.0.1:8376"
 	defaultControlDiscordOAuthClientID            = "1396606252506681395"
-	controlBearerTokenEnv                         = "ALICE_CONTROL_BEARER_TOKEN"
-	controlDiscordOAuthClientIDEnv                = "ALICE_CONTROL_DISCORD_OAUTH_CLIENT_ID"
-	controlDiscordOAuthClientSecretEnv            = "ALICE_CONTROL_DISCORD_OAUTH_CLIENT_SECRET"
-	controlDiscordOAuthRedirectURIEnv             = "ALICE_CONTROL_DISCORD_OAUTH_REDIRECT_URI"
-	controlDiscordOAuthIncludeGuildMembersReadEnv = "ALICE_CONTROL_DISCORD_OAUTH_INCLUDE_GUILDS_MEMBERS_READ"
-	controlDiscordOAuthSessionStorePathEnv        = "ALICE_CONTROL_DISCORD_OAUTH_SESSION_STORE_PATH"
-	controlTLSCertFileEnv                         = "ALICE_CONTROL_TLS_CERT_FILE"
-	controlTLSKeyFileEnv                          = "ALICE_CONTROL_TLS_KEY_FILE"
+	controlBearerTokenEnv                         = "DISCORDCORE_CONTROL_BEARER_TOKEN"
+	controlDiscordOAuthClientIDEnv                = "DISCORDCORE_CONTROL_DISCORD_OAUTH_CLIENT_ID"
+	controlDiscordOAuthClientSecretEnv            = "DISCORDCORE_CONTROL_DISCORD_OAUTH_CLIENT_SECRET"
+	controlDiscordOAuthRedirectURIEnv             = "DISCORDCORE_CONTROL_DISCORD_OAUTH_REDIRECT_URI"
+	controlDiscordOAuthIncludeGuildMembersReadEnv = "DISCORDCORE_CONTROL_DISCORD_OAUTH_INCLUDE_GUILDS_MEMBERS_READ"
+	controlDiscordOAuthSessionStorePathEnv        = "DISCORDCORE_CONTROL_DISCORD_OAUTH_SESSION_STORE_PATH"
+	controlTLSCertFileEnv                         = "DISCORDCORE_CONTROL_TLS_CERT_FILE"
+	controlTLSKeyFileEnv                          = "DISCORDCORE_CONTROL_TLS_KEY_FILE"
 )
 
 // Run bootstraps the bot with a unified flow and blocks until shutdown.
@@ -102,7 +102,7 @@ func runWithOptions(appName string, opts RunOptions) error {
 	// Best-effort startup notification on the configured lifecycle
 	// webhook. Fires once before any work happens so operators see a
 	// fresh "back online" chat message after every supervisor restart.
-	// notifyLifecycleEvent is a no-op when ALICE_LIFECYCLE_WEBHOOK_URL is unset.
+	// notifyLifecycleEvent is a no-op when DISCORDCORE_LIFECYCLE_WEBHOOK_URL is unset.
 	notifyLifecycleEvent("starting", "")
 
 	// Theme configuration now comes from persisted runtime_config.
@@ -110,7 +110,7 @@ func runWithOptions(appName string, opts RunOptions) error {
 	// We cannot read runtime_config here without risking an undefined variable / nil config.
 	// Theme will be applied right after loading the config store (see below).
 
-	// Runtime hot-apply manager (theme + ALICE_DISABLE_* toggles)
+	// Runtime hot-apply manager (theme + DISCORDCORE_DISABLE_* toggles)
 	// NOTE: The /config runtime panel triggers Apply() after persisting config changes.
 	var runtimeApplier *runtimeapply.Manager
 

@@ -49,14 +49,14 @@ import (
 )
 
 func main() {
-	token, err := files.LoadEnvWithLocalBinFallback("ALICE_BOT_PRODUCTION_TOKEN")
+	token, err := files.LoadEnvWithLocalBinFallback("DISCORDCORE_BOT_PRODUCTION_TOKEN")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	databaseURL := os.Getenv("ALICE_DATABASE_URL")
+	databaseURL := os.Getenv("DISCORDCORE_DATABASE_URL")
 	if databaseURL == "" {
-		log.Fatal("ALICE_DATABASE_URL is required")
+		log.Fatal("DISCORDCORE_DATABASE_URL is required")
 	}
 
 	db, err := persistence.Open(context.Background(), persistence.Config{
@@ -230,11 +230,11 @@ Note: `/addpartner` is not registered. Use `/partner add`.
 
 When the shared runner is used via `Run`, the Control API starts on the default listener `127.0.0.1:8376`. Hosts can override the listener and public origin through `RunWithOptions`; `discordmain` uses that path to expose embedded local HTTPS on `127.0.0.1:8443` with canonical public origin `https://discordmain.localhost:8443`. The control server serves a minimal landing page at `/`, while the embedded dashboard is mounted canonically under `/manage/` with `/dashboard/` retained only as a legacy compatibility alias.
 
-- `ALICE_CONTROL_BEARER_TOKEN` (optional; enables trusted internal bearer auth for control routes)
-- `ALICE_CONTROL_PUBLIC_ORIGIN` (optional; absolute canonical browser origin such as `https://discordmain.localhost:8443`)
+- `DISCORDCORE_CONTROL_BEARER_TOKEN` (optional; enables trusted internal bearer auth for control routes)
+- `DISCORDCORE_CONTROL_PUBLIC_ORIGIN` (optional; absolute canonical browser origin such as `https://discordmain.localhost:8443`)
 - optional TLS listener:
-  - `ALICE_CONTROL_TLS_CERT_FILE`
-  - `ALICE_CONTROL_TLS_KEY_FILE`
+  - `DISCORDCORE_CONTROL_TLS_CERT_FILE`
+  - `DISCORDCORE_CONTROL_TLS_KEY_FILE`
 
 Behavior summary:
 
@@ -275,19 +275,19 @@ Discord OAuth2 endpoints (optional, same control server):
 
 Enable OAuth routes by setting these vars:
 
-- `ALICE_CONTROL_DISCORD_OAUTH_CLIENT_SECRET`
-- `ALICE_CONTROL_DISCORD_OAUTH_REDIRECT_URI` (optional when `ALICE_CONTROL_PUBLIC_ORIGIN` or host `RunWithOptions` wiring can derive the callback)
-- `ALICE_CONTROL_DISCORD_OAUTH_SESSION_STORE_PATH` (optional; defaults to `<app-cache>/control/oauth_sessions.json`)
-- use `ALICE_CONTROL_TLS_CERT_FILE` + `ALICE_CONTROL_TLS_KEY_FILE` for direct HTTPS on the control listener, or configure host-managed HTTPS such as `discordmain`'s embedded local TLS mode.
+- `DISCORDCORE_CONTROL_DISCORD_OAUTH_CLIENT_SECRET`
+- `DISCORDCORE_CONTROL_DISCORD_OAUTH_REDIRECT_URI` (optional when `DISCORDCORE_CONTROL_PUBLIC_ORIGIN` or host `RunWithOptions` wiring can derive the callback)
+- `DISCORDCORE_CONTROL_DISCORD_OAUTH_SESSION_STORE_PATH` (optional; defaults to `<app-cache>/control/oauth_sessions.json`)
+- use `DISCORDCORE_CONTROL_TLS_CERT_FILE` + `DISCORDCORE_CONTROL_TLS_KEY_FILE` for direct HTTPS on the control listener, or configure host-managed HTTPS such as `discordmain`'s embedded local TLS mode.
 
 The product ships with a versioned default Discord OAuth client ID (`1396606252506681395`).
-Set `ALICE_CONTROL_DISCORD_OAUTH_CLIENT_ID` only if you need to override that default with a different Discord application.
-When `ALICE_CONTROL_DISCORD_OAUTH_CLIENT_SECRET` is set and `ALICE_CONTROL_DISCORD_OAUTH_REDIRECT_URI` is unset, Discordcore derives the redirect URI from the configured public origin and the fixed callback path `/auth/discord/callback`.
+Set `DISCORDCORE_CONTROL_DISCORD_OAUTH_CLIENT_ID` only if you need to override that default with a different Discord application.
+When `DISCORDCORE_CONTROL_DISCORD_OAUTH_CLIENT_SECRET` is set and `DISCORDCORE_CONTROL_DISCORD_OAUTH_REDIRECT_URI` is unset, Discordcore derives the redirect URI from the configured public origin and the fixed callback path `/auth/discord/callback`.
 
 Scopes:
 
 - default/minimum: `identify guilds`
-- optional member scope: set `ALICE_CONTROL_DISCORD_OAUTH_INCLUDE_GUILDS_MEMBERS_READ=true` to include `guilds.members.read`
+- optional member scope: set `DISCORDCORE_CONTROL_DISCORD_OAUTH_INCLUDE_GUILDS_MEMBERS_READ=true` to include `guilds.members.read`
 
 Partner board endpoints (all under `/v1/guilds/{guild_id}`):
 
@@ -420,7 +420,7 @@ Parsed sources:
 
 Slow gateway handlers are logged by default.
 
-- `ALICE_GATEWAY_PERF_THRESHOLD_MS` (default: 200)
+- `DISCORDCORE_GATEWAY_PERF_THRESHOLD_MS` (default: 200)
 - Set to `0` to disable
 
 ## Required permissions

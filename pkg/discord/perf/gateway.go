@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	envGatewayPerfThresholdMs     = "ALICE_GATEWAY_PERF_THRESHOLD_MS"
+	envGatewayPerfThresholdMs     = "DISCORDCORE_GATEWAY_PERF_THRESHOLD_MS"
 	defaultGatewayPerfThresholdMs = int64(200)
 )
 
@@ -38,7 +38,7 @@ func gatewayPerfThreshold() time.Duration {
 
 // StartGatewayEvent tracks how long a gateway handler takes. It aggregates
 // all event execution latencies into an observability summary, and logs a
-// warning if the event is slower than ALICE_GATEWAY_PERF_THRESHOLD_MS.
+// warning if the event is slower than DISCORDCORE_GATEWAY_PERF_THRESHOLD_MS.
 func StartGatewayEvent(event string, attrs ...slog.Attr) func() {
 	start := time.Now()
 	return func() {

@@ -13,7 +13,7 @@ func TestNormalizeReactionBlockConfigMergesPairsAndDedupesEmojis(t *testing.T) {
 			ReactorUserID: " 222222222222222222 ",
 			TargetUserID:  " 111111111111111111 ",
 			Emojis: []ReactionBlockEmojiConfig{
-				{Kind: ReactionBlockEmojiKindCustom, Value: " 987654321098765432 ", Name: "skrunklyalice"},
+				{Kind: ReactionBlockEmojiKindCustom, Value: " 987654321098765432 ", Name: "skrunklytest"},
 				{Kind: ReactionBlockEmojiKindUnicode, Value: "❌", Alias: " :X: "},
 			},
 		},
@@ -75,7 +75,7 @@ func TestSetReactionBlockConfigCanonicalizesAndReadsBack(t *testing.T) {
 		Emojis: []ReactionBlockEmojiConfig{{
 			Kind:  ReactionBlockEmojiKindCustom,
 			Value: " 987654321098765432 ",
-			Name:  "skrunklyalice",
+			Name:  "skrunklytest",
 		}},
 	}}})
 	if err != nil {
@@ -95,7 +95,7 @@ func TestSetReactionBlockConfigCanonicalizesAndReadsBack(t *testing.T) {
 	if len(cfg.Rules[0].Emojis) != 1 {
 		t.Fatalf("expected one persisted emoji, got %+v", cfg.Rules[0].Emojis)
 	}
-	if cfg.Rules[0].Emojis[0].Display() != "<:skrunklyalice:987654321098765432>" {
+	if cfg.Rules[0].Emojis[0].Display() != "<:skrunklytest:987654321098765432>" {
 		t.Fatalf("expected custom emoji display label, got %+v", cfg.Rules[0].Emojis[0])
 	}
 }

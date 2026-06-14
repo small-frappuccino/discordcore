@@ -13,7 +13,7 @@ import (
 
 func TestParseEntryExitBackfillMessage_MimuWelcome(t *testing.T) {
 	m := &discordgo.Message{
-		Content: "<@1234567890> Welcome to Alice Mains!"}
+		Content: "<@1234567890> Welcome to the server!"}
 	gotEvt, gotUserID, ok := parseEntryExitBackfillMessage(m, "", files.RuntimeConfig{})
 	if !ok {
 		t.Fatalf("expected ok=true")
@@ -59,9 +59,9 @@ func TestParseEntryExitBackfillMessage_EmbedJoin_ByBot(t *testing.T) {
 }
 
 func TestParseEntryExitBackfillMessage_NewFormats(t *testing.T) {
-	t.Run("welcome to alice mains! @user", func(t *testing.T) {
+	t.Run("welcome to the server! @user", func(t *testing.T) {
 		m := &discordgo.Message{
-			Content: "welcome to alice mains! <@1234567890>"}
+			Content: "welcome to the server! <@1234567890>"}
 		gotEvt, gotUserID, ok := parseEntryExitBackfillMessage(m, "", files.RuntimeConfig{})
 		if !ok {
 			t.Fatalf("expected ok=true")

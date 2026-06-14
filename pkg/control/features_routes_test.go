@@ -609,8 +609,8 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 					GuildID: "g1",
 					Nick:    "Alice Alpha",
 					User: &discordgo.User{
-						ID:       "user-alice",
-						Username: "alice",
+						ID:       "user-test",
+						Username: "testuser",
 					},
 				},
 				&discordgo.Member{
@@ -650,7 +650,7 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 		if response.Members[0].ID != "user-bob" {
 			t.Fatalf("expected selected member first, got %+v", response.Members)
 		}
-		if response.Members[1].ID != "user-alice" {
+		if response.Members[1].ID != "user-test" {
 			t.Fatalf("expected query match after selected member, got %+v", response.Members)
 		}
 	})

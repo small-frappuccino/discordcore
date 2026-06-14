@@ -45,7 +45,7 @@ func TestResolveManageableGuildsCachesDiscordLookup(t *testing.T) {
 	}
 
 	session, err := srv.discordOAuth.sessions.Create(discordOAuthSessionCreateParams{
-		User:         discordOAuthUser{ID: "u1", Username: "alice"},
+		User:         discordOAuthUser{ID: "u1", Username: "testuser"},
 		Scopes:       []string{discordOAuthScopeIdentify, discordOAuthScopeGuilds},
 		AccessToken:  "access-token",
 		RefreshToken: "refresh-token",
@@ -112,7 +112,7 @@ func TestResolveManageableGuildsCacheExpires(t *testing.T) {
 	}
 
 	session, err := srv.discordOAuth.sessions.Create(discordOAuthSessionCreateParams{
-		User:         discordOAuthUser{ID: "u1", Username: "alice"},
+		User:         discordOAuthUser{ID: "u1", Username: "testuser"},
 		Scopes:       []string{discordOAuthScopeIdentify, discordOAuthScopeGuilds},
 		AccessToken:  "access-token",
 		RefreshToken: "refresh-token",
@@ -176,7 +176,7 @@ func TestResolveAccessibleGuildsRecomputesDiscordRoleAccessOnCacheHit(t *testing
 
 	currentSession := newTestDiscordSessionWithGuildMembers("g1",
 		&discordgo.Member{
-			User:  &discordgo.User{ID: "u1", Username: "alice"},
+			User:  &discordgo.User{ID: "u1", Username: "testuser"},
 			Roles: nil,
 		},
 	)
@@ -197,7 +197,7 @@ func TestResolveAccessibleGuildsRecomputesDiscordRoleAccessOnCacheHit(t *testing
 	}
 
 	session, err := srv.discordOAuth.sessions.Create(discordOAuthSessionCreateParams{
-		User:         discordOAuthUser{ID: "u1", Username: "alice"},
+		User:         discordOAuthUser{ID: "u1", Username: "testuser"},
 		Scopes:       []string{discordOAuthScopeIdentify, discordOAuthScopeGuilds},
 		AccessToken:  "access-token",
 		RefreshToken: "refresh-token",
@@ -220,7 +220,7 @@ func TestResolveAccessibleGuildsRecomputesDiscordRoleAccessOnCacheHit(t *testing
 
 	currentSession = newTestDiscordSessionWithGuildMembers("g1",
 		&discordgo.Member{
-			User:  &discordgo.User{ID: "u1", Username: "alice"},
+			User:  &discordgo.User{ID: "u1", Username: "testuser"},
 			Roles: []string{"writer-role"},
 		},
 	)

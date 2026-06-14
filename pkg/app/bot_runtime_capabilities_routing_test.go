@@ -12,9 +12,9 @@ func TestResolveBotRuntimeCapabilitiesResolvesGranularFeatures(t *testing.T) {
 		Guilds: []files.GuildConfig{
 			{
 				GuildID:           "guild-1",
-				BotInstanceTokens: map[string]files.EncryptedString{"alice": "a", "sandrone": "s"},
+				BotInstanceTokens: map[string]files.EncryptedString{"main": "a", "custom": "s"},
 				FeatureRouting: map[string]string{
-					"roles": "sandrone",
+					"roles": "custom",
 				},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
@@ -25,16 +25,16 @@ func TestResolveBotRuntimeCapabilitiesResolvesGranularFeatures(t *testing.T) {
 		},
 	}
 
-	sandroneCaps := resolveBotRuntimeCapabilities(cfg, "sandrone")
-	if !sandroneCaps.HasCommands() {
-		t.Errorf("Expected Sandrone to have commands capability due to roles feature routing")
+	customCaps := resolveBotRuntimeCapabilities(cfg, "custom")
+	if !customCaps.HasCommands() {
+		t.Errorf("Expected custom to have commands capability due to roles feature routing")
 	}
-	if sandroneCaps.intents&discordgo.IntentsGuildMembers == 0 {
-		t.Errorf("Expected Sandrone to have IntentsGuildMembers due to roles feature routing")
+	if customCaps.intents&discordgo.IntentsGuildMembers == 0 {
+		t.Errorf("Expected custom to have IntentsGuildMembers due to roles feature routing")
 	}
 
-	aliceCaps := resolveBotRuntimeCapabilities(cfg, "alice")
-	if !aliceCaps.HasCommands() {
-		t.Errorf("Expected Alice to have commands capability due to default fallback for commands feature")
+	mainCaps := resolveBotRuntimeCapabilities(cfg, "main")
+	if !mainCaps.HasCommands() {
+		t.Errorf("Expected main to have commands capability due to default fallback for commands feature")
 	}
 }

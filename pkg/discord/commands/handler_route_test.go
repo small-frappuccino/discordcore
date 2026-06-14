@@ -14,10 +14,10 @@ func TestCommandHandlerRoutesFeaturesToCorrectBotInstance(t *testing.T) {
 		cfg.Guilds = []files.GuildConfig{
 			{
 				GuildID:           "guild-1",
-				BotInstanceTokens: map[string]files.EncryptedString{"alice": "a", "sandrone": "s"},
+				BotInstanceTokens: map[string]files.EncryptedString{"main": "a", "custom": "s"},
 				FeatureRouting: map[string]string{
-					"roles":      "sandrone",
-					"moderation": "sandrone",
+					"roles":      "custom",
+					"moderation": "custom",
 				},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
@@ -31,31 +31,31 @@ func TestCommandHandlerRoutesFeaturesToCorrectBotInstance(t *testing.T) {
 		t.Fatalf("seed config: %v", err)
 	}
 
-	aliceHandler := NewCommandHandlerForBot(nil, cfgMgr, "alice")
-	sandroneHandler := NewCommandHandlerForBot(nil, cfgMgr, "sandrone")
+	mainHandler := NewCommandHandlerForBot(nil, cfgMgr, "main")
+	customHandler := NewCommandHandlerForBot(nil, cfgMgr, "custom")
 
 	tests := []struct {
-		name         string
-		path         string
-		wantAlice    bool
-		wantSandrone bool
+		name       string
+		path       string
+		wantMain   bool
+		wantCustom bool
 	}{
-		{"Roles command goes to Sandrone", "rolepanel", false, true},
-		{"Moderation command goes to Sandrone", "ban", false, true},
+		{"Roles command goes to custom", "rolepanel", false, true},
+		{"Moderation command goes to custom", "ban", false, true},
 		{"Base command goes to all bots", "config", true, true},
 		{"Unrouted QOTD command goes to no one", "qotd", false, false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			aliceHandles := aliceHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Path: tt.path})
-			if aliceHandles != tt.wantAlice {
-				t.Errorf("Alice handles %s: got %v, want %v", tt.path, aliceHandles, tt.wantAlice)
+			mainHandles := mainHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Path: tt.path})
+			if mainHandles != tt.wantMain {
+				t.Errorf("main handles %s: got %v, want %v", tt.path, mainHandles, tt.wantMain)
 			}
 
-			sandroneHandles := sandroneHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Path: tt.path})
-			if sandroneHandles != tt.wantSandrone {
-				t.Errorf("Sandrone handles %s: got %v, want %v", tt.path, sandroneHandles, tt.wantSandrone)
+			customHandles := customHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Path: tt.path})
+			if customHandles != tt.wantCustom {
+				t.Errorf("custom handles %s: got %v, want %v", tt.path, customHandles, tt.wantCustom)
 			}
 		})
 	}

@@ -113,7 +113,7 @@ func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 	}
 	session.State.User = &discordgo.User{
 		ID:            "bot-id",
-		Username:      "alice-test",
+		Username:      "testuser",
 		Discriminator: "0001",
 		Bot:           true,
 	}
@@ -175,7 +175,7 @@ func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 func TestRun_ShutdownAggregatesStoreAndSessionCloseErrors(t *testing.T) {
 	const (
 		appName  = "discordmain-run-shutdown-error-test"
-		tokenEnv = "ALICE_TEST_TOKEN"
+		tokenEnv = "DISCORDCORE_TEST_TOKEN"
 	)
 
 	appDataDir, err := os.MkdirTemp("", "discordmain-run-shutdown-error-test-*")
@@ -220,7 +220,7 @@ func TestRun_ShutdownAggregatesStoreAndSessionCloseErrors(t *testing.T) {
 	}
 	session.State.User = &discordgo.User{
 		ID:            "bot-id",
-		Username:      "alice-test",
+		Username:      "testuser",
 		Discriminator: "0001",
 		Bot:           true,
 	}
@@ -326,7 +326,7 @@ func TestRun_ControlServerBindFailureIsNonFatal(t *testing.T) {
 	}
 	session.State.User = &discordgo.User{
 		ID:            "bot-id",
-		Username:      "alice-test",
+		Username:      "testuser",
 		Discriminator: "0001",
 		Bot:           true,
 	}

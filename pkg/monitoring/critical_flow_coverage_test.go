@@ -40,7 +40,7 @@ func TestMemberEventService_HandleGuildMemberAddRemovePersistsData(t *testing.T)
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"user": map[string]any{
 					"id":       botID,
-					"username": "alice-bot",
+					"username": "test-bot",
 					"bot":      true},
 				"joined_at": time.Now().UTC().Add(-24 * time.Hour).Format(time.RFC3339),
 				"roles":     []string{}})
@@ -49,7 +49,7 @@ func TestMemberEventService_HandleGuildMemberAddRemovePersistsData(t *testing.T)
 		}
 	})
 	session.Identify.Intents = discordgo.IntentsGuildMembers
-	session.State.User = &discordgo.User{ID: botID, Username: "alice-bot", Bot: true}
+	session.State.User = &discordgo.User{ID: botID, Username: "test-bot", Bot: true}
 
 	service := NewMemberEventService(session, cfgMgr, NewNotificationSender(session, slog.Default()), store, slog.Default())
 
@@ -234,7 +234,7 @@ func TestMonitoringService_InitializeGuildCachePersistsOwnerBotAndRoles(t *testi
 		}
 	})
 
-	session.State.User = &discordgo.User{ID: botID, Username: "alice-bot", Bot: true}
+	session.State.User = &discordgo.User{ID: botID, Username: "test-bot", Bot: true}
 	if err := session.State.GuildAdd(&discordgo.Guild{
 		ID:      guildID,
 		Name:    "Guild Cache",
@@ -245,7 +245,7 @@ func TestMonitoringService_InitializeGuildCachePersistsOwnerBotAndRoles(t *testi
 		GuildID: guildID,
 		User: &discordgo.User{
 			ID:       botID,
-			Username: "alice-bot",
+			Username: "test-bot",
 			Bot:      true},
 		JoinedAt: botJoinedAt}); err != nil {
 		t.Fatalf("add bot member to state: %v", err)

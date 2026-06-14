@@ -5,14 +5,14 @@ import "testing"
 func TestParseReactionBlockEmojiListSupportsCustomEmojiAndShortcodes(t *testing.T) {
 	t.Parallel()
 
-	emojis, err := parseReactionBlockEmojiList("<:skrunklyalice:987654321098765432> :x:")
+	emojis, err := parseReactionBlockEmojiList("<:skrunklytest:987654321098765432> :x:")
 	if err != nil {
 		t.Fatalf("parseReactionBlockEmojiList() failed: %v", err)
 	}
 	if len(emojis) != 2 {
 		t.Fatalf("expected two parsed emojis, got %+v", emojis)
 	}
-	if emojis[0].Kind != "custom" || emojis[0].Value != "987654321098765432" || emojis[0].Name != "skrunklyalice" {
+	if emojis[0].Kind != "custom" || emojis[0].Value != "987654321098765432" || emojis[0].Name != "skrunklytest" {
 		t.Fatalf("unexpected custom emoji parse result: %+v", emojis[0])
 	}
 	if emojis[1].Kind != "unicode" || emojis[1].Alias != ":x:" || emojis[1].Value == "" || emojis[1].Value == ":x:" {
@@ -34,7 +34,7 @@ func TestReactionBlockCommandsCRUD(t *testing.T) {
 		moderationStringOpt(reactionBlockActionOptionName, reactionBlockActionSet),
 		moderationUserOpt(reactionBlockReactorOptionName, reactorUserID),
 		moderationUserOpt(reactionBlockTargetOptionName, targetUserID),
-		moderationStringOpt(reactionBlockEmojisOptionName, "<:skrunklyalice:987654321098765432> :x:"),
+		moderationStringOpt(reactionBlockEmojisOptionName, "<:skrunklytest:987654321098765432> :x:"),
 	)
 	assertModerationPublicContains(t, setResp, "Blocked reactions from <@222222222222222222> to <@111111111111111111> are now")
 
@@ -51,7 +51,7 @@ func TestReactionBlockCommandsCRUD(t *testing.T) {
 		moderationUserOpt(reactionBlockReactorOptionName, reactorUserID),
 		moderationUserOpt(reactionBlockTargetOptionName, targetUserID),
 	)
-	assertModerationEphemeralContains(t, listResp, "skrunklyalice")
+	assertModerationEphemeralContains(t, listResp, "skrunklytest")
 	assertModerationEphemeralContains(t, listResp, ":x:")
 
 	addResp := harness.runSlash(t, reactionBlockCommandName,
@@ -76,7 +76,7 @@ func TestReactionBlockCommandsCRUD(t *testing.T) {
 		moderationUserOpt(reactionBlockTargetOptionName, targetUserID),
 		moderationStringOpt(reactionBlockEmojisOptionName, ":x:"),
 	)
-	assertModerationPublicContains(t, removeResp, "skrunklyalice")
+	assertModerationPublicContains(t, removeResp, "skrunklytest")
 
 	cfg, err = harness.cm.ReactionBlockConfig(guildID)
 	if err != nil {

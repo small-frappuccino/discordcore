@@ -33,7 +33,7 @@ func TestEnsureReadyCreatesMaterialsAndTrusts(t *testing.T) {
 
 	result, err := EnsureReady(context.Background(), Config{
 		Directory:      dir,
-		CommonName:     "alice.localhost",
+		CommonName:     "bot.localhost",
 		DNSNames:       []string{"localhost"},
 		IPAddresses:    []net.IP{net.ParseIP("127.0.0.1")},
 		AutoTrust:      true,
@@ -63,7 +63,7 @@ func TestEnsureReadyReusesExistingMaterials(t *testing.T) {
 
 	first, err := EnsureReady(context.Background(), Config{
 		Directory:   dir,
-		CommonName:  "alice.localhost",
+		CommonName:  "bot.localhost",
 		DNSNames:    []string{"localhost"},
 		IPAddresses: []net.IP{net.ParseIP("127.0.0.1")},
 		Now:         func() time.Time { return now },
@@ -73,7 +73,7 @@ func TestEnsureReadyReusesExistingMaterials(t *testing.T) {
 	}
 	second, err := EnsureReady(context.Background(), Config{
 		Directory:   dir,
-		CommonName:  "alice.localhost",
+		CommonName:  "bot.localhost",
 		DNSNames:    []string{"localhost"},
 		IPAddresses: []net.IP{net.ParseIP("127.0.0.1")},
 		Now:         func() time.Time { return now.Add(24 * time.Hour) },
@@ -92,7 +92,7 @@ func TestEnsureReadyRotatesServerCertificateWhenSANSChange(t *testing.T) {
 
 	first, err := EnsureReady(context.Background(), Config{
 		Directory:  dir,
-		CommonName: "alice.localhost",
+		CommonName: "bot.localhost",
 		DNSNames:   []string{"localhost"},
 		Now:        func() time.Time { return now },
 	})
@@ -102,8 +102,8 @@ func TestEnsureReadyRotatesServerCertificateWhenSANSChange(t *testing.T) {
 
 	second, err := EnsureReady(context.Background(), Config{
 		Directory:  dir,
-		CommonName: "alice.localhost",
-		DNSNames:   []string{"localhost", "api.alice.localhost"},
+		CommonName: "bot.localhost",
+		DNSNames:   []string{"localhost", "api.bot.localhost"},
 		Now:        func() time.Time { return now.Add(24 * time.Hour) },
 	})
 	if err != nil {
@@ -119,7 +119,7 @@ func TestEnsureReadyErrorsOnCorruptKey(t *testing.T) {
 	now := time.Date(2026, time.March, 11, 12, 0, 0, 0, time.UTC)
 	if _, err := EnsureReady(context.Background(), Config{
 		Directory:  dir,
-		CommonName: "alice.localhost",
+		CommonName: "bot.localhost",
 		DNSNames:   []string{"localhost"},
 		Now:        func() time.Time { return now },
 	}); err != nil {
@@ -131,7 +131,7 @@ func TestEnsureReadyErrorsOnCorruptKey(t *testing.T) {
 
 	if _, err := EnsureReady(context.Background(), Config{
 		Directory:  dir,
-		CommonName: "alice.localhost",
+		CommonName: "bot.localhost",
 		DNSNames:   []string{"localhost"},
 		Now:        func() time.Time { return now.Add(24 * time.Hour) },
 	}); err != nil {

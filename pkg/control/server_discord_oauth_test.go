@@ -184,7 +184,7 @@ func TestDiscordOAuthStatusReportsConfiguredSessionState(t *testing.T) {
 	if !signedIn.OAuthConfigured || !signedIn.Authenticated {
 		t.Fatalf("expected authenticated oauth status, got %+v", signedIn)
 	}
-	if signedIn.User.ID != "u1" || signedIn.User.Username != "alice" {
+	if signedIn.User.ID != "u1" || signedIn.User.Username != "testuser" {
 		t.Fatalf("unexpected oauth status user payload: %+v", signedIn.User)
 	}
 	if strings.TrimSpace(signedIn.CSRFToken) == "" {
@@ -202,20 +202,20 @@ func TestDiscordOAuthStatusPrefersServerPublicOrigin(t *testing.T) {
 	t.Parallel()
 
 	srv, _ := newControlTestServer(t)
-	if err := srv.SetPublicOrigin("https://alice.localhost:8443"); err != nil {
+	if err := srv.SetPublicOrigin("https://bot.localhost:8443"); err != nil {
 		t.Fatalf("set public origin: %v", err)
 	}
 	if err := srv.SetDiscordOAuthConfig(withTestOAuthSessionStorePath(t, DiscordOAuthConfig{
 		ClientID:     "1234567890",
 		ClientSecret: "super-secret",
-		RedirectURI:  "https://alice.localhost:8443/auth/discord/callback",
+		RedirectURI:  "https://bot.localhost:8443/auth/discord/callback",
 	})); err != nil {
 		t.Fatalf("configure oauth: %v", err)
 	}
 
 	req := httptest.NewRequest(
 		http.MethodGet,
-		"https://alice.localhost:8443/auth/discord/status?next=%2Fmanage%2Fcontrol-panel",
+		"https://bot.localhost:8443/auth/discord/status?next=%2Fmanage%2Fcontrol-panel",
 		nil,
 	)
 	rec := httptest.NewRecorder()
@@ -231,10 +231,10 @@ func TestDiscordOAuthStatusPrefersServerPublicOrigin(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
 		t.Fatalf("decode oauth status payload: %v body=%q", err, rec.Body.String())
 	}
-	if payload.DashboardURL != "https://alice.localhost:8443/manage/" {
+	if payload.DashboardURL != "https://bot.localhost:8443/manage/" {
 		t.Fatalf("unexpected public dashboard url: %+v", payload)
 	}
-	if payload.LoginURL != "https://alice.localhost:8443/auth/discord/login?next=%2Fmanage%2Fcontrol-panel" {
+	if payload.LoginURL != "https://bot.localhost:8443/auth/discord/login?next=%2Fmanage%2Fcontrol-panel" {
 		t.Fatalf("unexpected public login url: %+v", payload)
 	}
 }
@@ -331,7 +331,7 @@ func TestDiscordOAuthCallbackRedirectsToManageWhenRequested(t *testing.T) {
 			_, _ = w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
 		case "/users/@me":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"u1","username":"alice","global_name":"Alice","avatar":"abc123","discriminator":"0001"}`))
+			_, _ = w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User","avatar":"abc123","discriminator":"0001"}`))
 		case "/users/@me/guilds":
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":true,"permissions":"0"}]`))
@@ -392,7 +392,7 @@ func TestDiscordOAuthCallbackRedirectsToRootWhenRequested(t *testing.T) {
 			_, _ = w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
 		case "/users/@me":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"u1","username":"alice","global_name":"Alice","avatar":"abc123","discriminator":"0001"}`))
+			_, _ = w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User","avatar":"abc123","discriminator":"0001"}`))
 		case "/users/@me/guilds":
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":true,"permissions":"0"}]`))
@@ -468,7 +468,7 @@ func TestDiscordOAuthCallbackCreatesSessionAndHidesTokenPayload(t *testing.T) {
 		case "/users/@me":
 			userCapture <- strings.TrimSpace(r.Header.Get("Authorization"))
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"u1","username":"alice","global_name":"Alice","avatar":"abc123","discriminator":"0001"}`))
+			_, _ = w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User","avatar":"abc123","discriminator":"0001"}`))
 		case "/users/@me/guilds":
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":true,"permissions":"0"}]`))
@@ -523,7 +523,7 @@ func TestDiscordOAuthCallbackCreatesSessionAndHidesTokenPayload(t *testing.T) {
 	if response.Status != "ok" {
 		t.Fatalf("unexpected response status: %+v", response)
 	}
-	if response.User.ID != "u1" || response.User.Username != "alice" {
+	if response.User.ID != "u1" || response.User.Username != "testuser" {
 		t.Fatalf("unexpected callback user payload: %+v", response.User)
 	}
 	if len(response.Scopes) == 0 {
@@ -670,7 +670,7 @@ func TestGuildRoutesRequireCSRFForOAuthSessionMutations(t *testing.T) {
 			_, _ = w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
 		case "/users/@me":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"u1","username":"alice","global_name":"Alice"}`))
+			_, _ = w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User"}`))
 		case "/users/@me/guilds":
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":true,"permissions":"0"}]`))
@@ -791,7 +791,7 @@ func TestGlobalRoutesDenyOAuthSessionMutations(t *testing.T) {
 			_, _ = w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
 		case "/users/@me":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"u1","username":"alice","global_name":"Alice"}`))
+			_, _ = w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User"}`))
 		case "/users/@me/guilds":
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":true,"permissions":"0"}]`))
@@ -912,7 +912,7 @@ func TestGuildRoutesDenyOAuthSessionWithoutGuildAuthorization(t *testing.T) {
 			_, _ = w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
 		case "/users/@me":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"u1","username":"alice","global_name":"Alice"}`))
+			_, _ = w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User"}`))
 		case "/users/@me/guilds":
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":false,"permissions":"0"}]`))
@@ -977,7 +977,7 @@ func TestGuildRoutesAllowReadOnlyOAuthAccessForGetAndDenyWrites(t *testing.T) {
 			_, _ = w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
 		case "/users/@me":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"u1","username":"alice","global_name":"Alice"}`))
+			_, _ = w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User"}`))
 		case "/users/@me/guilds":
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":false,"permissions":"0"}]`))
@@ -997,7 +997,7 @@ func TestGuildRoutesAllowReadOnlyOAuthAccessForGetAndDenyWrites(t *testing.T) {
 				GuildID: "g1",
 				User: &discordgo.User{
 					ID:       "u1",
-					Username: "alice",
+					Username: "testuser",
 				},
 				Roles: []string{"reader-role"},
 			},
@@ -1113,7 +1113,7 @@ func TestGuildAccessRoleUpdatesInvalidateAccessibleGuildCache(t *testing.T) {
 				GuildID: "g1",
 				User: &discordgo.User{
 					ID:       "u1",
-					Username: "alice",
+					Username: "testuser",
 				},
 				Roles: []string{"reader-role"},
 			},
@@ -1132,7 +1132,7 @@ func TestGuildAccessRoleUpdatesInvalidateAccessibleGuildCache(t *testing.T) {
 	}
 
 	session, err := srv.discordOAuth.sessions.Create(discordOAuthSessionCreateParams{
-		User:         discordOAuthUser{ID: "u1", Username: "alice"},
+		User:         discordOAuthUser{ID: "u1", Username: "testuser"},
 		Scopes:       []string{discordOAuthScopeIdentify, discordOAuthScopeGuilds},
 		AccessToken:  "access-token",
 		RefreshToken: "refresh-token",
@@ -1255,7 +1255,7 @@ func TestGuildWriteAuthorizationUsesAccessibleGuildCache(t *testing.T) {
 	}
 
 	session, err := srv.discordOAuth.sessions.Create(discordOAuthSessionCreateParams{
-		User:         discordOAuthUser{ID: "u1", Username: "alice"},
+		User:         discordOAuthUser{ID: "u1", Username: "testuser"},
 		Scopes:       []string{discordOAuthScopeIdentify, discordOAuthScopeGuilds},
 		AccessToken:  "access-token",
 		RefreshToken: "refresh-token",
@@ -1383,7 +1383,7 @@ func TestDiscordOAuthGuildAccessFreshQueryRefreshesCachedGuilds(t *testing.T) {
 	}
 
 	session, err := srv.discordOAuth.sessions.Create(discordOAuthSessionCreateParams{
-		User:         discordOAuthUser{ID: "u1", Username: "alice"},
+		User:         discordOAuthUser{ID: "u1", Username: "testuser"},
 		Scopes:       []string{discordOAuthScopeIdentify, discordOAuthScopeGuilds},
 		AccessToken:  "access-token",
 		RefreshToken: "refresh-token",
@@ -1519,7 +1519,7 @@ func TestDiscordOAuthGuildAccessEndpointSkipsErrorResponseOnRequestCancellation(
 	}
 
 	session, err := srv.discordOAuth.sessions.Create(discordOAuthSessionCreateParams{
-		User:         discordOAuthUser{ID: "u1", Username: "alice"},
+		User:         discordOAuthUser{ID: "u1", Username: "testuser"},
 		Scopes:       []string{discordOAuthScopeIdentify, discordOAuthScopeGuilds},
 		AccessToken:  "access-token",
 		RefreshToken: "refresh-token",
@@ -1560,7 +1560,7 @@ func TestDiscordOAuthGuildAccessEndpoints(t *testing.T) {
 			_, _ = w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
 		case "/users/@me":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"u1","username":"alice","global_name":"Alice"}`))
+			_, _ = w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User"}`))
 		case "/users/@me/guilds":
 			limit := strings.TrimSpace(r.URL.Query().Get("limit"))
 			after := strings.TrimSpace(r.URL.Query().Get("after"))
@@ -1626,7 +1626,7 @@ func TestDiscordOAuthGuildAccessEndpoints(t *testing.T) {
 				GuildID: "g-read",
 				User: &discordgo.User{
 					ID:       "u1",
-					Username: "alice",
+					Username: "testuser",
 				},
 				Roles: []string{"reader-role"},
 			},
@@ -1780,7 +1780,7 @@ func TestDiscordOAuthManageableGuildsEndpointDoesNotRequireBotGuildProvider(t *t
 			_, _ = w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
 		case "/users/@me":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"u1","username":"alice","global_name":"Alice"}`))
+			_, _ = w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User"}`))
 		case "/users/@me/guilds":
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","icon":"guild-icon","owner":true,"permissions":"0"}]`))
@@ -1864,7 +1864,7 @@ func TestDiscordOAuthSessionPersistsAcrossServerRestart(t *testing.T) {
 			_, _ = w.Write([]byte(`{"access_token":"access-token","refresh_token":"refresh-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
 		case "/users/@me":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"u1","username":"alice","global_name":"Alice"}`))
+			_, _ = w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User"}`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -1958,7 +1958,7 @@ func TestDiscordOAuthManageableGuildsRefreshesAccessTokenWithRotation(t *testing
 			}
 		case "/users/@me":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"u1","username":"alice","global_name":"Alice"}`))
+			_, _ = w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User"}`))
 		case "/users/@me/guilds":
 			mu.Lock()
 			guildAuthHeaders = append(guildAuthHeaders, strings.TrimSpace(r.Header.Get("Authorization")))

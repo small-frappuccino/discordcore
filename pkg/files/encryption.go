@@ -16,7 +16,7 @@ import (
 func getEncryptionKey() []byte {
 	keys := []string{
 		"PASTEBIN_ENCRYPTION_KEY",
-		"ALICE_TOKEN",
+		"DISCORDCORE_TOKEN",
 		"DISCORD_TOKEN",
 		"BOT_TOKEN",
 	}
