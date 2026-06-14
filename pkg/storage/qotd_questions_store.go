@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/small-frappuccino/discordcore/pkg/idgen"
 )
 
 type qotdRowScanner interface {
@@ -36,6 +37,7 @@ func (s *Store) CreateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 
 	row := s.queryRowContext(ctx,
 		`INSERT INTO qotd_questions (
+			id,
 			guild_id,
 			deck_id,
 			body,
@@ -52,15 +54,16 @@ func (s *Store) CreateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 			$2,
 			$3,
 			$4,
+			$5,
 			CASE
-				WHEN $5 > 0 THEN $6
-				ELSE COALESCE((SELECT MAX(queue_position) + 1 FROM qotd_questions WHERE guild_id = $7 AND deck_id = $8), 1)
+				WHEN $6 > 0 THEN $7
+				ELSE COALESCE((SELECT MAX(queue_position) + 1 FROM qotd_questions WHERE guild_id = $8 AND deck_id = $9), 1)
 			END,
-			COALESCE((SELECT MAX(display_id) + 1 FROM qotd_questions WHERE guild_id = $9 AND deck_id = $10), 1),
-			$11,
+			COALESCE((SELECT MAX(display_id) + 1 FROM qotd_questions WHERE guild_id = $10 AND deck_id = $11), 1),
 			$12,
 			$13,
-			$14
+			$14,
+			$15
 		)
 		RETURNING
 			id,
@@ -76,6 +79,7 @@ func (s *Store) CreateQOTDQuestion(ctx context.Context, rec QOTDQuestionRecord) 
 			published_once_at,
 			created_at,
 			updated_at`,
+		idgen.GenerateID(),
 		normalized.GuildID,
 		normalized.DeckID,
 		normalized.Body,

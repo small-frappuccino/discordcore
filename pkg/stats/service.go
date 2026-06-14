@@ -787,9 +787,19 @@ func (s *StatsService) updateStatsChannelName(ctx context.Context, guildID strin
 		return nil
 	}
 
+	metaKey := "stats_channel:" + channelID
+	lastUpdate, exists, err := s.store.Metadata(ctx, metaKey)
+	if err == nil && exists && time.Since(lastUpdate) < 6*time.Minute {
+		// Discord rate limit for channel name is 2 edits per 10 mins.
+		// Enforce a strict 6 min interval to avoid 429 when multiple bots/nodes try to update.
+		return nil
+	}
+
 	if err := s.gateway.UpdateChannelName(ctx, channelID, newName); err != nil {
 		return fmt.Errorf("channel edit: %w", err)
 	}
+
+	_ = s.store.SetMetadata(ctx, metaKey, time.Now().UTC())
 
 	s.recordStatsPublishedChannel(guildID, channelID, statsPublishedChannel{
 		count: count,

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/small-frappuccino/discordcore/pkg/idgen"
 )
 
 // CreateQOTDOfficialPostProvisioning creates qotdofficial post provisioning.
@@ -23,6 +24,7 @@ func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTD
 
 	row := s.queryRowContext(ctx,
 		`INSERT INTO qotd_official_posts (
+			id,
 			guild_id,
 			deck_id,
 			deck_name_snapshot,
@@ -48,9 +50,9 @@ func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTD
 			last_reconciled_at
 		)
 		VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-			COALESCE((SELECT MAX(publish_ordinal) FROM qotd_official_posts WHERE guild_id = $17 AND deck_id = $18), 0) + 1,
-			$19, $20, $21, $22, $23, $24
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
+			COALESCE((SELECT MAX(publish_ordinal) FROM qotd_official_posts WHERE guild_id = $18 AND deck_id = $19), 0) + 1,
+			$20, $21, $22, $23, $24, $25
 		)
 		RETURNING
 			id,
@@ -79,6 +81,7 @@ func (s *Store) CreateQOTDOfficialPostProvisioning(ctx context.Context, rec QOTD
 			last_reconciled_at,
 			created_at,
 			updated_at`,
+		idgen.GenerateID(),
 		normalized.GuildID,
 		normalized.DeckID,
 		normalized.DeckNameSnapshot,

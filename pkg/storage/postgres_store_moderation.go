@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/small-frappuccino/discordcore/pkg/idgen"
 )
 
 // ModerationWarning is a stored warning against a user in a guild. CaseNumber is
@@ -96,9 +97,10 @@ func (s *Store) CreateModerationWarning(guildID, userID, moderatorID, reason str
 	if err := txQueryRowContext(
 		ctx,
 		tx,
-		`INSERT INTO moderation_warnings (guild_id, user_id, case_number, moderator_id, reason, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6)
+		`INSERT INTO moderation_warnings (id, guild_id, user_id, case_number, moderator_id, reason, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING id, created_at`,
+		idgen.GenerateID(),
 		warning.GuildID,
 		warning.UserID,
 		warning.CaseNumber,

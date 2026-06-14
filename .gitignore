@@ -31,5 +31,5 @@ tmp/
 /package.json
 /package-lock.json
 
-# Editor config
-/.claude/
+# AI configuration
+.gemini/

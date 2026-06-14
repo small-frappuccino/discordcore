@@ -21,6 +21,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	"github.com/small-frappuccino/discordcore/pkg/discord/session"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/idgen"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/persistence"
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
@@ -85,6 +86,11 @@ func runWithOptions(appName string, opts RunOptions) error {
 
 	// App name first (affects paths)
 	files.SetAppName(appName)
+
+	// Initialize Distributed ID Generator (Node ID via StatefulSet ordinal, fallback to 1)
+	if err := idgen.Init(1); err != nil {
+		return fmt.Errorf("initialize idgen: %w", err)
+	}
 
 	// Logger first so subsequent steps can log meaningfully
 	if err := log.SetupLogger(files.EffectiveBotName(), files.GetLogFilePath()); err != nil {

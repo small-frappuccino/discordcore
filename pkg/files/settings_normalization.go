@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/small-frappuccino/discordcore/pkg/idgen"
 	"github.com/small-frappuccino/discordcore/pkg/persistence"
 )
 
@@ -210,7 +211,7 @@ func normalizeQOTDDeckConfig(in QOTDDeckConfig) (QOTDDeckConfig, error) {
 	}
 
 	if out.ID == "" {
-		return QOTDDeckConfig{}, fmt.Errorf("id is required")
+		out.ID = idgen.GenerateString()
 	}
 	if out.Name == "" {
 		return QOTDDeckConfig{}, fmt.Errorf("name is required")

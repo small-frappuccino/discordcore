@@ -211,4 +211,4 @@ flowchart TD
 - **Control & Background Tasks (`pkg/control`, `pkg/task`)**: Orchestrates HTTP APIs for the dashboard and scheduled tasks independent of Discord gateway events.
 - **Vertical Features**: Domain-specific logic encapsulating behavior like `QOTD`, `Partners`, etc.
 - **Core Domain (`pkg/files`, `pkg/storage`)**: The foundational data layers, modeling the application's configuration state and Postgres persistence.
-- **Infrastructure**: Foundational utilities such as structured logging, lifecycle management, and observability hooks.
+- **Infrastructure**: Foundational utilities such as structured logging, lifecycle management, observability hooks, and distributed ID generation (`pkg/idgen` using Snowflakes).

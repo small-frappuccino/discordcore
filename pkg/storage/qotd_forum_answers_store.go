@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/small-frappuccino/discordcore/pkg/idgen"
 )
 
 // GetQOTDSurfaceByDeck gets qotdsurface by deck.
@@ -62,12 +63,13 @@ func (s *Store) UpsertQOTDSurface(ctx context.Context, rec QOTDSurfaceRecord) (r
 
 	row := s.queryRowContext(ctx,
 		`INSERT INTO qotd_forum_surfaces (
+			id,
 			guild_id,
 			deck_id,
 			channel_id,
 			question_list_thread_id
 		)
-		VALUES ($1, $2, $3, $4)
+		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (guild_id, deck_id) DO UPDATE
 		SET
 			channel_id = EXCLUDED.channel_id,
@@ -81,6 +83,7 @@ func (s *Store) UpsertQOTDSurface(ctx context.Context, rec QOTDSurfaceRecord) (r
 			question_list_thread_id,
 			created_at,
 			updated_at`,
+		idgen.GenerateID(),
 		normalized.GuildID,
 		normalized.DeckID,
 		normalized.ChannelID,
@@ -130,6 +133,7 @@ func (s *Store) CreateQOTDAnswerMessage(ctx context.Context, rec QOTDAnswerMessa
 
 	row := s.queryRowContext(ctx,
 		`INSERT INTO qotd_answer_messages (
+			id,
 			guild_id,
 			official_post_id,
 			user_id,
@@ -140,7 +144,7 @@ func (s *Store) CreateQOTDAnswerMessage(ctx context.Context, rec QOTDAnswerMessa
 			closed_at,
 			archived_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING
 			id,
 			guild_id,
@@ -154,6 +158,7 @@ func (s *Store) CreateQOTDAnswerMessage(ctx context.Context, rec QOTDAnswerMessa
 			updated_at,
 			closed_at,
 			archived_at`,
+		idgen.GenerateID(),
 		normalized.GuildID,
 		normalized.OfficialPostID,
 		normalized.UserID,

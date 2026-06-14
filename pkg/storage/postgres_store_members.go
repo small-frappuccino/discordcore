@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/small-frappuccino/discordcore/pkg/idgen"
 )
 
 // GuildMemberSnapshot represents the persisted snapshot for one guild member.
@@ -245,6 +246,7 @@ func insertAvatarHistoryBatch(ctx context.Context, tx pgx.Tx, batch avatarHistor
 	oldHashes := make([]string, len(rows))
 	newHashes := make([]string, len(rows))
 	changedAts := make([]time.Time, len(rows))
+	ids := make([]int64, len(rows))
 
 	for i, row := range rows {
 		guildIDs[i] = batch.GuildID
@@ -252,13 +254,14 @@ func insertAvatarHistoryBatch(ctx context.Context, tx pgx.Tx, batch avatarHistor
 		oldHashes[i] = row.OldHash
 		newHashes[i] = row.NewHash
 		changedAts[i] = row.ChangedAt
+		ids[i] = idgen.GenerateID()
 	}
 
 	if len(rows) > 0 {
 		_, err := tx.Exec(ctx,
-			`INSERT INTO avatars_history (guild_id, user_id, old_hash, new_hash, changed_at)
-             SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[], $5::timestamptz[])`,
-			guildIDs, userIDs, oldHashes, newHashes, changedAts,
+			`INSERT INTO avatars_history (id, guild_id, user_id, old_hash, new_hash, changed_at)
+             SELECT * FROM UNNEST($1::bigint[], $2::text[], $3::text[], $4::text[], $5::text[], $6::timestamptz[])`,
+			ids, guildIDs, userIDs, oldHashes, newHashes, changedAts,
 		)
 		return err
 	}
@@ -633,9 +636,9 @@ func (s *Store) UpsertAvatar(guildID, userID, newHash string, updatedAt time.Tim
 	changed = !hasCur || curHash != newHash
 	if changed && hasCur {
 		if _, err := txExec(tx,
-			`INSERT INTO avatars_history (guild_id, user_id, old_hash, new_hash, changed_at)
-             VALUES ($1, $2, $3, $4, $5)`,
-			guildID, userID, curHash, newHash, updatedAt,
+			`INSERT INTO avatars_history (id, guild_id, user_id, old_hash, new_hash, changed_at)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+			idgen.GenerateID(), guildID, userID, curHash, newHash, updatedAt,
 		); err != nil {
 			return false, "", err
 		}
