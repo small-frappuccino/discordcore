@@ -341,10 +341,38 @@ Additional caution:
 
 ## Load-Bearing Invariants
 
+### Generic Bot Paradigm and Identity
+
+- the system operates on a "generic bot" paradigm rather than maintaining a "primary" bot. Guilds that have only one bot treat it equally as a generic bot.
+- the magic blank string `""` represents a "generic bot identity". It serves strictly as a fallback for guilds that do not have explicitly configured bot tokens.
+- `""` must not force itself into being a dispatcher or catch-all for all guilds.
+- unrouted features (features lacking a configured `botInstanceID`) must resolve to an `<unrouted>` sentinel rather than `""` to safely prevent the generic bot from assuming ownership of disabled or unconfigured features.
+- decoupling of subsystems (e.g., stats) from Discord logic must respect routing bounds: features must not execute without proper routing, enforcing strict separation between core system logic and discord-facing services.
+
 ### Bot Identity Resolution
 
 - runtime identity assignment must evaluate FeatureRouting from a single deterministic seam before executing a fallback to the primary bot ID, establishing the absolute source of truth in multi-bot deployments
 - context propagation must enforce this resolved identity strictly across all asynchronous execution boundaries
+
+### Sentinel Safety & Null State Representation
+
+- The explicit use of string sentinels (like `<unrouted>`) over `""` must be enforced to represent explicitly disabled or disconnected states in mapping dictionaries.
+- This mitigates the risk of empty strings naturally acting as wildcard catch-alls in conditional loops or routing lookups.
+
+### Discord Logic Decoupling (System Boundaries)
+
+- Features like Stats, QOTD, or Monitoring must remain functionally decoupled from the raw Discord orchestration logic (e.g., `pkg/discord`).
+- Core system state changes or feature toggles must not bind directly to Discord gateway events without passing through an agnostic routing interface or event handler. Core logic should be invokable and testable without a live `discordgo.Session`.
+
+### Idempotency & Retry Mechanisms for Background Tasks
+
+- The application relies on `pkg/task/router.go` utilizing a locking `inflight` map for idempotency tracking, alongside a heap-based retry queue.
+- Operations interfacing with external APIs or DB writes must push tasks to this queue rather than spinning up raw, unmanaged `goroutines`. This protects against race conditions, thundering herd state collapses, and duplicate executions.
+
+### Multi-Tenant State Refresh Isolation
+
+- Operations targeting a single guild must never invoke a full system-wide `ConfigManager` state reload or global UI refresh unless strictly changing a repository-wide schema parameter.
+- Agents must only target local `GuildConfig` segments, reducing memory consumption and blocking time on the backend.
 
 ### QOTD subsystem
 

@@ -145,10 +145,10 @@ func TestStatsServiceHandlesGuild(t *testing.T) {
 	}
 
 	if mainSvc.handlesGuild("guild-stats-default") {
-		t.Errorf("expected main service to NOT handle guild-stats-default")
+		t.Errorf("expected main service to NOT handle guild-stats-default (unrouted)")
 	}
-	if !defaultSvc.handlesGuild("guild-stats-default") {
-		t.Errorf("expected default service to handle guild-stats-default")
+	if defaultSvc.handlesGuild("guild-stats-default") {
+		t.Errorf("expected default service to NOT handle guild-stats-default (unrouted sentinel)")
 	}
 }
 

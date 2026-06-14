@@ -23,6 +23,8 @@ tmp/
 /*.log
 /*.exe
 /*.ps1
+/*.py
+/*.go
 /*.js
 /*.out
 /c
@@ -32,4 +34,4 @@ tmp/
 /package-lock.json
 
 # AI configuration
-.gemini/
+.gemini

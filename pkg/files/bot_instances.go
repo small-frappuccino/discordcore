@@ -11,9 +11,13 @@ func NormalizeBotInstanceID(botInstanceID string) string {
 // provided runtime, which is true if the guild has a configured token for it.
 func (gc GuildConfig) BelongsToBotInstance(botInstanceID string) bool {
 	botInstanceID = NormalizeBotInstanceID(botInstanceID)
-	if botInstanceID == "" {
-		return true
+
+	// If the guild has gracefully fallen back due to having NO bot tokens,
+	// the magic blank instance handles it.
+	if len(gc.BotInstanceTokens) == 0 {
+		return botInstanceID == ""
 	}
+
 	token, ok := gc.BotInstanceTokens[botInstanceID]
 	return ok && len(token) > 0
 }
@@ -26,11 +30,6 @@ func (cfg *BotConfig) GuildsForBotInstance(botInstanceID string) []GuildConfig {
 	}
 
 	target := NormalizeBotInstanceID(botInstanceID)
-	if target == "" {
-		out := make([]GuildConfig, len(cfg.Guilds))
-		copy(out, cfg.Guilds)
-		return out
-	}
 
 	out := make([]GuildConfig, 0, len(cfg.Guilds))
 	for _, guild := range cfg.Guilds {
@@ -49,11 +48,6 @@ func (cfg *BotConfig) GuildsForBotInstanceFeature(botInstanceID string, feature 
 	}
 
 	target := NormalizeBotInstanceID(botInstanceID)
-	if target == "" {
-		out := make([]GuildConfig, len(cfg.Guilds))
-		copy(out, cfg.Guilds)
-		return out
-	}
 
 	out := make([]GuildConfig, 0, len(cfg.Guilds))
 	for _, guild := range cfg.Guilds {
@@ -74,14 +68,22 @@ func (cfg *BotConfig) GuildsForBotInstanceFeature(botInstanceID string, feature 
 // indicating if the designated bot token was revoked, invalid, or missing, necessitating
 // a degradation to the default fallback bot.
 func (gc GuildConfig) ResolveFeatureBotInstanceID(feature string) (resolvedID string, fallback bool) {
-	route := gc.FeatureRouting[feature]
-	if route == "" {
+	// If the guild has gracefully fallen back due to having NO bot tokens,
+	// the magic blank instance handles ALL features.
+	if len(gc.BotInstanceTokens) == 0 {
 		return "", false
+	}
+
+	route, exists := gc.FeatureRouting[feature]
+	if !exists || route == "" {
+		// If unrouted, return a sentinel so it does not accidentally match
+		// the magic blank instance ("").
+		return "<unrouted>", false
 	}
 
 	token, ok := gc.BotInstanceTokens[route]
 	if !ok || len(token) == 0 {
-		return "", true
+		return "<unrouted>", true
 	}
 	return route, false
 }

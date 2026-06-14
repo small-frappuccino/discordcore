@@ -196,7 +196,10 @@ func TestAutomodHandleRawEvent_CoalescesPerActionStream(t *testing.T) {
 
 	cm := newTestConfigManager(t)
 	if err := cm.AddGuildConfig(files.GuildConfig{
-		GuildID:  guildID,
+		GuildID: guildID,
+		FeatureRouting: map[string]string{
+			"moderation": "",
+		},
 		Channels: files.ChannelsConfig{AutomodAction: channelID}}); err != nil {
 		t.Fatalf("AddGuildConfig: %v", err)
 	}
@@ -284,7 +287,10 @@ func TestAutomodHandleRawEvent_DistinctViolationsBothRun(t *testing.T) {
 
 	cm := newTestConfigManager(t)
 	if err := cm.AddGuildConfig(files.GuildConfig{
-		GuildID:  guildID,
+		GuildID: guildID,
+		FeatureRouting: map[string]string{
+			"moderation": "",
+		},
 		Channels: files.ChannelsConfig{AutomodAction: channelID}}); err != nil {
 		t.Fatalf("AddGuildConfig: %v", err)
 	}
@@ -365,7 +371,10 @@ func TestAutomodHandleRawEvent_DropsSendAlertMessageEvents(t *testing.T) {
 
 	cm := newTestConfigManager(t)
 	if err := cm.AddGuildConfig(files.GuildConfig{
-		GuildID:  guildID,
+		GuildID: guildID,
+		FeatureRouting: map[string]string{
+			"moderation": "",
+		},
 		Channels: files.ChannelsConfig{AutomodAction: channelID}}); err != nil {
 		t.Fatalf("AddGuildConfig: %v", err)
 	}

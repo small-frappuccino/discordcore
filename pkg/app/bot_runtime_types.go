@@ -198,6 +198,11 @@ func (r *botRuntimeResolver) runtimeForGuild(guildID string) (*botRuntime, strin
 				return runtime, id, nil
 			}
 		}
+	} else {
+		// Gracefully fallback to the magic blank instance if the guild has no configured tokens.
+		if runtime, ok := runtimes[""]; ok && runtime != nil {
+			return runtime, "", nil
+		}
 	}
 
 	return nil, "", fmt.Errorf("guild %s does not resolve to a running bot instance", guildID)
