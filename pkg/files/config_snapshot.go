@@ -169,6 +169,7 @@ func cloneGuildConfigPtr(in *GuildConfig) *GuildConfig {
 
 func cloneBotConfig(in BotConfig) BotConfig {
 	return BotConfig{
+		ConfigVersion: in.ConfigVersion,
 		Guilds:        cloneGuildConfigs(in.Guilds),
 		Features:      cloneFeatureToggles(in.Features),
 		RuntimeConfig: cloneRuntimeConfig(in.RuntimeConfig),
@@ -189,6 +190,7 @@ func cloneGuildConfigs(in []GuildConfig) []GuildConfig {
 func cloneGuildConfig(in GuildConfig) GuildConfig {
 	return GuildConfig{
 		GuildID:             in.GuildID,
+		ConfigVersion:       in.ConfigVersion,
 		FeatureRouting:      cloneStringMap(in.FeatureRouting),
 		BotInstanceTokens:   cloneEncryptedStringMap(in.BotInstanceTokens),
 		BotInstanceStatuses: cloneStringMap(in.BotInstanceStatuses),

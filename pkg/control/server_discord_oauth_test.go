@@ -739,26 +739,27 @@ func TestGuildRoutesRequireCSRFForOAuthSessionMutations(t *testing.T) {
 		name   string
 		method string
 		path   string
-		body   string
+		bodyFn func() string
 	}{
 		{
 			name:   "guild settings put",
 			method: http.MethodPut,
 			path:   "/v1/guilds/g1/settings",
-			body:   fmt.Sprintf(`{"roles":{"dashboard_read":[]},"config_version":%d}`, getCV("g1")),
+			bodyFn: func() string { return fmt.Sprintf(`{"roles":{"dashboard_read":[]},"config_version":%d}`, getCV("g1")) },
 		},
 		{
 			name:   "guild feature patch",
 			method: http.MethodPatch,
 			path:   "/v1/guilds/g1/features/services.monitoring",
-			body:   fmt.Sprintf(`{"enabled":false,"config_version":%d}`, getCV("g1")),
+			bodyFn: func() string { return fmt.Sprintf(`{"enabled":false,"config_version":%d}`, getCV("g1")) },
 		},
 	}
 
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			noCSRFReq := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+			bodyStr := tc.bodyFn()
+			noCSRFReq := httptest.NewRequest(tc.method, tc.path, strings.NewReader(bodyStr))
 			noCSRFReq.AddCookie(sessionCookie)
 			noCSRFReq.Header.Set("Content-Type", "application/json")
 			noCSRFRec := httptest.NewRecorder()
@@ -767,7 +768,7 @@ func TestGuildRoutesRequireCSRFForOAuthSessionMutations(t *testing.T) {
 				t.Fatalf("expected 403 without csrf token on mutable guild route, route=%s %s got %d body=%q", tc.method, tc.path, noCSRFRec.Code, noCSRFRec.Body.String())
 			}
 
-			withCSRFReq := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+			withCSRFReq := httptest.NewRequest(tc.method, tc.path, strings.NewReader(bodyStr))
 			withCSRFReq.AddCookie(sessionCookie)
 			withCSRFReq.Header.Set("Content-Type", "application/json")
 			withCSRFReq.Header.Set(discordOAuthCSRFHeaderName, callbackResp.CSRFToken)

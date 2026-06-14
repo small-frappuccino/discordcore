@@ -57,7 +57,10 @@ func ensureStatsEnabled(ctx *core.Context) error {
 	}
 	features := ctx.Config.Config().ResolveFeatures(ctx.GuildID)
 	if !features.StatsChannels {
-		return core.NewResponseBuilder(ctx.Session).Ephemeral().Error(ctx.Interaction, "Stats channels feature is currently disabled for this server.")
+		return &core.CommandError{
+			Message:   "Stats channels feature is currently disabled for this server.",
+			Ephemeral: true,
+		}
 	}
 	return nil
 }
@@ -117,7 +120,20 @@ func (c *statsAddSubCommand) Handle(ctx *core.Context) error {
 	}
 	opts := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 
-	channelID := opts.String("channel")
+	var channelID string
+	var roleFilter string
+	for _, opt := range core.GetSubCommandOptions(ctx.Interaction) {
+		if opt.Name == "channel" {
+			if s, ok := opt.Value.(string); ok {
+				channelID = s
+			}
+		} else if opt.Name == "role_filter" {
+			if s, ok := opt.Value.(string); ok {
+				roleFilter = s
+			}
+		}
+	}
+
 	if channelID == "" {
 		return fmt.Errorf("channel is required")
 	}
@@ -127,7 +143,6 @@ func (c *statsAddSubCommand) Handle(ctx *core.Context) error {
 		memberType = "all"
 	}
 	nameTemplate := opts.String("name_template")
-	roleFilter := opts.String("role_filter")
 
 	err := c.configManager.UpdateGuildConfig(ctx.GuildID, func(cfg *files.GuildConfig) error {
 		for i, ch := range cfg.Stats.Channels {
@@ -189,8 +204,15 @@ func (c *statsRemoveSubCommand) Handle(ctx *core.Context) error {
 	if err := ensureStatsEnabled(ctx); err != nil {
 		return err
 	}
-	opts := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
-	channelID := opts.String("channel")
+	var channelID string
+	for _, opt := range core.GetSubCommandOptions(ctx.Interaction) {
+		if opt.Name == "channel" {
+			if s, ok := opt.Value.(string); ok {
+				channelID = s
+			}
+		}
+	}
+
 	if channelID == "" {
 		return fmt.Errorf("channel is required")
 	}
