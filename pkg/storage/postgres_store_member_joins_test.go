@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/small-frappuccino/discordcore/pkg/testdb"
 )
 
@@ -284,7 +285,7 @@ func readMemberLastSeen(store *Store, guildID, userID string) (time.Time, bool, 
 	)
 	var lastSeen sql.NullTime
 	if err := row.Scan(&lastSeen); err != nil {
-		if err == sql.ErrNoRows {
+		if err == pgx.ErrNoRows {
 			return time.Time{}, false, nil
 		}
 		return time.Time{}, false, fmt.Errorf("readMemberLastSeen: %w", err)

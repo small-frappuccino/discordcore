@@ -7,6 +7,8 @@ import (
 	"iter"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // GetQOTDSurfaceByDeck gets qotdsurface by deck.
@@ -38,7 +40,7 @@ func (s *Store) GetQOTDSurfaceByDeck(ctx context.Context, guildID, deckID string
 	)
 	record, err := scanQOTDSurfaceRecord(row)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("Store.GetQOTDSurfaceByDeck: %w", err)
@@ -246,7 +248,7 @@ func (s *Store) GetQOTDAnswerMessageByOfficialPostAndUser(ctx context.Context, o
 	)
 	record, err := scanQOTDAnswerMessageRecord(row)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("Store.GetQOTDAnswerMessageByOfficialPostAndUser: %w", err)

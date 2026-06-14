@@ -7,6 +7,8 @@ import (
 	"iter"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // CreateQOTDOfficialPostProvisioning creates qotdofficial post provisioning.
@@ -239,7 +241,7 @@ func (s *Store) GetQOTDOfficialPostByID(ctx context.Context, id int64) (res *QOT
 	)
 	record, err := scanQOTDOfficialPostRecord(row)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("Store.GetQOTDOfficialPostByID: %w", err)
@@ -303,7 +305,7 @@ func (s *Store) GetQOTDOfficialPostByDate(ctx context.Context, guildID string, p
 	)
 	record, err := scanQOTDOfficialPostRecord(row)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("Store.GetQOTDOfficialPostByDate: %w", err)
@@ -447,7 +449,7 @@ func (s *Store) GetAutomaticSlotQOTDOfficialPostByDate(ctx context.Context, guil
 	)
 	record, err := scanQOTDOfficialPostRecord(row)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("Store.GetAutomaticSlotQOTDOfficialPostByDate: %w", err)
@@ -512,7 +514,7 @@ func (s *Store) GetScheduledQOTDOfficialPostByDate(ctx context.Context, guildID 
 	)
 	record, err := scanQOTDOfficialPostRecord(row)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("Store.GetScheduledQOTDOfficialPostByDate: %w", err)

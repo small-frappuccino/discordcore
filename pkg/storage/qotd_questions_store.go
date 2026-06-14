@@ -892,7 +892,7 @@ func getQOTDQuestionTx(ctx context.Context, tx pgx.Tx, guildID string, questionI
 	)
 	record, err := scanQOTDQuestionRecord(row)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("getQOTDQuestionTx: %w", err)

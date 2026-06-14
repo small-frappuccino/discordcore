@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // SetBotSince sets the bot_since timestamp for a guild (keeps the earliest time).
@@ -35,7 +37,7 @@ func (s *Store) BotSince(ctx context.Context, guildID string) (time.Time, bool, 
 	row := s.queryRowContext(ctx, `SELECT bot_since FROM guild_meta WHERE guild_id=$1`, guildID)
 	var t sql.NullTime
 	if err := row.Scan(&t); err != nil {
-		if err == sql.ErrNoRows {
+		if err == pgx.ErrNoRows {
 			return time.Time{}, false, nil
 		}
 		return time.Time{}, false, fmt.Errorf("Store.BotSince: %w", err)
@@ -63,7 +65,7 @@ func (s *Store) getRuntimeTimestamp(ctx context.Context, key string) (time.Time,
 	row := s.queryRowContext(ctx, `SELECT ts FROM runtime_meta WHERE key=$1`, key)
 	var ts time.Time
 	if err := row.Scan(&ts); err != nil {
-		if err == sql.ErrNoRows {
+		if err == pgx.ErrNoRows {
 			return time.Time{}, false, nil
 		}
 		return time.Time{}, false, fmt.Errorf("Store.getRuntimeTimestamp: %w", err)
