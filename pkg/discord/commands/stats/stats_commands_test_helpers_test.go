@@ -1,6 +1,7 @@
 package stats
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,24 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordgo"
 )
+
+type mockStatsService struct {
+	mu           sync.Mutex
+	updateCalled bool
+}
+
+func (m *mockStatsService) UpdateStatsChannels(ctx context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.updateCalled = true
+	return nil
+}
+
+func (m *mockStatsService) wasUpdateCalled() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.updateCalled
+}
 
 type interactionRecorder struct {
 	mu        sync.Mutex
@@ -72,7 +91,7 @@ func newStatsCommandTestRouter(
 	guildID string,
 	ownerID string,
 	cfg files.GuildConfig,
-) (*core.CommandRouter, *files.ConfigManager) {
+) (*core.CommandRouter, *files.ConfigManager, *mockStatsService) {
 	t.Helper()
 
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
@@ -84,10 +103,9 @@ func newStatsCommandTestRouter(
 	}
 
 	router := core.NewCommandRouter(session, cm)
-	// statsService is nil — handlers guard with if c.statsService != nil,
-	// so config-level behavior is fully testable without a live service.
-	NewStatsCommands(cm, nil).RegisterCommands(router)
-	return router, cm
+	mockSvc := &mockStatsService{}
+	NewStatsCommands(cm, mockSvc).RegisterCommands(router)
+	return router, cm, mockSvc
 }
 
 func newStatsSlashInteraction(

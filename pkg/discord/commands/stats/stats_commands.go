@@ -7,18 +7,22 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	domainstats "github.com/small-frappuccino/discordcore/pkg/stats"
 	"github.com/small-frappuccino/discordgo"
 )
+
+// StatsService interface for dependency injection.
+type StatsService interface {
+	UpdateStatsChannels(ctx context.Context) error
+}
 
 // StatsCommands wiring.
 type StatsCommands struct {
 	configManager *files.ConfigManager
-	statsService  *domainstats.StatsService
+	statsService  StatsService
 }
 
 // NewStatsCommands returns the root stats command tree.
-func NewStatsCommands(configManager *files.ConfigManager, statsService *domainstats.StatsService) *StatsCommands {
+func NewStatsCommands(configManager *files.ConfigManager, statsService StatsService) *StatsCommands {
 	return &StatsCommands{
 		configManager: configManager,
 		statsService:  statsService,
@@ -67,10 +71,10 @@ func ensureStatsEnabled(ctx *core.Context) error {
 
 type statsAddSubCommand struct {
 	configManager *files.ConfigManager
-	statsService  *domainstats.StatsService
+	statsService  StatsService
 }
 
-func newStatsAddSubCommand(cm *files.ConfigManager, ss *domainstats.StatsService) *statsAddSubCommand {
+func newStatsAddSubCommand(cm *files.ConfigManager, ss StatsService) *statsAddSubCommand {
 	return &statsAddSubCommand{configManager: cm, statsService: ss}
 }
 
@@ -176,10 +180,10 @@ func (c *statsAddSubCommand) Handle(ctx *core.Context) error {
 
 type statsRemoveSubCommand struct {
 	configManager *files.ConfigManager
-	statsService  *domainstats.StatsService
+	statsService  StatsService
 }
 
-func newStatsRemoveSubCommand(cm *files.ConfigManager, ss *domainstats.StatsService) *statsRemoveSubCommand {
+func newStatsRemoveSubCommand(cm *files.ConfigManager, ss StatsService) *statsRemoveSubCommand {
 	return &statsRemoveSubCommand{configManager: cm, statsService: ss}
 }
 
@@ -308,10 +312,10 @@ func (c *statsListSubCommand) Handle(ctx *core.Context) error {
 
 type statsSettingsSubCommand struct {
 	configManager *files.ConfigManager
-	statsService  *domainstats.StatsService
+	statsService  StatsService
 }
 
-func newStatsSettingsSubCommand(cm *files.ConfigManager, ss *domainstats.StatsService) *statsSettingsSubCommand {
+func newStatsSettingsSubCommand(cm *files.ConfigManager, ss StatsService) *statsSettingsSubCommand {
 	return &statsSettingsSubCommand{configManager: cm, statsService: ss}
 }
 

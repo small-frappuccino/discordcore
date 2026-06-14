@@ -15,7 +15,7 @@ func TestStatsAddPersistsChannelConfig(t *testing.T) {
 	)
 
 	session, rec := newStatsCommandTestSession(t)
-	router, cm := newStatsCommandTestRouter(t, session, guildID, ownerID, files.GuildConfig{
+	router, cm, mockSvc := newStatsCommandTestRouter(t, session, guildID, ownerID, files.GuildConfig{
 		GuildID: guildID,
 		Features: files.FeatureToggles{
 			StatsChannels: testBoolPtr(true),
@@ -42,6 +42,10 @@ func TestStatsAddPersistsChannelConfig(t *testing.T) {
 	if ch.ChannelID != "voice-channel-1" || ch.MemberType != "humans" || ch.NameTemplate != "Members: {count}" {
 		t.Fatalf("unexpected persisted channel config: %+v", ch)
 	}
+
+	if !mockSvc.wasUpdateCalled() {
+		t.Fatalf("expected UpdateStatsChannels to be called")
+	}
 }
 
 func TestStatsAddUpdatesExistingChannelConfig(t *testing.T) {
@@ -51,7 +55,7 @@ func TestStatsAddUpdatesExistingChannelConfig(t *testing.T) {
 	)
 
 	session, rec := newStatsCommandTestSession(t)
-	router, cm := newStatsCommandTestRouter(t, session, guildID, ownerID, files.GuildConfig{
+	router, cm, _ := newStatsCommandTestRouter(t, session, guildID, ownerID, files.GuildConfig{
 		GuildID: guildID,
 		Features: files.FeatureToggles{
 			StatsChannels: testBoolPtr(true),
@@ -89,7 +93,7 @@ func TestStatsAddWithRoleFilter(t *testing.T) {
 	)
 
 	session, rec := newStatsCommandTestSession(t)
-	router, cm := newStatsCommandTestRouter(t, session, guildID, ownerID, files.GuildConfig{
+	router, cm, _ := newStatsCommandTestRouter(t, session, guildID, ownerID, files.GuildConfig{
 		GuildID: guildID,
 		Features: files.FeatureToggles{
 			StatsChannels: testBoolPtr(true),
@@ -120,7 +124,7 @@ func TestStatsRemoveDeletesChannelConfig(t *testing.T) {
 	)
 
 	session, rec := newStatsCommandTestSession(t)
-	router, cm := newStatsCommandTestRouter(t, session, guildID, ownerID, files.GuildConfig{
+	router, cm, mockSvc := newStatsCommandTestRouter(t, session, guildID, ownerID, files.GuildConfig{
 		GuildID: guildID,
 		Features: files.FeatureToggles{
 			StatsChannels: testBoolPtr(true),
@@ -150,6 +154,10 @@ func TestStatsRemoveDeletesChannelConfig(t *testing.T) {
 	if cfg.Stats.Channels[0].ChannelID != "voice-channel-2" {
 		t.Fatalf("expected voice-channel-2 to remain, got %+v", cfg.Stats.Channels[0])
 	}
+
+	if !mockSvc.wasUpdateCalled() {
+		t.Fatalf("expected UpdateStatsChannels to be called")
+	}
 }
 
 func TestStatsRemoveReportsErrorForUnknownChannel(t *testing.T) {
@@ -159,7 +167,7 @@ func TestStatsRemoveReportsErrorForUnknownChannel(t *testing.T) {
 	)
 
 	session, rec := newStatsCommandTestSession(t)
-	router, _ := newStatsCommandTestRouter(t, session, guildID, ownerID, files.GuildConfig{
+	router, _, _ := newStatsCommandTestRouter(t, session, guildID, ownerID, files.GuildConfig{
 		GuildID: guildID,
 		Features: files.FeatureToggles{
 			StatsChannels: testBoolPtr(true),
@@ -184,7 +192,7 @@ func TestStatsListShowsConfiguredChannels(t *testing.T) {
 	)
 
 	session, rec := newStatsCommandTestSession(t)
-	router, _ := newStatsCommandTestRouter(t, session, guildID, ownerID, files.GuildConfig{
+	router, _, _ := newStatsCommandTestRouter(t, session, guildID, ownerID, files.GuildConfig{
 		GuildID: guildID,
 		Features: files.FeatureToggles{
 			StatsChannels: testBoolPtr(true),
@@ -226,7 +234,7 @@ func TestStatsListShowsEmptyStateWhenNoChannels(t *testing.T) {
 	)
 
 	session, rec := newStatsCommandTestSession(t)
-	router, _ := newStatsCommandTestRouter(t, session, guildID, ownerID, files.GuildConfig{
+	router, _, _ := newStatsCommandTestRouter(t, session, guildID, ownerID, files.GuildConfig{
 		GuildID: guildID,
 		Features: files.FeatureToggles{
 			StatsChannels: testBoolPtr(true),
@@ -249,7 +257,7 @@ func TestStatsListShowsRoleFilter(t *testing.T) {
 	)
 
 	session, rec := newStatsCommandTestSession(t)
-	router, _ := newStatsCommandTestRouter(t, session, guildID, ownerID, files.GuildConfig{
+	router, _, _ := newStatsCommandTestRouter(t, session, guildID, ownerID, files.GuildConfig{
 		GuildID: guildID,
 		Features: files.FeatureToggles{
 			StatsChannels: testBoolPtr(true),
@@ -279,7 +287,7 @@ func TestStatsSettingsShowsCurrentWhenNoOptionProvided(t *testing.T) {
 	)
 
 	session, rec := newStatsCommandTestSession(t)
-	router, _ := newStatsCommandTestRouter(t, session, guildID, ownerID, files.GuildConfig{
+	router, _, _ := newStatsCommandTestRouter(t, session, guildID, ownerID, files.GuildConfig{
 		GuildID: guildID,
 		Features: files.FeatureToggles{
 			StatsChannels: testBoolPtr(true),
@@ -309,7 +317,7 @@ func TestStatsSettingsUpdatesInterval(t *testing.T) {
 	)
 
 	session, rec := newStatsCommandTestSession(t)
-	router, cm := newStatsCommandTestRouter(t, session, guildID, ownerID, files.GuildConfig{
+	router, cm, mockSvc := newStatsCommandTestRouter(t, session, guildID, ownerID, files.GuildConfig{
 		GuildID: guildID,
 		Features: files.FeatureToggles{
 			StatsChannels: testBoolPtr(true),
@@ -333,6 +341,10 @@ func TestStatsSettingsUpdatesInterval(t *testing.T) {
 	if cfg.Stats.UpdateIntervalMins != 60 {
 		t.Fatalf("expected interval persisted as 60, got %d", cfg.Stats.UpdateIntervalMins)
 	}
+
+	if !mockSvc.wasUpdateCalled() {
+		t.Fatalf("expected UpdateStatsChannels to be called")
+	}
 }
 
 func TestStatsCommandsRejectWhenFeatureDisabled(t *testing.T) {
@@ -342,7 +354,7 @@ func TestStatsCommandsRejectWhenFeatureDisabled(t *testing.T) {
 	)
 
 	session, rec := newStatsCommandTestSession(t)
-	router, _ := newStatsCommandTestRouter(t, session, guildID, ownerID, files.GuildConfig{
+	router, _, _ := newStatsCommandTestRouter(t, session, guildID, ownerID, files.GuildConfig{
 		GuildID: guildID,
 		Features: files.FeatureToggles{
 			StatsChannels: testBoolPtr(false),
@@ -382,7 +394,7 @@ func TestStatsSettingsShowsDefaultIntervalWhenZero(t *testing.T) {
 	)
 
 	session, rec := newStatsCommandTestSession(t)
-	router, _ := newStatsCommandTestRouter(t, session, guildID, ownerID, files.GuildConfig{
+	router, _, _ := newStatsCommandTestRouter(t, session, guildID, ownerID, files.GuildConfig{
 		GuildID: guildID,
 		Features: files.FeatureToggles{
 			StatsChannels: testBoolPtr(true),
