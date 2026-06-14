@@ -25,9 +25,9 @@ var requiredSchemaTables = []string{
 	"persistent_cache",
 	"daily_message_metrics",
 	"daily_reaction_metrics",
-	"daily_member_joins",
 	"daily_member_leaves",
 	"ticket_sequences",
+	"guild_configs",
 }
 
 var requiredSchemaColumns = map[string][]string{

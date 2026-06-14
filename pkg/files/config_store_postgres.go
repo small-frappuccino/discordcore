@@ -35,27 +35,46 @@ func (s *PostgresConfigStore) Load() (*BotConfig, error) {
 		return cfg, fmt.Errorf("postgres config store database handle is nil")
 	}
 
-	var raw []byte
+	var globalRaw []byte
 	err := s.db.QueryRow(
 		context.Background(),
 		`SELECT config_json FROM bot_config_state WHERE config_key = $1`,
 		s.key,
-	).Scan(&raw)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			return cfg, nil
+	).Scan(&globalRaw)
+	if err != nil && err != pgx.ErrNoRows {
+		return nil, fmt.Errorf("load global config row from postgres: %w", err)
+	}
+	if len(globalRaw) > 0 {
+		if err := json.Unmarshal(globalRaw, cfg); err != nil {
+			return nil, fmt.Errorf("decode global config row from postgres: %w", err)
 		}
-		return nil, fmt.Errorf("load config row from postgres: %w", err)
 	}
-	if len(raw) == 0 {
-		return cfg, nil
+	cfg.Guilds = []GuildConfig{}
+
+	rows, err := s.db.Query(
+		context.Background(),
+		`SELECT config_json FROM guild_configs`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query guild_configs: %w", err)
 	}
-	if err := json.Unmarshal(raw, cfg); err != nil {
-		return nil, fmt.Errorf("decode config row from postgres: %w", err)
+	defer rows.Close()
+
+	for rows.Next() {
+		var guildRaw []byte
+		if err := rows.Scan(&guildRaw); err != nil {
+			return nil, fmt.Errorf("scan guild_configs row: %w", err)
+		}
+		var guildCfg GuildConfig
+		if err := json.Unmarshal(guildRaw, &guildCfg); err != nil {
+			return nil, fmt.Errorf("decode guild_configs json: %w", err)
+		}
+		cfg.Guilds = append(cfg.Guilds, guildCfg)
 	}
-	if cfg.Guilds == nil {
-		cfg.Guilds = []GuildConfig{}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate guild_configs rows: %w", err)
 	}
+
 	return cfg, nil
 }
 
@@ -68,21 +87,58 @@ func (s *PostgresConfigStore) Save(cfg *BotConfig) error {
 		return fmt.Errorf("postgres config store database handle is nil")
 	}
 
-	raw, err := json.Marshal(cfg)
+	ctx := context.Background()
+	tx, err := s.db.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("encode config for postgres: %w", err)
+		return fmt.Errorf("begin config save tx: %w", err)
 	}
-	if _, err := s.db.Exec(
-		context.Background(),
+	defer tx.Rollback(ctx)
+
+	// Save global features/runtime to bot_config_state (without guilds)
+	globalCopy := *cfg
+	globalCopy.Guilds = nil
+	globalRaw, err := json.Marshal(globalCopy)
+	if err != nil {
+		return fmt.Errorf("encode global config: %w", err)
+	}
+
+	if _, err := tx.Exec(
+		ctx,
 		`INSERT INTO bot_config_state (config_key, config_json)
 		 VALUES ($1, $2::jsonb)
 		 ON CONFLICT (config_key) DO UPDATE
 		 SET config_json = EXCLUDED.config_json,
 		     updated_at = NOW()`,
 		s.key,
-		string(raw),
+		string(globalRaw),
 	); err != nil {
-		return fmt.Errorf("save config row to postgres: %w", err)
+		return fmt.Errorf("save global config row: %w", err)
+	}
+
+	// Upsert all guilds into guild_configs table
+	for _, guild := range cfg.Guilds {
+		guildRaw, err := json.Marshal(guild)
+		if err != nil {
+			return fmt.Errorf("encode guild config for %s: %w", guild.GuildID, err)
+		}
+		if _, err := tx.Exec(
+			ctx,
+			`INSERT INTO guild_configs (guild_id, config_version, config_json)
+			 VALUES ($1, $2, $3::jsonb)
+			 ON CONFLICT (guild_id) DO UPDATE
+			 SET config_version = EXCLUDED.config_version,
+			     config_json = EXCLUDED.config_json,
+			     updated_at = NOW()`,
+			guild.GuildID,
+			guild.ConfigVersion,
+			string(guildRaw),
+		); err != nil {
+			return fmt.Errorf("save guild_configs row %s: %w", guild.GuildID, err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit config save tx: %w", err)
 	}
 	return nil
 }
