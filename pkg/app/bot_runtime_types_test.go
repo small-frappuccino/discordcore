@@ -22,7 +22,7 @@ func TestBotRuntimeResolver_AggregateCachesAndMetrics(t *testing.T) {
 	ms1, _ := monitoring.NewMonitoringServiceForBotWithMetrics(mockSession, mockConfigManager, mockStore, "bot1", &monitoring.InMemoryMetrics{}, log.ApplicationLogger())
 	ms2, _ := monitoring.NewMonitoringServiceForBotWithMetrics(mockSession, mockConfigManager, mockStore, "bot2", &monitoring.InMemoryMetrics{}, log.ApplicationLogger())
 
-	runtimes[files.TokenHash("token")] = &botRuntime{
+	runtimes["bot1"] = &botRuntime{
 		monitoringService: ms1,
 		session:           &discordgo.Session{Token: "test-token"},
 	}
@@ -48,7 +48,7 @@ func TestBotRuntimeResolver_SessionForGuild(t *testing.T) {
 	runtimes := make(map[string]*botRuntime)
 	session := &discordgo.Session{Token: "test-token", State: discordgo.NewState()}
 	session.State.GuildAdd(&discordgo.Guild{ID: "g1"})
-	runtimes[files.TokenHash("token")] = &botRuntime{
+	runtimes["bot1"] = &botRuntime{
 		instanceID: "bot1",
 		session:    session,
 	}
@@ -104,7 +104,7 @@ func TestBotRuntimeResolver_SessionForGuild(t *testing.T) {
 	}
 
 	// Session is nil case
-	runtimes[files.TokenHash("token2")] = &botRuntime{
+	runtimes["bot2"] = &botRuntime{
 		instanceID: "bot2",
 		session:    nil, // nil session
 	}

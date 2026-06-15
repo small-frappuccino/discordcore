@@ -192,8 +192,7 @@ func (r *botRuntimeResolver) runtimeForGuild(guildID string, feature string) (*b
 	if bestInstanceID != "" {
 		tokenEnc, ok := guild.BotInstanceTokens[bestInstanceID]
 		if ok && string(tokenEnc) != "" {
-			th := files.TokenHash(string(tokenEnc))
-			if runtime, ok := runtimes[th]; ok && runtime != nil {
+			if runtime, ok := runtimes[bestInstanceID]; ok && runtime != nil {
 				return runtime, bestInstanceID, nil
 			}
 		}
@@ -204,8 +203,7 @@ func (r *botRuntimeResolver) runtimeForGuild(guildID string, feature string) (*b
 			if string(tokenEnc) == "" {
 				continue
 			}
-			th := files.TokenHash(string(tokenEnc))
-			if runtime, ok := runtimes[th]; ok && runtime != nil {
+			if runtime, ok := runtimes[id]; ok && runtime != nil {
 				return runtime, id, nil
 			}
 		}
@@ -263,8 +261,7 @@ func (r *botRuntimeResolver) guildBindings(context.Context) ([]control.BotGuildB
 			if token == "" {
 				continue
 			}
-			th := files.TokenHash(token)
-			runtime, ok := runtimes[th]
+			runtime, ok := runtimes[botInstanceID]
 			if !ok || runtime == nil || runtime.session == nil {
 				continue
 			}
