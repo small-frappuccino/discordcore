@@ -25,7 +25,7 @@ type controlServerHolder struct {
 	server *control.Server
 }
 
-// Set sets.
+// Set updates the held control server reference safely.
 func (h *controlServerHolder) Set(server *control.Server) {
 	if h == nil || server == nil {
 		return
@@ -35,7 +35,7 @@ func (h *controlServerHolder) Set(server *control.Server) {
 	h.server = server
 }
 
-// Stop stops.
+// Stop safely shuts down the held control server if one is active.
 func (h *controlServerHolder) Stop(ctx context.Context) error {
 	if h == nil {
 		return nil

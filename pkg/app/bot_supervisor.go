@@ -172,9 +172,11 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 		} else if oldState.DiscordStatus != currentStatuses[id] {
 			oldState.DiscordStatus = currentStatuses[id]
 			if runtime, ok := s.resolver.getRuntimes()[id]; ok && runtime.session != nil {
-				_ = runtime.session.UpdateStatusComplex(discordgo.UpdateStatusData{
+				if err := runtime.session.UpdateStatusComplex(discordgo.UpdateStatusData{
 					Status: currentStatuses[id],
-				})
+				}); err != nil {
+					log.ApplicationLogger().Warn("Failed to update discord status for bot instance", "botInstanceID", id, "error", err)
+				}
 			}
 		}
 	}
@@ -396,7 +398,9 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token, status str
 		errStr := err.Error()
 		if strings.Contains(errStr, "401") || strings.Contains(errStr, "4004") || strings.Contains(strings.ToLower(errStr), "authentication failed") {
 			log.ApplicationLogger().Warn("Bot authentication failed permanently, revoking token from configuration", "botInstanceID", instanceID, "error", err)
-			_ = s.configManager.RevokeBotInstance(instanceID, token)
+			if revokeErr := s.configManager.RevokeBotInstance(instanceID, token); revokeErr != nil {
+				log.ApplicationLogger().Error("Failed to revoke bot instance after auth failure", "botInstanceID", instanceID, "error", revokeErr)
+			}
 			break
 		}
 

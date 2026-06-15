@@ -29,7 +29,7 @@ var errControlLocalTLSUnavailable = errors.New("control local tls unavailable")
 // or the QOTD-specialized runtime. See the RunProfile* constants.
 type RunProfile string
 
-// RunProfileDiscordMain defines run profile discord main.
+// RunProfileDiscordMain is the primary runtime profile for the main discord bot process.
 const (
 	RunProfileDiscordMain RunProfile = "discordmain"
 )

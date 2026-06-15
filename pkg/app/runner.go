@@ -58,7 +58,6 @@ const (
 
 // Run bootstraps the bot with a unified flow and blocks until shutdown.
 // appName affects config/cache/log paths.
-// Run bootstraps the bot with a unified flow and blocks until shutdown.
 // Persistent cache: guild-level cleanup uses explicit (type + key prefix) deletion to safely
 // remove rows for members (prefix guildID:), guilds (key guildID), and roles (key guildID).
 func Run(appName string) error {

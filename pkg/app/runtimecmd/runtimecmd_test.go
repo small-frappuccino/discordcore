@@ -7,13 +7,15 @@ import (
 	discordcoreapp "github.com/small-frappuccino/discordcore/pkg/app"
 )
 
-func setTempHome(t *testing.T) {
+func isolateEnv(t *testing.T) {
 	t.Helper()
-	t.Setenv("HOME", t.TempDir())
+	tempDir := t.TempDir()
+	t.Setenv("PATH", tempDir)
+	t.Setenv("Path", tempDir)
 }
 
 func TestRunUsesMainProfileOptions(t *testing.T) {
-	setTempHome(t)
+	isolateEnv(t)
 
 	called := struct {
 		name string
