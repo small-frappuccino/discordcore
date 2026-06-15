@@ -26,7 +26,7 @@ import (
 type CommandHandler struct {
 	session             *discordgo.Session
 	configManager       *files.ConfigManager
-	tokenHash           string
+	botInstanceID       string
 	catalogCapabilities CommandCatalogCapabilities
 	catalogRegistrars   []CommandCatalogRegistrar
 	commandManager      *core.CommandManager
@@ -56,12 +56,12 @@ func NewCommandHandler(
 func NewCommandHandlerForBot(
 	session *discordgo.Session,
 	configManager *files.ConfigManager,
-	tokenHash string,
+	botInstanceID string,
 ) *CommandHandler {
 	return &CommandHandler{
 		session:           session,
 		configManager:     configManager,
-		tokenHash:         tokenHash,
+		botInstanceID:     botInstanceID,
 		catalogRegistrars: DefaultCommandCatalogRegistrars(),
 	}
 }
@@ -332,8 +332,8 @@ func (ch *CommandHandler) matchesGuildBotInstance(guildID string, feature string
 
 	// Commands feature is universally available to all active bots in the guild.
 	if feature == "commands" {
-		for _, tokenEnc := range guild.BotInstanceTokens {
-			if string(tokenEnc) != "" && files.TokenHash(string(tokenEnc)) == ch.tokenHash {
+		for instanceID, tokenEnc := range guild.BotInstanceTokens {
+			if string(tokenEnc) != "" && instanceID == ch.botInstanceID {
 				return true
 			}
 		}
@@ -345,5 +345,5 @@ func (ch *CommandHandler) matchesGuildBotInstance(guildID string, feature string
 	if !ok || string(tokenEnc) == "" {
 		return false
 	}
-	return files.TokenHash(string(tokenEnc)) == ch.tokenHash
+	return resolvedID == ch.botInstanceID
 }
