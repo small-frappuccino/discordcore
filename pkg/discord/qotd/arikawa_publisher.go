@@ -2,6 +2,7 @@ package qotd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -9,10 +10,42 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/state"
+	"github.com/diamondburned/arikawa/v3/utils/httputil"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	domain "github.com/small-frappuccino/discordcore/pkg/qotd"
 )
+
+func mapArikawaError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var httpErr *httputil.HTTPError
+	if errors.As(err, &httpErr) {
+		switch httpErr.Code {
+		case 10003:
+			return fmt.Errorf("%w: %s", domain.ErrDiscordUnknownChannel, httpErr.Message)
+		case 10004:
+			return fmt.Errorf("%w: %s", domain.ErrDiscordUnknownGuild, httpErr.Message)
+		case 10008:
+			return fmt.Errorf("%w: %s", domain.ErrDiscordUnknownMessage, httpErr.Message)
+		case 50001:
+			return fmt.Errorf("%w: %s", domain.ErrDiscordMissingAccess, httpErr.Message)
+		case 50013:
+			return fmt.Errorf("%w: %s", domain.ErrDiscordMissingPermissions, httpErr.Message)
+		case 50074:
+			return fmt.Errorf("%w: %s", domain.ErrDiscordCannotSendMessagesInVoice, httpErr.Message)
+		case 50007:
+			return fmt.Errorf("%w: %s", domain.ErrDiscordCannotSendMessagesToUser, httpErr.Message)
+		case 160004:
+			return fmt.Errorf("%w: %s", domain.ErrDiscordThreadAlreadyCreatedForThisMessage, httpErr.Message)
+		}
+		if httpErr.Status == 401 {
+			return fmt.Errorf("%w: %s", domain.ErrDiscordUnauthorized, httpErr.Message)
+		}
+	}
+	return err
+}
 
 // ArikawaPublisher implements the domain.Publisher interface using Arikawa.
 type ArikawaPublisher struct {
@@ -57,7 +90,7 @@ func (p *ArikawaPublisher) PublishOfficialPost(ctx context.Context, params domai
 		c := p.client.WithContext(ctx)
 		message, err := c.SendMessageComplex(discord.ChannelID(channelID), sendData)
 		if err != nil {
-			return result, fmt.Errorf("create qotd starter message: %w", err)
+			return result, fmt.Errorf("create qotd starter message: %w", mapArikawaError(err))
 		}
 		result.StarterMessageID = message.ID.String()
 		if result.PublishedAt.IsZero() {
@@ -85,7 +118,7 @@ func (p *ArikawaPublisher) PublishOfficialPost(ctx context.Context, params domai
 				// thread already exists, let's fetch message
 				existingMsg, lookupErr := c.Message(discord.ChannelID(channelID), discord.MessageID(messageID))
 				if lookupErr != nil {
-					return result, fmt.Errorf("lookup existing qotd thread after retry: %w", lookupErr)
+					return result, fmt.Errorf("lookup existing qotd thread after retry: %w", mapArikawaError(lookupErr))
 				}
 				result.ThreadID = existingMsg.ID.String() // In Discord, a thread created from a message shares the same ID as the message.
 			} else if isArikawaAutoArchiveDurationRejection(err) {
@@ -93,11 +126,11 @@ func (p *ArikawaPublisher) PublishOfficialPost(ctx context.Context, params domai
 				threadData.AutoArchiveDuration = discord.ArchiveDuration(fallbackThreadAutoArchiveMinutes)
 				thread, err = c.StartThreadWithMessage(discord.ChannelID(channelID), discord.MessageID(messageID), threadData)
 				if err != nil {
-					return result, fmt.Errorf("create qotd daily thread fallback: %w", err)
+					return result, fmt.Errorf("create qotd daily thread fallback: %w", mapArikawaError(err))
 				}
 				result.ThreadID = thread.ID.String()
 			} else {
-				return result, fmt.Errorf("create qotd daily thread: %w", err)
+				return result, fmt.Errorf("create qotd daily thread: %w", mapArikawaError(err))
 			}
 		} else {
 			result.ThreadID = thread.ID.String()
@@ -135,7 +168,7 @@ func (p *ArikawaPublisher) SetThreadState(ctx context.Context, guildID string, t
 	c := p.client.WithContext(ctx)
 	err = c.ModifyChannel(discord.ChannelID(id), data)
 	if err != nil {
-		return err
+		return mapArikawaError(err)
 	}
 	return nil
 }
@@ -148,7 +181,7 @@ func (p *ArikawaPublisher) DeleteOfficialPost(ctx context.Context, params domain
 		if err == nil {
 			err = c.DeleteChannel(discord.ChannelID(threadID), api.AuditLogReason("qotd replace"))
 			if err != nil {
-				log.ApplicationLogger().Warn("qotd skip failed to delete discord thread", "guildID", params.GuildID, "threadID", params.DiscordThreadID, "err", err)
+				log.ApplicationLogger().Warn("qotd skip failed to delete discord thread", "guildID", params.GuildID, "threadID", params.DiscordThreadID, "err", mapArikawaError(err))
 			}
 		}
 	}
@@ -159,7 +192,7 @@ func (p *ArikawaPublisher) DeleteOfficialPost(ctx context.Context, params domain
 		if errC == nil && errM == nil {
 			err := c.DeleteMessage(discord.ChannelID(channelID), discord.MessageID(messageID), "qotd replace")
 			if err != nil {
-				log.ApplicationLogger().Warn("qotd skip failed to delete starter message", "guildID", params.GuildID, "channelID", params.ChannelID, "messageID", params.DiscordStarterMessageID, "err", err)
+				log.ApplicationLogger().Warn("qotd skip failed to delete starter message", "guildID", params.GuildID, "channelID", params.ChannelID, "messageID", params.DiscordStarterMessageID, "err", mapArikawaError(err))
 			}
 		}
 	}
@@ -170,7 +203,7 @@ func (p *ArikawaPublisher) DeleteOfficialPost(ctx context.Context, params domain
 		if errC == nil && errM == nil {
 			err := c.DeleteMessage(discord.ChannelID(threadID), discord.MessageID(messageID), "qotd replace")
 			if err != nil {
-				log.ApplicationLogger().Warn("qotd skip failed to delete question list entry message", "guildID", params.GuildID, "threadID", params.QuestionListThreadID, "messageID", params.QuestionListEntryMessageID, "err", err)
+				log.ApplicationLogger().Warn("qotd skip failed to delete question list entry message", "guildID", params.GuildID, "threadID", params.QuestionListThreadID, "messageID", params.QuestionListEntryMessageID, "err", mapArikawaError(err))
 			}
 		}
 	}
