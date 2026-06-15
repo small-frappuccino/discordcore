@@ -60,10 +60,10 @@ func TestStatsServiceHandlesGuild(t *testing.T) {
 			{
 				GuildID: "guild-stats-main",
 				BotInstanceTokens: map[string]files.EncryptedString{
-					"main": "token",
+					"generic": "token",
 				},
 				FeatureRouting: map[string]string{
-					"stats": "main",
+					"stats": "generic",
 				},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
@@ -81,11 +81,10 @@ func TestStatsServiceHandlesGuild(t *testing.T) {
 			{
 				GuildID: "guild-stats-custom",
 				BotInstanceTokens: map[string]files.EncryptedString{
-					"custom": "token",
-					"main":   "token",
+					"generic": "token",
 				},
 				FeatureRouting: map[string]string{
-					"stats": "custom",
+					"stats": "generic",
 				},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
@@ -103,7 +102,7 @@ func TestStatsServiceHandlesGuild(t *testing.T) {
 			{
 				GuildID: "guild-stats-default",
 				BotInstanceTokens: map[string]files.EncryptedString{
-					"main": "token",
+					"generic": "token",
 				},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
@@ -126,26 +125,19 @@ func TestStatsServiceHandlesGuild(t *testing.T) {
 	}
 
 	logger := slog.Default()
-	mainSvc := NewStatsService(nil, cm, nil, logger, "main")
-	customSvc := NewStatsService(nil, cm, nil, logger, "custom")
+	genericSvc := NewStatsService(nil, cm, nil, logger, "generic")
 	defaultSvc := NewStatsService(nil, cm, nil, logger, "")
 
-	if !mainSvc.handlesGuild("guild-stats-main") {
-		t.Errorf("expected main service to handle guild-stats-main")
-	}
-	if customSvc.handlesGuild("guild-stats-main") {
-		t.Errorf("expected custom service to NOT handle guild-stats-main")
+	if !genericSvc.handlesGuild("guild-stats-main") {
+		t.Errorf("expected generic service to handle guild-stats-main")
 	}
 
-	if mainSvc.handlesGuild("guild-stats-custom") {
-		t.Errorf("expected main service to NOT handle guild-stats-custom")
-	}
-	if !customSvc.handlesGuild("guild-stats-custom") {
-		t.Errorf("expected custom service to handle guild-stats-custom")
+	if !genericSvc.handlesGuild("guild-stats-custom") {
+		t.Errorf("expected generic service to handle guild-stats-custom")
 	}
 
-	if mainSvc.handlesGuild("guild-stats-default") {
-		t.Errorf("expected main service to NOT handle guild-stats-default (unrouted)")
+	if genericSvc.handlesGuild("guild-stats-default") {
+		t.Errorf("expected generic service to NOT handle guild-stats-default (unrouted)")
 	}
 	if defaultSvc.handlesGuild("guild-stats-default") {
 		t.Errorf("expected default service to NOT handle guild-stats-default (unrouted sentinel)")

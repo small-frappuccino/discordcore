@@ -12,9 +12,9 @@ func TestResolveBotRuntimeCapabilitiesResolvesGranularFeatures(t *testing.T) {
 		Guilds: []files.GuildConfig{
 			{
 				GuildID:           "guild-1",
-				BotInstanceTokens: map[string]files.EncryptedString{"main": "a", "custom": "s"},
+				BotInstanceTokens: map[string]files.EncryptedString{"generic": "a"},
 				FeatureRouting: map[string]string{
-					"roles": "custom",
+					"roles": "generic",
 				},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
@@ -25,7 +25,7 @@ func TestResolveBotRuntimeCapabilitiesResolvesGranularFeatures(t *testing.T) {
 		},
 	}
 
-	customCaps := resolveBotRuntimeCapabilities(cfg, "custom")
+	customCaps := resolveBotRuntimeCapabilities(cfg, "generic")
 	if !customCaps.HasCommands() {
 		t.Errorf("Expected custom to have commands capability due to roles feature routing")
 	}
@@ -33,7 +33,7 @@ func TestResolveBotRuntimeCapabilitiesResolvesGranularFeatures(t *testing.T) {
 		t.Errorf("Expected custom to have IntentsGuildMembers due to roles feature routing")
 	}
 
-	mainCaps := resolveBotRuntimeCapabilities(cfg, "main")
+	mainCaps := resolveBotRuntimeCapabilities(cfg, "generic")
 	if !mainCaps.HasCommands() {
 		t.Errorf("Expected main to have commands capability due to default fallback for commands feature")
 	}

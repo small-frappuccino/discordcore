@@ -22,6 +22,7 @@ export function useCorePageLogic() {
   const [tokensState, setTokensState] = useState<Record<string, string>>({});
   const [statusesState, setStatusesState] = useState<Record<string, string>>({});
   const [featureRoutingState, setFeatureRoutingState] = useState<Record<string, string>>({});
+  const [deletedProfiles, setDeletedProfiles] = useState<string[]>([]);
   
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -47,11 +48,15 @@ export function useCorePageLogic() {
         feature_routing: featureRoutingState,
         bot_instance_statuses: statusesState,
       };
-      if (Object.keys(tokensState).length > 0) {
-        payload.bot_instance_tokens = tokensState;
+      if (Object.keys(tokensState).length > 0 || deletedProfiles.length > 0) {
+        payload.bot_instance_tokens = { ...tokensState };
+        for (const dp of deletedProfiles) {
+          payload.bot_instance_tokens[dp] = "";
+        }
       }
       await updateSettings({ originalWorkspace: settings?.workspace, payload });
       setTokensState({});
+      setDeletedProfiles([]);
     } catch (err) {
       const e = err as { status?: number; response?: { status?: number } };
       if (e?.response?.status === 412 || e?.status === 412) {
@@ -66,51 +71,24 @@ export function useCorePageLogic() {
   };
 
   const handleDeleteProfile = async (instanceId: string) => {
-    setIsSaving(true);
-    setSaveError(null);
-    try {
-      const currentRouting = settings?.workspace.sections.feature_routing || {};
-      const nextRouting = { ...currentRouting };
-      for (const key of Object.keys(nextRouting)) {
-        if (nextRouting[key] === instanceId) {
-          delete nextRouting[key];
-        }
+    // Just mark it for deletion locally
+    setDeletedProfiles(prev => [...prev, instanceId]);
+    
+    // Clean up local states for this instance
+    setTokensState(prev => { const next = {...prev}; delete next[instanceId]; return next; });
+    setStatusesState(prev => { const next = {...prev}; delete next[instanceId]; return next; });
+    setFeatureRoutingState(prev => {
+      const next = { ...prev };
+      for (const key of Object.keys(next)) {
+        if (next[key] === instanceId) delete next[key];
       }
-      
-      const payload = {
-        config_version: settings?.workspace.config_version ?? 0,
-        feature_routing: nextRouting,
-        bot_instance_tokens: { [instanceId]: "" },
-      };
-      
-      await updateSettings({ originalWorkspace: settings?.workspace, payload });
-      
-      // Clean up local states for this instance
-      setTokensState(prev => { const next = {...prev}; delete next[instanceId]; return next; });
-      setStatusesState(prev => { const next = {...prev}; delete next[instanceId]; return next; });
-      setFeatureRoutingState(prev => {
-        const next = { ...prev };
-        for (const key of Object.keys(next)) {
-          if (next[key] === instanceId) delete next[key];
-        }
-        return next;
-      });
-    } catch (err) {
-      const e = err as { status?: number; response?: { status?: number } };
-      if (e?.response?.status === 412 || e?.status === 412) {
-        setSaveError("Another session modified the configuration. Please refresh and try again. (Lost Update)");
-      } else {
-        const message = err instanceof Error ? err.message : "Failed to delete profile";
-        setSaveError(message);
-      }
-      throw err;
-    } finally {
-      setIsSaving(false);
-    }
+      return next;
+    });
   };
 
   const handleResetTokens = () => {
     setTokensState({});
+    setDeletedProfiles([]);
     if (settings) {
       setFeatureRoutingState(settings.workspace.sections.feature_routing || {});
       setStatusesState(settings.workspace.sections.bot_instance_statuses || {});
@@ -120,7 +98,7 @@ export function useCorePageLogic() {
 
   return {
     settings,
-    botProfiles,
+    botProfiles: botProfiles?.filter(p => !deletedProfiles.includes(p.logical_key)) || [],
     isLoading: isLoading || isProfilesLoading,
     tokensState,
     setTokensState,
@@ -131,10 +109,12 @@ export function useCorePageLogic() {
     handleUpdateTokens,
     handleDeleteProfile,
     handleResetTokens,
+    deletedProfiles,
     isSaving,
     saveError,
     clearSaveError: () => setSaveError(null),
     isDirty: Object.keys(tokensState).length > 0 || 
+             deletedProfiles.length > 0 ||
              JSON.stringify(featureRoutingState) !== JSON.stringify(settings?.workspace?.sections?.feature_routing || {}) ||
              JSON.stringify(statusesState) !== JSON.stringify(settings?.workspace?.sections?.bot_instance_statuses || {}),
   };

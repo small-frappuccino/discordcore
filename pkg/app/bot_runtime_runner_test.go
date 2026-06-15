@@ -28,7 +28,7 @@ func TestInitializeBotRuntimeSkipsCommandHandlerWhenCommandsDisabled(t *testing.
 		cfg.Guilds = []files.GuildConfig{
 			{
 				GuildID:           "guild-1",
-				BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
+				BotInstanceTokens: map[string]files.EncryptedString{"generic": "a"},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
 						Commands: new(bool(false)),
@@ -70,7 +70,7 @@ func TestInitializeBotRuntimeSkipsCommandHandlerWhenCommandsDisabled(t *testing.
 	}
 
 	runtime := &botRuntime{
-		instanceID:   "main",
+		instanceID:   "generic",
 		capabilities: botRuntimeCapabilities{qotdRuntime: true},
 		session:      session,
 	}

@@ -19,7 +19,7 @@ func TestMonitoringServiceHandleGuildCreatePersistsDormantGuild(t *testing.T) {
 	ms := &MonitoringService{
 		session:       session,
 		configManager: cfgMgr,
-		botInstanceID: "custom"}
+		botInstanceID: "generic"}
 
 	ms.handleGuildCreate(session, &discordgo.GuildCreate{
 		Guild: &discordgo.Guild{ID: guildID}})

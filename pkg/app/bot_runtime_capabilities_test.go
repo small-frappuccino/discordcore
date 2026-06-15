@@ -45,7 +45,7 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 		Guilds: []files.GuildConfig{
 			{
 				GuildID:           "main-guild",
-				BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
+				BotInstanceTokens: map[string]files.EncryptedString{"generic": "a"},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
 						Commands: new(bool(true)),
@@ -63,11 +63,11 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 			},
 			{
 				GuildID:           "custom-guild",
-				BotInstanceTokens: map[string]files.EncryptedString{"custom": "a"},
+				BotInstanceTokens: map[string]files.EncryptedString{"generic": "a"},
 				FeatureRouting: map[string]string{
-					"roles":      "custom",
-					"moderation": "custom",
-					"commands":   "custom",
+					"roles":      "generic",
+					"moderation": "generic",
+					"commands":   "generic",
 				},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
@@ -93,7 +93,7 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 		},
 	}
 
-	capabilities := resolveBotRuntimeCapabilities(cfg, "custom")
+	capabilities := resolveBotRuntimeCapabilities(cfg, "generic")
 	if !capabilities.monitoring {
 		t.Fatal("expected monitoring capability for custom runtime")
 	}
@@ -126,7 +126,7 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 func TestResolveBotRuntimeCapabilitiesWithoutGuildBindingsIsIdle(t *testing.T) {
 	t.Parallel()
 
-	capabilities := resolveBotRuntimeCapabilities(&files.BotConfig{}, "custom")
+	capabilities := resolveBotRuntimeCapabilities(&files.BotConfig{}, "generic")
 	if capabilities.monitoring || capabilities.HasCommands() || capabilities.automod || capabilities.userPrune || capabilities.qotdRuntime {
 		t.Fatalf("expected idle capabilities for unbound bot, got %+v", capabilities)
 	}
@@ -151,7 +151,7 @@ func TestResolveBotRuntimeCapabilitiesAggregatesAllGuildsForSameBotInstance(t *t
 		Guilds: []files.GuildConfig{
 			{
 				GuildID:           "g1",
-				BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
+				BotInstanceTokens: map[string]files.EncryptedString{"generic": "a"},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
 						Commands: new(bool(true)),
@@ -169,11 +169,11 @@ func TestResolveBotRuntimeCapabilitiesAggregatesAllGuildsForSameBotInstance(t *t
 			},
 			{
 				GuildID:           "g2",
-				BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
+				BotInstanceTokens: map[string]files.EncryptedString{"generic": "a"},
 				FeatureRouting: map[string]string{
-					"qotd":       "main",
-					"roles":      "main",
-					"moderation": "main",
+					"qotd":       "generic",
+					"roles":      "generic",
+					"moderation": "generic",
 				},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
@@ -195,7 +195,7 @@ func TestResolveBotRuntimeCapabilitiesAggregatesAllGuildsForSameBotInstance(t *t
 		},
 	}
 
-	capabilities := resolveBotRuntimeCapabilities(cfg, "main")
+	capabilities := resolveBotRuntimeCapabilities(cfg, "generic")
 	if !capabilities.HasCommands() {
 		t.Fatal("expected commands capability to include any guild assigned to main")
 	}

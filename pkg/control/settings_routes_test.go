@@ -367,7 +367,7 @@ func TestGuildSettingsPutSavesBotInstanceTokenForUndiscoveredGuild(t *testing.T)
 		return nil
 	}
 
-	tokens := map[string]string{"main": "bootstrap-token"}
+	tokens := map[string]string{"generic": "bootstrap-token"}
 	payload := updateGuildSettingsRequest{
 		ConfigVersion:     getCV("g2"),
 		BotInstanceTokens: &tokens,
@@ -383,7 +383,7 @@ func TestGuildSettingsPutSavesBotInstanceTokenForUndiscoveredGuild(t *testing.T)
 	if !ok {
 		t.Fatal("expected guild g2 in config")
 	}
-	if got := string(guild.BotInstanceTokens["main"]); got != "bootstrap-token" {
+	if got := string(guild.BotInstanceTokens["generic"]); got != "bootstrap-token" {
 		t.Fatalf("expected persisted bootstrap token, got %q", got)
 	}
 }
@@ -432,7 +432,7 @@ func TestGuildRegistrationPostCreatesDormantGuildWorkspace(t *testing.T) {
 	t.Parallel()
 
 	srv, cm := newControlTestServer(t)
-	setTestBotGuildBindings(srv, BotGuildBinding{GuildID: "g2", BotInstanceID: "main"})
+	setTestBotGuildBindings(srv, BotGuildBinding{GuildID: "g2", BotInstanceID: "generic"})
 	srv.SetGuildRegistrationResolver(func(_ context.Context, guildID string) error {
 		return cm.EnsureMinimalGuildConfig(guildID)
 	})

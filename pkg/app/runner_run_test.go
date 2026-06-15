@@ -97,7 +97,7 @@ func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 		Guilds: []files.GuildConfig{{
 			GuildID: "guild-1",
 			BotInstanceTokens: map[string]files.EncryptedString{
-				"main": files.EncryptedString("test-token"),
+				"generic": files.EncryptedString("test-token"),
 			},
 			Channels: files.ChannelsConfig{
 				Commands: "channel-1",
@@ -208,7 +208,7 @@ func TestRun_ShutdownAggregatesStoreAndSessionCloseErrors(t *testing.T) {
 		Guilds: []files.GuildConfig{{
 			GuildID: "guild-1",
 			BotInstanceTokens: map[string]files.EncryptedString{
-				"main": files.EncryptedString("test-token"),
+				"generic": files.EncryptedString("test-token"),
 			},
 		}},
 	}

@@ -172,7 +172,7 @@ func TestCommandHandlerSkipsGuildWithoutCommandsFeature(t *testing.T) {
 		cfg.Guilds = []files.GuildConfig{
 			{
 				GuildID:           "guild-1",
-				BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
+				BotInstanceTokens: map[string]files.EncryptedString{"generic": "a"},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
 						Commands: boolPtr(false),
@@ -194,7 +194,7 @@ func TestCommandHandlerSkipsGuildWithoutCommandsFeature(t *testing.T) {
 		t.Fatalf("seed config: %v", err)
 	}
 
-	handler := NewCommandHandlerForBot(nil, cfgMgr, "main")
+	handler := NewCommandHandlerForBot(nil, cfgMgr, "generic")
 	if handler.handlesGuild("guild-1") {
 		t.Fatal("expected slash command handler to remain disabled for commands-off guild")
 	}

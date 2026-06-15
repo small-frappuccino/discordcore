@@ -30,11 +30,12 @@ export function CorePage() {
     featureRoutingState,
     setFeatureRoutingState,
     handleUpdateTokens,
+    handleDeleteProfile,
+    handleResetTokens,
+    deletedProfiles,
     isSaving,
     saveError,
     clearSaveError,
-    handleDeleteProfile,
-    handleResetTokens,
     isDirty
   } = useCorePageLogic();
 
@@ -55,8 +56,8 @@ export function CorePage() {
     return Array.from(new Set([
       ...Object.keys(configuredTokens),
       ...addedProfiles
-    ]));
-  }, [configuredTokens, addedProfiles]);
+    ])).filter(id => !deletedProfiles.includes(id));
+  }, [configuredTokens, addedProfiles, deletedProfiles]);
 
   const [isCreatingProfile, setIsCreatingProfile] = useState(false);
   const [newProfileName, setNewProfileName] = useState("");
@@ -333,7 +334,7 @@ export function CorePage() {
         isOpen={deletingProfileId !== null}
         onClose={() => setDeletingProfileId(null)}
         title="Delete Profile"
-        description={`Are you sure you want to delete profile ${deletingProfileId}? This action will take effect immediately.`}
+        description={`Are you sure you want to delete profile ${deletingProfileId}? This will remove the profile from your unsaved changes. You must save for this to take effect.`}
         confirmText="Delete Profile"
         onConfirm={async () => {
           if (deletingProfileId) {

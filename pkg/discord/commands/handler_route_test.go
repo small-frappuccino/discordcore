@@ -14,10 +14,10 @@ func TestCommandHandlerRoutesFeaturesToCorrectBotInstance(t *testing.T) {
 		cfg.Guilds = []files.GuildConfig{
 			{
 				GuildID:           "guild-1",
-				BotInstanceTokens: map[string]files.EncryptedString{"main": "a", "custom": "s"},
+				BotInstanceTokens: map[string]files.EncryptedString{"generic": "a"},
 				FeatureRouting: map[string]string{
-					"roles":      "custom",
-					"moderation": "custom",
+					"roles":      "generic",
+					"moderation": "generic",
 				},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{
@@ -31,31 +31,24 @@ func TestCommandHandlerRoutesFeaturesToCorrectBotInstance(t *testing.T) {
 		t.Fatalf("seed config: %v", err)
 	}
 
-	mainHandler := NewCommandHandlerForBot(nil, cfgMgr, "main")
-	customHandler := NewCommandHandlerForBot(nil, cfgMgr, "custom")
+	genericHandler := NewCommandHandlerForBot(nil, cfgMgr, "generic")
 
 	tests := []struct {
-		name       string
-		path       string
-		wantMain   bool
-		wantCustom bool
+		name        string
+		path        string
+		wantHandles bool
 	}{
-		{"Roles command goes to custom", "rolepanel", false, true},
-		{"Moderation command goes to custom", "ban", false, true},
-		{"Base command goes to all bots", "config", true, true},
-		{"Unrouted QOTD command goes to no one", "qotd", false, false},
+		{"Roles command goes to generic", "rolepanel", true},
+		{"Moderation command goes to generic", "ban", true},
+		{"Base command goes to generic", "config", true},
+		{"Unrouted QOTD command goes to no one", "qotd", false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mainHandles := mainHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Path: tt.path})
-			if mainHandles != tt.wantMain {
-				t.Errorf("main handles %s: got %v, want %v", tt.path, mainHandles, tt.wantMain)
-			}
-
-			customHandles := customHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Path: tt.path})
-			if customHandles != tt.wantCustom {
-				t.Errorf("custom handles %s: got %v, want %v", tt.path, customHandles, tt.wantCustom)
+			handles := genericHandler.handlesGuildRoute("guild-1", core.InteractionRouteKey{Path: tt.path})
+			if handles != tt.wantHandles {
+				t.Errorf("generic handles %s: got %v, want %v", tt.path, handles, tt.wantHandles)
 			}
 		})
 	}

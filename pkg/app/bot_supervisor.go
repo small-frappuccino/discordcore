@@ -246,7 +246,9 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 				continue
 			}
 			if !reflect.DeepEqual(oldGuild.FeatureRouting, newGuild.FeatureRouting) ||
-				!reflect.DeepEqual(oldGuild.Features, newGuild.Features) {
+				!reflect.DeepEqual(oldGuild.Features, newGuild.Features) ||
+				!reflect.DeepEqual(oldGuild.BotInstanceTokens, newGuild.BotInstanceTokens) ||
+				!reflect.DeepEqual(oldGuild.BotInstanceStatuses, newGuild.BotInstanceStatuses) {
 
 				guildID := newGuild.GuildID
 				var activeInstances []string

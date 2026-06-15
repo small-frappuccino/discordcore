@@ -115,8 +115,8 @@ func TestRuntimeServiceLoopRunsPublishCycleOnStartAndInterval(t *testing.T) {
 	for _, guild := range []files.GuildConfig{
 		{
 			GuildID:           "g-enabled",
-			BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
-			FeatureRouting:    map[string]string{"qotd": "main"},
+			BotInstanceTokens: map[string]files.EncryptedString{"generic": "a"},
+			FeatureRouting:    map[string]string{"qotd": "generic"},
 			QOTD: files.QOTDConfig{
 				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 				Decks: []files.QOTDDeckConfig{{
@@ -129,8 +129,8 @@ func TestRuntimeServiceLoopRunsPublishCycleOnStartAndInterval(t *testing.T) {
 		},
 		{
 			GuildID:           "g-disabled",
-			BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
-			FeatureRouting:    map[string]string{"qotd": "main"},
+			BotInstanceTokens: map[string]files.EncryptedString{"generic": "a"},
+			FeatureRouting:    map[string]string{"qotd": "generic"},
 			QOTD: files.QOTDConfig{
 				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 				Decks: []files.QOTDDeckConfig{{
@@ -150,7 +150,7 @@ func TestRuntimeServiceLoopRunsPublishCycleOnStartAndInterval(t *testing.T) {
 		publishCh:   make(chan string, 8),
 		reconcileCh: make(chan string, 8),
 	}
-	service := NewRuntimeServiceForBot(&discordgo.Session{}, configManager, fake, "main")
+	service := NewRuntimeServiceForBot(&discordgo.Session{}, configManager, fake, "generic")
 	service.publishInterval = 10 * time.Millisecond
 	service.reconcileEvery = time.Hour
 	service.now = func() time.Time {
@@ -202,8 +202,8 @@ func TestRuntimeServiceCyclesUseScopedGuilds(t *testing.T) {
 	for _, guild := range []files.GuildConfig{
 		{
 			GuildID:           "g-enabled",
-			BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
-			FeatureRouting:    map[string]string{"qotd": "main"},
+			BotInstanceTokens: map[string]files.EncryptedString{"generic": "a"},
+			FeatureRouting:    map[string]string{"qotd": "generic"},
 			QOTD: files.QOTDConfig{
 				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 				Decks: []files.QOTDDeckConfig{{
@@ -216,8 +216,8 @@ func TestRuntimeServiceCyclesUseScopedGuilds(t *testing.T) {
 		},
 		{
 			GuildID:           "g-enabled-missing-channel",
-			BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
-			FeatureRouting:    map[string]string{"qotd": "main"},
+			BotInstanceTokens: map[string]files.EncryptedString{"generic": "a"},
+			FeatureRouting:    map[string]string{"qotd": "generic"},
 			QOTD: files.QOTDConfig{
 				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 				Decks: []files.QOTDDeckConfig{{
@@ -229,8 +229,8 @@ func TestRuntimeServiceCyclesUseScopedGuilds(t *testing.T) {
 		},
 		{
 			GuildID:           "g-configured-disabled",
-			BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
-			FeatureRouting:    map[string]string{"qotd": "main"},
+			BotInstanceTokens: map[string]files.EncryptedString{"generic": "a"},
+			FeatureRouting:    map[string]string{"qotd": "generic"},
 			QOTD: files.QOTDConfig{
 				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 				Decks: []files.QOTDDeckConfig{{
@@ -254,8 +254,8 @@ func TestRuntimeServiceCyclesUseScopedGuilds(t *testing.T) {
 		},
 		{
 			GuildID:           "g-empty",
-			BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
-			FeatureRouting:    map[string]string{"qotd": "main"},
+			BotInstanceTokens: map[string]files.EncryptedString{"generic": "a"},
+			FeatureRouting:    map[string]string{"qotd": "generic"},
 		},
 	} {
 		if err := configManager.AddGuildConfig(guild); err != nil {
@@ -264,7 +264,7 @@ func TestRuntimeServiceCyclesUseScopedGuilds(t *testing.T) {
 	}
 
 	fake := &fakeGuildLifecycleService{}
-	service := NewRuntimeServiceForBot(&discordgo.Session{}, configManager, fake, "main")
+	service := NewRuntimeServiceForBot(&discordgo.Session{}, configManager, fake, "generic")
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}
@@ -290,8 +290,8 @@ func TestRuntimeServiceCyclesUseQOTDDomainScopedGuilds(t *testing.T) {
 	for _, guild := range []files.GuildConfig{
 		{
 			GuildID:           "g-qotd-enabled",
-			BotInstanceTokens: map[string]files.EncryptedString{"custom": "a"},
-			FeatureRouting:    map[string]string{"qotd": "custom"},
+			BotInstanceTokens: map[string]files.EncryptedString{"generic": "a"},
+			FeatureRouting:    map[string]string{"qotd": "generic"},
 			QOTD: files.QOTDConfig{
 				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 				Decks: []files.QOTDDeckConfig{{
@@ -304,8 +304,8 @@ func TestRuntimeServiceCyclesUseQOTDDomainScopedGuilds(t *testing.T) {
 		},
 		{
 			GuildID:           "g-qotd-configured-disabled",
-			BotInstanceTokens: map[string]files.EncryptedString{"custom": "a"},
-			FeatureRouting:    map[string]string{"qotd": "custom"},
+			BotInstanceTokens: map[string]files.EncryptedString{"generic": "a"},
+			FeatureRouting:    map[string]string{"qotd": "generic"},
 			QOTD: files.QOTDConfig{
 				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 				Decks: []files.QOTDDeckConfig{{
@@ -316,9 +316,9 @@ func TestRuntimeServiceCyclesUseQOTDDomainScopedGuilds(t *testing.T) {
 			},
 		},
 		{
-			GuildID:           "g-default-main",
-			BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
-			FeatureRouting:    map[string]string{"qotd": "main"},
+			GuildID:           "g-default-other",
+			BotInstanceTokens: map[string]files.EncryptedString{"other": "a"},
+			FeatureRouting:    map[string]string{"qotd": "other"},
 			QOTD: files.QOTDConfig{
 				ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 				Decks: []files.QOTDDeckConfig{{
@@ -336,7 +336,7 @@ func TestRuntimeServiceCyclesUseQOTDDomainScopedGuilds(t *testing.T) {
 	}
 
 	fake := &fakeGuildLifecycleService{}
-	service := NewRuntimeServiceForBot(&discordgo.Session{}, configManager, fake, "custom")
+	service := NewRuntimeServiceForBot(&discordgo.Session{}, configManager, fake, "generic")
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}
@@ -365,8 +365,8 @@ func TestRuntimeServiceIdentityDoesNotDriftDuringPublish(t *testing.T) {
 	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := configManager.AddGuildConfig(files.GuildConfig{
 		GuildID:           "g-identity-lock",
-		BotInstanceTokens: map[string]files.EncryptedString{"custom": "a", "main": "b"},
-		FeatureRouting:    map[string]string{"qotd": "custom"},
+		BotInstanceTokens: map[string]files.EncryptedString{"generic": "a"},
+		FeatureRouting:    map[string]string{"qotd": "generic"},
 		QOTD: files.QOTDConfig{
 			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 			Decks: []files.QOTDDeckConfig{{
@@ -381,7 +381,7 @@ func TestRuntimeServiceIdentityDoesNotDriftDuringPublish(t *testing.T) {
 	}
 
 	fake := &fakeGuildLifecycleService{}
-	service := NewRuntimeServiceForBot(&discordgo.Session{}, configManager, fake, "custom")
+	service := NewRuntimeServiceForBot(&discordgo.Session{}, configManager, fake, "generic")
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}
@@ -389,7 +389,7 @@ func TestRuntimeServiceIdentityDoesNotDriftDuringPublish(t *testing.T) {
 	// Run multiple cycles to ensure the identity doesn't drift after the first pass
 	for i := 0; i < 5; i++ {
 		service.runPublishCycle(service.clock())
-		if service.botInstanceID != "custom" {
+		if service.botInstanceID != "generic" {
 			t.Fatalf("CRITICAL REGRESSION: service.botInstanceID drifted to %q", service.botInstanceID)
 		}
 	}
@@ -403,8 +403,8 @@ func TestRuntimeServiceRestartResumesIntervalCycles(t *testing.T) {
 	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := configManager.AddGuildConfig(files.GuildConfig{
 		GuildID:           "g-enabled",
-		BotInstanceTokens: map[string]files.EncryptedString{"main": "test-token"},
-		FeatureRouting:    map[string]string{"qotd": "main"},
+		BotInstanceTokens: map[string]files.EncryptedString{"generic": "test-token"},
+		FeatureRouting:    map[string]string{"qotd": "generic"},
 		QOTD: files.QOTDConfig{
 			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 			Decks: []files.QOTDDeckConfig{{
@@ -419,7 +419,7 @@ func TestRuntimeServiceRestartResumesIntervalCycles(t *testing.T) {
 	}
 
 	fake := &fakeGuildLifecycleService{publishCh: make(chan string, 16)}
-	service := NewRuntimeServiceForBot(&discordgo.Session{}, configManager, fake, "main")
+	service := NewRuntimeServiceForBot(&discordgo.Session{}, configManager, fake, "generic")
 	service.publishInterval = time.Hour
 	service.reconcileEvery = time.Hour
 	service.now = func() time.Time {
@@ -469,8 +469,8 @@ func TestRuntimeServiceMultipleRestartsResumeIntervalCycles(t *testing.T) {
 	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := configManager.AddGuildConfig(files.GuildConfig{
 		GuildID:           "g-enabled",
-		BotInstanceTokens: map[string]files.EncryptedString{"main": "test-token"},
-		FeatureRouting:    map[string]string{"qotd": "main"},
+		BotInstanceTokens: map[string]files.EncryptedString{"generic": "test-token"},
+		FeatureRouting:    map[string]string{"qotd": "generic"},
 		QOTD: files.QOTDConfig{
 			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 			Decks: []files.QOTDDeckConfig{{
@@ -485,7 +485,7 @@ func TestRuntimeServiceMultipleRestartsResumeIntervalCycles(t *testing.T) {
 	}
 
 	fake := &fakeGuildLifecycleService{publishCh: make(chan string, 32)}
-	service := NewRuntimeServiceForBot(&discordgo.Session{}, configManager, fake, "main")
+	service := NewRuntimeServiceForBot(&discordgo.Session{}, configManager, fake, "generic")
 	service.publishInterval = time.Hour
 	service.reconcileEvery = time.Hour
 	service.now = func() time.Time {
@@ -538,8 +538,8 @@ func TestRuntimeServiceStopCancelsInflightPublish(t *testing.T) {
 	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := configManager.AddGuildConfig(files.GuildConfig{
 		GuildID:           "g-enabled",
-		BotInstanceTokens: map[string]files.EncryptedString{"main": "test-token"},
-		FeatureRouting:    map[string]string{"qotd": "main"},
+		BotInstanceTokens: map[string]files.EncryptedString{"generic": "test-token"},
+		FeatureRouting:    map[string]string{"qotd": "generic"},
 		QOTD: files.QOTDConfig{
 			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 			Decks: []files.QOTDDeckConfig{{
@@ -558,7 +558,7 @@ func TestRuntimeServiceStopCancelsInflightPublish(t *testing.T) {
 		done:    make(chan struct{}),
 		errCh:   make(chan error, 1),
 	}
-	service := NewRuntimeServiceForBot(&discordgo.Session{}, configManager, fake, "main")
+	service := NewRuntimeServiceForBot(&discordgo.Session{}, configManager, fake, "generic")
 	service.publishInterval = time.Hour
 	service.reconcileEvery = time.Hour
 
@@ -651,8 +651,8 @@ func TestNextPublishDelayClampsToConfiguredBounds(t *testing.T) {
 			cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 			if err := cm.AddGuildConfig(files.GuildConfig{
 				GuildID:           "g",
-				BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
-				FeatureRouting:    map[string]string{"qotd": "main"},
+				BotInstanceTokens: map[string]files.EncryptedString{"generic": "a"},
+				FeatureRouting:    map[string]string{"qotd": "generic"},
 				QOTD: files.QOTDConfig{
 					ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 					Decks: []files.QOTDDeckConfig{{
@@ -671,7 +671,7 @@ func TestNextPublishDelayClampsToConfiguredBounds(t *testing.T) {
 				fake.nextPublish = map[string]time.Time{"g": tc.next}
 			}
 
-			service := NewRuntimeServiceForBot(&discordgo.Session{}, cm, fake, "main")
+			service := NewRuntimeServiceForBot(&discordgo.Session{}, cm, fake, "generic")
 			service.publishInterval = cap
 			service.now = func() time.Time { return now }
 
@@ -692,8 +692,8 @@ func TestRuntimeServiceLoopWakesAtScheduledMoment(t *testing.T) {
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := cm.AddGuildConfig(files.GuildConfig{
 		GuildID:           "g-enabled",
-		BotInstanceTokens: map[string]files.EncryptedString{"main": "test-token"},
-		FeatureRouting:    map[string]string{"qotd": "main"},
+		BotInstanceTokens: map[string]files.EncryptedString{"generic": "test-token"},
+		FeatureRouting:    map[string]string{"qotd": "generic"},
 		QOTD: files.QOTDConfig{
 			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 			Decks: []files.QOTDDeckConfig{{
@@ -719,7 +719,7 @@ func TestRuntimeServiceLoopWakesAtScheduledMoment(t *testing.T) {
 		nextPublish: map[string]time.Time{"g-enabled": scheduled},
 	}
 
-	service := NewRuntimeServiceForBot(&discordgo.Session{}, cm, fake, "main")
+	service := NewRuntimeServiceForBot(&discordgo.Session{}, cm, fake, "generic")
 	service.publishInterval = 5 * time.Second
 	service.reconcileEvery = time.Hour
 
@@ -760,8 +760,8 @@ func TestRuntimeServiceLoopFallsBackToCapWithoutSchedule(t *testing.T) {
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 	if err := cm.AddGuildConfig(files.GuildConfig{
 		GuildID:           "g-enabled",
-		BotInstanceTokens: map[string]files.EncryptedString{"main": "test-token"},
-		FeatureRouting:    map[string]string{"qotd": "main"},
+		BotInstanceTokens: map[string]files.EncryptedString{"generic": "test-token"},
+		FeatureRouting:    map[string]string{"qotd": "generic"},
 		QOTD: files.QOTDConfig{
 			ActiveDeckID: files.LegacyQOTDDefaultDeckID,
 			Decks: []files.QOTDDeckConfig{{
@@ -781,7 +781,7 @@ func TestRuntimeServiceLoopFallsBackToCapWithoutSchedule(t *testing.T) {
 		// the cap-based fallback.
 	}
 
-	service := NewRuntimeServiceForBot(&discordgo.Session{}, cm, fake, "main")
+	service := NewRuntimeServiceForBot(&discordgo.Session{}, cm, fake, "generic")
 	service.publishInterval = 10 * time.Millisecond
 	service.reconcileEvery = time.Hour
 	service.now = func() time.Time {

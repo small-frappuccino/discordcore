@@ -564,13 +564,13 @@ func TestRuntimeMetadataIsNamespacedByBot(t *testing.T) {
 	if err := store.SetHeartbeatForBot(context.Background(), "testuser", aliceHeartbeat); err != nil {
 		t.Fatalf("set alice heartbeat: %v", err)
 	}
-	if err := store.SetHeartbeatForBot(context.Background(), "custom", customHeartbeat); err != nil {
+	if err := store.SetHeartbeatForBot(context.Background(), "generic", customHeartbeat); err != nil {
 		t.Fatalf("set custom heartbeat: %v", err)
 	}
 	if err := store.SetLastEventForBot(context.Background(), "testuser", aliceLastEvent); err != nil {
 		t.Fatalf("set alice last event: %v", err)
 	}
-	if err := store.SetLastEventForBot(context.Background(), "custom", customLastEvent); err != nil {
+	if err := store.SetLastEventForBot(context.Background(), "generic", customLastEvent); err != nil {
 		t.Fatalf("set custom last event: %v", err)
 	}
 
@@ -578,7 +578,7 @@ func TestRuntimeMetadataIsNamespacedByBot(t *testing.T) {
 	if err != nil || !ok || !gotAliceHeartbeat.Equal(aliceHeartbeat) {
 		t.Fatalf("unexpected alice heartbeat: got=%v ok=%v err=%v", gotAliceHeartbeat, ok, err)
 	}
-	gotCustomHeartbeat, ok, err := store.HeartbeatForBot(context.Background(), "custom")
+	gotCustomHeartbeat, ok, err := store.HeartbeatForBot(context.Background(), "generic")
 	if err != nil || !ok || !gotCustomHeartbeat.Equal(customHeartbeat) {
 		t.Fatalf("unexpected custom heartbeat: got=%v ok=%v err=%v", gotCustomHeartbeat, ok, err)
 	}
@@ -586,7 +586,7 @@ func TestRuntimeMetadataIsNamespacedByBot(t *testing.T) {
 	if err != nil || !ok || !gotAliceLastEvent.Equal(aliceLastEvent) {
 		t.Fatalf("unexpected alice last event: got=%v ok=%v err=%v", gotAliceLastEvent, ok, err)
 	}
-	gotCustomLastEvent, ok, err := store.LastEventForBot(context.Background(), "custom")
+	gotCustomLastEvent, ok, err := store.LastEventForBot(context.Background(), "generic")
 	if err != nil || !ok || !gotCustomLastEvent.Equal(customLastEvent) {
 		t.Fatalf("unexpected custom last event: got=%v ok=%v err=%v", gotCustomLastEvent, ok, err)
 	}

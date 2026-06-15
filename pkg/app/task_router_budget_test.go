@@ -41,7 +41,7 @@ func TestResolveRuntimeTaskRouterWorkersUsesSmallestRuntimeOverride(t *testing.T
 			},
 			{
 				GuildID:           "g3",
-				BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
+				BotInstanceTokens: map[string]files.EncryptedString{"generic": "a"},
 			},
 		},
 	}

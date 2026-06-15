@@ -16,18 +16,18 @@ func TestGuildConfigLegacyMigration(t *testing.T) {
 	}{
 		{
 			name:       "migrates bot_instance_id",
-			jsonInput:  `{"guild_id": "g1", "bot_instance_id": "main"}`,
-			wantTokens: []string{"main"},
+			jsonInput:  `{"guild_id": "g1", "bot_instance_id": "generic"}`,
+			wantTokens: []string{"generic"},
 		},
 		{
 			name:       "migrates domain_bot_instance_ids",
-			jsonInput:  `{"guild_id": "g2", "domain_bot_instance_ids": {"qotd": "custom", "moderation": "admin"}}`,
-			wantTokens: []string{"custom", "admin"},
+			jsonInput:  `{"guild_id": "g2", "domain_bot_instance_ids": {"qotd": "generic", "moderation": "admin"}}`,
+			wantTokens: []string{"generic", "admin"},
 		},
 		{
 			name:       "combines both legacy fields",
-			jsonInput:  `{"guild_id": "g3", "bot_instance_id": "main", "domain_bot_instance_ids": {"qotd": "custom"}}`,
-			wantTokens: []string{"main", "custom"},
+			jsonInput:  `{"guild_id": "g3", "bot_instance_id": "generic", "domain_bot_instance_ids": {"qotd": "generic"}}`,
+			wantTokens: []string{"generic"},
 		},
 		{
 			name:       "normalizes legacy names",
@@ -41,8 +41,8 @@ func TestGuildConfigLegacyMigration(t *testing.T) {
 		},
 		{
 			name:       "does not overwrite existing canonical tokens",
-			jsonInput:  `{"guild_id": "g6", "bot_instance_id": "main", "bot_instance_tokens": {"main": "existing-token"}}`,
-			wantTokens: []string{"main"}, // we should check that "main" has "existing-token"
+			jsonInput:  `{"guild_id": "g6", "bot_instance_id": "generic", "bot_instance_tokens": {"generic": "existing-token"}}`,
+			wantTokens: []string{"generic"}, // we should check that "generic" has "existing-token"
 		},
 	}
 
@@ -72,7 +72,7 @@ func TestGuildConfigLegacyMigration(t *testing.T) {
 				if !exists {
 					t.Errorf("expected BotInstanceTokens to contain key %q", want)
 				}
-				if tc.name == "does not overwrite existing canonical tokens" && want == "main" {
+				if tc.name == "does not overwrite existing canonical tokens" && want == "generic" {
 					if string(val) != "existing-token" {
 						t.Errorf("expected token to remain 'existing-token', got %q", val)
 					}

@@ -27,7 +27,7 @@ func TestBotConfigRoundTripDropsLegacyModerationFields(t *testing.T) {
 									{
 										"id": "list-a",
 										"name": "List A",
-										"type": "custom",
+										"type": "generic",
 										"blocked_keywords": ["spam"]
 									}
 								]
@@ -44,7 +44,7 @@ func TestBotConfigRoundTripDropsLegacyModerationFields(t *testing.T) {
 							{
 								"id": "list-b",
 								"name": "List B",
-								"type": "custom",
+								"type": "generic",
 								"blocked_keywords": ["eggs"]
 							}
 						]

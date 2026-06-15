@@ -46,7 +46,7 @@ export function ConfirmationModal({
       />
       
       {/* Modal Box */}
-      <div className={`relative bg-[var(--bg-surface)] w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col mx-4 transform transition-all duration-300 ${
+      <div className={`relative bg-[#111214] border border-[var(--border-subtle)] w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col mx-4 transform transition-all duration-300 ${
         isOpen ? "scale-100 translate-y-0" : "scale-95 translate-y-4"
       }`}>
         <div className="p-6">

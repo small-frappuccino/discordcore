@@ -38,7 +38,7 @@ func TestRun_MidBootSabotageTriggersTeardown(t *testing.T) {
 		Guilds: []files.GuildConfig{{
 			GuildID: "guild-1",
 			BotInstanceTokens: map[string]files.EncryptedString{
-				"main": files.EncryptedString("test-token"),
+				"generic": files.EncryptedString("test-token"),
 			},
 		}},
 	}
@@ -160,7 +160,7 @@ func TestRun_CascadingRollbackFailures(t *testing.T) {
 		Guilds: []files.GuildConfig{{
 			GuildID: "guild-1",
 			BotInstanceTokens: map[string]files.EncryptedString{
-				"main": files.EncryptedString("test-token"),
+				"generic": files.EncryptedString("test-token"),
 			},
 		}},
 	}
