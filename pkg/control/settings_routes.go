@@ -428,9 +428,17 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 			guild.RuntimeConfig = next
 		}
 
-		// Auto-populate tokens for any routed bot instances from the global config.
-		// This permits Administrators to route features to available bots without needing the raw token.
+		// Auto-populate tokens for any routed or active bot instances from the global config.
+		// This permits Administrators to use available bots without needing the raw token.
+		activeInstances := make(map[string]struct{})
 		for _, instanceID := range guild.FeatureRouting {
+			activeInstances[instanceID] = struct{}{}
+		}
+		for instanceID := range guild.BotInstanceStatuses {
+			activeInstances[instanceID] = struct{}{}
+		}
+
+		for instanceID := range activeInstances {
 			if _, ok := guild.BotInstanceTokens[instanceID]; !ok {
 				for _, otherGuild := range cfg.Guilds {
 					if enc, ok := otherGuild.BotInstanceTokens[instanceID]; ok && string(enc) != "" {
