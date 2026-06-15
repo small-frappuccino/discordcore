@@ -54,7 +54,7 @@ func (s *Server) registerDashboardRoutes(mux *http.ServeMux) {
 	mux.Handle("/", newLandingHandler(isOAuthConfigured))
 	mux.HandleFunc("/manage", s.handleManageRoot)
 
-	// Segregação de assets públicos no roteador exigida pelo Go 1.22
+	// Public assets segregation in router required by Go 1.22
 	if assets, err := embeddedui.DistFS(); err == nil {
 		fs := http.FileServer(http.FS(assets))
 		mux.Handle("GET "+dashboardRoutePrefix+"brand/", http.StripPrefix(dashboardRoutePrefix, fs))

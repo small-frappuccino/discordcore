@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/json"
+	"errors"
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
@@ -10,6 +11,10 @@ import (
 	"github.com/small-frappuccino/discordgo"
 	"log/slog"
 )
+
+// ErrAlreadyAcknowledged is returned by handlers that have already sent a response to Discord
+// and do not want the router to log a failure.
+var ErrAlreadyAcknowledged = errors.New("interaction has already been acknowledged")
 
 // ArikawaCommandRouter manages routing and execution of Arikawa commands.
 type ArikawaCommandRouter struct {
@@ -72,7 +77,7 @@ func (r *ArikawaCommandRouter) HandleRawEvent(s *discordgo.Session, e *discordgo
 		ctx.GuildConfig = r.config.GuildConfig(interactionEvent.GuildID.String())
 	}
 
-	if err := cmd.Handle(ctx); err != nil {
+	if err := cmd.Handle(ctx); err != nil && !errors.Is(err, ErrAlreadyAcknowledged) {
 		log.ErrorLoggerRaw().Error("Arikawa command handler failed", slog.String("cmd", cmd.Name()), slog.Any("error", err))
 	}
 }

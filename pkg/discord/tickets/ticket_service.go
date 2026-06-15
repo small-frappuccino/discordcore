@@ -144,7 +144,7 @@ func (s *TicketService) HandleClose(ctx *core.Context) error {
 	// Update name and permissions (remove SendMessages from user)
 	// To do this properly, we need to find the user's overwrite and update it.
 	// We'll just deny SendMessages for the initiator (assuming we can track them, or just deny for everyone except staff).
-	// But the spec says: "Remoção atômica do bit SendMessages no bloco de permissão customizada do usuário iniciador."
+	// But the spec says: "Atomic removal of the SendMessages bit in the initiator user's custom permission block."
 	// We can try to infer the initiator if they are the one clicking close, or we can just iterate overwrites and remove SendMessages from all members.
 	// Let's iterate all member overwrites and remove SendMessages.
 	for _, ow := range ch.PermissionOverwrites {

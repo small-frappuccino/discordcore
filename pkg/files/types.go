@@ -624,8 +624,8 @@ type RPCButtonConfig struct {
 	URL   string `json:"url,omitempty"`
 }
 
-// ResolveRuntimeConfig retorna a configuração de runtime para uma guilda,
-// caindo para o global se o campo não estiver definido (zero-value).
+// ResolveRuntimeConfig returns the runtime configuration for a guild,
+// falling back to the global one if the field is not defined (zero-value).
 func (cfg *BotConfig) ResolveRuntimeConfig(guildID string) RuntimeConfig {
 	global := cfg.RuntimeConfig
 	if global.ModerationLogging == nil {

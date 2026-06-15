@@ -225,7 +225,7 @@ func TestServerDashboardRoutesDoNotInterceptAPIOrAuth(t *testing.T) {
 	if rootRec.Code != http.StatusOK {
 		t.Fatalf("expected / to serve landing page, got %d body=%q", rootRec.Code, rootRec.Body.String())
 	}
-	if body := rootRec.Body.String(); !strings.Contains(body, "Discord indisponível") {
+	if body := rootRec.Body.String(); !strings.Contains(body, "Discord unavailable") {
 		t.Fatalf("expected landing page disabled login button, got %q", body)
 	}
 

@@ -134,10 +134,11 @@ func ensureStatsEnabled(ctx *core.ArikawaContext) error {
 	}
 	features := ctx.Config.Config().ResolveFeatures(ctx.GuildID.String())
 	if !features.StatsChannels {
-		return ctx.Respond(api.InteractionResponseData{
+		_ = ctx.Respond(api.InteractionResponseData{
 			Content: option.NewNullableString("Stats channels feature is currently disabled for this server."),
 			Flags:   discord.EphemeralMessage,
 		})
+		return core.ErrAlreadyAcknowledged
 	}
 	return nil
 }
