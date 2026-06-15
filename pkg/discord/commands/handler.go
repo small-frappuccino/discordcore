@@ -136,7 +136,7 @@ func (ch *CommandHandler) Start(ctx context.Context) error {
 	ch.mu.Unlock()
 
 	// Info: Service architectural state transition log (initialization).
-	slog.Info("starting primary routine of CommandHandler",
+	slog.Info("Starting primary routine of CommandHandler",
 		slog.String("botInstanceID", ch.botInstanceID),
 	)
 
@@ -163,7 +163,7 @@ func (ch *CommandHandler) Stop(ctx context.Context) error {
 	ch.mu.Unlock()
 
 	// Info: Planned instance shutdown log.
-	slog.Info("stopping main instances of CommandHandler",
+	slog.Info("Stopping main instances of CommandHandler",
 		slog.String("botInstanceID", ch.botInstanceID),
 	)
 
@@ -172,7 +172,7 @@ func (ch *CommandHandler) Stop(ctx context.Context) error {
 
 // SetupCommands initializes and registers all bot commands
 func (ch *CommandHandler) SetupCommands() error {
-	slog.Info("starting command and route coupling",
+	slog.Info("Starting command and route coupling",
 		slog.String("botInstanceID", ch.botInstanceID),
 	)
 
@@ -220,7 +220,7 @@ func (ch *CommandHandler) SetupCommands() error {
 		return fmt.Errorf("failed to setup commands: %w", err)
 	}
 
-	slog.Info("command architecture successfully established",
+	slog.Info("Command architecture successfully established",
 		slog.String("botInstanceID", ch.botInstanceID),
 	)
 	return nil
@@ -286,7 +286,7 @@ func (ch *CommandHandler) registerCommandCatalog() error {
 		registrar.Register(ch, router)
 	}
 
-	slog.Info("command catalog fragments coupled to the router")
+	slog.Info("Command catalog fragments coupled to the router")
 	return nil
 }
 
@@ -309,7 +309,7 @@ func (ch *CommandHandler) supportsCatalogCapabilities(required CommandCatalogCap
 
 // Shutdown performs cleanup for the command handler resources
 func (ch *CommandHandler) Shutdown() error {
-	slog.Info("starting connection drain and shutdown of CommandHandler",
+	slog.Info("Starting connection drain and shutdown of CommandHandler",
 		slog.String("botInstanceID", ch.botInstanceID),
 	)
 

@@ -62,7 +62,7 @@ func NewCommandRouter(
 	}
 	router.UseMiddleware(defaultInteractionMiddlewares(router)...)
 
-	slog.Info("Architectural state transition: primary routines initialization", slog.String("component", "CommandRouter"))
+	slog.Info("Architectural state transition: Primary routines initialization", slog.String("component", "CommandRouter"))
 
 	return router
 }
@@ -198,7 +198,7 @@ func NewCommandManager(
 	session *discordgo.Session,
 	configManager *files.ConfigManager,
 ) *CommandManager {
-	slog.Info("Architectural state transition: primary routines initialization", slog.String("component", "CommandManager"))
+	slog.Info("Architectural state transition: Primary routines initialization", slog.String("component", "CommandManager"))
 
 	return &CommandManager{
 		session:       session,
@@ -249,7 +249,7 @@ func (cm *CommandManager) SetupCommands() error {
 	cm.interactionHandlerCancel = cm.session.AddHandler(cm.router.HandleInteraction)
 	cm.rawEventHandlerCancel = cm.session.AddHandler(cm.arikawaRouter.HandleRawEvent)
 
-	slog.Info("Architectural state transition: asynchronous event handler coupling", slog.String("component", "CommandManager"))
+	slog.Info("Architectural state transition: Asynchronous event handler coupling", slog.String("component", "CommandManager"))
 
 	rollback := func(err error) error {
 		if cm.interactionHandlerCancel != nil {
@@ -274,14 +274,14 @@ func (cm *CommandManager) SetupCommands() error {
 
 	// Dispatches background scan task strictly after READY signal completion
 	scheduleOrphanCleanupTask(cm.router.GetTaskRouter(), cm.session)
-	slog.Info("Architectural state transition: asynchronous primary routines initialization", slog.String("task", "orphan_cleanup"))
+	slog.Info("Architectural state transition: Asynchronous primary routines initialization", slog.String("task", "orphan_cleanup"))
 
 	return nil
 }
 
 // Shutdown unbinds command interaction handlers.
 func (cm *CommandManager) Shutdown() error {
-	slog.Info("Architectural state transition: planned shutdown of main instances", slog.String("component", "CommandManager"))
+	slog.Info("Architectural state transition: Planned shutdown of main instances", slog.String("component", "CommandManager"))
 
 	if cm.interactionHandlerCancel != nil {
 		cm.interactionHandlerCancel()
@@ -346,7 +346,7 @@ func (cm *CommandManager) syncGuildScopedCommands() error {
 		summary.add(guildSummary)
 	}
 
-	slog.Info("Architectural state transition: guild scope synchronization completion",
+	slog.Info("Architectural state transition: Guild scope synchronization completion",
 		slog.Int("created", summary.created),
 		slog.Int("updated", summary.updated),
 		slog.Int("deleted", summary.deleted),
@@ -834,7 +834,7 @@ func (gc *GroupCommand) Handle(ctx *Context) error {
 	subcmd, exists := gc.subcommands[subCommandName]
 	if !exists {
 		slog.Warn("Service degradation intercepted and mitigated",
-			slog.String("reason", "subcomando solicitado inexistente"),
+			slog.String("reason", "requested subcommand does not exist"),
 			slog.String("subcommand", subCommandName),
 			slog.String("user_id", ctx.UserID),
 		)
@@ -857,7 +857,7 @@ func (gc *GroupCommand) Handle(ctx *Context) error {
 			slog.String("subcommand", subCommandName),
 			slog.String("user_id", ctx.UserID),
 		)
-		return &CommandError{Message: "Acesso negado a este subcomando, portanto esta resposta permanece privada.", Ephemeral: true}
+		return &CommandError{Message: "Access denied to this subcommand, therefore this response remains private.", Ephemeral: true}
 	}
 
 	if subcmd.RequiresPermissions() && !gc.checker.HasPermission(ctx.GuildID, ctx.UserID) {
@@ -866,7 +866,7 @@ func (gc *GroupCommand) Handle(ctx *Context) error {
 			slog.String("subcommand", subCommandName),
 			slog.String("user_id", ctx.UserID),
 		)
-		return &CommandError{Message: "Acesso negado a este subcomando, portanto esta resposta permanece privada.", Ephemeral: true}
+		return &CommandError{Message: "Access denied to this subcommand, therefore this response remains private.", Ephemeral: true}
 	}
 
 	return subcmd.Handle(ctx)
