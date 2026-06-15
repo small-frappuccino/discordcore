@@ -165,8 +165,10 @@ func (cr *CommandRouter) shouldHandleInteraction(guildID string, routeKey Intera
 type CommandManager struct {
 	session                  *discordgo.Session
 	router                   *CommandRouter
+	arikawaRouter            *ArikawaCommandRouter
 	logger                   *log.Logger
 	interactionHandlerCancel func()
+	rawEventHandlerCancel    func()
 }
 
 type commandSyncSummary struct {
@@ -183,10 +185,16 @@ func NewCommandManager(
 	configManager *files.ConfigManager,
 ) *CommandManager {
 	return &CommandManager{
-		session: session,
-		router:  NewCommandRouter(session, configManager),
-		logger:  log.GlobalLogger,
+		session:       session,
+		router:        NewCommandRouter(session, configManager),
+		arikawaRouter: NewArikawaCommandRouter(session.Token, configManager),
+		logger:        log.GlobalLogger,
 	}
+}
+
+// GetArikawaRouter returns the Arikawa command router
+func (cm *CommandManager) GetArikawaRouter() *ArikawaCommandRouter {
+	return cm.arikawaRouter
 }
 
 // GetRouter returns the command router
@@ -206,11 +214,21 @@ func (cm *CommandManager) SetupCommands() error {
 		cm.interactionHandlerCancel()
 		cm.interactionHandlerCancel = nil
 	}
+	if cm.rawEventHandlerCancel != nil {
+		cm.rawEventHandlerCancel()
+		cm.rawEventHandlerCancel = nil
+	}
 	cm.interactionHandlerCancel = cm.session.AddHandler(cm.router.HandleInteraction)
+	cm.rawEventHandlerCancel = cm.session.AddHandler(cm.arikawaRouter.HandleRawEvent)
+
 	rollback := func(err error) error {
 		if cm.interactionHandlerCancel != nil {
 			cm.interactionHandlerCancel()
 			cm.interactionHandlerCancel = nil
+		}
+		if cm.rawEventHandlerCancel != nil {
+			cm.rawEventHandlerCancel()
+			cm.rawEventHandlerCancel = nil
 		}
 		return err
 	}
@@ -235,6 +253,10 @@ func (cm *CommandManager) Shutdown() error {
 	if cm.interactionHandlerCancel != nil {
 		cm.interactionHandlerCancel()
 		cm.interactionHandlerCancel = nil
+	}
+	if cm.rawEventHandlerCancel != nil {
+		cm.rawEventHandlerCancel()
+		cm.rawEventHandlerCancel = nil
 	}
 	return nil
 }
@@ -308,13 +330,23 @@ func (cm *CommandManager) globalDesiredCommands() map[string]*discordgo.Applicat
 		return nil
 	}
 	codeCommands := cm.router.registry.GetAllCommands()
-	desired := make(map[string]*discordgo.ApplicationCommand, len(codeCommands))
+	arikawaCommands := cm.arikawaRouter.GetAllCommands()
+
+	desired := make(map[string]*discordgo.ApplicationCommand, len(codeCommands)+len(arikawaCommands))
 	for name, cmd := range codeCommands {
 		desired[name] = &discordgo.ApplicationCommand{
 			Name:                     cmd.Name(),
 			Description:              cmd.Description(),
 			Options:                  normalizeCommandOptions(cmd.Options()),
 			DefaultMemberPermissions: commandDefaultMemberPermissions(cmd),
+		}
+	}
+	for name, cmd := range arikawaCommands {
+		desired[name] = &discordgo.ApplicationCommand{
+			Name:                     cmd.Name(),
+			Description:              cmd.Description(),
+			Options:                  normalizeCommandOptions(ConvertArikawaOptions(cmd.Options())),
+			DefaultMemberPermissions: arikawaCommandDefaultMemberPermissions(cmd),
 		}
 	}
 	return desired
@@ -325,7 +357,9 @@ func (cm *CommandManager) guildDesiredCommands(guildID string) map[string]*disco
 		return nil
 	}
 	codeCommands := cm.router.registry.GetAllCommands()
-	desired := make(map[string]*discordgo.ApplicationCommand, len(codeCommands))
+	arikawaCommands := cm.arikawaRouter.GetAllCommands()
+
+	desired := make(map[string]*discordgo.ApplicationCommand, len(codeCommands)+len(arikawaCommands))
 	for _, name := range sortedCommandNames(codeCommands) {
 		cmd := codeCommands[name]
 		if cmd == nil {
@@ -336,6 +370,19 @@ func (cm *CommandManager) guildDesiredCommands(guildID string) map[string]*disco
 			continue
 		}
 		desired[built.Name] = built
+	}
+
+	// Collect Arikawa commands (we don't have a complex Guild group builder for them yet)
+	for name, cmd := range arikawaCommands {
+		if !cm.shouldSyncSlashRoute(guildID, strings.TrimSpace(cmd.Name())) {
+			continue
+		}
+		desired[name] = &discordgo.ApplicationCommand{
+			Name:                     cmd.Name(),
+			Description:              cmd.Description(),
+			Options:                  normalizeCommandOptions(ConvertArikawaOptions(cmd.Options())),
+			DefaultMemberPermissions: arikawaCommandDefaultMemberPermissions(cmd),
+		}
 	}
 	return desired
 }
@@ -374,6 +421,14 @@ func (cm *CommandManager) buildGuildApplicationCommand(guildID string, cmd Comma
 // preserves the previous "permissionGateMiddleware only" behavior.
 func commandDefaultMemberPermissions(cmd Command) *int64 {
 	provider, ok := cmd.(DefaultMemberPermissionsProvider)
+	if !ok {
+		return nil
+	}
+	return new(int64(provider.DefaultMemberPermissions()))
+}
+
+func arikawaCommandDefaultMemberPermissions(cmd ArikawaCommand) *int64 {
+	provider, ok := cmd.(ArikawaDefaultMemberPermissionsProvider)
 	if !ok {
 		return nil
 	}

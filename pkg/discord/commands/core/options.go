@@ -116,3 +116,39 @@ func GetBooleanOption(options []*discordgo.ApplicationCommandInteractionDataOpti
 	}
 	return false
 }
+
+// ChannelID extracts a channel ID option by name
+func (e OptionList) ChannelID(name string) string {
+	for _, opt := range e {
+		if opt.Name == name {
+			if s, ok := opt.Value.(string); ok {
+				return s
+			}
+		}
+	}
+	return ""
+}
+
+// RoleID extracts a role ID option by name
+func (e OptionList) RoleID(name string) string {
+	for _, opt := range e {
+		if opt.Name == name {
+			if s, ok := opt.Value.(string); ok {
+				return s
+			}
+		}
+	}
+	return ""
+}
+
+// UserID extracts a user ID option by name
+func (e OptionList) UserID(name string) string {
+	for _, opt := range e {
+		if opt.Name == name {
+			if s, ok := opt.Value.(string); ok {
+				return s
+			}
+		}
+	}
+	return ""
+}

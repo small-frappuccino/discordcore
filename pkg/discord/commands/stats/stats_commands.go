@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/diamondburned/arikawa/v3/api"
+	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/utils/json/option"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordgo"
 )
 
 // StatsService interface for dependency injection.
@@ -30,125 +32,155 @@ func NewStatsCommands(configManager *files.ConfigManager, statsService StatsServ
 }
 
 // RegisterCommands registers the commands.
-func (c *StatsCommands) RegisterCommands(router *core.CommandRouter) {
+func (c *StatsCommands) RegisterCommands(router *core.ArikawaCommandRouter) {
 	if router == nil || c.configManager == nil {
 		return
 	}
 
-	checker := core.NewPermissionChecker(router.GetSession(), c.configManager)
-
-	statsGroup := core.NewGroupCommand(
-		"stats",
-		"Configure stats channels for this server",
-		checker,
-	)
-
-	statsGroup.AddSubCommand(newStatsAddSubCommand(c.configManager, c.statsService))
-	statsGroup.AddSubCommand(newStatsRemoveSubCommand(c.configManager, c.statsService))
-	statsGroup.AddSubCommand(newStatsListSubCommand(c.configManager))
-	statsGroup.AddSubCommand(newStatsSettingsSubCommand(c.configManager, c.statsService))
-
-	router.RegisterSlashCommand(statsGroup)
+	router.Register(&statsRootCommand{
+		configManager: c.configManager,
+		statsService:  c.statsService,
+	})
 }
 
-func ensureStatsEnabled(ctx *core.Context) error {
-	if ctx == nil || ctx.Config == nil || ctx.GuildID == "" {
-		return fmt.Errorf("invalid context")
-	}
-	cfg := ctx.Config.GuildConfig(ctx.GuildID)
-	if cfg == nil {
-		return fmt.Errorf("guild config not found")
-	}
-	features := ctx.Config.Config().ResolveFeatures(ctx.GuildID)
-	if !features.StatsChannels {
-		return &core.CommandError{
-			Message:   "Stats channels feature is currently disabled for this server.",
-			Ephemeral: true,
-		}
-	}
-	return nil
-}
-
-type statsAddSubCommand struct {
+type statsRootCommand struct {
 	configManager *files.ConfigManager
 	statsService  StatsService
 }
 
-func newStatsAddSubCommand(cm *files.ConfigManager, ss StatsService) *statsAddSubCommand {
-	return &statsAddSubCommand{configManager: cm, statsService: ss}
+func (c *statsRootCommand) Name() string              { return "stats" }
+func (c *statsRootCommand) Description() string       { return "Configure stats channels for this server" }
+func (c *statsRootCommand) RequiresGuild() bool       { return true }
+func (c *statsRootCommand) RequiresPermissions() bool { return true }
+
+func (c *statsRootCommand) DefaultMemberPermissions() discord.Permissions {
+	return discord.PermissionManageGuild
 }
 
-func (c *statsAddSubCommand) Name() string              { return "add" }
-func (c *statsAddSubCommand) Description() string       { return "Add a new stats channel" }
-func (c *statsAddSubCommand) RequiresGuild() bool       { return true }
-func (c *statsAddSubCommand) RequiresPermissions() bool { return true }
-func (c *statsAddSubCommand) Options() []*discordgo.ApplicationCommandOption {
-	return []*discordgo.ApplicationCommandOption{
-		{
-			Type:        discordgo.ApplicationCommandOptionChannel,
-			Name:        "channel",
-			Description: "The voice channel to rename",
-			Required:    true,
-			ChannelTypes: []discordgo.ChannelType{
-				discordgo.ChannelTypeGuildVoice,
+func (c *statsRootCommand) Options() []discord.CommandOption {
+	minInterval := 5.0
+	return []discord.CommandOption{
+		&discord.SubcommandOption{
+			OptionName:  "add",
+			Description: "Add a new stats channel",
+			Options: []discord.CommandOptionValue{
+				&discord.ChannelOption{
+					OptionName:  "channel",
+					Description: "The voice channel to rename",
+					Required:    true,
+					ChannelTypes: []discord.ChannelType{
+						discord.GuildVoice,
+					},
+				},
+				&discord.StringOption{
+					OptionName:  "type",
+					Description: "Type of members to count (default: All)",
+					Required:    false,
+					Choices: []discord.StringChoice{
+						{Name: "All Members", Value: "all"},
+						{Name: "Humans Only", Value: "humans"},
+						{Name: "Bots Only", Value: "bots"},
+					},
+				},
+				&discord.StringOption{
+					OptionName:  "name_template",
+					Description: "Template for the channel name (e.g. 'Members: {count}')",
+					Required:    false,
+				},
+				&discord.RoleOption{
+					OptionName:  "role_filter",
+					Description: "Only count members with this role",
+					Required:    false,
+				},
 			},
 		},
-		{
-			Type:        discordgo.ApplicationCommandOptionString,
-			Name:        "type",
-			Description: "Type of members to count (default: All)",
-			Required:    false,
-			Choices: []*discordgo.ApplicationCommandOptionChoice{
-				{Name: "All Members", Value: "all"},
-				{Name: "Humans Only", Value: "humans"},
-				{Name: "Bots Only", Value: "bots"},
+		&discord.SubcommandOption{
+			OptionName:  "remove",
+			Description: "Remove a stats channel",
+			Options: []discord.CommandOptionValue{
+				&discord.ChannelOption{
+					OptionName:  "channel",
+					Description: "The stats channel to remove",
+					Required:    true,
+					ChannelTypes: []discord.ChannelType{
+						discord.GuildVoice,
+					},
+				},
 			},
 		},
-		{
-			Type:        discordgo.ApplicationCommandOptionString,
-			Name:        "name_template",
-			Description: "Template for the channel name (e.g. 'Members: {count}')",
-			Required:    false,
+		&discord.SubcommandOption{
+			OptionName:  "list",
+			Description: "List all configured stats channels",
 		},
-		{
-			Type:        discordgo.ApplicationCommandOptionRole,
-			Name:        "role_filter",
-			Description: "Only count members with this role",
-			Required:    false,
+		&discord.SubcommandOption{
+			OptionName:  "settings",
+			Description: "Configure global stats settings",
+			Options: []discord.CommandOptionValue{
+				&discord.NumberOption{
+					OptionName:  "interval",
+					Description: "Update interval in minutes (min 5)",
+					Required:    true,
+					Min:         option.NewFloat(minInterval),
+				},
+			},
 		},
 	}
 }
-func (c *statsAddSubCommand) Handle(ctx *core.Context) error {
+
+func ensureStatsEnabled(ctx *core.ArikawaContext) error {
+	if ctx == nil || ctx.Config == nil {
+		return fmt.Errorf("invalid context")
+	}
+	features := ctx.Config.Config().ResolveFeatures(ctx.GuildID.String())
+	if !features.StatsChannels {
+		return ctx.Respond(api.InteractionResponseData{
+			Content: option.NewNullableString("Stats channels feature is currently disabled for this server."),
+			Flags:   discord.EphemeralMessage,
+		})
+	}
+	return nil
+}
+
+func (c *statsRootCommand) Handle(ctx *core.ArikawaContext) error {
+	data, ok := ctx.Interaction.Data.(*discord.CommandInteraction)
+	if !ok || len(data.Options) == 0 {
+		return nil
+	}
+
+	subcommand := data.Options[0]
+
+	switch subcommand.Name {
+	case "add":
+		return c.handleAdd(ctx, subcommand.Options)
+	case "remove":
+		return c.handleRemove(ctx, subcommand.Options)
+	case "list":
+		return c.handleList(ctx)
+	case "settings":
+		return c.handleSettings(ctx, subcommand.Options)
+	}
+	return nil
+}
+
+func (c *statsRootCommand) handleAdd(ctx *core.ArikawaContext, opts []discord.CommandInteractionOption) error {
 	if err := ensureStatsEnabled(ctx); err != nil {
 		return err
 	}
-	opts := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 
-	var channelID string
-	var roleFilter string
-	for _, opt := range core.GetSubCommandOptions(ctx.Interaction) {
-		if opt.Name == "channel" {
-			if s, ok := opt.Value.(string); ok {
-				channelID = s
-			}
-		} else if opt.Name == "role_filter" {
-			if s, ok := opt.Value.(string); ok {
-				roleFilter = s
-			}
-		}
-	}
-
+	parsedOpts := core.ArikawaOptionList(opts)
+	channelID := parsedOpts.ChannelID("channel")
 	if channelID == "" {
 		return fmt.Errorf("channel is required")
 	}
 
-	memberType := opts.String("type")
+	roleFilter := parsedOpts.RoleID("role_filter")
+	memberType := parsedOpts.String("type")
 	if memberType == "" {
 		memberType = "all"
 	}
-	nameTemplate := opts.String("name_template")
+	nameTemplate := parsedOpts.String("name_template")
 
-	err := c.configManager.UpdateGuildConfig(ctx.GuildID, func(cfg *files.GuildConfig) error {
+	err := c.configManager.UpdateGuildConfig(ctx.GuildID.String(), func(cfg *files.GuildConfig) error {
 		for i, ch := range cfg.Stats.Channels {
 			if ch.ChannelID == channelID {
 				cfg.Stats.Channels[i].MemberType = memberType
@@ -175,54 +207,26 @@ func (c *statsAddSubCommand) Handle(ctx *core.Context) error {
 		_ = c.statsService.UpdateStatsChannels(context.WithoutCancel(context.Background()))
 	}
 
-	return core.NewResponseBuilder(ctx.Session).Ephemeral().Success(ctx.Interaction, fmt.Sprintf("Updated stats configuration for <#%s>.", channelID))
+	return ctx.Respond(api.InteractionResponseData{
+		Content: option.NewNullableString(fmt.Sprintf("Updated stats configuration for <#%s>.", channelID)),
+		Flags:   discord.EphemeralMessage,
+	})
 }
 
-type statsRemoveSubCommand struct {
-	configManager *files.ConfigManager
-	statsService  StatsService
-}
-
-func newStatsRemoveSubCommand(cm *files.ConfigManager, ss StatsService) *statsRemoveSubCommand {
-	return &statsRemoveSubCommand{configManager: cm, statsService: ss}
-}
-
-func (c *statsRemoveSubCommand) Name() string              { return "remove" }
-func (c *statsRemoveSubCommand) Description() string       { return "Remove a stats channel" }
-func (c *statsRemoveSubCommand) RequiresGuild() bool       { return true }
-func (c *statsRemoveSubCommand) RequiresPermissions() bool { return true }
-func (c *statsRemoveSubCommand) Options() []*discordgo.ApplicationCommandOption {
-	return []*discordgo.ApplicationCommandOption{
-		{
-			Type:        discordgo.ApplicationCommandOptionChannel,
-			Name:        "channel",
-			Description: "The stats channel to remove",
-			Required:    true,
-			ChannelTypes: []discordgo.ChannelType{
-				discordgo.ChannelTypeGuildVoice,
-			},
-		},
-	}
-}
-func (c *statsRemoveSubCommand) Handle(ctx *core.Context) error {
+func (c *statsRootCommand) handleRemove(ctx *core.ArikawaContext, opts []discord.CommandInteractionOption) error {
 	if err := ensureStatsEnabled(ctx); err != nil {
 		return err
 	}
-	var channelID string
-	for _, opt := range core.GetSubCommandOptions(ctx.Interaction) {
-		if opt.Name == "channel" {
-			if s, ok := opt.Value.(string); ok {
-				channelID = s
-			}
-		}
-	}
+
+	parsedOpts := core.ArikawaOptionList(opts)
+	channelID := parsedOpts.ChannelID("channel")
 
 	if channelID == "" {
 		return fmt.Errorf("channel is required")
 	}
 
 	removed := false
-	err := c.configManager.UpdateGuildConfig(ctx.GuildID, func(cfg *files.GuildConfig) error {
+	err := c.configManager.UpdateGuildConfig(ctx.GuildID.String(), func(cfg *files.GuildConfig) error {
 		filtered := make([]files.StatsChannelConfig, 0, len(cfg.Stats.Channels))
 		for _, ch := range cfg.Stats.Channels {
 			if ch.ChannelID == channelID {
@@ -239,37 +243,33 @@ func (c *statsRemoveSubCommand) Handle(ctx *core.Context) error {
 		return err
 	}
 	if !removed {
-		return core.NewResponseBuilder(ctx.Session).Ephemeral().Error(ctx.Interaction, fmt.Sprintf("<#%s> is not configured as a stats channel.", channelID))
+		return ctx.Respond(api.InteractionResponseData{
+			Content: option.NewNullableString(fmt.Sprintf("<#%s> is not configured as a stats channel.", channelID)),
+			Flags:   discord.EphemeralMessage,
+		})
 	}
 
 	if c.statsService != nil {
 		_ = c.statsService.UpdateStatsChannels(context.WithoutCancel(context.Background()))
 	}
 
-	return core.NewResponseBuilder(ctx.Session).Ephemeral().Success(ctx.Interaction, fmt.Sprintf("Removed <#%s> from stats channels.", channelID))
+	return ctx.Respond(api.InteractionResponseData{
+		Content: option.NewNullableString(fmt.Sprintf("Removed <#%s> from stats channels.", channelID)),
+		Flags:   discord.EphemeralMessage,
+	})
 }
 
-type statsListSubCommand struct {
-	configManager *files.ConfigManager
-}
-
-func newStatsListSubCommand(cm *files.ConfigManager) *statsListSubCommand {
-	return &statsListSubCommand{configManager: cm}
-}
-
-func (c *statsListSubCommand) Name() string                                   { return "list" }
-func (c *statsListSubCommand) Description() string                            { return "List all configured stats channels" }
-func (c *statsListSubCommand) RequiresGuild() bool                            { return true }
-func (c *statsListSubCommand) RequiresPermissions() bool                      { return true }
-func (c *statsListSubCommand) Options() []*discordgo.ApplicationCommandOption { return nil }
-func (c *statsListSubCommand) Handle(ctx *core.Context) error {
+func (c *statsRootCommand) handleList(ctx *core.ArikawaContext) error {
 	if err := ensureStatsEnabled(ctx); err != nil {
 		return err
 	}
 
-	cfg := ctx.Config.GuildConfig(ctx.GuildID)
+	cfg := ctx.GuildConfig
 	if len(cfg.Stats.Channels) == 0 {
-		return core.NewResponseBuilder(ctx.Session).Ephemeral().Info(ctx.Interaction, "There are no stats channels configured for this server.")
+		return ctx.Respond(api.InteractionResponseData{
+			Content: option.NewNullableString("There are no stats channels configured for this server."),
+			Flags:   discord.EphemeralMessage,
+		})
 	}
 
 	var buf strings.Builder
@@ -297,78 +297,44 @@ func (c *statsListSubCommand) Handle(ctx *core.Context) error {
 		interval = 30
 	}
 
-	embed := &discordgo.MessageEmbed{
+	embed := discord.Embed{
 		Title:       "Stats Channels",
 		Description: buf.String(),
 		Color:       0x5865F2, // Discord Blurple
-		Footer: &discordgo.MessageEmbedFooter{
+		Footer: &discord.EmbedFooter{
 			Text: fmt.Sprintf("Update Interval: %d minutes", interval),
 		},
 	}
 
-	rm := core.NewResponseBuilder(ctx.Session).Build()
-	return rm.Custom(ctx.Interaction, "", []*discordgo.MessageEmbed{embed})
+	return ctx.Respond(api.InteractionResponseData{
+		Embeds: &[]discord.Embed{embed},
+		Flags:  discord.EphemeralMessage,
+	})
 }
 
-type statsSettingsSubCommand struct {
-	configManager *files.ConfigManager
-	statsService  StatsService
-}
-
-func newStatsSettingsSubCommand(cm *files.ConfigManager, ss StatsService) *statsSettingsSubCommand {
-	return &statsSettingsSubCommand{configManager: cm, statsService: ss}
-}
-
-func (c *statsSettingsSubCommand) Name() string              { return "settings" }
-func (c *statsSettingsSubCommand) Description() string       { return "Configure global stats settings" }
-func (c *statsSettingsSubCommand) RequiresGuild() bool       { return true }
-func (c *statsSettingsSubCommand) RequiresPermissions() bool { return true }
-
-var minInterval = float64(5)
-
-func (c *statsSettingsSubCommand) Options() []*discordgo.ApplicationCommandOption {
-	return []*discordgo.ApplicationCommandOption{
-		{
-			Type:        discordgo.ApplicationCommandOptionInteger,
-			Name:        "update_interval_mins",
-			Description: "How often to update the channels (in minutes)",
-			Required:    false,
-			MinValue:    &minInterval,
-			MaxValue:    1440,
-		},
-	}
-}
-func (c *statsSettingsSubCommand) Handle(ctx *core.Context) error {
+func (c *statsRootCommand) handleSettings(ctx *core.ArikawaContext, opts []discord.CommandInteractionOption) error {
 	if err := ensureStatsEnabled(ctx); err != nil {
 		return err
 	}
-	opts := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
-	intervalMins := opts.Int("update_interval_mins")
 
-	if !opts.HasOption("update_interval_mins") {
-		cfg := ctx.Config.GuildConfig(ctx.GuildID)
-		interval := cfg.Stats.UpdateIntervalMins
-		if interval <= 0 {
-			interval = 30
-		}
-		enabledStr := "Enabled"
-		if !cfg.Stats.Enabled {
-			enabledStr = "Disabled"
-		}
-		return core.NewResponseBuilder(ctx.Session).Ephemeral().Info(ctx.Interaction, fmt.Sprintf("Stats Channels are currently **%s**. Update interval is **%d minutes**.", enabledStr, interval))
+	parsedOpts := core.ArikawaOptionList(opts)
+	interval := parsedOpts.Float("interval")
+
+	if interval < 5 {
+		interval = 5
 	}
 
-	err := c.configManager.UpdateGuildConfig(ctx.GuildID, func(cfg *files.GuildConfig) error {
-		cfg.Stats.UpdateIntervalMins = int(intervalMins)
+	err := c.configManager.UpdateGuildConfig(ctx.GuildID.String(), func(cfg *files.GuildConfig) error {
+		cfg.Stats.UpdateIntervalMins = int(interval)
 		return nil
 	})
+
 	if err != nil {
 		return err
 	}
 
-	if c.statsService != nil {
-		_ = c.statsService.UpdateStatsChannels(context.WithoutCancel(context.Background()))
-	}
-
-	return core.NewResponseBuilder(ctx.Session).Ephemeral().Success(ctx.Interaction, "Stats settings updated successfully.")
+	return ctx.Respond(api.InteractionResponseData{
+		Content: option.NewNullableString(fmt.Sprintf("Stats update interval set to **%d minutes**.", int(interval))),
+		Flags:   discord.EphemeralMessage,
+	})
 }

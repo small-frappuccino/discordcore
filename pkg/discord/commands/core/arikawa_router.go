@@ -1,0 +1,101 @@
+package core
+
+import (
+	"encoding/json"
+
+	"github.com/diamondburned/arikawa/v3/api"
+	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordgo"
+)
+
+// ArikawaCommandRouter manages routing and execution of Arikawa commands.
+type ArikawaCommandRouter struct {
+	commands map[string]ArikawaCommand
+	client   *api.Client
+	config   *files.ConfigManager
+}
+
+// NewArikawaCommandRouter creates a new Arikawa router.
+func NewArikawaCommandRouter(token string, config *files.ConfigManager) *ArikawaCommandRouter {
+	return &ArikawaCommandRouter{
+		commands: make(map[string]ArikawaCommand),
+		client:   api.NewClient(token),
+		config:   config,
+	}
+}
+
+// Register registers an Arikawa command.
+func (r *ArikawaCommandRouter) Register(cmd ArikawaCommand) {
+	r.commands[cmd.Name()] = cmd
+}
+
+// HandleRawEvent intercepts raw Discord events and routes INTERACTION_CREATE natively to Arikawa.
+func (r *ArikawaCommandRouter) HandleRawEvent(s *discordgo.Session, e *discordgo.Event) {
+	if e.Type != "INTERACTION_CREATE" {
+		return
+	}
+
+	var interactionEvent discord.InteractionEvent
+	if err := json.Unmarshal(e.RawData, &interactionEvent); err != nil {
+		log.GlobalLogger.Error().Errorf("Failed to unmarshal raw interaction to Arikawa type: %v", err)
+		return
+	}
+
+	data, ok := interactionEvent.Data.(*discord.CommandInteraction)
+	if !ok {
+		return
+	}
+
+	cmd, exists := r.commands[data.Name]
+	if !exists {
+		return
+	}
+
+	ctx := &ArikawaContext{
+		Client:      r.client,
+		Interaction: &interactionEvent,
+		Config:      r.config,
+		Logger:      log.GlobalLogger,
+		GuildID:     interactionEvent.GuildID,
+	}
+
+	if interactionEvent.Member != nil {
+		ctx.UserID = interactionEvent.Member.User.ID
+	} else if interactionEvent.User != nil {
+		ctx.UserID = interactionEvent.User.ID
+	}
+
+	if r.config != nil {
+		ctx.GuildConfig = r.config.GuildConfig(interactionEvent.GuildID.String())
+	}
+
+	if err := cmd.Handle(ctx); err != nil {
+		log.GlobalLogger.Error().Errorf("Arikawa command handler failed for cmd %s: %v", cmd.Name(), err)
+	}
+}
+
+// GetAllCommands returns all registered Arikawa commands.
+func (r *ArikawaCommandRouter) GetAllCommands() map[string]ArikawaCommand {
+	return r.commands
+}
+
+// ConvertArikawaOptions converts Arikawa command options to Discordgo options via JSON bridge.
+func ConvertArikawaOptions(opts []discord.CommandOption) []*discordgo.ApplicationCommandOption {
+	if len(opts) == 0 {
+		return nil
+	}
+	b, err := json.Marshal(opts)
+	if err != nil {
+		log.GlobalLogger.Error().Errorf("Failed to marshal arikawa options: %v", err)
+		return nil
+	}
+
+	var dgoOpts []*discordgo.ApplicationCommandOption
+	if err := json.Unmarshal(b, &dgoOpts); err != nil {
+		log.GlobalLogger.Error().Errorf("Failed to unmarshal to discordgo options: %v", err)
+		return nil
+	}
+	return dgoOpts
+}
