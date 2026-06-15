@@ -111,7 +111,9 @@ func TestScheduleRuntimeWarmupQueuesMemberPhaseAfterBasePhase(t *testing.T) {
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
-		_ = worker.Shutdown(ctx)
+		if err := worker.Shutdown(ctx); err != nil {
+			t.Logf("shutdown worker in cleanup: %v", err)
+		}
 	})
 
 	scheduleRuntimeWarmup(context.Background(), runtime, nil, startupTasks)

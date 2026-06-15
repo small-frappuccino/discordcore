@@ -2,7 +2,6 @@ package app
 
 import (
 	"errors"
-	"os"
 	"runtime"
 	"strings"
 	"sync/atomic"
@@ -17,13 +16,7 @@ import (
 func TestRun_MidBootSabotageTriggersTeardown(t *testing.T) {
 	const appName = "discordmain-rollback-test"
 
-	appDataDir, err := os.MkdirTemp("", "discordmain-rollback-test-*")
-	if err != nil {
-		t.Fatalf("create APPDATA temp dir: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.RemoveAll(appDataDir)
-	})
+	appDataDir := t.TempDir()
 	t.Setenv("APPDATA", appDataDir)
 
 	dbCfg, configStore := openRunnerConfigStore(t)
@@ -145,13 +138,7 @@ func TestRun_MidBootSabotageTriggersTeardown(t *testing.T) {
 func TestRun_CascadingRollbackFailures(t *testing.T) {
 	const appName = "discordmain-cascading-rollback-test"
 
-	appDataDir, err := os.MkdirTemp("", "discordmain-cascading-rollback-test-*")
-	if err != nil {
-		t.Fatalf("create APPDATA temp dir: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.RemoveAll(appDataDir)
-	})
+	appDataDir := t.TempDir()
 	t.Setenv("APPDATA", appDataDir)
 
 	dbCfg, configStore := openRunnerConfigStore(t)
