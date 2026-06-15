@@ -743,4 +743,13 @@ var postgresMigrations = []migration{
 			`DROP TABLE IF EXISTS guild_configs`,
 		},
 	},
+	{
+		Version: 26,
+		UpSQL: []string{
+			`CREATE INDEX IF NOT EXISTS idx_qotd_official_posts_pending_recovery ON qotd_official_posts(guild_id, state, updated_at) WHERE archived_at IS NULL`,
+		},
+		DownSQL: []string{
+			`DROP INDEX IF EXISTS idx_qotd_official_posts_pending_recovery`,
+		},
+	},
 }
