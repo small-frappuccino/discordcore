@@ -30,7 +30,6 @@ func TestNewMinimalGuildConfigDisablesAllFeatures(t *testing.T) {
 	resolved := cfg.ResolveFeatures("guild-new")
 	if resolved.Services.Monitoring ||
 		resolved.Services.Automod ||
-		resolved.Services.Commands ||
 		resolved.Logging.AvatarLogging ||
 		resolved.Logging.RoleUpdate ||
 		resolved.Logging.MemberJoin ||
@@ -77,8 +76,8 @@ func TestEnsureMinimalGuildConfigPersistsDormantGuild(t *testing.T) {
 	if len(snapshot.Guilds) != 1 {
 		t.Fatalf("expected one guild in snapshot, got %+v", snapshot.Guilds)
 	}
-	if resolved := snapshot.ResolveFeatures("guild-new"); resolved.Services.Commands {
-		t.Fatalf("expected dormant guild commands feature to be disabled, got %+v", resolved.Services)
+	if resolved := snapshot.ResolveFeatures("guild-new"); !resolved.Services.Commands {
+		t.Fatalf("expected dormant guild commands feature to be enabled by default, got %+v", resolved.Services)
 	}
 
 	loaded, err := store.Load()
@@ -138,7 +137,7 @@ func TestEnsureMinimalGuildConfigPersistsDormantGuildToPostgres(t *testing.T) {
 	if loaded.Guilds[0].GuildID != "guild-pg" {
 		t.Fatalf("unexpected postgres-backed guild config: %+v", loaded.Guilds[0])
 	}
-	if resolved := loaded.ResolveFeatures("guild-pg"); resolved.Services.Monitoring || resolved.Services.Commands || resolved.Logging.MemberJoin {
+	if resolved := loaded.ResolveFeatures("guild-pg"); resolved.Services.Monitoring || resolved.Logging.MemberJoin {
 		t.Fatalf("expected postgres-backed dormant guild features to stay disabled, got %+v", resolved)
 	}
 }

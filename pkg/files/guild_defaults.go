@@ -13,6 +13,11 @@ func NewMinimalGuildConfig(guildID string) GuildConfig {
 
 	features := FeatureToggles{}
 	for _, spec := range featureRegistry {
+		// Do not forcefully disable the core command router. If we disable it, the bot
+		// strips its own command list out of Discord entirely when joining a new guild.
+		if spec.ID == "services.commands" {
+			continue
+		}
 		features.SetToggle(spec.ID, boolPtr(disabled))
 	}
 

@@ -36,7 +36,7 @@ func TestMonitoringServiceHandleGuildCreatePersistsDormantGuild(t *testing.T) {
 	}
 
 	resolved := cfg.ResolveFeatures(guildID)
-	if resolved.Services.Monitoring || resolved.Services.Commands || resolved.Logging.MemberJoin || resolved.StatsChannels || resolved.UserPrune {
+	if resolved.Services.Monitoring || resolved.Logging.MemberJoin || resolved.StatsChannels || resolved.UserPrune {
 		t.Fatalf("expected guild create to persist dormant feature defaults, got %+v", resolved)
 	}
 }
