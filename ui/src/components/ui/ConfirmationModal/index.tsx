@@ -33,18 +33,22 @@ export function ConfirmationModal({
     };
   }, [isOpen]);
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div 
+      className={`fixed inset-0 z-50 flex items-center justify-center transition-all duration-300 ${
+        isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+      }`}
+    >
       {/* Backdrop */}
       <div 
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+        className="absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity"
         onClick={() => !isConfirming && onClose()}
       />
       
       {/* Modal Box */}
-      <div className="relative bg-[var(--bg-surface)] w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col mx-4 transform transition-all">
+      <div className={`relative bg-[var(--bg-surface)] w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col mx-4 transform transition-all duration-300 ${
+        isOpen ? "scale-100 translate-y-0" : "scale-95 translate-y-4"
+      }`}>
         <div className="p-6">
           <h2 className="text-xl font-bold text-[var(--text-primary)] mb-3">{title}</h2>
           <div className="text-[var(--text-secondary)] text-sm leading-relaxed">

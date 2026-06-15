@@ -17,10 +17,14 @@ export function SaveActionBar({
   saveError,
   onClearError
 }: SaveActionBarProps) {
-  if (!isDirty && !saveError) return null;
+  const isVisible = isDirty || saveError;
 
   return (
-    <div className={`fixed bottom-0 left-0 right-0 p-4 md:p-6 pointer-events-none z-40 transition-transform duration-300 ease-out transform translate-y-0`}>
+    <div 
+      className={`fixed bottom-0 left-0 right-0 p-4 md:p-6 pointer-events-none z-40 transition-all duration-300 ease-in-out transform ${
+        isVisible ? "translate-y-0 opacity-100" : "translate-y-[120%] opacity-0"
+      }`}
+    >
       <div className="max-w-4xl mx-auto pointer-events-auto">
         <div className="bg-[var(--bg-surface-active)] border border-[var(--border-subtle)] shadow-xl rounded-xl p-3 md:p-4 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex-1 min-w-0">
@@ -48,7 +52,7 @@ export function SaveActionBar({
                 else onReset();
               }}
               disabled={isSaving}
-              className="text-[var(--text-primary)] hover:underline"
+              className="text-[var(--text-primary)] hover:underline transition-colors"
             >
               {saveError ? "Dismiss" : "Reset"}
             </Button>
@@ -57,7 +61,7 @@ export function SaveActionBar({
               onClick={onSave} 
               isLoading={isSaving}
               disabled={isSaving}
-              className="bg-[#23a559] hover:bg-[#1f934f] min-w-[120px]" // Discord-like green
+              className="bg-[#23a559] hover:bg-[#1f934f] min-w-[120px] transition-all" // Discord-like green
             >
               Save Changes
             </Button>

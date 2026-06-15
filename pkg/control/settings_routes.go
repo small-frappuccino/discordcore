@@ -428,6 +428,22 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 			guild.RuntimeConfig = next
 		}
 
+		// Auto-populate tokens for any routed bot instances from the global config.
+		// This permits Administrators to route features to available bots without needing the raw token.
+		for _, instanceID := range guild.FeatureRouting {
+			if _, ok := guild.BotInstanceTokens[instanceID]; !ok {
+				for _, otherGuild := range cfg.Guilds {
+					if enc, ok := otherGuild.BotInstanceTokens[instanceID]; ok && string(enc) != "" {
+						if guild.BotInstanceTokens == nil {
+							guild.BotInstanceTokens = make(map[string]files.EncryptedString)
+						}
+						guild.BotInstanceTokens[instanceID] = enc
+						break
+					}
+				}
+			}
+		}
+
 		for feature, instanceID := range guild.FeatureRouting {
 			if _, ok := guild.BotInstanceTokens[instanceID]; !ok {
 				delete(guild.FeatureRouting, feature)
