@@ -347,7 +347,7 @@ func (mgr *ConfigManager) DetectGuildsForBot(session *discordgo.Session, botInst
 		}
 
 		// Determine allowed roles
-		roles := FindAdminRoles(session, g.ID, fullGuild.OwnerID)
+		roles := FindAdminRoles(session, g.ID)
 
 		entryLeaveID := FindEntryLeaveChannel(session, g.ID)
 		if entryLeaveID == "" {
@@ -403,7 +403,7 @@ func (mgr *ConfigManager) RegisterGuildForBot(session *discordgo.Session, guildI
 	if channelID == "" {
 		return fmt.Errorf("%w: "+ErrNoSuitableChannelMsg, ErrGuildBootstrapPrerequisite, guild.Name)
 	}
-	roles := FindAdminRoles(session, guildID, guild.OwnerID)
+	roles := FindAdminRoles(session, guildID)
 	entryLeaveID := FindEntryLeaveChannel(session, guildID)
 	if entryLeaveID == "" {
 		entryLeaveID = channelID
@@ -518,7 +518,7 @@ func HasSendPermission(session *discordgo.Session, channelID string) bool {
 }
 
 // FindAdminRoles finds admin roles.
-func FindAdminRoles(session *discordgo.Session, guildID, ownerID string) []string {
+func FindAdminRoles(session *discordgo.Session, guildID string) []string {
 	var allowedRoles []string
 	roles, err := session.GuildRoles(guildID)
 	if err == nil {
@@ -526,11 +526,6 @@ func FindAdminRoles(session *discordgo.Session, guildID, ownerID string) []strin
 			if role.Name != "@everyone" && (role.Permissions&discordgo.PermissionAdministrator) != 0 {
 				allowedRoles = append(allowedRoles, role.ID)
 			}
-		}
-	}
-	if len(allowedRoles) == 0 && ownerID != "" {
-		if member, err := session.GuildMember(guildID, ownerID); err == nil && len(member.Roles) > 0 {
-			allowedRoles = append(allowedRoles, member.Roles[0])
 		}
 	}
 	return allowedRoles

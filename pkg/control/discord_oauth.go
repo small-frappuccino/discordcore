@@ -122,7 +122,6 @@ type discordOAuthGuild struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	Icon        string `json:"icon,omitempty"`
-	Owner       bool   `json:"owner"`
 	Permissions int64  `json:"permissions"`
 }
 
@@ -132,7 +131,6 @@ func (g *discordOAuthGuild) UnmarshalJSON(data []byte) error {
 		ID          string          `json:"id"`
 		Name        string          `json:"name"`
 		Icon        string          `json:"icon,omitempty"`
-		Owner       bool            `json:"owner"`
 		Permissions json.RawMessage `json:"permissions"`
 	}
 
@@ -149,7 +147,6 @@ func (g *discordOAuthGuild) UnmarshalJSON(data []byte) error {
 	g.ID = raw.ID
 	g.Name = raw.Name
 	g.Icon = raw.Icon
-	g.Owner = raw.Owner
 	g.Permissions = permissions
 	return nil
 }

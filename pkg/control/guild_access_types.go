@@ -19,7 +19,6 @@ type accessibleGuildResponse struct {
 	Name        string           `json:"name"`
 	Icon        string           `json:"icon,omitempty"`
 	BotPresent  bool             `json:"bot_present"`
-	Owner       bool             `json:"owner"`
 	Permissions int64            `json:"permissions"`
 	AccessLevel guildAccessLevel `json:"access_level"`
 }

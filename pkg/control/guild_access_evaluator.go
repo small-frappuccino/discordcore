@@ -97,9 +97,6 @@ func matchesAnyRole(memberRoleSet map[string]struct{}, roleIDs []string) bool {
 }
 
 func isGuildManageableByUser(guild discordOAuthGuild) bool {
-	if guild.Owner {
-		return true
-	}
 	if guild.Permissions&discordgo.PermissionAdministrator == discordgo.PermissionAdministrator {
 		return true
 	}

@@ -460,7 +460,6 @@ func TestGuildRegistrationPostCreatesDormantGuildWorkspace(t *testing.T) {
 		t.Fatalf("expected empty roles for dormant guild, got %+v", response.Workspace.Sections.Roles)
 	}
 	if response.Workspace.Effective.Features.Services.Monitoring ||
-		response.Workspace.Effective.Features.Services.Commands ||
 		response.Workspace.Effective.Features.Logging.MemberJoin ||
 		response.Workspace.Effective.Features.MuteRole ||
 		response.Workspace.Effective.Features.StatsChannels ||

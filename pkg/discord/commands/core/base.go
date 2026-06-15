@@ -41,17 +41,6 @@ func (cb *ContextBuilder) BuildContextWithContext(goCtx context.Context, i *disc
 		guildConfig = cb.configManager.GuildConfig(guildID)
 	}
 
-	isOwner := false
-	if guildID != "" && userID != "" {
-		checker := cb.checker
-		if checker == nil && cb.session != nil && cb.configManager != nil {
-			checker = NewPermissionChecker(cb.session, cb.configManager)
-		}
-		if checker != nil {
-			isOwner = checker.IsOwner(guildID, userID)
-		}
-	}
-
 	logger := log.GlobalLogger
 
 	ctx := &Context{
@@ -61,7 +50,7 @@ func (cb *ContextBuilder) BuildContextWithContext(goCtx context.Context, i *disc
 		Logger:      logger,
 		GuildID:     guildID,
 		UserID:      userID,
-		IsOwner:     isOwner,
+
 		GuildConfig: guildConfig,
 		ctx:         goCtx,
 	}

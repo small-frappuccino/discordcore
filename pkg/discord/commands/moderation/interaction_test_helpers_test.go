@@ -105,8 +105,21 @@ func newModerationCommandTestRouter(t *testing.T, session *discordgo.Session, gu
 	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: guildID}); err != nil {
 		t.Fatalf("failed to add guild config: %v", err)
 	}
-	if err := session.State.GuildAdd(&discordgo.Guild{ID: guildID, OwnerID: ownerID}); err != nil {
+	if err := session.State.GuildAdd(&discordgo.Guild{
+		ID:      guildID,
+		OwnerID: ownerID,
+		Roles: []*discordgo.Role{
+			{ID: "admin-role", Permissions: discordgo.PermissionAdministrator},
+		},
+	}); err != nil {
 		t.Fatalf("failed to add guild to state: %v", err)
+	}
+	if err := session.State.MemberAdd(&discordgo.Member{
+		GuildID: guildID,
+		User:    &discordgo.User{ID: ownerID},
+		Roles:   []string{"admin-role"},
+	}); err != nil {
+		t.Fatalf("failed to add member to state: %v", err)
 	}
 
 	router := core.NewCommandRouter(session, cm)
@@ -125,7 +138,10 @@ func newModerationSlashInteraction(
 			Token:   "token",
 			Type:    discordgo.InteractionApplicationCommand,
 			GuildID: guildID,
-			Member:  &discordgo.Member{User: &discordgo.User{ID: userID}},
+			Member: &discordgo.Member{
+				User:  &discordgo.User{ID: userID},
+				Roles: []string{"admin-role"},
+			},
 			Data: discordgo.ApplicationCommandInteractionData{
 				Name:    commandName,
 				Options: options,

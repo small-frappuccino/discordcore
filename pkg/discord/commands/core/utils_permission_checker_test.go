@@ -1,16 +1,11 @@
 package core
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
-	"sync/atomic"
 	"testing"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/storage/storagetest"
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -43,60 +38,6 @@ func newPermissionCheckerTestSession(t *testing.T, handler http.HandlerFunc) *di
 		t.Fatalf("create discord session: %v", err)
 	}
 	return session
-}
-
-func TestPermissionCheckerGetOwnerID_StoreWriteFailureKeepsRESTFallbackAndCache(t *testing.T) {
-	var guildCalls int32
-	session := newPermissionCheckerTestSession(t, func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/guilds/g1") {
-			atomic.AddInt32(&guildCalls, 1)
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id":       "g1",
-				"name":     "Guild 1",
-				"owner_id": "owner-1",
-			})
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]any{})
-	})
-
-	cfg := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
-	checker := NewPermissionChecker(session, cfg)
-
-	// Failing store forces Get/SetGuildOwnerID errors, so REST is the only path.
-	checker.SetStore(storagetest.NewFailingStore())
-
-	unifiedCache := cache.NewUnifiedCache(cache.DefaultCacheConfig())
-	t.Cleanup(unifiedCache.Stop)
-	checker.SetCache(unifiedCache)
-
-	ownerID, ok, err := checker.ResolveOwnerID("g1")
-	if err != nil {
-		t.Fatalf("resolve owner id: %v", err)
-	}
-	if !ok {
-		t.Fatalf("expected owner resolution success")
-	}
-	if ownerID != "owner-1" {
-		t.Fatalf("expected owner-1, got %q", ownerID)
-	}
-
-	ownerID, ok, err = checker.ResolveOwnerID("g1")
-	if err != nil {
-		t.Fatalf("resolve owner id from cache: %v", err)
-	}
-	if !ok {
-		t.Fatalf("expected cached owner resolution success")
-	}
-	if ownerID != "owner-1" {
-		t.Fatalf("expected owner-1 on cached read, got %q", ownerID)
-	}
-
-	if got := atomic.LoadInt32(&guildCalls); got != 1 {
-		t.Fatalf("expected one REST guild lookup, got %d", got)
-	}
 }
 
 func TestPermissionCheckerHasPermissionAllowsAdministratorRoleWithoutAllowedRoles(t *testing.T) {

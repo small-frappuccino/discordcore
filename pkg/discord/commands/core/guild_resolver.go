@@ -73,54 +73,37 @@ func (pc *PermissionChecker) HasPermission(guildID, userID string) bool {
 }
 
 func (pc *PermissionChecker) hasAdministrativeAccess(guildID, userID string) bool {
-	ownerID, ownerFound, err := pc.ResolveOwnerID(guildID)
-	if err != nil {
-		log.ErrorLoggerRaw().Error(
-			"Permission checker failed to resolve guild owner",
-			"operation", "commands.permission.has_permission.resolve_owner",
-			"guildID", guildID,
-			"userID", userID,
-			"err", err,
-		)
-	}
-	if err == nil && ownerFound && ownerID == userID {
-		return true
-	}
-
 	member, memberFound, err := pc.ResolveMember(guildID, userID)
-	if err != nil {
-		log.ErrorLoggerRaw().Error(
-			"Permission checker failed to resolve guild member for admin access",
-			"operation", "commands.permission.has_permission.resolve_member_admin",
-			"guildID", guildID,
-			"userID", userID,
-			"err", err,
-		)
-		return false
-	}
-	if !memberFound || member == nil {
+	if err != nil || !memberFound {
+		fmt.Printf("DEBUG hasAdministrativeAccess: member not found for %s/%s err=%v\n", guildID, userID, err)
 		return false
 	}
 
-	roles, err := pc.ResolveRoles(guildID)
-	if err != nil {
-		log.ErrorLoggerRaw().Error(
-			"Permission checker failed to resolve guild roles for admin access",
-			"operation", "commands.permission.has_permission.resolve_roles_admin",
-			"guildID", guildID,
-			"userID", userID,
-			"err", err,
-		)
-		return false
+	for _, roleID := range member.Roles {
+		if roleID == guildID {
+			continue // skip @everyone
+		}
+		hasAdmin, err := pc.roleHasAdmin(guildID, roleID)
+		if err == nil && hasAdmin {
+			fmt.Printf("DEBUG hasAdministrativeAccess: role %s has admin for %s/%s\n", roleID, guildID, userID)
+			return true
+		}
+		fmt.Printf("DEBUG hasAdministrativeAccess: role %s NO admin for %s/%s (err=%v hasAdmin=%v)\n", roleID, guildID, userID, err, hasAdmin)
 	}
-	permissions := memberPermissionBits(member, roles, guildID)
-	if permissions&discordgo.PermissionAdministrator == discordgo.PermissionAdministrator {
-		return true
-	}
-	if permissions&discordgo.PermissionManageGuild == discordgo.PermissionManageGuild {
-		return true
-	}
+	fmt.Printf("DEBUG hasAdministrativeAccess: no admin roles for %s/%s\n", guildID, userID)
 	return false
+}
+
+func (pc *PermissionChecker) roleHasAdmin(guildID, roleID string) (bool, error) {
+	roles, err := pc.ResolveRoles(guildID)
+	if err == nil {
+		for _, r := range roles {
+			if r.ID == roleID {
+				return r.Permissions&discordgo.PermissionAdministrator != 0 || r.Permissions&discordgo.PermissionManageGuild != 0, nil
+			}
+		}
+	}
+	return false, nil
 }
 
 func memberPermissionBits(member *discordgo.Member, roles []*discordgo.Role, guildID string) int64 {
@@ -165,111 +148,6 @@ func (pc *PermissionChecker) HasRole(guildID, userID, roleID string) bool {
 		return false
 	}
 	return slices.Contains(member.Roles, roleID)
-}
-
-// IsOwner checks whether the user is the server owner
-func (pc *PermissionChecker) IsOwner(guildID, userID string) bool {
-	if guildID == "" {
-		return false
-	}
-	ownerID, ok, err := pc.ResolveOwnerID(guildID)
-	if err != nil {
-		log.ErrorLoggerRaw().Error(
-			"Permission checker failed to resolve guild owner for owner check",
-			"operation", "commands.permission.is_owner.resolve_owner",
-			"guildID", guildID,
-			"userID", userID,
-			"err", err,
-		)
-		return false
-	}
-	if !ok {
-		return false
-	}
-	return ownerID == userID
-}
-
-// ResolveOwnerID resolves a guild owner ID using cache -> state -> store -> REST.
-// It returns (ownerID, true, nil) when found, ("", false, nil) when not found,
-// and a non-nil error when resolution fails in a terminal path.
-func (pc *PermissionChecker) ResolveOwnerID(guildID string) (string, bool, error) {
-	if pc == nil || guildID == "" {
-		return "", false, nil
-	}
-
-	if pc.cache != nil {
-		if g, ok := pc.cache.GetGuild(guildID); ok && g != nil && g.OwnerID != "" {
-			return g.OwnerID, true, nil
-		}
-	}
-
-	if pc.session != nil && pc.session.State != nil {
-		if g, _ := pc.session.State.Guild(guildID); g != nil && g.OwnerID != "" {
-			if pc.cache != nil {
-				pc.cache.SetGuild(guildID, g)
-			}
-			if pc.store != nil {
-				if err := pc.store.SetGuildOwnerID(guildID, g.OwnerID); err != nil {
-					log.ErrorLoggerRaw().Error(
-						"Guild resolver failed to persist owner from state",
-						"operation", "commands.guild_resolver.resolve_owner.store_write",
-						"guildID", guildID,
-						"ownerID", g.OwnerID,
-						"source", "state",
-						"err", err,
-					)
-				}
-			}
-			return g.OwnerID, true, nil
-		}
-	}
-
-	if pc.store != nil {
-		ownerID, ok, err := pc.store.GetGuildOwnerID(guildID)
-		if err != nil {
-			log.ErrorLoggerRaw().Error(
-				"Guild resolver failed to read owner from store",
-				"operation", "commands.guild_resolver.resolve_owner.store_read",
-				"guildID", guildID,
-				"err", err,
-			)
-		} else if ok && ownerID != "" {
-			return ownerID, true, nil
-		}
-	}
-
-	if pc.session == nil {
-		return "", false, fmt.Errorf("resolve owner id for guild %s: session not ready", guildID)
-	}
-
-	guild, err := pc.session.Guild(guildID)
-	if err != nil {
-		if isNotFoundRESTError(err) {
-			return "", false, nil
-		}
-		return "", false, fmt.Errorf("resolve owner id via rest for guild %s: %w", guildID, err)
-	}
-	if guild == nil || guild.OwnerID == "" {
-		return "", false, nil
-	}
-
-	if pc.cache != nil {
-		pc.cache.SetGuild(guildID, guild)
-	}
-	if pc.store != nil {
-		if err := pc.store.SetGuildOwnerID(guildID, guild.OwnerID); err != nil {
-			log.ErrorLoggerRaw().Error(
-				"Guild resolver failed to persist owner from rest",
-				"operation", "commands.guild_resolver.resolve_owner.store_write",
-				"guildID", guildID,
-				"ownerID", guild.OwnerID,
-				"source", "rest",
-				"err", err,
-			)
-		}
-	}
-
-	return guild.OwnerID, true, nil
 }
 
 // ResolveMember resolves a guild member using cache -> state -> REST.

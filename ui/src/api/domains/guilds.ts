@@ -7,7 +7,6 @@ export interface AccessibleGuild {
   name: string;
   icon?: string;
   bot_present?: boolean;
-  owner: boolean;
   permissions: number;
   access_level: DashboardGuildAccessLevel;
 }

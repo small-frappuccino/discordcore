@@ -52,7 +52,6 @@ type guildRegistryEntry struct {
 	GuildID                 string   `json:"guild_id"`
 	Name                    string   `json:"name,omitempty"`
 	Icon                    string   `json:"icon,omitempty"`
-	Owner                   bool     `json:"owner"`
 	Permissions             int64    `json:"permissions"`
 	Configured              bool     `json:"configured"`
 	AvailableBotInstanceIDs []string `json:"available_bot_instance_ids,omitempty"`
@@ -68,7 +67,6 @@ type guildRegistrySource struct {
 	GuildID                 string
 	Name                    string
 	Icon                    string
-	Owner                   bool
 	Permissions             int64
 	AvailableBotInstanceIDs []string
 }
@@ -418,7 +416,6 @@ func buildGuildRegistryWorkspace(
 			GuildID:                 guildID,
 			Name:                    strings.TrimSpace(source.Name),
 			Icon:                    strings.TrimSpace(source.Icon),
-			Owner:                   source.Owner,
 			Permissions:             source.Permissions,
 			AvailableBotInstanceIDs: slices.Clone(source.AvailableBotInstanceIDs),
 		}

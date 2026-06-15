@@ -334,7 +334,7 @@ func TestDiscordOAuthCallbackRedirectsToManageWhenRequested(t *testing.T) {
 			_, _ = w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User","avatar":"abc123","discriminator":"0001"}`))
 		case "/users/@me/guilds":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":true,"permissions":"0"}]`))
+			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","permissions":"8"}]`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -395,7 +395,7 @@ func TestDiscordOAuthCallbackRedirectsToRootWhenRequested(t *testing.T) {
 			_, _ = w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User","avatar":"abc123","discriminator":"0001"}`))
 		case "/users/@me/guilds":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":true,"permissions":"0"}]`))
+			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","permissions":"8"}]`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -471,7 +471,7 @@ func TestDiscordOAuthCallbackCreatesSessionAndHidesTokenPayload(t *testing.T) {
 			_, _ = w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User","avatar":"abc123","discriminator":"0001"}`))
 		case "/users/@me/guilds":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":true,"permissions":"0"}]`))
+			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","permissions":"8"}]`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -673,7 +673,7 @@ func TestGuildRoutesRequireCSRFForOAuthSessionMutations(t *testing.T) {
 			_, _ = w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User"}`))
 		case "/users/@me/guilds":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":true,"permissions":"0"}]`))
+			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","permissions":"8"}]`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -794,7 +794,7 @@ func TestGlobalRoutesDenyOAuthSessionMutations(t *testing.T) {
 			_, _ = w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User"}`))
 		case "/users/@me/guilds":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":true,"permissions":"0"}]`))
+			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","permissions":"8"}]`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -1228,7 +1228,7 @@ func TestGuildWriteAuthorizationUsesAccessibleGuildCache(t *testing.T) {
 			guildRequests.Add(1)
 			w.Header().Set("Content-Type", "application/json")
 			if guildVisible.Load() {
-				_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":true,"permissions":"0"}]`))
+				_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","permissions":"8"}]`))
 				return
 			}
 			_, _ = w.Write([]byte(`[]`))
@@ -1356,7 +1356,7 @@ func TestDiscordOAuthGuildAccessFreshQueryRefreshesCachedGuilds(t *testing.T) {
 			guildRequests.Add(1)
 			w.Header().Set("Content-Type", "application/json")
 			if guildVisible.Load() {
-				_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":true,"permissions":"0"}]`))
+				_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","permissions":"8"}]`))
 				return
 			}
 			_, _ = w.Write([]byte(`[]`))
@@ -1498,7 +1498,7 @@ func TestDiscordOAuthGuildAccessEndpointSkipsErrorResponseOnRequestCancellation(
 		switch r.URL.Path {
 		case "/users/@me/guilds":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":true,"permissions":"0"}]`))
+			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","permissions":"8"}]`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -1586,7 +1586,7 @@ func TestDiscordOAuthGuildAccessEndpoints(t *testing.T) {
 					if i == 10 {
 						guild.ID = "g-owner"
 						guild.Name = "Owner Guild"
-						guild.Owner = true
+						guild.Permissions = discordgo.PermissionAdministrator
 					}
 					if i == 20 {
 						guild.ID = "g-admin"
@@ -1602,7 +1602,7 @@ func TestDiscordOAuthGuildAccessEndpoints(t *testing.T) {
 				page := []discordOAuthGuild{
 					{ID: "g-manage", Name: "Manage Guild", Permissions: discordgo.PermissionManageGuild},
 					{ID: "g-read", Name: "Read Only", Permissions: 0},
-					{ID: "g-other", Name: "Other Guild", Owner: true},
+					{ID: "g-other", Name: "Other Guild", Permissions: discordgo.PermissionAdministrator},
 				}
 				if err := json.NewEncoder(w).Encode(page); err != nil {
 					t.Fatalf("encode second guilds page: %v", err)
@@ -1783,7 +1783,7 @@ func TestDiscordOAuthManageableGuildsEndpointDoesNotRequireBotGuildProvider(t *t
 			_, _ = w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User"}`))
 		case "/users/@me/guilds":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","icon":"guild-icon","owner":true,"permissions":"0"}]`))
+			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","icon":"guild-icon","permissions":"8"}]`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -1964,7 +1964,7 @@ func TestDiscordOAuthManageableGuildsRefreshesAccessTokenWithRotation(t *testing
 			guildAuthHeaders = append(guildAuthHeaders, strings.TrimSpace(r.Header.Get("Authorization")))
 			mu.Unlock()
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":true,"permissions":"0"}]`))
+			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","permissions":"8"}]`))
 		default:
 			http.NotFound(w, r)
 		}

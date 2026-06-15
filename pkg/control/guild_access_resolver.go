@@ -164,7 +164,6 @@ func (resolver *accessibleGuildResolver) materializeAccessibleGuilds(
 			Name:        strings.TrimSpace(cached.guild.Name),
 			Icon:        icon,
 			BotPresent:  cached.botPresent,
-			Owner:       cached.guild.Owner,
 			Permissions: cached.guild.Permissions,
 			AccessLevel: accessLevel,
 		})

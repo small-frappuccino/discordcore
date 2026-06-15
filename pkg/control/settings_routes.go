@@ -571,7 +571,6 @@ func (s *Server) resolveGuildRegistrySources(
 				GuildID:                 guildID,
 				Name:                    strings.TrimSpace(guild.Name),
 				Icon:                    strings.TrimSpace(guild.Icon),
-				Owner:                   guild.Owner,
 				Permissions:             guild.Permissions,
 				AvailableBotInstanceIDs: botInstanceIDsByGuild[guildID],
 			})

@@ -238,8 +238,21 @@ func newQOTDCommandTestRouterWithService(
 	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: guildID}); err != nil {
 		t.Fatalf("failed to add guild config: %v", err)
 	}
-	if err := session.State.GuildAdd(&discordgo.Guild{ID: guildID, OwnerID: ownerID}); err != nil {
+	if err := session.State.GuildAdd(&discordgo.Guild{
+		ID:      guildID,
+		OwnerID: ownerID,
+		Roles: []*discordgo.Role{
+			{ID: "admin-role", Permissions: discordgo.PermissionAdministrator},
+		},
+	}); err != nil {
 		t.Fatalf("failed to add guild to state: %v", err)
+	}
+	if err := session.State.MemberAdd(&discordgo.Member{
+		GuildID: guildID,
+		User:    &discordgo.User{ID: ownerID},
+		Roles:   []string{"admin-role"},
+	}); err != nil {
+		t.Fatalf("failed to add member to state: %v", err)
 	}
 
 	router := core.NewCommandRouter(session, cm)
@@ -260,7 +273,10 @@ func newQOTDSlashInteraction(
 			Token:   "token",
 			Type:    discordgo.InteractionApplicationCommand,
 			GuildID: guildID,
-			Member:  &discordgo.Member{User: &discordgo.User{ID: userID}},
+			Member: &discordgo.Member{
+				User:  &discordgo.User{ID: userID},
+				Roles: []string{"admin-role"},
+			},
 			Data: discordgo.ApplicationCommandInteractionData{
 				Name: groupName,
 				Options: []*discordgo.ApplicationCommandInteractionDataOption{{
@@ -290,7 +306,10 @@ func newQOTDRootSlashInteraction(
 			Token:   "token",
 			Type:    discordgo.InteractionApplicationCommand,
 			GuildID: guildID,
-			Member:  &discordgo.Member{User: &discordgo.User{ID: userID}},
+			Member: &discordgo.Member{
+				User:  &discordgo.User{ID: userID},
+				Roles: []string{"admin-role"},
+			},
 			Data: discordgo.ApplicationCommandInteractionData{
 				Name: groupName,
 				Options: []*discordgo.ApplicationCommandInteractionDataOption{{
@@ -311,7 +330,10 @@ func newQOTDComponentInteraction(guildID, userID, customID string) *discordgo.In
 			Token:   "token",
 			Type:    discordgo.InteractionMessageComponent,
 			GuildID: guildID,
-			Member:  &discordgo.Member{User: &discordgo.User{ID: userID}},
+			Member: &discordgo.Member{
+				User:  &discordgo.User{ID: userID},
+				Roles: []string{"admin-role"},
+			},
 			Data: discordgo.MessageComponentInteractionData{
 				CustomID: customID,
 			},

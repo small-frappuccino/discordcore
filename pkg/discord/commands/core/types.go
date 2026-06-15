@@ -114,7 +114,7 @@ type Context struct {
 	Logger      *log.Logger
 	GuildID     string
 	UserID      string
-	IsOwner     bool
+
 	GuildConfig *files.GuildConfig
 	RouteKey    InteractionRouteKey
 	// Acknowledged is true once the router has sent an ack response for this

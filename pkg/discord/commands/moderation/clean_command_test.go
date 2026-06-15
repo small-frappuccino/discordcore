@@ -694,10 +694,16 @@ func newCleanCommandHarness(t *testing.T, cfg cleanHarnessConfig) *cleanHarness 
 	if err := session.State.GuildAdd(&discordgo.Guild{
 		ID:      cfg.guildID,
 		OwnerID: cfg.ownerID,
-		Roles: []*discordgo.Role{{
-			ID:          cfg.guildID,
-			Permissions: cfg.channelPerms,
-		}},
+		Roles: []*discordgo.Role{
+			{
+				ID:          cfg.guildID,
+				Permissions: cfg.channelPerms,
+			},
+			{
+				ID:          "admin-role",
+				Permissions: discordgo.PermissionManageGuild,
+			},
+		},
 	}); err != nil {
 		t.Fatalf("GuildAdd: %v", err)
 	}
@@ -712,7 +718,7 @@ func newCleanCommandHarness(t *testing.T, cfg cleanHarnessConfig) *cleanHarness 
 	if err := session.State.MemberAdd(&discordgo.Member{GuildID: cfg.guildID, User: &discordgo.User{ID: cfg.botID}, Roles: []string{cfg.guildID}}); err != nil {
 		t.Fatalf("MemberAdd bot: %v", err)
 	}
-	if err := session.State.MemberAdd(&discordgo.Member{GuildID: cfg.guildID, User: &discordgo.User{ID: cfg.actorID}, Roles: []string{cfg.guildID}}); err != nil {
+	if err := session.State.MemberAdd(&discordgo.Member{GuildID: cfg.guildID, User: &discordgo.User{ID: cfg.actorID}, Roles: []string{cfg.guildID, "admin-role"}}); err != nil {
 		t.Fatalf("MemberAdd actor: %v", err)
 	}
 

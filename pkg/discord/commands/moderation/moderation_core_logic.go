@@ -187,12 +187,9 @@ func permissionCheckerForContext(ctx *core.Context) *core.PermissionChecker {
 
 type banContext struct {
 	rolesByID    map[string]*discordgo.Role
-	ownerID      string
 	botID        string
 	actorMember  *discordgo.Member
 	botMember    *discordgo.Member
-	actorIsOwner bool
-	botIsOwner   bool
 	actorRolePos int
 	botRolePos   int
 }
@@ -305,21 +302,6 @@ func prepareModerationContext(ctx *core.Context, requiredPermission int64, actor
 	}
 	rolesByID := buildRoleIndex(roles)
 
-	ownerID, ownerFound, err := checker.ResolveOwnerID(ctx.GuildID)
-	if err != nil {
-		log.ErrorLoggerRaw().Error(
-			"Moderation context failed to resolve guild owner",
-			"operation", "commands.moderation.prepare_context.resolve_owner",
-			"guildID", ctx.GuildID,
-			"userID", ctx.UserID,
-			"err", err,
-		)
-		return nil, &core.CommandError{Message: "Failed to resolve server owner.", Ephemeral: true}
-	}
-	if !ownerFound {
-		ownerID = ""
-	}
-
 	botID := ""
 	if ctx.Session.State != nil && ctx.Session.State.User != nil {
 		botID = ctx.Session.State.User.ID
@@ -365,24 +347,18 @@ func prepareModerationContext(ctx *core.Context, requiredPermission int64, actor
 		return nil, &core.CommandError{Message: "Unable to resolve the bot member record.", Ephemeral: true}
 	}
 
-	actorIsOwner := ctx.IsOwner || (ownerID != "" && ctx.UserID == ownerID)
-	botIsOwner := ownerID != "" && botID == ownerID
-
-	if !actorIsOwner && !memberHasPermission(actorMember, rolesByID, ctx.GuildID, ownerID, requiredPermission) {
+	if !memberHasPermission(actorMember, rolesByID, ctx.GuildID, requiredPermission) {
 		return nil, &core.CommandError{Message: actorPermissionError, Ephemeral: true}
 	}
-	if !botIsOwner && !memberHasPermission(botMember, rolesByID, ctx.GuildID, ownerID, requiredPermission) {
+	if !memberHasPermission(botMember, rolesByID, ctx.GuildID, requiredPermission) {
 		return nil, &core.CommandError{Message: botPermissionError, Ephemeral: true}
 	}
 
 	return &banContext{
 		rolesByID:    rolesByID,
-		ownerID:      ownerID,
 		botID:        botID,
 		actorMember:  actorMember,
 		botMember:    botMember,
-		actorIsOwner: actorIsOwner,
-		botIsOwner:   botIsOwner,
 		actorRolePos: highestRolePosition(actorMember, rolesByID, ctx.GuildID),
 		botRolePos:   highestRolePosition(botMember, rolesByID, ctx.GuildID),
 	}, nil
@@ -414,9 +390,6 @@ func canModerateTarget(ctx *core.Context, actionCtx *banContext, targetID, actio
 	}
 	if targetID == actionCtx.botID {
 		return false, "cannot " + actionVerb + " the bot"
-	}
-	if actionCtx.ownerID != "" && targetID == actionCtx.ownerID {
-		return false, "cannot " + actionVerb + " the server owner"
 	}
 
 	checker := permissionCheckerForContext(ctx)
@@ -450,10 +423,10 @@ func canModerateTarget(ctx *core.Context, actionCtx *banContext, targetID, actio
 	}
 
 	targetPos := highestRolePosition(targetMember, actionCtx.rolesByID, ctx.GuildID)
-	if !actionCtx.actorIsOwner && actionCtx.actorRolePos <= targetPos {
+	if actionCtx.actorRolePos <= targetPos {
 		return false, "target has an equal or higher role than you"
 	}
-	if !actionCtx.botIsOwner && actionCtx.botRolePos <= targetPos {
+	if actionCtx.botRolePos <= targetPos {
 		return false, "target has an equal or higher role than the bot"
 	}
 	return true, ""
@@ -497,10 +470,10 @@ func resolveConfiguredMuteRole(ctx *core.Context, actionCtx *banContext) (*disco
 	if role.Managed {
 		return nil, roleID, &core.CommandError{Message: "Configured mute role is managed by an integration and cannot be assigned manually.", Ephemeral: true}
 	}
-	if !actionCtx.actorIsOwner && actionCtx.actorRolePos <= role.Position {
+	if actionCtx.actorRolePos <= role.Position {
 		return nil, roleID, &core.CommandError{Message: "Your highest role must stay above the configured mute role.", Ephemeral: true}
 	}
-	if !actionCtx.botIsOwner && actionCtx.botRolePos <= role.Position {
+	if actionCtx.botRolePos <= role.Position {
 		return nil, roleID, &core.CommandError{Message: "My highest role must stay above the configured mute role.", Ephemeral: true}
 	}
 	return role, roleID, nil
@@ -598,12 +571,9 @@ func resolveUserDisplayName(ctx *core.Context, userID string) string {
 	return userID
 }
 
-func memberHasPermission(member *discordgo.Member, rolesByID map[string]*discordgo.Role, guildID, ownerID string, perm int64) bool {
+func memberHasPermission(member *discordgo.Member, rolesByID map[string]*discordgo.Role, guildID string, perm int64) bool {
 	if member == nil || member.User == nil {
 		return false
-	}
-	if ownerID != "" && member.User.ID == ownerID {
-		return true
 	}
 
 	var permissions int64

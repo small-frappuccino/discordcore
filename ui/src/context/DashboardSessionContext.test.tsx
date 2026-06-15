@@ -118,7 +118,6 @@ describe("DashboardSessionProvider", () => {
       guilds: Array<{
         id: string;
         name: string;
-        owner: boolean;
         permissions: number;
         access_level: "write";
       }>;
@@ -133,7 +132,6 @@ describe("DashboardSessionProvider", () => {
         {
           id: "guild-1",
           name: "Server One",
-          owner: true,
           permissions: 8,
           access_level: "write",
         },
@@ -179,7 +177,6 @@ describe("DashboardSessionProvider", () => {
         {
           id: "guild-1",
           name: "Server One",
-          owner: true,
           permissions: 8,
           access_level: "write",
         },
@@ -221,7 +218,6 @@ describe("DashboardSessionProvider", () => {
           {
             id: "guild-1",
             name: "Server One",
-            owner: true,
             permissions: 8,
             access_level: "write",
           },
@@ -240,7 +236,6 @@ describe("DashboardSessionProvider", () => {
           {
             id: "guild-1",
             name: "Server One",
-            owner: true,
             permissions: 8,
             access_level: "write",
           },

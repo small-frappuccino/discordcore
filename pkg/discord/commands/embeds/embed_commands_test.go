@@ -101,8 +101,21 @@ func TestEmbedCommandsIntegration(t *testing.T) {
 		t.Fatalf("add guild config: %v", err)
 	}
 
-	if err := session.State.GuildAdd(&discordgo.Guild{ID: guildID, OwnerID: "operator"}); err != nil {
+	if err := session.State.GuildAdd(&discordgo.Guild{
+		ID:      guildID,
+		OwnerID: "operator",
+		Roles: []*discordgo.Role{
+			{ID: "admin-role", Permissions: discordgo.PermissionAdministrator},
+		},
+	}); err != nil {
 		t.Fatalf("add guild to state: %v", err)
+	}
+	if err := session.State.MemberAdd(&discordgo.Member{
+		GuildID: guildID,
+		User:    &discordgo.User{ID: "operator"},
+		Roles:   []string{"admin-role"},
+	}); err != nil {
+		t.Fatalf("add member to state: %v", err)
 	}
 
 	router := core.NewCommandRouter(session, cm)
@@ -116,7 +129,10 @@ func TestEmbedCommandsIntegration(t *testing.T) {
 			ID:      "int-list",
 			Type:    discordgo.InteractionApplicationCommand,
 			GuildID: guildID,
-			Member:  &discordgo.Member{User: &discordgo.User{ID: "operator"}},
+			Member: &discordgo.Member{
+				User:  &discordgo.User{ID: "operator"},
+				Roles: []string{"admin-role"},
+			},
 			Data: discordgo.ApplicationCommandInteractionData{
 				Name: "embed",
 				Options: []*discordgo.ApplicationCommandInteractionDataOption{
