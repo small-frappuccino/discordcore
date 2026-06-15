@@ -51,12 +51,11 @@ export function ConfirmationModal({
       }`}>
         <div className="p-6">
           <h2 className="text-xl font-bold text-[var(--text-primary)] mb-3">{title}</h2>
-          <div className="text-[var(--text-secondary)] text-sm leading-relaxed">
+          <div className="text-[var(--text-secondary)] text-sm leading-relaxed mb-6">
             {description}
           </div>
-        </div>
-        
-        <div className="bg-[var(--bg-surface-hover)] p-4 flex items-center justify-end gap-3 border-t border-[var(--border-subtle)]">
+          
+          <div className="flex items-center justify-end gap-3">
           <Button 
             variant="ghost" 
             onClick={onClose} 
@@ -72,6 +71,7 @@ export function ConfirmationModal({
           >
             {confirmText}
           </Button>
+        </div>
         </div>
       </div>
     </div>

@@ -26,7 +26,7 @@ export function SaveActionBar({
       }`}
     >
       <div className="max-w-4xl mx-auto pointer-events-auto">
-        <div className="bg-[var(--bg-surface-active)] border border-[var(--border-subtle)] shadow-xl rounded-xl p-3 md:p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="bg-[#111214] border border-[var(--border-subtle)] shadow-2xl rounded-xl p-3 md:p-4 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex-1 min-w-0">
             {saveError ? (
               <div className="flex items-center gap-2 text-[var(--danger)]">
@@ -61,7 +61,7 @@ export function SaveActionBar({
               onClick={onSave} 
               isLoading={isSaving}
               disabled={isSaving}
-              className="bg-[#23a559] hover:bg-[#1f934f] min-w-[120px] transition-all" // Discord-like green
+              className="min-w-[120px] transition-all"
             >
               Save Changes
             </Button>
