@@ -30,44 +30,6 @@ func TestIsUnrecoverableDiscordPublishErrorTreatsClientErrorsAsTerminal(t *testi
 	}
 }
 
-func TestIsUnmanageableDiscordThreadErrorMatchesPermissionRejections(t *testing.T) {
-	t.Parallel()
-
-	matchTests := []struct {
-		name string
-		err  error
-	}{
-		{name: "missing access code", err: ErrDiscordMissingAccess},
-		{name: "missing permissions code", err: ErrDiscordMissingPermissions},
-		{name: "wrapped error", err: fmt.Errorf("set qotd thread state: %w", ErrDiscordMissingAccess)},
-	}
-	for _, tt := range matchTests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			if !isUnmanageableDiscordThreadError(tt.err) {
-				t.Fatalf("expected error to classify as unmanageable thread: %v", tt.err)
-			}
-		})
-	}
-
-	skipTests := []struct {
-		name string
-		err  error
-	}{
-		{name: "nil", err: nil},
-		{name: "plain network error", err: errors.New("dial tcp: timeout")},
-		{name: "unknown channel code", err: ErrDiscordUnknownChannel},
-	}
-	for _, tt := range skipTests {
-		t.Run("not_"+tt.name, func(t *testing.T) {
-			t.Parallel()
-			if isUnmanageableDiscordThreadError(tt.err) {
-				t.Fatalf("expected error to NOT classify as unmanageable thread: %v", tt.err)
-			}
-		})
-	}
-}
-
 func TestIsUnrecoverableDiscordPublishErrorLeavesTransientFailuresRetryable(t *testing.T) {
 	t.Parallel()
 

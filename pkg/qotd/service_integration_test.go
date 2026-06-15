@@ -49,7 +49,6 @@ func scheduledQOTDConfig(enabled bool, channelID string) files.QOTDConfig {
 type fakePublisher struct {
 	publishedParams  []PublishOfficialPostParams
 	publishResponses []fakePublishResponse
-	threadStates     map[string]ThreadState
 }
 
 type fakePublishResponse struct {
@@ -124,14 +123,6 @@ func defaultFakePublishedOfficialPost(params PublishOfficialPostParams) *Publish
 		PublishedAt:                publishedAt,
 		PostURL:                    BuildMessageJumpURL(params.GuildID, params.ChannelID, messageID),
 	}
-}
-
-func (p *fakePublisher) SetThreadState(_ context.Context, guildID string, threadID string, state ThreadState) error {
-	if p.threadStates == nil {
-		p.threadStates = make(map[string]ThreadState)
-	}
-	p.threadStates[threadID] = state
-	return nil
 }
 
 func (p *fakePublisher) DeleteOfficialPost(_ context.Context, _ DeleteOfficialPostParams) error {
@@ -663,13 +654,6 @@ func TestServicePublishNowCreatesCurrentSlotManualPostAlongsidePreviousDayPost(t
 	}
 	if result.OfficialPost.PublishMode != string(PublishModeManual) {
 		t.Fatalf("expected manual publish mode, got %+v", result.OfficialPost)
-	}
-	currentState, ok := fake.threadStates["thread-previous"]
-	if !ok {
-		t.Fatalf("expected scheduled thread state update, got %+v", fake.threadStates)
-	}
-	if currentState.Pinned || currentState.Locked || currentState.Archived {
-		t.Fatalf("expected scheduled current thread to stay open and unpinned, got %+v", currentState)
 	}
 
 	storedQuestion, err := store.GetQOTDQuestion(context.Background(), "g1", nextQuestion.ID)
@@ -2048,9 +2032,6 @@ func TestServicePublishScheduledIfDueCreatesScheduledPost(t *testing.T) {
 	if official.DiscordThreadID == "" {
 		t.Fatalf("expected scheduled publish to persist the official thread id, got %+v", official)
 	}
-	if fake.threadStates[official.DiscordThreadID] != (ThreadState{Pinned: false, Locked: false, Archived: false}) {
-		t.Fatalf("expected the daily thread to remain open for answers, got %+v", fake.threadStates[official.DiscordThreadID])
-	}
 
 	usedQuestion, err := store.GetQOTDQuestion(context.Background(), "g1", question.ID)
 	if err != nil {
@@ -2530,106 +2511,8 @@ func TestServiceReconcileGuildArchivesExpiredPostsAndAnswerRecords(t *testing.T)
 		t.Fatalf("expected archived answer record after reconcile, got %+v", updatedReply)
 	}
 
-	// At ArchiveAt the bot only locks the Discord thread; Discord's
-	// auto_archive_duration (set to the QOTD answer window at creation)
-	// handles the actual "Close" transition. Setting Archived=true ourselves
-	// would race the platform-driven archive.
-	if fake.threadStates["official-thread-archive"] != (ThreadState{Pinned: false, Locked: true, Archived: false}) {
-		t.Fatalf("expected archived official thread to be locked while Discord auto-archives, got %+v", fake.threadStates["official-thread-archive"])
-	}
-
 	if err := service.ReconcileGuild(context.Background(), "g1"); err != nil {
 		t.Fatalf("ReconcileGuild(second) failed: %v", err)
-	}
-}
-
-// TestServiceArchiveClosesAndLocksThreadAndPreservesModeratorReopen pins
-// down two invariants that together make the retroactive-read-only contract
-// safe to ship: (1) when a QOTD ages past ArchiveAt the bot closes+locks the
-// Discord thread so verified members can still read the conversation but
-// not post; (2) once the post is in the archived state, a subsequent
-// ReconcileGuild does NOT re-issue SetThreadState — meaning a moderator who
-// later unlocks the thread (using MANAGE_THREADS) is not fought by the bot.
-func TestServiceArchiveClosesAndLocksThreadAndPreservesModeratorReopen(t *testing.T) {
-	service, store, fake := newIntegrationTestQOTDService(t)
-	service.now = func() time.Time {
-		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
-	}
-
-	question, err := service.CreateQuestion(context.Background(), "g1", "user-1", QuestionMutation{
-		Body:   "Lock me on archive",
-		Status: QuestionStatusReady,
-	})
-	if err != nil {
-		t.Fatalf("CreateQuestion() failed: %v", err)
-	}
-
-	publishDate := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
-	publishedAt := time.Date(2026, 4, 1, 12, 43, 0, 0, time.UTC)
-	schedule, err := resolvePublishSchedule(scheduledQOTDConfig(true, integrationForumChannelID))
-	if err != nil {
-		t.Fatalf("resolvePublishSchedule() failed: %v", err)
-	}
-	lifecycle := EvaluateOfficialPost(schedule, publishDate, service.clock())
-	const threadID = "thread-archive-lock"
-	post, err := store.CreateQOTDOfficialPostProvisioning(context.Background(), storage.QOTDOfficialPostRecord{
-		GuildID:              "g1",
-		DeckID:               files.LegacyQOTDDefaultDeckID,
-		DeckNameSnapshot:     files.LegacyQOTDDefaultDeckName,
-		QuestionID:           question.ID,
-		PublishMode:          string(PublishModeScheduled),
-		PublishDateUTC:       publishDate,
-		State:                string(OfficialPostStatePrevious),
-		ChannelID:            integrationForumChannelID,
-		QuestionTextSnapshot: question.Body,
-		GraceUntil:           lifecycle.BecomesPreviousAt,
-		ArchiveAt:            lifecycle.ArchiveAt,
-	})
-	if err != nil {
-		t.Fatalf("CreateQOTDOfficialPostProvisioning() failed: %v", err)
-	}
-	if _, err := store.FinalizeQOTDOfficialPost(context.Background(), storage.FinalizeQOTDOfficialPostParams{
-		ID:                         post.ID,
-		QuestionListThreadID:       "questions-list-thread",
-		QuestionListEntryMessageID: "questions-list-entry-lock",
-		DiscordThreadID:            threadID,
-		StarterMessageID:           "starter-lock",
-		AnswerChannelID:            threadID,
-		PublishedAt:                publishedAt,
-	}); err != nil {
-		t.Fatalf("FinalizeQOTDOfficialPost() failed: %v", err)
-	}
-	if _, err := store.UpdateQOTDOfficialPostState(context.Background(), post.ID, string(OfficialPostStatePrevious), nil, nil); err != nil {
-		t.Fatalf("UpdateQOTDOfficialPostState(seed previous) failed: %v", err)
-	}
-
-	if err := service.ReconcileGuild(context.Background(), "g1"); err != nil {
-		t.Fatalf("ReconcileGuild(initial archive) failed: %v", err)
-	}
-
-	if got := fake.threadStates[threadID]; got != (ThreadState{Pinned: false, Locked: true, Archived: false}) {
-		t.Fatalf("expected archive transition to lock the thread while Discord auto-archives, got %+v", got)
-	}
-
-	archived, err := store.GetQOTDOfficialPostByID(context.Background(), post.ID)
-	if err != nil {
-		t.Fatalf("GetQOTDOfficialPostByID(archived) failed: %v", err)
-	}
-	if archived == nil || archived.State != string(OfficialPostStateArchived) || archived.ArchivedAt == nil {
-		t.Fatalf("expected post to be marked archived in storage, got %+v", archived)
-	}
-
-	// Simulate a moderator manually unlocking the thread via the Discord
-	// UI (MANAGE_THREADS). The next reconcile must not re-impose the lock,
-	// otherwise the bot would fight moderator decisions in a loop.
-	fake.threadStates[threadID] = ThreadState{Pinned: false, Locked: false, Archived: false}
-
-	if err := service.ReconcileGuild(context.Background(), "g1"); err != nil {
-		t.Fatalf("ReconcileGuild(after moderator reopen) failed: %v", err)
-	}
-
-	if got := fake.threadStates[threadID]; got != (ThreadState{Pinned: false, Locked: false, Archived: false}) {
-		t.Fatalf("expected reconcile to leave a moderator-unlocked archived thread alone, got %+v", got)
 	}
 }
 

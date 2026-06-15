@@ -11,7 +11,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/diamondburned/arikawa/v3/utils/httputil"
-	"github.com/diamondburned/arikawa/v3/utils/json/option"
+
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	domain "github.com/small-frappuccino/discordcore/pkg/qotd"
 )
@@ -151,26 +151,6 @@ func (p *ArikawaPublisher) PublishOfficialPost(ctx context.Context, params domai
 	}
 
 	return result, nil
-}
-
-// SetThreadState implements domain.Publisher.
-func (p *ArikawaPublisher) SetThreadState(ctx context.Context, guildID string, threadID string, state domain.ThreadState) error {
-	id, err := discord.ParseSnowflake(threadID)
-	if err != nil {
-		return fmt.Errorf("invalid thread ID %q: %w", threadID, err)
-	}
-
-	data := api.ModifyChannelData{
-		Archived: option.PtrTo(state.Archived),
-		Locked:   option.PtrTo(state.Locked),
-	}
-
-	c := p.client.WithContext(ctx)
-	err = c.ModifyChannel(discord.ChannelID(id), data)
-	if err != nil {
-		return mapArikawaError(err)
-	}
-	return nil
 }
 
 // DeleteOfficialPost implements domain.Publisher.

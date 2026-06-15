@@ -16,7 +16,6 @@ type nopPublisher struct{}
 func (nopPublisher) PublishOfficialPost(context.Context, PublishOfficialPostParams) (*PublishedOfficialPost, error) {
 	return nil, nil
 }
-func (nopPublisher) SetThreadState(context.Context, string, string, ThreadState) error  { return nil }
 func (nopPublisher) DeleteOfficialPost(context.Context, DeleteOfficialPostParams) error { return nil }
 
 func TestNormalizeQuestionMutationDefaultsAndValidation(t *testing.T) {

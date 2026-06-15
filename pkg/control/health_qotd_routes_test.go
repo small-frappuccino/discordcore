@@ -74,8 +74,6 @@ func TestQOTDHealthRouteSurfacesRecordedMetrics(t *testing.T) {
 	metrics.RecordPublishFailure(qotd.PublishModeManual, "no_questions", 400*time.Millisecond)
 	metrics.RecordReconcileCycle(150*time.Millisecond, nil)
 	metrics.RecordOfficialPostAbandoned()
-	metrics.RecordStateDivergence()
-	metrics.RecordUnmanageableThread()
 	metrics.RecordOrphanReclaim(2)
 	metrics.RecordSuppressionCleared()
 
@@ -111,7 +109,7 @@ func TestQOTDHealthRouteSurfacesRecordedMetrics(t *testing.T) {
 	if snap.Reconcile.CyclesTotal != 1 {
 		t.Fatalf("expected one reconcile cycle, got %+v", snap.Reconcile)
 	}
-	if snap.State.AbandonedTotal != 1 || snap.State.DivergenceTotal != 1 || snap.State.OrphanReservationsReclaimed != 2 {
+	if snap.State.AbandonedTotal != 1 || snap.State.SuppressionsCleared != 1 || snap.State.OrphanReservationsReclaimed != 2 {
 		t.Fatalf("expected side-event counters to match recordings, got %+v", snap.State)
 	}
 }

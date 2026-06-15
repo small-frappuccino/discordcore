@@ -41,7 +41,6 @@ var (
 // depends on, so publish flows can be exercised without a live session.
 type Publisher interface {
 	PublishOfficialPost(ctx context.Context, params PublishOfficialPostParams) (*PublishedOfficialPost, error)
-	SetThreadState(ctx context.Context, guildID string, threadID string, state ThreadState) error
 	DeleteOfficialPost(ctx context.Context, params DeleteOfficialPostParams) error
 }
 

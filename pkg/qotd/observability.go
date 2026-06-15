@@ -63,18 +63,6 @@ type StateMetrics interface {
 	// length" — a steady non-zero rate means broken guilds piling up.
 	RecordOfficialPostAbandoned()
 
-	// RecordStateDivergence is called every time the asymmetric "Discord
-	// OK, DB failed" branch fires inside
-	// applyOfficialPostThreadTransition. Transient spikes are expected
-	// (Postgres blips); a persistent rate is a real outage.
-	RecordStateDivergence()
-
-	// RecordUnmanageableThread is called the first time a (thread,
-	// target-state) pair is rejected with 403; the existing log-once
-	// dedup means subsequent calls are silenced, so this metric counts
-	// distinct rejections, not the per-cycle retries.
-	RecordUnmanageableThread()
-
 	// RecordSuppressionCleared is called each time an expired suppression
 	// entry is purged from a guild's config.
 	RecordSuppressionCleared()
@@ -121,8 +109,6 @@ type ReconcileSnapshot struct {
 // them as "how many of these unusual events happened recently".
 type StateSnapshot struct {
 	AbandonedTotal              int64 `json:"abandoned_total"`
-	DivergenceTotal             int64 `json:"divergence_total"`
-	UnmanageableThreadTotal     int64 `json:"unmanageable_thread_total"`
 	OrphanReservationsReclaimed int64 `json:"orphan_reservations_reclaimed_total"`
 	SuppressionsCleared         int64 `json:"suppressions_cleared_total"`
 }
@@ -160,12 +146,6 @@ func (NopMetrics) RecordReconcileCycle(time.Duration, error) {}
 // RecordOfficialPostAbandoned records official post abandoned.
 func (NopMetrics) RecordOfficialPostAbandoned() {}
 
-// RecordStateDivergence records state divergence.
-func (NopMetrics) RecordStateDivergence() {}
-
-// RecordUnmanageableThread records unmanageable thread.
-func (NopMetrics) RecordUnmanageableThread() {}
-
 // RecordOrphanReclaim records orphan reclaim.
 func (NopMetrics) RecordOrphanReclaim(int) {}
 
@@ -195,8 +175,6 @@ type InMemoryMetrics struct {
 	reconcileDuration observability.Summary
 
 	abandoned          atomic.Int64
-	divergence         atomic.Int64
-	unmanageableThread atomic.Int64
 	orphanReclaim      atomic.Int64
 	suppressionCleared atomic.Int64
 }
@@ -233,12 +211,6 @@ func (m *InMemoryMetrics) RecordReconcileCycle(duration time.Duration, err error
 
 // RecordOfficialPostAbandoned records official post abandoned.
 func (m *InMemoryMetrics) RecordOfficialPostAbandoned() { m.abandoned.Add(1) }
-
-// RecordStateDivergence records state divergence.
-func (m *InMemoryMetrics) RecordStateDivergence() { m.divergence.Add(1) }
-
-// RecordUnmanageableThread records unmanageable thread.
-func (m *InMemoryMetrics) RecordUnmanageableThread() { m.unmanageableThread.Add(1) }
 
 // RecordSuppressionCleared records suppression cleared.
 func (m *InMemoryMetrics) RecordSuppressionCleared() { m.suppressionCleared.Add(1) }
@@ -289,8 +261,6 @@ func (m *InMemoryMetrics) Snapshot() MetricsSnapshot {
 		},
 		State: StateSnapshot{
 			AbandonedTotal:              m.abandoned.Load(),
-			DivergenceTotal:             m.divergence.Load(),
-			UnmanageableThreadTotal:     m.unmanageableThread.Load(),
 			OrphanReservationsReclaimed: m.orphanReclaim.Load(),
 			SuppressionsCleared:         m.suppressionCleared.Load(),
 		},
@@ -418,8 +388,7 @@ func ClassifyPublishFailure(err error) string {
 		return "qotd_disabled"
 	case errorMatches(err, ErrDiscordUnavailable):
 		return "discord_unavailable"
-	case errorMatches(err, ErrOfficialPostStateDivergence):
-		return "state_divergence"
+
 	default:
 		return "other"
 	}

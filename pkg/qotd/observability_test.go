@@ -100,8 +100,6 @@ func TestInMemoryMetricsRecordsSideEvents(t *testing.T) {
 	m := &InMemoryMetrics{}
 	m.RecordOfficialPostAbandoned()
 	m.RecordOfficialPostAbandoned()
-	m.RecordStateDivergence()
-	m.RecordUnmanageableThread()
 	m.RecordOrphanReclaim(3)
 	m.RecordOrphanReclaim(0) // ignored: empty batches do not pollute the count
 	m.RecordSuppressionCleared()
@@ -109,12 +107,6 @@ func TestInMemoryMetricsRecordsSideEvents(t *testing.T) {
 	snap := m.Snapshot()
 	if snap.State.AbandonedTotal != 2 {
 		t.Fatalf("expected two abandoned events, got %d", snap.State.AbandonedTotal)
-	}
-	if snap.State.DivergenceTotal != 1 {
-		t.Fatalf("expected one divergence event, got %d", snap.State.DivergenceTotal)
-	}
-	if snap.State.UnmanageableThreadTotal != 1 {
-		t.Fatalf("expected one unmanageable-thread event, got %d", snap.State.UnmanageableThreadTotal)
 	}
 	if snap.State.OrphanReservationsReclaimed != 3 {
 		t.Fatalf("expected three reclaimed reservations, got %d", snap.State.OrphanReservationsReclaimed)
@@ -143,7 +135,6 @@ func TestInMemoryMetricsTolerantToConcurrentWrites(t *testing.T) {
 				m.RecordPublishAttempt(PublishModeScheduled)
 				m.RecordPublishSuccess(PublishModeScheduled, 10*time.Millisecond)
 				m.RecordReconcileCycle(5*time.Millisecond, nil)
-				m.RecordStateDivergence()
 			}
 		}()
 	}
@@ -156,9 +147,6 @@ func TestInMemoryMetricsTolerantToConcurrentWrites(t *testing.T) {
 	}
 	if snap.Reconcile.CyclesTotal != total {
 		t.Fatalf("expected %d concurrent reconcile cycles, got %d", total, snap.Reconcile.CyclesTotal)
-	}
-	if snap.State.DivergenceTotal != total {
-		t.Fatalf("expected %d concurrent divergence events, got %d", total, snap.State.DivergenceTotal)
 	}
 }
 
@@ -188,14 +176,13 @@ func TestClassifyPublishFailureMapsKnownSentinels(t *testing.T) {
 	t.Parallel()
 
 	cases := map[error]string{
-		nil:                            "none",
-		ErrAlreadyPublished:            "already_published",
-		ErrPublishInProgress:           "in_progress",
-		ErrNoQuestionsAvailable:        "no_questions",
-		ErrQOTDDisabled:                "qotd_disabled",
-		ErrDiscordUnavailable:          "discord_unavailable",
-		ErrOfficialPostStateDivergence: "state_divergence",
-		errors.New("random"):           "other",
+		nil:                     "none",
+		ErrAlreadyPublished:     "already_published",
+		ErrPublishInProgress:    "in_progress",
+		ErrNoQuestionsAvailable: "no_questions",
+		ErrQOTDDisabled:         "qotd_disabled",
+		ErrDiscordUnavailable:   "discord_unavailable",
+		errors.New("random"):    "other",
 	}
 	for err, want := range cases {
 		got := ClassifyPublishFailure(err)

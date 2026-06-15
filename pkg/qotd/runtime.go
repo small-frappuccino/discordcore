@@ -367,30 +367,11 @@ func (s *Service) reclaimOrphanReservedQuestions(ctx context.Context, guildID st
 }
 
 func (s *Service) syncLiveOfficialPost(ctx context.Context, post storage.QOTDOfficialPostRecord, lifecycle OfficialPostLifecycle) error {
-	// Short-circuit when the DB already reflects the lifecycle target. For
-	// the current→previous transition the *thread* target is unchanged
-	// (both states want unlocked+unarchived+unpinned), so once we've reached
-	// the target state once we don't need to repeatedly poke Discord. Saves
-	// rate-limit budget and eliminates the recurring 403 churn on guilds
-	// where the bot can publish but lacks per-thread MANAGE_THREADS. The
-	// transition to OfficialPostStateArchived is handled by
-	// archiveOfficialPost (separate code path with its own thread edit), so
-	// short-circuiting here does not block the archive flow.
 	if string(lifecycle.State) == strings.TrimSpace(post.State) {
 		return nil
 	}
 
-	// Discord-then-DB transition is funnelled through
-	// applyOfficialPostThreadTransition. That helper documents the
-	// divergence-window contract; the reconcile loop is the recovery path
-	// if the DB write fails after Discord succeeded.
-	_, err := s.applyOfficialPostThreadTransition(ctx, officialPostThreadTransition{
-		Post:          post,
-		ThreadState:   ThreadState{Pinned: false, Locked: false, Archived: false},
-		TargetDBState: lifecycle.State,
-		ClosedAt:      nil,
-		ArchivedAt:    nil,
-	})
+	_, err := s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(lifecycle.State), nil, nil)
 	return err
 }
 
@@ -412,32 +393,7 @@ func (s *Service) archiveOfficialPost(ctx context.Context, post storage.QOTDOffi
 		}
 	}
 
-	// Message-mode posts skip Discord entirely; commit the archived state
-	// directly. The Discord-thread path below routes through
-	// applyOfficialPostThreadTransition so the divergence semantics stay
-	// in one place.
-	if strings.TrimSpace(post.DiscordThreadID) == "" {
-		_, err = s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(OfficialPostStateArchived), &archivedAt, &archivedAt)
-		return err
-	}
-
-	// At ArchiveAt (publish + 48h) we only lock the Discord thread.
-	// Discord auto-archives it independently because the thread was
-	// created with auto_archive_duration = 48h (equivalent to a mod
-	// hitting "Close" in the UI). Setting Archived=true ourselves used to
-	// be required, but now it would race the Discord auto-archive and
-	// risk unarchiving a thread the platform just closed. The lock stays
-	// so reply traffic on the past QOTD cannot reopen the thread from
-	// the archived state. applyOfficialPostThreadTransition flips the
-	// final state to OfficialPostStateMissingDiscord when the thread is
-	// gone from Discord's side.
-	_, err = s.applyOfficialPostThreadTransition(ctx, officialPostThreadTransition{
-		Post:          post,
-		ThreadState:   ThreadState{Pinned: false, Locked: true, Archived: false},
-		TargetDBState: OfficialPostStateArchived,
-		ClosedAt:      &archivedAt,
-		ArchivedAt:    &archivedAt,
-	})
+	_, err = s.store.UpdateQOTDOfficialPostState(ctx, post.ID, string(OfficialPostStateArchived), &archivedAt, &archivedAt)
 	return err
 }
 
@@ -447,72 +403,6 @@ func (s *Service) archiveAnswerRecord(ctx context.Context, answerRecord storage.
 	}
 	_, err := s.store.UpdateQOTDAnswerMessageState(ctx, answerRecord.ID, string(AnswerRecordStateArchived), &archivedAt, &archivedAt)
 	return err
-}
-
-func (s *Service) setThreadState(ctx context.Context, guildID string, threadID string, state ThreadState) (bool, error) {
-	threadID = strings.TrimSpace(threadID)
-	if threadID == "" {
-		return true, nil
-	}
-	if err := s.publisher.SetThreadState(ctx, guildID, threadID, state); err != nil {
-		if isMissingDiscordThreadError(err) {
-			return true, nil
-		}
-		// 403/Missing Access on a thread the bot CAN otherwise post in is
-		// usually a per-thread overwrite or a forum tag/lock that prevents
-		// MANAGE_THREADS even when the role grants it server-wide. Failing the
-		// reconcile cycle here would re-emit the same WARN every minute for
-		// the post's whole 48h lifecycle, drowning real publish failures.
-		// Treat as a no-op (state already unmanageable from our side), log
-		// once per (guild, thread, target state), and let the DB lifecycle
-		// state advance.
-		if isUnmanageableDiscordThreadError(err) {
-			s.logUnmanageableThreadOnce(threadID, state, err)
-			return false, nil
-		}
-		return false, fmt.Errorf("Service.setThreadState: %w", err)
-	}
-	return false, nil
-}
-
-// logUnmanageableThreadOnce emits a single WARN per (thread, target state)
-// pair so operators see the issue without the reconcile loop flooding logs.
-// The metrics counter increments once per unique pair, matching the log
-// dedup — operators reading /v1/health/qotd see the same "distinct
-// rejection" cardinality as the WARN stream.
-func (s *Service) logUnmanageableThreadOnce(threadID string, state ThreadState, cause error) {
-	if s == nil {
-		return
-	}
-	key := fmt.Sprintf("%s|%t|%t|%t", threadID, state.Pinned, state.Locked, state.Archived)
-	if _, loaded := s.unmanageableThreadLogs.LoadOrStore(key, struct{}{}); loaded {
-		return
-	}
-	s.observability().RecordUnmanageableThread()
-	log.ApplicationLogger().Warn(
-		"QOTD thread state edit rejected by Discord; continuing without grooming the thread",
-		"threadID", threadID,
-		"targetPinned", state.Pinned,
-		"targetLocked", state.Locked,
-		"targetArchived", state.Archived,
-		"err", cause,
-	)
-}
-
-func isMissingDiscordThreadError(err error) bool {
-	return errors.Is(err, ErrDiscordUnknownChannel)
-}
-
-// isUnmanageableDiscordThreadError reports whether Discord rejected a thread
-// state edit because the bot lacks the specific permissions required to
-// manage *this* thread, even if it can post there. Distinct from
-// isMissingDiscordThreadError (404 / Unknown Channel): the thread exists,
-// the bot just cannot edit its lock/archive/pin flags. Distinct from
-// isUnrecoverableDiscordPublishError: that one is for the publish path,
-// where 403 means "give up and abandon"; here 403 means "skip grooming and
-// move on with the lifecycle".
-func isUnmanageableDiscordThreadError(err error) bool {
-	return errors.Is(err, ErrDiscordMissingAccess) || errors.Is(err, ErrDiscordMissingPermissions)
 }
 
 // isUnrecoverableDiscordPublishError reports whether the Discord error returned

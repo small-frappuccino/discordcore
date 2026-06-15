@@ -66,15 +66,6 @@ func (p *dualSDKPublisher) PublishOfficialPost(ctx context.Context, params domai
 	return pub.PublishOfficialPost(ctx, params)
 }
 
-// SetThreadState implements domain.Publisher by routing the call to Arikawa.
-func (p *dualSDKPublisher) SetThreadState(ctx context.Context, guildID string, threadID string, state domain.ThreadState) error {
-	pub, err := p.getArikawaPublisher(guildID)
-	if err != nil {
-		return err
-	}
-	return pub.SetThreadState(ctx, guildID, threadID, state)
-}
-
 // DeleteOfficialPost implements domain.Publisher by routing the call to Arikawa.
 func (p *dualSDKPublisher) DeleteOfficialPost(ctx context.Context, params domain.DeleteOfficialPostParams) error {
 	pub, err := p.getArikawaPublisher(params.GuildID)

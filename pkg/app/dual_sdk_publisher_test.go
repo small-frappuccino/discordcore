@@ -26,11 +26,6 @@ func TestDualSDKPublisher_ResolutionFailure(t *testing.T) {
 		t.Fatal("PublishOfficialPost should fail")
 	}
 
-	err = pub.SetThreadState(ctx, "guild-1", "thread-1", domain.ThreadState{})
-	if err == nil {
-		t.Fatal("SetThreadState should fail")
-	}
-
 	err = pub.DeleteOfficialPost(ctx, domain.DeleteOfficialPostParams{GuildID: "guild-1"})
 	if err == nil {
 		t.Fatal("DeleteOfficialPost should fail")
