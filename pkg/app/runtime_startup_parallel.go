@@ -4,6 +4,7 @@ import (
 	"context"
 	stdErrors "errors"
 	"fmt"
+	"log/slog"
 	"sync"
 
 	"github.com/small-frappuccino/discordcore/pkg/log"
@@ -96,6 +97,12 @@ func NewRuntimeStartupBackgroundWorkerWithLimits(parallelism, queueSize int) *Ru
 		dispatchDone: make(chan struct{}),
 		done:         make(chan struct{}),
 	}
+
+	slog.Info("Architectural state transition: Background worker pool initialized",
+		slog.Int("parallelism_limit", parallelism),
+		slog.Int("queue_capacity", queueSize),
+	)
+
 	go worker.dispatch()
 	return worker
 }
@@ -106,6 +113,10 @@ type StartupTaskOrchestrator struct {
 }
 
 func NewStartupTaskOrchestrator(runtimeCount int) *StartupTaskOrchestrator {
+	slog.Info("Architectural state transition: Startup task orchestrator instantiated",
+		slog.Int("runtime_count_heuristic", runtimeCount),
+	)
+
 	return &StartupTaskOrchestrator{
 		light: NewRuntimeStartupBackgroundWorkerWithLimits(
 			ResolveStartupLightParallelism(runtimeCount),
@@ -136,16 +147,23 @@ func (o *StartupTaskOrchestrator) goTask(worker *RuntimeStartupBackgroundWorker,
 		return
 	}
 
+	slog.Debug("Tracking complex conditional branch: Injecting closure into orchestrator queue",
+		slog.String("task_name", name),
+		slog.String("queue_tier", kind),
+	)
+
 	worker.Go(func(ctx context.Context) error {
 		if err := fn(ctx); err != nil {
 			if ctx.Err() != nil {
+				slog.Debug("Tracking complex conditional branch: Task execution halted via context cancellation",
+					slog.String("task_name", name),
+				)
 				return nil
 			}
-			log.ApplicationLogger().Warn(
-				"Startup background task failed",
-				"task", name,
-				"kind", kind,
-				"err", err,
+			slog.Warn("Mitigated service degradation: Background startup task encountered an error and aborted",
+				slog.String("task", name),
+				slog.String("kind", kind),
+				slog.String("error", err.Error()),
 			)
 		}
 		return nil
@@ -158,15 +176,21 @@ func (o *StartupTaskOrchestrator) Shutdown(ctx context.Context) error {
 		return nil
 	}
 
+	slog.Info("Architectural state transition: Halting startup orchestrator and draining worker pools")
+
 	var errs []error
 	if o.light != nil {
 		if err := o.light.Shutdown(ctx); err != nil && !stdErrors.Is(err, context.DeadlineExceeded) {
-			errs = append(errs, fmt.Errorf("shutdown light startup tasks: %w", err))
+			errWrap := fmt.Errorf("shutdown light startup tasks: %w", err)
+			log.EmitBlockingError("Blocking structural failure: Light worker pool failed to terminate cleanly", errWrap, log.GenerateRequestID())
+			errs = append(errs, errWrap)
 		}
 	}
 	if o.heavy != nil {
 		if err := o.heavy.Shutdown(ctx); err != nil && !stdErrors.Is(err, context.DeadlineExceeded) {
-			errs = append(errs, fmt.Errorf("shutdown heavy startup tasks: %w", err))
+			errWrap := fmt.Errorf("shutdown heavy startup tasks: %w", err)
+			log.EmitBlockingError("Blocking structural failure: Heavy worker pool failed to terminate cleanly", errWrap, log.GenerateRequestID())
+			errs = append(errs, errWrap)
 		}
 	}
 	return stdErrors.Join(errs...)
@@ -179,6 +203,7 @@ func (w *RuntimeStartupBackgroundWorker) Go(fn func(context.Context) error) {
 	}
 	select {
 	case <-w.ctx.Done():
+		slog.Debug("Tracking complex conditional branch: Task rejected, worker pool context already finalized")
 		return
 	case w.queue <- fn:
 	}
@@ -193,6 +218,7 @@ func (w *RuntimeStartupBackgroundWorker) Shutdown(ctx context.Context) error {
 		ctx = context.Background()
 	}
 	w.shutdownOnce.Do(func() {
+		slog.Debug("Tracking complex conditional branch: Broadcasting cancellation signal across worker goroutines")
 		if w.cancel != nil {
 			w.cancel()
 		}
@@ -207,7 +233,11 @@ func (w *RuntimeStartupBackgroundWorker) Shutdown(ctx context.Context) error {
 	case <-w.done:
 		return w.waitErr
 	case <-ctx.Done():
-		return ctx.Err()
+		errWrap := ctx.Err()
+		slog.Warn("Mitigated service degradation: Context deadline exceeded while awaiting worker pool drain",
+			slog.String("error", errWrap.Error()),
+		)
+		return errWrap
 	}
 }
 
@@ -217,6 +247,7 @@ func (w *RuntimeStartupBackgroundWorker) dispatch() {
 	for {
 		select {
 		case <-w.ctx.Done():
+			slog.Debug("Tracking complex conditional branch: Dispatcher loop terminating via context closure")
 			return
 		case fn := <-w.queue:
 			if fn == nil {

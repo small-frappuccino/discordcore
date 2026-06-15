@@ -107,7 +107,7 @@ func TestCommandManagerSetupCommandsRollbackOnFetchError(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected setup error when command fetch fails")
 	}
-	if !strings.Contains(err.Error(), "falha ao buscar comandos registrados") {
+	if !strings.Contains(err.Error(), "failed to fetch registered commands") {
 		t.Fatalf("unexpected setup error: %v", err)
 	}
 	if cm.interactionHandlerCancel != nil {
@@ -130,7 +130,7 @@ func TestCommandManagerSetupCommandsRequiresSessionUser(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected setup error when session user is missing")
 	}
-	if got, want := err.Error(), "estado da sessão não inicializado adequadamente"; got != want {
+	if got, want := err.Error(), "session state not properly initialized"; got != want {
 		t.Fatalf("unexpected setup error: got %q, want %q", got, want)
 	}
 	if cm.interactionHandlerCancel != nil {
@@ -166,7 +166,7 @@ func TestCommandManagerSetupCommandsRollbackOnCreateError(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected setup error when command create fails")
 	}
-	if !strings.Contains(err.Error(), "erro ao sobrescrever comandos em massa no escopo global") {
+	if !strings.Contains(err.Error(), "error bulk overwriting commands in scope global") {
 		t.Fatalf("unexpected setup error: %v", err)
 	}
 	if cm.interactionHandlerCancel != nil {

@@ -135,16 +135,16 @@ func (ch *CommandHandler) Start(ctx context.Context) error {
 	ch.startTime = time.Now()
 	ch.mu.Unlock()
 
-	// Info: Registro de transição de estado arquitetural de serviço (inicialização).
-	slog.Info("iniciando rotina primária do CommandHandler",
+	// Info: Service architectural state transition log (initialization).
+	slog.Info("starting primary routine of CommandHandler",
 		slog.String("botInstanceID", ch.botInstanceID),
 	)
 
 	err := ch.SetupCommands()
 	if err != nil {
-		// Warn: Falha mitigada que não compromete o fluxo de dados principal;
-		// o serviço continua a execução ignorando a sincronização dos comandos.
-		slog.Warn("sincronização de comandos falhou na inicialização; operando com estado degradado",
+		// Warn: Mitigated failure that does not compromise main data flow;
+		// the service continues execution ignoring command synchronization.
+		slog.Warn("command synchronization failed at initialization; operating in degraded state",
 			slog.String("botInstanceID", ch.botInstanceID),
 			slog.Any("err", err),
 		)
@@ -162,8 +162,8 @@ func (ch *CommandHandler) Stop(ctx context.Context) error {
 	ch.running = false
 	ch.mu.Unlock()
 
-	// Info: Registro de encerramento planejado de instância.
-	slog.Info("encerrando instâncias principais do CommandHandler",
+	// Info: Planned instance shutdown log.
+	slog.Info("stopping main instances of CommandHandler",
 		slog.String("botInstanceID", ch.botInstanceID),
 	)
 
@@ -172,14 +172,14 @@ func (ch *CommandHandler) Stop(ctx context.Context) error {
 
 // SetupCommands initializes and registers all bot commands
 func (ch *CommandHandler) SetupCommands() error {
-	slog.Info("iniciando acoplamento de comandos e rotas",
+	slog.Info("starting command and route coupling",
 		slog.String("botInstanceID", ch.botInstanceID),
 	)
 
 	// Re-init safety: avoid duplicated handlers if setup is called more than once.
 	if ch.commandManager != nil {
-		// Warn: Condição mitigada por repetição compensatória de limpeza de estado local.
-		slog.Warn("registro de handlers sobreposto; invocando limpeza de registros prévios",
+		// Warn: Condition mitigated by compensatory repetition of local state cleanup.
+		slog.Warn("overlapping handler registration; invoking cleanup of previous registrations",
 			slog.String("botInstanceID", ch.botInstanceID),
 		)
 		if err := ch.Shutdown(); err != nil {
@@ -206,8 +206,8 @@ func (ch *CommandHandler) SetupCommands() error {
 	if err := ch.commandManager.SetupCommands(); err != nil {
 		if ch.commandManager != nil {
 			if shutdownErr := ch.commandManager.Shutdown(); shutdownErr != nil {
-				// Error: Falha estrutural bloqueante da operação em curso.
-				slog.Error("falha fatal no rollback de registro do gerenciador de comandos",
+				// Error: Blocking structural failure of current operation.
+				slog.Error("fatal failure during command manager registration rollback",
 					slog.Group("metadata",
 						slog.String("botInstanceID", ch.botInstanceID),
 						slog.String("synthetic_fault_code", "500"),
@@ -220,7 +220,7 @@ func (ch *CommandHandler) SetupCommands() error {
 		return fmt.Errorf("failed to setup commands: %w", err)
 	}
 
-	slog.Info("arquitetura de comandos estabelecida com sucesso",
+	slog.Info("command architecture successfully established",
 		slog.String("botInstanceID", ch.botInstanceID),
 	)
 	return nil
@@ -286,7 +286,7 @@ func (ch *CommandHandler) registerCommandCatalog() error {
 		registrar.Register(ch, router)
 	}
 
-	slog.Info("fragmentos do catálogo de comandos acoplados ao roteador")
+	slog.Info("command catalog fragments coupled to the router")
 	return nil
 }
 
@@ -309,7 +309,7 @@ func (ch *CommandHandler) supportsCatalogCapabilities(required CommandCatalogCap
 
 // Shutdown performs cleanup for the command handler resources
 func (ch *CommandHandler) Shutdown() error {
-	slog.Info("iniciando drenagem e encerramento de conexões do CommandHandler",
+	slog.Info("starting connection drain and shutdown of CommandHandler",
 		slog.String("botInstanceID", ch.botInstanceID),
 	)
 
@@ -322,8 +322,8 @@ func (ch *CommandHandler) Shutdown() error {
 	}
 
 	if len(errs) > 0 {
-		// Error: Falha estrutural bloqueante ao drenar dependências. Aciona sistema de agregação.
-		slog.Error("falhas detectadas durante a execução do shutdown do gerenciador de comandos",
+		// Error: Blocking structural failure draining dependencies. Triggers aggregation system.
+		slog.Error("failures detected during command manager shutdown execution",
 			slog.Group("metadata",
 				slog.String("botInstanceID", ch.botInstanceID),
 				slog.String("synthetic_fault_code", "500"),
@@ -345,15 +345,15 @@ func (ch *CommandHandler) handlesGuild(guildID string) bool {
 }
 
 func (ch *CommandHandler) handlesGuildRoute(guildID string, routeKey core.InteractionRouteKey) bool {
-	// Debug: Rastreamento granular do fluxo lógico do filtro de rota de guilda.
-	slog.Debug("avaliando autorização de rota para requisição",
+	// Debug: Granular tracking of the guild route filter logical flow.
+	slog.Debug("evaluating route authorization for request",
 		slog.String("guildID", guildID),
 		slog.String("routeKeyPath", routeKey.Path),
 	)
 
 	feature := core.ResolveFeatureForCommandPath(routeKey.Path)
 	if !ch.matchesGuildBotInstance(guildID, feature) {
-		slog.Debug("permissão negada: incompatibilidade entre instância bot e funcionalidade mapeada",
+		slog.Debug("permission denied: mismatch between bot instance and mapped functionality",
 			slog.String("feature", feature),
 		)
 		return false
@@ -394,8 +394,8 @@ func (ch *CommandHandler) matchesGuildBotInstance(guildID string, feature string
 	resolvedID, _ := guild.ResolveFeatureBotInstanceID(feature)
 	tokenEnc, ok := guild.BotInstanceTokens[resolvedID]
 
-	// Debug: Inspeção granular de estado transiente e avaliação estrutural para identificação de contexto.
-	slog.Debug("resolução de escopo de execução do bot para guilda específica",
+	// Debug: Granular inspection of transient state and structural evaluation for context identification.
+	slog.Debug("resolution of bot execution scope for specific guild",
 		slog.String("resolvedID", resolvedID),
 		slog.String("feature", feature),
 		slog.Bool("tokenExists", ok),

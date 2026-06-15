@@ -18,7 +18,7 @@ func (gc GuildConfig) BelongsToBotInstance(botInstanceID string) bool {
 	// If the guild has gracefully fallen back due to having NO bot tokens,
 	// the magic blank instance handles it.
 	if len(gc.BotInstanceTokens) == 0 {
-		slog.Debug("Inspeção de estado transiente: Avaliação condicional sobre vetor de tokens vazio resultando em fallback de instância",
+		slog.Debug("Transient state inspection: Conditional evaluation on empty token vector resulting in instance fallback",
 			slog.String("guild_id", gc.GuildID),
 		)
 		return botInstanceID == ""
@@ -27,7 +27,7 @@ func (gc GuildConfig) BelongsToBotInstance(botInstanceID string) bool {
 	token, ok := gc.BotInstanceTokens[botInstanceID]
 	match := ok && len(token) > 0
 
-	slog.Debug("Inspeção de estado transiente: Resolução de pertencimento computada na árvore de guildas",
+	slog.Debug("Transient state inspection: Membership resolution computed in guild tree",
 		slog.String("guild_id", gc.GuildID),
 		slog.String("bot_instance_id", botInstanceID),
 		slog.Bool("match", match),
@@ -52,7 +52,7 @@ func (cfg *BotConfig) GuildsForBotInstance(botInstanceID string) []GuildConfig {
 		}
 	}
 
-	slog.Debug("Rastreamento de ramificação condicional: Filtragem vetorial de guildas por alocação de instância concluída",
+	slog.Debug("Conditional branch tracking: Guild vector filtering by instance allocation completed",
 		slog.String("target_instance", target),
 		slog.Int("total_guilds", len(cfg.Guilds)),
 		slog.Int("matched_guilds", len(out)),
@@ -81,7 +81,7 @@ func (cfg *BotConfig) GuildsForBotInstanceFeature(botInstanceID string, feature 
 		}
 	}
 
-	slog.Debug("Rastreamento de ramificação condicional: Filtragem vetorial segmentada por roteamento de feature concluída",
+	slog.Debug("Conditional branch tracking: Segmented vector filtering by feature routing completed",
 		slog.String("target_instance", target),
 		slog.String("feature", feature),
 		slog.Int("total_guilds", len(cfg.Guilds)),
@@ -112,7 +112,7 @@ func (gc GuildConfig) ResolveFeatureBotInstanceID(feature string) (resolvedID st
 
 	token, ok := gc.BotInstanceTokens[route]
 	if !ok || len(token) == 0 {
-		slog.Warn("Degradação de serviço mitigada: Roteamento estrutural de feature apontou para token revogado ou inexistente. Acionando fallback sem interrupção de fluxo principal.",
+		slog.Warn("Mitigated service degradation: Structural feature routing pointed to revoked or non-existent token. Triggering fallback without main flow interruption.",
 			slog.String("guild_id", gc.GuildID),
 			slog.String("feature", feature),
 			slog.String("invalid_route", route),
@@ -120,7 +120,7 @@ func (gc GuildConfig) ResolveFeatureBotInstanceID(feature string) (resolvedID st
 		return "<unrouted>", true
 	}
 
-	slog.Debug("Inspeção de estado transiente: Rota de feature resolvida nominalmente contra o dicionário de tokens",
+	slog.Debug("Transient state inspection: Feature route resolved nominally against token dictionary",
 		slog.String("guild_id", gc.GuildID),
 		slog.String("feature", feature),
 		slog.String("resolved_route", route),

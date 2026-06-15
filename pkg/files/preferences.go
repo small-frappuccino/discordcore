@@ -14,7 +14,7 @@ import (
 	"github.com/small-frappuccino/discordgo"
 )
 
-// log.GenerateRequestID cria um identificador único transiente para correlação de erros.
+// log.GenerateRequestID creates a unique transient identifier for error correlation.
 func GenerateRequestID() string {
 	bytes := make([]byte, 16)
 	if _, err := rand.Read(bytes); err != nil {
@@ -23,7 +23,7 @@ func GenerateRequestID() string {
 	return hex.EncodeToString(bytes)
 }
 
-// log.EmitBlockingError encapsula a emissão de falhas estruturais com metadados obrigatórios.
+// log.EmitBlockingError encapsulates the emission of structural failures with mandatory metadata.
 func EmitBlockingError(msg string, err error, requestID string) {
 	slog.Error(msg,
 		slog.String("request_id", requestID),
@@ -33,10 +33,10 @@ func EmitBlockingError(msg string, err error, requestID string) {
 	)
 }
 
-// --- Inicialização e Persistência ---
+// --- Initialization and Persistence ---
 
-// NewConfigManagerWithStore instancia um novo gerenciador de configuração apoiado pela
-// camada de persistência fornecida.
+// NewConfigManagerWithStore instantiates a new config manager backed by the
+// provided persistence layer.
 func NewConfigManagerWithStore(store ConfigStore) *ConfigManager {
 	description := ""
 	if store != nil {
@@ -48,18 +48,18 @@ func NewConfigManagerWithStore(store ConfigStore) *ConfigManager {
 	}
 }
 
-// LoadConfigFromStore executa uma leitura atômica e validação da configuração
-// na camada de persistência sem sofrer mutação no estado ativo do gerenciador.
+// LoadConfigFromStore performs an atomic read and validation of the configuration
+// on the persistence layer without mutating the active manager state.
 func (mgr *ConfigManager) LoadConfigFromStore() (*BotConfig, bool, error) {
 	if mgr.store == nil {
-		err := fmt.Errorf("config store não está configurado")
-		log.EmitBlockingError("Falha na inicialização da leitura de configuração", err, log.GenerateRequestID())
+		err := fmt.Errorf("config store is not configured")
+		log.EmitBlockingError("Failed to initialize configuration read", err, log.GenerateRequestID())
 		return nil, false, err
 	}
 	cfg, err := mgr.store.Load()
 	if err != nil {
-		errWrap := fmt.Errorf("carregar configuração de %s: %w", mgr.ConfigPath(), err)
-		log.EmitBlockingError("Falha estrutural no carregamento do arquivo", errWrap, log.GenerateRequestID())
+		errWrap := fmt.Errorf("load configuration from %s: %w", mgr.ConfigPath(), err)
+		log.EmitBlockingError("Structural failure in file loading", errWrap, log.GenerateRequestID())
 		return nil, false, errWrap
 	}
 
@@ -67,13 +67,13 @@ func (mgr *ConfigManager) LoadConfigFromStore() (*BotConfig, bool, error) {
 
 	if validationErr := validateBotConfig(cfg); validationErr != nil {
 		errWrap := wrapValidationError(validationErr)
-		log.EmitBlockingError("Falha de validação da configuração carregada", errWrap, log.GenerateRequestID())
+		log.EmitBlockingError("Validation failure of loaded configuration", errWrap, log.GenerateRequestID())
 		return nil, false, errWrap
 	}
 	return cfg, orderMigrated, nil
 }
 
-// ApplyConfig rotaciona atomicamente o ponteiro de configuração global e reconstrói índices.
+// ApplyConfig atomically rotates the global configuration pointer and rebuilds indexes.
 func (mgr *ConfigManager) ApplyConfig(cfg *BotConfig) int {
 	if cfg == nil {
 		return 0
@@ -81,7 +81,7 @@ func (mgr *ConfigManager) ApplyConfig(cfg *BotConfig) int {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
 
-	slog.Debug("Iniciando transição atômica de estado da configuração",
+	slog.Debug("Starting atomic transition of configuration state",
 		slog.Int("guilds_payload_size", len(cfg.Guilds)),
 	)
 
@@ -89,14 +89,14 @@ func (mgr *ConfigManager) ApplyConfig(cfg *BotConfig) int {
 	mgr.config = cfg
 
 	if len(mgr.config.Guilds) == 0 {
-		slog.Warn("Configuração aplicada não contém guildas ativas. Execução operando em limite basal.",
+		slog.Warn("Applied configuration does not contain active guilds. Running in basal mode.",
 			slog.String("path", mgr.ConfigPath()),
 		)
 	}
 
 	dupCount, err := mgr.rebuildGuildIndexLocked("apply")
 	if err != nil {
-		slog.Warn("Degradação mitigada na reconstrução do índice",
+		slog.Warn("Mitigated degradation in index rebuilding",
 			slog.String("error", err.Error()),
 			slog.String("path", mgr.ConfigPath()),
 		)
@@ -105,13 +105,13 @@ func (mgr *ConfigManager) ApplyConfig(cfg *BotConfig) int {
 	mgr.publishSnapshotLocked()
 	mgr.notifySubscribersLocked(oldCfg, cfg)
 
-	slog.Info("Transição de estado da configuração concluída",
+	slog.Info("Configuration state transition completed",
 		slog.Int("duplicates_removed", dupCount),
 	)
 	return dupCount
 }
 
-// LoadConfig carrega a configuração diretamente do sistema de arquivos.
+// LoadConfig loads the configuration directly from the filesystem.
 func (mgr *ConfigManager) LoadConfig() error {
 	cfg, orderMigrated, err := mgr.LoadConfigFromStore()
 	if err != nil {
@@ -121,52 +121,52 @@ func (mgr *ConfigManager) LoadConfig() error {
 	dupCount := mgr.ApplyConfig(cfg)
 
 	if dupCount > 0 || orderMigrated {
-		slog.Debug("Anomalia estrutural sanada em memória, forçando persistência compensatória",
+		slog.Debug("Structural anomaly resolved in memory, forcing compensatory persistence",
 			slog.Bool("order_migrated", orderMigrated),
 			slog.Int("duplicates", dupCount),
 		)
 		if saveErr := mgr.SaveConfig(); saveErr != nil {
-			errWrap := fmt.Errorf("salvar configuração após normalização: %w", saveErr)
-			log.EmitBlockingError("Falha ao gravar correções estruturais na configuração", errWrap, log.GenerateRequestID())
+			errWrap := fmt.Errorf("save configuration after normalization: %w", saveErr)
+			log.EmitBlockingError("Failed to write structural corrections to configuration", errWrap, log.GenerateRequestID())
 			return errWrap
 		}
-		slog.Info("Configuração re-persistida após normalização em tempo de execução",
+		slog.Info("Configuration re-persisted after runtime normalization",
 			slog.String("path", mgr.ConfigPath()),
 			slog.Int("duplicates", dupCount),
 			slog.Bool("autoRoleOrderMigrated", orderMigrated),
 		)
 	} else if exists, err := mgr.store.Exists(); err == nil && !exists {
-		slog.Info("Inicialização em estado limpo: arquivo primário não detectado",
+		slog.Info("Initialized in clean state: primary file not detected",
 			slog.String("path", mgr.ConfigPath()),
 		)
 	}
 	return nil
 }
 
-// SaveConfig persiste a configuração ativa no sistema de arquivos.
+// SaveConfig persists the active configuration to the filesystem.
 func (mgr *ConfigManager) SaveConfig() error {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
 
 	if err := mgr.saveConfigLocked(); err != nil {
 		errWrap := fmt.Errorf("ConfigManager.SaveConfig: %w", err)
-		log.EmitBlockingError("Falha de persistência global bloqueante", errWrap, log.GenerateRequestID())
+		log.EmitBlockingError("Blocking global persistence failure", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
 	mgr.publishSnapshotLocked()
 	return nil
 }
 
-// SaveGuildConfig atualiza uma configuração específica de guilda e persiste a alteração imediatamente.
+// SaveGuildConfig updates a specific guild configuration and persists the change immediately.
 func (mgr *ConfigManager) SaveGuildConfig(cfg GuildConfig) error {
-	slog.Debug("Atualizando estado granular de guilda",
+	slog.Debug("Updating granular guild state",
 		slog.String("guildID", cfg.GuildID),
 	)
 	if err := mgr.AddGuildConfig(cfg); err != nil {
-		return fmt.Errorf("falha ao atualizar configuração em memória: %w", err)
+		return fmt.Errorf("failed to update in-memory configuration: %w", err)
 	}
 	if err := mgr.SaveConfig(); err != nil {
-		return fmt.Errorf("falha ao persistir configuração de guilda: %w", err)
+		return fmt.Errorf("failed to persist guild configuration: %w", err)
 	}
 	return nil
 }
@@ -176,24 +176,24 @@ func (mgr *ConfigManager) saveConfigLocked() error {
 		return errors.New(ErrCannotSaveNilConfig)
 	}
 	if mgr.store == nil {
-		return fmt.Errorf("config store não está configurado")
+		return fmt.Errorf("config store is not configured")
 	}
 	if validationErr := validateBotConfig(mgr.config); validationErr != nil {
 		return wrapValidationError(validationErr)
 	}
 
 	if err := mgr.store.Save(mgr.config); err != nil {
-		return fmt.Errorf("salvar configuração para %s: %w", mgr.ConfigPath(), err)
+		return fmt.Errorf("save configuration for %s: %w", mgr.ConfigPath(), err)
 	}
 
-	slog.Info("Transição de estado I/O: Configuração persistida com sucesso",
+	slog.Info("I/O state transition: Configuration successfully persisted",
 		slog.String("path", mgr.ConfigPath()),
 	)
 
 	return nil
 }
 
-// UpdateRuntimeConfig muta runtime_config e persiste a mudança em disco.
+// UpdateRuntimeConfig mutates runtime_config and persists the change to disk.
 func (mgr *ConfigManager) UpdateRuntimeConfig(fn func(*RuntimeConfig) error) (RuntimeConfig, error) {
 	snapshot, err := mgr.UpdateConfig(func(cfg *BotConfig) error {
 		if fn == nil {
@@ -203,7 +203,7 @@ func (mgr *ConfigManager) UpdateRuntimeConfig(fn func(*RuntimeConfig) error) (Ru
 	})
 	if err != nil {
 		errWrap := fmt.Errorf("ConfigManager.UpdateRuntimeConfig: %w", err)
-		log.EmitBlockingError("Falha mutacional na configuração de runtime", errWrap, log.GenerateRequestID())
+		log.EmitBlockingError("Mutational failure in runtime configuration", errWrap, log.GenerateRequestID())
 		return RuntimeConfig{}, errWrap
 	}
 	return snapshot.RuntimeConfig, nil
@@ -211,7 +211,7 @@ func (mgr *ConfigManager) UpdateRuntimeConfig(fn func(*RuntimeConfig) error) (Ru
 
 // --- Getters ---
 
-// ConfigPath retorna uma descrição em formato texto do backend de configuração ativo.
+// ConfigPath returns a text description of the active configuration backend.
 func (mgr *ConfigManager) ConfigPath() string {
 	if mgr == nil {
 		return ""
@@ -225,7 +225,7 @@ func (mgr *ConfigManager) ConfigPath() string {
 	return ""
 }
 
-// Config retorna a publicação atual de leitura imutável do snapshot.
+// Config returns the current read-only published snapshot of the configuration.
 func (mgr *ConfigManager) Config() *BotConfig {
 	snap := mgr.currentPublishedSnapshot()
 	if snap == nil {
@@ -234,7 +234,7 @@ func (mgr *ConfigManager) Config() *BotConfig {
 	return snap.config
 }
 
-// HasAnyGuilds avalia a existência de guildas configuradas.
+// HasAnyGuilds evaluates the existence of configured guilds.
 func (mgr *ConfigManager) HasAnyGuilds() bool {
 	snap := mgr.currentPublishedSnapshot()
 	return snap != nil && snap.config != nil && len(snap.config.Guilds) > 0
@@ -242,7 +242,7 @@ func (mgr *ConfigManager) HasAnyGuilds() bool {
 
 // --- Guild Config Management ---
 
-// GuildConfig retorna a publicação atual de leitura imutável do snapshot para uma guilda.
+// GuildConfig returns the current read-only published snapshot of the configuration for a guild.
 func (mgr *ConfigManager) GuildConfig(guildID string) *GuildConfig {
 	if mgr == nil || guildID == "" {
 		return nil
@@ -277,7 +277,7 @@ func (mgr *ConfigManager) guildConfigWithPublish(guildID string) *GuildConfig {
 		}
 	}
 	if _, err := mgr.rebuildGuildIndexLocked("lookup_miss"); err != nil {
-		slog.Warn("Reconstrução de índice acionada via falha de cache mitigada",
+		slog.Warn("Index rebuilding triggered via mitigated cache miss",
 			slog.String("guildID", guildID),
 			slog.String("error", err.Error()),
 		)
@@ -289,7 +289,7 @@ func (mgr *ConfigManager) guildConfigWithPublish(guildID string) *GuildConfig {
 			}
 		}
 	}
-	slog.Debug("Mapeamento de guilda inexistente no índice consolidado",
+	slog.Debug("Guild mapping does not exist in consolidated index",
 		slog.String("guildID", guildID),
 	)
 	return nil
@@ -299,13 +299,13 @@ func (mgr *ConfigManager) rebuildGuildIndexLocked(reason string) (int, error) {
 	mgr.indexRebuilds.Add(1)
 	if mgr.config == nil {
 		mgr.guildIndex = nil
-		slog.Info("Índice de guildas anulado devido à configuração nula",
+		slog.Info("Guild index cleared due to nil configuration",
 			slog.String("reason", reason),
 		)
 		return 0, nil
 	}
 
-	slog.Debug("Iterando estrutura de guildas para reconstrução de índice hash",
+	slog.Debug("Iterating guild structures for hash index rebuilding",
 		slog.String("reason", reason),
 	)
 
@@ -320,7 +320,7 @@ func (mgr *ConfigManager) rebuildGuildIndexLocked(reason string) (int, error) {
 			continue
 		}
 		if _, exists := index[gid]; exists {
-			slog.Debug("Colisão de chaves evitada durante a construção do índice",
+			slog.Debug("Key collision avoided during index construction",
 				slog.String("guildID", gid),
 			)
 			dupCount++
@@ -332,7 +332,7 @@ func (mgr *ConfigManager) rebuildGuildIndexLocked(reason string) (int, error) {
 
 	if dupCount > 0 {
 		mgr.indexDuplicates.Add(uint64(dupCount))
-		slog.Warn("Integridade estrutural corrigida localmente: guildas duplicadas expurgadas do vetor",
+		slog.Warn("Structural integrity corrected locally: duplicate guilds purged from vector",
 			slog.String("reason", reason),
 			slog.Int("duplicates", dupCount),
 			slog.Int("remaining", len(deduped)),
@@ -341,18 +341,18 @@ func (mgr *ConfigManager) rebuildGuildIndexLocked(reason string) (int, error) {
 	}
 
 	mgr.guildIndex = index
-	slog.Info("Transição de estado estrutural concluída: Índice de guildas reconstruído",
+	slog.Info("Structural state transition completed: Guild index rebuilt",
 		slog.String("reason", reason),
 		slog.Int("guilds_count", len(mgr.config.Guilds)),
 	)
 
 	if dupCount > 0 {
-		return dupCount, fmt.Errorf("removidas %d configurações de guildas duplicadas", dupCount)
+		return dupCount, fmt.Errorf("removed %d duplicate guild configurations", dupCount)
 	}
 	return dupCount, nil
 }
 
-// GuildIndexStats retorna contadores operacionais para métricas de índice.
+// GuildIndexStats returns operational counters for index metrics.
 func (mgr *ConfigManager) GuildIndexStats() GuildIndexStats {
 	if mgr == nil {
 		return GuildIndexStats{}
@@ -364,7 +364,7 @@ func (mgr *ConfigManager) GuildIndexStats() GuildIndexStats {
 	}
 }
 
-// AddGuildConfig injeta ou substitui a configuração mapeada de uma guilda.
+// AddGuildConfig injects or replaces the mapped configuration of a guild.
 func (mgr *ConfigManager) AddGuildConfig(guildCfg GuildConfig) error {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
@@ -373,7 +373,7 @@ func (mgr *ConfigManager) AddGuildConfig(guildCfg GuildConfig) error {
 		next = &BotConfig{Guilds: []GuildConfig{}}
 	}
 
-	slog.Debug("Injeção granular de guilda na árvore de configuração",
+	slog.Debug("Granular guild injection into configuration tree",
 		slog.String("guildID", guildCfg.GuildID),
 	)
 
@@ -383,15 +383,15 @@ func (mgr *ConfigManager) AddGuildConfig(guildCfg GuildConfig) error {
 
 	mgr.config = next
 	if _, err := mgr.rebuildGuildIndexLocked("add"); err != nil {
-		errWrap := fmt.Errorf("adicionar configuração de guilda: %w", err)
-		log.EmitBlockingError("Falha crítica ao anexar configuração na árvore de estados", errWrap, log.GenerateRequestID())
+		errWrap := fmt.Errorf("add guild configuration: %w", err)
+		log.EmitBlockingError("Critical failure attaching configuration to state tree", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
 	mgr.publishSnapshotLocked()
 	return nil
 }
 
-// RemoveGuildConfig expurga uma configuração de guilda.
+// RemoveGuildConfig purges a guild configuration.
 func (mgr *ConfigManager) RemoveGuildConfig(guildID string) {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
@@ -399,7 +399,7 @@ func (mgr *ConfigManager) RemoveGuildConfig(guildID string) {
 		return
 	}
 
-	slog.Debug("Remoção atômica de nó da guilda na configuração",
+	slog.Debug("Atomic removal of guild node in configuration",
 		slog.String("guildID", guildID),
 	)
 
@@ -410,7 +410,7 @@ func (mgr *ConfigManager) RemoveGuildConfig(guildID string) {
 	mgr.config = next
 
 	if _, err := mgr.rebuildGuildIndexLocked("remove"); err != nil {
-		slog.Warn("Colisão mitigada durante a reconstrução pós-remoção",
+		slog.Warn("Collision mitigated during post-removal rebuild",
 			slog.String("guildID", guildID),
 			slog.String("error", err.Error()),
 		)
@@ -420,13 +420,13 @@ func (mgr *ConfigManager) RemoveGuildConfig(guildID string) {
 
 // --- Guild Detection & Addition ---
 
-// DetectGuilds detecta automaticamente guildas nas quais o bot está ativo.
+// DetectGuilds automatically detects guilds where the bot is active.
 func (mgr *ConfigManager) DetectGuilds(session *discordgo.Session) error {
 	return mgr.DetectGuildsForBot(session, "")
 }
 
-// DetectGuildsForBot automatiza a descoberta de guildas e as acopla ao
-// identificador de bot correspondente.
+// DetectGuildsForBot automates guild discovery and binds it to the
+// corresponding bot identifier.
 func (mgr *ConfigManager) DetectGuildsForBot(session *discordgo.Session, botInstanceID string) error {
 	botInstanceID = NormalizeBotInstanceID(botInstanceID)
 	detected := make([]GuildConfig, 0, len(session.State.Guilds))
@@ -434,7 +434,7 @@ func (mgr *ConfigManager) DetectGuildsForBot(session *discordgo.Session, botInst
 	for _, g := range session.State.Guilds {
 		fullGuild, err := session.Guild(g.ID)
 		if err != nil {
-			slog.Warn("Degradação na busca de dados arquiteturais da guilda; a operação principal continuará ociosamente",
+			slog.Warn("Degradation in fetching guild architectural data; main operation will continue idly",
 				slog.String("guildID", g.ID),
 				slog.String("error", err.Error()),
 			)
@@ -443,7 +443,7 @@ func (mgr *ConfigManager) DetectGuildsForBot(session *discordgo.Session, botInst
 
 		channelID := FindSuitableChannel(session, g.ID)
 		if channelID == "" {
-			slog.Warn("Falha mitigada: canal operacional primário ausente na guilda alvo",
+			slog.Warn("Mitigated failure: primary operational channel missing in target guild",
 				slog.String("guildName", fullGuild.Name),
 				slog.String("guildID", g.ID),
 			)
@@ -454,7 +454,7 @@ func (mgr *ConfigManager) DetectGuildsForBot(session *discordgo.Session, botInst
 
 		entryLeaveID := FindEntryLeaveChannel(session, g.ID)
 		if entryLeaveID == "" {
-			slog.Debug("Roteamento dinâmico: utilizando canal principal como fallback para entry_leave",
+			slog.Debug("Dynamic routing: using main channel as fallback for entry_leave",
 				slog.String("guildID", g.ID),
 			)
 			entryLeaveID = channelID
@@ -476,7 +476,7 @@ func (mgr *ConfigManager) DetectGuildsForBot(session *discordgo.Session, botInst
 			},
 		}
 		detected = append(detected, guildCfg)
-		slog.Info("Transição de rede: Guilda vinculada à matriz de descoberta",
+		slog.Info("Network transition: Guild linked to discovery matrix",
 			slog.String("guildName", fullGuild.Name),
 			slog.String("guildID", g.ID),
 			slog.String("channelID", channelID),
@@ -488,26 +488,26 @@ func (mgr *ConfigManager) DetectGuildsForBot(session *discordgo.Session, botInst
 		return nil
 	})
 	if err != nil {
-		log.EmitBlockingError("Falha de atualização em bloco durante fase de detecção heurística", err, log.GenerateRequestID())
+		log.EmitBlockingError("Block update failure during heuristic detection phase", err, log.GenerateRequestID())
 	}
 	return err
 }
 
-// RegisterGuild injeta explicitamente uma nova guilda.
+// RegisterGuild explicitly injects a new guild.
 func (mgr *ConfigManager) RegisterGuild(session *discordgo.Session, guildID string) error {
 	return mgr.RegisterGuildForBot(session, guildID, "")
 }
 
-// RegisterGuildForBot injeta e acopla a guilda à instância de bot parametrizada.
+// RegisterGuildForBot injects and binds the guild to the parameterized bot instance.
 func (mgr *ConfigManager) RegisterGuildForBot(session *discordgo.Session, guildID, botInstanceID string) error {
 	if session == nil {
-		err := fmt.Errorf("%w: sessão do discord não está disponível", ErrGuildBootstrapDiscordFetch)
-		log.EmitBlockingError("Estado corrompido em rotina de registro: Sessão nula", err, log.GenerateRequestID())
+		err := fmt.Errorf("%w: discord session is not available", ErrGuildBootstrapDiscordFetch)
+		log.EmitBlockingError("Corrupted state in register routine: Null session", err, log.GenerateRequestID())
 		return err
 	}
 	botInstanceID = NormalizeBotInstanceID(botInstanceID)
 	if mgr.GuildConfig(guildID) != nil {
-		slog.Info("Condição preexistente sanada silenciada: guilda já injetada",
+		slog.Info("Pre-existing condition silently resolved: guild already injected",
 			slog.String("guildID", guildID),
 		)
 		return nil
@@ -546,8 +546,8 @@ func (mgr *ConfigManager) RegisterGuildForBot(session *discordgo.Session, guildI
 		cfg.Guilds = append(cfg.Guilds, guildCfg)
 		return nil
 	}); err != nil {
-		errWrap := fmt.Errorf("registrar guilda: salvar configuração: %w", err)
-		log.EmitBlockingError("Falha bloqueante em rotina primária de injeção", errWrap, log.GenerateRequestID())
+		errWrap := fmt.Errorf("register guild: save configuration: %w", err)
+		log.EmitBlockingError("Blocking failure in primary injection routine", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
 
@@ -555,7 +555,7 @@ func (mgr *ConfigManager) RegisterGuildForBot(session *discordgo.Session, guildI
 	if ch, err := session.Channel(channelID); err == nil {
 		channelName = ch.Name
 	}
-	slog.Info("Transição de estado arquitetural: Registro de guilda consumado e acoplado a porta serial",
+	slog.Info("Architectural state transition: Guild registration completed and coupled to serial port",
 		slog.String("guildName", guild.Name),
 		slog.String("guildID", guildID),
 		slog.String("channel", channelName),
@@ -565,7 +565,7 @@ func (mgr *ConfigManager) RegisterGuildForBot(session *discordgo.Session, guildI
 
 // --- Utility & Logging ---
 
-// ShowConfiguredGuilds emite logs sumários das instâncias indexadas.
+// ShowConfiguredGuilds emits summary logs of the indexed instances.
 func ShowConfiguredGuilds(s *discordgo.Session, configManager *ConfigManager) {
 	configuration := configManager.Config()
 	if configuration == nil || len(configuration.Guilds) == 0 {
@@ -573,19 +573,19 @@ func ShowConfiguredGuilds(s *discordgo.Session, configManager *ConfigManager) {
 	}
 	for _, guildConfig := range configuration.Guilds {
 		if guild, err := s.Guild(guildConfig.GuildID); err == nil {
-			slog.Info("Procedimento em conformidade: Monitoramento ativo sobre canal de telemetria da guilda",
+			slog.Info("Compliant procedure: Active monitoring on guild telemetry channel",
 				slog.String("guildName", guild.Name),
 				slog.String("guildID", guild.ID),
 			)
 		} else {
-			slog.Warn("Obstrução na malha de comunicação: Guilda registrada inacessível à inspeção de telemetria",
+			slog.Warn("Obstruction in communication network: Registered guild inaccessible to telemetry inspection",
 				slog.String("guildID", guildConfig.GuildID),
 			)
 		}
 	}
 }
 
-// FindSuitableChannel busca o canal primário condizente para alocação de pipes.
+// FindSuitableChannel searches for the suitable primary channel for pipe allocation.
 func FindSuitableChannel(session *discordgo.Session, guildID string) string {
 	if session == nil || session.State == nil || session.State.User == nil {
 		return ""
@@ -610,7 +610,7 @@ func FindSuitableChannel(session *discordgo.Session, guildID string) string {
 	return ""
 }
 
-// FindEntryLeaveChannel busca canal primário para registro de eventos de I/O de usuários.
+// FindEntryLeaveChannel searches for the primary channel for logging user I/O events.
 func FindEntryLeaveChannel(session *discordgo.Session, guildID string) string {
 	if session == nil || session.State == nil || session.State.User == nil {
 		return ""
@@ -632,7 +632,7 @@ func FindEntryLeaveChannel(session *discordgo.Session, guildID string) string {
 	return ""
 }
 
-// HasSendPermission valida os vetores de autorização contra a bitmask alvo.
+// HasSendPermission validates authorization vectors against the target bitmask.
 func HasSendPermission(session *discordgo.Session, channelID string) bool {
 	if session == nil || session.State == nil || session.State.User == nil || channelID == "" {
 		return false
@@ -643,7 +643,7 @@ func HasSendPermission(session *discordgo.Session, channelID string) bool {
 	return false
 }
 
-// FindAdminRoles extrai do vetor as funções contendo o bitmask de administrador.
+// FindAdminRoles extracts roles containing the administrator bitmask from the vector.
 func FindAdminRoles(session *discordgo.Session, guildID string) []string {
 	var allowedRoles []string
 	roles, err := session.GuildRoles(guildID)
@@ -657,10 +657,10 @@ func FindAdminRoles(session *discordgo.Session, guildID string) []string {
 	return allowedRoles
 }
 
-// TextChannels converte e extrai do multiplexador os canais aptos para transmissão em formato texto.
+// TextChannels converts and extracts channels suitable for text transmission from the multiplexer.
 func TextChannels(session *discordgo.Session, guildID string) ([]*discordgo.Channel, error) {
 	if session == nil || session.State == nil || session.State.User == nil {
-		return nil, fmt.Errorf("sessão não inicializada")
+		return nil, fmt.Errorf("session not initialized")
 	}
 	channels, err := session.GuildChannels(guildID)
 	if err != nil {
@@ -678,10 +678,10 @@ func TextChannels(session *discordgo.Session, guildID string) ([]*discordgo.Chan
 	return textChannels, nil
 }
 
-// ValidateChannel valida propriedades de nó, estrutura hierárquica e integridade de restrições.
+// ValidateChannel validates node properties, hierarchical structure, and constraint integrity.
 func ValidateChannel(session *discordgo.Session, guildID, channelID string) error {
 	if session == nil || session.State == nil || session.State.User == nil {
-		return errors.New("sessão não inicializada")
+		return errors.New("session not initialized")
 	}
 	channel, err := session.Channel(channelID)
 	if err != nil {
@@ -703,12 +703,12 @@ func ValidateChannel(session *discordgo.Session, guildID, channelID string) erro
 	return nil
 }
 
-// LogConfiguredGuilds sumaria em log a árvore de nós mapeada.
+// LogConfiguredGuilds logs a summary of the mapped node tree.
 func LogConfiguredGuilds(configManager *ConfigManager, session *discordgo.Session) error {
 	return LogConfiguredGuildsForBot(configManager, session, "")
 }
 
-// LogConfiguredGuildsForBot sumariza o subconjunto mapeado designado para roteamento de instância bot explícita.
+// LogConfiguredGuildsForBot summarizes the mapped subset designated for routing of explicit bot instance.
 func LogConfiguredGuildsForBot(configManager *ConfigManager, session *discordgo.Session, botInstanceID string) error {
 	return logConfiguredGuildSubset(configManager, session, func(cfg *BotConfig) []GuildConfig {
 		guilds := cfg.Guilds
@@ -722,7 +722,7 @@ func LogConfiguredGuildsForBot(configManager *ConfigManager, session *discordgo.
 func logConfiguredGuildSubset(configManager *ConfigManager, session *discordgo.Session, resolve func(*BotConfig) []GuildConfig) error {
 	cfg := configManager.Config()
 	if cfg == nil || len(cfg.Guilds) == 0 {
-		slog.Warn("Limiar basal atingido: Vetor de alocação de guildas vazio na rotina de boot")
+		slog.Warn("Basal threshold reached: Empty guild allocation vector in boot routine")
 		return nil
 	}
 
@@ -731,11 +731,11 @@ func logConfiguredGuildSubset(configManager *ConfigManager, session *discordgo.S
 		guilds = resolve(cfg)
 	}
 	if len(guilds) == 0 {
-		slog.Warn("Limiar basal atingido: Vetor de alocação de guildas vazio na rotina de boot")
+		slog.Warn("Basal threshold reached: Empty guild allocation vector in boot routine")
 		return nil
 	}
 
-	slog.Info("Sumarização de carga inicializada",
+	slog.Info("Load summary initialized",
 		slog.Int("guilds_count", len(guilds)),
 	)
 
@@ -743,12 +743,12 @@ func logConfiguredGuildSubset(configManager *ConfigManager, session *discordgo.S
 	for _, g := range guilds {
 		guild, err := session.Guild(g.GuildID)
 		if err == nil {
-			slog.Info("Interface ativa confirmada",
+			slog.Info("Active interface confirmed",
 				slog.String("guildName", guild.Name),
 				slog.String("guildID", guild.ID),
 			)
 		} else {
-			slog.Warn("Falha de handshake com interface da guilda reportada pelo hub central",
+			slog.Warn("Handshake failure with guild interface reported by central hub",
 				slog.String("guildID", g.GuildID),
 			)
 			errCount++

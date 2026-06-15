@@ -16,7 +16,7 @@ import (
 	"github.com/small-frappuccino/discordgo"
 )
 
-// CommandRouter gerencia o roteamento e a execução de comandos
+// CommandRouter manages routing and execution of commands
 type CommandRouter struct {
 	registry       *CommandRegistry
 	routeRegistry  *interactionRouteRegistry
@@ -28,18 +28,18 @@ type CommandRouter struct {
 	guildFilter      func(string) bool
 	guildRouteFilter func(string, InteractionRouteKey) bool
 
-	// runtimeApplier consiste em um gerenciador opcional de aplicação a quente compartilhado (tema + alternadores ALICE_DISABLE_*).
-	// Configurado pelo executor da aplicação, permite que manipuladores de interação apliquem alterações
-	// imediatamente após a persistência de mudanças de configuração em tempo de execução.
+	// runtimeApplier consists of an optional shared hot-apply manager (theme + ALICE_DISABLE_* toggles).
+	// Configured by the application runner, it allows interaction handlers to apply changes
+	// immediately after persisting runtime configuration changes.
 	runtimeApplier *runtimeapply.Manager
 
-	// taskRouter consiste em um roteador de tarefas compartilhado opcional (preenchimento retroativo, notificações assíncronas).
+	// taskRouter consists of an optional shared task router (backfilling, asynchronous notifications).
 	taskRouter *task.TaskRouter
 
 	ignoredArikawaCommands map[string]bool
 }
 
-// NewCommandRouter aloca e inicializa um novo roteador de comandos
+// NewCommandRouter allocates and initializes a new command router
 func NewCommandRouter(
 	session *discordgo.Session,
 	configManager *files.ConfigManager,
@@ -62,19 +62,19 @@ func NewCommandRouter(
 	}
 	router.UseMiddleware(defaultInteractionMiddlewares(router)...)
 
-	slog.Info("Transição de estado arquitetural: inicialização de rotinas primárias", slog.String("component", "CommandRouter"))
+	slog.Info("Architectural state transition: primary routines initialization", slog.String("component", "CommandRouter"))
 
 	return router
 }
 
-// RegisterSlashCommand registra uma árvore de comandos de barra simultaneamente no registro
-// de sincronização e no registro de rotas de barra.
+// RegisterSlashCommand registers a slash command tree simultaneously in the sync registry
+// and slash route registry.
 func (cr *CommandRouter) RegisterSlashCommand(cmd Command) {
 	cr.RegisterSlashCommandForDomain("", cmd)
 }
 
-// RegisterSlashCommandForDomain registra uma árvore de comandos de barra simultaneamente no
-// registro de sincronização e no registro de rotas de barra sob o domínio solicitado.
+// RegisterSlashCommandForDomain registers a slash command tree simultaneously in the
+// sync registry and slash route registry under the requested domain.
 func (cr *CommandRouter) RegisterSlashCommandForDomain(domain string, cmd Command) {
 	if cr == nil || cmd == nil {
 		return
@@ -83,19 +83,19 @@ func (cr *CommandRouter) RegisterSlashCommandForDomain(domain string, cmd Comman
 	cr.registerSlashCommandRoutesForDomain(domain, cmd)
 }
 
-// RegisterCommand consiste na API de compatibilidade; priorize RegisterSlashCommand para novas árvores de barra.
+// RegisterCommand is the compatibility API; prioritize RegisterSlashCommand for new slash trees.
 func (cr *CommandRouter) RegisterCommand(cmd Command) {
 	cr.RegisterSlashCommand(cmd)
 }
 
-// RegisterSlashSubCommand registra um subcomando de barra simultaneamente no registro
-// de sincronização e no registro de rotas de barra.
+// RegisterSlashSubCommand registers a slash subcommand simultaneously in the sync registry
+// and slash route registry.
 func (cr *CommandRouter) RegisterSlashSubCommand(parentName string, subcmd Command) {
 	cr.RegisterSlashSubCommandForDomain("", parentName, subcmd)
 }
 
-// RegisterSlashSubCommandForDomain registra um subcomando de barra simultaneamente no
-// registro de sincronização e no registro de rotas de barra sob o domínio solicitado.
+// RegisterSlashSubCommandForDomain registers a slash subcommand simultaneously in the
+// sync registry and slash route registry under the requested domain.
 func (cr *CommandRouter) RegisterSlashSubCommandForDomain(domain, parentName string, subcmd Command) {
 	if cr == nil || subcmd == nil {
 		return
@@ -104,26 +104,26 @@ func (cr *CommandRouter) RegisterSlashSubCommandForDomain(domain, parentName str
 	cr.registerSlashSubCommandRoutesForDomain(domain, parentName, subcmd)
 }
 
-// RegisterSubCommand consiste na API de compatibilidade; priorize RegisterSlashSubCommand para novas árvores de barra.
+// RegisterSubCommand is the compatibility API; prioritize RegisterSlashSubCommand for new slash trees.
 func (cr *CommandRouter) RegisterSubCommand(parentName string, subcmd Command) {
 	cr.RegisterSlashSubCommand(parentName, subcmd)
 }
 
-// RegisterAutocomplete acopla um manipulador de autocompletar via caminho de rota canônico.
-// Consiste na API de compatibilidade; priorize um AutocompleteRouteProvider na
-// árvore de barra ou RegisterInteractionRoute para código novo.
+// RegisterAutocomplete binds an autocomplete handler via canonical route path.
+// It is the compatibility API; prioritize an AutocompleteRouteProvider in the
+// slash tree or RegisterInteractionRoute for new code.
 func (cr *CommandRouter) RegisterAutocomplete(routePath string, handler AutocompleteHandler) {
 	cr.RegisterAutocompleteRoute(routePath, handler)
 }
 
-// RegisterComponentHandler acopla um manipulador de componentes para um ID de rota de componente exato.
-// Consiste na API de compatibilidade; priorize RegisterInteractionRoute para código novo.
+// RegisterComponentHandler binds a component handler for an exact component route ID.
+// It is the compatibility API; prioritize RegisterInteractionRoute for new code.
 func (cr *CommandRouter) RegisterComponentHandler(routeID string, handler ComponentHandler) {
 	cr.RegisterComponentRoute(routeID, handler)
 }
 
-// RegisterModalHandler acopla um manipulador de modal para um ID de rota de modal exato.
-// Consiste na API de compatibilidade; priorize RegisterInteractionRoute para código novo.
+// RegisterModalHandler binds a modal handler for an exact modal route ID.
+// It is the compatibility API; prioritize RegisterInteractionRoute for new code.
 func (cr *CommandRouter) RegisterModalHandler(routeID string, handler ModalHandler) {
 	cr.RegisterModalRoute(routeID, handler)
 }
@@ -135,7 +135,7 @@ func (cr *CommandRouter) IgnoreArikawaCommand(rootName string) {
 	}
 }
 
-// SetGuildFilter restringe o processamento de interações a guildas validadas pelo predicado fornecido.
+// SetGuildFilter restricts interaction processing to guilds validated by the provided predicate.
 func (cr *CommandRouter) SetGuildFilter(filter func(string) bool) {
 	if cr == nil {
 		return
@@ -150,7 +150,7 @@ func (cr *CommandRouter) SetGuildFilter(filter func(string) bool) {
 	}
 }
 
-// SetGuildRouteFilter restringe o processamento de interações a pares guilda/rota
+// SetGuildRouteFilter restricts interaction processing to guild/route pairs.
 // validados pelo predicado fornecido.
 func (cr *CommandRouter) SetGuildRouteFilter(filter func(string, InteractionRouteKey) bool) {
 	if cr == nil {
@@ -175,7 +175,7 @@ func (cr *CommandRouter) shouldHandleInteraction(guildID string, routeKey Intera
 	return cr.guildFilter(guildID)
 }
 
-// CommandManager orquestra o ciclo de vida dos comandos na infraestrutura do Discord
+// CommandManager orchestrates the command lifecycle in the Discord infrastructure
 type CommandManager struct {
 	session                  *discordgo.Session
 	router                   *CommandRouter
@@ -193,12 +193,12 @@ type commandSyncSummary struct {
 	total     int
 }
 
-// NewCommandManager aloca e inicializa um novo gerenciador de comandos
+// NewCommandManager allocates and initializes a new command manager
 func NewCommandManager(
 	session *discordgo.Session,
 	configManager *files.ConfigManager,
 ) *CommandManager {
-	slog.Info("Transição de estado arquitetural: inicialização de rotinas primárias", slog.String("component", "CommandManager"))
+	slog.Info("Architectural state transition: primary routines initialization", slog.String("component", "CommandManager"))
 
 	return &CommandManager{
 		session:       session,
@@ -208,22 +208,22 @@ func NewCommandManager(
 	}
 }
 
-// GetArikawaRouter expõe o roteador de comandos Arikawa
+// GetArikawaRouter exposes the Arikawa command router
 func (cm *CommandManager) GetArikawaRouter() *ArikawaCommandRouter {
 	return cm.arikawaRouter
 }
 
-// GetRouter expõe o roteador de comandos primário
+// GetRouter exposes the primary command router
 func (cm *CommandManager) GetRouter() *CommandRouter {
 	return cm.router
 }
 
-// SetupCommands configura e alinha o estado local de comandos com a API do Discord
+// SetupCommands configures and aligns local command state with the Discord API
 func (cm *CommandManager) SetupCommands() error {
-	// Valida a integridade do estado da sessão
+	// Validates session state integrity
 	if cm.session == nil || cm.session.State == nil || cm.session.State.User == nil {
-		err := fmt.Errorf("estado da sessão não inicializado adequadamente")
-		slog.Error("Falha estrutural bloqueante restrita ao escopo da operação",
+		err := fmt.Errorf("session state not properly initialized")
+		slog.Error("Blocking structural failure restricted to operational scope",
 			slog.String("req_id", "sys-init"),
 			slog.String("stack_trace", string(debug.Stack())),
 			slog.Int("fail_id", 500),
@@ -232,7 +232,7 @@ func (cm *CommandManager) SetupCommands() error {
 		return err
 	}
 
-	// Previne a duplicação de processamento de interações em ciclos de reinicialização/recarga a quente.
+	// Prevents duplicate interaction processing in restart/hot-reload cycles.
 	if cm.interactionHandlerCancel != nil {
 		cm.interactionHandlerCancel()
 		cm.interactionHandlerCancel = nil
@@ -249,7 +249,7 @@ func (cm *CommandManager) SetupCommands() error {
 	cm.interactionHandlerCancel = cm.session.AddHandler(cm.router.HandleInteraction)
 	cm.rawEventHandlerCancel = cm.session.AddHandler(cm.arikawaRouter.HandleRawEvent)
 
-	slog.Info("Transição de estado arquitetural: acoplamento de manipuladores de eventos assíncronos", slog.String("component", "CommandManager"))
+	slog.Info("Architectural state transition: asynchronous event handler coupling", slog.String("component", "CommandManager"))
 
 	rollback := func(err error) error {
 		if cm.interactionHandlerCancel != nil {
@@ -272,16 +272,16 @@ func (cm *CommandManager) SetupCommands() error {
 		}
 	}
 
-	// Despacha tarefa de varredura em segundo plano estritamente após a conclusão do sinal READY
+	// Dispatches background scan task strictly after READY signal completion
 	scheduleOrphanCleanupTask(cm.router.GetTaskRouter(), cm.session)
-	slog.Info("Transição de estado arquitetural: inicialização de rotinas primárias assíncronas", slog.String("task", "orphan_cleanup"))
+	slog.Info("Architectural state transition: asynchronous primary routines initialization", slog.String("task", "orphan_cleanup"))
 
 	return nil
 }
 
-// Shutdown desvincula os manipuladores de interação de comandos.
+// Shutdown unbinds command interaction handlers.
 func (cm *CommandManager) Shutdown() error {
-	slog.Info("Transição de estado arquitetural: encerramento planejado de instâncias principais", slog.String("component", "CommandManager"))
+	slog.Info("Architectural state transition: planned shutdown of main instances", slog.String("component", "CommandManager"))
 
 	if cm.interactionHandlerCancel != nil {
 		cm.interactionHandlerCancel()
@@ -314,8 +314,8 @@ func (cm *CommandManager) usesGuildScopedSync() bool {
 	return false
 }
 
-// SyncGuildCommands dispara uma sincronização cirúrgica na API do Discord para uma guilda única.
-// Retorna nulo se o gerenciador estiver configurado para sincronização global.
+// SyncGuildCommands triggers a surgical sync on the Discord API for a single guild.
+// Returns nil if the manager is configured for global synchronization.
 func (cm *CommandManager) SyncGuildCommands(guildID string) error {
 	if !cm.usesGuildScopedSync() {
 		return nil
@@ -346,7 +346,7 @@ func (cm *CommandManager) syncGuildScopedCommands() error {
 		summary.add(guildSummary)
 	}
 
-	slog.Info("Transição de estado arquitetural: conclusão de sincronização de escopo de guilda",
+	slog.Info("Architectural state transition: guild scope synchronization completion",
 		slog.Int("created", summary.created),
 		slog.Int("updated", summary.updated),
 		slog.Int("deleted", summary.deleted),
@@ -411,7 +411,7 @@ func (cm *CommandManager) guildDesiredCommands(guildID string) map[string]*disco
 		desired[built.Name] = built
 	}
 
-	// Extrai comandos Arikawa (ausência de um construtor de grupos de Guilda complexo nesta versão)
+	// Extracts Arikawa commands (absence of a complex Guild group builder in this version)
 	for name, cmd := range arikawaCommands {
 		if !cm.shouldSyncSlashRoute(guildID, strings.TrimSpace(cmd.Name())) {
 			continue
@@ -454,10 +454,10 @@ func (cm *CommandManager) buildGuildApplicationCommand(guildID string, cmd Comma
 	}
 }
 
-// commandDefaultMemberPermissions extrai a base de permissões do Discord para
-// embutir no descritor de nível superior para o cmd, ou nulo quando o cmd não
-// declara nenhuma. O Discord exige um ponteiro; nulo preserva o comportamento anterior
-// focado apenas em "permissionGateMiddleware".
+// commandDefaultMemberPermissions extracts the Discord permission base to
+// embed in the top-level descriptor for the cmd, or nil when the cmd
+// declares none. Discord requires a pointer; nil preserves the previous
+// behavior focused only on "permissionGateMiddleware".
 func commandDefaultMemberPermissions(cmd Command) *int64 {
 	provider, ok := cmd.(DefaultMemberPermissionsProvider)
 	if !ok {
@@ -618,8 +618,8 @@ func (cm *CommandManager) syncCommandScope(guildID string, desired map[string]*d
 		if reqID == "" {
 			reqID = "global"
 		}
-		errWrap := fmt.Errorf("falha ao buscar comandos registrados para o escopo %s: %w", commandSyncScopeLabel(guildID), err)
-		slog.Error("Falha estrutural bloqueante restrita ao escopo da operação",
+		errWrap := fmt.Errorf("failed to fetch registered commands for scope %s: %w", commandSyncScopeLabel(guildID), err)
+		slog.Error("Blocking structural failure restricted to operational scope",
 			slog.String("req_id", reqID),
 			slog.String("stack_trace", string(debug.Stack())),
 			slog.Int("fail_id", 500),
@@ -639,7 +639,7 @@ func (cm *CommandManager) syncCommandScope(guildID string, desired map[string]*d
 		desiredCommand := desired[name]
 		if existing, ok := regByName[name]; ok {
 			if CompareCommands(existing, desiredCommand) {
-				slog.Debug("Inspeção granular de estado transiente: comando inalterado",
+				slog.Debug("Granular transient state inspection: command unchanged",
 					slog.String("scope", commandSyncScopeLabel(guildID)),
 					slog.String("command", name),
 					slog.String("options", formatOptions(desiredCommand.Options)),
@@ -648,7 +648,7 @@ func (cm *CommandManager) syncCommandScope(guildID string, desired map[string]*d
 				continue
 			}
 
-			slog.Debug("Inspeção granular de estado transiente: comando atualizado",
+			slog.Debug("Granular transient state inspection: command updated",
 				slog.String("scope", commandSyncScopeLabel(guildID)),
 				slog.String("command", name),
 				slog.String("options", formatOptions(desiredCommand.Options)),
@@ -658,7 +658,7 @@ func (cm *CommandManager) syncCommandScope(guildID string, desired map[string]*d
 			continue
 		}
 
-		slog.Debug("Inspeção granular de estado transiente: comando criado",
+		slog.Debug("Granular transient state inspection: command created",
 			slog.String("scope", commandSyncScopeLabel(guildID)),
 			slog.String("command", name),
 			slog.String("options", formatOptions(desiredCommand.Options)),
@@ -671,7 +671,7 @@ func (cm *CommandManager) syncCommandScope(guildID string, desired map[string]*d
 		if _, exists := desired[rc.Name]; exists {
 			continue
 		}
-		slog.Debug("Inspeção granular de estado transiente: comando órfão removido",
+		slog.Debug("Granular transient state inspection: orphan command removed",
 			slog.String("scope", commandSyncScopeLabel(guildID)),
 			slog.String("command", rc.Name),
 			slog.String("options", formatOptions(rc.Options)),
@@ -690,8 +690,8 @@ func (cm *CommandManager) syncCommandScope(guildID string, desired map[string]*d
 			if reqID == "" {
 				reqID = "global"
 			}
-			errWrap := fmt.Errorf("erro ao sobrescrever comandos em massa no escopo %s: %w", commandSyncScopeLabel(guildID), err)
-			slog.Error("Falha estrutural bloqueante restrita ao escopo da operação",
+			errWrap := fmt.Errorf("error bulk overwriting commands in scope %s: %w", commandSyncScopeLabel(guildID), err)
+			slog.Error("Blocking structural failure restricted to operational scope",
 				slog.String("req_id", reqID),
 				slog.String("stack_trace", string(debug.Stack())),
 				slog.Int("fail_id", 500),
@@ -738,7 +738,7 @@ func sortedSubCommandNames(subcommands map[string]Command) []string {
 	return names
 }
 
-// GroupCommand encapsula um comando que contém subcomandos
+// GroupCommand encapsulates a command containing subcommands
 type GroupCommand struct {
 	name        string
 	description string
@@ -746,7 +746,7 @@ type GroupCommand struct {
 	checker     *PermissionChecker
 }
 
-// NewGroupCommand aloca um novo comando de grupo
+// NewGroupCommand allocates a new group command
 func NewGroupCommand(name, description string, checker *PermissionChecker) *GroupCommand {
 	return &GroupCommand{
 		name:        name,
@@ -756,29 +756,29 @@ func NewGroupCommand(name, description string, checker *PermissionChecker) *Grou
 	}
 }
 
-// AddSubCommand anexa um subcomando à hierarquia do grupo
+// AddSubCommand appends a subcommand to the group hierarchy
 func (gc *GroupCommand) AddSubCommand(subcmd Command) {
 	gc.subcommands[subcmd.Name()] = subcmd
 }
 
-// Name expõe a nomenclatura do comando
+// Name exposes the command name
 func (gc *GroupCommand) Name() string {
 	return gc.name
 }
 
-// Description expõe a descrição funcional do comando
+// Description exposes the functional description of the command
 func (gc *GroupCommand) Description() string {
 	return gc.description
 }
 
-// Options constrói as opções do comando com base na árvore de subcomandos
+// Options builds command options based on the subcommand tree
 func (gc *GroupCommand) Options() []*discordgo.ApplicationCommandOption {
 	options := make([]*discordgo.ApplicationCommandOption, 0, len(gc.subcommands))
 
 	for _, subcmd := range gc.subcommands {
-		// Avaliação de tipo: se o subcomando em si possui opções que também são subcomandos,
-		// esta entrada obrigatoriamente torna-se um SubCommandGroup (Tipo 2).
-		// Caso contrário, classifica-se como um SubCommand regular (Tipo 1).
+		// Type evaluation: if the subcommand itself has options that are also subcommands,
+		// this entry must be a SubCommandGroup (Type 2).
+		// Otherwise, it is classified as a regular SubCommand (Type 1).
 		optType := discordgo.ApplicationCommandOptionSubCommand
 		subOpts := subcmd.Options()
 		for _, so := range subOpts {
@@ -800,7 +800,7 @@ func (gc *GroupCommand) Options() []*discordgo.ApplicationCommandOption {
 	return options
 }
 
-// RequiresGuild valida a dependência de infraestrutura de servidor nos subcomandos filhos
+// RequiresGuild validates guild infrastructure dependency on child subcommands
 func (gc *GroupCommand) RequiresGuild() bool {
 	for _, subcmd := range gc.subcommands {
 		if subcmd.RequiresGuild() {
@@ -810,7 +810,7 @@ func (gc *GroupCommand) RequiresGuild() bool {
 	return false
 }
 
-// RequiresPermissions valida a presença de restrições de permissões nos subcomandos filhos
+// RequiresPermissions validates the presence of permission restrictions on child subcommands
 func (gc *GroupCommand) RequiresPermissions() bool {
 	for _, subcmd := range gc.subcommands {
 		if subcmd.RequiresPermissions() {
@@ -820,40 +820,40 @@ func (gc *GroupCommand) RequiresPermissions() bool {
 	return false
 }
 
-// Handle delega o fluxo de controle para o subcomando qualificado
+// Handle delegates control flow to the qualified subcommand
 func (gc *GroupCommand) Handle(ctx *Context) error {
 	subCommandName := GetSubCommandName(ctx.Interaction)
 	if subCommandName == "" {
-		slog.Warn("Degradação de serviço interceptada e mitigada",
-			slog.String("reason", "subcomando ausente em grupo restrito"),
+		slog.Warn("Service degradation intercepted and mitigated",
+			slog.String("reason", "missing subcommand in restricted group"),
 			slog.String("user_id", ctx.UserID),
 		)
-		return &CommandError{Message: "Este comando requer um subcomando antes de prosseguir, portanto esta resposta permanece privada.", Ephemeral: true}
+		return &CommandError{Message: "This command requires a subcommand before proceeding, so this response remains private.", Ephemeral: true}
 	}
 
 	subcmd, exists := gc.subcommands[subCommandName]
 	if !exists {
-		slog.Warn("Degradação de serviço interceptada e mitigada",
+		slog.Warn("Service degradation intercepted and mitigated",
 			slog.String("reason", "subcomando solicitado inexistente"),
 			slog.String("subcommand", subCommandName),
 			slog.String("user_id", ctx.UserID),
 		)
-		return &CommandError{Message: "O subcomando não pôde ser correspondido, portanto esta resposta permanece privada.", Ephemeral: true}
+		return &CommandError{Message: "The subcommand could not be matched, so this response remains private.", Ephemeral: true}
 	}
 
-	// Validação de permissões específicas de escopo do subcomando
+	// Validation of subcommand-specific scope permissions
 	if subcmd.RequiresGuild() && ctx.GuildID == "" {
-		slog.Warn("Degradação de serviço interceptada e mitigada",
-			slog.String("reason", "execução fora de guilda em subcomando dependente de estado de servidor"),
+		slog.Warn("Service degradation intercepted and mitigated",
+			slog.String("reason", "execution outside guild in subcommand dependent on guild state"),
 			slog.String("subcommand", subCommandName),
 			slog.String("user_id", ctx.UserID),
 		)
-		return &CommandError{Message: "Este subcomando funciona apenas dentro de um servidor, portanto esta falha permanece privada.", Ephemeral: true}
+		return &CommandError{Message: "This subcommand only works inside a server, so this failure remains private.", Ephemeral: true}
 	}
 
 	if ctx.GuildConfig != nil && len(ctx.GuildConfig.Roles.Allowed) > 0 && !gc.checker.HasPermission(ctx.GuildID, ctx.UserID) {
-		slog.Warn("Degradação de serviço interceptada e mitigada",
-			slog.String("reason", "violação mitigada de controle de acesso de guilda"),
+		slog.Warn("Service degradation intercepted and mitigated",
+			slog.String("reason", "mitigated violation of guild access control"),
 			slog.String("subcommand", subCommandName),
 			slog.String("user_id", ctx.UserID),
 		)
@@ -861,8 +861,8 @@ func (gc *GroupCommand) Handle(ctx *Context) error {
 	}
 
 	if subcmd.RequiresPermissions() && !gc.checker.HasPermission(ctx.GuildID, ctx.UserID) {
-		slog.Warn("Degradação de serviço interceptada e mitigada",
-			slog.String("reason", "violação mitigada de permissões estritas em tempo de execução"),
+		slog.Warn("Service degradation intercepted and mitigated",
+			slog.String("reason", "mitigated violation of strict runtime permissions"),
 			slog.String("subcommand", subCommandName),
 			slog.String("user_id", ctx.UserID),
 		)
@@ -872,7 +872,7 @@ func (gc *GroupCommand) Handle(ctx *Context) error {
 	return subcmd.Handle(ctx)
 }
 
-// SimpleCommand implementa a interface Command para instruções atômicas
+// SimpleCommand implements the Command interface for atomic instructions
 type SimpleCommand struct {
 	name                string
 	description         string
@@ -883,7 +883,7 @@ type SimpleCommand struct {
 	requiresPermissions bool
 }
 
-// NewSimpleCommand aloca e inicializa um comando atômico
+// NewSimpleCommand allocates and initializes an atomic command
 func NewSimpleCommand(
 	name, description string,
 	options []*discordgo.ApplicationCommandOption,
@@ -900,7 +900,7 @@ func NewSimpleCommand(
 	}
 }
 
-// WithAutocomplete acopla um manipulador de autocompletar ao caminho de rota do comando.
+// WithAutocomplete binds an autocomplete handler to the command route path.
 func (sc *SimpleCommand) WithAutocomplete(handler AutocompleteHandler) *SimpleCommand {
 	if sc == nil {
 		return nil
@@ -909,42 +909,42 @@ func (sc *SimpleCommand) WithAutocomplete(handler AutocompleteHandler) *SimpleCo
 	return sc
 }
 
-// Name expõe a nomenclatura de rota.
+// Name exposes the route name.
 func (sc *SimpleCommand) Name() string { return sc.name }
 
-// Description expõe a descrição da entidade.
+// Description exposes the entity description.
 func (sc *SimpleCommand) Description() string { return sc.description }
 
-// Options expõe os parâmetros estruturais da entidade.
+// Options exposes the structural parameters of the entity.
 func (sc *SimpleCommand) Options() []*discordgo.ApplicationCommandOption {
 	return sc.options
 }
 
-// Handle invoca o manipulador primário alocado.
+// Handle invokes the allocated primary handler.
 func (sc *SimpleCommand) Handle(ctx *Context) error { return sc.handler(ctx) }
 
-// AutocompleteRouteHandler expõe o autocompletar da rota de manipulador.
+// AutocompleteRouteHandler exposes the autocomplete of the handler route.
 func (sc *SimpleCommand) AutocompleteRouteHandler() AutocompleteHandler {
 	return sc.autocompleteHandler
 }
 
-// RequiresGuild sinaliza dependência infraestrutural de guilda.
+// RequiresGuild signals guild infrastructure dependency.
 func (sc *SimpleCommand) RequiresGuild() bool { return sc.requiresGuild }
 
-// RequiresPermissions sinaliza a imposição estrita de permissões.
+// RequiresPermissions signals strict permission enforcement.
 func (sc *SimpleCommand) RequiresPermissions() bool { return sc.requiresPermissions }
 
-// GetSession extrai a sessão primária do Discord contida no construtor de contexto
+// GetSession extracts the primary Discord session contained in the context builder
 func (cr *CommandRouter) GetSession() *discordgo.Session {
 	return cr.contextBuilder.session
 }
 
-// GetConfigManager extrai o gerenciador de estado de configuração contido no construtor de contexto
+// GetConfigManager extracts the configuration state manager contained in the context builder
 func (cr *CommandRouter) GetConfigManager() *files.ConfigManager {
 	return cr.contextBuilder.configManager
 }
 
-// formatOptions aplica serialização formatada nas opções de comando para injetar na telemetria
+// formatOptions applies formatted serialization to command options to inject into telemetry
 func formatOptions(options []*discordgo.ApplicationCommandOption) string {
 	if len(options) == 0 {
 		return ""
@@ -956,17 +956,17 @@ func formatOptions(options []*discordgo.ApplicationCommandOption) string {
 	return "[" + strings.Join(parts, ", ") + "]"
 }
 
-// GetRegistry expõe o registro ativo de comandos
+// GetRegistry exposes the active command registry
 func (cr *CommandRouter) GetRegistry() *CommandRegistry {
 	return cr.registry
 }
 
-// GetPermissionChecker expõe o validador de permissões de escopo global
+// GetPermissionChecker exposes the global scope permission checker
 func (cr *CommandRouter) GetPermissionChecker() *PermissionChecker {
 	return cr.permChecker
 }
 
-// SetStore injeta o provedor de armazenamento para o validador de permissões habilitar cachê local de OwnerID.
+// SetStore injects the storage provider for the permission checker to enable local OwnerID cache.
 func (cr *CommandRouter) SetStore(store *storage.Store) {
 	cr.store = store
 	if cr.permChecker != nil {
@@ -974,30 +974,30 @@ func (cr *CommandRouter) SetStore(store *storage.Store) {
 	}
 }
 
-// GetStore expõe o provedor de armazenamento acoplado, caso esteja definido.
+// GetStore exposes the coupled storage provider, if defined.
 func (cr *CommandRouter) GetStore() *storage.Store {
 	return cr.store
 }
 
-// SetCache sobrepõe o cache unificado no validador de permissões para atenuar chamadas de API externas.
+// SetCache overlays the unified cache on the permission checker to mitigate external API calls.
 func (cr *CommandRouter) SetCache(unifiedCache *cache.UnifiedCache) {
 	if cr.permChecker != nil {
 		cr.permChecker.SetCache(unifiedCache)
 	}
 }
 
-// SetRuntimeApplier injeta o gerenciador de aplicação a quente de tempo de execução.
-// Classificado como opcional; omiti-lo inativa os recarregamentos dinâmicos a quente.
+// SetRuntimeApplier injects the runtime hot-apply manager.
+// Classified as optional; omitting it disables dynamic hot reloads.
 func (cr *CommandRouter) SetRuntimeApplier(applier *runtimeapply.Manager) {
 	cr.runtimeApplier = applier
 }
 
-// GetRuntimeApplier expõe a instância alocada do gerenciador de aplicação a quente de tempo de execução.
+// GetRuntimeApplier exposes the allocated instance of the runtime hot-apply manager.
 func (cr *CommandRouter) GetRuntimeApplier() *runtimeapply.Manager {
 	return cr.runtimeApplier
 }
 
-// SetTaskRouter acopla o roteador estrutural de tarefas assíncronas
+// SetTaskRouter couples the structural router for asynchronous tasks
 func (cr *CommandRouter) SetTaskRouter(router *task.TaskRouter) {
 	cr.taskRouter = router
 	if cr.taskRouter != nil {
@@ -1005,7 +1005,7 @@ func (cr *CommandRouter) SetTaskRouter(router *task.TaskRouter) {
 	}
 }
 
-// GetTaskRouter expõe o roteador de tarefas configurado
+// GetTaskRouter exposes the configured task router
 func (cr *CommandRouter) GetTaskRouter() *task.TaskRouter {
 	return cr.taskRouter
 }

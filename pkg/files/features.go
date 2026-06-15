@@ -101,13 +101,13 @@ func (ft *FeatureToggles) UnmarshalJSON(data []byte) error {
 	type alias FeatureToggles
 	var parsed alias
 
-	slog.Debug("Inspeção granular: Iniciando extração de payload dinâmico para FeatureToggles",
+	slog.Debug("Granular inspection: Starting dynamic payload extraction for FeatureToggles",
 		slog.Int("payload_bytes", len(data)),
 	)
 
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		errWrap := fmt.Errorf("FeatureToggles.UnmarshalJSON: %w", err)
-		log.EmitBlockingError("Falha estrutural bloqueante restrita ao escopo de desserialização do payload I/O", errWrap, log.GenerateRequestID())
+		log.EmitBlockingError("Blocking structural failure restricted to I/O payload deserialization scope", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
 	*ft = FeatureToggles(parsed)
@@ -175,18 +175,18 @@ func boolPtr(v bool) *bool {
 
 func resolveFeatureBool(guildVal *bool, globalVal *bool, def bool) bool {
 	if guildVal != nil {
-		slog.Debug("Rastreamento de ramificação condicional: Adoção de estado transiente sobrescrito pela guilda",
+		slog.Debug("Conditional branch tracking: Adoption of transient state overridden by the guild",
 			slog.Bool("resolved_value", *guildVal),
 		)
 		return *guildVal
 	}
 	if globalVal != nil {
-		slog.Debug("Rastreamento de ramificação condicional: Adoção de estado transiente em nível global",
+		slog.Debug("Conditional branch tracking: Adoption of transient state at global level",
 			slog.Bool("resolved_value", *globalVal),
 		)
 		return *globalVal
 	}
-	slog.Debug("Rastreamento de ramificação condicional: Recuo estrutural para valor padrão basal",
+	slog.Debug("Conditional branch tracking: Structural fallback to basal default value",
 		slog.Bool("resolved_value", def),
 	)
 	return def
@@ -198,7 +198,7 @@ func (cfg *BotConfig) ResolveFeatures(guildID string) ResolvedFeatureToggles {
 	if cfg != nil {
 		global = cfg.Features
 	} else {
-		slog.Warn("Degradação mitigada interceptada: Objeto BotConfig nulo durante resolução; o fluxo compensatório adotará um vetor global vazio",
+		slog.Warn("Intercepted mitigated degradation: Nil BotConfig object during resolution; compensatory flow will adopt empty global vector",
 			slog.String("guild_id", guildID),
 		)
 	}
@@ -216,7 +216,7 @@ func (cfg *BotConfig) ResolveFeatures(guildID string) ResolvedFeatureToggles {
 	}
 
 	if cfg != nil && guildID != "" && !guildFound {
-		slog.Debug("Inspeção granular: Nenhuma árvore de características customizada localizada para a guilda; ramificação dependente da herança global",
+		slog.Debug("Granular inspection: No customized feature tree located for the guild; branch dependent on global inheritance",
 			slog.String("guild_id", guildID),
 		)
 	}
@@ -229,7 +229,7 @@ func (cfg *BotConfig) ResolveFeatures(guildID string) ResolvedFeatureToggles {
 		spec.SetResolved(&out, resolved)
 	}
 
-	slog.Debug("Transição de sub-estado: Vetor hierárquico FeatureToggles consolidado",
+	slog.Debug("Sub-state transition: Consolidated FeatureToggles hierarchical vector",
 		slog.String("guild_id", guildID),
 	)
 

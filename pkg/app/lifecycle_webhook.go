@@ -9,8 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"log/slog"
+
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
 const (
@@ -42,17 +43,21 @@ const (
 func notifyLifecycleEvent(reason, detail string) {
 	webhookURL := strings.TrimSpace(files.EnvString(lifecycleWebhookEnv, ""))
 	if webhookURL == "" {
+		slog.Debug("Tracking complex conditional branch: Lifecycle webhook notification suppressed due to empty environment binding")
 		return
 	}
+
+	slog.Info("Architectural state transition: Initiating out-of-band lifecycle notification sequence",
+		slog.String("reason", reason),
+	)
 
 	content := buildLifecycleContent(reason, detail)
 	payload, err := json.Marshal(map[string]string{"content": content})
 	if err != nil {
-		log.ApplicationLogger().Warn(
-			"Lifecycle webhook payload encode failed",
-			"operation", "lifecycle.webhook",
-			"reason", reason,
-			"err", err,
+		slog.Warn("Mitigated service degradation: Discarding lifecycle webhook transmission due to JSON marshal failure",
+			slog.String("operation", "lifecycle.webhook"),
+			slog.String("reason", reason),
+			slog.String("error", err.Error()),
 		)
 		return
 	}
@@ -61,36 +66,44 @@ func notifyLifecycleEvent(reason, detail string) {
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, webhookURL, bytes.NewReader(payload))
 	if err != nil {
-		log.ApplicationLogger().Warn(
-			"Lifecycle webhook request construction failed",
-			"operation", "lifecycle.webhook",
-			"reason", reason,
-			"err", err,
+		slog.Warn("Mitigated service degradation: HTTP request construction aborted during lifecycle webhook transmission",
+			slog.String("operation", "lifecycle.webhook"),
+			slog.String("reason", reason),
+			slog.String("error", err.Error()),
 		)
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
 
+	slog.Debug("Granular inspection: Executing HTTP POST to external lifecycle webhook endpoint",
+		slog.String("content", content),
+		slog.Int("payload_bytes", len(payload)),
+	)
+
 	client := &http.Client{Timeout: lifecycleWebhookTimeout}
 	resp, err := client.Do(req)
 	if err != nil {
-		log.ApplicationLogger().Warn(
-			"Lifecycle webhook POST failed",
-			"operation", "lifecycle.webhook",
-			"reason", reason,
-			"err", err,
+		slog.Warn("Mitigated service degradation: External webhook endpoint unreachable; timeout or DNS failure",
+			slog.String("operation", "lifecycle.webhook"),
+			slog.String("reason", reason),
+			slog.String("error", err.Error()),
 		)
 		return
 	}
 	defer resp.Body.Close()
+
 	if resp.StatusCode >= 400 {
-		log.ApplicationLogger().Warn(
-			"Lifecycle webhook returned error status",
-			"operation", "lifecycle.webhook",
-			"reason", reason,
-			"status", resp.StatusCode,
+		slog.Warn("Mitigated service degradation: Discord upstream rejected lifecycle webhook payload",
+			slog.String("operation", "lifecycle.webhook"),
+			slog.String("reason", reason),
+			slog.Int("status_code", resp.StatusCode),
 		)
+		return
 	}
+
+	slog.Info("Architectural state transition: Lifecycle webhook notification transmitted successfully",
+		slog.String("reason", reason),
+	)
 }
 
 // buildLifecycleContent renders the chat message body. Keep it short and
@@ -115,5 +128,11 @@ func buildLifecycleContent(reason, detail string) string {
 	if detail = strings.TrimSpace(detail); detail != "" {
 		parts = append(parts, "—", detail)
 	}
-	return strings.Join(parts, " ")
+
+	rendered := strings.Join(parts, " ")
+	slog.Debug("Tracking complex conditional branch: Lifecycle message content string compiled",
+		slog.String("rendered_string", rendered),
+	)
+
+	return rendered
 }
