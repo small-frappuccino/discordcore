@@ -34,6 +34,8 @@ func TestSupervisorFaultIsolation(t *testing.T) {
 	session1.State.User = &discordgo.User{ID: "child1"}
 	session2, _ := discordgo.New("Bot token2")
 	session2.State.User = &discordgo.User{ID: "child2"}
+	session3, _ := discordgo.New("Bot token3")
+	session3.State.User = &discordgo.User{ID: "child3"}
 
 	newDiscordSession = func(token string) (*discordgo.Session, error) {
 		if token == "token1" {
@@ -41,6 +43,9 @@ func TestSupervisorFaultIsolation(t *testing.T) {
 		}
 		if token == "token2" {
 			return session2, nil
+		}
+		if token == "token3" {
+			return session3, nil
 		}
 		return nil, errors.New("unknown token")
 	}
@@ -51,12 +56,18 @@ func TestSupervisorFaultIsolation(t *testing.T) {
 		if token == "token2" {
 			return session2, nil
 		}
+		if token == "token3" {
+			return session3, nil
+		}
 		return nil, errors.New("unknown token")
 	}
 
 	openBotDiscordSession = func(ctx context.Context, s *discordgo.Session) error {
 		if s == session2 {
 			return errors.New("simulated gateway panic in child runtime ID 2")
+		}
+		if s == session3 {
+			return errors.New("HTTP 401 Unauthorized")
 		}
 		return nil
 	}
@@ -74,6 +85,7 @@ func TestSupervisorFaultIsolation(t *testing.T) {
 				BotInstanceTokens: map[string]files.EncryptedString{
 					"child1": "token1",
 					"child2": "token2",
+					"child3": "token3",
 				},
 			},
 		},
@@ -92,11 +104,12 @@ func TestSupervisorFaultIsolation(t *testing.T) {
 	}
 
 	// Wait for instances to reach final state
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 40; i++ {
 		supervisor.mu.Lock()
 		s1 := supervisor.instances["child1"]
 		s2 := supervisor.instances["child2"]
-		ready := s1 != nil && s1.Status == StatusRunning && s2 != nil && s2.Status == StatusStarting
+		s3 := supervisor.instances["child3"]
+		ready := s1 != nil && s1.Status == StatusRunning && s2 != nil && s2.Status == StatusStarting && s3 == nil // s3 revoked
 		supervisor.mu.Unlock()
 		if ready {
 			break

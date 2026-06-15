@@ -9,7 +9,9 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/monitoring"
+	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordcore/pkg/task"
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -143,7 +145,7 @@ func TestInitializeBotRuntime_FullCapabilities(t *testing.T) {
 		capabilities: botRuntimeCapabilities{
 			monitoring:  false,
 			automod:     true,
-			userPrune:   false,
+			userPrune:   true,
 			qotdRuntime: true,
 			hasCommands: true,
 		},
@@ -237,4 +239,45 @@ func TestScheduleRuntimeWarmup(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Errorf("expected warmup to be called twice")
 	}
+}
+
+func TestBotRuntimeRunner_setupMonitoringService(t *testing.T) {
+	rt := &botRuntime{
+		instanceID: "test",
+		capabilities: botRuntimeCapabilities{
+			monitoring: true,
+		},
+		session: &discordgo.Session{},
+	}
+
+	// Should fail due to nil store/configManager
+	_, err := setupMonitoringService(rt, botRuntimeOptions{}, task.RouterConfig{})
+	if err == nil {
+		t.Fatal("expected err")
+	}
+}
+
+func TestBotRuntimeRunner_registerUserPruneService(t *testing.T) {
+	rt := &botRuntime{
+		instanceID: "test",
+		capabilities: botRuntimeCapabilities{
+			userPrune: true,
+		},
+		monitoringService: &monitoring.MonitoringService{},
+		serviceManager:    service.NewServiceManager(),
+	}
+	err := registerUserPruneService(rt, botRuntimeOptions{}, nil)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+}
+
+func TestBotRuntimeRunner_shutdownBotRuntime(t *testing.T) {
+	rt := &botRuntime{
+		instanceID:     "test",
+		serviceManager: service.NewServiceManager(),
+	}
+
+	// Does not panic
+	shutdownBotRuntime(rt, context.Background())
 }

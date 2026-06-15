@@ -115,7 +115,7 @@ type AutomodService struct {
 	isRunning     bool
 	handlerCancel func()
 
-	mu        sync.RWMutex
+	mu        sync.Mutex
 	startTime time.Time
 
 	botInstanceID string
@@ -153,8 +153,8 @@ func (as *AutomodService) Dependencies() []string { return nil }
 
 // IsRunning safely reports the current execution state of the service.
 func (as *AutomodService) IsRunning() bool {
-	as.mu.RLock()
-	defer as.mu.RUnlock()
+	as.mu.Lock()
+	defer as.mu.Unlock()
 	return as.isRunning
 }
 
@@ -169,8 +169,8 @@ func (as *AutomodService) HealthCheck(ctx context.Context) service.HealthStatus 
 
 // Stats provides runtime telemetry for the AutoMod service.
 func (as *AutomodService) Stats() service.ServiceStats {
-	as.mu.RLock()
-	defer as.mu.RUnlock()
+	as.mu.Lock()
+	defer as.mu.Unlock()
 
 	var uptime time.Duration
 	if as.isRunning {
