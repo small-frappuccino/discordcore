@@ -6,7 +6,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/log"
+	"log/slog"
 )
 
 // ArikawaCommand represents a Discord slash command fully native to Arikawa.
@@ -29,7 +29,7 @@ type ArikawaContext struct {
 	Client      *api.Client
 	Interaction *discord.InteractionEvent
 	Config      *files.ConfigManager
-	Logger      *log.Logger
+	Logger      *slog.Logger
 	GuildID     discord.GuildID
 	UserID      discord.UserID
 	GuildConfig *files.GuildConfig

@@ -10,6 +10,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"log/slog"
 )
 
 // StatsService interface for dependency injection.
@@ -207,6 +208,12 @@ func (c *statsRootCommand) handleAdd(ctx *core.ArikawaContext, opts []discord.Co
 		_ = c.statsService.UpdateStatsChannels(context.WithoutCancel(context.Background()))
 	}
 
+	ctx.Logger.Info("Added or updated stats channel",
+		slog.String("guild_id", ctx.GuildID.String()),
+		slog.String("channel_id", channelID),
+		slog.String("member_type", memberType),
+	)
+
 	return ctx.Respond(api.InteractionResponseData{
 		Content: option.NewNullableString(fmt.Sprintf("Updated stats configuration for <#%s>.", channelID)),
 		Flags:   discord.EphemeralMessage,
@@ -252,6 +259,11 @@ func (c *statsRootCommand) handleRemove(ctx *core.ArikawaContext, opts []discord
 	if c.statsService != nil {
 		_ = c.statsService.UpdateStatsChannels(context.WithoutCancel(context.Background()))
 	}
+
+	ctx.Logger.Info("Removed stats channel",
+		slog.String("guild_id", ctx.GuildID.String()),
+		slog.String("channel_id", channelID),
+	)
 
 	return ctx.Respond(api.InteractionResponseData{
 		Content: option.NewNullableString(fmt.Sprintf("Removed <#%s> from stats channels.", channelID)),
@@ -332,6 +344,11 @@ func (c *statsRootCommand) handleSettings(ctx *core.ArikawaContext, opts []disco
 	if err != nil {
 		return err
 	}
+
+	ctx.Logger.Info("Updated stats update interval",
+		slog.String("guild_id", ctx.GuildID.String()),
+		slog.Float64("interval_mins", interval),
+	)
 
 	return ctx.Respond(api.InteractionResponseData{
 		Content: option.NewNullableString(fmt.Sprintf("Stats update interval set to **%d minutes**.", int(interval))),

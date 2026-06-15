@@ -8,6 +8,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordgo"
+	"log/slog"
 )
 
 // ArikawaCommandRouter manages routing and execution of Arikawa commands.
@@ -39,7 +40,7 @@ func (r *ArikawaCommandRouter) HandleRawEvent(s *discordgo.Session, e *discordgo
 
 	var interactionEvent discord.InteractionEvent
 	if err := json.Unmarshal(e.RawData, &interactionEvent); err != nil {
-		log.GlobalLogger.Error().Errorf("Failed to unmarshal raw interaction to Arikawa type: %v", err)
+		log.ErrorLoggerRaw().Error("Failed to unmarshal raw interaction to Arikawa type", slog.Any("error", err))
 		return
 	}
 
@@ -57,7 +58,7 @@ func (r *ArikawaCommandRouter) HandleRawEvent(s *discordgo.Session, e *discordgo
 		Client:      r.client,
 		Interaction: &interactionEvent,
 		Config:      r.config,
-		Logger:      log.GlobalLogger,
+		Logger:      log.DiscordLogger(),
 		GuildID:     interactionEvent.GuildID,
 	}
 
@@ -72,7 +73,7 @@ func (r *ArikawaCommandRouter) HandleRawEvent(s *discordgo.Session, e *discordgo
 	}
 
 	if err := cmd.Handle(ctx); err != nil {
-		log.GlobalLogger.Error().Errorf("Arikawa command handler failed for cmd %s: %v", cmd.Name(), err)
+		log.ErrorLoggerRaw().Error("Arikawa command handler failed", slog.String("cmd", cmd.Name()), slog.Any("error", err))
 	}
 }
 
@@ -88,13 +89,13 @@ func ConvertArikawaOptions(opts []discord.CommandOption) []*discordgo.Applicatio
 	}
 	b, err := json.Marshal(opts)
 	if err != nil {
-		log.GlobalLogger.Error().Errorf("Failed to marshal arikawa options: %v", err)
+		log.ErrorLoggerRaw().Error("Failed to marshal arikawa options", slog.Any("error", err))
 		return nil
 	}
 
 	var dgoOpts []*discordgo.ApplicationCommandOption
 	if err := json.Unmarshal(b, &dgoOpts); err != nil {
-		log.GlobalLogger.Error().Errorf("Failed to unmarshal to discordgo options: %v", err)
+		log.ErrorLoggerRaw().Error("Failed to unmarshal to discordgo options", slog.Any("error", err))
 		return nil
 	}
 	return dgoOpts
