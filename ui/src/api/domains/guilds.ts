@@ -175,19 +175,36 @@ export async function updateGuildSettings(
       // Explicitly check field-level mutation collisions
       let collision = false;
       if (originalWorkspace) {
-        // Check if any specific tokens changed. We consider it dirty if payload keys
-        // don't match the workspace configured state boolean values (true=configured, false=removed)
-        if (currentPayload.bot_instance_tokens !== undefined && JSON.stringify(latestWorkspace.sections.bot_instance_tokens_configured) !== JSON.stringify(originalWorkspace.sections.bot_instance_tokens_configured)) {
+        if (currentPayload.bot_instance_tokens !== undefined) {
+          const changedConcurrently = JSON.stringify(latestWorkspace.sections.bot_instance_tokens_configured) !== JSON.stringify(originalWorkspace.sections.bot_instance_tokens_configured);
+          if (changedConcurrently) {
+            let patchAlreadyReflected = true;
+            for (const [instanceId, tokenStr] of Object.entries(currentPayload.bot_instance_tokens)) {
+              const wantsDeleted = tokenStr === "";
+              const isConfigured = !!latestWorkspace.sections.bot_instance_tokens_configured?.[instanceId];
+              if (wantsDeleted && isConfigured) patchAlreadyReflected = false;
+              if (!wantsDeleted && !isConfigured) patchAlreadyReflected = false;
+            }
+            if (!patchAlreadyReflected) collision = true;
+          }
+        }
+        if (currentPayload.bot_instance_statuses !== undefined) {
+          const changedConcurrently = JSON.stringify(latestWorkspace.sections.bot_instance_statuses) !== JSON.stringify(originalWorkspace.sections.bot_instance_statuses);
+          if (changedConcurrently && JSON.stringify(latestWorkspace.sections.bot_instance_statuses) !== JSON.stringify(currentPayload.bot_instance_statuses)) {
             collision = true;
+          }
         }
-        if (currentPayload.bot_instance_statuses !== undefined && JSON.stringify(latestWorkspace.sections.bot_instance_statuses) !== JSON.stringify(originalWorkspace.sections.bot_instance_statuses)) {
+        if (currentPayload.feature_routing !== undefined) {
+          const changedConcurrently = JSON.stringify(latestWorkspace.sections.feature_routing) !== JSON.stringify(originalWorkspace.sections.feature_routing);
+          if (changedConcurrently && JSON.stringify(latestWorkspace.sections.feature_routing) !== JSON.stringify(currentPayload.feature_routing)) {
             collision = true;
+          }
         }
-        if (currentPayload.feature_routing !== undefined && JSON.stringify(latestWorkspace.sections.feature_routing) !== JSON.stringify(originalWorkspace.sections.feature_routing)) {
-          collision = true;
-        }
-        if (currentPayload.roles !== undefined && JSON.stringify(latestWorkspace.sections.roles) !== JSON.stringify(originalWorkspace.sections.roles)) {
-          collision = true;
+        if (currentPayload.roles !== undefined) {
+          const changedConcurrently = JSON.stringify(latestWorkspace.sections.roles) !== JSON.stringify(originalWorkspace.sections.roles);
+          if (changedConcurrently && JSON.stringify(latestWorkspace.sections.roles) !== JSON.stringify(currentPayload.roles)) {
+            collision = true;
+          }
         }
       }
 

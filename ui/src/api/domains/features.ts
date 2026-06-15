@@ -215,17 +215,20 @@ export async function patchGuildFeature(
       // Explicitly check field-level mutation collisions
       let collision = false;
       if (originalFeature) {
-        if (currentPayload.enabled !== undefined && latestFeature.effective_enabled !== originalFeature.effective_enabled) {
+        if (currentPayload.enabled !== undefined && latestFeature.effective_enabled !== originalFeature.effective_enabled && latestFeature.effective_enabled !== currentPayload.enabled) {
           collision = true;
         }
-        if (currentPayload.channel_id !== undefined && latestFeature.details?.channel_id !== originalFeature.details?.channel_id) {
+        if (currentPayload.channel_id !== undefined && latestFeature.details?.channel_id !== originalFeature.details?.channel_id && latestFeature.details?.channel_id !== currentPayload.channel_id) {
           collision = true;
         }
-        if (currentPayload.role_id !== undefined && latestFeature.details?.role_id !== originalFeature.details?.role_id) {
+        if (currentPayload.role_id !== undefined && latestFeature.details?.role_id !== originalFeature.details?.role_id && latestFeature.details?.role_id !== currentPayload.role_id) {
           collision = true;
         }
-        if (currentPayload.allowed_role_ids !== undefined && JSON.stringify(latestFeature.details?.allowed_role_ids) !== JSON.stringify(originalFeature.details?.allowed_role_ids)) {
-          collision = true;
+        if (currentPayload.allowed_role_ids !== undefined) {
+          const changedConcurrently = JSON.stringify(latestFeature.details?.allowed_role_ids) !== JSON.stringify(originalFeature.details?.allowed_role_ids);
+          if (changedConcurrently && JSON.stringify(latestFeature.details?.allowed_role_ids) !== JSON.stringify(currentPayload.allowed_role_ids)) {
+            collision = true;
+          }
         }
         // ... (we can add more fields if needed, but enabled, channel_id, role_id, allowed_role_ids are the main ones)
       }
