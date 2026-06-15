@@ -73,15 +73,6 @@ func buildMainRunOptions() discordcoreapp.RunOptions {
 				AutoTrust: true,
 			},
 		},
-		CommandCatalogRegistrars: []discordcommands.CommandCatalogRegistrar{
-			discordcommands.RuntimeCommandCatalogRegistrar(),
-			discordcommands.AnalyticsCommandCatalogRegistrar(),
-			discordcommands.PartnerCommandCatalogRegistrar(),
-			discordcommands.ModerationCommandCatalogRegistrar(),
-			discordcommands.RolesCommandCatalogRegistrar(),
-			discordcommands.EmbedsCommandCatalogRegistrar(),
-			discordcommands.TicketsCommandCatalogRegistrar(),
-			discordcommands.QOTDCommandCatalogRegistrar(),
-		},
+		CommandCatalogRegistrars: discordcommands.DefaultCommandCatalogRegistrars(),
 	}
 }

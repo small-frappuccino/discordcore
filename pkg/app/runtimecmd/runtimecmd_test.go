@@ -38,7 +38,7 @@ func TestRunUsesMainProfileOptions(t *testing.T) {
 		t.Fatalf("expected control plane to stay enabled for main runtime, got %+v", called.opts)
 	}
 
-	if len(called.opts.CommandCatalogRegistrars) != 8 {
+	if len(called.opts.CommandCatalogRegistrars) != 9 {
 		t.Fatalf("unexpected main command registrars: %+v", called.opts.CommandCatalogRegistrars)
 	}
 	if called.opts.CommandCatalogRegistrars[0].RequiredCapabilities.Stats {
