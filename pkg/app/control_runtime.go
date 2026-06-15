@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/url"
 	"path/filepath"
@@ -38,16 +39,10 @@ const (
 // drives, which bot instances and domains it hosts, and how its optional control
 // plane is exposed. The zero value is not runnable; Profile must be set.
 type RunOptions struct {
-	// Profile identifies the runtime profile driving this process, such as the
-	// primary main runtime or the qotd-specialized runtime.
-	Profile RunProfile
-	// Control configures the optional local control plane served by this process.
-	Control ControlOptions
-	// CommandCatalogRegistrars optionally override the default slash command
-	// catalog composition for handlers started by this process.
+	Profile                  RunProfile
+	Control                  ControlOptions
 	CommandCatalogRegistrars []commands.CommandCatalogRegistrar
-	// DisableControl skips starting the local control plane for this process.
-	DisableControl bool
+	DisableControl           bool
 }
 
 // ControlOptions configures the local control plane. BindAddr and PublicOrigin
@@ -80,6 +75,9 @@ func normalizeRunProfile(profile RunProfile) RunProfile {
 	case string(RunProfileDiscordMain):
 		return RunProfileDiscordMain
 	default:
+		slog.Debug("Tracking complex conditional branch: Reverting unmapped runtime profile constraint to generic execution flow",
+			slog.String("unmapped_profile", string(profile)),
+		)
 		return ""
 	}
 }
@@ -106,6 +104,9 @@ func resolveControlRuntime(ctx context.Context, opts RunOptions) (resolvedContro
 	profile := normalizeRunProfile(opts.Profile)
 	bindAddr := strings.TrimSpace(opts.Control.BindAddr)
 	publicOrigin := strings.TrimSpace(files.EnvString(controlPublicOriginEnv, opts.Control.PublicOrigin))
+
+	slog.Info("Architectural state transition: Instantiating resolution pipeline for control plane bindings")
+
 	if opts.Control.LocalHTTPS.Enabled {
 		if bindAddr == "" {
 			bindAddr = defaultLocalHTTPSControlAddr
@@ -113,6 +114,10 @@ func resolveControlRuntime(ctx context.Context, opts RunOptions) (resolvedContro
 		if publicOrigin == "" {
 			publicOrigin = defaultLocalHTTPSPublicOriginForProfile(profile)
 		}
+		slog.Debug("Tracking complex conditional branch: Injecting default local HTTPS topologies into control runtime matrix",
+			slog.String("injected_bind_addr", bindAddr),
+			slog.String("injected_public_origin", publicOrigin),
+		)
 	}
 	if bindAddr == "" {
 		bindAddr = defaultControlAddr
@@ -120,12 +125,18 @@ func resolveControlRuntime(ctx context.Context, opts RunOptions) (resolvedContro
 
 	tlsCertFile, tlsKeyFile, err := loadControlTLSFilesFromEnv()
 	if err != nil {
-		return resolvedControlRuntime{}, fmt.Errorf("load control tls config: %w", err)
+		errWrap := fmt.Errorf("load control tls config: %w", err)
+		emitBlockingError("Blocking structural failure: Environmental TLS payload validation rejected", errWrap, generateRequestID())
+		return resolvedControlRuntime{}, errWrap
 	}
+
 	if tlsCertFile == "" && tlsKeyFile == "" && opts.Control.LocalHTTPS.Enabled {
+		slog.Info("Architectural state transition: Initiating ad-hoc generation of local TLS credentials for control plane binding")
 		ready, readyErr := prepareManagedLocalTLS(ctx, profile, publicOrigin, opts.Control.LocalHTTPS.AutoTrust)
 		if readyErr != nil {
-			return resolvedControlRuntime{}, fmt.Errorf("%w: %w", errControlLocalTLSUnavailable, readyErr)
+			errWrap := fmt.Errorf("%w: %w", errControlLocalTLSUnavailable, readyErr)
+			emitBlockingError("Blocking structural failure: Aborted generation of self-signed loopback TLS materials", errWrap, generateRequestID())
+			return resolvedControlRuntime{}, errWrap
 		}
 		tlsCertFile = ready.CertFile
 		tlsKeyFile = ready.KeyFile
@@ -133,7 +144,9 @@ func resolveControlRuntime(ctx context.Context, opts RunOptions) (resolvedContro
 
 	oauthConfig, err := loadControlDiscordOAuthConfigFromEnv(publicOrigin)
 	if err != nil {
-		return resolvedControlRuntime{}, fmt.Errorf("load control discord oauth config: %w", err)
+		errWrap := fmt.Errorf("load control discord oauth config: %w", err)
+		emitBlockingError("Blocking structural failure: Validation of OAuth credentials against public origin aborted", errWrap, generateRequestID())
+		return resolvedControlRuntime{}, errWrap
 	}
 
 	return resolvedControlRuntime{
@@ -148,8 +161,15 @@ func resolveControlRuntime(ctx context.Context, opts RunOptions) (resolvedContro
 func prepareManagedLocalTLS(ctx context.Context, profile RunProfile, publicOrigin string, autoTrust bool) (localtls.ReadyResult, error) {
 	hostName, ipAddresses, err := localTLSSANs(profile, publicOrigin)
 	if err != nil {
-		return localtls.ReadyResult{}, fmt.Errorf("resolve local tls sans: %w", err)
+		errWrap := fmt.Errorf("resolve local tls sans: %w", err)
+		emitBlockingError("Blocking structural failure: Resolution of cryptographic Subject Alternate Names from host parameters failed", errWrap, generateRequestID())
+		return localtls.ReadyResult{}, errWrap
 	}
+
+	slog.Debug("Tracking complex conditional branch: Forwarding resolved SAN variables to certificate authority simulation",
+		slog.String("host_name", hostName),
+		slog.Int("ip_addresses_count", len(ipAddresses)),
+	)
 
 	return localtls.EnsureReady(ctx, localtls.Config{
 		Directory:    filepath.Join(files.ApplicationCachesPath, "control", "tls"),
@@ -163,15 +183,25 @@ func prepareManagedLocalTLS(ctx context.Context, profile RunProfile, publicOrigi
 
 func localTLSSANs(profile RunProfile, publicOrigin string) (string, []net.IP, error) {
 	if strings.TrimSpace(publicOrigin) == "" {
+		slog.Debug("Granular inspection: Parsing local TLS Subject Alternate Names skipped, utilizing fallback parameters")
 		return defaultLocalTLSCommonNameForProfile(profile), []net.IP{net.ParseIP("127.0.0.1")}, nil
 	}
 	parsed, err := url.Parse(publicOrigin)
 	if err != nil {
-		return "", nil, fmt.Errorf("parse public origin: %w", err)
+		errWrap := fmt.Errorf("parse public origin: %w", err)
+		slog.Warn("Mitigated service degradation: URL parsing failed against public origin scalar, aborting SAN computation",
+			slog.String("invalid_origin", publicOrigin),
+			slog.String("error", errWrap.Error()),
+		)
+		return "", nil, errWrap
 	}
 	host := strings.TrimSpace(parsed.Hostname())
 	if host == "" {
-		return "", nil, fmt.Errorf("public origin %q is missing a hostname", publicOrigin)
+		errWrap := fmt.Errorf("public origin %q is missing a hostname", publicOrigin)
+		slog.Warn("Mitigated service degradation: Valid URL identified but hostname extraction failed, aborting SAN computation",
+			slog.String("invalid_origin", publicOrigin),
+		)
+		return "", nil, errWrap
 	}
 	if ip := net.ParseIP(host); ip != nil {
 		return host, []net.IP{ip}, nil

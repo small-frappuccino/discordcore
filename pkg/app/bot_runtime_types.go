@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 	"sync"
@@ -53,18 +54,28 @@ func (r *botRuntimeResolver) markReady() {
 	if r == nil {
 		return
 	}
-	r.readyOnce.Do(func() { close(r.readyCh) })
+	r.readyOnce.Do(func() {
+		slog.Info("Architectural state transition: Runtime resolver marked ready, unlocking dependent initialization pipelines")
+		close(r.readyCh)
+	})
 }
 
 func (r *botRuntimeResolver) waitForReady(ctx context.Context) error {
 	if r == nil {
-		return fmt.Errorf("resolver is nil")
+		err := fmt.Errorf("resolver is nil")
+		emitBlockingError("Blocking structural failure: Synchronization channel missing from resolver matrix", err, generateRequestID())
+		return err
 	}
 	select {
 	case <-r.readyCh:
+		slog.Debug("Tracking complex conditional branch: Wait lock released across runtime resolver")
 		return nil
 	case <-ctx.Done():
-		return ctx.Err()
+		errWrap := ctx.Err()
+		slog.Warn("Mitigated service degradation: Synchronization context expired before runtime resolver released the wait lock",
+			slog.String("error", errWrap.Error()),
+		)
+		return errWrap
 	}
 }
 
@@ -77,6 +88,11 @@ func (r *botRuntimeResolver) getRuntimes() map[string]*botRuntime {
 func (r *botRuntimeResolver) swapRuntimes(newMap map[string]*botRuntime) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
+	slog.Debug("Granular inspection: Executing atomic pointer rotation for active runtimes map",
+		slog.Int("new_map_size", len(newMap)),
+	)
+
 	r.runtimes = newMap
 }
 
@@ -113,6 +129,9 @@ func knownBotInstanceCatalogSlice(catalog map[string]struct{}) []string {
 }
 
 func newBotRuntimeResolver(configManager *files.ConfigManager, initialRuntimes map[string]*botRuntime) *botRuntimeResolver {
+	slog.Info("Architectural state transition: Initializing memory barrier for bot runtime multiplexing",
+		slog.Int("initial_runtimes_count", len(initialRuntimes)),
+	)
 	return &botRuntimeResolver{
 		configManager: configManager,
 		runtimes:      initialRuntimes,
@@ -165,15 +184,24 @@ func (r *botRuntimeResolver) aggregateMonitoringMetrics() map[string]monitoring.
 
 func (r *botRuntimeResolver) runtimeForGuild(guildID string, feature string) (*botRuntime, string, error) {
 	if r == nil {
-		return nil, "", fmt.Errorf("bot runtime resolver is unavailable")
+		err := fmt.Errorf("bot runtime resolver is unavailable")
+		emitBlockingError("Blocking structural failure: Pointer to runtime resolver dropped from state matrix", err, generateRequestID())
+		return nil, "", err
 	}
 	guildID = strings.TrimSpace(guildID)
 	if r.configManager == nil {
-		return nil, "", fmt.Errorf("bot runtime resolver config manager is unavailable")
+		err := fmt.Errorf("bot runtime resolver config manager is unavailable")
+		emitBlockingError("Blocking structural failure: Config manager detached from runtime resolver", err, generateRequestID())
+		return nil, "", err
 	}
 	guild := r.configManager.GuildConfig(guildID)
 	if guild == nil {
-		return nil, "", fmt.Errorf("guild %s is not configured", guildID)
+		errWrap := fmt.Errorf("guild %s is not configured", guildID)
+		slog.Warn("Mitigated service degradation: Request target resolves to an unconfigured guild parameter, aborting sub-routine",
+			slog.String("guild_id", guildID),
+			slog.String("error", errWrap.Error()),
+		)
+		return nil, "", errWrap
 	}
 
 	if feature == "" {
@@ -186,6 +214,9 @@ func (r *botRuntimeResolver) runtimeForGuild(guildID string, feature string) (*b
 
 	runtimes := r.runtimes
 	if len(runtimes) == 0 {
+		slog.Warn("Mitigated service degradation: Primary runtime vector exhausted or uninitialized",
+			slog.String("guild_id", guildID),
+		)
 		return nil, "", ErrSessionUnavailable
 	}
 
@@ -198,23 +229,38 @@ func (r *botRuntimeResolver) runtimeForGuild(guildID string, feature string) (*b
 		}
 	}
 
+	slog.Debug("Tracking complex conditional branch: Executing heuristic token scan for orphan guild",
+		slog.String("guild_id", guildID),
+	)
+
 	if len(guild.BotInstanceTokens) > 0 {
 		for id, tokenEnc := range guild.BotInstanceTokens {
 			if string(tokenEnc) == "" {
 				continue
 			}
 			if runtime, ok := runtimes[id]; ok && runtime != nil {
+				slog.Debug("Tracking complex conditional branch: First valid token matched during scan",
+					slog.String("guild_id", guildID),
+					slog.String("resolved_id", id),
+				)
 				return runtime, id, nil
 			}
 		}
 	} else {
-		// Gracefully fallback to the magic blank instance if the guild has no configured tokens.
 		if runtime, ok := runtimes[""]; ok && runtime != nil {
+			slog.Debug("Tracking complex conditional branch: Reverting to blank sentinel runtime for tokenless guild",
+				slog.String("guild_id", guildID),
+			)
 			return runtime, "", nil
 		}
 	}
 
-	return nil, "", fmt.Errorf("guild %s does not resolve to a running bot instance", guildID)
+	err := fmt.Errorf("guild %s does not resolve to a running bot instance", guildID)
+	slog.Warn("Mitigated service degradation: Orchestrator failed to couple guild node to an active port",
+		slog.String("guild_id", guildID),
+		slog.String("error", err.Error()),
+	)
+	return nil, "", err
 }
 
 func (r *botRuntimeResolver) sessionForGuild(guildID string, feature string) (*discordgo.Session, error) {
@@ -225,23 +271,31 @@ func (r *botRuntimeResolver) sessionForGuild(guildID string, feature string) (*d
 	if runtime.session == nil {
 		guildID = strings.TrimSpace(guildID)
 		if guildID == "" {
-			return nil, fmt.Errorf("%w: discord session for default bot instance %q is empty", ErrSessionUnavailable, botInstanceID)
+			errWrap := fmt.Errorf("%w: discord session for default bot instance %q is empty", ErrSessionUnavailable, botInstanceID)
+			emitBlockingError("Blocking structural failure: Socket payload evaluates to nil on default instance", errWrap, generateRequestID())
+			return nil, errWrap
 		}
-		return nil, fmt.Errorf("%w: discord session for guild %s (bot instance %q) is empty", ErrSessionUnavailable, guildID, botInstanceID)
+		errWrap := fmt.Errorf("%w: discord session for guild %s (bot instance %q) is empty", ErrSessionUnavailable, guildID, botInstanceID)
+		emitBlockingError("Blocking structural failure: Socket payload evaluates to nil on specific guild channel", errWrap, generateRequestID())
+		return nil, errWrap
 	}
 	return runtime.session, nil
 }
 
 func (r *botRuntimeResolver) registerGuild(_ context.Context, guildID string) error {
 	if r == nil || r.configManager == nil {
-		return fmt.Errorf("bot runtime resolver is unavailable")
+		err := fmt.Errorf("bot runtime resolver is unavailable")
+		emitBlockingError("Blocking structural failure: Registry pipeline detached from local orchestrator", err, generateRequestID())
+		return err
 	}
 	return r.configManager.EnsureMinimalGuildConfig(guildID)
 }
 
 func (r *botRuntimeResolver) guildBindings(context.Context) ([]control.BotGuildBinding, error) {
 	if r == nil {
-		return nil, fmt.Errorf("bot runtime resolver is unavailable")
+		err := fmt.Errorf("bot runtime resolver is unavailable")
+		emitBlockingError("Blocking structural failure: Sub-routine invoked against nil struct pointer", err, generateRequestID())
+		return nil, err
 	}
 
 	out := make([]control.BotGuildBinding, 0)
@@ -255,6 +309,8 @@ func (r *botRuntimeResolver) guildBindings(context.Context) ([]control.BotGuildB
 		return out, nil
 	}
 
+	slog.Debug("Granular inspection: Parsing unified configuration manifest for explicit guild-to-bot bindings")
+
 	for _, guild := range cfg.Guilds {
 		for botInstanceID, tokenEnc := range guild.BotInstanceTokens {
 			token := string(tokenEnc)
@@ -266,7 +322,6 @@ func (r *botRuntimeResolver) guildBindings(context.Context) ([]control.BotGuildB
 				continue
 			}
 
-			// Check if this token's runtime actually sees this guild
 			if _, err := runtime.session.State.Guild(guild.GuildID); err == nil {
 				out = append(out, control.BotGuildBinding{
 					GuildID:       guild.GuildID,
@@ -288,7 +343,9 @@ func (r *botRuntimeResolver) guildBindings(context.Context) ([]control.BotGuildB
 func listBotGuildBindingsFromSessionState(botInstanceID string, session *discordgo.Session) ([]control.BotGuildBinding, error) {
 	ids, err := listBotGuildIDsFromSessionState(session)
 	if err != nil {
-		return nil, fmt.Errorf("listBotGuildBindingsFromSessionState: %w", err)
+		errWrap := fmt.Errorf("listBotGuildBindingsFromSessionState: %w", err)
+		emitBlockingError("Blocking structural failure: External list extraction via state mapping aborted", errWrap, generateRequestID())
+		return nil, errWrap
 	}
 
 	out := make([]control.BotGuildBinding, 0, len(ids))
@@ -300,5 +357,3 @@ func listBotGuildBindingsFromSessionState(botInstanceID string, session *discord
 	}
 	return out, nil
 }
-
-// Ptr is a generic helper for inline pointer allocations.

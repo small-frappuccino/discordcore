@@ -35,6 +35,8 @@ type CommandRouter struct {
 
 	// taskRouter consiste em um roteador de tarefas compartilhado opcional (preenchimento retroativo, notificações assíncronas).
 	taskRouter *task.TaskRouter
+
+	ignoredArikawaCommands map[string]bool
 }
 
 // NewCommandRouter aloca e inicializa um novo roteador de comandos
@@ -55,7 +57,8 @@ func NewCommandRouter(
 		routeRegistry:  newInteractionRouteRegistry(),
 		contextBuilder: contextBuilder,
 
-		permChecker: permChecker,
+		permChecker:            permChecker,
+		ignoredArikawaCommands: make(map[string]bool),
 	}
 	router.UseMiddleware(defaultInteractionMiddlewares(router)...)
 
@@ -123,6 +126,13 @@ func (cr *CommandRouter) RegisterComponentHandler(routeID string, handler Compon
 // Consiste na API de compatibilidade; priorize RegisterInteractionRoute para código novo.
 func (cr *CommandRouter) RegisterModalHandler(routeID string, handler ModalHandler) {
 	cr.RegisterModalRoute(routeID, handler)
+}
+
+// IgnoreArikawaCommand tells the router to ignore a root command name because it's handled natively.
+func (cr *CommandRouter) IgnoreArikawaCommand(rootName string) {
+	if cr != nil && cr.ignoredArikawaCommands != nil {
+		cr.ignoredArikawaCommands[rootName] = true
+	}
 }
 
 // SetGuildFilter restringe o processamento de interações a guildas validadas pelo predicado fornecido.
@@ -231,6 +241,11 @@ func (cm *CommandManager) SetupCommands() error {
 		cm.rawEventHandlerCancel()
 		cm.rawEventHandlerCancel = nil
 	}
+
+	for name := range cm.arikawaRouter.GetAllCommands() {
+		cm.router.IgnoreArikawaCommand(name)
+	}
+
 	cm.interactionHandlerCancel = cm.session.AddHandler(cm.router.HandleInteraction)
 	cm.rawEventHandlerCancel = cm.session.AddHandler(cm.arikawaRouter.HandleRawEvent)
 

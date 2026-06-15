@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"log/slog"
+	"strings"
 
 	"github.com/small-frappuccino/discordgo"
 )
@@ -58,6 +59,13 @@ func (cr *CommandRouter) handleSlashCommandRoute(goCtx context.Context, i *disco
 	err := cr.executeRoute(ctx, routeKey, func(ctx *Context) error {
 		handler, exists := cr.lookupSlashHandler(ctx.RouteKey)
 		if !exists {
+			rootName := ctx.RouteKey.Path
+			if spaceIdx := strings.Index(rootName, " "); spaceIdx != -1 {
+				rootName = rootName[:spaceIdx]
+			}
+			if cr.ignoredArikawaCommands != nil && cr.ignoredArikawaCommands[rootName] {
+				return nil
+			}
 			return &CommandError{Message: "That command couldn't be found, so this reply stays private.", Ephemeral: true}
 		}
 		return handler.Handle(ctx)

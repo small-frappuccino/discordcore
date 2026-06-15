@@ -159,6 +159,7 @@ type featureStatsChannelDetail struct {
 var featureDefinitions = []featureDefinition{
 	{ID: "services.monitoring", Category: "services", Label: "Monitoring", Description: "Core monitoring service lifecycle and shared event processing.", Area: featureAreaMaintenance, SupportsGuildOverride: true, GlobalEditableFields: []string{"enabled"}, GuildEditableFields: []string{"enabled"}},
 	{ID: "role_panels", Category: "roles", Label: "Role panels", Description: "Self-service role panels with toggleable buttons published to guild channels.", Area: featureAreaRoles, SupportsGuildOverride: true, GlobalEditableFields: []string{"enabled"}, GuildEditableFields: []string{"enabled"}},
+	{ID: "stats_channels", Category: "services", Label: "Stats channels", Description: "Update server stats on voice channel names.", Area: featureAreaMaintenance, SupportsGuildOverride: true, GlobalEditableFields: []string{"enabled"}, GuildEditableFields: []string{"enabled", "config_enabled", "update_interval_mins"}},
 }
 
 var featureDefinitionsByID = func() map[string]featureDefinition {

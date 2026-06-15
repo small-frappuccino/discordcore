@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"log/slog"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
@@ -28,37 +29,60 @@ func resolveDatabaseBootstrap() (resolvedDatabaseBootstrap, error) {
 			Source: "env",
 		}, nil
 	}
-	return resolvedDatabaseBootstrap{}, fmt.Errorf(
+	err := fmt.Errorf(
 		"postgres bootstrap config unavailable: set %s before startup",
 		databaseURLEnv,
 	)
+	emitBlockingError("Blocking structural failure: Database bootstrap configuration unavailable", err, generateRequestID())
+	return resolvedDatabaseBootstrap{}, err
 }
 
 func databaseBootstrapFromEnv() (files.DatabaseRuntimeConfig, bool) {
 	url := files.EnvString(databaseURLEnv, "")
 	if url == "" {
+		slog.Debug("Granular inspection: Database environment variable absent, skipping payload injection",
+			slog.String("env", databaseURLEnv),
+		)
 		return files.DatabaseRuntimeConfig{}, false
 	}
 
 	driver := files.EnvString(databaseDriverEnv, "postgres")
+	maxOpen := int(files.EnvInt64(databaseMaxOpenConnsEnv, 20))
+	maxIdle := int(files.EnvInt64(databaseMaxIdleConnsEnv, 10))
+	connMaxLifetime := int(files.EnvInt64(databaseConnMaxLifetimeSecsEnv, 1800))
+	connMaxIdle := int(files.EnvInt64(databaseConnMaxIdleTimeSecsEnv, 300))
+	pingTimeout := int(files.EnvInt64(databasePingTimeoutMSEnv, 5000))
+
+	slog.Debug("Granular inspection: Database connection parameters injected via environment",
+		slog.String("driver", driver),
+		slog.Int("max_open_conns", maxOpen),
+		slog.Int("max_idle_conns", maxIdle),
+		slog.Int("conn_max_lifetime_secs", connMaxLifetime),
+		slog.Int("conn_max_idle_time_secs", connMaxIdle),
+		slog.Int("ping_timeout_ms", pingTimeout),
+	)
+
 	return files.DatabaseRuntimeConfig{
 		Driver:              driver,
 		DatabaseURL:         url,
-		MaxOpenConns:        int(files.EnvInt64(databaseMaxOpenConnsEnv, 20)),
-		MaxIdleConns:        int(files.EnvInt64(databaseMaxIdleConnsEnv, 10)),
-		ConnMaxLifetimeSecs: int(files.EnvInt64(databaseConnMaxLifetimeSecsEnv, 1800)),
-		ConnMaxIdleTimeSecs: int(files.EnvInt64(databaseConnMaxIdleTimeSecsEnv, 300)),
-		PingTimeoutMS:       int(files.EnvInt64(databasePingTimeoutMSEnv, 5000)),
+		MaxOpenConns:        maxOpen,
+		MaxIdleConns:        maxIdle,
+		ConnMaxLifetimeSecs: connMaxLifetime,
+		ConnMaxIdleTimeSecs: connMaxIdle,
+		PingTimeoutMS:       pingTimeout,
 	}, true
 }
 
 func syncBootstrapDatabaseConfig(configManager *files.ConfigManager, cfg files.DatabaseRuntimeConfig) error {
 	if configManager == nil {
-		return fmt.Errorf("config manager is nil")
+		err := fmt.Errorf("config manager is nil")
+		emitBlockingError("Blocking structural failure: Config manager pointer evaluates to nil during database synchronization", err, generateRequestID())
+		return err
 	}
 
 	current := configManager.SnapshotConfig().RuntimeConfig.Database
 	if current == cfg {
+		slog.Debug("Tracking complex conditional branch: Database configuration identical to persisted state, bypassing update")
 		return nil
 	}
 
@@ -67,7 +91,11 @@ func syncBootstrapDatabaseConfig(configManager *files.ConfigManager, cfg files.D
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("persist runtime database config: %w", err)
+		errWrap := fmt.Errorf("persist runtime database config: %w", err)
+		emitBlockingError("Blocking structural failure: Unable to persist runtime database configuration", errWrap, generateRequestID())
+		return errWrap
 	}
+
+	slog.Info("Architectural state transition: Database bootstrap configuration synchronized successfully")
 	return nil
 }

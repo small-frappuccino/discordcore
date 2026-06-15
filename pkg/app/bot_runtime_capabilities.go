@@ -88,11 +88,13 @@ func resolveBotRuntimeCapabilities(
 
 		rolesResolvedID, _ := guild.ResolveFeatureBotInstanceID("roles")
 		modResolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation")
+		statsResolvedID, _ := guild.ResolveFeatureBotInstanceID("stats")
 
 		isRolesBot := rolesResolvedID == botInstanceID
 		isModBot := modResolvedID == botInstanceID
+		isStatsBot := statsResolvedID == botInstanceID
 
-		if !isRolesBot && !isModBot {
+		if !isRolesBot && !isModBot && !isStatsBot {
 			continue
 		}
 
@@ -101,13 +103,14 @@ func resolveBotRuntimeCapabilities(
 			slog.String("bot_instance_id", botInstanceID),
 			slog.Bool("is_roles_bot", isRolesBot),
 			slog.Bool("is_mod_bot", isModBot),
+			slog.Bool("is_stats_bot", isStatsBot),
 		)
 
 		if botRuntimeNeedsMonitoring(features, runtimeConfig, guild) {
 			capabilities.monitoring = true
 		}
 
-		if isRolesBot {
+		if isRolesBot || isStatsBot {
 			if botRuntimeNeedsMemberData(features, runtimeConfig, guild) {
 				capabilities.intents |= discordgo.IntentsGuildMembers
 				capabilities.warmup = true
