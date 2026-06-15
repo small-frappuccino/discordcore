@@ -1,6 +1,7 @@
 package app
 
 import (
+	"log/slog"
 	"strings"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -28,7 +29,12 @@ func resolveBotRuntimeCapabilities(
 	capabilities := botRuntimeCapabilities{
 		intents: discordgo.IntentsGuilds,
 	}
+
 	if cfg == nil {
+		slog.Warn("Mitigated service degradation: Configuration reference resolves to nil; enforcing basal gateway intents",
+			slog.String("bot_instance_id", botInstanceID),
+			slog.Int("basal_intents", int(capabilities.intents)),
+		)
 		return capabilities
 	}
 
@@ -90,6 +96,13 @@ func resolveBotRuntimeCapabilities(
 			continue
 		}
 
+		slog.Debug("Tracking complex conditional branch: Evaluating monitoring sub-capabilities for target runtime",
+			slog.String("guild_id", guild.GuildID),
+			slog.String("bot_instance_id", botInstanceID),
+			slog.Bool("is_roles_bot", isRolesBot),
+			slog.Bool("is_mod_bot", isModBot),
+		)
+
 		if botRuntimeNeedsMonitoring(features, runtimeConfig, guild) {
 			capabilities.monitoring = true
 		}
@@ -114,6 +127,13 @@ func resolveBotRuntimeCapabilities(
 			}
 		}
 	}
+
+	slog.Info("Architectural state transition: Gateway intent bitmask and runtime capabilities computed",
+		slog.String("bot_instance_id", botInstanceID),
+		slog.Int("intents_bitmask", int(capabilities.intents)),
+		slog.Bool("has_commands", capabilities.hasCommands),
+		slog.Bool("monitoring_enabled", capabilities.monitoring),
+	)
 
 	return capabilities
 }

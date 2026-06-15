@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -14,7 +15,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/tickets"
 	"github.com/small-frappuccino/discordcore/pkg/embeds"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/partners"
 	"github.com/small-frappuccino/discordcore/pkg/roles"
 	"github.com/small-frappuccino/discordcore/pkg/service"
@@ -135,9 +135,19 @@ func (ch *CommandHandler) Start(ctx context.Context) error {
 	ch.startTime = time.Now()
 	ch.mu.Unlock()
 
+	// Info: Registro de transição de estado arquitetural de serviço (inicialização).
+	slog.Info("iniciando rotina primária do CommandHandler",
+		slog.String("botInstanceID", ch.botInstanceID),
+	)
+
 	err := ch.SetupCommands()
 	if err != nil {
-		log.ApplicationLogger().Warn("Failed to sync commands during startup; continuing without updated commands", "err", err)
+		// Warn: Falha mitigada que não compromete o fluxo de dados principal;
+		// o serviço continua a execução ignorando a sincronização dos comandos.
+		slog.Warn("sincronização de comandos falhou na inicialização; operando com estado degradado",
+			slog.String("botInstanceID", ch.botInstanceID),
+			slog.Any("err", err),
+		)
 	}
 	return nil
 }
@@ -152,16 +162,26 @@ func (ch *CommandHandler) Stop(ctx context.Context) error {
 	ch.running = false
 	ch.mu.Unlock()
 
+	// Info: Registro de encerramento planejado de instância.
+	slog.Info("encerrando instâncias principais do CommandHandler",
+		slog.String("botInstanceID", ch.botInstanceID),
+	)
+
 	return ch.Shutdown()
 }
 
 // SetupCommands initializes and registers all bot commands
 func (ch *CommandHandler) SetupCommands() error {
-	log.ApplicationLogger().Info("Setting up bot commands...")
+	slog.Info("iniciando acoplamento de comandos e rotas",
+		slog.String("botInstanceID", ch.botInstanceID),
+	)
 
 	// Re-init safety: avoid duplicated handlers if setup is called more than once.
 	if ch.commandManager != nil {
-		log.ApplicationLogger().Warn("Command setup called with active handlers; cleaning previous registrations first")
+		// Warn: Condição mitigada por repetição compensatória de limpeza de estado local.
+		slog.Warn("registro de handlers sobreposto; invocando limpeza de registros prévios",
+			slog.String("botInstanceID", ch.botInstanceID),
+		)
 		if err := ch.Shutdown(); err != nil {
 			return fmt.Errorf("cleanup previous command handlers: %w", err)
 		}
@@ -186,14 +206,23 @@ func (ch *CommandHandler) SetupCommands() error {
 	if err := ch.commandManager.SetupCommands(); err != nil {
 		if ch.commandManager != nil {
 			if shutdownErr := ch.commandManager.Shutdown(); shutdownErr != nil {
-				log.ErrorLoggerRaw().Error("Failed to rollback command manager handler registration", "err", shutdownErr)
+				// Error: Falha estrutural bloqueante da operação em curso.
+				slog.Error("falha fatal no rollback de registro do gerenciador de comandos",
+					slog.Group("metadata",
+						slog.String("botInstanceID", ch.botInstanceID),
+						slog.String("synthetic_fault_code", "500"),
+						slog.String("stack_trace", fmt.Sprintf("%+v", shutdownErr)),
+					),
+				)
 			}
 			ch.commandManager = nil
 		}
 		return fmt.Errorf("failed to setup commands: %w", err)
 	}
 
-	log.ApplicationLogger().Info("Bot commands setup completed successfully")
+	slog.Info("arquitetura de comandos estabelecida com sucesso",
+		slog.String("botInstanceID", ch.botInstanceID),
+	)
 	return nil
 }
 
@@ -257,7 +286,7 @@ func (ch *CommandHandler) registerCommandCatalog() error {
 		registrar.Register(ch, router)
 	}
 
-	log.ApplicationLogger().Info("Command catalog fragments registered successfully")
+	slog.Info("fragmentos do catálogo de comandos acoplados ao roteador")
 	return nil
 }
 
@@ -280,7 +309,9 @@ func (ch *CommandHandler) supportsCatalogCapabilities(required CommandCatalogCap
 
 // Shutdown performs cleanup for the command handler resources
 func (ch *CommandHandler) Shutdown() error {
-	log.ApplicationLogger().Info("Shutting down command handler...")
+	slog.Info("iniciando drenagem e encerramento de conexões do CommandHandler",
+		slog.String("botInstanceID", ch.botInstanceID),
+	)
 
 	var errs []error
 	if ch.commandManager != nil {
@@ -288,6 +319,17 @@ func (ch *CommandHandler) Shutdown() error {
 			errs = append(errs, fmt.Errorf("shutdown command manager: %w", err))
 		}
 		ch.commandManager = nil
+	}
+
+	if len(errs) > 0 {
+		// Error: Falha estrutural bloqueante ao drenar dependências. Aciona sistema de agregação.
+		slog.Error("falhas detectadas durante a execução do shutdown do gerenciador de comandos",
+			slog.Group("metadata",
+				slog.String("botInstanceID", ch.botInstanceID),
+				slog.String("synthetic_fault_code", "500"),
+				slog.String("stack_trace", fmt.Sprintf("%+v", errors.Join(errs...))),
+			),
+		)
 	}
 
 	return errors.Join(errs...)
@@ -303,8 +345,17 @@ func (ch *CommandHandler) handlesGuild(guildID string) bool {
 }
 
 func (ch *CommandHandler) handlesGuildRoute(guildID string, routeKey core.InteractionRouteKey) bool {
+	// Debug: Rastreamento granular do fluxo lógico do filtro de rota de guilda.
+	slog.Debug("avaliando autorização de rota para requisição",
+		slog.String("guildID", guildID),
+		slog.String("routeKeyPath", routeKey.Path),
+	)
+
 	feature := core.ResolveFeatureForCommandPath(routeKey.Path)
 	if !ch.matchesGuildBotInstance(guildID, feature) {
+		slog.Debug("permissão negada: incompatibilidade entre instância bot e funcionalidade mapeada",
+			slog.String("feature", feature),
+		)
 		return false
 	}
 	cfg := ch.configManager.Config()
@@ -342,6 +393,14 @@ func (ch *CommandHandler) matchesGuildBotInstance(guildID string, feature string
 
 	resolvedID, _ := guild.ResolveFeatureBotInstanceID(feature)
 	tokenEnc, ok := guild.BotInstanceTokens[resolvedID]
+
+	// Debug: Inspeção granular de estado transiente e avaliação estrutural para identificação de contexto.
+	slog.Debug("resolução de escopo de execução do bot para guilda específica",
+		slog.String("resolvedID", resolvedID),
+		slog.String("feature", feature),
+		slog.Bool("tokenExists", ok),
+	)
+
 	if !ok || string(tokenEnc) == "" {
 		return false
 	}

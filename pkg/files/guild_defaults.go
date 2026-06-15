@@ -2,6 +2,7 @@ package files
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
 )
 
@@ -21,6 +22,10 @@ func NewMinimalGuildConfig(guildID string) GuildConfig {
 		features.SetToggle(spec.ID, boolPtr(disabled))
 	}
 
+	slog.Debug("Granular inspection: Dormant guild configuration structure materialized in memory",
+		slog.String("guild_id", guildID),
+	)
+
 	return GuildConfig{
 		GuildID:  strings.TrimSpace(guildID),
 		Features: features,
@@ -32,7 +37,9 @@ func NewMinimalGuildConfig(guildID string) GuildConfig {
 func (mgr *ConfigManager) EnsureMinimalGuildConfig(guildID string) error {
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
-		return fmt.Errorf("guild id is required")
+		err := fmt.Errorf("guild id is required")
+		emitBlockingError("Blocking structural failure: Guild configuration enforcement aborted due to null identifier", err, generateRequestID())
+		return err
 	}
 
 	_, err := mgr.UpdateConfig(func(cfg *BotConfig) error {
@@ -40,14 +47,27 @@ func (mgr *ConfigManager) EnsureMinimalGuildConfig(guildID string) error {
 			if cfg.Guilds[idx].GuildID != guildID {
 				continue
 			}
+
+			slog.Debug("Granular inspection: Guild configuration already resident in operational matrix",
+				slog.String("guild_id", guildID),
+				slog.Int("matrix_index", idx),
+			)
 			return nil
 		}
 
 		cfg.Guilds = append(cfg.Guilds, NewMinimalGuildConfig(guildID))
+
+		slog.Info("Architectural state transition: Dormant guild node appended to global configuration tree",
+			slog.String("guild_id", guildID),
+		)
+
 		return nil
 	})
+
 	if err != nil {
-		return fmt.Errorf("ensure minimal guild config for %s: %w", guildID, err)
+		errWrap := fmt.Errorf("ensure minimal guild config for %s: %w", guildID, err)
+		emitBlockingError("Blocking structural failure: State mutation transaction rejected during guild enforcement", errWrap, generateRequestID())
+		return errWrap
 	}
 	return nil
 }

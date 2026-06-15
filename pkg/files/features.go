@@ -3,6 +3,7 @@ package files
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 )
 
 // FeatureServiceToggles holds optional overrides for runtime behavior.
@@ -97,8 +98,15 @@ type FeatureToggles struct {
 func (ft *FeatureToggles) UnmarshalJSON(data []byte) error {
 	type alias FeatureToggles
 	var parsed alias
+
+	slog.Debug("Inspeção granular: Iniciando extração de payload dinâmico para FeatureToggles",
+		slog.Int("payload_bytes", len(data)),
+	)
+
 	if err := json.Unmarshal(data, &parsed); err != nil {
-		return fmt.Errorf("FeatureToggles.UnmarshalJSON: %w", err)
+		errWrap := fmt.Errorf("FeatureToggles.UnmarshalJSON: %w", err)
+		emitBlockingError("Falha estrutural bloqueante restrita ao escopo de desserialização do payload I/O", errWrap, generateRequestID())
+		return errWrap
 	}
 	*ft = FeatureToggles(parsed)
 	return nil
@@ -165,11 +173,20 @@ func boolPtr(v bool) *bool {
 
 func resolveFeatureBool(guildVal *bool, globalVal *bool, def bool) bool {
 	if guildVal != nil {
+		slog.Debug("Rastreamento de ramificação condicional: Adoção de estado transiente sobrescrito pela guilda",
+			slog.Bool("resolved_value", *guildVal),
+		)
 		return *guildVal
 	}
 	if globalVal != nil {
+		slog.Debug("Rastreamento de ramificação condicional: Adoção de estado transiente em nível global",
+			slog.Bool("resolved_value", *globalVal),
+		)
 		return *globalVal
 	}
+	slog.Debug("Rastreamento de ramificação condicional: Recuo estrutural para valor padrão basal",
+		slog.Bool("resolved_value", def),
+	)
 	return def
 }
 
@@ -178,16 +195,28 @@ func (cfg *BotConfig) ResolveFeatures(guildID string) ResolvedFeatureToggles {
 	global := FeatureToggles{}
 	if cfg != nil {
 		global = cfg.Features
+	} else {
+		slog.Warn("Degradação mitigada interceptada: Objeto BotConfig nulo durante resolução; o fluxo compensatório adotará um vetor global vazio",
+			slog.String("guild_id", guildID),
+		)
 	}
 
 	var guild FeatureToggles
+	guildFound := false
 	if cfg != nil && guildID != "" {
 		for _, g := range cfg.Guilds {
 			if g.GuildID == guildID {
 				guild = g.Features
+				guildFound = true
 				break
 			}
 		}
+	}
+
+	if cfg != nil && guildID != "" && !guildFound {
+		slog.Debug("Inspeção granular: Nenhuma árvore de características customizada localizada para a guilda; ramificação dependente da herança global",
+			slog.String("guild_id", guildID),
+		)
 	}
 
 	var out ResolvedFeatureToggles
@@ -197,5 +226,10 @@ func (cfg *BotConfig) ResolveFeatures(guildID string) ResolvedFeatureToggles {
 		resolved := resolveFeatureBool(guildPtr, globalPtr, spec.Default)
 		spec.SetResolved(&out, resolved)
 	}
+
+	slog.Debug("Transição de sub-estado: Vetor hierárquico FeatureToggles consolidado",
+		slog.String("guild_id", guildID),
+	)
+
 	return out
 }

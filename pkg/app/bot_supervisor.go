@@ -2,8 +2,10 @@ package app
 
 import (
 	"context"
+	"log/slog"
 	"math/rand/v2"
 	"reflect"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -11,7 +13,6 @@ import (
 	"github.com/small-frappuccino/discordgo"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/service"
 )
 
@@ -73,11 +74,13 @@ func (s *BotSupervisor) SetFatalCallback(cb func(error)) {
 }
 
 func (s *BotSupervisor) Start() error {
+	slog.Info("Inicializando rotinas primárias do BotSupervisor", slog.String("component", "BotSupervisor"))
 	s.onConfigChanged(nil, nil) // trigger initial resolution
 	return nil
 }
 
 func (s *BotSupervisor) Stop(ctx context.Context) error {
+	slog.Info("Acionando encerramento planejado de instâncias principais do BotSupervisor")
 	s.cancel() // signal background goroutines to abort
 
 	var globalWG sync.WaitGroup
@@ -108,7 +111,12 @@ func (s *BotSupervisor) Stop(ctx context.Context) error {
 	select {
 	case <-done:
 	case <-ctx.Done():
-		log.ApplicationLogger().Warn("BotSupervisor stop timeout exceeded before background tasks completed")
+		slog.Error("BotSupervisor stop timeout excedido antes da conclusão de tarefas em background",
+			slog.String("request_id", "supervisor_shutdown"),
+			slog.Int("synthetic_status_code", 500),
+			slog.String("stacktrace", string(debug.Stack())),
+			slog.Any("error", ctx.Err()),
+		)
 		return ctx.Err()
 	}
 
@@ -155,6 +163,11 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 	toStop := make([]string, 0)
 	capsChangedMap := make(map[string]bool)
 
+	slog.Debug("Rastreamento de deltas de configuração",
+		slog.Int("current_tokens", len(currentTokens)),
+		slog.Int("current_instances", len(s.instances)),
+	)
+
 	for id, token := range currentTokens {
 		oldState, exists := s.instances[id]
 		var capsChanged bool
@@ -175,7 +188,11 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 				if err := runtime.session.UpdateStatusComplex(discordgo.UpdateStatusData{
 					Status: currentStatuses[id],
 				}); err != nil {
-					log.ApplicationLogger().Warn("Failed to update discord status for bot instance", "botInstanceID", id, "error", err)
+					slog.Warn("Falha ao atualizar discord status para a instância",
+						slog.String("botInstanceID", id),
+						slog.String("mitigation", "operação ignorada para proteger fluxo principal"),
+						slog.Any("error", err),
+					)
 				}
 			}
 		}
@@ -190,7 +207,7 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 	// 3. Trigger Stops
 	for _, id := range toStop {
 		if state, exists := s.instances[id]; exists && state.Status != StatusStopping {
-			log.ApplicationLogger().Info("Stopping bot instance due to token removal", "botInstanceID", id)
+			slog.Info("Encerramento planejado de instância ativado por remoção de token", slog.String("botInstanceID", id))
 			state.Status = StatusStopping
 			state.StopWG.Add(1)
 			s.bgWG.Add(1)
@@ -208,9 +225,9 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 		if state, exists := s.instances[id]; exists {
 			if state.Status != StatusStopping {
 				if state.Token != token {
-					log.ApplicationLogger().Info("Stopping bot instance due to token update", "botInstanceID", id)
+					slog.Info("Encerramento planejado de instância ativado por atualização de token", slog.String("botInstanceID", id))
 				} else {
-					log.ApplicationLogger().Info("Stopping bot instance due to capability change", "botInstanceID", id)
+					slog.Info("Encerramento planejado de instância ativado por alteração de capabilities", slog.String("botInstanceID", id))
 				}
 				state.Status = StatusStopping
 				state.StopWG.Add(1)
@@ -240,6 +257,7 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 	var syncTasks []syncTask
 
 	if oldCfg != nil {
+		slog.Debug("Avaliando rotinas de feature routing condicional")
 		for _, newGuild := range newCfg.Guilds {
 			var oldGuild *files.GuildConfig
 			for i := range oldCfg.Guilds {
@@ -296,12 +314,24 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 					if cm := runtime.commandHandler.GetCommandManager(); cm != nil {
 						if syncErr := cm.SyncGuildCommands(gID); syncErr != nil {
 							if strings.Contains(syncErr.Error(), "403") {
-								log.ApplicationLogger().Warn("dynamic command sync forbidden (missing scope?)", "guildID", gID, "botInstanceID", instanceID, "error", syncErr)
+								slog.Warn("Sincronização dinâmica de comandos ignorada por barreira de autorização",
+									slog.String("guildID", gID),
+									slog.String("botInstanceID", instanceID),
+									slog.String("mitigation", "bypass de permissão"),
+									slog.Any("error", syncErr),
+								)
 							} else {
-								log.ApplicationLogger().Error("failed dynamic guild command sync", "guildID", gID, "botInstanceID", instanceID, "error", syncErr)
+								slog.Error("Falha estrutural ao sincronizar guild commands",
+									slog.String("request_id", "sync_"+gID+"_"+instanceID),
+									slog.Int("synthetic_status_code", 500),
+									slog.String("stacktrace", string(debug.Stack())),
+									slog.String("guildID", gID),
+									slog.String("botInstanceID", instanceID),
+									slog.Any("error", syncErr),
+								)
 							}
 						} else {
-							log.ApplicationLogger().Info("Completed dynamic guild command sync", "guildID", gID, "botInstanceID", instanceID)
+							slog.Info("Sincronização dinâmica de guild commands concluída", slog.String("guildID", gID), slog.String("botInstanceID", instanceID))
 						}
 					}
 				}
@@ -327,7 +357,13 @@ func (s *BotSupervisor) executeStopAndRemove(ctx context.Context, id string, sta
 	if err != nil {
 		s.serviceManager.ForceRemove("bot-runtime-" + id)
 		state.Status = StatusError
-		log.ApplicationLogger().Error("falha no expurgo I/O, escalado para ForceRemove", "botInstanceID", id, "error", err)
+		slog.Error("Falha no expurgo I/O, escalado para ForceRemove",
+			slog.String("request_id", "stop_remove_"+id),
+			slog.Int("synthetic_status_code", 500),
+			slog.String("stacktrace", string(debug.Stack())),
+			slog.String("botInstanceID", id),
+			slog.Any("error", err),
+		)
 		return
 	}
 
@@ -360,7 +396,12 @@ func (s *BotSupervisor) awaitStopAndStart(id, token, status string, oldState *bo
 		case <-waitCh:
 		}
 		if oldState.Status == StatusError {
-			log.ApplicationLogger().Error("abortando startup devido a estado zumbi não resolvido", "botInstanceID", id)
+			slog.Error("Abortando inicialização de processo secundário devido a estado zumbi irreversível",
+				slog.String("request_id", "await_start_"+id),
+				slog.Int("synthetic_status_code", 500),
+				slog.String("stacktrace", string(debug.Stack())),
+				slog.String("botInstanceID", id),
+			)
 			return
 		}
 	}
@@ -401,6 +442,10 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token, status str
 		s.mu.Unlock()
 
 		if sleepDur > 0 {
+			slog.Debug("Interrupção transiente para mitigação de rajadas de identificação",
+				slog.String("botInstanceID", instanceID),
+				slog.Duration("delay", sleepDur),
+			)
 			select {
 			case <-s.ctx.Done():
 				return
@@ -416,14 +461,31 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token, status str
 
 		errStr := err.Error()
 		if strings.Contains(errStr, "401") || strings.Contains(errStr, "4004") || strings.Contains(strings.ToLower(errStr), "authentication failed") {
-			log.ApplicationLogger().Warn("Bot authentication failed permanently, revoking token from configuration", "botInstanceID", instanceID, "error", err)
+			slog.Error("Autenticação de instância comprometida, acionando revogação de token na configuração",
+				slog.String("request_id", "auth_bot_"+instanceID),
+				slog.Int("synthetic_status_code", 500),
+				slog.String("stacktrace", string(debug.Stack())),
+				slog.String("botInstanceID", instanceID),
+				slog.Any("error", err),
+			)
 			if revokeErr := s.configManager.RevokeBotInstance(instanceID, token); revokeErr != nil {
-				log.ApplicationLogger().Error("Failed to revoke bot instance after auth failure", "botInstanceID", instanceID, "error", revokeErr)
+				slog.Error("Falha estrutural ao revogar credenciais da instância na base central",
+					slog.String("request_id", "revoke_bot_"+instanceID),
+					slog.Int("synthetic_status_code", 500),
+					slog.String("stacktrace", string(debug.Stack())),
+					slog.String("botInstanceID", instanceID),
+					slog.Any("error", revokeErr),
+				)
 			}
 			break
 		}
 
-		log.ApplicationLogger().Warn("failed to open bot runtime, retrying", "botInstanceID", instanceID, "attempt", attempt+1, "error", err)
+		slog.Warn("Interferência na inicialização de bot runtime, acionando ramificação compensatória",
+			slog.String("botInstanceID", instanceID),
+			slog.Int("attempt", attempt+1),
+			slog.String("mitigation", "execução de algoritmo exponential backoff"),
+			slog.Any("error", err),
+		)
 
 		delay := float64(baseDelay) * float64(uint(1)<<attempt)
 		if delay > float64(maxDelay) {
@@ -441,7 +503,13 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token, status str
 	}
 
 	if err != nil {
-		log.ApplicationLogger().Error("failed to open bot runtime after retries", "botInstanceID", instanceID, "error", err)
+		slog.Error("Falha bloqueante após esgotamento de rotinas de mitigação no start de runtime",
+			slog.String("request_id", "start_exhaust_"+instanceID),
+			slog.Int("synthetic_status_code", 500),
+			slog.String("stacktrace", string(debug.Stack())),
+			slog.String("botInstanceID", instanceID),
+			slog.Any("error", err),
+		)
 		s.mu.Lock()
 		if s.instances[instanceID] == state {
 			state.Status = StatusError
@@ -452,7 +520,13 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token, status str
 	}
 
 	if err := initializeBotRuntime(s.ctx, runtime, s.opts); err != nil {
-		log.ApplicationLogger().Error("failed to initialize bot runtime", "botInstanceID", instanceID, "error", err)
+		slog.Error("Falha estrutural ao registrar componentes operacionais de runtime",
+			slog.String("request_id", "init_components_"+instanceID),
+			slog.Int("synthetic_status_code", 500),
+			slog.String("stacktrace", string(debug.Stack())),
+			slog.String("botInstanceID", instanceID),
+			slog.Any("error", err),
+		)
 		s.mu.Lock()
 		if s.instances[instanceID] == state {
 			state.Status = StatusError
@@ -477,7 +551,13 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token, status str
 	})
 
 	if err := s.serviceManager.RegisterAndStart("bot-runtime-"+instanceID, wrapper); err != nil {
-		log.ApplicationLogger().Error("failed to register bot runtime service", "botInstanceID", instanceID, "error", err)
+		slog.Error("Falha na interface de acoplamento com o Service Manager dinâmico",
+			slog.String("request_id", "register_svc_"+instanceID),
+			slog.Int("synthetic_status_code", 500),
+			slog.String("stacktrace", string(debug.Stack())),
+			slog.String("botInstanceID", instanceID),
+			slog.Any("error", err),
+		)
 		return
 	}
 
@@ -495,6 +575,6 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token, status str
 		}
 		newRuntimes[instanceID] = runtime
 		s.resolver.swapRuntimes(newRuntimes)
-		log.ApplicationLogger().Info("Bot instance dynamically started and registered", "botInstanceID", instanceID)
+		slog.Info("Acoplamento de instância primária e registro de socket efetivados com sucesso", slog.String("botInstanceID", instanceID))
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	stdErrors "errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -57,9 +58,6 @@ const (
 )
 
 // Run bootstraps the bot with a unified flow and blocks until shutdown.
-// appName affects config/cache/log paths.
-// Persistent cache: guild-level cleanup uses explicit (type + key prefix) deletion to safely
-// remove rows for members (prefix guildID:), guilds (key guildID), and roles (key guildID).
 func Run(appName string) error {
 	return RunWithOptions(appName, RunOptions{})
 }
@@ -68,9 +66,12 @@ func Run(appName string) error {
 func RunWithOptions(appName string, opts RunOptions) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			notifyLifecycleEvent("fatal", fmt.Sprintf("panic recovered during runtime: %v", r))
-			err = fmt.Errorf("panic recovered during runtime: %v", r)
+			errWrap := fmt.Errorf("panic recovered during runtime: %v", r)
+			emitBlockingError("Critical pipeline failure: Unhandled panic intercepted", errWrap, generateRequestID())
+			notifyLifecycleEvent("fatal", errWrap.Error())
+			err = errWrap
 		} else if err != nil {
+			emitBlockingError("Critical pipeline failure: Primary routine aborted", err, generateRequestID())
 			notifyLifecycleEvent("fatal", fmt.Sprintf("startup or runtime error: %v", err))
 		} else {
 			notifyLifecycleEvent("stopping", "")
@@ -82,69 +83,63 @@ func RunWithOptions(appName string, opts RunOptions) (err error) {
 func runWithOptions(appName string, opts RunOptions) error {
 	started := time.Now()
 
-	// App name first (affects paths)
 	files.SetAppName(appName)
 
-	// Initialize Distributed ID Generator (Node ID via StatefulSet ordinal, fallback to 1)
 	if err := idgen.Init(1); err != nil {
-		return fmt.Errorf("initialize idgen: %w", err)
+		errWrap := fmt.Errorf("initialize idgen: %w", err)
+		emitBlockingError("Structural dependency failure: ID generator initialization aborted", errWrap, generateRequestID())
+		return errWrap
 	}
 
-	// Logger first so subsequent steps can log meaningfully
 	if err := log.SetupLogger(files.EffectiveBotName(), files.GetLogFilePath()); err != nil {
-		return fmt.Errorf("configure logger: %w", err)
+		errWrap := fmt.Errorf("configure logger: %w", err)
+		emitBlockingError("Structural dependency failure: Core logging infrastructure aborted", errWrap, generateRequestID())
+		return errWrap
 	}
-	// Ensure logs are flushed on exit
 	defer log.GlobalLogger.Sync()
 
-	// Best-effort startup notification on the configured lifecycle
-	// webhook. Fires once before any work happens so operators see a
-	// fresh "back online" chat message after every supervisor restart.
-	// notifyLifecycleEvent is a no-op when DISCORDCORE_LIFECYCLE_WEBHOOK_URL is unset.
 	notifyLifecycleEvent("starting", "")
 
-	// Theme configuration now comes from persisted runtime_config.
-	// IMPORTANT: configManager is created later (after the config store is ready).
-	// We cannot read runtime_config here without risking an undefined variable / nil config.
-	// Theme will be applied right after loading the config store (see below).
-
-	// Runtime hot-apply manager (theme + DISCORDCORE_DISABLE_* toggles)
-	// NOTE: The /config runtime panel triggers Apply() after persisting config changes.
 	var runtimeApplier *runtimeapply.Manager
 
 	msg := formatStartupMessage(appName, AppVersion(), Version)
-	log.ApplicationLogger().Info(msg)
+	slog.Info("Architectural state transition: Executing application binary",
+		slog.String("version_info", msg),
+	)
 
 	databaseBootstrap, err := resolveDatabaseBootstrap()
 	if err != nil {
-		return fmt.Errorf("RunWithOptions: %w", err)
+		errWrap := fmt.Errorf("RunWithOptions resolveDatabaseBootstrap: %w", err)
+		emitBlockingError("Structural dependency failure: Database manifest resolution aborted", errWrap, generateRequestID())
+		return errWrap
 	}
-	log.ApplicationLogger().Info(
-		"Resolved postgres bootstrap configuration",
-		"operation", "startup.database.bootstrap",
-		"source", databaseBootstrap.Source,
+	slog.Info("Architectural state transition: Database matrix parameters loaded",
+		slog.String("operation", "startup.database.bootstrap"),
+		slog.String("source", databaseBootstrap.Source),
 	)
 
-	// Minimal on-disk structure
 	if err := files.EnsureCacheInitialized(); err != nil {
-		log.ApplicationLogger().Warn(fmt.Sprintf("Failed to initialize cache structure: %v", err))
+		slog.Warn("Mitigated service degradation: Sub-optimal filesystem state detected; executing local cache fallback",
+			slog.String("error", err.Error()),
+		)
 	}
 	if err := files.EnsureCacheDirs(); err != nil {
-		return fmt.Errorf("create cache directories: %w", err)
+		errWrap := fmt.Errorf("create cache directories: %w", err)
+		emitBlockingError("Structural dependency failure: Block storage provisioning aborted", errWrap, generateRequestID())
+		return errWrap
 	}
-	// PostgreSQL bootstrap comes from environment variables. The resolved value is
-	// mirrored into runtime_config after the config store is loaded.
+
 	store, configManager, err := setupStorage(databaseBootstrap)
 	if err != nil {
-		return fmt.Errorf("RunWithOptions: %w", err)
+		errWrap := fmt.Errorf("RunWithOptions setupStorage: %w", err)
+		emitBlockingError("Structural dependency failure: Storage manifold orchestration aborted", errWrap, generateRequestID())
+		return errWrap
 	}
 	closeStoreOnReturn := true
 	defer func() { rollbackStoreClose(closeStoreOnReturn, store) }()
 
-	// Theme configuration (from persisted runtime_config)
 	applyConfiguredTheme(configManager)
 
-	// Periodic cleanup (every 6 hours), can be disabled via runtime config
 	cleanupStop := scheduleDBCleanup(store, configManager)
 	defer func() {
 		if cleanupStop != nil {
@@ -152,8 +147,6 @@ func runWithOptions(appName string, opts RunOptions) error {
 		}
 	}()
 
-	// Create runtime hot-apply manager and set initial baseline from current config.
-	// This lets the runtime config panel apply environment-like toggles without a full restart.
 	runtimeApplier = runtimeapply.New(nil, nil)
 	if cfg := configManager.Config(); cfg != nil {
 		runtimeApplier.SetInitial(cfg.RuntimeConfig)
@@ -178,22 +171,13 @@ func runWithOptions(appName string, opts RunOptions) error {
 	startupTasks := NewStartupTaskOrchestrator(runtimeCount)
 	defer shutdownStartupServices(startupTasks, controlServerRegistry, "Startup background tasks did not finish cleanly")
 
-	// Wire the in-memory metrics sink so /v1/health/qotd has counters to
-	// expose. NopMetrics is a valid fallback (the service still works) but
-	// without a SnapshotProvider the route returns 503; production startup
-	// always uses the in-memory implementation.
 	qotdMetrics := &qotd.InMemoryMetrics{}
 	qotdService := qotd.NewServiceWithMetrics(configManager, store, nil, qotdMetrics)
 
-	// Provision an edge-synced clock to perfectly align internal timers
 	appClock := clock.NewHTTPClock("https://discord.com")
 	qotdService.SetClock(appClock)
 
-	// Mirror QOTD: wire the in-memory moderation metrics so /v1/health/moderation
-	// has counters to expose. NopMetrics is a valid fallback for tests, but
-	// production startup always uses the in-memory implementation.
 	moderationMetrics := &moderation.InMemoryMetrics{}
-
 	appServiceManager := service.NewServiceManager()
 
 	storeService := service.NewLegacyServiceWrapper(service.LegacyServiceWrapperSpec{
@@ -207,7 +191,9 @@ func runWithOptions(appName string, opts RunOptions) error {
 		},
 	})
 	if err := appServiceManager.Register(storeService); err != nil {
-		return fmt.Errorf("register store service: %w", err)
+		errWrap := fmt.Errorf("register store service: %w", err)
+		emitBlockingError("Structural dependency failure: Subgraph registration aborted", errWrap, generateRequestID())
+		return errWrap
 	}
 
 	botOpts := botRuntimeOptions{
@@ -246,7 +232,9 @@ func runWithOptions(appName string, opts RunOptions) error {
 	})
 
 	if err := appServiceManager.Register(botSupervisorService); err != nil {
-		return fmt.Errorf("register bot supervisor service: %w", err)
+		errWrap := fmt.Errorf("register bot supervisor service: %w", err)
+		emitBlockingError("Structural dependency failure: Supervisor allocation aborted", errWrap, generateRequestID())
+		return errWrap
 	}
 
 	runtimeResolver := botSupervisor.GetResolver()
@@ -254,10 +242,14 @@ func runWithOptions(appName string, opts RunOptions) error {
 	attachCtx, attachCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer attachCancel()
 	if err := qotdMetrics.Attach(attachCtx); err != nil {
-		return fmt.Errorf("fatal abort: qotd metrics pipeline failed to attach: %w", err)
+		errWrap := fmt.Errorf("fatal abort: qotd metrics pipeline failed to attach: %w", err)
+		emitBlockingError("Structural dependency failure: Core metrics pipeline desync", errWrap, generateRequestID())
+		return errWrap
 	}
 	if err := moderationMetrics.Attach(attachCtx); err != nil {
-		return fmt.Errorf("fatal abort: moderation metrics pipeline failed to attach: %w", err)
+		errWrap := fmt.Errorf("fatal abort: moderation metrics pipeline failed to attach: %w", err)
+		emitBlockingError("Structural dependency failure: Moderation metrics pipeline desync", errWrap, generateRequestID())
+		return errWrap
 	}
 
 	eg, egCtx := errgroup.WithContext(context.Background())
@@ -287,93 +279,92 @@ func runWithOptions(appName string, opts RunOptions) error {
 			moderationMetrics:     moderationMetrics,
 			controlServerRegistry: controlServerRegistry,
 		})
-		log.ApplicationLogger().Info("🔗 Slash commands sync completed")
+		slog.Info("Architectural state transition: Command tree sync complete")
 		return nil
 	})
 
 	if err := eg.Wait(); err != nil {
 		return err
 	}
-	log.ApplicationLogger().Info(fmt.Sprintf("🎯 %s initialized successfully in %s", appName, time.Since(started).Round(time.Millisecond)))
-	log.ApplicationLogger().Info(fmt.Sprintf("🤖 %s running. Press Ctrl+C to stop...", appName))
 
-	// Configuração da escuta de sinais POSIX (context-aware)
+	slog.Info("Architectural state transition: Main process operational matrix finalized",
+		slog.String("app_name", appName),
+		slog.Duration("boot_time", time.Since(started).Round(time.Millisecond)),
+	)
+
 	rootCtx, stopRoot := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopRoot()
 
 	sigHupCh := make(chan os.Signal, 1)
 	signal.Notify(sigHupCh, syscall.SIGHUP)
 
-	// Canal para erros críticos de background reportados pelo ServiceManager
 	fatalErrCh := make(chan error, 1)
 	go func() {
 		fatalErrCh <- appServiceManager.Wait()
 	}()
 
-	// Loop principal de multiplexação no runner
 	var runErr error
 	for {
 		select {
 		case err := <-fatalErrCh:
 			if err != nil {
-				log.ApplicationLogger().Error("Fatal background error encountered, initiating shutdown", "error", err)
+				emitBlockingError("Critical pipeline failure: Daemon cluster collapsed", err, generateRequestID())
 				runErr = err
 				goto shutdown
 			}
-			// if nil, services stopped cleanly somehow without OS signal. We exit cleanly.
 			goto shutdown
 
 		case <-rootCtx.Done():
-			log.ApplicationLogger().Info("Sinal de encerramento interceptado. Iniciando teardown gracioso...")
-			stopRoot() // restore default signal behavior so a second Ctrl+C kills immediately
+			slog.Info("Architectural state transition: Process termination signal acknowledged. Initiating graceful teardown.")
+			stopRoot()
 			goto shutdown
 
 		case <-sigHupCh:
-			// 1. Recarga estática e segura sem mutilar o estado atual
+			slog.Debug("Dynamic instruction intercepted: Evaluating configuration layer reload via SIGHUP")
 			newCfg, needsSave, err := configManager.LoadConfigFromStore()
 			if err != nil {
-				log.ApplicationLogger().Info("Failed to reload config on SIGHUP", "error", err.Error())
-				continue // Aborta a recarga, preserva o estado estável em uso
+				slog.Warn("Mitigated service degradation: Live configuration mutation failed; enforcing active baseline",
+					slog.String("error", err.Error()),
+				)
+				continue
 			}
 
-			// 2. Rotação atômica do ponteiro global sob Write Lock (sync.RWMutex)
-			// Isso automaticamente dispara os subscribers (incluindo o BotSupervisor)
-
-			// 4. Rotação atômica do ponteiro global sob Write Lock (sync.RWMutex)
 			dupCount := configManager.ApplyConfig(newCfg)
 
 			if dupCount > 0 || needsSave {
 				if saveErr := configManager.SaveConfig(); saveErr != nil {
-					log.ApplicationLogger().Error("Failed to save config after SIGHUP normalization", "error", saveErr)
+					emitBlockingError("Structural state failure: Volatile configuration drift blocks persistence flush", saveErr, generateRequestID())
 				} else {
-					log.ApplicationLogger().Info("Configuração recarregada com sucesso via SIGHUP (index rebuilt/normalized)", "duplicates", dupCount)
+					slog.Info("Architectural state transition: Configuration topology updated and indexes rebuilt",
+						slog.Int("duplicates_purged", dupCount),
+					)
 				}
 			} else {
-				log.ApplicationLogger().Info("Configuração recarregada com sucesso via SIGHUP")
+				slog.Info("Architectural state transition: Configuration topology refreshed directly from disk")
 			}
 		}
 	}
 
 shutdown:
-	log.ApplicationLogger().Info(fmt.Sprintf("🛑 Stopping %s...", appName))
+	slog.Info("Architectural state transition: Commencing teardown sequence across local orchestrators",
+		slog.String("app_name", appName),
+	)
 	log.GlobalLogger.Sync()
 
 	shutdownStartupServices(startupTasks, controlServerRegistry, "Startup background tasks did not finish before shutdown")
 
-	// Steady state reached: take over explicit, ordered shutdown and disable the
-	// rollback defers so resources are not closed twice.
 	closeStoreOnReturn = false
 	if err := appServiceManager.StopAll(context.Background()); err != nil {
+		errWrap := fmt.Errorf("shutdown: %w", err)
+		emitBlockingError("Structural teardown failure: Zombie sub-processes detected during stop iteration", errWrap, generateRequestID())
 		if runErr != nil {
-			return stdErrors.Join(runErr, fmt.Errorf("shutdown: %w", err))
+			return stdErrors.Join(runErr, errWrap)
 		}
-		return fmt.Errorf("shutdown: %w", err)
+		return errWrap
 	}
 	return runErr
 }
 
-// applyConfiguredTheme applies the persisted bot_theme, falling back to the default
-// theme when none is configured. Theme failures are logged but never fatal.
 func applyConfiguredTheme(configManager *files.ConfigManager) {
 	cfg := configManager.Config()
 	themeName := ""
@@ -382,20 +373,22 @@ func applyConfiguredTheme(configManager *files.ConfigManager) {
 	}
 
 	if err := files.ConfigureThemeFromConfig(themeName); err != nil {
-		log.ApplicationLogger().Warn(fmt.Sprintf("Failed to set theme from runtime config %s: %v", "bot_theme", err))
+		slog.Warn("Mitigated service degradation: Client interface theme rejected context; reverting visual defaults",
+			slog.String("theme_name", themeName),
+			slog.String("error", err.Error()),
+		)
 	}
 	if themeName == "" {
 		if err := files.SetTheme(""); err != nil {
-			log.ApplicationLogger().Warn(fmt.Sprintf("Failed to apply default theme: %v", err))
+			slog.Warn("Mitigated service degradation: Hard fallback visual theme application failed",
+				slog.String("error", err.Error()),
+			)
 		} else {
-			log.ApplicationLogger().Info("🌈 Default theme applied")
+			slog.Info("Architectural state transition: Standard UI theme locked")
 		}
 	}
 }
 
-// scheduleDBCleanup starts the periodic DB cleanup loop unless disabled by the
-// maintenance feature gate or the disable_db_cleanup runtime toggle. It returns the
-// stop channel (nil when cleanup is disabled) for the caller to close on shutdown.
 func scheduleDBCleanup(store *storage.Store, configManager *files.ConfigManager) chan struct{} {
 	disableCleanup := false
 	features := (&files.BotConfig{}).ResolveFeatures("")
@@ -404,13 +397,24 @@ func scheduleDBCleanup(store *storage.Store, configManager *files.ConfigManager)
 		disableCleanup = cfg.RuntimeConfig.DisableDBCleanup
 	}
 	cleanupEnabled := features.Maintenance.DBCleanup
+
+	slog.Debug("Evaluating temporal garbage collection routines",
+		slog.Bool("cleanup_enabled", cleanupEnabled),
+		slog.Bool("disable_cleanup_flag", disableCleanup),
+	)
+
 	if cleanupEnabled && !disableCleanup {
 		return cache.SchedulePeriodicCleanup(store, 6*time.Hour)
 	}
+
 	if !cleanupEnabled {
-		log.ApplicationLogger().Info("🛑 DB cleanup disabled by features.maintenance.db_cleanup")
+		slog.Info("Architectural state override: Database garbage collection suppressed explicitly by node definition",
+			slog.String("flag", "features.maintenance.db_cleanup"),
+		)
 	} else {
-		log.ApplicationLogger().Info("🛑 DB cleanup disabled by runtime config disable_db_cleanup")
+		slog.Info("Architectural state override: Database garbage collection suppressed globally by configuration override",
+			slog.String("flag", "disable_db_cleanup"),
+		)
 	}
 	return nil
 }
@@ -428,26 +432,26 @@ func resolveRuntimeCapabilities(configSnapshot *files.BotConfig, botInstances []
 	return capabilities
 }
 
-// rollbackStoreClose closes store during a failed-startup rollback when enabled.
 func rollbackStoreClose(enabled bool, store *storage.Store) {
 	if !enabled || store == nil {
 		return
 	}
 	if err := closeStore(store); err != nil {
-		log.ErrorLoggerRaw().Error("Store close failed during startup cleanup", "err", err)
+		emitBlockingError("Structural rollback failure: Persistence mechanism locked during compensatory teardown", err, generateRequestID())
 	}
 }
 
-// shutdownStartupServices stops the background startup tasks and the control server
-// under a bounded timeout. tasksWarn is logged when the tasks do not finish in time.
 func shutdownStartupServices(startupTasks *StartupTaskOrchestrator, controlServerRegistry *controlServerHolder, tasksWarn string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := startupTasks.Shutdown(ctx); err != nil && !stdErrors.Is(err, context.DeadlineExceeded) {
-		log.ApplicationLogger().Warn(tasksWarn, "err", err)
+		slog.Warn("Mitigated shutdown degradation: Async orchestrator missed synchronization lock",
+			slog.String("warning_context", tasksWarn),
+			slog.String("error", err.Error()),
+		)
 	}
 	if err := controlServerRegistry.Stop(ctx); err != nil {
-		log.ErrorLoggerRaw().Error("Failed to stop control server cleanly", "err", err)
+		emitBlockingError("Structural teardown failure: Interface server socket release hung", err, generateRequestID())
 	}
 }
 
@@ -457,6 +461,10 @@ func loadControlDiscordOAuthConfigFromEnv(publicOrigin string) (*control.Discord
 	redirectURI := strings.TrimSpace(files.EnvString(controlDiscordOAuthRedirectURIEnv, ""))
 	includeGuildMembersRead := files.EnvBool(controlDiscordOAuthIncludeGuildMembersReadEnv)
 	sessionStorePath := strings.TrimSpace(files.EnvString(controlDiscordOAuthSessionStorePathEnv, ""))
+
+	slog.Debug("Inspecting environment map for dynamic OAuth injections",
+		slog.String("client_id", clientID),
+	)
 
 	if clientSecret == "" && redirectURI == "" {
 		if includeGuildMembersRead {
@@ -545,11 +553,6 @@ func listBotGuildIDsFromSessionState(session *discordgo.Session) ([]string, erro
 	return ids, nil
 }
 
-// formatStartupMessage builds the startup log line.
-// Rules:
-// - If appVersion is empty: omit it.
-// - If coreVersion is empty: omit it.
-// - If appVersion equals coreVersion: omit the "(discordcore ...)" suffix to avoid redundant output.
 func formatStartupMessage(appName, appVersion, coreVersion string) string {
 	appName = strings.TrimSpace(appName)
 	appVersion = strings.TrimSpace(appVersion)
@@ -560,7 +563,6 @@ func formatStartupMessage(appName, appVersion, coreVersion string) string {
 		msg += fmt.Sprintf(" %s", appVersion)
 	}
 
-	// Avoid duplicated versions like: "discordmain v0.146.0 (discordcore v0.146.0)"
 	if coreVersion == "" || (appVersion != "" && appVersion == coreVersion) {
 		return msg + "..."
 	}
@@ -622,45 +624,73 @@ func setupStorage(dbb resolvedDatabaseBootstrap) (*storage.Store, *files.ConfigM
 	defer openCancel()
 	db, err := persistence.Open(openCtx, dbc)
 	if err != nil {
-		return nil, nil, fmt.Errorf("open postgres database: %w", err)
+		errWrap := fmt.Errorf("open postgres database: %w", err)
+		emitBlockingError("Structural dependency failure: Core socket driver rejected host", errWrap, generateRequestID())
+		return nil, nil, errWrap
 	}
-	log.ApplicationLogger().Info("Database connection opened", "operation", "startup.database.open", "driver", "postgres")
+	slog.Info("Architectural state transition: Remote persistence pipeline materialized",
+		slog.String("operation", "startup.database.open"),
+		slog.String("driver", "postgres"),
+	)
 
 	pingCtx, pingCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer pingCancel()
 	if err := persistence.Ping(pingCtx, db); err != nil {
 		db.Close()
-		return nil, nil, fmt.Errorf("postgres readiness check failed: %w", err)
+		errWrap := fmt.Errorf("postgres readiness check failed: %w", err)
+		emitBlockingError("Structural dependency failure: Remote persistence pipeline failed readiness probe", errWrap, generateRequestID())
+		return nil, nil, errWrap
 	}
-	log.ApplicationLogger().Info("Database readiness check passed", "operation", "startup.database.ping", "driver", "postgres")
+	slog.Info("Architectural state transition: I/O payload validation complete",
+		slog.String("operation", "startup.database.ping"),
+		slog.String("driver", "postgres"),
+	)
 
 	migrateCtx, migrateCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer migrateCancel()
 	migrator := persistence.NewPostgresMigrator(db)
 	if err := migrator.Up(migrateCtx); err != nil {
 		db.Close()
-		return nil, nil, fmt.Errorf("apply postgres migrations: %w", err)
+		errWrap := fmt.Errorf("apply postgres migrations: %w", err)
+		emitBlockingError("Structural schema failure: Matrix migration scripts stalled", errWrap, generateRequestID())
+		return nil, nil, errWrap
 	}
-	log.ApplicationLogger().Info("Database migrations applied", "operation", "startup.database.migrate", "driver", "postgres")
+	slog.Info("Architectural state transition: Schema schema deltas propagated successfully",
+		slog.String("operation", "startup.database.migrate"),
+		slog.String("driver", "postgres"),
+	)
 
 	store, err := storage.NewStore(db)
 	if err != nil {
 		db.Close()
-		return nil, nil, fmt.Errorf("create postgres store: %w", err)
+		errWrap := fmt.Errorf("create postgres store: %w", err)
+		emitBlockingError("Structural dependency failure: Allocation of I/O buffer blocks aborted", errWrap, generateRequestID())
+		return nil, nil, errWrap
 	}
 	if err := store.Init(); err != nil {
 		db.Close()
-		return nil, nil, fmt.Errorf("initialize postgres store: %w", err)
+		errWrap := fmt.Errorf("initialize postgres store: %w", err)
+		emitBlockingError("Structural dependency failure: Internal store map lock aborted", errWrap, generateRequestID())
+		return nil, nil, errWrap
 	}
-	log.ApplicationLogger().Info("Storage layer initialized", "operation", "startup.database.store_init", "driver", "postgres")
+	slog.Info("Architectural state transition: Virtual storage layers active",
+		slog.String("operation", "startup.database.store_init"),
+		slog.String("driver", "postgres"),
+	)
 
 	configStore := files.NewPostgresConfigStore(db, files.DefaultPostgresConfigStoreKey)
 	configManager := files.NewConfigManagerWithStore(configStore)
+
+	slog.Debug("Executing cross-boundary extraction for master configuration tree")
 	if err := configManager.LoadConfig(); err != nil {
-		return nil, nil, fmt.Errorf("load config from postgres: %w", err)
+		errWrap := fmt.Errorf("load config from postgres: %w", err)
+		emitBlockingError("Structural dependency failure: Configuration load blocked", errWrap, generateRequestID())
+		return nil, nil, errWrap
 	}
 	if err := syncBootstrapDatabaseConfig(configManager, dbCfg); err != nil {
-		return nil, nil, fmt.Errorf("sync runtime database bootstrap config: %w", err)
+		errWrap := fmt.Errorf("sync runtime database bootstrap config: %w", err)
+		emitBlockingError("Structural dependency failure: Node manifest drift detected", errWrap, generateRequestID())
+		return nil, nil, errWrap
 	}
 
 	return store, configManager, nil

@@ -2,8 +2,12 @@ package app
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	stdErrors "errors"
 	"fmt"
+	"log/slog"
+	"runtime/debug"
 	"strings"
 	"sync"
 
@@ -12,13 +16,31 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	"github.com/small-frappuccino/discordcore/pkg/discord/webhook"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/monitoring"
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordgo"
 )
+
+// generateRequestID creates a transient unique identifier for error correlation.
+func generateRequestID() string {
+	bytes := make([]byte, 16)
+	if _, err := rand.Read(bytes); err != nil {
+		return "00000000000000000000000000000000"
+	}
+	return hex.EncodeToString(bytes)
+}
+
+// emitBlockingError encapsulates the emission of structural failures with mandatory metadata.
+func emitBlockingError(msg string, err error, requestID string) {
+	slog.Error(msg,
+		slog.String("request_id", requestID),
+		slog.String("synthetic_code", "500"),
+		slog.String("stack_trace", string(debug.Stack())),
+		slog.Any("error", err),
+	)
+}
 
 type controlServerHolder struct {
 	mu     sync.Mutex
@@ -32,6 +54,8 @@ func (h *controlServerHolder) Set(server *control.Server) {
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
+
+	slog.Debug("Updating control server reference in memory holder")
 	h.server = server
 }
 
@@ -49,7 +73,16 @@ func (h *controlServerHolder) Stop(ctx context.Context) error {
 	if server == nil {
 		return nil
 	}
-	return server.Stop(ctx)
+
+	slog.Info("Planned shutdown of control server instance initiated")
+
+	if err := server.Stop(ctx); err != nil {
+		emitBlockingError("Blocking failure during control server shutdown", err, generateRequestID())
+		return err
+	}
+
+	slog.Info("Planned shutdown of control server instance completed successfully")
+	return nil
 }
 
 func (h *controlServerHolder) BroadcastGuildEvent(guildID string, botPresent bool) {
@@ -63,6 +96,11 @@ func (h *controlServerHolder) BroadcastGuildEvent(guildID string, botPresent boo
 	if server == nil {
 		return
 	}
+
+	slog.Debug("Broadcasting guild presence transition event",
+		slog.String("guild_id", guildID),
+		slog.Bool("bot_present", botPresent),
+	)
 	server.BroadcastGuildEvent(guildID, botPresent)
 }
 
@@ -90,10 +128,9 @@ func scheduleRuntimeConfiguredGuildLogging(
 	run := func(context.Context) error {
 		err := files.LogConfiguredGuildsForBot(configManager, runtime.session, runtime.instanceID)
 		if err != nil {
-			log.ErrorLoggerRaw().Error(
-				"Some configured guilds could not be accessed",
-				"botInstanceID", runtime.instanceID,
-				"err", err,
+			slog.Warn("Mitigated degradation: Some configured guilds could not be accessed during runtime logging",
+				slog.String("botInstanceID", runtime.instanceID),
+				slog.String("error", err.Error()),
 			)
 		}
 		return nil
@@ -101,7 +138,9 @@ func scheduleRuntimeConfiguredGuildLogging(
 
 	if startupTasks == nil {
 		if err := run(context.Background()); err != nil {
-			log.ApplicationLogger().Warn("Failed to log configured guilds", "err", err)
+			slog.Warn("Failed to execute synchronous guild logging task",
+				slog.String("error", err.Error()),
+			)
 		}
 		return
 	}
@@ -131,6 +170,10 @@ func scheduleStartupWebhookEmbedUpdates(
 			)
 			sess := sessionResolver(item.scope)
 			if sess == nil {
+				slog.Debug("Session resolution missed for webhook patch target; skipping",
+					slog.String("operation", operation),
+					slog.String("scope", item.scope),
+				)
 				continue
 			}
 
@@ -139,19 +182,17 @@ func scheduleStartupWebhookEmbedUpdates(
 				WebhookURL: item.update.WebhookURL,
 				Embed:      item.update.Embed,
 			}); err != nil {
-				log.ApplicationLogger().Warn(
-					"Webhook embed patch failed",
-					"operation", operation,
-					"scope", item.scope,
-					"messageID", strings.TrimSpace(item.update.MessageID),
-					"error", err,
+				slog.Warn("Compensatory action required: Webhook embed patch payload rejected",
+					slog.String("operation", operation),
+					slog.String("scope", item.scope),
+					slog.String("message_id", strings.TrimSpace(item.update.MessageID)),
+					slog.String("error", err.Error()),
 				)
 			} else {
-				log.ApplicationLogger().Info(
-					"Webhook embed patch applied",
-					"operation", operation,
-					"scope", item.scope,
-					"messageID", strings.TrimSpace(item.update.MessageID),
+				slog.Debug("Webhook embed patch applied successfully to target",
+					slog.String("operation", operation),
+					slog.String("scope", item.scope),
+					slog.String("message_id", strings.TrimSpace(item.update.MessageID)),
 				)
 			}
 		}
@@ -160,7 +201,9 @@ func scheduleStartupWebhookEmbedUpdates(
 
 	if startupTasks == nil {
 		if err := run(context.Background()); err != nil {
-			log.ApplicationLogger().Warn("Failed to schedule startup webhook embed updates", "err", err)
+			slog.Warn("Failed to execute synchronous webhook embed update schedule",
+				slog.String("error", err.Error()),
+			)
 		}
 		return
 	}
@@ -170,7 +213,7 @@ func scheduleStartupWebhookEmbedUpdates(
 
 func scheduleControlServerStartup(startupTasks *StartupTaskOrchestrator, opts controlStartupTaskOptions) {
 	if opts.runOptions.DisableControl {
-		log.ApplicationLogger().Info("Control server startup skipped; disabled by run options")
+		slog.Info("Architectural transition: Control server startup bypassed via explicit run options")
 		return
 	}
 
@@ -180,7 +223,7 @@ func scheduleControlServerStartup(startupTasks *StartupTaskOrchestrator, opts co
 
 	if startupTasks == nil {
 		if err := run(context.Background()); err != nil {
-			log.ApplicationLogger().Warn("Control server startup failed", "err", err)
+			emitBlockingError("Synchronous execution of control server startup failed completely", err, generateRequestID())
 		}
 		return
 	}
@@ -191,26 +234,26 @@ func scheduleControlServerStartup(startupTasks *StartupTaskOrchestrator, opts co
 func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskOptions) error {
 	controlRuntime, err := resolveControlRuntime(ctx, opts.runOptions)
 	if err != nil && stdErrors.Is(err, errControlLocalTLSUnavailable) {
-		log.ApplicationLogger().Warn(
-			"Embedded local control HTTPS is unavailable; continuing without control server",
-			"err", err,
+		slog.Warn("Local TLS parameters unavailable; fallback to insecure local execution state activated",
+			slog.String("error", err.Error()),
 		)
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("resolve control runtime: %w", err)
+		errWrap := fmt.Errorf("resolve control runtime: %w", err)
+		emitBlockingError("Blocking failure during control runtime resolution", errWrap, generateRequestID())
+		return errWrap
 	}
 
 	controlServer := control.NewServer(controlRuntime.bindAddr, opts.configManager, opts.runtimeApplier)
 	if controlServer == nil {
-		log.ApplicationLogger().Warn("Control server disabled (invalid parameters)")
+		slog.Warn("Control server allocation yielded nil structure; execution branching aborted")
 		return nil
 	}
 
 	if opts.controlBearerToken == "" && controlRuntime.oauthConfig == nil {
-		log.ApplicationLogger().Info(
-			"Control server authentication is not configured",
-			"addr", controlRuntime.bindAddr,
-			"dashboard_only", true,
+		slog.Info("Architectural transition: Control server initializing without authentication middleware",
+			slog.String("addr", controlRuntime.bindAddr),
+			slog.Bool("dashboard_only", true),
 		)
 	}
 	if opts.controlBearerToken != "" {
@@ -262,23 +305,28 @@ func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskO
 		return opts.runtimeResolver.registerGuild(ctx, guildID)
 	})
 	if err := controlServer.SetPublicOrigin(controlRuntime.publicOrigin); err != nil {
-		return fmt.Errorf("configure control public origin: %w", err)
+		errWrap := fmt.Errorf("configure control public origin: %w", err)
+		emitBlockingError("Failed to lock public origin for control server", errWrap, generateRequestID())
+		return errWrap
 	}
 	if controlRuntime.tlsCertFile != "" || controlRuntime.tlsKeyFile != "" {
 		if err := controlServer.SetTLSCertificates(controlRuntime.tlsCertFile, controlRuntime.tlsKeyFile); err != nil {
-			return fmt.Errorf("configure control tls certificates: %w", err)
+			errWrap := fmt.Errorf("configure control tls certificates: %w", err)
+			emitBlockingError("Failed to bind TLS material to control server listener", errWrap, generateRequestID())
+			return errWrap
 		}
 	}
 	if controlRuntime.oauthConfig != nil {
 		if err := controlServer.SetDiscordOAuthConfig(*controlRuntime.oauthConfig); err != nil {
-			return fmt.Errorf("configure control discord oauth: %w", err)
+			errWrap := fmt.Errorf("configure control discord oauth: %w", err)
+			emitBlockingError("Failed to inject OAuth configuration into control server", errWrap, generateRequestID())
+			return errWrap
 		}
-		log.ApplicationLogger().Info(
-			"Control server Discord OAuth enabled",
-			"scopes", strings.Join(control.DiscordOAuthScopes(controlRuntime.oauthConfig.IncludeGuildsMembersRead), " "),
+		slog.Info("Architectural transition: Discord OAuth constraints applied to control interface",
+			slog.String("scopes", strings.Join(control.DiscordOAuthScopes(controlRuntime.oauthConfig.IncludeGuildsMembersRead), " ")),
 		)
 		if controlRuntime.tlsCertFile == "" || controlRuntime.tlsKeyFile == "" {
-			log.ApplicationLogger().Warn("Discord OAuth is enabled but control TLS certificate/key are not configured; ensure HTTPS termination in front of control server so Secure cookies persist")
+			slog.Warn("Misconfigured deployment topology: OAuth enforced without local TLS termination; secure cookies risk clearance drop")
 		}
 	}
 
@@ -286,23 +334,29 @@ func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskO
 		return fmt.Errorf("startControlServerStartupTask: %w", err)
 	}
 
+	slog.Info("Architectural transition: Binding control server socket",
+		slog.String("address", controlRuntime.bindAddr),
+	)
+
 	if err := controlServer.Start(); err != nil {
 		if stdErrors.Is(err, control.ErrControlServerBind) {
-			log.ApplicationLogger().Warn(
-				"Control server unavailable; continuing without dashboard listener",
-				"addr", controlRuntime.bindAddr,
-				"err", err,
+			slog.Warn("Port allocation collision detected; control server bypassing listener initialization",
+				slog.String("addr", controlRuntime.bindAddr),
+				slog.String("error", err.Error()),
 			)
 			return nil
 		}
-		return fmt.Errorf("start control server: %w", err)
+		errWrap := fmt.Errorf("start control server: %w", err)
+		emitBlockingError("Critical failure during control server socket bind operation", errWrap, generateRequestID())
+		return errWrap
 	}
 
 	if err := ctx.Err(); err != nil {
+		slog.Warn("Startup context invalidated; executing compensatory teardown of control server")
 		stopCtx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		if stopErr := controlServer.Stop(stopCtx); stopErr != nil {
-			log.ApplicationLogger().Warn("Control server stop failed during startup cancellation", "err", stopErr)
+			emitBlockingError("Teardown failure during aborted startup sequence", stopErr, generateRequestID())
 		}
 		return fmt.Errorf("startControlServerStartupTask: %w", err)
 	}

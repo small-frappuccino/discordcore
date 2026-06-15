@@ -3,11 +3,11 @@ package app
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/small-frappuccino/discordgo"
-
-	"strings"
 
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordcore/pkg/automod"
@@ -20,7 +20,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/session"
 	discordstats "github.com/small-frappuccino/discordcore/pkg/discord/stats"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/monitoring"
 	"github.com/small-frappuccino/discordcore/pkg/notifications"
 	applicationqotd "github.com/small-frappuccino/discordcore/pkg/qotd"
@@ -49,41 +48,51 @@ type botRuntimeOptions struct {
 var openBotDiscordSession = session.OpenSession
 
 func openBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabilities) (*botRuntime, error) {
-	log.DiscordLogger().Info(
-		"Attempting to authenticate with Discord API...",
-		"botInstanceID", instance.ID,
+	slog.Info("Architectural state transition: Initializing primary Discord API routine",
+		slog.String("botInstanceID", instance.ID),
 	)
-	log.DiscordLogger().Info("Using bot token (value redacted)", "botInstanceID", instance.ID)
+
+	slog.Debug("Injecting runtime configuration payload",
+		slog.String("botInstanceID", instance.ID),
+		slog.Int("intents", int(capabilities.intents)),
+	)
 
 	discordSession, err := newDiscordSessionWithIntents(instance.Token, capabilities.intents)
 	if err != nil {
-		return nil, fmt.Errorf("create discord session for %s: %w", instance.ID, err)
+		errWrap := fmt.Errorf("create discord session for %s: %w", instance.ID, err)
+		emitBlockingError("Blocking structural failure during session initialization", errWrap, generateRequestID())
+		return nil, errWrap
 	}
 
 	if instance.DiscordStatus != "" {
+		slog.Debug("Applying dynamic gateway status update",
+			slog.String("status", instance.DiscordStatus),
+		)
 		discordSession.Identify.Presence = discordgo.GatewayStatusUpdate{
 			Status: instance.DiscordStatus,
 		}
 	}
 
-	// Estabelecer o handshake com o Discord respeitando o timeout do supervisor (implícito no loop de retry,
-	// mas adicionamos timeout explícito para não trancar o bot)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
 	if err := openBotDiscordSession(ctx, discordSession); err != nil {
-		return nil, fmt.Errorf("open discord session for %s: %w", instance.ID, err)
+		errWrap := fmt.Errorf("open discord session for %s: %w", instance.ID, err)
+		emitBlockingError("Blocking structural failure during socket bind and handshake", errWrap, generateRequestID())
+		return nil, errWrap
 	}
 
 	if discordSession.State == nil || discordSession.State.User == nil {
-		return nil, fmt.Errorf("discord session state not properly initialized for %s", instance.ID)
+		errState := fmt.Errorf("discord session state not properly initialized for %s", instance.ID)
+		emitBlockingError("Blocking structural failure: Gateway payload yielded nil state", errState, generateRequestID())
+		return nil, errState
 	}
 
-	log.DiscordLogger().Info(
-		"Authenticated with Discord",
-		"botInstanceID", instance.ID,
-		"botUser", fmt.Sprintf("%s#%s", discordSession.State.User.Username, discordSession.State.User.Discriminator),
+	slog.Info("Architectural state transition: Socket bound and API authenticated",
+		slog.String("botInstanceID", instance.ID),
+		slog.String("botUser", fmt.Sprintf("%s#%s", discordSession.State.User.Username, discordSession.State.User.Discriminator)),
 	)
+
 	return &botRuntime{
 		instanceID:   instance.ID,
 		capabilities: capabilities,
@@ -93,7 +102,9 @@ func openBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabil
 
 func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRuntimeOptions) error {
 	if runtime == nil || runtime.session == nil {
-		return fmt.Errorf("bot runtime is unavailable")
+		err := fmt.Errorf("bot runtime is unavailable")
+		emitBlockingError("Blocking structural failure: Runtime pointer resolves to nil", err, generateRequestID())
+		return err
 	}
 
 	cfg := opts.configManager.Config()
@@ -103,6 +114,7 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 	}
 
 	if opts.controlServerRegistry != nil {
+		slog.Debug("Binding control server registry event handlers")
 		runtime.session.AddHandler(func(s *discordgo.Session, e *discordgo.GuildCreate) {
 			opts.controlServerRegistry.BroadcastGuildEvent(e.Guild.ID, true)
 		})
@@ -112,11 +124,10 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 	}
 
 	routerConfig := newRuntimeTaskRouterConfig(cfg, runtime.instanceID, opts.runtimeCount)
-	log.ApplicationLogger().Info(
-		"Configured runtime task router budget",
-		"botInstanceID", runtime.instanceID,
-		"globalMaxWorkers", routerConfig.GlobalMaxWorkers,
-		"sharedLimiter", routerConfig.ExecutionLimiter != nil,
+	slog.Info("Architectural state transition: Configured runtime task router budget",
+		slog.String("botInstanceID", runtime.instanceID),
+		slog.Int("globalMaxWorkers", routerConfig.GlobalMaxWorkers),
+		slog.Bool("sharedLimiter", routerConfig.ExecutionLimiter != nil),
 	)
 
 	runtime.serviceManager = service.NewServiceManager()
@@ -131,12 +142,16 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 
 	if monitoringService != nil {
 		if err := runtime.serviceManager.Register(monitoringService); err != nil {
-			return fmt.Errorf("register monitoring service for %s: %w", runtime.instanceID, err)
+			errWrap := fmt.Errorf("register monitoring service for %s: %w", runtime.instanceID, err)
+			emitBlockingError("Blocking structural failure during service registry update", errWrap, generateRequestID())
+			return errWrap
 		}
 	}
 	if automodService := buildAutomodService(runtime, opts, routerConfig, runtimeConfig, monitoringService); automodService != nil {
 		if err := runtime.serviceManager.Register(automodService); err != nil {
-			return fmt.Errorf("register automod service for %s: %w", runtime.instanceID, err)
+			errWrap := fmt.Errorf("register automod service for %s: %w", runtime.instanceID, err)
+			emitBlockingError("Blocking structural failure during service registry update", errWrap, generateRequestID())
+			return errWrap
 		}
 	}
 
@@ -153,21 +168,30 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 	}
 	arikawaState := state.New(token)
 	statsGateway := discordstats.NewArikawaGateway(arikawaState)
-	statsService := stats.NewStatsService(statsGateway, opts.configManager, opts.store, log.DiscordLogger(), runtime.instanceID)
+	statsService := stats.NewStatsService(statsGateway, opts.configManager, opts.store, slog.Default(), runtime.instanceID)
 	discordstats.RegisterDiscordGoEventHandlers(runtime.session, statsService)
+
 	if err := runtime.serviceManager.Register(statsService); err != nil {
-		return fmt.Errorf("register stats service for %s: %w", runtime.instanceID, err)
+		errWrap := fmt.Errorf("register stats service for %s: %w", runtime.instanceID, err)
+		emitBlockingError("Blocking structural failure during service registry update", errWrap, generateRequestID())
+		return errWrap
 	}
 
 	if commandHandler := setupRuntimeCommandHandler(runtime, opts, cfg, monitoringService, statsService); commandHandler != nil {
 		if err := runtime.serviceManager.Register(commandHandler); err != nil {
-			return fmt.Errorf("register command handler service for %s: %w", runtime.instanceID, err)
+			errWrap := fmt.Errorf("register command handler service for %s: %w", runtime.instanceID, err)
+			emitBlockingError("Blocking structural failure during service registry update", errWrap, generateRequestID())
+			return errWrap
 		}
 	}
 
-	log.ApplicationLogger().Info("Starting runtime services", "botInstanceID", runtime.instanceID)
+	slog.Info("Architectural state transition: Executing StartAll across service manager instances",
+		slog.String("botInstanceID", runtime.instanceID),
+	)
 	if err := runtime.serviceManager.StartAll(); err != nil {
-		return fmt.Errorf("start services for %s: %w", runtime.instanceID, err)
+		errWrap := fmt.Errorf("start services for %s: %w", runtime.instanceID, err)
+		emitBlockingError("Blocking structural failure: Service manager execution sequence aborted", errWrap, generateRequestID())
+		return errWrap
 	}
 
 	scheduleRuntimeConfiguredGuildLogging(runtime, opts.configManager, opts.startupTasks)
@@ -175,51 +199,49 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 	return nil
 }
 
-// setupMonitoringService creates and wires the per-runtime monitoring service when the
-// runtime has the monitoring capability, configuring its task-router budget and cache
-// persistence interval. It returns (nil, nil) when monitoring is not enabled.
 func setupMonitoringService(runtime *botRuntime, opts botRuntimeOptions, routerConfig task.RouterConfig) (*monitoring.MonitoringService, error) {
 	if !runtime.capabilities.monitoring {
-		log.ApplicationLogger().Info("Monitoring runtime skipped; no effective monitoring workload is enabled", "botInstanceID", runtime.instanceID)
+		slog.Info("Architectural state bypass: Monitoring runtime skipped due to explicit capability flags",
+			slog.String("botInstanceID", runtime.instanceID),
+		)
 		return nil, nil
 	}
 
-	// Per-runtime metrics: each bot's monitoring service writes to its
-	// own InMemoryMetrics. The control plane reads via the default
-	// runtime's MonitoringMetricsResolver, mirroring the cache
-	// observability resolver pattern.
 	monitoringService, err := monitoring.NewMonitoringServiceForBotWithMetrics(
 		runtime.session,
 		opts.configManager,
 		opts.store,
 		runtime.instanceID,
 		&monitoring.InMemoryMetrics{},
-		log.DiscordLogger(),
+		slog.Default(),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("create monitoring service for %s: %w", runtime.instanceID, err)
+		errWrap := fmt.Errorf("create monitoring service for %s: %w", runtime.instanceID, err)
+		emitBlockingError("Blocking structural failure during monitoring instantiation", errWrap, generateRequestID())
+		return nil, errWrap
 	}
 	monitoringService.SetTaskRouterConfig(routerConfig)
 	runtime.monitoringService = monitoringService
 	return monitoringService, nil
 }
 
-// buildAutomodService constructs the automod logging service when the runtime
-// has the automod capability and automod logs are not disabled, sharing the monitoring
-// notifier when available. It returns nil when automod should not run.
 func buildAutomodService(runtime *botRuntime, opts botRuntimeOptions, routerConfig task.RouterConfig, runtimeConfig files.RuntimeConfig, monitoringService *monitoring.MonitoringService) service.Service {
 	if !runtime.capabilities.automod {
-		log.ApplicationLogger().Info("Automod service skipped; no effective automod logging workload is enabled", "botInstanceID", runtime.instanceID)
+		slog.Info("Architectural state bypass: Automod service skipped due to explicit capability flags",
+			slog.String("botInstanceID", runtime.instanceID),
+		)
 		return nil
 	}
 	if runtimeConfig.DisableAutomodLogs {
-		log.ApplicationLogger().Info("Automod logs disabled by runtime config disable_automod_logs; AutomodService will not start", "botInstanceID", runtime.instanceID)
+		slog.Info("Architectural state bypass: Automod logs strictly disabled via configuration manifest",
+			slog.String("botInstanceID", runtime.instanceID),
+		)
 		return nil
 	}
 
 	automodService := automod.NewAutomodService(runtime.session, opts.configManager, runtime.instanceID)
 	automodRouter := task.NewRouter(routerConfig)
-	notifier := notifications.NewNotificationSender(runtime.session, log.DiscordLogger())
+	notifier := notifications.NewNotificationSender(runtime.session, slog.Default())
 	if monitoringService != nil {
 		notifier = monitoringService.Notifier()
 	}
@@ -233,13 +255,9 @@ func buildAutomodService(runtime *botRuntime, opts botRuntimeOptions, routerConf
 	automodAdapters.RegisterHandlers()
 	automodService.SetAdapters(automodAdapters)
 
-	automodService.SetAdapters(automodAdapters)
-
 	return automodService
 }
 
-// registerUserPruneService registers the Discord-native user prune maintenance service
-// when the runtime has the userPrune capability.
 func registerUserPruneService(runtime *botRuntime, opts botRuntimeOptions, monitoringService *monitoring.MonitoringService) error {
 	if !runtime.capabilities.userPrune {
 		return nil
@@ -252,14 +270,16 @@ func registerUserPruneService(runtime *botRuntime, opts botRuntimeOptions, monit
 	userPruneService.SetDependencies(userPruneDependencies)
 
 	if err := runtime.serviceManager.Register(userPruneService); err != nil {
-		return fmt.Errorf("register user prune service for %s: %w", runtime.instanceID, err)
+		errWrap := fmt.Errorf("register user prune service for %s: %w", runtime.instanceID, err)
+		emitBlockingError("Blocking structural failure during user prune registration", errWrap, generateRequestID())
+		return errWrap
 	}
-	log.ApplicationLogger().Info("User prune enabled (Discord native prune: day 28, 30 days)", "botInstanceID", runtime.instanceID)
+	slog.Info("Architectural state transition: User prune operational routine initialized",
+		slog.String("botInstanceID", runtime.instanceID),
+	)
 	return nil
 }
 
-// registerQOTDRuntimeService registers the QOTD runtime service when the runtime has the
-// qotdRuntime capability and a lifecycle service is wired.
 func registerQOTDRuntimeService(runtime *botRuntime, opts botRuntimeOptions) error {
 	if !runtime.capabilities.qotdRuntime || opts.qotdLifecycleService == nil {
 		return nil
@@ -274,24 +294,22 @@ func registerQOTDRuntimeService(runtime *botRuntime, opts botRuntimeOptions) err
 		qotdRuntimeService.SetClock(opts.appClock)
 	}
 	if err := runtime.serviceManager.Register(qotdRuntimeService); err != nil {
-		return fmt.Errorf("register qotd runtime service for %s: %w", runtime.instanceID, err)
+		errWrap := fmt.Errorf("register qotd runtime service for %s: %w", runtime.instanceID, err)
+		emitBlockingError("Blocking structural failure during QOTD runtime registration", errWrap, generateRequestID())
+		return errWrap
 	}
-	log.ApplicationLogger().Info("QOTD runtime enabled", "botInstanceID", runtime.instanceID)
+	slog.Info("Architectural state transition: QOTD runtime initialized",
+		slog.String("botInstanceID", runtime.instanceID),
+	)
 	return nil
 }
 
-// setupRuntimeCommandHandler builds and registers the slash-command handler for runtimes
-// that expose commands; otherwise it logs why commands were skipped.
 func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg *files.BotConfig, monitoringService *monitoring.MonitoringService, statsService *stats.StatsService) service.Service {
 	if !runtime.capabilities.HasCommands() {
 		logRuntimeCommandsSkipped(runtime, opts, cfg)
 
-		// If the bot has a valid token, we must still synchronize an empty command list to Discord.
-		// Otherwise, previously registered commands from an earlier capability assignment
-		// (or before registry sync existed) will remain perpetually cached in the guild or global scope.
 		if runtime.session != nil && runtime.session.Token != "" {
 			commandHandler := newCommandHandlerForBot(runtime.session, opts.configManager, runtime.instanceID)
-			// Returning the empty command handler will clear the Discord commands upon Start()
 			return commandHandler
 		}
 		return nil
@@ -307,8 +325,6 @@ func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg
 	commandHandler.SetQOTDService(opts.qotdCommandService)
 	commandHandler.SetModerationMetrics(opts.moderationMetrics)
 	commandHandler.SetStatsService(statsService)
-	// Cache observability flows through /v1/health/cache via the control server's
-	// runtime resolver.
 
 	if cm := commandHandler.GetCommandManager(); cm != nil {
 		if router := cm.GetRouter(); router != nil {
@@ -332,7 +348,9 @@ func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg
 }
 
 func logRuntimeCommandsSkipped(runtime *botRuntime, opts botRuntimeOptions, cfg *files.BotConfig) {
-	log.ApplicationLogger().Info("Commands skipped; no guild bound to this runtime has commands enabled", "botInstanceID", runtime.instanceID)
+	slog.Info("Architectural state bypass: Commands skipped due to empty guild bindings",
+		slog.String("botInstanceID", runtime.instanceID),
+	)
 }
 
 var intelligentWarmupFn = cache.IntelligentWarmupContext
@@ -358,8 +376,11 @@ func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *stor
 	if unifiedCache == nil {
 		return
 	}
+
 	if unifiedCache.WasWarmedUpRecently(10 * time.Minute) {
-		log.ApplicationLogger().Info("Skipping cache warmup (recently warmed up)", "botInstanceID", runtime.instanceID)
+		slog.Info("Architectural state bypass: Suppressing cache warmup sequence due to valid temporal TTL",
+			slog.String("botInstanceID", runtime.instanceID),
+		)
 		return
 	}
 
@@ -374,9 +395,9 @@ func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *stor
 				if ctx.Err() != nil {
 					return
 				}
-				log.ApplicationLogger().Warn(
-					fmt.Sprintf("Cache warmup base phase failed (continuing): %v", err),
-					"botInstanceID", runtime.instanceID,
+				slog.Warn("Mitigated service degradation: Cache warmup base phase failed, executing compensatory bypass",
+					slog.String("botInstanceID", runtime.instanceID),
+					slog.String("error", err.Error()),
 				)
 				return
 			}
@@ -387,18 +408,19 @@ func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *stor
 				if ctx.Err() != nil {
 					return
 				}
-				log.ApplicationLogger().Warn(
-					fmt.Sprintf("Cache warmup member phase failed (continuing): %v", err),
-					"botInstanceID", runtime.instanceID,
+				slog.Warn("Mitigated service degradation: Cache warmup member phase failed, executing compensatory bypass",
+					slog.String("botInstanceID", runtime.instanceID),
+					slog.String("error", err.Error()),
 				)
 			}
 		}()
 		return
 	}
 
-	log.ApplicationLogger().Info("Scheduling cache warmup base phase in background", "botInstanceID", runtime.instanceID)
+	slog.Debug("Delegating cache warmup base phase to orchestrator scheduling queue",
+		slog.String("botInstanceID", runtime.instanceID),
+	)
 	startupTasks.GoHeavy("cache_warmup_base:"+runtime.instanceID, func(taskCtx context.Context) error {
-		// Respect both the task context and the supervisor context
 		localCtx, localCancel := context.WithCancel(taskCtx)
 		defer localCancel()
 		go func() {
@@ -413,15 +435,17 @@ func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *stor
 			if localCtx.Err() != nil {
 				return nil
 			}
-			log.ApplicationLogger().Warn(
-				fmt.Sprintf("Cache warmup base phase failed (continuing): %v", err),
-				"botInstanceID", runtime.instanceID,
+			slog.Warn("Mitigated service degradation: Orchestrated cache warmup base phase failed, pipeline resumes",
+				slog.String("botInstanceID", runtime.instanceID),
+				slog.String("error", err.Error()),
 			)
 			return nil
 		}
 
 		if scheduleStartupMemberWarmupFn(runtime.monitoringService, memberWarmupConfig) {
-			log.ApplicationLogger().Info("Queued cache warmup member phase behind startup monitoring tasks", "botInstanceID", runtime.instanceID)
+			slog.Debug("Prioritized member phase execution behind startup tasks lock",
+				slog.String("botInstanceID", runtime.instanceID),
+			)
 			return nil
 		}
 
@@ -429,9 +453,9 @@ func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *stor
 			if localCtx.Err() != nil {
 				return nil
 			}
-			log.ApplicationLogger().Warn(
-				fmt.Sprintf("Cache warmup member phase failed (continuing): %v", err),
-				"botInstanceID", runtime.instanceID,
+			slog.Warn("Mitigated service degradation: Orchestrated cache warmup member phase failed, pipeline resumes",
+				slog.String("botInstanceID", runtime.instanceID),
+				slog.String("error", err.Error()),
 			)
 		}
 		return nil
@@ -457,10 +481,16 @@ func shutdownBotRuntime(runtime *botRuntime, ctx context.Context) []error {
 		return nil
 	}
 
+	slog.Info("Architectural state transition: Executing planned shutdown across main runtime instances",
+		slog.String("botInstanceID", runtime.instanceID),
+	)
+
 	var errs []error
 	if runtime.serviceManager != nil {
 		if err := runtime.serviceManager.StopAll(ctx); err != nil {
-			errs = append(errs, fmt.Errorf("stop services for %s: %w", runtime.instanceID, err))
+			errWrap := fmt.Errorf("stop services for %s: %w", runtime.instanceID, err)
+			emitBlockingError("Blocking structural failure during scheduled teardown sequence", errWrap, generateRequestID())
+			errs = append(errs, errWrap)
 		}
 	}
 	return errs

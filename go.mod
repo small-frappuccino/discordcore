@@ -3,6 +3,7 @@ module github.com/small-frappuccino/discordcore
 go 1.26.2
 
 require (
+	github.com/bwmarrin/snowflake v0.3.0
 	github.com/diamondburned/arikawa/v3 v3.6.0
 	github.com/hugolgst/rich-go v0.0.0-20240715122152-74618cc1ace2
 	github.com/jackc/pgx/v5 v5.9.2
@@ -12,13 +13,11 @@ require (
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/sync v0.20.0
 	golang.org/x/sys v0.35.0
-	golang.org/x/tools v0.36.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
 require (
 	github.com/bwmarrin/discordgo v0.29.0 // indirect
-	github.com/bwmarrin/snowflake v0.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/gorilla/schema v1.4.1 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
