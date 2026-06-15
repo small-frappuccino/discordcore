@@ -65,6 +65,59 @@ export function useCorePageLogic() {
     }
   };
 
+  const handleDeleteProfile = async (instanceId: string) => {
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      const currentRouting = settings?.workspace.sections.feature_routing || {};
+      const nextRouting = { ...currentRouting };
+      for (const key of Object.keys(nextRouting)) {
+        if (nextRouting[key] === instanceId) {
+          delete nextRouting[key];
+        }
+      }
+      
+      const payload = {
+        config_version: settings?.workspace.config_version ?? 0,
+        feature_routing: nextRouting,
+        bot_instance_tokens: { [instanceId]: "" },
+      };
+      
+      await updateSettings({ originalWorkspace: settings?.workspace, payload });
+      
+      // Clean up local states for this instance
+      setTokensState(prev => { const next = {...prev}; delete next[instanceId]; return next; });
+      setStatusesState(prev => { const next = {...prev}; delete next[instanceId]; return next; });
+      setFeatureRoutingState(prev => {
+        const next = { ...prev };
+        for (const key of Object.keys(next)) {
+          if (next[key] === instanceId) delete next[key];
+        }
+        return next;
+      });
+    } catch (err) {
+      const e = err as { status?: number; response?: { status?: number } };
+      if (e?.response?.status === 412 || e?.status === 412) {
+        setSaveError("Another session modified the configuration. Please refresh and try again. (Lost Update)");
+      } else {
+        const message = err instanceof Error ? err.message : "Failed to delete profile";
+        setSaveError(message);
+      }
+      throw err;
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleResetTokens = () => {
+    setTokensState({});
+    if (settings) {
+      setFeatureRoutingState(settings.workspace.sections.feature_routing || {});
+      setStatusesState(settings.workspace.sections.bot_instance_statuses || {});
+    }
+    setSaveError(null);
+  };
+
   return {
     settings,
     botProfiles,
@@ -76,6 +129,8 @@ export function useCorePageLogic() {
     featureRoutingState,
     setFeatureRoutingState,
     handleUpdateTokens,
+    handleDeleteProfile,
+    handleResetTokens,
     isSaving,
     saveError,
     clearSaveError: () => setSaveError(null),

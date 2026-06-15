@@ -10,8 +10,8 @@ import {
   SettingsGroup,
   SettingsRow,
   ToggleSwitch,
-  ActionTrigger,
-  TextInput
+  TextInput,
+  SaveActionBar
 } from "../components/ui/tahoe";
 import { Stack } from "../components/layout";
 import { useModerationPageLogic } from "./hooks/useModerationPageLogic";
@@ -96,17 +96,18 @@ export function ModerationPage() {
                       />
                     </SettingsGroup>
                   </Stack>
-                  <div className="form-actions">
-                    <ActionTrigger variant="primary" type="submit" isLoading={isSaving}>
-                      Save Mute Role
-                    </ActionTrigger>
-                  </div>
                   </Stack>
                 </FormProvider>
               </fieldset>
             </Stack>
           </form>
         </Stack>
+        <SaveActionBar
+          isDirty={form.formState.isDirty}
+          isSaving={isSaving}
+          onSave={onSubmit}
+          onReset={() => form.reset()}
+        />
       </PageContainer>
       )}
     </>

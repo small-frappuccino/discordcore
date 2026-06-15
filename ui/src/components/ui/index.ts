@@ -14,3 +14,4 @@ export * from "./FormControl/FormControl";
 export * from "./Form/FormFields";
 export { FormProvider } from "react-hook-form";
 export * from "./ToggleSwitch/ToggleSwitch";
+export * from "./ConfirmationModal";

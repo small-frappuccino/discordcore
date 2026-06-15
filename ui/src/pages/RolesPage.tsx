@@ -6,7 +6,7 @@ import {
   ToggleSwitch,
   SelectMenu,
   SelectMenuMultiple,
-  ActionTrigger
+  SaveActionBar
 } from "../components/ui/tahoe";
 import { Stack } from "../components/layout";
 import { useRolesPageLogic } from "./hooks/useRolesPageLogic";
@@ -193,15 +193,14 @@ export function RolesPage() {
               </Stack>
             )}
           </Stack>
-          {!isLoading && (
-            <div className="form-actions">
-              <ActionTrigger variant="primary" type="submit" isLoading={isSaving}>
-                Save Changes
-              </ActionTrigger>
-            </div>
-          )}
         </form>
       </FormProvider>
+      <SaveActionBar
+        isDirty={form.formState.isDirty}
+        isSaving={isSaving}
+        onSave={onSubmit}
+        onReset={() => form.reset()}
+      />
     </PageContainer>
   );
 }

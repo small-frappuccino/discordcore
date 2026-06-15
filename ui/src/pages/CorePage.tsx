@@ -1,5 +1,5 @@
-import { PageHeader, Badge, PageContainer, SettingsGroupSkeleton, Button } from "../components/ui";
-import { SelectMenuMultiple, SettingsGroup, SettingsRow, TextInput, ToggleSwitch, ActionTrigger } from "../components/ui/tahoe";
+import { PageHeader, Badge, PageContainer, SettingsGroupSkeleton, Button, ConfirmationModal } from "../components/ui";
+import { SelectMenuMultiple, SettingsGroup, SettingsRow, TextInput, ToggleSwitch, ActionTrigger, SaveActionBar } from "../components/ui/tahoe";
 import { Stack } from "../components/layout";
 import { useCorePageLogic } from "./hooks/useCorePageLogic";
 import { useState, useEffect, useMemo } from "react";
@@ -33,8 +33,12 @@ export function CorePage() {
     isSaving,
     saveError,
     clearSaveError,
+    handleDeleteProfile,
+    handleResetTokens,
     isDirty
   } = useCorePageLogic();
+
+  const [deletingProfileId, setDeletingProfileId] = useState<string | null>(null);
 
   const configuredTokens = useMemo(() => settings?.workspace?.sections?.bot_instance_tokens_configured || {}, [settings?.workspace?.sections?.bot_instance_tokens_configured]);
 
@@ -104,21 +108,11 @@ export function CorePage() {
               <div className="mb-2">
                 <div className="flex items-center justify-between mb-1">
                   <h3 className="text-base font-semibold text-text-primary">Bot Profiles</h3>
-                  {isDirty && (
-                    <Button onClick={handleUpdateTokens} variant="primary" isLoading={isSaving} disabled={isSaving}>
-                      Save Changes
-                    </Button>
-                  )}
                 </div>
                 <p className="text-sm text-text-secondary mb-2">
                   Manage bot identities, secure tokens, and operational feature routing for this guild.
                 </p>
-                {saveError && (
-                  <div className="mt-2 p-2 rounded bg-[var(--status-error-bg,rgba(239,68,68,0.1))] text-[var(--status-error,#ef4444)] text-sm flex items-center justify-between">
-                    <span>{saveError}</span>
-                    <button onClick={clearSaveError} className="ml-2 text-xs opacity-70 hover:opacity-100">&times;</button>
-                  </div>
-                )}
+                {/* SaveError is now handled by SaveActionBar */}
               </div>
 
               <Stack spacing="md">
@@ -181,17 +175,7 @@ export function CorePage() {
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setOpenMenuId(null);
-                                  if (confirm(`Are you sure you want to delete profile ${instanceId}?`)) {
-                                    setTokensState(prev => ({ ...prev, [instanceId]: "" }));
-                                    setAddedProfiles(prev => prev.filter(id => id !== instanceId));
-                                    const nextRouting = { ...featureRoutingState };
-                                    for (const key of Object.keys(nextRouting)) {
-                                      if (nextRouting[key] === instanceId) {
-                                        delete nextRouting[key];
-                                      }
-                                    }
-                                    setFeatureRoutingState(nextRouting);
-                                  }
+                                  setDeletingProfileId(instanceId);
                                 }}
                               >
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -344,6 +328,33 @@ export function CorePage() {
           )}
         </Stack>
       </div>
+      
+      <ConfirmationModal
+        isOpen={deletingProfileId !== null}
+        onClose={() => setDeletingProfileId(null)}
+        title="Delete Profile"
+        description={`Are you sure you want to delete profile ${deletingProfileId}? This action will take effect immediately.`}
+        confirmText="Delete Profile"
+        onConfirm={async () => {
+          if (deletingProfileId) {
+            try {
+              await handleDeleteProfile(deletingProfileId);
+              setAddedProfiles(prev => prev.filter(id => id !== deletingProfileId));
+            } finally {
+              setDeletingProfileId(null);
+            }
+          }
+        }}
+      />
+      
+      <SaveActionBar 
+        isDirty={isDirty} 
+        isSaving={isSaving} 
+        onSave={handleUpdateTokens} 
+        onReset={handleResetTokens} 
+        saveError={saveError}
+        onClearError={clearSaveError}
+      />
     </PageContainer>
   );
 }

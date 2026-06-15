@@ -3,9 +3,9 @@ import {
   SettingsGroup,
   SettingsRow,
   ToggleSwitch,
-  ActionTrigger,
   TextInput,
-  TextArea
+  TextArea,
+  SaveActionBar
 } from "../components/ui/tahoe";
 import { Stack } from "../components/layout";
 import { usePartnersPageLogic } from "./hooks/usePartnersPageLogic";
@@ -91,11 +91,12 @@ export function PartnersPage() {
           </Stack>
         )}
         </Stack>
-        <div className="form-actions">
-          <ActionTrigger variant="primary" type="submit" isLoading={isSaving}>
-            Save Template
-          </ActionTrigger>
-        </div>
+        <SaveActionBar
+          isDirty={form.formState.isDirty}
+          isSaving={isSaving}
+          onSave={onSubmit}
+          onReset={() => form.reset()}
+        />
       </form>
     </PageContainer>
   );

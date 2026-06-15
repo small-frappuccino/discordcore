@@ -1,6 +1,7 @@
-import * as React from "react";
+import React, { useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
-import { ActionTrigger, SettingsGroup, SettingsRow, TextInput, TextArea } from "../../components/ui/tahoe";
+import { ActionTrigger, SettingsGroup, SettingsRow, TextInput, TextArea, SaveActionBar } from "../../components/ui/tahoe";
+import { ConfirmationModal } from "../../components/ui";
 import type { EmbedsFormData } from "../schemas/embeds";
 
 type EmbedEditorFormProps = {
@@ -28,6 +29,8 @@ export function EmbedEditorForm({
   selectedEmbedKey,
   activeEmbedDataKey,
 }: EmbedEditorFormProps) {
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+
   if (!selectedEmbedKey && !activeEmbedDataKey) {
     return null;
   }
@@ -130,16 +133,32 @@ export function EmbedEditorForm({
           />
         </div>
 
-      <div className="form-actions">
-        <ActionTrigger variant="primary" type="submit" isLoading={isSaving}>
-          Save Embed
-        </ActionTrigger>
+      <div className="form-actions mt-4">
         {selectedEmbedKey && (
-          <ActionTrigger variant="danger" onClick={deleteEmbed} isLoading={isDeleting}>
+          <ActionTrigger variant="danger" type="button" onClick={() => setIsDeleteModalOpen(true)} isLoading={isDeleting}>
             Delete Embed
           </ActionTrigger>
         )}
       </div>
+
+      <ConfirmationModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        title="Delete Embed"
+        description={`Are you sure you want to delete the embed "${selectedEmbedKey}"? This action cannot be undone.`}
+        confirmText="Delete"
+        onConfirm={() => {
+          setIsDeleteModalOpen(false);
+          deleteEmbed();
+        }}
+      />
+
+      <SaveActionBar
+        isDirty={form.formState.isDirty}
+        isSaving={isSaving}
+        onSave={onSubmit}
+        onReset={() => form.reset()}
+      />
     </form>
   );
 }

@@ -3,8 +3,8 @@ import {
   SettingsGroup,
   SettingsRow,
   SelectMenu,
-  ActionTrigger,
-  TextInput
+  TextInput,
+  SaveActionBar
 } from "../components/ui/tahoe";
 import { Stack, Box } from "../components/layout";
 import { useQOTDPageLogic } from "./hooks/useQOTDPageLogic";
@@ -110,12 +110,6 @@ export function QOTDPage() {
                     />
                   </SettingsGroup>
                 </Stack>
-
-                <div className="form-actions">
-                  <ActionTrigger variant="primary" type="submit" isLoading={isSaving}>
-                    Save Changes
-                  </ActionTrigger>
-                </div>
               </Stack>
             ) : (
               <p className="text-muted">Failed to load QOTD settings.</p>
@@ -123,6 +117,12 @@ export function QOTDPage() {
           </Stack>
         </FormProvider>
       </Box>
+      <SaveActionBar
+        isDirty={form.formState.isDirty}
+        isSaving={isSaving}
+        onSave={onSubmit}
+        onReset={() => form.reset()}
+      />
     </PageContainer>
   );
 }
