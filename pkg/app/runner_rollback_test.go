@@ -66,7 +66,6 @@ func TestRun_MidBootSabotageTriggersTeardown(t *testing.T) {
 
 	origNewDiscordSession := newDiscordSession
 	origNewDiscordSessionWithIntents := newDiscordSessionWithIntents
-	origWaitForInterrupt := waitForInterrupt
 	origShutdownDelay := shutdownDelay
 	origSetupCommandHandler := setupCommandHandler
 	origCloseStore := closeStore
@@ -75,7 +74,6 @@ func TestRun_MidBootSabotageTriggersTeardown(t *testing.T) {
 	t.Cleanup(func() {
 		newDiscordSession = origNewDiscordSession
 		newDiscordSessionWithIntents = origNewDiscordSessionWithIntents
-		waitForInterrupt = origWaitForInterrupt
 		shutdownDelay = origShutdownDelay
 		setupCommandHandler = origSetupCommandHandler
 		closeStore = origCloseStore
@@ -93,7 +91,6 @@ func TestRun_MidBootSabotageTriggersTeardown(t *testing.T) {
 		openDiscordSession = origOpenDiscordSession
 	})
 	openDiscordSession = func(s interface{ Open() error }) error { return nil }
-	waitForInterrupt = func() { time.Sleep(100 * time.Millisecond) }
 	shutdownDelay = func(time.Duration) {}
 
 	// We sabotage the boot by forcing the command handler setup to fail.
@@ -196,7 +193,6 @@ func TestRun_CascadingRollbackFailures(t *testing.T) {
 
 	origNewDiscordSession := newDiscordSession
 	origNewDiscordSessionWithIntents := newDiscordSessionWithIntents
-	origWaitForInterrupt := waitForInterrupt
 	origShutdownDelay := shutdownDelay
 	origSetupCommandHandler := setupCommandHandler
 	origCloseStore := closeStore
@@ -205,7 +201,6 @@ func TestRun_CascadingRollbackFailures(t *testing.T) {
 	t.Cleanup(func() {
 		newDiscordSession = origNewDiscordSession
 		newDiscordSessionWithIntents = origNewDiscordSessionWithIntents
-		waitForInterrupt = origWaitForInterrupt
 		shutdownDelay = origShutdownDelay
 		setupCommandHandler = origSetupCommandHandler
 		closeStore = origCloseStore
@@ -223,7 +218,6 @@ func TestRun_CascadingRollbackFailures(t *testing.T) {
 		openDiscordSession = origOpenDiscordSession
 	})
 	openDiscordSession = func(s interface{ Open() error }) error { return nil }
-	waitForInterrupt = func() { time.Sleep(100 * time.Millisecond) }
 	shutdownDelay = func(time.Duration) {}
 
 	// Cause mid-boot sabotage

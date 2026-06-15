@@ -246,7 +246,7 @@ loop:
 	time.Sleep(10 * time.Millisecond)
 
 	// Stop everything
-	_ = sm.StopAll()
+	_ = sm.StopAll(context.Background())
 
 	info, err := sm.GetServiceInfo("s1")
 	if err != nil {

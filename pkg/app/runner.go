@@ -40,7 +40,6 @@ var (
 	closeStore                   = func(c interface{ Close() error }) error { return c.Close() }
 	closeDiscordSession          = func(c interface{ Close() error }) error { return c.Close() }
 	openDiscordSession           = func(s interface{ Open() error }) error { return s.Open() }
-	waitForInterrupt             = WaitForInterrupt
 	shutdownDelay                = time.Sleep
 )
 
@@ -298,9 +297,12 @@ func runWithOptions(appName string, opts RunOptions) error {
 	log.ApplicationLogger().Info(fmt.Sprintf("🎯 %s initialized successfully in %s", appName, time.Since(started).Round(time.Millisecond)))
 	log.ApplicationLogger().Info(fmt.Sprintf("🤖 %s running. Press Ctrl+C to stop...", appName))
 
-	// Configuração da escuta de sinais POSIX
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGHUP, os.Interrupt, syscall.SIGTERM)
+	// Configuração da escuta de sinais POSIX (context-aware)
+	rootCtx, stopRoot := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopRoot()
+
+	sigHupCh := make(chan os.Signal, 1)
+	signal.Notify(sigHupCh, syscall.SIGHUP)
 
 	// Canal para erros críticos de background reportados pelo ServiceManager
 	fatalErrCh := make(chan error, 1)
@@ -321,36 +323,33 @@ func runWithOptions(appName string, opts RunOptions) error {
 			// if nil, services stopped cleanly somehow without OS signal. We exit cleanly.
 			goto shutdown
 
-		case sig := <-sigCh:
-			switch sig {
-			case syscall.SIGHUP:
-				// 1. Recarga estática e segura sem mutilar o estado atual
-				newCfg, needsSave, err := configManager.LoadConfigFromStore()
-				if err != nil {
-					log.ApplicationLogger().Info("Failed to reload config on SIGHUP", "error", err.Error())
-					continue // Aborta a recarga, preserva o estado estável em uso
-				}
+		case <-rootCtx.Done():
+			log.ApplicationLogger().Info("Sinal de encerramento interceptado. Iniciando teardown gracioso...")
+			stopRoot() // restore default signal behavior so a second Ctrl+C kills immediately
+			goto shutdown
 
-				// 2. Rotação atômica do ponteiro global sob Write Lock (sync.RWMutex)
-				// Isso automaticamente dispara os subscribers (incluindo o BotSupervisor)
+		case <-sigHupCh:
+			// 1. Recarga estática e segura sem mutilar o estado atual
+			newCfg, needsSave, err := configManager.LoadConfigFromStore()
+			if err != nil {
+				log.ApplicationLogger().Info("Failed to reload config on SIGHUP", "error", err.Error())
+				continue // Aborta a recarga, preserva o estado estável em uso
+			}
 
-				// 4. Rotação atômica do ponteiro global sob Write Lock (sync.RWMutex)
-				dupCount := configManager.ApplyConfig(newCfg)
+			// 2. Rotação atômica do ponteiro global sob Write Lock (sync.RWMutex)
+			// Isso automaticamente dispara os subscribers (incluindo o BotSupervisor)
 
-				if dupCount > 0 || needsSave {
-					if saveErr := configManager.SaveConfig(); saveErr != nil {
-						log.ApplicationLogger().Error("Failed to save config after SIGHUP normalization", "error", saveErr)
-					} else {
-						log.ApplicationLogger().Info("Configuração recarregada com sucesso via SIGHUP (index rebuilt/normalized)", "duplicates", dupCount)
-					}
+			// 4. Rotação atômica do ponteiro global sob Write Lock (sync.RWMutex)
+			dupCount := configManager.ApplyConfig(newCfg)
+
+			if dupCount > 0 || needsSave {
+				if saveErr := configManager.SaveConfig(); saveErr != nil {
+					log.ApplicationLogger().Error("Failed to save config after SIGHUP normalization", "error", saveErr)
 				} else {
-					log.ApplicationLogger().Info("Configuração recarregada com sucesso via SIGHUP")
+					log.ApplicationLogger().Info("Configuração recarregada com sucesso via SIGHUP (index rebuilt/normalized)", "duplicates", dupCount)
 				}
-
-			case os.Interrupt, syscall.SIGTERM:
-				log.ApplicationLogger().Info("Sinal de encerramento interceptado. Iniciando teardown gracioso...")
-				botSupervisor.Stop(context.Background())
-				goto shutdown
+			} else {
+				log.ApplicationLogger().Info("Configuração recarregada com sucesso via SIGHUP")
 			}
 		}
 	}
@@ -364,7 +363,7 @@ shutdown:
 	// Steady state reached: take over explicit, ordered shutdown and disable the
 	// rollback defers so resources are not closed twice.
 	closeStoreOnReturn = false
-	if err := appServiceManager.StopAll(); err != nil {
+	if err := appServiceManager.StopAll(context.Background()); err != nil {
 		if runErr != nil {
 			return stdErrors.Join(runErr, fmt.Errorf("shutdown: %w", err))
 		}

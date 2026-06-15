@@ -85,7 +85,7 @@ func TestServiceManagerStopFailureLeavesServiceInErrorState(t *testing.T) {
 		t.Fatalf("start service: %v", err)
 	}
 
-	err := manager.StopService(svc.Name())
+	err := manager.StopService(context.Background(), svc.Name())
 	if !stdErrors.Is(err, stopErr) {
 		t.Fatalf("expected stop error %v, got %v", stopErr, err)
 	}

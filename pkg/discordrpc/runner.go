@@ -10,7 +10,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/small-frappuccino/discordcore/pkg/app"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 )
@@ -73,13 +72,14 @@ func Run(appName string, opts RunOptions) error {
 	}
 
 	interval := resolveUpdateInterval(profile)
-	if interval <= 0 {
-		app.WaitForInterrupt()
-		return nil
-	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	if interval <= 0 {
+		<-ctx.Done()
+		return nil
+	}
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()

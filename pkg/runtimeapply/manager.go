@@ -122,7 +122,7 @@ func (m *Manager) Apply(ctx context.Context, next files.RuntimeConfig) error {
 					continue
 				}
 				if next.DisableAutomodLogs {
-					_ = manager.StopService("automod")
+					_ = manager.StopService(ctx, "automod")
 				} else {
 					_ = manager.StartService("automod")
 				}

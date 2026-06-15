@@ -98,9 +98,20 @@ func (s *BotSupervisor) Stop(ctx context.Context) error {
 	s.mu.Unlock()
 
 	// Barreira obrigatória: impede encerramento do processo enquanto há I/O pendente
-	globalWG.Wait()
-	// Barreira secundária: garante que processos em bg como retries limpem a memória
-	s.bgWG.Wait()
+	done := make(chan struct{})
+	go func() {
+		globalWG.Wait()
+		s.bgWG.Wait() // Barreira secundária: garante que processos em bg como retries limpem a memória
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-ctx.Done():
+		log.ApplicationLogger().Warn("BotSupervisor stop timeout exceeded before background tasks completed")
+		return ctx.Err()
+	}
+
 	return nil
 }
 
@@ -436,8 +447,8 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token, status str
 		Start: func(ctx context.Context) error {
 			return nil
 		},
-		Stop: func(context.Context) error {
-			shutdownBotRuntime(runtime, context.Background())
+		Stop: func(ctx context.Context) error {
+			shutdownBotRuntime(runtime, ctx)
 			return closeDiscordSession(runtime.session)
 		},
 	})

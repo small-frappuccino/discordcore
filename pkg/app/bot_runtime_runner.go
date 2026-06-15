@@ -448,7 +448,7 @@ func shutdownBotRuntime(runtime *botRuntime, ctx context.Context) []error {
 
 	var errs []error
 	if runtime.serviceManager != nil {
-		if err := runtime.serviceManager.StopAll(); err != nil {
+		if err := runtime.serviceManager.StopAll(ctx); err != nil {
 			errs = append(errs, fmt.Errorf("stop services for %s: %w", runtime.instanceID, err))
 		}
 	}

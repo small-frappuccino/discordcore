@@ -397,7 +397,7 @@ func (ms *ManagedService) HandleError(err error) {
 		slog.Warn("Service error detected, attempting restart", "service", ms.name, "err", err)
 		go func() {
 			time.Sleep(ms.restartDelay)
-			if restartErr := ms.manager.RestartService(ms.name); restartErr != nil {
+			if restartErr := ms.manager.RestartService(context.Background(), ms.name); restartErr != nil {
 				slog.Error("Failed to restart service after error", "service", ms.name, "err", restartErr)
 			}
 		}()

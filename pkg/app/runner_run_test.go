@@ -120,14 +120,12 @@ func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 
 	origNewDiscordSession := newDiscordSession
 	origNewDiscordSessionWithIntents := newDiscordSessionWithIntents
-	origWaitForInterrupt := waitForInterrupt
 	origShutdownDelay := shutdownDelay
 	origSetupCommandHandler := setupCommandHandler
 	origShutdownCommandHandler := shutdownCommandHandler
 	t.Cleanup(func() {
 		newDiscordSession = origNewDiscordSession
 		newDiscordSessionWithIntents = origNewDiscordSessionWithIntents
-		waitForInterrupt = origWaitForInterrupt
 		shutdownDelay = origShutdownDelay
 		setupCommandHandler = origSetupCommandHandler
 		shutdownCommandHandler = origShutdownCommandHandler
@@ -144,7 +142,11 @@ func TestRun_GracefulShutdownInvokesCommandHandlerShutdown(t *testing.T) {
 		openDiscordSession = origOpenDiscordSession
 	})
 	openDiscordSession = func(s interface{ Open() error }) error { return nil }
-	waitForInterrupt = func() { time.Sleep(100 * time.Millisecond) }
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		p, _ := os.FindProcess(os.Getpid())
+		_ = p.Signal(os.Interrupt)
+	}()
 	shutdownDelay = func(time.Duration) {}
 	identifyStaggerDelay = 0
 
@@ -226,14 +228,12 @@ func TestRun_ShutdownAggregatesStoreAndSessionCloseErrors(t *testing.T) {
 
 	origNewDiscordSession := newDiscordSession
 	origNewDiscordSessionWithIntents := newDiscordSessionWithIntents
-	origWaitForInterrupt := waitForInterrupt
 	origShutdownDelay := shutdownDelay
 	origCloseStore := closeStore
 	origCloseDiscordSession := closeDiscordSession
 	t.Cleanup(func() {
 		newDiscordSession = origNewDiscordSession
 		newDiscordSessionWithIntents = origNewDiscordSessionWithIntents
-		waitForInterrupt = origWaitForInterrupt
 		shutdownDelay = origShutdownDelay
 		closeStore = origCloseStore
 		closeDiscordSession = origCloseDiscordSession
@@ -250,7 +250,11 @@ func TestRun_ShutdownAggregatesStoreAndSessionCloseErrors(t *testing.T) {
 		openDiscordSession = origOpenDiscordSession
 	})
 	openDiscordSession = func(s interface{ Open() error }) error { return nil }
-	waitForInterrupt = func() { time.Sleep(100 * time.Millisecond) }
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		p, _ := os.FindProcess(os.Getpid())
+		_ = p.Signal(os.Interrupt)
+	}()
 	shutdownDelay = func(time.Duration) {}
 	identifyStaggerDelay = 0
 
@@ -338,12 +342,10 @@ func TestRun_ControlServerBindFailureIsNonFatal(t *testing.T) {
 
 	origNewDiscordSession := newDiscordSession
 	origNewDiscordSessionWithIntents := newDiscordSessionWithIntents
-	origWaitForInterrupt := waitForInterrupt
 	origShutdownDelay := shutdownDelay
 	t.Cleanup(func() {
 		newDiscordSession = origNewDiscordSession
 		newDiscordSessionWithIntents = origNewDiscordSessionWithIntents
-		waitForInterrupt = origWaitForInterrupt
 		shutdownDelay = origShutdownDelay
 	})
 
@@ -358,7 +360,11 @@ func TestRun_ControlServerBindFailureIsNonFatal(t *testing.T) {
 		openDiscordSession = origOpenDiscordSession
 	})
 	openDiscordSession = func(s interface{ Open() error }) error { return nil }
-	waitForInterrupt = func() { time.Sleep(100 * time.Millisecond) }
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		p, _ := os.FindProcess(os.Getpid())
+		_ = p.Signal(os.Interrupt)
+	}()
 	shutdownDelay = func(time.Duration) {}
 	identifyStaggerDelay = 0
 

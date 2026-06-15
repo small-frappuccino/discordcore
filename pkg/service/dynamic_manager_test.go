@@ -51,7 +51,7 @@ func TestDynamicManager(t *testing.T) {
 	if len(running) != 1 {
 		t.Errorf("expected 1 running service")
 	}
-	_ = sm.StopAll()
+	_ = sm.StopAll(context.Background())
 }
 
 func TestBaseServiceAccessors(t *testing.T) {
