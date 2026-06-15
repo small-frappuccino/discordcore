@@ -132,8 +132,17 @@ func ensureStatsEnabled(ctx *core.ArikawaContext) error {
 	if ctx == nil || ctx.Config == nil {
 		return fmt.Errorf("invalid context")
 	}
-	features := ctx.Config.Config().ResolveFeatures(ctx.GuildID.String())
-	if !features.StatsChannels {
+	cfg := ctx.Config.Config()
+	features := cfg.ResolveFeatures(ctx.GuildID.String())
+	route, isFallback := ctx.Config.GuildConfig(ctx.GuildID.String()).ResolveFeatureBotInstanceID("stats")
+
+	ctx.Logger.Debug("Transient state inspection: Evaluated feature enablement for Stats",
+		slog.Bool("toggle_enabled", features.StatsChannels),
+		slog.String("resolved_route", route),
+		slog.Bool("route_is_fallback", isFallback),
+	)
+
+	if !features.StatsChannels || route == "<unrouted>" {
 		_ = ctx.Respond(api.InteractionResponseData{
 			Content: option.NewNullableString("Stats channels feature is currently disabled for this server."),
 			Flags:   discord.EphemeralMessage,
@@ -209,7 +218,7 @@ func (c *statsRootCommand) handleAdd(ctx *core.ArikawaContext, opts []discord.Co
 		_ = c.statsService.UpdateStatsChannels(context.WithoutCancel(context.Background()))
 	}
 
-	ctx.Logger.Info("Added or updated stats channel",
+	ctx.Logger.Debug("Added or updated stats channel",
 		slog.String("guild_id", ctx.GuildID.String()),
 		slog.String("channel_id", channelID),
 		slog.String("member_type", memberType),
@@ -261,7 +270,7 @@ func (c *statsRootCommand) handleRemove(ctx *core.ArikawaContext, opts []discord
 		_ = c.statsService.UpdateStatsChannels(context.WithoutCancel(context.Background()))
 	}
 
-	ctx.Logger.Info("Removed stats channel",
+	ctx.Logger.Debug("Removed stats channel",
 		slog.String("guild_id", ctx.GuildID.String()),
 		slog.String("channel_id", channelID),
 	)
@@ -346,7 +355,7 @@ func (c *statsRootCommand) handleSettings(ctx *core.ArikawaContext, opts []disco
 		return err
 	}
 
-	ctx.Logger.Info("Updated stats update interval",
+	ctx.Logger.Debug("Updated stats update interval",
 		slog.String("guild_id", ctx.GuildID.String()),
 		slog.Float64("interval_mins", interval),
 	)

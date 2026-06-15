@@ -3,9 +3,6 @@ package files
 import (
 	"encoding/json"
 	"fmt"
-	"log/slog"
-
-	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
 // FeatureServiceToggles holds optional overrides for runtime behavior.
@@ -101,14 +98,8 @@ func (ft *FeatureToggles) UnmarshalJSON(data []byte) error {
 	type alias FeatureToggles
 	var parsed alias
 
-	slog.Debug("Granular inspection: Starting dynamic payload extraction for FeatureToggles",
-		slog.Int("payload_bytes", len(data)),
-	)
-
 	if err := json.Unmarshal(data, &parsed); err != nil {
-		errWrap := fmt.Errorf("FeatureToggles.UnmarshalJSON: %w", err)
-		log.EmitBlockingError("Blocking structural failure restricted to I/O payload deserialization scope", errWrap, log.GenerateRequestID())
-		return errWrap
+		return fmt.Errorf("FeatureToggles.UnmarshalJSON: %w", err)
 	}
 	*ft = FeatureToggles(parsed)
 	return nil
@@ -175,20 +166,11 @@ func boolPtr(v bool) *bool {
 
 func resolveFeatureBool(guildVal *bool, globalVal *bool, def bool) bool {
 	if guildVal != nil {
-		slog.Debug("Conditional branch tracking: Adoption of transient state overridden by the guild",
-			slog.Bool("resolved_value", *guildVal),
-		)
 		return *guildVal
 	}
 	if globalVal != nil {
-		slog.Debug("Conditional branch tracking: Adoption of transient state at global level",
-			slog.Bool("resolved_value", *globalVal),
-		)
 		return *globalVal
 	}
-	slog.Debug("Conditional branch tracking: Structural fallback to basal default value",
-		slog.Bool("resolved_value", def),
-	)
 	return def
 }
 
@@ -197,28 +179,16 @@ func (cfg *BotConfig) ResolveFeatures(guildID string) ResolvedFeatureToggles {
 	global := FeatureToggles{}
 	if cfg != nil {
 		global = cfg.Features
-	} else {
-		slog.Warn("Intercepted mitigated degradation: Nil BotConfig object during resolution; compensatory flow will adopt empty global vector",
-			slog.String("guild_id", guildID),
-		)
 	}
 
 	var guild FeatureToggles
-	guildFound := false
 	if cfg != nil && guildID != "" {
 		for _, g := range cfg.Guilds {
 			if g.GuildID == guildID {
 				guild = g.Features
-				guildFound = true
 				break
 			}
 		}
-	}
-
-	if cfg != nil && guildID != "" && !guildFound {
-		slog.Debug("Granular inspection: No customized feature tree located for the guild; branch dependent on global inheritance",
-			slog.String("guild_id", guildID),
-		)
 	}
 
 	var out ResolvedFeatureToggles
@@ -228,10 +198,6 @@ func (cfg *BotConfig) ResolveFeatures(guildID string) ResolvedFeatureToggles {
 		resolved := resolveFeatureBool(guildPtr, globalPtr, spec.Default)
 		spec.SetResolved(&out, resolved)
 	}
-
-	slog.Debug("Sub-state transition: Consolidated FeatureToggles hierarchical vector",
-		slog.String("guild_id", guildID),
-	)
 
 	return out
 }

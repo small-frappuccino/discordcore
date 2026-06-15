@@ -25,11 +25,13 @@ type ArikawaCommandRouter struct {
 
 // NewArikawaCommandRouter creates a new Arikawa router.
 func NewArikawaCommandRouter(token string, config *files.ConfigManager) *ArikawaCommandRouter {
-	return &ArikawaCommandRouter{
+	router := &ArikawaCommandRouter{
 		commands: make(map[string]ArikawaCommand),
 		client:   api.NewClient(token),
 		config:   config,
 	}
+	log.ApplicationLogger().Info("Initialized Arikawa command router")
+	return router
 }
 
 // Register registers an Arikawa command.
@@ -59,6 +61,11 @@ func (r *ArikawaCommandRouter) HandleRawEvent(s *discordgo.Session, e *discordgo
 		return
 	}
 
+	log.DiscordLogger().Debug("Received Arikawa interaction event",
+		slog.String("interaction_id", interactionEvent.ID.String()),
+		slog.String("command_name", data.Name),
+	)
+
 	ctx := &ArikawaContext{
 		Client:      r.client,
 		Interaction: &interactionEvent,
@@ -78,7 +85,12 @@ func (r *ArikawaCommandRouter) HandleRawEvent(s *discordgo.Session, e *discordgo
 	}
 
 	if err := cmd.Handle(ctx); err != nil && !errors.Is(err, ErrAlreadyAcknowledged) {
-		log.ErrorLoggerRaw().Error("Arikawa command handler failed", slog.String("cmd", cmd.Name()), slog.Any("error", err))
+		log.ErrorLoggerRaw().Error("Arikawa command handler failed",
+			slog.String("cmd", cmd.Name()),
+			slog.String("request_id", interactionEvent.ID.String()),
+			slog.Int("http_status", 500),
+			slog.Any("error", err),
+		)
 	}
 }
 

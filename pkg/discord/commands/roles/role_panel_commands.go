@@ -14,12 +14,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strings"
 
 	"github.com/small-frappuccino/discordcore/pkg/discord"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/log"
 	rolesvc "github.com/small-frappuccino/discordcore/pkg/roles"
 	"github.com/small-frappuccino/discordgo"
 )
@@ -1370,7 +1372,13 @@ func ensureRolePanelEnabled(ctx *core.Context) error {
 	if cfg == nil {
 		return rolePanelDetailedCommandError("Configuration is not available right now.")
 	}
-	if enabled, _ := cfg.ResolveFeatures(ctx.GuildID).Lookup(rolePanelFeatureID); !enabled {
+
+	enabled, _ := cfg.ResolveFeatures(ctx.GuildID).Lookup(rolePanelFeatureID)
+	log.DiscordLogger().Debug("Transient state inspection: Evaluated feature enablement for Role Panels",
+		slog.Bool("toggle_enabled", enabled),
+	)
+
+	if !enabled {
 		return rolePanelDetailedCommandError("Role panels are disabled for this server.")
 	}
 	return nil

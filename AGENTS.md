@@ -171,9 +171,14 @@ Go and backend rules:
 - prefer `:=` for new values and `=` when reusing outer `ctx` or `err`
 - wrap inspectable errors with `fmt.Errorf("operation: %w", err)`
 - use sentinel errors and `errors.Is` / `errors.As` when callers branch on failure
-- logging goes through `pkg/log` or area-specific helpers, not stdlib `log`
-- include relevant guild, channel, or user identifiers in operational logs
-- never log secrets, OAuth credentials, tokens, or private message content
+- **Logging Guidelines**:
+  - `slog` is the canonical logging library. Routing continues through `pkg/log` or area-specific helpers, not stdlib `log`.
+  - **Debug**: Granular transient state inspection. Emits full request payloads, generated SQL query dumps, and complex conditional branch tracking. Must remain inactive in production via environment variables to prevent throughput degradation and I/O operation saturation.
+  - **Info**: Baseline operational telemetry. Emits exclusively architectural state transitions, such as primary routine initialization, socket port binding, and planned instance shutdown.
+  - **Warn**: Intercepted and mitigated service degradation. Emits when a failure does not compromise the main data flow. Examples include response time exceedance triggering compensatory retry logic, local cache configuration loads post-disconnection, or API rate limit consumption operating at **80%**.
+  - **Error**: Blocking structural failure restricted to the scope of the ongoing operation or transaction. Emits structural metadata obligatorily containing unique request identifiers, the injected stack trace dump, and a synthetic failure identifier corresponding to HTTP **500**. Immediately triggers alerts in external aggregators and structured on-call paging systems.
+  - Include relevant guild, channel, or user identifiers in operational logs.
+  - Never log secrets, OAuth credentials, tokens, or private message content.
 - validate only at system boundaries: HTTP input, OAuth callbacks, Discord payloads, and external rows or documents
 - treat `ConfigManager.Config()` and `GuildConfig()` results as read-only snapshots; persist through the existing update helpers
 
