@@ -222,6 +222,7 @@ func runWithOptions(appName string, opts RunOptions) error {
 		startupTasks:             startupTasks,
 		profile:                  opts.Profile,
 		appClock:                 appClock,
+		controlServerRegistry:    controlServerRegistry,
 	}
 
 	botSupervisor := NewBotSupervisor(configManager, botOpts)

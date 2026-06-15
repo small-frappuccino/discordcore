@@ -288,6 +288,52 @@ export function DashboardSessionProvider({
     };
   }, []);
 
+  useEffect(() => {
+    if (authState !== "signed_in") {
+      return;
+    }
+
+    const eventSourceUrl = baseUrl 
+      ? new URL("/v1/events/guilds", baseUrl).toString()
+      : "/v1/events/guilds";
+      
+    if (typeof EventSource === "undefined") {
+      return;
+    }
+    
+    const sse = new EventSource(eventSourceUrl, { withCredentials: true });
+
+    sse.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data && data.guild_id && typeof data.bot_present === "boolean") {
+          setAccessibleGuilds((currentGuilds) => {
+            const hasChange = currentGuilds.some(g => g.id === data.guild_id && g.bot_present !== data.bot_present);
+            if (!hasChange) return currentGuilds;
+
+            return currentGuilds.map((g) =>
+              g.id === data.guild_id ? { ...g, bot_present: data.bot_present } : g
+            );
+          });
+          setManageableGuilds((currentGuilds) => {
+            const hasChange = currentGuilds.some(g => g.id === data.guild_id && g.bot_present !== data.bot_present);
+            if (!hasChange) return currentGuilds;
+
+            return currentGuilds.map((g) =>
+              g.id === data.guild_id ? { ...g, bot_present: data.bot_present } : g
+            );
+          });
+        }
+      } catch {
+        // Parse error, ignore
+      }
+    };
+
+    return () => {
+      sse.close();
+    };
+  }, [authState, baseUrl]);
+
   // Removed selected guild sync effects
 
   const refreshSession = useCallback(async () => {

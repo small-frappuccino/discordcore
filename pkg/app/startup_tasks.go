@@ -52,6 +52,20 @@ func (h *controlServerHolder) Stop(ctx context.Context) error {
 	return server.Stop(ctx)
 }
 
+func (h *controlServerHolder) BroadcastGuildEvent(guildID string, botPresent bool) {
+	if h == nil {
+		return
+	}
+	h.mu.Lock()
+	server := h.server
+	h.mu.Unlock()
+
+	if server == nil {
+		return
+	}
+	server.BroadcastGuildEvent(guildID, botPresent)
+}
+
 type controlStartupTaskOptions struct {
 	runOptions            RunOptions
 	configManager         *files.ConfigManager

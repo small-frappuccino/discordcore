@@ -43,6 +43,7 @@ type botRuntimeOptions struct {
 	startupTasks             *StartupTaskOrchestrator
 	profile                  RunProfile
 	appClock                 clock.Clock
+	controlServerRegistry    *controlServerHolder
 }
 
 var openBotDiscordSession = session.OpenSession
@@ -100,6 +101,16 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 	if cfg != nil {
 		runtimeConfig = cfg.RuntimeConfig
 	}
+
+	if opts.controlServerRegistry != nil {
+		runtime.session.AddHandler(func(s *discordgo.Session, e *discordgo.GuildCreate) {
+			opts.controlServerRegistry.BroadcastGuildEvent(e.Guild.ID, true)
+		})
+		runtime.session.AddHandler(func(s *discordgo.Session, e *discordgo.GuildDelete) {
+			opts.controlServerRegistry.BroadcastGuildEvent(e.Guild.ID, false)
+		})
+	}
+
 	routerConfig := newRuntimeTaskRouterConfig(cfg, runtime.instanceID, opts.runtimeCount)
 	log.ApplicationLogger().Info(
 		"Configured runtime task router budget",

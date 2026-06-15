@@ -102,6 +102,7 @@ type Server struct {
 	discordOAuthSvc      *discordOAuthControlService
 	httpServer           *http.Server
 	listener             net.Listener
+	guildEventBroker     *guildEventBroker
 }
 
 // NewServer returns nil if addr is empty.
@@ -142,6 +143,7 @@ func NewServer(addr string, configManager *files.ConfigManager, runtimeApplier *
 		Handler:           s.wrapCanonicalPublicOrigin(mux),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
+	s.guildEventBroker = newGuildEventBroker()
 	s.registerHTTPRoutes(mux)
 
 	return s
