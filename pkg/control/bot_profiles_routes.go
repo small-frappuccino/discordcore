@@ -146,7 +146,7 @@ func getBotProfileCached(ctx context.Context, guildID, logicalKey, token string)
 		}
 		botProfileCache[cacheKey] = cachedBotProfile{
 			Profile:   profile,
-			ExpiresAt: time.Now().Add(10 * time.Minute),
+			ExpiresAt: time.Now().Add(15 * time.Second),
 		}
 		botProfileCacheMu.Unlock()
 
