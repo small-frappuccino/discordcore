@@ -21,7 +21,10 @@ func ResolveFeatureForCommandPath(path string) string {
 		strings.HasPrefix(path, "unban"),
 		strings.HasPrefix(path, "slowmode"),
 		strings.HasPrefix(path, "lock"),
-		strings.HasPrefix(path, "unlock"):
+		strings.HasPrefix(path, "unlock"),
+		strings.HasPrefix(path, "massban"),
+		strings.HasPrefix(path, "mute"),
+		strings.HasPrefix(path, "reaction_block"):
 		return "moderation"
 	case strings.HasPrefix(path, "rolepanel"),
 		strings.HasPrefix(path, "role"):
