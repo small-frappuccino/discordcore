@@ -67,11 +67,11 @@ func RunWithOptions(appName string, opts RunOptions) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			errWrap := fmt.Errorf("panic recovered during runtime: %v", r)
-			emitBlockingError("Critical pipeline failure: Unhandled panic intercepted", errWrap, generateRequestID())
+			log.EmitBlockingError("Critical pipeline failure: Unhandled panic intercepted", errWrap, log.GenerateRequestID())
 			notifyLifecycleEvent("fatal", errWrap.Error())
 			err = errWrap
 		} else if err != nil {
-			emitBlockingError("Critical pipeline failure: Primary routine aborted", err, generateRequestID())
+			log.EmitBlockingError("Critical pipeline failure: Primary routine aborted", err, log.GenerateRequestID())
 			notifyLifecycleEvent("fatal", fmt.Sprintf("startup or runtime error: %v", err))
 		} else {
 			notifyLifecycleEvent("stopping", "")
@@ -87,13 +87,13 @@ func runWithOptions(appName string, opts RunOptions) error {
 
 	if err := idgen.Init(1); err != nil {
 		errWrap := fmt.Errorf("initialize idgen: %w", err)
-		emitBlockingError("Structural dependency failure: ID generator initialization aborted", errWrap, generateRequestID())
+		log.EmitBlockingError("Structural dependency failure: ID generator initialization aborted", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
 
 	if err := log.SetupLogger(files.EffectiveBotName(), files.GetLogFilePath()); err != nil {
 		errWrap := fmt.Errorf("configure logger: %w", err)
-		emitBlockingError("Structural dependency failure: Core logging infrastructure aborted", errWrap, generateRequestID())
+		log.EmitBlockingError("Structural dependency failure: Core logging infrastructure aborted", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
 	defer log.GlobalLogger.Sync()
@@ -110,7 +110,7 @@ func runWithOptions(appName string, opts RunOptions) error {
 	databaseBootstrap, err := resolveDatabaseBootstrap()
 	if err != nil {
 		errWrap := fmt.Errorf("RunWithOptions resolveDatabaseBootstrap: %w", err)
-		emitBlockingError("Structural dependency failure: Database manifest resolution aborted", errWrap, generateRequestID())
+		log.EmitBlockingError("Structural dependency failure: Database manifest resolution aborted", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
 	slog.Info("Architectural state transition: Database matrix parameters loaded",
@@ -125,14 +125,14 @@ func runWithOptions(appName string, opts RunOptions) error {
 	}
 	if err := files.EnsureCacheDirs(); err != nil {
 		errWrap := fmt.Errorf("create cache directories: %w", err)
-		emitBlockingError("Structural dependency failure: Block storage provisioning aborted", errWrap, generateRequestID())
+		log.EmitBlockingError("Structural dependency failure: Block storage provisioning aborted", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
 
 	store, configManager, err := setupStorage(databaseBootstrap)
 	if err != nil {
 		errWrap := fmt.Errorf("RunWithOptions setupStorage: %w", err)
-		emitBlockingError("Structural dependency failure: Storage manifold orchestration aborted", errWrap, generateRequestID())
+		log.EmitBlockingError("Structural dependency failure: Storage manifold orchestration aborted", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
 	closeStoreOnReturn := true
@@ -192,7 +192,7 @@ func runWithOptions(appName string, opts RunOptions) error {
 	})
 	if err := appServiceManager.Register(storeService); err != nil {
 		errWrap := fmt.Errorf("register store service: %w", err)
-		emitBlockingError("Structural dependency failure: Subgraph registration aborted", errWrap, generateRequestID())
+		log.EmitBlockingError("Structural dependency failure: Subgraph registration aborted", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
 
@@ -233,7 +233,7 @@ func runWithOptions(appName string, opts RunOptions) error {
 
 	if err := appServiceManager.Register(botSupervisorService); err != nil {
 		errWrap := fmt.Errorf("register bot supervisor service: %w", err)
-		emitBlockingError("Structural dependency failure: Supervisor allocation aborted", errWrap, generateRequestID())
+		log.EmitBlockingError("Structural dependency failure: Supervisor allocation aborted", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
 
@@ -243,12 +243,12 @@ func runWithOptions(appName string, opts RunOptions) error {
 	defer attachCancel()
 	if err := qotdMetrics.Attach(attachCtx); err != nil {
 		errWrap := fmt.Errorf("fatal abort: qotd metrics pipeline failed to attach: %w", err)
-		emitBlockingError("Structural dependency failure: Core metrics pipeline desync", errWrap, generateRequestID())
+		log.EmitBlockingError("Structural dependency failure: Core metrics pipeline desync", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
 	if err := moderationMetrics.Attach(attachCtx); err != nil {
 		errWrap := fmt.Errorf("fatal abort: moderation metrics pipeline failed to attach: %w", err)
-		emitBlockingError("Structural dependency failure: Moderation metrics pipeline desync", errWrap, generateRequestID())
+		log.EmitBlockingError("Structural dependency failure: Moderation metrics pipeline desync", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
 
@@ -308,7 +308,7 @@ func runWithOptions(appName string, opts RunOptions) error {
 		select {
 		case err := <-fatalErrCh:
 			if err != nil {
-				emitBlockingError("Critical pipeline failure: Daemon cluster collapsed", err, generateRequestID())
+				log.EmitBlockingError("Critical pipeline failure: Daemon cluster collapsed", err, log.GenerateRequestID())
 				runErr = err
 				goto shutdown
 			}
@@ -333,7 +333,7 @@ func runWithOptions(appName string, opts RunOptions) error {
 
 			if dupCount > 0 || needsSave {
 				if saveErr := configManager.SaveConfig(); saveErr != nil {
-					emitBlockingError("Structural state failure: Volatile configuration drift blocks persistence flush", saveErr, generateRequestID())
+					log.EmitBlockingError("Structural state failure: Volatile configuration drift blocks persistence flush", saveErr, log.GenerateRequestID())
 				} else {
 					slog.Info("Architectural state transition: Configuration topology updated and indexes rebuilt",
 						slog.Int("duplicates_purged", dupCount),
@@ -356,7 +356,7 @@ shutdown:
 	closeStoreOnReturn = false
 	if err := appServiceManager.StopAll(context.Background()); err != nil {
 		errWrap := fmt.Errorf("shutdown: %w", err)
-		emitBlockingError("Structural teardown failure: Zombie sub-processes detected during stop iteration", errWrap, generateRequestID())
+		log.EmitBlockingError("Structural teardown failure: Zombie sub-processes detected during stop iteration", errWrap, log.GenerateRequestID())
 		if runErr != nil {
 			return stdErrors.Join(runErr, errWrap)
 		}
@@ -437,7 +437,7 @@ func rollbackStoreClose(enabled bool, store *storage.Store) {
 		return
 	}
 	if err := closeStore(store); err != nil {
-		emitBlockingError("Structural rollback failure: Persistence mechanism locked during compensatory teardown", err, generateRequestID())
+		log.EmitBlockingError("Structural rollback failure: Persistence mechanism locked during compensatory teardown", err, log.GenerateRequestID())
 	}
 }
 
@@ -451,7 +451,7 @@ func shutdownStartupServices(startupTasks *StartupTaskOrchestrator, controlServe
 		)
 	}
 	if err := controlServerRegistry.Stop(ctx); err != nil {
-		emitBlockingError("Structural teardown failure: Interface server socket release hung", err, generateRequestID())
+		log.EmitBlockingError("Structural teardown failure: Interface server socket release hung", err, log.GenerateRequestID())
 	}
 }
 
@@ -625,7 +625,7 @@ func setupStorage(dbb resolvedDatabaseBootstrap) (*storage.Store, *files.ConfigM
 	db, err := persistence.Open(openCtx, dbc)
 	if err != nil {
 		errWrap := fmt.Errorf("open postgres database: %w", err)
-		emitBlockingError("Structural dependency failure: Core socket driver rejected host", errWrap, generateRequestID())
+		log.EmitBlockingError("Structural dependency failure: Core socket driver rejected host", errWrap, log.GenerateRequestID())
 		return nil, nil, errWrap
 	}
 	slog.Info("Architectural state transition: Remote persistence pipeline materialized",
@@ -638,7 +638,7 @@ func setupStorage(dbb resolvedDatabaseBootstrap) (*storage.Store, *files.ConfigM
 	if err := persistence.Ping(pingCtx, db); err != nil {
 		db.Close()
 		errWrap := fmt.Errorf("postgres readiness check failed: %w", err)
-		emitBlockingError("Structural dependency failure: Remote persistence pipeline failed readiness probe", errWrap, generateRequestID())
+		log.EmitBlockingError("Structural dependency failure: Remote persistence pipeline failed readiness probe", errWrap, log.GenerateRequestID())
 		return nil, nil, errWrap
 	}
 	slog.Info("Architectural state transition: I/O payload validation complete",
@@ -652,7 +652,7 @@ func setupStorage(dbb resolvedDatabaseBootstrap) (*storage.Store, *files.ConfigM
 	if err := migrator.Up(migrateCtx); err != nil {
 		db.Close()
 		errWrap := fmt.Errorf("apply postgres migrations: %w", err)
-		emitBlockingError("Structural schema failure: Matrix migration scripts stalled", errWrap, generateRequestID())
+		log.EmitBlockingError("Structural schema failure: Matrix migration scripts stalled", errWrap, log.GenerateRequestID())
 		return nil, nil, errWrap
 	}
 	slog.Info("Architectural state transition: Schema schema deltas propagated successfully",
@@ -664,13 +664,13 @@ func setupStorage(dbb resolvedDatabaseBootstrap) (*storage.Store, *files.ConfigM
 	if err != nil {
 		db.Close()
 		errWrap := fmt.Errorf("create postgres store: %w", err)
-		emitBlockingError("Structural dependency failure: Allocation of I/O buffer blocks aborted", errWrap, generateRequestID())
+		log.EmitBlockingError("Structural dependency failure: Allocation of I/O buffer blocks aborted", errWrap, log.GenerateRequestID())
 		return nil, nil, errWrap
 	}
 	if err := store.Init(); err != nil {
 		db.Close()
 		errWrap := fmt.Errorf("initialize postgres store: %w", err)
-		emitBlockingError("Structural dependency failure: Internal store map lock aborted", errWrap, generateRequestID())
+		log.EmitBlockingError("Structural dependency failure: Internal store map lock aborted", errWrap, log.GenerateRequestID())
 		return nil, nil, errWrap
 	}
 	slog.Info("Architectural state transition: Virtual storage layers active",
@@ -684,12 +684,12 @@ func setupStorage(dbb resolvedDatabaseBootstrap) (*storage.Store, *files.ConfigM
 	slog.Debug("Executing cross-boundary extraction for master configuration tree")
 	if err := configManager.LoadConfig(); err != nil {
 		errWrap := fmt.Errorf("load config from postgres: %w", err)
-		emitBlockingError("Structural dependency failure: Configuration load blocked", errWrap, generateRequestID())
+		log.EmitBlockingError("Structural dependency failure: Configuration load blocked", errWrap, log.GenerateRequestID())
 		return nil, nil, errWrap
 	}
 	if err := syncBootstrapDatabaseConfig(configManager, dbCfg); err != nil {
 		errWrap := fmt.Errorf("sync runtime database bootstrap config: %w", err)
-		emitBlockingError("Structural dependency failure: Node manifest drift detected", errWrap, generateRequestID())
+		log.EmitBlockingError("Structural dependency failure: Node manifest drift detected", errWrap, log.GenerateRequestID())
 		return nil, nil, errWrap
 	}
 

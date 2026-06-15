@@ -2,12 +2,9 @@ package app
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	stdErrors "errors"
 	"fmt"
 	"log/slog"
-	"runtime/debug"
 	"strings"
 	"sync"
 
@@ -16,31 +13,13 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	"github.com/small-frappuccino/discordcore/pkg/discord/webhook"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/monitoring"
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordgo"
 )
-
-// generateRequestID creates a transient unique identifier for error correlation.
-func generateRequestID() string {
-	bytes := make([]byte, 16)
-	if _, err := rand.Read(bytes); err != nil {
-		return "00000000000000000000000000000000"
-	}
-	return hex.EncodeToString(bytes)
-}
-
-// emitBlockingError encapsulates the emission of structural failures with mandatory metadata.
-func emitBlockingError(msg string, err error, requestID string) {
-	slog.Error(msg,
-		slog.String("request_id", requestID),
-		slog.String("synthetic_code", "500"),
-		slog.String("stack_trace", string(debug.Stack())),
-		slog.Any("error", err),
-	)
-}
 
 type controlServerHolder struct {
 	mu     sync.Mutex
@@ -77,7 +56,7 @@ func (h *controlServerHolder) Stop(ctx context.Context) error {
 	slog.Info("Planned shutdown of control server instance initiated")
 
 	if err := server.Stop(ctx); err != nil {
-		emitBlockingError("Blocking failure during control server shutdown", err, generateRequestID())
+		log.EmitBlockingError("Blocking failure during control server shutdown", err, log.GenerateRequestID())
 		return err
 	}
 
@@ -223,7 +202,7 @@ func scheduleControlServerStartup(startupTasks *StartupTaskOrchestrator, opts co
 
 	if startupTasks == nil {
 		if err := run(context.Background()); err != nil {
-			emitBlockingError("Synchronous execution of control server startup failed completely", err, generateRequestID())
+			log.EmitBlockingError("Synchronous execution of control server startup failed completely", err, log.GenerateRequestID())
 		}
 		return
 	}
@@ -240,7 +219,7 @@ func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskO
 		return nil
 	} else if err != nil {
 		errWrap := fmt.Errorf("resolve control runtime: %w", err)
-		emitBlockingError("Blocking failure during control runtime resolution", errWrap, generateRequestID())
+		log.EmitBlockingError("Blocking failure during control runtime resolution", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
 
@@ -306,20 +285,20 @@ func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskO
 	})
 	if err := controlServer.SetPublicOrigin(controlRuntime.publicOrigin); err != nil {
 		errWrap := fmt.Errorf("configure control public origin: %w", err)
-		emitBlockingError("Failed to lock public origin for control server", errWrap, generateRequestID())
+		log.EmitBlockingError("Failed to lock public origin for control server", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
 	if controlRuntime.tlsCertFile != "" || controlRuntime.tlsKeyFile != "" {
 		if err := controlServer.SetTLSCertificates(controlRuntime.tlsCertFile, controlRuntime.tlsKeyFile); err != nil {
 			errWrap := fmt.Errorf("configure control tls certificates: %w", err)
-			emitBlockingError("Failed to bind TLS material to control server listener", errWrap, generateRequestID())
+			log.EmitBlockingError("Failed to bind TLS material to control server listener", errWrap, log.GenerateRequestID())
 			return errWrap
 		}
 	}
 	if controlRuntime.oauthConfig != nil {
 		if err := controlServer.SetDiscordOAuthConfig(*controlRuntime.oauthConfig); err != nil {
 			errWrap := fmt.Errorf("configure control discord oauth: %w", err)
-			emitBlockingError("Failed to inject OAuth configuration into control server", errWrap, generateRequestID())
+			log.EmitBlockingError("Failed to inject OAuth configuration into control server", errWrap, log.GenerateRequestID())
 			return errWrap
 		}
 		slog.Info("Architectural transition: Discord OAuth constraints applied to control interface",
@@ -347,7 +326,7 @@ func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskO
 			return nil
 		}
 		errWrap := fmt.Errorf("start control server: %w", err)
-		emitBlockingError("Critical failure during control server socket bind operation", errWrap, generateRequestID())
+		log.EmitBlockingError("Critical failure during control server socket bind operation", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
 
@@ -356,7 +335,7 @@ func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskO
 		stopCtx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		if stopErr := controlServer.Stop(stopCtx); stopErr != nil {
-			emitBlockingError("Teardown failure during aborted startup sequence", stopErr, generateRequestID())
+			log.EmitBlockingError("Teardown failure during aborted startup sequence", stopErr, log.GenerateRequestID())
 		}
 		return fmt.Errorf("startControlServerStartupTask: %w", err)
 	}

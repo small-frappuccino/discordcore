@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
 // PostgresConfigStore persists BotConfig in PostgreSQL as one canonical JSONB document.
@@ -37,7 +38,7 @@ func (s *PostgresConfigStore) Load() (*BotConfig, error) {
 	cfg := &BotConfig{Guilds: []GuildConfig{}}
 	if s == nil || s.db == nil {
 		err := fmt.Errorf("postgres config store database handle is nil")
-		emitBlockingError("Falha estrutural bloqueante: Ponteiro nulo bloqueou a inicialização do driver PostgreSQL", err, generateRequestID())
+		log.EmitBlockingError("Falha estrutural bloqueante: Ponteiro nulo bloqueou a inicialização do driver PostgreSQL", err, log.GenerateRequestID())
 		return cfg, err
 	}
 
@@ -61,7 +62,7 @@ func (s *PostgresConfigStore) Load() (*BotConfig, error) {
 
 	if err != nil && err != pgx.ErrNoRows {
 		errWrap := fmt.Errorf("load global config row from postgres: %w", err)
-		emitBlockingError("Falha estrutural bloqueante: Driver SQL rejeitou a leitura de documento global", errWrap, generateRequestID())
+		log.EmitBlockingError("Falha estrutural bloqueante: Driver SQL rejeitou a leitura de documento global", errWrap, log.GenerateRequestID())
 		return nil, errWrap
 	}
 
@@ -75,7 +76,7 @@ func (s *PostgresConfigStore) Load() (*BotConfig, error) {
 		)
 		if err := json.Unmarshal(globalRaw, cfg); err != nil {
 			errWrap := fmt.Errorf("decode global config row from postgres: %w", err)
-			emitBlockingError("Falha estrutural bloqueante: Parsing de documento JSON corrompido no bloco global", errWrap, generateRequestID())
+			log.EmitBlockingError("Falha estrutural bloqueante: Parsing de documento JSON corrompido no bloco global", errWrap, log.GenerateRequestID())
 			return nil, errWrap
 		}
 	}
@@ -92,7 +93,7 @@ func (s *PostgresConfigStore) Load() (*BotConfig, error) {
 	)
 	if err != nil {
 		errWrap := fmt.Errorf("query guild_configs: %w", err)
-		emitBlockingError("Falha estrutural bloqueante: Subgrafo de configurações das instâncias rejeitado pelo servidor relacional", errWrap, generateRequestID())
+		log.EmitBlockingError("Falha estrutural bloqueante: Subgrafo de configurações das instâncias rejeitado pelo servidor relacional", errWrap, log.GenerateRequestID())
 		return nil, errWrap
 	}
 	defer rows.Close()
@@ -101,20 +102,20 @@ func (s *PostgresConfigStore) Load() (*BotConfig, error) {
 		var guildRaw []byte
 		if err := rows.Scan(&guildRaw); err != nil {
 			errWrap := fmt.Errorf("scan guild_configs row: %w", err)
-			emitBlockingError("Falha estrutural bloqueante: Cursor I/O estourou durante rastreamento bidirecional da tabela", errWrap, generateRequestID())
+			log.EmitBlockingError("Falha estrutural bloqueante: Cursor I/O estourou durante rastreamento bidirecional da tabela", errWrap, log.GenerateRequestID())
 			return nil, errWrap
 		}
 		var guildCfg GuildConfig
 		if err := json.Unmarshal(guildRaw, &guildCfg); err != nil {
 			errWrap := fmt.Errorf("decode guild_configs json: %w", err)
-			emitBlockingError("Falha estrutural bloqueante: Parsing de documento JSON corrompido em sub-nó de guilda", errWrap, generateRequestID())
+			log.EmitBlockingError("Falha estrutural bloqueante: Parsing de documento JSON corrompido em sub-nó de guilda", errWrap, log.GenerateRequestID())
 			return nil, errWrap
 		}
 		cfg.Guilds = append(cfg.Guilds, guildCfg)
 	}
 	if err := rows.Err(); err != nil {
 		errWrap := fmt.Errorf("iterate guild_configs rows: %w", err)
-		emitBlockingError("Falha estrutural bloqueante: Pipe de paginação SQL reportou contenção não recuperável", errWrap, generateRequestID())
+		log.EmitBlockingError("Falha estrutural bloqueante: Pipe de paginação SQL reportou contenção não recuperável", errWrap, log.GenerateRequestID())
 		return nil, errWrap
 	}
 
@@ -125,12 +126,12 @@ func (s *PostgresConfigStore) Load() (*BotConfig, error) {
 func (s *PostgresConfigStore) Save(cfg *BotConfig) error {
 	if cfg == nil {
 		err := fmt.Errorf("cannot save nil config")
-		emitBlockingError("Falha estrutural bloqueante: Tentativa de persistência com matriz global nula", err, generateRequestID())
+		log.EmitBlockingError("Falha estrutural bloqueante: Tentativa de persistência com matriz global nula", err, log.GenerateRequestID())
 		return err
 	}
 	if s == nil || s.db == nil {
 		err := fmt.Errorf("postgres config store database handle is nil")
-		emitBlockingError("Falha estrutural bloqueante: Sincronização bloqueada por driver relacional nulo", err, generateRequestID())
+		log.EmitBlockingError("Falha estrutural bloqueante: Sincronização bloqueada por driver relacional nulo", err, log.GenerateRequestID())
 		return err
 	}
 
@@ -142,7 +143,7 @@ func (s *PostgresConfigStore) Save(cfg *BotConfig) error {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		errWrap := fmt.Errorf("begin config save tx: %w", err)
-		emitBlockingError("Falha estrutural bloqueante: Negociação de transação abortada pelo SGBD", errWrap, generateRequestID())
+		log.EmitBlockingError("Falha estrutural bloqueante: Negociação de transação abortada pelo SGBD", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
 	defer func() {
@@ -159,7 +160,7 @@ func (s *PostgresConfigStore) Save(cfg *BotConfig) error {
 	globalRaw, err := json.Marshal(globalCopy)
 	if err != nil {
 		errWrap := fmt.Errorf("encode global config: %w", err)
-		emitBlockingError("Falha estrutural bloqueante: Operação marshal anulou o buffer de escrita primária", errWrap, generateRequestID())
+		log.EmitBlockingError("Falha estrutural bloqueante: Operação marshal anulou o buffer de escrita primária", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
 
@@ -182,7 +183,7 @@ func (s *PostgresConfigStore) Save(cfg *BotConfig) error {
 		string(globalRaw),
 	); err != nil {
 		errWrap := fmt.Errorf("save global config row: %w", err)
-		emitBlockingError("Falha estrutural bloqueante: Commando executável upsert de topologia base rejeitado", errWrap, generateRequestID())
+		log.EmitBlockingError("Falha estrutural bloqueante: Commando executável upsert de topologia base rejeitado", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
 
@@ -198,7 +199,7 @@ func (s *PostgresConfigStore) Save(cfg *BotConfig) error {
 		guildRaw, err := json.Marshal(guild)
 		if err != nil {
 			errWrap := fmt.Errorf("encode guild config for %s: %w", guild.GuildID, err)
-			emitBlockingError("Falha estrutural bloqueante: Operação marshal falhou sobre o escopo hierárquico isolado", errWrap, generateRequestID())
+			log.EmitBlockingError("Falha estrutural bloqueante: Operação marshal falhou sobre o escopo hierárquico isolado", errWrap, log.GenerateRequestID())
 			return errWrap
 		}
 
@@ -216,14 +217,14 @@ func (s *PostgresConfigStore) Save(cfg *BotConfig) error {
 			string(guildRaw),
 		); err != nil {
 			errWrap := fmt.Errorf("save guild_configs row %s: %w", guild.GuildID, err)
-			emitBlockingError("Falha estrutural bloqueante: Colisão ou obstrução transacional atrelada ao sub-nível", errWrap, generateRequestID())
+			log.EmitBlockingError("Falha estrutural bloqueante: Colisão ou obstrução transacional atrelada ao sub-nível", errWrap, log.GenerateRequestID())
 			return errWrap
 		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
 		errWrap := fmt.Errorf("commit config save tx: %w", err)
-		emitBlockingError("Falha estrutural bloqueante: Protocolo 2PC consolidativo rejeitado; o commit falhou e travou o estado na origem", errWrap, generateRequestID())
+		log.EmitBlockingError("Falha estrutural bloqueante: Protocolo 2PC consolidativo rejeitado; o commit falhou e travou o estado na origem", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
 
@@ -235,7 +236,7 @@ func (s *PostgresConfigStore) Save(cfg *BotConfig) error {
 func (s *PostgresConfigStore) Exists() (bool, error) {
 	if s == nil || s.db == nil {
 		err := fmt.Errorf("postgres config store database handle is nil")
-		emitBlockingError("Falha estrutural bloqueante: Probe estático falhou sobre integridade referencial do nó", err, generateRequestID())
+		log.EmitBlockingError("Falha estrutural bloqueante: Probe estático falhou sobre integridade referencial do nó", err, log.GenerateRequestID())
 		return false, err
 	}
 
@@ -253,7 +254,7 @@ func (s *PostgresConfigStore) Exists() (bool, error) {
 		s.key,
 	).Scan(&exists); err != nil {
 		errWrap := fmt.Errorf("check config row in postgres: %w", err)
-		emitBlockingError("Falha estrutural bloqueante: Query booleana escalar colapsou na varredura", errWrap, generateRequestID())
+		log.EmitBlockingError("Falha estrutural bloqueante: Query booleana escalar colapsou na varredura", errWrap, log.GenerateRequestID())
 		return false, errWrap
 	}
 	return exists, nil

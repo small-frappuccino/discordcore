@@ -15,6 +15,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/monitoring"
 
 	"github.com/small-frappuccino/discordcore/pkg/service"
@@ -63,7 +64,7 @@ func (r *botRuntimeResolver) markReady() {
 func (r *botRuntimeResolver) waitForReady(ctx context.Context) error {
 	if r == nil {
 		err := fmt.Errorf("resolver is nil")
-		emitBlockingError("Blocking structural failure: Synchronization channel missing from resolver matrix", err, generateRequestID())
+		log.EmitBlockingError("Blocking structural failure: Synchronization channel missing from resolver matrix", err, log.GenerateRequestID())
 		return err
 	}
 	select {
@@ -185,13 +186,13 @@ func (r *botRuntimeResolver) aggregateMonitoringMetrics() map[string]monitoring.
 func (r *botRuntimeResolver) runtimeForGuild(guildID string, feature string) (*botRuntime, string, error) {
 	if r == nil {
 		err := fmt.Errorf("bot runtime resolver is unavailable")
-		emitBlockingError("Blocking structural failure: Pointer to runtime resolver dropped from state matrix", err, generateRequestID())
+		log.EmitBlockingError("Blocking structural failure: Pointer to runtime resolver dropped from state matrix", err, log.GenerateRequestID())
 		return nil, "", err
 	}
 	guildID = strings.TrimSpace(guildID)
 	if r.configManager == nil {
 		err := fmt.Errorf("bot runtime resolver config manager is unavailable")
-		emitBlockingError("Blocking structural failure: Config manager detached from runtime resolver", err, generateRequestID())
+		log.EmitBlockingError("Blocking structural failure: Config manager detached from runtime resolver", err, log.GenerateRequestID())
 		return nil, "", err
 	}
 	guild := r.configManager.GuildConfig(guildID)
@@ -272,11 +273,11 @@ func (r *botRuntimeResolver) sessionForGuild(guildID string, feature string) (*d
 		guildID = strings.TrimSpace(guildID)
 		if guildID == "" {
 			errWrap := fmt.Errorf("%w: discord session for default bot instance %q is empty", ErrSessionUnavailable, botInstanceID)
-			emitBlockingError("Blocking structural failure: Socket payload evaluates to nil on default instance", errWrap, generateRequestID())
+			log.EmitBlockingError("Blocking structural failure: Socket payload evaluates to nil on default instance", errWrap, log.GenerateRequestID())
 			return nil, errWrap
 		}
 		errWrap := fmt.Errorf("%w: discord session for guild %s (bot instance %q) is empty", ErrSessionUnavailable, guildID, botInstanceID)
-		emitBlockingError("Blocking structural failure: Socket payload evaluates to nil on specific guild channel", errWrap, generateRequestID())
+		log.EmitBlockingError("Blocking structural failure: Socket payload evaluates to nil on specific guild channel", errWrap, log.GenerateRequestID())
 		return nil, errWrap
 	}
 	return runtime.session, nil
@@ -285,7 +286,7 @@ func (r *botRuntimeResolver) sessionForGuild(guildID string, feature string) (*d
 func (r *botRuntimeResolver) registerGuild(_ context.Context, guildID string) error {
 	if r == nil || r.configManager == nil {
 		err := fmt.Errorf("bot runtime resolver is unavailable")
-		emitBlockingError("Blocking structural failure: Registry pipeline detached from local orchestrator", err, generateRequestID())
+		log.EmitBlockingError("Blocking structural failure: Registry pipeline detached from local orchestrator", err, log.GenerateRequestID())
 		return err
 	}
 	return r.configManager.EnsureMinimalGuildConfig(guildID)
@@ -294,7 +295,7 @@ func (r *botRuntimeResolver) registerGuild(_ context.Context, guildID string) er
 func (r *botRuntimeResolver) guildBindings(context.Context) ([]control.BotGuildBinding, error) {
 	if r == nil {
 		err := fmt.Errorf("bot runtime resolver is unavailable")
-		emitBlockingError("Blocking structural failure: Sub-routine invoked against nil struct pointer", err, generateRequestID())
+		log.EmitBlockingError("Blocking structural failure: Sub-routine invoked against nil struct pointer", err, log.GenerateRequestID())
 		return nil, err
 	}
 
@@ -344,7 +345,7 @@ func listBotGuildBindingsFromSessionState(botInstanceID string, session *discord
 	ids, err := listBotGuildIDsFromSessionState(session)
 	if err != nil {
 		errWrap := fmt.Errorf("listBotGuildBindingsFromSessionState: %w", err)
-		emitBlockingError("Blocking structural failure: External list extraction via state mapping aborted", errWrap, generateRequestID())
+		log.EmitBlockingError("Blocking structural failure: External list extraction via state mapping aborted", errWrap, log.GenerateRequestID())
 		return nil, errWrap
 	}
 

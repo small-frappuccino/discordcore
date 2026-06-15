@@ -20,6 +20,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/session"
 	discordstats "github.com/small-frappuccino/discordcore/pkg/discord/stats"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/monitoring"
 	"github.com/small-frappuccino/discordcore/pkg/notifications"
 	applicationqotd "github.com/small-frappuccino/discordcore/pkg/qotd"
@@ -60,7 +61,7 @@ func openBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabil
 	discordSession, err := newDiscordSessionWithIntents(instance.Token, capabilities.intents)
 	if err != nil {
 		errWrap := fmt.Errorf("create discord session for %s: %w", instance.ID, err)
-		emitBlockingError("Blocking structural failure during session initialization", errWrap, generateRequestID())
+		log.EmitBlockingError("Blocking structural failure during session initialization", errWrap, log.GenerateRequestID())
 		return nil, errWrap
 	}
 
@@ -78,13 +79,13 @@ func openBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabil
 
 	if err := openBotDiscordSession(ctx, discordSession); err != nil {
 		errWrap := fmt.Errorf("open discord session for %s: %w", instance.ID, err)
-		emitBlockingError("Blocking structural failure during socket bind and handshake", errWrap, generateRequestID())
+		log.EmitBlockingError("Blocking structural failure during socket bind and handshake", errWrap, log.GenerateRequestID())
 		return nil, errWrap
 	}
 
 	if discordSession.State == nil || discordSession.State.User == nil {
 		errState := fmt.Errorf("discord session state not properly initialized for %s", instance.ID)
-		emitBlockingError("Blocking structural failure: Gateway payload yielded nil state", errState, generateRequestID())
+		log.EmitBlockingError("Blocking structural failure: Gateway payload yielded nil state", errState, log.GenerateRequestID())
 		return nil, errState
 	}
 
@@ -103,7 +104,7 @@ func openBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabil
 func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRuntimeOptions) error {
 	if runtime == nil || runtime.session == nil {
 		err := fmt.Errorf("bot runtime is unavailable")
-		emitBlockingError("Blocking structural failure: Runtime pointer resolves to nil", err, generateRequestID())
+		log.EmitBlockingError("Blocking structural failure: Runtime pointer resolves to nil", err, log.GenerateRequestID())
 		return err
 	}
 
@@ -143,14 +144,14 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 	if monitoringService != nil {
 		if err := runtime.serviceManager.Register(monitoringService); err != nil {
 			errWrap := fmt.Errorf("register monitoring service for %s: %w", runtime.instanceID, err)
-			emitBlockingError("Blocking structural failure during service registry update", errWrap, generateRequestID())
+			log.EmitBlockingError("Blocking structural failure during service registry update", errWrap, log.GenerateRequestID())
 			return errWrap
 		}
 	}
 	if automodService := buildAutomodService(runtime, opts, routerConfig, runtimeConfig, monitoringService); automodService != nil {
 		if err := runtime.serviceManager.Register(automodService); err != nil {
 			errWrap := fmt.Errorf("register automod service for %s: %w", runtime.instanceID, err)
-			emitBlockingError("Blocking structural failure during service registry update", errWrap, generateRequestID())
+			log.EmitBlockingError("Blocking structural failure during service registry update", errWrap, log.GenerateRequestID())
 			return errWrap
 		}
 	}
@@ -173,14 +174,14 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 
 	if err := runtime.serviceManager.Register(statsService); err != nil {
 		errWrap := fmt.Errorf("register stats service for %s: %w", runtime.instanceID, err)
-		emitBlockingError("Blocking structural failure during service registry update", errWrap, generateRequestID())
+		log.EmitBlockingError("Blocking structural failure during service registry update", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
 
 	if commandHandler := setupRuntimeCommandHandler(runtime, opts, cfg, monitoringService, statsService); commandHandler != nil {
 		if err := runtime.serviceManager.Register(commandHandler); err != nil {
 			errWrap := fmt.Errorf("register command handler service for %s: %w", runtime.instanceID, err)
-			emitBlockingError("Blocking structural failure during service registry update", errWrap, generateRequestID())
+			log.EmitBlockingError("Blocking structural failure during service registry update", errWrap, log.GenerateRequestID())
 			return errWrap
 		}
 	}
@@ -190,7 +191,7 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 	)
 	if err := runtime.serviceManager.StartAll(); err != nil {
 		errWrap := fmt.Errorf("start services for %s: %w", runtime.instanceID, err)
-		emitBlockingError("Blocking structural failure: Service manager execution sequence aborted", errWrap, generateRequestID())
+		log.EmitBlockingError("Blocking structural failure: Service manager execution sequence aborted", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
 
@@ -217,7 +218,7 @@ func setupMonitoringService(runtime *botRuntime, opts botRuntimeOptions, routerC
 	)
 	if err != nil {
 		errWrap := fmt.Errorf("create monitoring service for %s: %w", runtime.instanceID, err)
-		emitBlockingError("Blocking structural failure during monitoring instantiation", errWrap, generateRequestID())
+		log.EmitBlockingError("Blocking structural failure during monitoring instantiation", errWrap, log.GenerateRequestID())
 		return nil, errWrap
 	}
 	monitoringService.SetTaskRouterConfig(routerConfig)
@@ -271,7 +272,7 @@ func registerUserPruneService(runtime *botRuntime, opts botRuntimeOptions, monit
 
 	if err := runtime.serviceManager.Register(userPruneService); err != nil {
 		errWrap := fmt.Errorf("register user prune service for %s: %w", runtime.instanceID, err)
-		emitBlockingError("Blocking structural failure during user prune registration", errWrap, generateRequestID())
+		log.EmitBlockingError("Blocking structural failure during user prune registration", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
 	slog.Info("Architectural state transition: User prune operational routine initialized",
@@ -295,7 +296,7 @@ func registerQOTDRuntimeService(runtime *botRuntime, opts botRuntimeOptions) err
 	}
 	if err := runtime.serviceManager.Register(qotdRuntimeService); err != nil {
 		errWrap := fmt.Errorf("register qotd runtime service for %s: %w", runtime.instanceID, err)
-		emitBlockingError("Blocking structural failure during QOTD runtime registration", errWrap, generateRequestID())
+		log.EmitBlockingError("Blocking structural failure during QOTD runtime registration", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
 	slog.Info("Architectural state transition: QOTD runtime initialized",
@@ -489,7 +490,7 @@ func shutdownBotRuntime(runtime *botRuntime, ctx context.Context) []error {
 	if runtime.serviceManager != nil {
 		if err := runtime.serviceManager.StopAll(ctx); err != nil {
 			errWrap := fmt.Errorf("stop services for %s: %w", runtime.instanceID, err)
-			emitBlockingError("Blocking structural failure during scheduled teardown sequence", errWrap, generateRequestID())
+			log.EmitBlockingError("Blocking structural failure during scheduled teardown sequence", errWrap, log.GenerateRequestID())
 			errs = append(errs, errWrap)
 		}
 	}

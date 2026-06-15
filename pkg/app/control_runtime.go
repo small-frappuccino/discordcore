@@ -14,6 +14,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/control/localtls"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
 const (
@@ -126,7 +127,7 @@ func resolveControlRuntime(ctx context.Context, opts RunOptions) (resolvedContro
 	tlsCertFile, tlsKeyFile, err := loadControlTLSFilesFromEnv()
 	if err != nil {
 		errWrap := fmt.Errorf("load control tls config: %w", err)
-		emitBlockingError("Blocking structural failure: Environmental TLS payload validation rejected", errWrap, generateRequestID())
+		log.EmitBlockingError("Blocking structural failure: Environmental TLS payload validation rejected", errWrap, log.GenerateRequestID())
 		return resolvedControlRuntime{}, errWrap
 	}
 
@@ -135,7 +136,7 @@ func resolveControlRuntime(ctx context.Context, opts RunOptions) (resolvedContro
 		ready, readyErr := prepareManagedLocalTLS(ctx, profile, publicOrigin, opts.Control.LocalHTTPS.AutoTrust)
 		if readyErr != nil {
 			errWrap := fmt.Errorf("%w: %w", errControlLocalTLSUnavailable, readyErr)
-			emitBlockingError("Blocking structural failure: Aborted generation of self-signed loopback TLS materials", errWrap, generateRequestID())
+			log.EmitBlockingError("Blocking structural failure: Aborted generation of self-signed loopback TLS materials", errWrap, log.GenerateRequestID())
 			return resolvedControlRuntime{}, errWrap
 		}
 		tlsCertFile = ready.CertFile
@@ -145,7 +146,7 @@ func resolveControlRuntime(ctx context.Context, opts RunOptions) (resolvedContro
 	oauthConfig, err := loadControlDiscordOAuthConfigFromEnv(publicOrigin)
 	if err != nil {
 		errWrap := fmt.Errorf("load control discord oauth config: %w", err)
-		emitBlockingError("Blocking structural failure: Validation of OAuth credentials against public origin aborted", errWrap, generateRequestID())
+		log.EmitBlockingError("Blocking structural failure: Validation of OAuth credentials against public origin aborted", errWrap, log.GenerateRequestID())
 		return resolvedControlRuntime{}, errWrap
 	}
 
@@ -162,7 +163,7 @@ func prepareManagedLocalTLS(ctx context.Context, profile RunProfile, publicOrigi
 	hostName, ipAddresses, err := localTLSSANs(profile, publicOrigin)
 	if err != nil {
 		errWrap := fmt.Errorf("resolve local tls sans: %w", err)
-		emitBlockingError("Blocking structural failure: Resolution of cryptographic Subject Alternate Names from host parameters failed", errWrap, generateRequestID())
+		log.EmitBlockingError("Blocking structural failure: Resolution of cryptographic Subject Alternate Names from host parameters failed", errWrap, log.GenerateRequestID())
 		return localtls.ReadyResult{}, errWrap
 	}
 

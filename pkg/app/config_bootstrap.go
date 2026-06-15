@@ -5,6 +5,7 @@ import (
 	"log/slog"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
 const (
@@ -33,7 +34,7 @@ func resolveDatabaseBootstrap() (resolvedDatabaseBootstrap, error) {
 		"postgres bootstrap config unavailable: set %s before startup",
 		databaseURLEnv,
 	)
-	emitBlockingError("Blocking structural failure: Database bootstrap configuration unavailable", err, generateRequestID())
+	log.EmitBlockingError("Blocking structural failure: Database bootstrap configuration unavailable", err, log.GenerateRequestID())
 	return resolvedDatabaseBootstrap{}, err
 }
 
@@ -76,7 +77,7 @@ func databaseBootstrapFromEnv() (files.DatabaseRuntimeConfig, bool) {
 func syncBootstrapDatabaseConfig(configManager *files.ConfigManager, cfg files.DatabaseRuntimeConfig) error {
 	if configManager == nil {
 		err := fmt.Errorf("config manager is nil")
-		emitBlockingError("Blocking structural failure: Config manager pointer evaluates to nil during database synchronization", err, generateRequestID())
+		log.EmitBlockingError("Blocking structural failure: Config manager pointer evaluates to nil during database synchronization", err, log.GenerateRequestID())
 		return err
 	}
 
@@ -92,7 +93,7 @@ func syncBootstrapDatabaseConfig(configManager *files.ConfigManager, cfg files.D
 	})
 	if err != nil {
 		errWrap := fmt.Errorf("persist runtime database config: %w", err)
-		emitBlockingError("Blocking structural failure: Unable to persist runtime database configuration", errWrap, generateRequestID())
+		log.EmitBlockingError("Blocking structural failure: Unable to persist runtime database configuration", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
 

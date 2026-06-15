@@ -10,11 +10,12 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordgo"
 )
 
-// generateRequestID cria um identificador único transiente para correlação de erros.
-func generateRequestID() string {
+// log.GenerateRequestID cria um identificador único transiente para correlação de erros.
+func GenerateRequestID() string {
 	bytes := make([]byte, 16)
 	if _, err := rand.Read(bytes); err != nil {
 		return "00000000000000000000000000000000"
@@ -22,8 +23,8 @@ func generateRequestID() string {
 	return hex.EncodeToString(bytes)
 }
 
-// emitBlockingError encapsula a emissão de falhas estruturais com metadados obrigatórios.
-func emitBlockingError(msg string, err error, requestID string) {
+// log.EmitBlockingError encapsula a emissão de falhas estruturais com metadados obrigatórios.
+func EmitBlockingError(msg string, err error, requestID string) {
 	slog.Error(msg,
 		slog.String("request_id", requestID),
 		slog.String("synthetic_code", "500"),
@@ -52,13 +53,13 @@ func NewConfigManagerWithStore(store ConfigStore) *ConfigManager {
 func (mgr *ConfigManager) LoadConfigFromStore() (*BotConfig, bool, error) {
 	if mgr.store == nil {
 		err := fmt.Errorf("config store não está configurado")
-		emitBlockingError("Falha na inicialização da leitura de configuração", err, generateRequestID())
+		log.EmitBlockingError("Falha na inicialização da leitura de configuração", err, log.GenerateRequestID())
 		return nil, false, err
 	}
 	cfg, err := mgr.store.Load()
 	if err != nil {
 		errWrap := fmt.Errorf("carregar configuração de %s: %w", mgr.ConfigPath(), err)
-		emitBlockingError("Falha estrutural no carregamento do arquivo", errWrap, generateRequestID())
+		log.EmitBlockingError("Falha estrutural no carregamento do arquivo", errWrap, log.GenerateRequestID())
 		return nil, false, errWrap
 	}
 
@@ -66,7 +67,7 @@ func (mgr *ConfigManager) LoadConfigFromStore() (*BotConfig, bool, error) {
 
 	if validationErr := validateBotConfig(cfg); validationErr != nil {
 		errWrap := wrapValidationError(validationErr)
-		emitBlockingError("Falha de validação da configuração carregada", errWrap, generateRequestID())
+		log.EmitBlockingError("Falha de validação da configuração carregada", errWrap, log.GenerateRequestID())
 		return nil, false, errWrap
 	}
 	return cfg, orderMigrated, nil
@@ -126,7 +127,7 @@ func (mgr *ConfigManager) LoadConfig() error {
 		)
 		if saveErr := mgr.SaveConfig(); saveErr != nil {
 			errWrap := fmt.Errorf("salvar configuração após normalização: %w", saveErr)
-			emitBlockingError("Falha ao gravar correções estruturais na configuração", errWrap, generateRequestID())
+			log.EmitBlockingError("Falha ao gravar correções estruturais na configuração", errWrap, log.GenerateRequestID())
 			return errWrap
 		}
 		slog.Info("Configuração re-persistida após normalização em tempo de execução",
@@ -149,7 +150,7 @@ func (mgr *ConfigManager) SaveConfig() error {
 
 	if err := mgr.saveConfigLocked(); err != nil {
 		errWrap := fmt.Errorf("ConfigManager.SaveConfig: %w", err)
-		emitBlockingError("Falha de persistência global bloqueante", errWrap, generateRequestID())
+		log.EmitBlockingError("Falha de persistência global bloqueante", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
 	mgr.publishSnapshotLocked()
@@ -202,7 +203,7 @@ func (mgr *ConfigManager) UpdateRuntimeConfig(fn func(*RuntimeConfig) error) (Ru
 	})
 	if err != nil {
 		errWrap := fmt.Errorf("ConfigManager.UpdateRuntimeConfig: %w", err)
-		emitBlockingError("Falha mutacional na configuração de runtime", errWrap, generateRequestID())
+		log.EmitBlockingError("Falha mutacional na configuração de runtime", errWrap, log.GenerateRequestID())
 		return RuntimeConfig{}, errWrap
 	}
 	return snapshot.RuntimeConfig, nil
@@ -383,7 +384,7 @@ func (mgr *ConfigManager) AddGuildConfig(guildCfg GuildConfig) error {
 	mgr.config = next
 	if _, err := mgr.rebuildGuildIndexLocked("add"); err != nil {
 		errWrap := fmt.Errorf("adicionar configuração de guilda: %w", err)
-		emitBlockingError("Falha crítica ao anexar configuração na árvore de estados", errWrap, generateRequestID())
+		log.EmitBlockingError("Falha crítica ao anexar configuração na árvore de estados", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
 	mgr.publishSnapshotLocked()
@@ -487,7 +488,7 @@ func (mgr *ConfigManager) DetectGuildsForBot(session *discordgo.Session, botInst
 		return nil
 	})
 	if err != nil {
-		emitBlockingError("Falha de atualização em bloco durante fase de detecção heurística", err, generateRequestID())
+		log.EmitBlockingError("Falha de atualização em bloco durante fase de detecção heurística", err, log.GenerateRequestID())
 	}
 	return err
 }
@@ -501,7 +502,7 @@ func (mgr *ConfigManager) RegisterGuild(session *discordgo.Session, guildID stri
 func (mgr *ConfigManager) RegisterGuildForBot(session *discordgo.Session, guildID, botInstanceID string) error {
 	if session == nil {
 		err := fmt.Errorf("%w: sessão do discord não está disponível", ErrGuildBootstrapDiscordFetch)
-		emitBlockingError("Estado corrompido em rotina de registro: Sessão nula", err, generateRequestID())
+		log.EmitBlockingError("Estado corrompido em rotina de registro: Sessão nula", err, log.GenerateRequestID())
 		return err
 	}
 	botInstanceID = NormalizeBotInstanceID(botInstanceID)
@@ -546,7 +547,7 @@ func (mgr *ConfigManager) RegisterGuildForBot(session *discordgo.Session, guildI
 		return nil
 	}); err != nil {
 		errWrap := fmt.Errorf("registrar guilda: salvar configuração: %w", err)
-		emitBlockingError("Falha bloqueante em rotina primária de injeção", errWrap, generateRequestID())
+		log.EmitBlockingError("Falha bloqueante em rotina primária de injeção", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
 

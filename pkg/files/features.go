@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+
+	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
 // FeatureServiceToggles holds optional overrides for runtime behavior.
@@ -105,7 +107,7 @@ func (ft *FeatureToggles) UnmarshalJSON(data []byte) error {
 
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		errWrap := fmt.Errorf("FeatureToggles.UnmarshalJSON: %w", err)
-		emitBlockingError("Falha estrutural bloqueante restrita ao escopo de desserialização do payload I/O", errWrap, generateRequestID())
+		log.EmitBlockingError("Falha estrutural bloqueante restrita ao escopo de desserialização do payload I/O", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
 	*ft = FeatureToggles(parsed)

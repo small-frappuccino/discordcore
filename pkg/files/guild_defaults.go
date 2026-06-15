@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+
+	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
 // NewMinimalGuildConfig returns a dormant guild record for automatic discovery.
@@ -38,7 +40,7 @@ func (mgr *ConfigManager) EnsureMinimalGuildConfig(guildID string) error {
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" {
 		err := fmt.Errorf("guild id is required")
-		emitBlockingError("Blocking structural failure: Guild configuration enforcement aborted due to null identifier", err, generateRequestID())
+		log.EmitBlockingError("Blocking structural failure: Guild configuration enforcement aborted due to null identifier", err, log.GenerateRequestID())
 		return err
 	}
 
@@ -66,7 +68,7 @@ func (mgr *ConfigManager) EnsureMinimalGuildConfig(guildID string) error {
 
 	if err != nil {
 		errWrap := fmt.Errorf("ensure minimal guild config for %s: %w", guildID, err)
-		emitBlockingError("Blocking structural failure: State mutation transaction rejected during guild enforcement", errWrap, generateRequestID())
+		log.EmitBlockingError("Blocking structural failure: State mutation transaction rejected during guild enforcement", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
 	return nil
