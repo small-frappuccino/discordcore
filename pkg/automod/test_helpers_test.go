@@ -12,7 +12,7 @@ func newTestConfigManager(t *testing.T) *files.ConfigManager {
 	return files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
 }
 
-func testSessionWithChannel(guildID, channelID, botID string, perms int64) *discordgo.Session {
+func testSessionWithChannel(t *testing.T, guildID, channelID, botID string, perms int64) *discordgo.Session {
 	state := discordgo.NewState()
 	state.User = &discordgo.User{ID: botID}
 
@@ -21,15 +21,21 @@ func testSessionWithChannel(guildID, channelID, botID string, perms int64) *disc
 		ID: guildID,
 		Roles: []*discordgo.Role{
 			{ID: roleID, Permissions: perms}}}
-	_ = state.GuildAdd(guild)
-	_ = state.ChannelAdd(&discordgo.Channel{
+	if err := state.GuildAdd(guild); err != nil {
+		t.Fatalf("GuildAdd failed: %v", err)
+	}
+	if err := state.ChannelAdd(&discordgo.Channel{
 		ID:      channelID,
 		GuildID: guildID,
-		Type:    discordgo.ChannelTypeGuildText})
-	_ = state.MemberAdd(&discordgo.Member{
+		Type:    discordgo.ChannelTypeGuildText}); err != nil {
+		t.Fatalf("ChannelAdd failed: %v", err)
+	}
+	if err := state.MemberAdd(&discordgo.Member{
 		GuildID: guildID,
 		User:    &discordgo.User{ID: botID},
-		Roles:   []string{roleID}})
+		Roles:   []string{roleID}}); err != nil {
+		t.Fatalf("MemberAdd failed: %v", err)
+	}
 
 	return &discordgo.Session{State: state}
 }

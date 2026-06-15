@@ -123,7 +123,7 @@ func TestAutomodHandleRawEvent_DedupsSecondEventWithSameSequence(t *testing.T) {
 		t.Fatalf("AddGuildConfig: %v", err)
 	}
 
-	session := testSessionWithChannel(guildID, channelID, botID, perms)
+	session := testSessionWithChannel(t, guildID, channelID, botID, perms)
 	session.Identify.Intents = discordgo.IntentAutoModerationExecution
 
 	cfg := task.RouterConfig{
@@ -204,7 +204,7 @@ func TestAutomodHandleRawEvent_CoalescesPerActionStream(t *testing.T) {
 		t.Fatalf("AddGuildConfig: %v", err)
 	}
 
-	session := testSessionWithChannel(guildID, channelID, botID, perms)
+	session := testSessionWithChannel(t, guildID, channelID, botID, perms)
 	session.Identify.Intents = discordgo.IntentAutoModerationExecution
 
 	cfg := task.RouterConfig{
@@ -295,7 +295,7 @@ func TestAutomodHandleRawEvent_DistinctViolationsBothRun(t *testing.T) {
 		t.Fatalf("AddGuildConfig: %v", err)
 	}
 
-	session := testSessionWithChannel(guildID, channelID, botID, perms)
+	session := testSessionWithChannel(t, guildID, channelID, botID, perms)
 	session.Identify.Intents = discordgo.IntentAutoModerationExecution
 
 	cfg := task.RouterConfig{
@@ -379,7 +379,7 @@ func TestAutomodHandleRawEvent_DropsSendAlertMessageEvents(t *testing.T) {
 		t.Fatalf("AddGuildConfig: %v", err)
 	}
 
-	session := testSessionWithChannel(guildID, channelID, botID, perms)
+	session := testSessionWithChannel(t, guildID, channelID, botID, perms)
 	session.Identify.Intents = discordgo.IntentAutoModerationExecution
 
 	cfg := task.RouterConfig{

@@ -125,7 +125,7 @@ type AutomodService struct {
 	dedupCache map[string]time.Time
 }
 
-// NewAutomodService news automod service.
+// NewAutomodService initializes a new AutoMod logging service for the given bot instance.
 func NewAutomodService(session *discordgo.Session, configManager *files.ConfigManager, botInstanceID string) *AutomodService {
 	return &AutomodService{
 		session:       session,
@@ -139,26 +139,26 @@ func (as *AutomodService) SetAdapters(adapters *task.NotificationAdapters) {
 	as.adapters = adapters
 }
 
-// Name returns the service name.
+// Name implements the service.Service interface.
 func (as *AutomodService) Name() string { return "automod" }
 
-// Type returns the service type.
+// Type implements the service.Service interface.
 func (as *AutomodService) Type() service.ServiceType { return service.TypeAutomod }
 
-// Priority returns the service startup priority.
+// Priority implements the service.Service interface.
 func (as *AutomodService) Priority() service.ServicePriority { return service.PriorityNormal }
 
-// Dependencies returns the dependencies.
+// Dependencies implements the service.Service interface.
 func (as *AutomodService) Dependencies() []string { return nil }
 
-// IsRunning reports whether the service is running.
+// IsRunning safely reports the current execution state of the service.
 func (as *AutomodService) IsRunning() bool {
 	as.mu.RLock()
 	defer as.mu.RUnlock()
 	return as.isRunning
 }
 
-// HealthCheck returns the current health status.
+// HealthCheck reports the operational status of the service.
 func (as *AutomodService) HealthCheck(ctx context.Context) service.HealthStatus {
 	return service.HealthStatus{
 		Healthy:   true,
@@ -167,7 +167,7 @@ func (as *AutomodService) HealthCheck(ctx context.Context) service.HealthStatus 
 	}
 }
 
-// Stats returns runtime statistics.
+// Stats provides runtime telemetry for the AutoMod service.
 func (as *AutomodService) Stats() service.ServiceStats {
 	as.mu.RLock()
 	defer as.mu.RUnlock()
@@ -186,7 +186,7 @@ func (as *AutomodService) Stats() service.ServiceStats {
 	}
 }
 
-// Start registers handlers.
+// Start binds the Discord gateway event handlers and initializes the dedup cache.
 func (as *AutomodService) Start(ctx context.Context) error {
 	as.mu.Lock()
 	defer as.mu.Unlock()
@@ -205,7 +205,7 @@ func (as *AutomodService) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop stops the service.
+// Stop deregisters gateway handlers and shuts down the notification router.
 func (as *AutomodService) Stop(ctx context.Context) error {
 	as.mu.Lock()
 	defer as.mu.Unlock()

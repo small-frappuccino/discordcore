@@ -24,7 +24,7 @@ func TestShouldEmitLogEventAutomodActionToggles(t *testing.T) {
 		t.Fatalf("AddGuildConfig: %v", err)
 	}
 
-	session := testSessionWithChannel(guildID, channelID, botID, perms)
+	session := testSessionWithChannel(t, guildID, channelID, botID, perms)
 	session.Identify.Intents = discordgo.IntentAutoModerationExecution
 
 	decision := logpolicy.ShouldEmitLogEvent(session, cm, logpolicy.LogEventAutomodAction, guildID)
@@ -85,7 +85,7 @@ func TestShouldEmitLogEventAutomodActionChannelResolution(t *testing.T) {
 			t.Fatalf("AddGuildConfig: %v", err)
 		}
 
-		session := testSessionWithChannel(guildID, automodChannelID, botID, perms)
+		session := testSessionWithChannel(t, guildID, automodChannelID, botID, perms)
 		session.Identify.Intents = discordgo.IntentAutoModerationExecution
 		decision := logpolicy.ShouldEmitLogEvent(session, cm, logpolicy.LogEventAutomodAction, guildID)
 		if !decision.Enabled {
@@ -105,7 +105,7 @@ func TestShouldEmitLogEventAutomodActionChannelResolution(t *testing.T) {
 			t.Fatalf("AddGuildConfig: %v", err)
 		}
 
-		session := testSessionWithChannel(guildID, "c-other", botID, perms)
+		session := testSessionWithChannel(t, guildID, "c-other", botID, perms)
 		session.Identify.Intents = discordgo.IntentAutoModerationExecution
 		decision := logpolicy.ShouldEmitLogEvent(session, cm, logpolicy.LogEventAutomodAction, guildID)
 		if decision.Enabled {
