@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/joho/godotenv"
@@ -12,7 +13,7 @@ import (
 	discordcommands "github.com/small-frappuccino/discordcore/pkg/discord/commands"
 )
 
-// MainRuntimeAppName defines main runtime app name.
+// MainRuntimeAppName is the canonical identifier for the primary Discord bot process.
 const (
 	MainRuntimeAppName = "discordmain"
 )
@@ -29,7 +30,8 @@ type Spec struct {
 // It is the injection seam that lets Run be tested without a live runtime.
 type Runner func(appName string, opts discordcoreapp.RunOptions) error
 
-// Run runs.
+// Run parses CLI flags, attempts to load a local .env file from the system PATH,
+// and invokes the provided runner with the resolved execution options.
 func Run(args []string, output io.Writer, spec Spec, runner Runner) error {
 	fs := flag.NewFlagSet(spec.CommandName, flag.ContinueOnError)
 	fs.SetOutput(output)
@@ -37,14 +39,22 @@ func Run(args []string, output io.Writer, spec Spec, runner Runner) error {
 		return fmt.Errorf("Run: %w", err)
 	}
 
-	// Tenta carregar as variáveis de ambiente localmente caso o arquivo .env exista
-	home, err := os.UserHomeDir()
-	if err == nil {
-		if len(home) >= 2 && home[1] == ':' {
-			home = "D:" + home[2:]
+	pathEnv := os.Getenv("PATH")
+	if pathEnv == "" {
+		pathEnv = os.Getenv("Path")
+	}
+	for _, dir := range strings.Split(pathEnv, string(os.PathListSeparator)) {
+		dir = strings.TrimSpace(dir)
+		if dir == "" {
+			continue
 		}
-		home = strings.Replace(home, "enzok", "smallfrappuccino", 1)
-		_ = godotenv.Load(home + `\.local\bin\.env`)
+		envPath := filepath.Join(dir, ".env")
+		if _, err := os.Stat(envPath); err == nil {
+			if err := godotenv.Load(envPath); err != nil {
+				return fmt.Errorf("failed to load .env from PATH (%s): %w", envPath, err)
+			}
+			break
+		}
 	}
 
 	discordcoreapp.SetAppVersion(discordcoreapp.Version)
@@ -55,7 +65,7 @@ func Run(args []string, output io.Writer, spec Spec, runner Runner) error {
 	return nil
 }
 
-// MainSpec mains spec.
+// MainSpec constructs the execution specification for the primary bot process.
 func MainSpec(commandName string) Spec {
 	return Spec{
 		CommandName:     commandName,
