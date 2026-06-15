@@ -649,8 +649,5 @@ func logConfiguredGuildSubset(configManager *ConfigManager, session *discordgo.S
 			errCount++
 		}
 	}
-	if errCount > 0 {
-		return fmt.Errorf(ErrGuildsNotAccessible, errCount)
-	}
 	return nil
 }

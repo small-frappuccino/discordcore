@@ -233,6 +233,12 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 	}
 
 	// 5. Trigger dynamic command syncs for feature changes
+	type syncTask struct {
+		guildID   string
+		instances []string
+	}
+	var syncTasks []syncTask
+
 	if oldCfg != nil {
 		for _, newGuild := range newCfg.Guilds {
 			var oldGuild *files.GuildConfig
@@ -242,47 +248,30 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 					break
 				}
 			}
+
+			needsSync := false
 			if oldGuild == nil {
-				continue
-			}
-			if !reflect.DeepEqual(oldGuild.FeatureRouting, newGuild.FeatureRouting) ||
+				needsSync = true
+			} else if !reflect.DeepEqual(oldGuild.FeatureRouting, newGuild.FeatureRouting) ||
 				!reflect.DeepEqual(oldGuild.Features, newGuild.Features) ||
 				!reflect.DeepEqual(oldGuild.BotInstanceTokens, newGuild.BotInstanceTokens) ||
 				!reflect.DeepEqual(oldGuild.BotInstanceStatuses, newGuild.BotInstanceStatuses) {
+				needsSync = true
+			}
 
-				guildID := newGuild.GuildID
+			if needsSync {
 				var activeInstances []string
 				for instanceID, token := range newGuild.BotInstanceTokens {
 					if string(token) != "" {
 						activeInstances = append(activeInstances, instanceID)
 					}
 				}
-
-				s.bgWG.Add(1)
-				go func(gID string, instances []string) {
-					defer s.bgWG.Done()
-					// Small debounce jitter
-					time.Sleep(time.Duration(rand.Float64()*500) * time.Millisecond)
-
-					currentRuntimes := s.resolver.getRuntimes()
-					for _, instanceID := range instances {
-						runtime, ok := currentRuntimes[instanceID]
-						if !ok || runtime == nil || runtime.commandHandler == nil {
-							continue
-						}
-						if cm := runtime.commandHandler.GetCommandManager(); cm != nil {
-							if syncErr := cm.SyncGuildCommands(gID); syncErr != nil {
-								if strings.Contains(syncErr.Error(), "403") {
-									log.ApplicationLogger().Warn("dynamic command sync forbidden (missing scope?)", "guildID", gID, "botInstanceID", instanceID, "error", syncErr)
-								} else {
-									log.ApplicationLogger().Error("failed dynamic guild command sync", "guildID", gID, "botInstanceID", instanceID, "error", syncErr)
-								}
-							} else {
-								log.ApplicationLogger().Info("Completed dynamic guild command sync", "guildID", gID, "botInstanceID", instanceID)
-							}
-						}
-					}
-				}(guildID, activeInstances)
+				if len(activeInstances) > 0 {
+					syncTasks = append(syncTasks, syncTask{
+						guildID:   newGuild.GuildID,
+						instances: activeInstances,
+					})
+				}
 			}
 		}
 	}
@@ -290,6 +279,34 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 	go func() {
 		startWG.Wait()
 		s.resolver.markReady()
+
+		for _, task := range syncTasks {
+			s.bgWG.Add(1)
+			go func(gID string, instances []string) {
+				defer s.bgWG.Done()
+				// Small debounce jitter
+				time.Sleep(time.Duration(rand.Float64()*500) * time.Millisecond)
+
+				currentRuntimes := s.resolver.getRuntimes()
+				for _, instanceID := range instances {
+					runtime, ok := currentRuntimes[instanceID]
+					if !ok || runtime == nil || runtime.commandHandler == nil {
+						continue
+					}
+					if cm := runtime.commandHandler.GetCommandManager(); cm != nil {
+						if syncErr := cm.SyncGuildCommands(gID); syncErr != nil {
+							if strings.Contains(syncErr.Error(), "403") {
+								log.ApplicationLogger().Warn("dynamic command sync forbidden (missing scope?)", "guildID", gID, "botInstanceID", instanceID, "error", syncErr)
+							} else {
+								log.ApplicationLogger().Error("failed dynamic guild command sync", "guildID", gID, "botInstanceID", instanceID, "error", syncErr)
+							}
+						} else {
+							log.ApplicationLogger().Info("Completed dynamic guild command sync", "guildID", gID, "botInstanceID", instanceID)
+						}
+					}
+				}
+			}(task.guildID, task.instances)
+		}
 	}()
 }
 
