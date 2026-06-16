@@ -71,11 +71,9 @@ func TestStatsServiceHandlesGuild(t *testing.T) {
 					},
 					StatsChannels: testBoolPtr(true),
 				},
-				Stats: files.StatsConfig{
-					Enabled: true,
-					Channels: []files.StatsChannelConfig{
-						{ChannelID: "c1"},
-					},
+				Stats: files.StatsConfig{Channels: []files.StatsChannelConfig{
+					{ChannelID: "c1"},
+				},
 				},
 			},
 			{
@@ -92,11 +90,9 @@ func TestStatsServiceHandlesGuild(t *testing.T) {
 					},
 					StatsChannels: testBoolPtr(true),
 				},
-				Stats: files.StatsConfig{
-					Enabled: true,
-					Channels: []files.StatsChannelConfig{
-						{ChannelID: "c2"},
-					},
+				Stats: files.StatsConfig{Channels: []files.StatsChannelConfig{
+					{ChannelID: "c2"},
+				},
 				},
 			},
 			{
@@ -110,11 +106,9 @@ func TestStatsServiceHandlesGuild(t *testing.T) {
 					},
 					StatsChannels: testBoolPtr(true),
 				},
-				Stats: files.StatsConfig{
-					Enabled: true,
-					Channels: []files.StatsChannelConfig{
-						{ChannelID: "c3"},
-					},
+				Stats: files.StatsConfig{Channels: []files.StatsChannelConfig{
+					{ChannelID: "c3"},
+				},
 				},
 			},
 		}

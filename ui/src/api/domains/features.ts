@@ -48,7 +48,6 @@ export interface FeatureDetails {
   start_day?: string;
   initial_date?: string;
   config_enabled?: boolean;
-  update_interval_mins?: number;
   configured_channel_count?: number;
   channels?: FeatureStatsChannelDetail[];
   target_role_id?: string;
@@ -118,7 +117,6 @@ export interface FeaturePatchPayload {
   start_day?: string;
   initial_date?: string;
   config_enabled?: boolean;
-  update_interval_mins?: number;
   target_role_id?: string;
   required_role_ids?: string[];
   grace_days?: number;

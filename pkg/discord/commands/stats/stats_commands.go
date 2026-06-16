@@ -3,7 +3,6 @@ package stats
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/diamondburned/arikawa/v3/api"
@@ -65,7 +64,6 @@ func (c *statsRootCommand) DefaultMemberPermissions() discord.Permissions {
 }
 
 func (c *statsRootCommand) Options() []discord.CommandOption {
-	minInterval := 5.0
 	return []discord.CommandOption{
 		&discord.SubcommandOption{
 			OptionName:  "add",
@@ -94,11 +92,6 @@ func (c *statsRootCommand) Options() []discord.CommandOption {
 					Description: "The exact name/prefix to use (e.g. '☆ Members ☆ : ')",
 					Required:    false,
 				},
-				&discord.StringOption{
-					OptionName:  "name_template",
-					Description: "Template for the channel name (e.g. 'Members: {count}')",
-					Required:    false,
-				},
 				&discord.RoleOption{
 					OptionName:  "role_filter",
 					Description: "Only count members with this role",
@@ -123,18 +116,6 @@ func (c *statsRootCommand) Options() []discord.CommandOption {
 		&discord.SubcommandOption{
 			OptionName:  "list",
 			Description: "List all configured stats channels",
-		},
-		&discord.SubcommandOption{
-			OptionName:  "settings",
-			Description: "Configure global stats settings",
-			Options: []discord.CommandOptionValue{
-				&discord.NumberOption{
-					OptionName:  "interval",
-					Description: "Update interval in minutes (min 5)",
-					Required:    true,
-					Min:         option.NewFloat(minInterval),
-				},
-			},
 		},
 	}
 }
@@ -180,8 +161,6 @@ func (c *statsRootCommand) Handle(ctx *core.ArikawaContext) error {
 		return c.handleRemove(ctx, subcommand.Options)
 	case "list":
 		return c.handleList(ctx)
-	case "settings":
-		return c.handleSettings(ctx, subcommand.Options)
 	}
 	return nil
 }
@@ -202,14 +181,13 @@ func (c *statsRootCommand) handleAdd(ctx *core.ArikawaContext, opts []discord.Co
 	if memberType == "" {
 		memberType = "all"
 	}
-	nameTemplate := parsedOpts.String("name_template")
 	label := parsedOpts.String("label")
 
 	err := c.configManager.UpdateGuildConfig(ctx.GuildID.String(), func(cfg *files.GuildConfig) error {
 		for i, ch := range cfg.Stats.Channels {
 			if ch.ChannelID == channelID {
 				cfg.Stats.Channels[i].MemberType = memberType
-				cfg.Stats.Channels[i].NameTemplate = nameTemplate
+				cfg.Stats.Channels[i].NameTemplate = "" // clear it in case it was previously set
 				cfg.Stats.Channels[i].RoleID = roleFilter
 				cfg.Stats.Channels[i].Label = label
 				return nil
@@ -217,11 +195,10 @@ func (c *statsRootCommand) handleAdd(ctx *core.ArikawaContext, opts []discord.Co
 		}
 
 		cfg.Stats.Channels = append(cfg.Stats.Channels, files.StatsChannelConfig{
-			ChannelID:    channelID,
-			Label:        label,
-			MemberType:   memberType,
-			NameTemplate: nameTemplate,
-			RoleID:       roleFilter,
+			ChannelID:  channelID,
+			Label:      label,
+			MemberType: memberType,
+			RoleID:     roleFilter,
 		})
 		return nil
 	})
@@ -327,25 +304,13 @@ func (c *statsRootCommand) handleList(ctx *core.ArikawaContext) error {
 		if ch.RoleID != "" {
 			filterStr += fmt.Sprintf(" (Role: <@&%s>)", ch.RoleID)
 		}
-		templateStr := ch.NameTemplate
-		if templateStr == "" {
-			templateStr = "{label}{count}"
-		}
-
 		buf.WriteString("• <#")
 		buf.WriteString(ch.ChannelID)
 		buf.WriteString(">\n  Label: `")
 		buf.WriteString(ch.Label)
 		buf.WriteString("`\n  Filter: ")
 		buf.WriteString(filterStr)
-		buf.WriteString("\n  Template: `")
-		buf.WriteString(templateStr)
-		buf.WriteString("`\n\n")
-	}
-
-	interval := cfg.Stats.UpdateIntervalMins
-	if interval <= 0 {
-		interval = 30
+		buf.WriteString("\n\n")
 	}
 
 	embed := discord.Embed{
@@ -353,68 +318,12 @@ func (c *statsRootCommand) handleList(ctx *core.ArikawaContext) error {
 		Description: buf.String(),
 		Color:       0x5865F2, // Discord Blurple
 		Footer: &discord.EmbedFooter{
-			Text: "Update Interval: " + strconv.Itoa(int(interval)) + " minutes",
+			Text: "Updates every 5 minutes",
 		},
 	}
 
 	return ctx.Respond(api.InteractionResponseData{
 		Embeds: &[]discord.Embed{embed},
 		Flags:  discord.EphemeralMessage,
-	})
-}
-
-func (c *statsRootCommand) handleSettings(ctx *core.ArikawaContext, opts []discord.CommandInteractionOption) error {
-	if err := c.ensureStatsEnabled(ctx); err != nil {
-		return err
-	}
-
-	parsedOpts := core.ArikawaOptionList(opts)
-	interval := parsedOpts.Float("update_interval_mins")
-	if interval == 0 {
-		interval = parsedOpts.Float("interval")
-	}
-
-	if len(opts) == 0 {
-		cfg := ctx.Config.GuildConfig(ctx.GuildID.String())
-		status := "Disabled"
-		if cfg.Stats.Enabled {
-			status = "Enabled"
-		}
-		currInterval := cfg.Stats.UpdateIntervalMins
-		if currInterval == 0 {
-			currInterval = 30
-		}
-
-		return ctx.Respond(api.InteractionResponseData{
-			Content: option.NewNullableString("Stats Channels: **" + status + "**\nUpdate Interval: **" + strconv.Itoa(currInterval) + " minutes**"),
-			Flags:   discord.EphemeralMessage,
-		})
-	}
-
-	if interval < 5 {
-		interval = 5
-	}
-
-	err := c.configManager.UpdateGuildConfig(ctx.GuildID.String(), func(cfg *files.GuildConfig) error {
-		cfg.Stats.UpdateIntervalMins = int(interval)
-		return nil
-	})
-
-	if err != nil {
-		return err
-	}
-
-	if c.logger != nil {
-		c.logger.Debug("Updated stats update interval",
-			slog.String("guild_id", ctx.GuildID.String()),
-			slog.Float64("interval_mins", interval),
-		)
-	}
-
-	go c.statsService.UpdateStatsChannels(context.Background())
-
-	return ctx.Respond(api.InteractionResponseData{
-		Content: option.NewNullableString("Stats update interval set to **" + strconv.Itoa(int(interval)) + " minutes**."),
-		Flags:   discord.EphemeralMessage,
 	})
 }

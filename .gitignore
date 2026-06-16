@@ -33,3 +33,4 @@ tmp/
 /bun.lockb
 /package.json
 /package-lock.json
+/scratch

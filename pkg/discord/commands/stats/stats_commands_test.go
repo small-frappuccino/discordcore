@@ -24,7 +24,6 @@ func TestStatsAddPersistsChannelConfig(t *testing.T) {
 	handleRawStatsInteraction(t, router, cm, rec, newStatsSlashInteraction(guildID, ownerID, "add", []discord.CommandInteractionOption{
 		{Name: "channel", Type: discord.ChannelOptionType, Value: []byte(`"111111111"`)},
 		{Name: "type", Type: discord.StringOptionType, Value: []byte(`"humans"`)},
-		{Name: "name_template", Type: discord.StringOptionType, Value: []byte(`"Members: {count}"`)},
 	}))
 
 	resp := rec.lastResponse(t)
@@ -38,7 +37,7 @@ func TestStatsAddPersistsChannelConfig(t *testing.T) {
 		t.Fatalf("expected 1 stats channel config, got %d", len(cfg.Stats.Channels))
 	}
 	ch := cfg.Stats.Channels[0]
-	if ch.ChannelID != "111111111" || ch.MemberType != "humans" || ch.NameTemplate != "Members: {count}" {
+	if ch.ChannelID != "111111111" || ch.MemberType != "humans" || ch.NameTemplate != "" {
 		t.Fatalf("unexpected persisted channel config: %+v", ch)
 	}
 
@@ -68,7 +67,6 @@ func TestStatsAddUpdatesExistingChannelConfig(t *testing.T) {
 	handleRawStatsInteraction(t, router, cm, rec, newStatsSlashInteraction(guildID, ownerID, "add", []discord.CommandInteractionOption{
 		{Name: "channel", Type: discord.ChannelOptionType, Value: []byte(`"111111111"`)},
 		{Name: "type", Type: discord.StringOptionType, Value: []byte(`"bots"`)},
-		{Name: "name_template", Type: discord.StringOptionType, Value: []byte(`"Bots: {count}"`)},
 	}))
 
 	resp := rec.lastResponse(t)
@@ -79,7 +77,7 @@ func TestStatsAddUpdatesExistingChannelConfig(t *testing.T) {
 		t.Fatalf("expected existing channel to be updated in-place, got %d channels", len(cfg.Stats.Channels))
 	}
 	ch := cfg.Stats.Channels[0]
-	if ch.MemberType != "bots" || ch.NameTemplate != "Bots: {count}" {
+	if ch.MemberType != "bots" || ch.NameTemplate != "" {
 		t.Fatalf("expected channel config to be updated, got %+v", ch)
 	}
 }
@@ -192,9 +190,8 @@ func TestStatsListShowsConfiguredChannels(t *testing.T) {
 			StatsChannels: testBoolPtr(true),
 		},
 		Stats: files.StatsConfig{
-			UpdateIntervalMins: 60,
 			Channels: []files.StatsChannelConfig{
-				{ChannelID: "voice-total", MemberType: "all", NameTemplate: "Total: {count}"},
+				{ChannelID: "voice-total", MemberType: "all", Label: "Total: "},
 				{ChannelID: "voice-bots", MemberType: "bots"},
 			},
 		},
@@ -216,7 +213,7 @@ func TestStatsListShowsConfiguredChannels(t *testing.T) {
 	if !strings.Contains(embed.Description, "Bots Only") {
 		t.Fatalf("expected embed to show filter label for bots, got %q", embed.Description)
 	}
-	if embed.Footer == nil || !strings.Contains(embed.Footer.Text, "60") {
+	if embed.Footer == nil || !strings.Contains(embed.Footer.Text, "5 minutes") {
 		t.Fatalf("expected footer to include update interval, got %+v", embed.Footer)
 	}
 }
@@ -272,71 +269,6 @@ func TestStatsListShowsRoleFilter(t *testing.T) {
 	}
 }
 
-func TestStatsSettingsShowsCurrentWhenNoOptionProvided(t *testing.T) {
-	const (
-		guildID = "123456789"
-		ownerID = "987654321"
-	)
-
-	router, cm, _, rec := newStatsCommandTestRouter(t, guildID, ownerID, files.GuildConfig{
-		GuildID: guildID,
-		Features: files.FeatureToggles{
-			StatsChannels: testBoolPtr(true),
-		},
-		Stats: files.StatsConfig{
-			Enabled:            true,
-			UpdateIntervalMins: 45,
-		},
-	})
-
-	handleRawStatsInteraction(t, router, cm, rec, newStatsSlashInteraction(guildID, ownerID, "settings", nil))
-
-	resp := rec.lastResponse(t)
-	requireEphemeralResponse(t, resp)
-	if !strings.Contains(resp.Data.Content.Val, "Enabled") {
-		t.Fatalf("expected current enabled status, got %q", resp.Data.Content.Val)
-	}
-	if !strings.Contains(resp.Data.Content.Val, "45") {
-		t.Fatalf("expected current interval value, got %q", resp.Data.Content.Val)
-	}
-}
-
-func TestStatsSettingsUpdatesInterval(t *testing.T) {
-	const (
-		guildID = "123456789"
-		ownerID = "987654321"
-	)
-
-	router, cm, mockSvc, rec := newStatsCommandTestRouter(t, guildID, ownerID, files.GuildConfig{
-		GuildID: guildID,
-		Features: files.FeatureToggles{
-			StatsChannels: testBoolPtr(true),
-		},
-		Stats: files.StatsConfig{
-			UpdateIntervalMins: 30,
-		},
-	})
-
-	handleRawStatsInteraction(t, router, cm, rec, newStatsSlashInteraction(guildID, ownerID, "settings", []discord.CommandInteractionOption{
-		{Name: "update_interval_mins", Type: discord.IntegerOptionType, Value: []byte(`60`)},
-	}))
-
-	resp := rec.lastResponse(t)
-	requireEphemeralResponse(t, resp)
-	if !strings.Contains(resp.Data.Content.Val, "Stats update interval set") {
-		t.Fatalf("expected success confirmation, got %q", resp.Data.Content.Val)
-	}
-
-	cfg := cm.GuildConfig(guildID)
-	if cfg.Stats.UpdateIntervalMins != 60 {
-		t.Fatalf("expected interval persisted as 60, got %d", cfg.Stats.UpdateIntervalMins)
-	}
-
-	if !mockSvc.wasUpdateCalled() {
-		t.Fatalf("expected UpdateStatsChannels to be called")
-	}
-}
-
 func TestStatsCommandsRejectWhenFeatureDisabled(t *testing.T) {
 	const (
 		guildID = "123456789"
@@ -361,7 +293,6 @@ func TestStatsCommandsRejectWhenFeatureDisabled(t *testing.T) {
 			{Name: "channel", Type: discord.ChannelOptionType, Value: []byte(`"111111111"`)},
 		}},
 		{"list", nil},
-		{"settings", nil},
 	}
 
 	for _, sc := range subcommands {
@@ -373,34 +304,5 @@ func TestStatsCommandsRejectWhenFeatureDisabled(t *testing.T) {
 				t.Fatalf("expected disabled error for /%s %s, got %q", "stats", sc.name, resp.Data.Content.Val)
 			}
 		})
-	}
-}
-
-func TestStatsSettingsShowsDefaultIntervalWhenZero(t *testing.T) {
-	const (
-		guildID = "123456789"
-		ownerID = "987654321"
-	)
-
-	router, cm, _, rec := newStatsCommandTestRouter(t, guildID, ownerID, files.GuildConfig{
-		GuildID: guildID,
-		Features: files.FeatureToggles{
-			StatsChannels: testBoolPtr(true),
-		},
-		Stats: files.StatsConfig{
-			Enabled:            false,
-			UpdateIntervalMins: 0,
-		},
-	})
-
-	handleRawStatsInteraction(t, router, cm, rec, newStatsSlashInteraction(guildID, ownerID, "settings", nil))
-
-	resp := rec.lastResponse(t)
-	requireEphemeralResponse(t, resp)
-	if !strings.Contains(resp.Data.Content.Val, "Disabled") {
-		t.Fatalf("expected disabled status, got %q", resp.Data.Content.Val)
-	}
-	if !strings.Contains(resp.Data.Content.Val, "30") {
-		t.Fatalf("expected default 30 minute interval when zero, got %q", resp.Data.Content.Val)
 	}
 }

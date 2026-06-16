@@ -314,9 +314,7 @@ func cloneAutoAssignmentConfig(in AutoAssignmentConfig) AutoAssignmentConfig {
 
 func cloneStatsConfig(in StatsConfig) StatsConfig {
 	return StatsConfig{
-		Enabled:            in.Enabled,
-		UpdateIntervalMins: in.UpdateIntervalMins,
-		Channels:           cloneStatsChannelConfigs(in.Channels),
+		Channels: cloneStatsChannelConfigs(in.Channels),
 	}
 }
 

@@ -51,11 +51,9 @@ func TestReconcileGuild(t *testing.T) {
 				Features: files.FeatureToggles{
 					StatsChannels: testBoolPtr(true),
 				},
-				Stats: files.StatsConfig{
-					Enabled: true,
-					Channels: []files.StatsChannelConfig{
-						{ChannelID: "c1"},
-					},
+				Stats: files.StatsConfig{Channels: []files.StatsChannelConfig{
+					{ChannelID: "c1"},
+				},
 				},
 			},
 		}
@@ -118,11 +116,9 @@ func TestReconcileAllGuilds(t *testing.T) {
 				Features: files.FeatureToggles{
 					StatsChannels: testBoolPtr(true),
 				},
-				Stats: files.StatsConfig{
-					Enabled: true,
-					Channels: []files.StatsChannelConfig{
-						{ChannelID: "c1"},
-					},
+				Stats: files.StatsConfig{Channels: []files.StatsChannelConfig{
+					{ChannelID: "c1"},
+				},
 				},
 			},
 		}

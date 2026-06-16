@@ -169,9 +169,6 @@ var featureReadinessCheckers = map[string]func(readinessInput) (string, []featur
 	},
 	"stats_channels": func(in readinessInput) (string, []featureBlocker) {
 		return withGuildSettings(in.cfg, in.guildID, func(guild files.GuildConfig) (string, []featureBlocker) {
-			if !guild.Stats.Enabled {
-				return "blocked", []featureBlocker{{Code: "config_disabled", Message: "Stats channel config is disabled.", Field: "config_enabled"}}
-			}
 			if len(guild.Stats.Channels) == 0 {
 				return "blocked", []featureBlocker{{Code: "missing_channels", Message: "Stats channels need at least one configured target."}}
 			}

@@ -220,7 +220,6 @@ func TestGuildFeaturePatchPersistsConfigDetails(t *testing.T) {
 		{path: "/v1/guilds/g1/features/presence_watch.user", payload: map[string]any{"user_id": "user-42"}},
 		{path: "/v1/guilds/g1/features/safety.bot_role_perm_mirror", payload: map[string]any{"actor_role_id": "actor-7"}},
 		{path: "/v1/guilds/g1/features/backfill.enabled", payload: map[string]any{"channel_id": "backfill-channel", "start_day": "2026-03-10", "initial_date": "2026-03-01"}},
-		{path: "/v1/guilds/g1/features/stats_channels", payload: map[string]any{"config_enabled": false, "update_interval_mins": 15}},
 		{path: "/v1/guilds/g1/features/auto_role_assignment", payload: map[string]any{"config_enabled": true, "target_role_id": "target-role", "required_role_ids": []string{"level-role", "booster-role"}}},
 		{path: "/v1/guilds/g1/features/user_prune", payload: map[string]any{"config_enabled": true}},
 	}
@@ -284,8 +283,8 @@ func TestGuildFeaturePatchPersistsConfigDetails(t *testing.T) {
 	if guild.Channels.EntryBackfill != "backfill-channel" || guild.RuntimeConfig.BackfillStartDay != "2026-03-10" || guild.RuntimeConfig.BackfillInitialDate != "2026-03-01" {
 		t.Fatalf("expected backfill settings persisted, got channels=%+v runtime=%+v", guild.Channels, guild.RuntimeConfig)
 	}
-	if guild.Stats.Enabled || guild.Stats.UpdateIntervalMins != 15 {
-		t.Fatalf("expected stats settings persisted, got %+v", guild.Stats)
+	if len(guild.Stats.Channels) != 0 {
+		t.Fatalf("expected stats channel modification to not apply via this route, got len %d", len(guild.Stats.Channels))
 	}
 	if !guild.Roles.AutoAssignment.Enabled || guild.Roles.AutoAssignment.TargetRoleID != "target-role" {
 		t.Fatalf("expected auto assignment persisted, got %+v", guild.Roles.AutoAssignment)
@@ -748,8 +747,6 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 		srv, cm := newControlTestServer(t)
 		_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
 			cfg.Guilds[0].Features.StatsChannels = testBoolPtr(true)
-			cfg.Guilds[0].Stats.Enabled = true
-			cfg.Guilds[0].Stats.UpdateIntervalMins = 45
 			cfg.Guilds[0].Stats.Channels = []files.StatsChannelConfig{
 				{
 					ChannelID:    "stats-total",
@@ -780,12 +777,6 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 		}
 		if response.Feature.Details == nil {
 			t.Fatalf("expected stats details, got nil")
-		}
-		if !response.Feature.Details.ConfigEnabled {
-			t.Fatalf("expected config_enabled detail, got %+v", response.Feature.Details)
-		}
-		if response.Feature.Details.UpdateIntervalMins != 45 {
-			t.Fatalf("expected update_interval_mins detail, got %+v", response.Feature.Details)
 		}
 		if response.Feature.Details.ConfiguredChannelCount != 2 {
 			t.Fatalf("expected configured_channel_count detail, got %+v", response.Feature.Details)

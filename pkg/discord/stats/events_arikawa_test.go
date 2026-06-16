@@ -104,7 +104,7 @@ func TestHandleArikawaGuildMemberAdd(t *testing.T) {
 
 	cm := newTestConfigManager(t)
 	_, _ = cm.UpdateConfig(func(cfg *files.BotConfig) error {
-		cfg.Guilds = []files.GuildConfig{{GuildID: "456", BotInstanceTokens: map[string]files.EncryptedString{"test": "token"}, FeatureRouting: map[string]string{"stats": "test"}, Features: files.FeatureToggles{StatsChannels: testBoolPtr(true)}, Stats: files.StatsConfig{Enabled: true, Channels: []files.StatsChannelConfig{{ChannelID: "c1"}}}}}
+		cfg.Guilds = []files.GuildConfig{{GuildID: "456", BotInstanceTokens: map[string]files.EncryptedString{"test": "token"}, FeatureRouting: map[string]string{"stats": "test"}, Features: files.FeatureToggles{StatsChannels: testBoolPtr(true)}, Stats: files.StatsConfig{Channels: []files.StatsChannelConfig{{ChannelID: "c1"}}}}}
 		return nil
 	})
 
@@ -141,7 +141,7 @@ func TestHandleArikawaGuildMemberRemove(t *testing.T) {
 	defer cleanup()
 	cm := newTestConfigManager(t)
 	_, _ = cm.UpdateConfig(func(cfg *files.BotConfig) error {
-		cfg.Guilds = []files.GuildConfig{{GuildID: "456", BotInstanceTokens: map[string]files.EncryptedString{"test": "token"}, FeatureRouting: map[string]string{"stats": "test"}, Features: files.FeatureToggles{StatsChannels: testBoolPtr(true)}, Stats: files.StatsConfig{Enabled: true, Channels: []files.StatsChannelConfig{{ChannelID: "c1"}}}}}
+		cfg.Guilds = []files.GuildConfig{{GuildID: "456", BotInstanceTokens: map[string]files.EncryptedString{"test": "token"}, FeatureRouting: map[string]string{"stats": "test"}, Features: files.FeatureToggles{StatsChannels: testBoolPtr(true)}, Stats: files.StatsConfig{Channels: []files.StatsChannelConfig{{ChannelID: "c1"}}}}}
 		return nil
 	})
 
@@ -171,7 +171,7 @@ func TestHandleArikawaGuildMemberUpdate(t *testing.T) {
 	defer cleanup()
 	cm := newTestConfigManager(t)
 	_, _ = cm.UpdateConfig(func(cfg *files.BotConfig) error {
-		cfg.Guilds = []files.GuildConfig{{GuildID: "456", BotInstanceTokens: map[string]files.EncryptedString{"test": "token"}, FeatureRouting: map[string]string{"stats": "test"}, Features: files.FeatureToggles{StatsChannels: testBoolPtr(true)}, Stats: files.StatsConfig{Enabled: true, Channels: []files.StatsChannelConfig{{ChannelID: "c1"}}}}}
+		cfg.Guilds = []files.GuildConfig{{GuildID: "456", BotInstanceTokens: map[string]files.EncryptedString{"test": "token"}, FeatureRouting: map[string]string{"stats": "test"}, Features: files.FeatureToggles{StatsChannels: testBoolPtr(true)}, Stats: files.StatsConfig{Channels: []files.StatsChannelConfig{{ChannelID: "c1"}}}}}
 		return nil
 	})
 

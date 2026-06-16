@@ -251,8 +251,6 @@ var featureDetailBuilders = map[string]func(*files.BotConfig, string) *featureDe
 		}
 		if guild, ok := findGuildSettings(*cfg, guildID); ok {
 			return &featureDetails{
-				ConfigEnabled:          guild.Stats.Enabled,
-				UpdateIntervalMins:     guild.Stats.UpdateIntervalMins,
 				ConfiguredChannelCount: len(guild.Stats.Channels),
 				Channels:               buildStatsChannelDetails(guild.Stats.Channels),
 			}

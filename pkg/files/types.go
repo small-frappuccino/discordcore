@@ -272,9 +272,7 @@ type StatsChannelConfig struct {
 
 // StatsConfig groups the periodic stats channel updates for a guild.
 type StatsConfig struct {
-	Enabled            bool                 `json:"enabled,omitempty"`
-	UpdateIntervalMins int                  `json:"update_interval_mins,omitempty"` // default: 30
-	Channels           []StatsChannelConfig `json:"channels,omitempty"`
+	Channels []StatsChannelConfig `json:"channels,omitempty"`
 }
 
 // AutoAssignmentConfig defines automatic role assignment rules.

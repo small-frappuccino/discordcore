@@ -365,7 +365,7 @@ func (s *StatsService) UpdateStatsChannels(ctx context.Context) error {
 				"err", prepErr,
 			)
 		}
-		shouldPublish := s.shouldRunStatsUpdate(gcfg.GuildID, statsInterval(gcfg.Stats))
+		shouldPublish := s.shouldRunStatsUpdate(gcfg.GuildID, statsInterval())
 		if needsReconcile {
 			if err := s.reconcileStatsForGuild(ctx, gcfg); err != nil {
 				s.log(gcfg.GuildID).Error(
@@ -395,21 +395,15 @@ func (s *StatsService) UpdateStatsChannels(ctx context.Context) error {
 }
 
 func Enabled(cfg files.StatsConfig) bool {
-	if !cfg.Enabled {
-		return false
-	}
 	return len(cfg.Channels) > 0
 }
 
-func statsInterval(cfg files.StatsConfig) time.Duration {
-	if cfg.UpdateIntervalMins <= 0 {
-		return defaultStatsInterval
-	}
-	return time.Duration(cfg.UpdateIntervalMins) * time.Minute
+func statsInterval() time.Duration {
+	return 5 * time.Minute
 }
 
-func statsReconcileInterval(cfg files.StatsConfig) time.Duration {
-	interval := statsInterval(cfg) * 12
+func statsReconcileInterval() time.Duration {
+	interval := statsInterval() * 12
 	if interval < defaultStatsReconcileInterval {
 		return defaultStatsReconcileInterval
 	}
@@ -497,7 +491,7 @@ func (s *StatsService) prepareStatsState(ctx context.Context, gcfg files.GuildCo
 	var needsReconcile, skipRest bool
 	if state.initialized && keysMatch && !state.dirty {
 		lastReconciled := state.lastReconciled
-		needsReconcile = time.Since(lastReconciled) >= statsReconcileInterval(gcfg.Stats)
+		needsReconcile = time.Since(lastReconciled) >= statsReconcileInterval()
 		skipRest = true
 	}
 	state.mu.Unlock()
@@ -560,7 +554,7 @@ func statsRequiresBotClassification(channels []files.StatsChannelConfig) bool {
 }
 
 func (s *StatsService) statsStoreStateStale(ctx context.Context, gcfg files.GuildConfig) bool {
-	limit := statsStoreFreshnessLimit(gcfg.Stats)
+	limit := statsStoreFreshnessLimit()
 	lastHeartbeat, ok, err := s.getHeartbeat(ctx)
 	if err != nil || !ok {
 		return true
@@ -568,8 +562,8 @@ func (s *StatsService) statsStoreStateStale(ctx context.Context, gcfg files.Guil
 	return time.Since(lastHeartbeat) > limit
 }
 
-func statsStoreFreshnessLimit(cfg files.StatsConfig) time.Duration {
-	limit := statsInterval(cfg)
+func statsStoreFreshnessLimit() time.Duration {
+	limit := statsInterval()
 	minimum := 2 * heartbeatInterval
 	if limit < minimum {
 		return minimum
@@ -739,13 +733,13 @@ func (s *StatsService) updateStatsChannelName(ctx context.Context, guildID strin
 	}
 
 	published, hasPublished := s.statsPublishedChannel(guildID, channelID)
-	label := strings.TrimSpace(cfg.Label)
-	if label == "" {
-		label = strings.TrimSpace(published.label)
+	label := cfg.Label
+	if strings.TrimSpace(label) == "" {
+		label = published.label
 	}
 
 	channelName := ""
-	if !hasPublished || label == "" {
+	if !hasPublished || strings.TrimSpace(label) == "" {
 		channel, err := s.resolveChannel(ctx, channelID)
 		if err != nil {
 			return fmt.Errorf("resolve channel: %w", err)
@@ -757,8 +751,8 @@ func (s *StatsService) updateStatsChannelName(ctx context.Context, guildID strin
 			return fmt.Errorf("channel guild mismatch: %s", channel.GuildID)
 		}
 		channelName = channel.Name
-		if label == "" {
-			label = strings.TrimSpace(channel.Name)
+		if strings.TrimSpace(label) == "" {
+			label = channel.Name
 		}
 	}
 

@@ -252,19 +252,7 @@ var guildFeaturePatchHandlers = map[string]guildFeaturePatchHandler{
 		}
 		return nil
 	},
-	"stats_channels": func(_ *files.BotConfig, guild *files.GuildConfig, remaining map[string]json.RawMessage) error {
-		if present, value, err := consumeBool(remaining, "config_enabled"); err != nil {
-			return fmt.Errorf("featureMutationApplier.applyGuildPatch: %w", err)
-		} else if present {
-			guild.Stats.Enabled = value
-		}
-		if present, value, err := consumeInt(remaining, "update_interval_mins"); err != nil {
-			return fmt.Errorf("featureMutationApplier.applyGuildPatch: %w", err)
-		} else if present {
-			guild.Stats.UpdateIntervalMins = value
-		}
-		return nil
-	},
+
 	"auto_role_assignment": func(_ *files.BotConfig, guild *files.GuildConfig, remaining map[string]json.RawMessage) error {
 		if present, value, err := consumeBool(remaining, "config_enabled"); err != nil {
 			return fmt.Errorf("featureMutationApplier.applyGuildPatch: %w", err)

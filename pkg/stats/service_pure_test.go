@@ -307,19 +307,14 @@ func TestStatsSnapshotHelpers(t *testing.T) {
 
 func TestStatsIntervalHelpers(t *testing.T) {
 	// interval logic testing
-	cfg := files.StatsConfig{UpdateIntervalMins: 0}
-	if statsInterval(cfg) != 30*time.Minute {
-		t.Errorf("expected 30m default")
-	}
-	cfg.UpdateIntervalMins = 10
-	if statsInterval(cfg) != 10*time.Minute {
-		t.Errorf("expected 10m")
+	if statsInterval() != 5*time.Minute {
+		t.Errorf("expected 5m default")
 	}
 
-	if statsReconcileInterval(cfg) != 4*time.Hour { // wait, let's see default stats reconcile interval. It's likely 4*time.Hour
-		_ = statsReconcileInterval(cfg) // Just execute it for coverage
+	if statsReconcileInterval() != 6*time.Hour {
+		t.Errorf("expected 6 hour reconcile interval")
 	}
-	_ = statsStoreFreshnessLimit(cfg) // Just execute for coverage
+	_ = statsStoreFreshnessLimit() // Just execute for coverage
 	if statsSeedMetadataKey("g1") == "" {
 		t.Errorf("unexpected seed key")
 	}
@@ -382,25 +377,14 @@ func TestStatsReconcileInterval(t *testing.T) {
 				GuildID:           "g1",
 				FeatureRouting:    map[string]string{"stats": "generic"},
 				BotInstanceTokens: map[string]files.EncryptedString{"generic": "token"},
-				Stats:             files.StatsConfig{UpdateIntervalMins: 0},
-			},
-			{
-				GuildID:           "g2",
-				FeatureRouting:    map[string]string{"stats": "generic"},
-				BotInstanceTokens: map[string]files.EncryptedString{"generic": "token"},
-				Stats:             files.StatsConfig{UpdateIntervalMins: 9999999},
+				Stats:             files.StatsConfig{},
 			},
 		}
 		return nil
 	})
-	svc := NewStatsService(nil, cm, newMockStateStore(), slog.Default(), "generic")
-	g1, _, _, _ := svc.statsGuildConfig("g1")
-	g2, _, _, _ := svc.statsGuildConfig("g2")
+	_ = NewStatsService(nil, cm, newMockStateStore(), slog.Default(), "generic")
 
-	if statsReconcileInterval(g1.Stats) != defaultStatsReconcileInterval {
+	if statsReconcileInterval() != defaultStatsReconcileInterval {
 		t.Errorf("expected default")
-	}
-	if statsReconcileInterval(g2.Stats) != maxStatsReconcileInterval {
-		t.Errorf("expected max")
 	}
 }
