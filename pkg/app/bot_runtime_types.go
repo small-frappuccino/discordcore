@@ -299,16 +299,17 @@ func (r *botRuntimeResolver) guildBindings(context.Context) ([]control.BotGuildB
 		return nil, err
 	}
 
-	out := make([]control.BotGuildBinding, 0)
-	runtimes := r.getRuntimes()
-	if len(runtimes) == 0 {
-		return out, nil
-	}
-
 	cfg := r.configManager.Config()
 	if cfg == nil {
-		return out, nil
+		return nil, nil
 	}
+
+	runtimes := r.getRuntimes()
+	if len(runtimes) == 0 {
+		return nil, nil
+	}
+
+	out := make([]control.BotGuildBinding, 0, len(cfg.Guilds))
 
 	slog.Debug("Granular inspection: Parsing unified configuration manifest for explicit guild-to-bot bindings")
 

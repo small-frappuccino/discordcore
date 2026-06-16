@@ -44,6 +44,7 @@ type RunOptions struct {
 	Control                  ControlOptions
 	CommandCatalogRegistrars []commands.CommandCatalogRegistrar
 	DisableControl           bool
+	Logger                   *slog.Logger
 }
 
 // ControlOptions configures the local control plane. BindAddr and PublicOrigin

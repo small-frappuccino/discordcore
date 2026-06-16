@@ -83,6 +83,11 @@ func RunWithOptions(appName string, opts RunOptions) (err error) {
 func runWithOptions(appName string, opts RunOptions) error {
 	started := time.Now()
 
+	logger := opts.Logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+
 	files.SetAppName(appName)
 
 	if err := idgen.Init(1); err != nil {
@@ -178,7 +183,7 @@ func runWithOptions(appName string, opts RunOptions) error {
 	qotdService.SetClock(appClock)
 
 	moderationMetrics := &moderation.InMemoryMetrics{}
-	appServiceManager := service.NewServiceManager(slog.Default())
+	appServiceManager := service.NewServiceManager(logger)
 
 	storeService := service.NewLegacyServiceWrapper(service.LegacyServiceWrapperSpec{
 		Name:     "postgres-store",
@@ -189,7 +194,7 @@ func runWithOptions(appName string, opts RunOptions) error {
 			shutdownDelay(100 * time.Millisecond)
 			return closeStore(store)
 		},
-		Logger: slog.Default(),
+		Logger: logger,
 	})
 	if err := appServiceManager.Register(storeService); err != nil {
 		errWrap := fmt.Errorf("register store service: %w", err)
@@ -210,6 +215,7 @@ func runWithOptions(appName string, opts RunOptions) error {
 		profile:                  opts.Profile,
 		appClock:                 appClock,
 		controlServerRegistry:    controlServerRegistry,
+		logger:                   logger,
 	}
 
 	botSupervisor := NewBotSupervisor(configManager, botOpts)
@@ -230,7 +236,7 @@ func runWithOptions(appName string, opts RunOptions) error {
 		Stop: func(ctx context.Context) error {
 			return botSupervisor.Stop(ctx)
 		},
-		Logger: slog.Default(),
+		Logger: logger,
 	})
 
 	if err := appServiceManager.Register(botSupervisorService); err != nil {

@@ -44,6 +44,7 @@ type botRuntimeOptions struct {
 	profile                  RunProfile
 	appClock                 clock.Clock
 	controlServerRegistry    *controlServerHolder
+	logger                   *slog.Logger
 }
 
 var openBotDiscordSession = session.OpenSession
