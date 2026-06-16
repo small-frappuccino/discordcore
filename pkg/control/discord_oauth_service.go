@@ -372,6 +372,10 @@ func (svc *discordOAuthControlService) handleGuildAccessList(
 	ctx, cancel := context.WithTimeout(r.Context(), defaultAccessibleGuildsQuery)
 	defer cancel()
 
+	if r.Context().Err() != nil {
+		return
+	}
+
 	resolveAccessible := svc.resolveAccessibleGuilds
 	if requestWantsFreshGuildAccess(r) {
 		resolveAccessible = svc.resolveAccessibleGuildsRefreshed

@@ -94,7 +94,13 @@ func (resolver *accessibleGuildResolver) resolveWithOptions(
 	}
 
 	v, err, _ := resolver.sfg.Do(session.User.ID, func() (any, error) {
-		botGuildSet, resolveErr := resolver.resolveBotGuildIDSet(ctx)
+		// Detach from the initiating caller's request context so a single
+		// client disconnect does not cancel in-flight Discord API calls for
+		// all callers coalesced into this singleflight invocation.
+		sfCtx, sfCancel := context.WithTimeout(context.WithoutCancel(ctx), defaultAccessibleGuildsQuery)
+		defer sfCancel()
+
+		botGuildSet, resolveErr := resolver.resolveBotGuildIDSet(sfCtx)
 		if resolveErr != nil {
 			if !errors.Is(resolveErr, errBotGuildIDsProviderUnavailable) {
 				return nil, fmt.Errorf("accessibleGuildResolver.resolveWithOptions: %w", resolveErr)
@@ -102,12 +108,12 @@ func (resolver *accessibleGuildResolver) resolveWithOptions(
 			botGuildSet = map[string]struct{}{}
 		}
 
-		freshSession, refreshErr := provider.ensureFreshSessionAccessToken(ctx, session)
+		freshSession, refreshErr := provider.ensureFreshSessionAccessToken(sfCtx, session)
 		if refreshErr != nil {
 			return nil, fmt.Errorf("resolve accessible guilds: refresh oauth access token: %w", refreshErr)
 		}
 
-		userGuilds, fetchErr := provider.fetchUserGuilds(ctx, freshSession.AccessToken, freshSession.TokenType)
+		userGuilds, fetchErr := provider.fetchUserGuilds(sfCtx, freshSession.AccessToken, freshSession.TokenType)
 		if fetchErr != nil {
 			return nil, fmt.Errorf("resolve accessible guilds: fetch user guilds: %w", fetchErr)
 		}

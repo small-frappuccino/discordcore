@@ -119,6 +119,10 @@ func (s *Server) authorizeGuildControlAccess(
 		ctx, cancel := context.WithTimeout(r.Context(), defaultAccessibleGuildsQuery)
 		defer cancel()
 
+		if r.Context().Err() != nil {
+			return false
+		}
+
 		resolveAccessible := s.resolveAccessibleGuilds
 
 		accessible, err := resolveAccessible(ctx, auth.oauthSession)
