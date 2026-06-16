@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -16,24 +17,35 @@ import (
 // Concurrency: Store is safe for concurrent use by multiple goroutines.
 // Lifecycle: Call Init() after creation before executing any queries. Call Close() to release resources.
 type Store struct {
-	db *pgxpool.Pool
+	db     *pgxpool.Pool
+	logger *slog.Logger
+}
+
+func (s *Store) log() *slog.Logger {
+	if s.logger != nil {
+		return s.logger
+	}
+	return slog.Default()
 }
 
 const storeBulkInsertMaxRows = 4000
 
 // NewStore creates a new Store using an existing SQL connection. Call Init() before using it.
 // Returns an error if the provided db is nil, avoiding runtime panics for invariant failures.
-func NewStore(db *pgxpool.Pool) (*Store, error) {
+func NewStore(db *pgxpool.Pool, logger *slog.Logger) (*Store, error) {
 	if db == nil {
 		return nil, fmt.Errorf("storage: NewStore requires a non-nil *pgxpool.Pool")
 	}
-	return &Store{db: db}, nil
+	return &Store{db: db, logger: logger}, nil
 }
 
 // Init ensures the migrated schema is present and primes per-deployment state.
 func (s *Store) Init() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
+	s.log().Debug("Storage subsystem initializing: verifying schema and priming deployment state")
+
 	if err := s.ensureMemberJoinColumns(ctx); err != nil {
 		return fmt.Errorf("ensure member join state columns: %w", err)
 	}
@@ -43,6 +55,8 @@ func (s *Store) Init() error {
 	if err := s.resetQOTDQuestionSequenceWhenEmpty(ctx); err != nil {
 		return fmt.Errorf("reset qotd question sequence: %w", err)
 	}
+
+	s.log().Debug("Storage subsystem initialized successfully")
 	return nil
 }
 

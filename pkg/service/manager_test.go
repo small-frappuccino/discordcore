@@ -121,7 +121,7 @@ func TestManager_DependencyResolution(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			sm := NewServiceManager()
+			sm := NewServiceManager(nil)
 			for _, s := range tc.services {
 				if err := sm.Register(s); err != nil {
 					t.Fatalf("unexpected register error: %v", err)
@@ -151,7 +151,7 @@ func TestManager_DependencyResolution(t *testing.T) {
 func TestManager_CascadingFailure(t *testing.T) {
 	t.Parallel()
 
-	sm := NewServiceManager()
+	sm := NewServiceManager(nil)
 
 	s1StartCh := make(chan struct{})
 	s1StopCh := make(chan struct{})
@@ -201,7 +201,7 @@ func TestManager_CascadingFailure(t *testing.T) {
 func TestManager_HealthMonitor_Restart(t *testing.T) {
 	t.Parallel()
 
-	sm := NewServiceManager()
+	sm := NewServiceManager(nil)
 	sm.healthInterval = 1 * time.Millisecond // very fast tick
 	sm.maxRestarts = 2
 	sm.restartDelay = 0
@@ -261,7 +261,7 @@ loop:
 func TestManager_FatalPropagation(t *testing.T) {
 	t.Parallel()
 
-	sm := NewServiceManager()
+	sm := NewServiceManager(nil)
 	errFatal := errors.New("fatal simulated")
 	sm.Fatal(errFatal)
 

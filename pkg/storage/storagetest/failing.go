@@ -21,6 +21,6 @@ func NewFailingStore() *storage.Store {
 		return nil, errors.New("storagetest: connector always fails")
 	}
 	pool, _ := pgxpool.NewWithConfig(context.Background(), config)
-	store, _ := storage.NewStore(pool)
+	store, _ := storage.NewStore(pool, nil)
 	return store
 }

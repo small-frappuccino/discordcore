@@ -548,6 +548,7 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token, status str
 			shutdownBotRuntime(runtime, ctx)
 			return closeDiscordSession(runtime.session)
 		},
+		Logger: slog.Default(),
 	})
 
 	if err := s.serviceManager.RegisterAndStart("bot-runtime-"+instanceID, wrapper); err != nil {

@@ -9,7 +9,7 @@ import (
 )
 
 func TestManagerApply_IgnoresAutomodServiceStartStopErrors(t *testing.T) {
-	serviceManager := service.NewServiceManager()
+	serviceManager := service.NewServiceManager(nil)
 	manager := New(serviceManager, nil)
 	manager.SetInitial(files.RuntimeConfig{DisableAutomodLogs: false})
 

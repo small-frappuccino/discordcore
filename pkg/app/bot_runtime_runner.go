@@ -131,7 +131,7 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 		slog.Bool("sharedLimiter", routerConfig.ExecutionLimiter != nil),
 	)
 
-	runtime.serviceManager = service.NewServiceManager()
+	runtime.serviceManager = service.NewServiceManager(slog.Default())
 
 	monitoringService, err := setupMonitoringService(runtime, opts, routerConfig)
 	if err != nil {

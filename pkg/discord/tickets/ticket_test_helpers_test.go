@@ -95,7 +95,7 @@ func newTicketCommandTestHarness(t *testing.T, guildID, ownerID string) *ticketC
 		}
 	})
 
-	store, err := storage.NewStore(db)
+	store, err := storage.NewStore(db, nil)
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}

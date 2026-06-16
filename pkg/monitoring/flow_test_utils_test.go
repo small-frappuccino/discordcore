@@ -37,7 +37,7 @@ func newLoggingStore(t *testing.T, _ string) (*storage.Store, *pgxpool.Pool) {
 		}
 	})
 
-	store, err := storage.NewStore(db)
+	store, err := storage.NewStore(db, nil)
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}

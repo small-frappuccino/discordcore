@@ -264,7 +264,7 @@ func TestBotRuntimeRunner_registerUserPruneService(t *testing.T) {
 			userPrune: true,
 		},
 		monitoringService: &monitoring.MonitoringService{},
-		serviceManager:    service.NewServiceManager(),
+		serviceManager:    service.NewServiceManager(nil),
 	}
 	err := registerUserPruneService(rt, botRuntimeOptions{}, nil)
 	if err != nil {
@@ -275,7 +275,7 @@ func TestBotRuntimeRunner_registerUserPruneService(t *testing.T) {
 func TestBotRuntimeRunner_shutdownBotRuntime(t *testing.T) {
 	rt := &botRuntime{
 		instanceID:     "test",
-		serviceManager: service.NewServiceManager(),
+		serviceManager: service.NewServiceManager(nil),
 	}
 
 	// Does not panic

@@ -20,6 +20,7 @@ type BaseService struct {
 	serviceType  ServiceType
 	priority     ServicePriority
 	dependencies []string
+	logger       *slog.Logger
 
 	// State management
 	state        ServiceState
@@ -43,12 +44,13 @@ type BaseService struct {
 }
 
 // NewBaseService creates a new base service
-func NewBaseService(name string, serviceType ServiceType, priority ServicePriority, dependencies []string) *BaseService {
+func NewBaseService(name string, serviceType ServiceType, priority ServicePriority, dependencies []string, logger *slog.Logger) *BaseService {
 	return &BaseService{
 		name:         name,
 		serviceType:  serviceType,
 		priority:     priority,
 		dependencies: dependencies,
+		logger:       logger,
 		state:        StateUninitialized,
 		healthStatus: HealthStatus{
 			Healthy:   true,
@@ -56,6 +58,14 @@ func NewBaseService(name string, serviceType ServiceType, priority ServicePriori
 			LastCheck: time.Now(),
 		},
 	}
+}
+
+// log returns the configured logger or a default logger.
+func (bs *BaseService) log() *slog.Logger {
+	if bs == nil || bs.logger == nil {
+		return slog.Default()
+	}
+	return bs.logger
 }
 
 // Name returns the service name
@@ -87,7 +97,7 @@ func (bs *BaseService) Start(ctx context.Context) error {
 		return nil // Already running
 	}
 
-	slog.Info("Starting service...", "service", bs.name)
+	bs.log().Info("Starting service...", "service", bs.name)
 	bs.state = StateInitializing
 
 	// Call the start hook if provided
@@ -97,7 +107,7 @@ func (bs *BaseService) Start(ctx context.Context) error {
 			bs.errorCount++
 			serviceErr := fmt.Errorf("service start hook failed: %w", err)
 			bs.lastError = serviceErr
-			slog.Error("Service start failed", "service", bs.name, "err", err)
+			bs.log().Error("Service start failed", "service", bs.name, "err", err)
 			return serviceErr
 		}
 	}
@@ -109,7 +119,7 @@ func (bs *BaseService) Start(ctx context.Context) error {
 	bs.startTime = &now
 	bs.stopTime = nil
 
-	slog.Info("Service started successfully", "service", bs.name)
+	bs.log().Info("Service started successfully", "service", bs.name)
 	return nil
 }
 
@@ -122,7 +132,7 @@ func (bs *BaseService) Stop(ctx context.Context) error {
 		return nil // Already stopped
 	}
 
-	slog.Info("Stopping service...", "service", bs.name)
+	bs.log().Info("Stopping service...", "service", bs.name)
 	bs.state = StateStopping
 
 	// Call the stop hook if provided
@@ -132,7 +142,7 @@ func (bs *BaseService) Stop(ctx context.Context) error {
 			serviceErr := fmt.Errorf("service stop hook failed: %w", err)
 			bs.lastError = serviceErr
 			bs.state = StateError
-			slog.Error("Service stop failed", "service", bs.name, "err", err)
+			bs.log().Error("Service stop failed", "service", bs.name, "err", err)
 			return serviceErr
 		}
 	}
@@ -143,7 +153,7 @@ func (bs *BaseService) Stop(ctx context.Context) error {
 	now := time.Now()
 	bs.stopTime = &now
 
-	slog.Info("Service stopped", "service", bs.name)
+	bs.log().Info("Service stopped", "service", bs.name)
 	return nil
 }
 
@@ -296,12 +306,13 @@ type LegacyServiceWrapperSpec struct {
 	Start        func(context.Context) error
 	Stop         func(context.Context) error
 	Check        func() bool
+	Logger       *slog.Logger
 }
 
 // NewLegacyServiceWrapper creates a wrapper for existing services
 func NewLegacyServiceWrapper(spec LegacyServiceWrapperSpec) *LegacyServiceWrapper {
 	wrapper := &LegacyServiceWrapper{
-		BaseService:  NewBaseService(spec.Name, spec.Type, spec.Priority, spec.Dependencies),
+		BaseService:  NewBaseService(spec.Name, spec.Type, spec.Priority, spec.Dependencies, spec.Logger),
 		wrappedStart: spec.Start,
 		wrappedStop:  spec.Stop,
 		wrappedCheck: spec.Check,
@@ -369,9 +380,10 @@ func NewManagedService(
 	priority ServicePriority,
 	dependencies []string,
 	manager *ServiceManager,
+	logger *slog.Logger,
 ) *ManagedService {
 	return &ManagedService{
-		BaseService:  NewBaseService(name, serviceType, priority, dependencies),
+		BaseService:  NewBaseService(name, serviceType, priority, dependencies, logger),
 		manager:      manager,
 		autoRestart:  true,
 		maxRestarts:  3,
@@ -394,11 +406,11 @@ func (ms *ManagedService) HandleError(err error) {
 
 	if ms.autoRestart && ms.restartCount < ms.maxRestarts {
 		// Use the package logger (simple categories are available)
-		slog.Warn("Service error detected, attempting restart", "service", ms.name, "err", err)
+		ms.log().Warn("Service error detected, attempting restart", "service", ms.name, "err", err)
 		go func() {
 			time.Sleep(ms.restartDelay)
 			if restartErr := ms.manager.RestartService(context.Background(), ms.name); restartErr != nil {
-				slog.Error("Failed to restart service after error", "service", ms.name, "err", restartErr)
+				ms.log().Error("Failed to restart service after error", "service", ms.name, "err", restartErr)
 			}
 		}()
 	}

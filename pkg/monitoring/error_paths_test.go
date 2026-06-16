@@ -139,7 +139,7 @@ func TestMaybeRestoreBotRolePermissionsLogsEditError(t *testing.T) {
 		}
 	})
 
-	store, err := storage.NewStore(db)
+	store, err := storage.NewStore(db, nil)
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}

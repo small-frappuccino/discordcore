@@ -28,7 +28,7 @@ func newPurgeTestStore(t *testing.T) *storage.Store {
 		}
 	})
 
-	s, err := storage.NewStore(db)
+	s, err := storage.NewStore(db, nil)
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}

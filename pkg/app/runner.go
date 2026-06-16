@@ -178,7 +178,7 @@ func runWithOptions(appName string, opts RunOptions) error {
 	qotdService.SetClock(appClock)
 
 	moderationMetrics := &moderation.InMemoryMetrics{}
-	appServiceManager := service.NewServiceManager()
+	appServiceManager := service.NewServiceManager(slog.Default())
 
 	storeService := service.NewLegacyServiceWrapper(service.LegacyServiceWrapperSpec{
 		Name:     "postgres-store",
@@ -189,6 +189,7 @@ func runWithOptions(appName string, opts RunOptions) error {
 			shutdownDelay(100 * time.Millisecond)
 			return closeStore(store)
 		},
+		Logger: slog.Default(),
 	})
 	if err := appServiceManager.Register(storeService); err != nil {
 		errWrap := fmt.Errorf("register store service: %w", err)
@@ -229,6 +230,7 @@ func runWithOptions(appName string, opts RunOptions) error {
 		Stop: func(ctx context.Context) error {
 			return botSupervisor.Stop(ctx)
 		},
+		Logger: slog.Default(),
 	})
 
 	if err := appServiceManager.Register(botSupervisorService); err != nil {
@@ -660,7 +662,7 @@ func setupStorage(dbb resolvedDatabaseBootstrap) (*storage.Store, *files.ConfigM
 		slog.String("driver", "postgres"),
 	)
 
-	store, err := storage.NewStore(db)
+	store, err := storage.NewStore(db, slog.Default())
 	if err != nil {
 		db.Close()
 		errWrap := fmt.Errorf("create postgres store: %w", err)

@@ -31,7 +31,7 @@ func TestCleanupObsoleteMemberJoins_DoesNotDeleteHistoricalJoins(t *testing.T) {
 		}
 	}()
 
-	s, err := NewStore(db)
+	s, err := NewStore(db, nil)
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}

@@ -38,7 +38,7 @@ func TestDynamicManager(t *testing.T) {
 
 	dm.ForceRemove("dyn")
 
-	sm := NewServiceManager()
+	sm := NewServiceManager(nil)
 	s1 := &mockService{name: "s1", startFunc: func(ctx context.Context) error { return nil }}
 	_ = sm.Register(s1)
 	_ = sm.StartAll()
@@ -56,7 +56,7 @@ func TestDynamicManager(t *testing.T) {
 
 func TestBaseServiceAccessors(t *testing.T) {
 	t.Parallel()
-	bs := NewBaseService("base", TypeMonitoring, PriorityNormal, nil)
+	bs := NewBaseService("base", TypeMonitoring, PriorityNormal, nil, nil)
 	bs.SetHealthHook(func(ctx context.Context) HealthStatus {
 		return HealthStatus{Healthy: true}
 	})
@@ -78,8 +78,8 @@ func TestBaseServiceAccessors(t *testing.T) {
 
 func TestManagedService(t *testing.T) {
 	t.Parallel()
-	sm := NewServiceManager()
-	ms := NewManagedService("managed", TypeMonitoring, PriorityNormal, nil, sm)
+	sm := NewServiceManager(nil)
+	ms := NewManagedService("managed", TypeMonitoring, PriorityNormal, nil, sm, nil)
 	ms.SetAutoRestart(true, 1, time.Millisecond)
 
 	// Simulate start so isRunning is true (to allow Stop to work)

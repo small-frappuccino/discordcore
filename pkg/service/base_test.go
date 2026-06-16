@@ -8,7 +8,7 @@ import (
 
 func TestBaseServiceStopReturnsErrorAndKeepsErrorState(t *testing.T) {
 	stopErr := stdErrors.New("stop failed")
-	svc := NewBaseService("test", TypeMonitoring, PriorityNormal, nil)
+	svc := NewBaseService("test", TypeMonitoring, PriorityNormal, nil, nil)
 	svc.SetStopHook(func(context.Context) error {
 		return stopErr
 	})
@@ -72,12 +72,12 @@ func TestLegacyServiceWrapperPassesLifecycleContext(t *testing.T) {
 
 func TestServiceManagerStopFailureLeavesServiceInErrorState(t *testing.T) {
 	stopErr := stdErrors.New("stop failed")
-	svc := NewBaseService("managed", TypeMonitoring, PriorityNormal, nil)
+	svc := NewBaseService("managed", TypeMonitoring, PriorityNormal, nil, nil)
 	svc.SetStopHook(func(context.Context) error {
 		return stopErr
 	})
 
-	manager := NewServiceManager()
+	manager := NewServiceManager(nil)
 	if err := manager.Register(svc); err != nil {
 		t.Fatalf("register service: %v", err)
 	}

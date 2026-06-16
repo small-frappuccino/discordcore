@@ -31,7 +31,7 @@ func newTempStore(t *testing.T) *Store {
 		}
 	})
 
-	store, err := NewStore(db)
+	store, err := NewStore(db, nil)
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
