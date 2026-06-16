@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/log"
 	svc "github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
@@ -57,6 +56,13 @@ func NewStatsService(
 		logger:        logger,
 		botInstanceID: botInstanceID,
 	}
+}
+
+func (s *StatsService) log(guildID string) *slog.Logger {
+	if guildID == "" {
+		return s.logger
+	}
+	return s.logger.With(slog.String("guild_id", guildID))
 }
 
 // Name names.
@@ -157,9 +163,6 @@ func (s *StatsService) Stop(ctx context.Context) error {
 }
 
 func (s *StatsService) handlesGuild(guildID string) bool {
-	if s == nil || s.configManager == nil {
-		return false
-	}
 	cfg := s.configManager.GuildConfig(guildID)
 	if cfg == nil {
 		return false
@@ -172,9 +175,6 @@ func (s *StatsService) handlesGuild(guildID string) bool {
 }
 
 func (s *StatsService) scopedConfig() *files.BotConfig {
-	if s == nil || s.configManager == nil {
-		return nil
-	}
 	cfg := s.configManager.Config()
 	if cfg == nil {
 		return nil
@@ -271,46 +271,41 @@ func cloneStatsPublishedChannels(in map[string]statsPublishedChannel) map[string
 	return out
 }
 
-func (state *statsGuildState) applyAdd(userID string, snapshot statsMemberSnapshot) bool {
+func (state *statsGuildState) applyDelta(userID string, snapshot statsMemberSnapshot, isAdd, isRemove bool) bool {
 	if state == nil || strings.TrimSpace(userID) == "" {
 		return false
 	}
 	if state.members == nil {
 		state.members = make(map[string]statsMemberSnapshot)
 	}
-	if _, exists := state.members[userID]; exists {
+	prev, exists := state.members[userID]
+	if isAdd && exists {
 		return false
 	}
-	state.members[userID] = snapshot
-	state.addContribution(snapshot, 1)
+	if isRemove && !exists {
+		return false
+	}
+	if exists {
+		state.addContribution(prev, -1)
+		delete(state.members, userID)
+	}
+	if !isRemove {
+		state.members[userID] = snapshot
+		state.addContribution(snapshot, 1)
+	}
 	return true
+}
+
+func (state *statsGuildState) applyAdd(userID string, snapshot statsMemberSnapshot) bool {
+	return state.applyDelta(userID, snapshot, true, false)
 }
 
 func (state *statsGuildState) applyRemove(userID string) bool {
-	if state == nil || strings.TrimSpace(userID) == "" {
-		return false
-	}
-	prev, ok := state.members[userID]
-	if !ok {
-		return false
-	}
-	delete(state.members, userID)
-	state.addContribution(prev, -1)
-	return true
+	return state.applyDelta(userID, statsMemberSnapshot{}, false, true)
 }
 
 func (state *statsGuildState) applyUpdate(userID string, snapshot statsMemberSnapshot) bool {
-	if state == nil || strings.TrimSpace(userID) == "" {
-		return false
-	}
-	prev, ok := state.members[userID]
-	if !ok {
-		return false
-	}
-	state.addContribution(prev, -1)
-	state.members[userID] = snapshot
-	state.addContribution(snapshot, 1)
-	return true
+	return state.applyDelta(userID, snapshot, false, false)
 }
 
 func (state *statsGuildState) addContribution(snapshot statsMemberSnapshot, delta int) {
@@ -329,11 +324,7 @@ func (state *statsGuildState) addContribution(snapshot statsMemberSnapshot, delt
 	}
 }
 
-// UpdateStatsChannels updates stats channels.
 func (s *StatsService) UpdateStatsChannels(ctx context.Context) error {
-	if s == nil || s.gateway == nil || s.configManager == nil {
-		return nil
-	}
 	cfg := s.scopedConfig()
 	if cfg == nil || len(cfg.Guilds) == 0 {
 		s.pruneStatsGuildState(nil)
@@ -356,20 +347,18 @@ func (s *StatsService) UpdateStatsChannels(ctx context.Context) error {
 
 		needsReconcile, prepErr := s.prepareStatsState(ctx, gcfg)
 		if prepErr != nil {
-			log.ErrorLoggerRaw().Error(
+			s.log(gcfg.GuildID).Error(
 				"Failed to prepare stats state",
 				"operation", "monitoring.stats.prepare",
-				"guildID", gcfg.GuildID,
 				"err", prepErr,
 			)
 		}
 		shouldPublish := s.shouldRunStatsUpdate(gcfg.GuildID, statsInterval(gcfg.Stats))
 		if needsReconcile {
 			if err := s.reconcileStatsForGuild(ctx, gcfg); err != nil {
-				log.ErrorLoggerRaw().Error(
+				s.log(gcfg.GuildID).Error(
 					"Failed to reconcile stats channels",
 					"operation", "monitoring.stats.reconcile",
-					"guildID", gcfg.GuildID,
 					"err", err,
 				)
 				if !shouldPublish {
@@ -381,10 +370,9 @@ func (s *StatsService) UpdateStatsChannels(ctx context.Context) error {
 			continue
 		}
 		if err := s.publishStatsForGuild(ctx, gcfg); err != nil {
-			log.ErrorLoggerRaw().Error(
+			s.log(gcfg.GuildID).Error(
 				"Failed to update stats channels",
 				"operation", "monitoring.stats.publish",
-				"guildID", gcfg.GuildID,
 				"err", err,
 			)
 		}
@@ -422,7 +410,7 @@ func statsReconcileInterval(cfg files.StatsConfig) time.Duration {
 // ForceGuildUpdate clears the last run timestamp for the guild,
 // ensuring the next update runs immediately.
 func (s *StatsService) ForceGuildUpdate(guildID string) {
-	if s == nil || strings.TrimSpace(guildID) == "" {
+	if strings.TrimSpace(guildID) == "" {
 		return
 	}
 	s.lastRun.Delete(guildID)
@@ -479,10 +467,9 @@ func (s *StatsService) reconcileStatsForGuild(ctx context.Context, gcfg files.Gu
 	s.replaceStatsGuildState(gcfg.GuildID, state)
 	s.markStatsSeeded(ctx, gcfg.GuildID, state.lastReconciled)
 
-	log.ApplicationLogger().Info(
+	s.log(gcfg.GuildID).Info(
 		"Reconciled stats counters",
 		"operation", "monitoring.stats.reconcile",
-		"guildID", gcfg.GuildID,
 		"members", len(state.members),
 		"trackedRoles", len(state.roleTotals),
 	)
@@ -518,9 +505,6 @@ func (s *StatsService) prepareStatsState(ctx context.Context, gcfg files.GuildCo
 }
 
 func (s *StatsService) hydrateStatsForGuildFromStore(ctx context.Context, gcfg files.GuildConfig) (bool, error) {
-	if s == nil || s.store == nil {
-		return false, nil
-	}
 	if gcfg.GuildID == "" {
 		return false, nil
 	}
@@ -586,15 +570,11 @@ func statsSeedMetadataKey(guildID string) string {
 }
 
 func (s *StatsService) hasStatsSeed(ctx context.Context, guildID string) bool {
-	if s == nil || s.store == nil {
-		return false
-	}
 	_, ok, err := s.store.Metadata(ctx, statsSeedMetadataKey(guildID))
 	if err != nil {
-		log.ApplicationLogger().Warn(
+		s.log(guildID).Warn(
 			"Failed to read stats seed metadata",
 			"operation", "monitoring.stats.seed.read",
-			"guildID", guildID,
 			"err", err,
 		)
 		return false
@@ -603,17 +583,16 @@ func (s *StatsService) hasStatsSeed(ctx context.Context, guildID string) bool {
 }
 
 func (s *StatsService) markStatsSeeded(ctx context.Context, guildID string, at time.Time) {
-	if s == nil || s.store == nil || strings.TrimSpace(guildID) == "" {
+	if strings.TrimSpace(guildID) == "" {
 		return
 	}
 	if at.IsZero() {
 		at = time.Now().UTC()
 	}
 	if err := s.store.SetMetadata(ctx, statsSeedMetadataKey(guildID), at); err != nil {
-		log.ApplicationLogger().Warn(
+		s.log(guildID).Warn(
 			"Failed to persist stats seed metadata",
 			"operation", "monitoring.stats.seed.write",
-			"guildID", guildID,
 			"err", err,
 		)
 	}
@@ -631,10 +610,9 @@ func (s *StatsService) publishStatsForGuild(ctx context.Context, gcfg files.Guil
 		}
 		count := statsCountForChannel(snapshot, sc)
 		if err := s.updateStatsChannelName(ctx, gcfg.GuildID, sc, count); err != nil {
-			log.ErrorLoggerRaw().Error(
+			s.log(gcfg.GuildID).Error(
 				"Failed to update stats channel name",
 				"operation", "monitoring.stats.publish_channel",
-				"guildID", gcfg.GuildID,
 				"channelID", strings.TrimSpace(sc.ChannelID),
 				"err", err,
 			)
@@ -818,10 +796,9 @@ func (s *StatsService) updateStatsChannelName(ctx context.Context, guildID strin
 		name:  newName,
 		label: label,
 	})
-	log.ApplicationLogger().Info(
+	s.log(guildID).Info(
 		"Updated stats channel name",
 		"operation", "monitoring.stats.publish_channel",
-		"guildID", guildID,
 		"channelID", channelID,
 		"count", count,
 		"name", newName,
@@ -932,7 +909,7 @@ func (s *StatsService) ApplyMemberRemove(guildID, userID string) {
 }
 
 func (s *StatsService) persistStatsMemberActive(guildID, userID string, joinedAt time.Time, isBot bool, roles []string) {
-	if s == nil || s.store == nil {
+	if s.store == nil {
 		return
 	}
 	guildID = strings.TrimSpace(guildID)
@@ -941,28 +918,31 @@ func (s *StatsService) persistStatsMemberActive(guildID, userID string, joinedAt
 		return
 	}
 
-	err := runErrWithTimeoutContext(context.Background(), monitoringPersistenceTimeout, func(runCtx context.Context) error {
-		if err := s.store.UpsertMemberPresenceContext(runCtx, storage.MemberPresenceInput{GuildID: guildID, UserID: userID, JoinedAt: joinedAt, SeenAt: time.Now().UTC(), IsBot: isBot}); err != nil {
-			return fmt.Errorf("upsert member presence: %w", err)
-		}
-		if err := s.store.UpsertMemberRoles(guildID, userID, roles, time.Now().UTC()); err != nil {
-			return fmt.Errorf("upsert member roles: %w", err)
-		}
-		return nil
-	})
-	if err != nil {
-		log.ApplicationLogger().Warn(
+	runCtx, cancel := context.WithTimeout(context.Background(), monitoringPersistenceTimeout)
+	defer cancel()
+
+	if err := s.store.UpsertMemberPresenceContext(runCtx, storage.MemberPresenceInput{GuildID: guildID, UserID: userID, JoinedAt: joinedAt, SeenAt: time.Now().UTC(), IsBot: isBot}); err != nil {
+		s.log(guildID).Warn(
 			"Failed to persist stats member state",
 			"operation", "monitoring.stats.persist_member_active",
-			"guildID", guildID,
 			"userID", userID,
 			"err", err,
 		)
+		return
+	}
+	if err := s.store.UpsertMemberRoles(guildID, userID, roles, time.Now().UTC()); err != nil {
+		s.log(guildID).Warn(
+			"Failed to persist stats member roles",
+			"operation", "monitoring.stats.persist_member_active",
+			"userID", userID,
+			"err", err,
+		)
+		return
 	}
 }
 
 func (s *StatsService) persistStatsMemberLeft(guildID, userID string) {
-	if s == nil || s.store == nil {
+	if s.store == nil {
 		return
 	}
 	guildID = strings.TrimSpace(guildID)
@@ -971,14 +951,13 @@ func (s *StatsService) persistStatsMemberLeft(guildID, userID string) {
 		return
 	}
 
-	err := runErrWithTimeoutContext(context.Background(), monitoringPersistenceTimeout, func(runCtx context.Context) error {
-		return s.store.MarkMemberLeftContext(runCtx, guildID, userID, time.Now().UTC())
-	})
-	if err != nil {
-		log.ApplicationLogger().Warn(
+	runCtx, cancel := context.WithTimeout(context.Background(), monitoringPersistenceTimeout)
+	defer cancel()
+
+	if err := s.store.MarkMemberLeftContext(runCtx, guildID, userID, time.Now().UTC()); err != nil {
+		s.log(guildID).Warn(
 			"Failed to persist stats member leave",
 			"operation", "monitoring.stats.persist_member_left",
-			"guildID", guildID,
 			"userID", userID,
 			"err", err,
 		)
@@ -1005,9 +984,6 @@ func (s *StatsService) statsGuildConfig(guildID string) (files.GuildConfig, map[
 }
 
 func (s *StatsService) getOrInitStatsGuildState(guildID string) *statsGuildState {
-	if s == nil {
-		return nil
-	}
 	v, ok := s.guilds.Load(guildID)
 	if ok {
 		return v.(*statsGuildState)
@@ -1106,60 +1082,8 @@ func (s *StatsService) pruneStatsGuildState(activeGuilds map[string]struct{}) {
 
 const monitoringPersistenceTimeout = 10 * time.Second
 
-func runWithTimeout[T any](ctx context.Context, timeout time.Duration, fn func() (T, error)) (T, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	errCh := make(chan error, 1)
-	resCh := make(chan T, 1)
-	go func() {
-		res, err := fn()
-		if err != nil {
-			errCh <- err
-		} else {
-			resCh <- res
-		}
-	}()
-	select {
-	case <-ctx.Done():
-		var zero T
-		return zero, ctx.Err()
-	case err := <-errCh:
-		var zero T
-		return zero, err
-	case res := <-resCh:
-		return res, nil
-	}
-}
-
-func runErrWithTimeoutContext(ctx context.Context, timeout time.Duration, fn func(context.Context) error) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- fn(ctx)
-	}()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case err := <-errCh:
-		return err
-	}
-}
-
 func (s *StatsService) streamGuildMembers(ctx context.Context, guildID string) iter.Seq2[MemberSnapshot, error] {
 	return func(yield func(MemberSnapshot, error) bool) {
-		if s == nil || s.gateway == nil {
-			yield(MemberSnapshot{}, fmt.Errorf("discord gateway is unavailable"))
-			return
-		}
 		if ctx == nil {
 			ctx = context.Background()
 		}
@@ -1172,9 +1096,6 @@ func (s *StatsService) streamGuildMembers(ctx context.Context, guildID string) i
 }
 
 func (s *StatsService) getHeartbeat(ctx context.Context) (time.Time, bool, error) {
-	if s == nil || s.store == nil {
-		return time.Time{}, false, nil
-	}
 	// We read the heartbeat from the monitoring service since stats used to be part of it,
 	// and monitoring is what asserts the cache is warm.
 	return s.store.HeartbeatForBot(ctx, s.botInstanceID)
