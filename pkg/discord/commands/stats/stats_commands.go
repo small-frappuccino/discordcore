@@ -16,6 +16,7 @@ import (
 // StatsService interface for dependency injection.
 type StatsService interface {
 	UpdateStatsChannels(ctx context.Context) error
+	ForceGuildUpdate(guildID string)
 }
 
 // StatsCommands wiring.
@@ -215,6 +216,7 @@ func (c *statsRootCommand) handleAdd(ctx *core.ArikawaContext, opts []discord.Co
 	}
 
 	if c.statsService != nil {
+		c.statsService.ForceGuildUpdate(ctx.GuildID.String())
 		_ = c.statsService.UpdateStatsChannels(context.WithoutCancel(context.Background()))
 	}
 

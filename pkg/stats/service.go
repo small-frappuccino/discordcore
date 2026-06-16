@@ -419,6 +419,15 @@ func statsReconcileInterval(cfg files.StatsConfig) time.Duration {
 	return interval
 }
 
+// ForceGuildUpdate clears the last run timestamp for the guild,
+// ensuring the next update runs immediately.
+func (s *StatsService) ForceGuildUpdate(guildID string) {
+	if s == nil || strings.TrimSpace(guildID) == "" {
+		return
+	}
+	s.lastRun.Delete(guildID)
+}
+
 func (s *StatsService) shouldRunStatsUpdate(guildID string, interval time.Duration) bool {
 	if guildID == "" {
 		return false
