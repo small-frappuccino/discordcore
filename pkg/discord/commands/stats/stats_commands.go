@@ -142,7 +142,7 @@ func ensureStatsEnabled(ctx *core.ArikawaContext) error {
 		slog.Bool("route_is_fallback", isFallback),
 	)
 
-	if !features.StatsChannels || route == "<unrouted>" {
+	if route == "<unrouted>" {
 		_ = ctx.Respond(api.InteractionResponseData{
 			Content: option.NewNullableString("Stats channels feature is currently disabled for this server."),
 			Flags:   discord.EphemeralMessage,
