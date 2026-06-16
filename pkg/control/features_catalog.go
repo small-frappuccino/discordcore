@@ -1,6 +1,7 @@
 package control
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 
@@ -171,14 +172,14 @@ var featureDefinitions = []featureDefinition{
 }
 
 var featureDefinitionsByID = func() map[string]featureDefinition {
-	slog.Info("Architectural state transition: Mapping feature definitions array to internal index")
+	slog.LogAttrs(context.Background(), slog.LevelInfo, "Architectural state transition: Mapping feature definitions array to internal index")
 
 	out := make(map[string]featureDefinition, len(featureDefinitions))
 	for _, def := range featureDefinitions {
 		out[def.ID] = def
 	}
 
-	slog.Debug("Granular inspection: Feature definition index populated",
+	slog.LogAttrs(context.Background(), slog.LevelDebug, "Granular inspection: Feature definition index populated",
 		slog.Int("total_definitions", len(out)),
 	)
 

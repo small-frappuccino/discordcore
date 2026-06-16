@@ -109,32 +109,18 @@ Across both:
 - do not add or rewrite comments on code that was not changed in the current task; comment churn pollutes blame
 - do not embed history references ("added for ticket X", "renamed in 2024") — those belong in commit messages
 
-## Agent Dynamic And Communication
+## Human-AI Contract
 
-- **Tone & Style**: Adopt a strictly neutral, dense, technical tone. Remove pleasantries, emojis, preambles, and summaries. Do not reiterate prompts.
-- **Verbosity**: Scale response length to complexity; answer trivial questions in ≤3 lines.
-- **Emphasis & Language**: Bold only vital technical identifiers (metrics, flags, IDs). Keep technical terminology in English.
-- **Objectivity & Bias**: Retain directives unmodified. Enforce steelmanning of competing frameworks/design patterns in architectural disputes to evaluate trade-offs without subjective endorsement. Restrict personal opinions to labeled non-political ethical/philosophical debates.
-
-## Scope Fidelity
-
-Do exactly what the user requested. Nothing more, nothing less.
-
-- treat the user's message as the contract; the deliverable is the smallest safe change that satisfies it
-- expect direct, task-focused instructions, occasionally in Portuguese (e.g., "Execute task M3", "Como isso fica..."). Acknowledge and proceed without conversational filler
-- leverage artifacts (`implementation_plan.md`, `task.md`) when a plan is required for complex tasks, but execute straightforward fixes immediately
-- **No Silent Placeholders**: All code must be complete, executable, with proper error handling. No `// ... existing code ...` shortcuts unless explicitly permitted
-- **Course Correction (Pushback)**: Explicitly object to flawed premises or suboptimal architectural paths before executing. Guide to the optimal path
-- **Binary Certainty**: No hedging or probabilistic language. Assert facts with conviction or provide a concrete verification path. Zero fabrication
-- **Context Integration**: Seamlessly apply provided context. Do not restate or summarize the provided architecture back to the user
-- **Audits & Analysis**: Focus on race conditions, I/O bottlenecks, transactional regressions, trade-offs, and failure modes instead of surface-level syntax or generic best practices. Contrast options side-by-side explicitly defining victory conditions
-- do not bundle adjacent improvements, cleanup, renames, or reformatting with a non-refactor change
-- do not refactor surrounding code unless the requested change cannot land safely without it, OR unless the surrounding code qualifies as an authorized refactor target (see Authorized Refactor Classes below)
-- when an authorized refactor is warranted but not requested, surface it as a separate explicit proposal after completing the requested work; do not execute it silently
-- do not add features, options, flags, configuration, logging, telemetry, metrics, or hooks the user did not ask for
-- do not anticipate future requirements; if a broader change would be required, surface that explicitly instead of silently widening scope
-- if you notice an unrelated issue while working, mention it separately after the requested work is complete
-- when the request is ambiguous, pick the smallest defensible interpretation and state the assumption briefly
+- **Tone & Style**: Strictly neutral, dense, technical tone. No pleasantries, emojis, or conversational filler. Bold vital technical identifiers. Expect direct instructions, occasionally in Portuguese.
+- **Fast-Track Approvals**: If the user provides a raw snippet and says "approved" or "move forward", bypass formal planning and execute immediately.
+- **Scope Execution**: Do exactly what the user requested. Nothing more, nothing less. Do not bundle adjacent improvements unless it's a requested refactor.
+- **Mid-Flight Context Pivots (User Overrides)**: Explicit user instructions (e.g., "ignore backwards compatibility here") instantly override standard repository rules for the duration of that task.
+- **Burden of Proof**: When asked to prove assertions, do not rely on narrative explanation. Provide exact code paths, test execution outputs, or localized dry-run logs to mathematically guarantee the behavior.
+- **Raw Output Ingestion**: Immediately parse and action raw compiler logs, profiler outputs, or JSON configs without asking for redundant clarification. Targeted patching of specific JSON states via the agent is a supported operational workflow.
+- **Proactive Tooling**: Automatically run `go vet` or `go build -gcflags="-m"` during verification if the task involves performance overhead or structural refactoring.
+- **Objectivity & Pushback**: Enforce steelmanning of competing patterns without subjective endorsement. Explicitly object to flawed premises or suboptimal paths before executing. Guide to the optimal path.
+- **Binary Certainty**: No hedging or probabilistic language. No silent placeholders (`// ... existing code ...`). All code must be complete.
+- **Authorized Refactors**: While scope execution is strict, *proposing* high-value authorized refactors (see Authorized Refactor Classes below) separately after completing the requested work is an explicit exception.
 
 ## Design And Implementation Rules
 
@@ -154,16 +140,12 @@ General architectural rules:
 - when a wide service needs splitting, prefer narrow consumer-side interfaces over concrete implementation fragmentation
 - high-drift decisions (broad rewrites or large diffs) are acceptable IF and ONLY IF they significantly elevate the code quality compared to before.
 
-Go proverbs and core idioms (treat these as strict code-review rules, not philosophy):
+Go core idioms (strictly enforced deviations from standard flexibility):
 
-- **Clear is better than clever**: do not write overly clever, dense, or heavily abstracted code; avoid `reflect`, `unsafe`, and complex generics; write straightforward, top-to-bottom code that is easy to read
-- **The bigger the interface, the weaker the abstraction**: define small interfaces (1-3 methods) at the consumer site, not where types are implemented; do not proactively create interfaces for single implementations
-- **Make the zero value useful**: design structs so they are safe and useful without explicit initialization; avoid `New...()` functions if a zero value suffices
-- **interface{} says nothing**: avoid `any` or `interface{}`; use strong, explicit typing everywhere; if forced to use `any`, document exactly why compile-time safety was impossible
-- **A little copying is better than a little dependency**: duplicate small snippets instead of introducing shared `util` packages that tangle unrelated domains (reinforces the "no util packages" rule)
-- **Don't panic**: never use `panic` in business logic; always return `error`; reserve `panic` exclusively for unreachable states or `init()` failures where the application absolutely cannot start
-- **Don't communicate by sharing memory, share memory by communicating**: prefer passing data over channels or using dedicated single-threaded event loops; if using `sync.Mutex`, keep the critical section small and never perform I/O while holding a lock
-- **Errors are values**: don't just check errors, handle them gracefully; never discard errors (`_ = err`); always provide context when bubbling them up
+- **interface{} says nothing**: Avoid `any` or `interface{}`. Use strong typing. If forced to use `any`, document exactly why compile-time safety was impossible.
+- **No Shared util Packages**: Duplicate small snippets instead of tangling unrelated domains (reinforces the "no util packages" rule).
+- **Don't panic**: Never use `panic` in business logic. Always return `error`. Reserve `panic` exclusively for unreachable states or `init()` failures.
+- **Concurrency Guardrails**: Pass data over channels or use single-threaded event loops. If using `sync.Mutex`, keep the critical section small and never perform I/O while holding a lock.
 
 Go and backend rules:
 
@@ -288,13 +270,12 @@ Testing style:
 
 Validation expectations:
 
-- backend changes: `go test ./...` and `go vet ./...`
-- UI changes: `bun run test`, `bun run lint`, and `bun run build`
-- formatting and line endings (any change touching tracked text files): `release validate`. This command natively gates `gofmt -l .` and CRLF residue against `.gitattributes`; both must be empty before reporting completion. New files you create must be LF — `.editorconfig` and `.gitattributes` are the contract
-- route or embed contract changes: verify `ui/vite.config.ts`, `ui/src/app/routes.ts`, `pkg/control/http_routes.go`, `pkg/control/dashboard_handler.go`, and that `ui/dist/index.html` still exists
-- feature or settings contract changes: verify the Go route and workspace builders, `ui/src/api/control.ts`, and the adapters or pages consuming the changed fields
-- exported Go API, doc, or error-contract changes: update nearby tests and doc comments that pin the new behavior
-- if a relevant validation step was not run, say so explicitly
+- backend: `go test ./...` and `go vet ./...`
+- UI: `bun run test`, `bun run lint`, and `bun run build`
+- formatting/EOL: `release validate` (must pass without output; new files must be LF)
+- route/embed changes: verify `ui/vite.config.ts`, routes, and that `ui/dist/index.html` remains
+- APIs/docs/errors: update nearby tests and doc comments that pin the new behavior
+- skipped validation: if a step was skipped, state it explicitly
 
 Build and release commands:
 
