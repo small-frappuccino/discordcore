@@ -837,17 +837,12 @@ func (s *StatsService) resolveChannel(ctx context.Context, channelID string) (*C
 }
 
 func renderStatsChannelName(label, template string, count int) string {
-	label = strings.TrimSpace(label)
-	tmpl := strings.TrimSpace(template)
-	if tmpl == "" {
-		if label == "" {
-			return fmt.Sprintf("☆  ☆ : %d", count)
-		}
-		return fmt.Sprintf("☆ %s ☆ : %d", strings.ToLower(label), count)
+	if template == "" {
+		return fmt.Sprintf("%s%d", label, count)
 	}
-	out := strings.ReplaceAll(tmpl, "{count}", fmt.Sprintf("%d", count))
+	out := strings.ReplaceAll(template, "{count}", fmt.Sprintf("%d", count))
 	out = strings.ReplaceAll(out, "{label}", label)
-	return strings.TrimSpace(out)
+	return out
 }
 
 // ApplyMemberAdd is called by the adapter when a member joins.

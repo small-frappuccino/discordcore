@@ -85,6 +85,11 @@ func (c *statsRootCommand) Options() []discord.CommandOption {
 					},
 				},
 				&discord.StringOption{
+					OptionName:  "label",
+					Description: "The exact name/prefix to use (e.g. '☆ Members ☆ : ')",
+					Required:    false,
+				},
+				&discord.StringOption{
 					OptionName:  "name_template",
 					Description: "Template for the channel name (e.g. 'Members: {count}')",
 					Required:    false,
@@ -191,6 +196,7 @@ func (c *statsRootCommand) handleAdd(ctx *core.ArikawaContext, opts []discord.Co
 		memberType = "all"
 	}
 	nameTemplate := parsedOpts.String("name_template")
+	label := parsedOpts.String("label")
 
 	err := c.configManager.UpdateGuildConfig(ctx.GuildID.String(), func(cfg *files.GuildConfig) error {
 		for i, ch := range cfg.Stats.Channels {
@@ -198,12 +204,14 @@ func (c *statsRootCommand) handleAdd(ctx *core.ArikawaContext, opts []discord.Co
 				cfg.Stats.Channels[i].MemberType = memberType
 				cfg.Stats.Channels[i].NameTemplate = nameTemplate
 				cfg.Stats.Channels[i].RoleID = roleFilter
+				cfg.Stats.Channels[i].Label = label
 				return nil
 			}
 		}
 
 		cfg.Stats.Channels = append(cfg.Stats.Channels, files.StatsChannelConfig{
 			ChannelID:    channelID,
+			Label:        label,
 			MemberType:   memberType,
 			NameTemplate: nameTemplate,
 			RoleID:       roleFilter,
@@ -310,10 +318,10 @@ func (c *statsRootCommand) handleList(ctx *core.ArikawaContext) error {
 		}
 		templateStr := ch.NameTemplate
 		if templateStr == "" {
-			templateStr = "☆ {label} ☆ : {count}"
+			templateStr = "{label}{count}"
 		}
 
-		buf.WriteString(fmt.Sprintf("• <#%s>\n  Filter: %s\n  Template: `%s`\n\n", ch.ChannelID, filterStr, templateStr))
+		buf.WriteString(fmt.Sprintf("• <#%s>\n  Label: `%s`\n  Filter: %s\n  Template: `%s`\n\n", ch.ChannelID, ch.Label, filterStr, templateStr))
 	}
 
 	interval := cfg.Stats.UpdateIntervalMins

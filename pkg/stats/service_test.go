@@ -42,18 +42,23 @@ func TestMemberTypeMatches(t *testing.T) {
 }
 
 func TestRenderStatsChannelName(t *testing.T) {
-	got := renderStatsChannelName("Total Proxies", "", 42)
-	if got != "☆ total proxies ☆ : 42" {
+	got := renderStatsChannelName("Total Proxies: ", "", 42)
+	if got != "Total Proxies: 42" {
 		t.Fatalf("default template: got %q", got)
 	}
 
 	got = renderStatsChannelName("", "", 7)
-	if got != "☆  ☆ : 7" {
+	if got != "7" {
 		t.Fatalf("default template without label: got %q", got)
 	}
 
 	got = renderStatsChannelName("Bunny", "{label} | {count}", 3)
 	if got != "Bunny | 3" {
 		t.Fatalf("custom template: got %q", got)
+	}
+
+	got = renderStatsChannelName("☆ custom proxies ☆ : ", "", 10)
+	if got != "☆ custom proxies ☆ : 10" {
+		t.Fatalf("pre-formatted label: got %q", got)
 	}
 }
