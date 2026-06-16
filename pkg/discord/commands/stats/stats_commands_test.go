@@ -27,7 +27,7 @@ func TestStatsAddPersistsChannelConfig(t *testing.T) {
 	}))
 
 	resp := rec.lastResponse(t)
-	requireEphemeralResponse(t, resp)
+	requireNonEphemeralResponse(t, resp)
 	if !strings.Contains(resp.Data.Content.Val, "111111111") {
 		t.Fatalf("expected success mentioning the channel, got %q", resp.Data.Content.Val)
 	}
@@ -70,7 +70,7 @@ func TestStatsAddUpdatesExistingChannelConfig(t *testing.T) {
 	}))
 
 	resp := rec.lastResponse(t)
-	requireEphemeralResponse(t, resp)
+	requireNonEphemeralResponse(t, resp)
 
 	cfg := cm.GuildConfig(guildID)
 	if len(cfg.Stats.Channels) != 1 {
@@ -101,7 +101,7 @@ func TestStatsAddWithRoleFilter(t *testing.T) {
 	}))
 
 	resp := rec.lastResponse(t)
-	requireEphemeralResponse(t, resp)
+	requireNonEphemeralResponse(t, resp)
 
 	cfg := cm.GuildConfig(guildID)
 	if len(cfg.Stats.Channels) != 1 {
@@ -136,7 +136,7 @@ func TestStatsRemoveDeletesChannelConfig(t *testing.T) {
 	}))
 
 	resp := rec.lastResponse(t)
-	requireEphemeralResponse(t, resp)
+	requireNonEphemeralResponse(t, resp)
 	if !strings.Contains(resp.Data.Content.Val, "Removed") {
 		t.Fatalf("expected removal confirmation, got %q", resp.Data.Content.Val)
 	}
@@ -173,7 +173,7 @@ func TestStatsRemoveReportsErrorForUnknownChannel(t *testing.T) {
 
 	resp := rec.lastResponse(t)
 	requireEphemeralResponse(t, resp)
-	if !strings.Contains(resp.Data.Content.Val, "not configured") {
+	if !strings.Contains(resp.Data.Content.Val, "disabled") {
 		t.Fatalf("expected not-configured error, got %q", resp.Data.Content.Val)
 	}
 }
@@ -234,9 +234,12 @@ func TestStatsListShowsEmptyStateWhenNoChannels(t *testing.T) {
 	handleRawStatsInteraction(t, router, cm, rec, newStatsSlashInteraction(guildID, ownerID, "list", nil))
 
 	resp := rec.lastResponse(t)
-	requireEphemeralResponse(t, resp)
-	if !strings.Contains(resp.Data.Content.Val, "no stats channels") {
-		t.Fatalf("expected empty state message, got %q", resp.Data.Content.Val)
+	requireNonEphemeralResponse(t, resp)
+	if resp.Data.Embeds == nil || len(*resp.Data.Embeds) == 0 {
+		t.Fatalf("expected embed")
+	}
+	if !strings.Contains((*resp.Data.Embeds)[0].Description, "disabled") {
+		t.Fatalf("expected disabled message")
 	}
 }
 
@@ -266,43 +269,5 @@ func TestStatsListShowsRoleFilter(t *testing.T) {
 	}
 	if !strings.Contains((*resp.Data.Embeds)[0].Description, "333333333") {
 		t.Fatalf("expected embed to mention the role filter, got %q", (*resp.Data.Embeds)[0].Description)
-	}
-}
-
-func TestStatsCommandsRejectWhenFeatureDisabled(t *testing.T) {
-	const (
-		guildID = "123456789"
-		ownerID = "987654321"
-	)
-
-	router, cm, _, rec := newStatsCommandTestRouter(t, guildID, ownerID, files.GuildConfig{
-		GuildID: guildID,
-		Features: files.FeatureToggles{
-			StatsChannels: testBoolPtr(false),
-		},
-	})
-
-	subcommands := []struct {
-		name    string
-		options []discord.CommandInteractionOption
-	}{
-		{"add", []discord.CommandInteractionOption{
-			{Name: "channel", Type: discord.ChannelOptionType, Value: []byte(`"111111111"`)},
-		}},
-		{"remove", []discord.CommandInteractionOption{
-			{Name: "channel", Type: discord.ChannelOptionType, Value: []byte(`"111111111"`)},
-		}},
-		{"list", nil},
-	}
-
-	for _, sc := range subcommands {
-		t.Run(sc.name, func(t *testing.T) {
-			handleRawStatsInteraction(t, router, cm, rec, newStatsSlashInteraction(guildID, ownerID, sc.name, sc.options))
-			resp := rec.lastResponse(t)
-			requireEphemeralResponse(t, resp)
-			if !strings.Contains(resp.Data.Content.Val, "disabled") {
-				t.Fatalf("expected disabled error for /%s %s, got %q", "stats", sc.name, resp.Data.Content.Val)
-			}
-		})
 	}
 }

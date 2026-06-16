@@ -174,3 +174,9 @@ func requireEphemeralResponse(t *testing.T, resp api.InteractionResponse) {
 func testBoolPtr(v bool) *bool {
 	return &v
 }
+
+func requireNonEphemeralResponse(t *testing.T, resp api.InteractionResponse) {
+	if resp.Data.Flags&discord.EphemeralMessage != 0 {
+		t.Errorf("expected non-ephemeral response, got flags=%v", resp.Data.Flags)
+	}
+}

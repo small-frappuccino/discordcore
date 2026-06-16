@@ -120,32 +120,6 @@ func (c *statsRootCommand) Options() []discord.CommandOption {
 	}
 }
 
-func (c *statsRootCommand) ensureStatsEnabled(ctx *core.ArikawaContext) error {
-	if ctx == nil || ctx.Config == nil {
-		return fmt.Errorf("invalid context")
-	}
-	cfg := ctx.Config.Config()
-	features := cfg.ResolveFeatures(ctx.GuildID.String())
-	route, isFallback := ctx.Config.GuildConfig(ctx.GuildID.String()).ResolveFeatureBotInstanceID("stats")
-
-	if c.logger != nil {
-		c.logger.Debug("Transient state inspection: Evaluated feature enablement for Stats",
-			slog.Bool("toggle_enabled", features.StatsChannels),
-			slog.String("resolved_route", route),
-			slog.Bool("route_is_fallback", isFallback),
-		)
-	}
-
-	if route == "<unrouted>" || !features.StatsChannels {
-		_ = ctx.Respond(api.InteractionResponseData{
-			Content: option.NewNullableString("Stats channels feature is currently disabled for this server."),
-			Flags:   discord.EphemeralMessage,
-		})
-		return core.ErrAlreadyAcknowledged
-	}
-	return nil
-}
-
 func (c *statsRootCommand) Handle(ctx *core.ArikawaContext) error {
 	data, ok := ctx.Interaction.Data.(*discord.CommandInteraction)
 	if !ok || len(data.Options) == 0 {
@@ -166,10 +140,6 @@ func (c *statsRootCommand) Handle(ctx *core.ArikawaContext) error {
 }
 
 func (c *statsRootCommand) handleAdd(ctx *core.ArikawaContext, opts []discord.CommandInteractionOption) error {
-	if err := c.ensureStatsEnabled(ctx); err != nil {
-		return err
-	}
-
 	parsedOpts := core.ArikawaOptionList(opts)
 	channelID := parsedOpts.ChannelID("channel")
 	if channelID == "" {
@@ -222,13 +192,17 @@ func (c *statsRootCommand) handleAdd(ctx *core.ArikawaContext, opts []discord.Co
 
 	return ctx.Respond(api.InteractionResponseData{
 		Content: option.NewNullableString("Updated stats configuration for <#" + channelID + ">."),
-		Flags:   discord.EphemeralMessage,
 	})
 }
 
 func (c *statsRootCommand) handleRemove(ctx *core.ArikawaContext, opts []discord.CommandInteractionOption) error {
-	if err := c.ensureStatsEnabled(ctx); err != nil {
-		return err
+	cfg := ctx.GuildConfig
+	if len(cfg.Stats.Channels) == 0 {
+		_ = ctx.Respond(api.InteractionResponseData{
+			Content: option.NewNullableString("Stats channels feature is currently disabled for this server."),
+			Flags:   discord.EphemeralMessage,
+		})
+		return core.ErrAlreadyAcknowledged
 	}
 
 	parsedOpts := core.ArikawaOptionList(opts)
@@ -275,20 +249,19 @@ func (c *statsRootCommand) handleRemove(ctx *core.ArikawaContext, opts []discord
 
 	return ctx.Respond(api.InteractionResponseData{
 		Content: option.NewNullableString("Removed <#" + channelID + "> from stats channels."),
-		Flags:   discord.EphemeralMessage,
 	})
 }
 
 func (c *statsRootCommand) handleList(ctx *core.ArikawaContext) error {
-	if err := c.ensureStatsEnabled(ctx); err != nil {
-		return err
-	}
-
 	cfg := ctx.GuildConfig
 	if len(cfg.Stats.Channels) == 0 {
+		embed := discord.Embed{
+			Title:       "Stats Channels",
+			Description: "Stats channels feature is currently disabled for this server.",
+			Color:       0x5865F2,
+		}
 		return ctx.Respond(api.InteractionResponseData{
-			Content: option.NewNullableString("There are no stats channels configured for this server."),
-			Flags:   discord.EphemeralMessage,
+			Embeds: &[]discord.Embed{embed},
 		})
 	}
 
@@ -324,6 +297,5 @@ func (c *statsRootCommand) handleList(ctx *core.ArikawaContext) error {
 
 	return ctx.Respond(api.InteractionResponseData{
 		Embeds: &[]discord.Embed{embed},
-		Flags:  discord.EphemeralMessage,
 	})
 }
