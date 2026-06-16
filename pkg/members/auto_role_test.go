@@ -1,11 +1,9 @@
-//go:build ignore
-
 package members
 
 import (
 	"testing"
 
-	"github.com/small-frappuccino/discordgo"
+	"github.com/diamondburned/arikawa/v3/discord"
 )
 
 func TestHasRoleID(t *testing.T) {
@@ -27,8 +25,8 @@ func TestMemberHasRole(t *testing.T) {
 	if memberHasRole(nil, "r1") {
 		t.Fatalf("expected false for nil member")
 	}
-	member := &discordgo.Member{Roles: []string{"a", "b"}}
-	if !memberHasRole(member, "a") {
+	member := &discord.Member{RoleIDs: []discord.RoleID{discord.RoleID(1), discord.RoleID(2)}}
+	if !memberHasRole(member, "1") {
 		t.Fatalf("expected true for existing role")
 	}
 	if memberHasRole(member, "z") {
@@ -48,11 +46,11 @@ func TestEvaluateAutoRoleDecision(t *testing.T) {
 		{
 			name:  "add target when member has role A and role B",
 			roles: []string{"role-a", "role-b"},
-			want:  autoRoleAddTarget},
+			want:  AutoRoleAddTarget},
 		{
 			name:  "remove target when role A is missing",
 			roles: []string{"role-target", "role-b"},
-			want:  autoRoleRemoveTarget},
+			want:  AutoRoleRemoveTarget},
 		{
 			name:  "noop when member already has target and still has role A",
 			roles: []string{"role-a", "role-target"},
@@ -64,9 +62,9 @@ func TestEvaluateAutoRoleDecision(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := evaluateAutoRoleDecision(tt.roles, target, required)
+			got := EvaluateAutoRoleDecision(tt.roles, target, required)
 			if got != tt.want {
-				t.Fatalf("evaluateAutoRoleDecision()=%v, want %v", got, tt.want)
+				t.Fatalf("EvaluateAutoRoleDecision()=%v, want %v", got, tt.want)
 			}
 		})
 	}

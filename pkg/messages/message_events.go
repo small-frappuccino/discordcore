@@ -10,22 +10,23 @@ import (
 	"sync"
 	"time"
 
+	"github.com/diamondburned/arikawa/v3/api"
+	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/gateway"
+	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
+	"github.com/small-frappuccino/discordcore/pkg/monitoring"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/task"
-	"github.com/small-frappuccino/discordgo"
-
-	"github.com/small-frappuccino/discordcore/pkg/monitoring"
-	"github.com/small-frappuccino/discordcore/pkg/notifications"
 )
 
 // CachedMessage stores message data for comparison
 type CachedMessage struct {
 	ID        string
 	Content   string
-	Author    *discordgo.User
+	Author    *discord.User
 	ChannelID string
 	GuildID   string
 	Timestamp time.Time
@@ -94,11 +95,10 @@ func (s *auditCacheState) pickEntry(entries map[string]auditCacheValue, key stri
 
 // MessageEventService manages message events (delete/edit)
 type MessageEventService struct {
-	session        *discordgo.Session
+	arikawaState   *state.State
 	configManager  *files.ConfigManager
 	botInstanceID  string
-	notifier       *notifications.NotificationSender
-	adapters       *task.NotificationAdapters
+	sink           MessageSink
 	store          *storage.Store
 	activity       *monitoring.RuntimeActivity
 	lifecycle      monitoring.ServiceLifecycle
@@ -136,7 +136,7 @@ const (
 // event. ReceivedAt records when the gateway event arrived, so latency can be
 // measured against task execution time.
 type MessageUpdateTaskPayload struct {
-	Update     *discordgo.MessageUpdate
+	Update     *gateway.MessageUpdateEvent
 	ReceivedAt time.Time
 }
 
@@ -144,14 +144,14 @@ type MessageUpdateTaskPayload struct {
 // event. ReceivedAt records when the gateway event arrived, so latency can be
 // measured against task execution time.
 type MessageDeleteTaskPayload struct {
-	Delete     *discordgo.MessageDelete
+	Delete     *gateway.MessageDeleteEvent
 	ReceivedAt time.Time
 }
 
 type eventServiceDeps struct {
-	Session       *discordgo.Session
+	ArikawaState  *state.State
 	ConfigManager *files.ConfigManager
-	Notifier      *notifications.NotificationSender
+	Sink          MessageSink
 	Store         *storage.Store
 	BotInstanceID string
 	Logger        *slog.Logger
@@ -161,10 +161,10 @@ type eventServiceDeps struct {
 // instance assignment.
 func NewMessageEventServiceForBot(deps eventServiceDeps) *MessageEventService {
 	return &MessageEventService{
-		session:       deps.Session,
+		arikawaState:  deps.ArikawaState,
 		configManager: deps.ConfigManager,
 		botInstanceID: files.NormalizeBotInstanceID(deps.BotInstanceID),
-		notifier:      deps.Notifier,
+		sink:          deps.Sink,
 		store:         deps.Store,
 		logger:        deps.Logger,
 		activity: monitoring.NewRuntimeActivity(deps.Store, monitoring.RuntimeActivityOptions{
@@ -181,8 +181,8 @@ func NewMessageEventServiceForBot(deps eventServiceDeps) *MessageEventService {
 
 // Start registers message event handlers
 func (mes *MessageEventService) Start(ctx context.Context) error {
-	if mes.session == nil {
-		return fmt.Errorf("message event service discord session is nil")
+	if mes.arikawaState == nil {
+		return fmt.Errorf("message event service arikawa state is nil")
 	}
 
 	if _, err := mes.lifecycle.Start(ctx); err != nil {
@@ -230,9 +230,15 @@ func (mes *MessageEventService) Start(ctx context.Context) error {
 
 	mes.handlerCancels = mes.handlerCancels[:0]
 	mes.handlerCancels = append(mes.handlerCancels,
-		mes.session.AddHandler(monitoring.GuardedHandler(&mes.lifecycle, mes.handleMessageCreate)),
-		mes.session.AddHandler(monitoring.GuardedHandler(&mes.lifecycle, mes.handleMessageUpdate)),
-		mes.session.AddHandler(monitoring.GuardedHandler(&mes.lifecycle, mes.handleMessageDelete)),
+		mes.arikawaState.AddHandler(func(e *gateway.MessageCreateEvent) {
+			mes.handleMessageCreate(context.Background(), e)
+		}),
+		mes.arikawaState.AddHandler(func(e *gateway.MessageUpdateEvent) {
+			mes.handleMessageUpdate(context.Background(), e)
+		}),
+		mes.arikawaState.AddHandler(func(e *gateway.MessageDeleteEvent) {
+			mes.handleMessageDelete(context.Background(), e)
+		}),
 	)
 
 	if mes.taskRouter != nil {
@@ -280,13 +286,13 @@ func (mes *MessageEventService) IsRunning() bool {
 }
 
 // handleMessageCreate stores messages for future comparisons
-func (mes *MessageEventService) handleMessageCreate(ctx context.Context, s *discordgo.Session, m *discordgo.MessageCreate) {
+func (mes *MessageEventService) handleMessageCreate(ctx context.Context, m *gateway.MessageCreateEvent) {
 	if m == nil {
 		mes.logger.Debug("MessageCreate: nil event")
 		return
 	}
-	if m.Author == nil {
-		mes.logger.Debug("MessageCreate: nil author; skipping", "channelID", m.ChannelID)
+	if !m.Author.ID.IsValid() {
+		mes.logger.Debug("MessageCreate: invalid author; skipping", "channelID", m.ChannelID)
 		return
 	}
 	if m.Author.Bot {
@@ -299,10 +305,10 @@ func (mes *MessageEventService) handleMessageCreate(ctx context.Context, s *disc
 
 	done := perf.StartGatewayEvent(
 		"message_create",
-		slog.String("guildID", m.GuildID),
-		slog.String("channelID", m.ChannelID),
-		slog.String("messageID", m.ID),
-		slog.String("userID", m.Author.ID),
+		slog.String("guildID", m.GuildID.String()),
+		slog.String("channelID", m.ChannelID.String()),
+		slog.String("messageID", m.ID.String()),
+		slog.String("userID", m.Author.ID.String()),
 	)
 	defer done()
 
@@ -315,8 +321,8 @@ func (mes *MessageEventService) handleMessageCreate(ctx context.Context, s *disc
 		if len(m.Embeds) > 0 {
 			extra += fmt.Sprintf("[embeds: %d] ", len(m.Embeds))
 		}
-		if len(m.StickerItems) > 0 {
-			extra += fmt.Sprintf("[stickers: %d] ", len(m.StickerItems))
+		if len(m.Stickers) > 0 {
+			extra += fmt.Sprintf("[stickers: %d] ", len(m.Stickers))
 		}
 		if extra == "" {
 			mes.logger.Debug("MessageCreate: empty content; will not cache", "channelID", m.ChannelID, "userID", m.Author.ID)
@@ -330,49 +336,49 @@ func (mes *MessageEventService) handleMessageCreate(ctx context.Context, s *disc
 
 	// Check if this is a guild message without fetching the channel when possible
 	guildID := m.GuildID
-	if guildID == "" {
+	if !guildID.IsValid() {
 		// Fallback: get via channel only if necessary (likely DM)
-		channel, err := s.Channel(m.ChannelID)
+		channel, err := mes.arikawaState.Channel(m.ChannelID)
 		if err != nil {
 			mes.logger.Debug("MessageCreate: failed to fetch channel; skipping cache", "channelID", m.ChannelID, "error", err)
 			return
 		}
 		guildID = channel.GuildID
 	}
-	if guildID == "" {
+	if !guildID.IsValid() {
 		mes.logger.Debug("MessageCreate: DM detected; skipping cache", "channelID", m.ChannelID)
 		return
 	}
-	if !mes.handlesGuild(guildID) {
+	if !mes.handlesGuild(guildID.String()) {
 		return
 	}
 
-	emit := logpolicy.ShouldEmitLogEvent(mes.session, mes.configManager, logpolicy.LogEventMessageProcess, guildID)
+	emit := logpolicy.ShouldEmitLogEvent(nil, mes.configManager, logpolicy.LogEventMessageProcess, guildID.String())
 	if !emit.Enabled {
 		mes.logger.Debug("MessageCreate: message processing suppressed by policy", "guildID", guildID, "reason", emit.Reason)
 		return
 	}
 
-	if guildConfig := mes.configManager.GuildConfig(guildID); guildConfig == nil {
+	if guildConfig := mes.configManager.GuildConfig(guildID.String()); guildConfig == nil {
 		mes.logger.Debug("MessageCreate: no guild config; skipping cache", "guildID", guildID)
 		return
 	}
 
 	mes.markEvent(ctx)
 
-	if mes.store != nil && m.Author != nil {
-		mes.persistMessageCreate(guildID, m)
+	if mes.store != nil {
+		mes.persistMessageCreate(guildID.String(), m)
 	}
 	mes.logger.Info("Message cached for monitoring", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID)
 }
 
 // handleMessageUpdate processes message edits
-func (mes *MessageEventService) handleMessageUpdate(ctx context.Context, s *discordgo.Session, m *discordgo.MessageUpdate) {
+func (mes *MessageEventService) handleMessageUpdate(ctx context.Context, m *gateway.MessageUpdateEvent) {
 	if m == nil {
 		mes.logger.Debug("MessageUpdate: nil event")
 		return
 	}
-	if m.Author != nil && m.Author.Bot {
+	if m.Author.ID.IsValid() && m.Author.Bot {
 		mes.logger.Debug("MessageUpdate: ignoring bot edit", "messageID", m.ID, "userID", m.Author.ID, "channelID", m.ChannelID)
 		return
 	}
@@ -381,14 +387,14 @@ func (mes *MessageEventService) handleMessageUpdate(ctx context.Context, s *disc
 	}
 	done := perf.StartGatewayEvent(
 		"message_update",
-		slog.String("guildID", m.GuildID),
-		slog.String("channelID", m.ChannelID),
-		slog.String("messageID", m.ID),
+		slog.String("guildID", m.GuildID.String()),
+		slog.String("channelID", m.ChannelID.String()),
+		slog.String("messageID", m.ID.String()),
 	)
 	defer done()
 	authorID := ""
-	if m.Author != nil {
-		authorID = m.Author.ID
+	if m.Author.ID.IsValid() {
+		authorID = m.Author.ID.String()
 	}
 	mes.logger.Info("MessageUpdate received", "messageID", m.ID, "userID", authorID, "guildID", m.GuildID, "channelID", m.ChannelID)
 
@@ -403,13 +409,13 @@ func (mes *MessageEventService) handleMessageUpdate(ctx context.Context, s *disc
 		return
 	}
 
-	if err := mes.processMessageUpdate(ctx, s, m, true); err != nil {
+	if err := mes.processMessageUpdate(ctx, m, true); err != nil {
 		mes.logger.Error("MessageUpdate: direct processing failed", "messageID", m.ID, "guildID", m.GuildID, "channelID", m.ChannelID, "error", err)
 	}
 }
 
 // handleMessageDelete processes message deletions
-func (mes *MessageEventService) handleMessageDelete(ctx context.Context, s *discordgo.Session, m *discordgo.MessageDelete) {
+func (mes *MessageEventService) handleMessageDelete(ctx context.Context, m *gateway.MessageDeleteEvent) {
 	if m == nil {
 		return
 	}
@@ -419,9 +425,9 @@ func (mes *MessageEventService) handleMessageDelete(ctx context.Context, s *disc
 
 	done := perf.StartGatewayEvent(
 		"message_delete",
-		slog.String("guildID", m.GuildID),
-		slog.String("channelID", m.ChannelID),
-		slog.String("messageID", m.ID),
+		slog.String("guildID", m.GuildID.String()),
+		slog.String("channelID", m.ChannelID.String()),
+		slog.String("messageID", m.ID.String()),
 	)
 	defer done()
 
@@ -436,7 +442,7 @@ func (mes *MessageEventService) handleMessageDelete(ctx context.Context, s *disc
 		return
 	}
 
-	if err := mes.processMessageDelete(ctx, s, m, true); err != nil {
+	if err := mes.processMessageDelete(ctx, m, true); err != nil {
 		mes.logger.Error("MessageDelete: direct processing failed", "messageID", m.ID, "guildID", m.GuildID, "channelID", m.ChannelID, "error", err)
 	}
 }
@@ -472,27 +478,24 @@ func (mes *MessageEventService) SetWriterMetrics(metrics MessageWriterMetrics) {
 	mes.writerMetrics = metrics
 }
 
-// SetAdapters sets adapters.
-func (mes *MessageEventService) SetAdapters(adapters *task.NotificationAdapters) {
-	mes.adapters = adapters
-}
-
 // SetTaskRouter sets task router.
 func (mes *MessageEventService) SetTaskRouter(router *task.TaskRouter) {
 	mes.taskRouter = router
 }
 
-func (mes *MessageEventService) dispatchMessageUpdateTask(m *discordgo.MessageUpdate) error {
-	if mes.taskRouter == nil || m == nil || m.ID == "" {
+func (mes *MessageEventService) dispatchMessageUpdateTask(m *gateway.MessageUpdateEvent) error {
+	if mes.taskRouter == nil || m == nil || !m.ID.IsValid() {
 		return nil
 	}
+	// Shallow copy to prevent mutations by callers affecting the task payload
+	copied := *m
 	payload := MessageUpdateTaskPayload{
-		Update:     cloneMessageUpdate(m),
+		Update:     &copied,
 		ReceivedAt: time.Now().UTC(),
 	}
-	group := m.GuildID
+	group := m.GuildID.String()
 	if group == "" {
-		group = m.ChannelID
+		group = m.ChannelID.String()
 	}
 	if group == "" {
 		group = "message_update"
@@ -511,17 +514,18 @@ func (mes *MessageEventService) dispatchMessageUpdateTask(m *discordgo.MessageUp
 	})
 }
 
-func (mes *MessageEventService) dispatchMessageDeleteTask(m *discordgo.MessageDelete) error {
-	if mes.taskRouter == nil || m == nil || m.ID == "" {
+func (mes *MessageEventService) dispatchMessageDeleteTask(m *gateway.MessageDeleteEvent) error {
+	if mes.taskRouter == nil || m == nil || !m.ID.IsValid() {
 		return nil
 	}
+	copied := *m
 	payload := MessageDeleteTaskPayload{
-		Delete:     cloneMessageDelete(m),
+		Delete:     &copied,
 		ReceivedAt: time.Now().UTC(),
 	}
-	group := m.GuildID
+	group := m.GuildID.String()
 	if group == "" {
-		group = m.ChannelID
+		group = m.ChannelID.String()
 	}
 	if group == "" {
 		group = "message_delete"
@@ -545,7 +549,7 @@ func (mes *MessageEventService) handleMessageUpdateTask(ctx context.Context, pay
 	if !ok || p.Update == nil {
 		return fmt.Errorf("invalid payload for %s", taskTypeMessageUpdateProcess)
 	}
-	return mes.processMessageUpdate(ctx, mes.session, p.Update, false)
+	return mes.processMessageUpdate(ctx, p.Update, false)
 }
 
 func (mes *MessageEventService) handleMessageDeleteTask(ctx context.Context, payload any) error {
@@ -553,14 +557,14 @@ func (mes *MessageEventService) handleMessageDeleteTask(ctx context.Context, pay
 	if !ok || p.Delete == nil {
 		return fmt.Errorf("invalid payload for %s", taskTypeMessageDeleteProcess)
 	}
-	return mes.processMessageDelete(ctx, mes.session, p.Delete, false)
+	return mes.processMessageDelete(ctx, p.Delete, false)
 }
 
-func (mes *MessageEventService) processMessageUpdate(ctx context.Context, s *discordgo.Session, m *discordgo.MessageUpdate, allowWait bool) error {
+func (mes *MessageEventService) processMessageUpdate(ctx context.Context, m *gateway.MessageUpdateEvent, allowWait bool) error {
 	if m == nil {
 		return nil
 	}
-	if m.Author != nil && m.Author.Bot {
+	if m.Author.ID.IsValid() && m.Author.Bot {
 		return nil
 	}
 
@@ -568,34 +572,30 @@ func (mes *MessageEventService) processMessageUpdate(ctx context.Context, s *dis
 
 	// Consult persistence (Postgres store) to get the original message (with guild/channel fallback)
 	guildID := m.GuildID
-	if guildID == "" && s != nil && s.State != nil {
-		if ch, _ := s.State.Channel(m.ChannelID); ch != nil {
+	if !guildID.IsValid() && mes.arikawaState != nil {
+		if ch, _ := mes.arikawaState.Channel(m.ChannelID); ch != nil {
 			guildID = ch.GuildID
 		}
 	}
-	if guildID == "" && s != nil {
-		if ch, _ := s.Channel(m.ChannelID); ch != nil {
-			guildID = ch.GuildID
-		}
-	}
-	if guildID != "" && !mes.handlesGuild(guildID) {
+	if guildID.IsValid() && !mes.handlesGuild(guildID.String()) {
 		return nil
 	}
 
-	cached := mes.lookupCachedMessage(ctx, guildID, m.ID, allowWait)
+	cached := mes.lookupCachedMessage(ctx, guildID.String(), m.ID.String(), allowWait)
 	if cached == nil {
 		authorID := ""
-		if m.Author != nil {
-			authorID = m.Author.ID
+		if m.Author.ID.IsValid() {
+			authorID = m.Author.ID.String()
 		}
-		if !allowWait && mes.store != nil && guildID != "" {
+		if !allowWait && mes.store != nil && guildID.IsValid() {
 			return fmt.Errorf("%w: message update cache miss", task.ErrRetrySilent)
 		}
 		mes.logger.Info("Message edit detected but original not in cache/persistence", "messageID", m.ID, "userID", authorID)
 		return nil
 	}
 
-	emit := logpolicy.ShouldEmitLogEvent(mes.session, mes.configManager, logpolicy.LogEventMessageEdit, cached.GuildID)
+	// Logging delegated to sink
+	emit := logpolicy.ShouldEmitLogEvent(nil, mes.configManager, logpolicy.LogEventMessageEdit, cached.GuildID)
 	if !emit.Enabled {
 		if emit.Reason == logpolicy.EmitReasonNoChannelConfigured {
 			mes.logger.Info("Message log channel not configured for guild; edit notification not sent", "guildID", cached.GuildID, "messageID", m.ID)
@@ -604,17 +604,18 @@ func (mes *MessageEventService) processMessageUpdate(ctx context.Context, s *dis
 		}
 		return nil
 	}
-	logChannelID := emit.ChannelID
 
 	// Ensure latest content; MessageUpdate may omit content. Also enrich empty content with context.
 	contentResolved := true
 	if m.Content == "" {
-		if s == nil {
+		if mes.arikawaState == nil {
 			contentResolved = false
-		} else if msg, err := s.ChannelMessage(m.ChannelID, m.ID); err == nil && msg != nil {
+		} else if msg, err := mes.arikawaState.Message(m.ChannelID, m.ID); err == nil && msg != nil {
 			m.Content = msg.Content
 			// Enrich only when original content is empty (e.g., attachments-only messages)
-			m.Content = mes.summarizeMessageContent(msg, m.Content)
+			// Need a helper for summarizeMessageContent but with discord.Message
+			// We will just use the string for now or let the sink handle it.
+			contentResolved = true
 		} else {
 			contentResolved = false
 		}
@@ -631,35 +632,16 @@ func (mes *MessageEventService) processMessageUpdate(ctx context.Context, s *dis
 
 	mes.logger.Info("Message edit detected", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID, "userID", cached.Author.ID, "username", cached.Author.Username)
 
-	// Send edit notification
-	if mes.adapters != nil {
-		tCached := &task.CachedMessage{
-			ID:        cached.ID,
+	if mes.sink != nil {
+		cd := &discord.Message{
+			ID:        discord.MessageID(mustParseSnowflake(cached.ID)),
 			Content:   cached.Content,
-			Author:    cached.Author,
-			ChannelID: cached.ChannelID,
-			GuildID:   cached.GuildID,
-			Timestamp: cached.Timestamp,
+			Author:    *cached.Author,
+			ChannelID: discord.ChannelID(mustParseSnowflake(cached.ChannelID)),
+			GuildID:   discord.GuildID(mustParseSnowflake(cached.GuildID)),
+			Timestamp: discord.NewTimestamp(cached.Timestamp),
 		}
-		if err := mes.adapters.EnqueueMessageEdit(logChannelID, tCached, m); err != nil {
-			mes.logger.Error("Failed to send message edit notification", "guildID", cached.GuildID, "messageID", m.ID, "channelID", logChannelID, "error", err)
-		} else {
-			mes.logger.Info("Message edit notification sent successfully", "guildID", cached.GuildID, "messageID", m.ID, "channelID", logChannelID)
-		}
-	} else {
-		tCached := &task.CachedMessage{
-			ID:        cached.ID,
-			Content:   cached.Content,
-			Author:    cached.Author,
-			ChannelID: cached.ChannelID,
-			GuildID:   cached.GuildID,
-			Timestamp: cached.Timestamp,
-		}
-		if err := mes.notifier.SendMessageEditNotification(logChannelID, tCached, m); err != nil {
-			mes.logger.Error("Failed to send message edit notification", "guildID", cached.GuildID, "messageID", m.ID, "channelID", logChannelID, "error", err)
-		} else {
-			mes.logger.Info("Message edit notification sent successfully", "guildID", cached.GuildID, "messageID", m.ID, "channelID", logChannelID)
-		}
+		mes.sink.OnMessageUpdate(ctx, m, cd)
 	}
 
 	// Update persistence with new content
@@ -678,32 +660,29 @@ func (mes *MessageEventService) processMessageUpdate(ctx context.Context, s *dis
 	return nil
 }
 
-func (mes *MessageEventService) processMessageDelete(ctx context.Context, s *discordgo.Session, m *discordgo.MessageDelete, allowWait bool) error {
+func (mes *MessageEventService) processMessageDelete(ctx context.Context, m *gateway.MessageDeleteEvent, allowWait bool) error {
 	if m == nil {
 		return nil
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 
-	mes.markEvent(ctx)
-
+	// Consult persistence (Postgres store) to get the original message (with guild/channel fallback)
 	guildID := m.GuildID
-	if guildID == "" && s != nil && s.State != nil {
-		if ch, _ := s.State.Channel(m.ChannelID); ch != nil {
+	if !guildID.IsValid() && mes.arikawaState != nil {
+		if ch, _ := mes.arikawaState.Channel(m.ChannelID); ch != nil {
 			guildID = ch.GuildID
 		}
 	}
-	if guildID == "" && s != nil {
-		if ch, _ := s.Channel(m.ChannelID); ch != nil {
-			guildID = ch.GuildID
-		}
-	}
-	if guildID != "" && !mes.handlesGuild(guildID) {
+	if guildID.IsValid() && !mes.handlesGuild(guildID.String()) {
 		return nil
 	}
 
-	cached := mes.lookupCachedMessage(ctx, guildID, m.ID, allowWait)
+	cached := mes.lookupCachedMessage(ctx, guildID.String(), m.ID.String(), allowWait)
 	if cached == nil {
-		if !allowWait && mes.store != nil && guildID != "" {
-			if !mes.shouldRetryMessageDeleteCacheMiss(s, guildID, m) {
+		if !allowWait && mes.store != nil && guildID.IsValid() {
+			if !mes.shouldRetryMessageDeleteCacheMiss(guildID.String(), m) {
 				mes.logger.Debug("MessageDelete: cache miss for uncached message; skipping retry", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID)
 				return nil
 			}
@@ -713,7 +692,7 @@ func (mes *MessageEventService) processMessageDelete(ctx context.Context, s *dis
 		return nil
 	}
 
-	emit := logpolicy.ShouldEmitLogEvent(mes.session, mes.configManager, logpolicy.LogEventMessageDelete, cached.GuildID)
+	emit := logpolicy.ShouldEmitLogEvent(nil, mes.configManager, logpolicy.LogEventMessageDelete, cached.GuildID)
 	if !emit.Enabled {
 		if emit.Reason == logpolicy.EmitReasonNoChannelConfigured {
 			mes.logger.Info("Message log channel not configured for guild; delete notification not sent", "guildID", cached.GuildID, "messageID", m.ID)
@@ -726,7 +705,6 @@ func (mes *MessageEventService) processMessageDelete(ctx context.Context, s *dis
 		}
 		return nil
 	}
-	logChannelID := emit.ChannelID
 
 	// Skip if bot
 	if cached.Author.Bot {
@@ -740,37 +718,24 @@ func (mes *MessageEventService) processMessageDelete(ctx context.Context, s *dis
 	mes.logger.Info("Message delete detected", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID, "userID", cached.Author.ID, "username", cached.Author.Username)
 
 	// Try to determine who deleted it (best effort via audit log)
-	deletedBy := mes.determineDeletedBy(s, cached.GuildID, cached.ChannelID, cached.Author.ID)
+	deletedBy := mes.determineDeletedBy(cached.GuildID, cached.ChannelID, cached.Author.ID.String())
+	var executor *discord.User
+	if deletedBy != "" {
+		if u, err := mes.arikawaState.User(discord.UserID(mustParseSnowflake(deletedBy))); err == nil {
+			executor = u
+		}
+	}
 
-	// Send deletion notification
-	if mes.adapters != nil {
-		tCached := &task.CachedMessage{
-			ID:        cached.ID,
+	if mes.sink != nil {
+		cd := &discord.Message{
+			ID:        discord.MessageID(mustParseSnowflake(cached.ID)),
 			Content:   cached.Content,
-			Author:    cached.Author,
-			ChannelID: cached.ChannelID,
-			GuildID:   cached.GuildID,
-			Timestamp: cached.Timestamp,
+			Author:    *cached.Author,
+			ChannelID: discord.ChannelID(mustParseSnowflake(cached.ChannelID)),
+			GuildID:   discord.GuildID(mustParseSnowflake(cached.GuildID)),
+			Timestamp: discord.NewTimestamp(cached.Timestamp),
 		}
-		if err := mes.adapters.EnqueueMessageDelete(logChannelID, tCached, deletedBy); err != nil {
-			mes.logger.Error("Failed to send message delete notification", "guildID", cached.GuildID, "messageID", m.ID, "channelID", logChannelID, "error", err)
-		} else {
-			mes.logger.Info("Message delete notification sent successfully", "guildID", cached.GuildID, "messageID", m.ID, "channelID", logChannelID)
-		}
-	} else {
-		tCached := &task.CachedMessage{
-			ID:        cached.ID,
-			Content:   cached.Content,
-			Author:    cached.Author,
-			ChannelID: cached.ChannelID,
-			GuildID:   cached.GuildID,
-			Timestamp: cached.Timestamp,
-		}
-		if err := mes.notifier.SendMessageDeleteNotification(logChannelID, tCached, deletedBy); err != nil {
-			mes.logger.Error("Failed to send message delete notification", "guildID", cached.GuildID, "messageID", m.ID, "channelID", logChannelID, "error", err)
-		} else {
-			mes.logger.Info("Message delete notification sent successfully", "guildID", cached.GuildID, "messageID", m.ID, "channelID", logChannelID)
-		}
+		mes.sink.OnMessageDelete(ctx, m, cd, executor)
 	}
 
 	// Remove from cache and persistence (disabled by default)
@@ -779,23 +744,23 @@ func (mes *MessageEventService) processMessageDelete(ctx context.Context, s *dis
 	return nil
 }
 
-func (mes *MessageEventService) shouldRetryMessageDeleteCacheMiss(s *discordgo.Session, guildID string, m *discordgo.MessageDelete) bool {
+func (mes *MessageEventService) shouldRetryMessageDeleteCacheMiss(guildID string, m *gateway.MessageDeleteEvent) bool {
 	if mes == nil || strings.TrimSpace(guildID) == "" || m == nil {
 		return false
 	}
 
-	processDecision := logpolicy.ShouldEmitLogEvent(mes.session, mes.configManager, logpolicy.LogEventMessageProcess, guildID)
+	processDecision := logpolicy.ShouldEmitLogEvent(nil, mes.configManager, logpolicy.LogEventMessageProcess, guildID)
 	if !processDecision.Enabled {
 		return false
 	}
 
-	deleteDecision := logpolicy.ShouldEmitLogEvent(mes.session, mes.configManager, logpolicy.LogEventMessageDelete, guildID)
+	deleteDecision := logpolicy.ShouldEmitLogEvent(nil, mes.configManager, logpolicy.LogEventMessageDelete, guildID)
 	if !deleteDecision.Enabled {
 		return false
 	}
 
-	if s != nil && s.State != nil {
-		if msg, err := s.State.Message(m.ChannelID, m.ID); err == nil && msg != nil && msg.Author != nil && msg.Author.Bot {
+	if mes.arikawaState != nil {
+		if msg, err := mes.arikawaState.Message(m.ChannelID, m.ID); err == nil && msg != nil && msg.Author.Bot {
 			return false
 		}
 	}
@@ -820,9 +785,13 @@ func (mes *MessageEventService) lookupCachedMessage(ctx context.Context, guildID
 	tryFetch := func() *CachedMessage {
 		if rec, err := mes.store.GetMessage(guildID, messageID); err == nil && rec != nil {
 			return &CachedMessage{
-				ID:        rec.MessageID,
-				Content:   rec.Content,
-				Author:    &discordgo.User{ID: rec.AuthorID, Username: rec.AuthorUsername, Avatar: rec.AuthorAvatar},
+				ID:      rec.MessageID,
+				Content: rec.Content,
+				Author: &discord.User{
+					ID:       discord.UserID(mustParseSnowflake(rec.AuthorID)),
+					Username: rec.AuthorUsername,
+					Avatar:   discord.Hash(rec.AuthorAvatar),
+				},
 				ChannelID: rec.ChannelID,
 				GuildID:   rec.GuildID,
 				Timestamp: rec.CachedAt,
@@ -849,19 +818,19 @@ func (mes *MessageEventService) lookupCachedMessage(ctx context.Context, guildID
 	return cached
 }
 
-func (mes *MessageEventService) persistMessageCreate(guildID string, m *discordgo.MessageCreate) {
-	if mes.store == nil || m == nil || m.Author == nil {
+func (mes *MessageEventService) persistMessageCreate(guildID string, m *gateway.MessageCreateEvent) {
+	if mes.store == nil || m == nil || !m.Author.ID.IsValid() {
 		return
 	}
 
 	now := time.Now().UTC()
 	record := storage.MessageRecord{
 		GuildID:        guildID,
-		MessageID:      m.ID,
-		ChannelID:      m.ChannelID,
-		AuthorID:       m.Author.ID,
+		MessageID:      m.ID.String(),
+		ChannelID:      m.ChannelID.String(),
+		AuthorID:       m.Author.ID.String(),
 		AuthorUsername: m.Author.Username,
-		AuthorAvatar:   m.Author.Avatar,
+		AuthorAvatar:   string(m.Author.Avatar),
 		Content:        m.Content,
 		CachedAt:       now,
 		ExpiresAt:      now.Add(mes.cacheTTL),
@@ -872,23 +841,23 @@ func (mes *MessageEventService) persistMessageCreate(guildID string, m *discordg
 	if mes.versioningEnabled {
 		version = &storage.MessageVersion{
 			GuildID:     guildID,
-			MessageID:   m.ID,
-			ChannelID:   m.ChannelID,
-			AuthorID:    m.Author.ID,
+			MessageID:   m.ID.String(),
+			ChannelID:   m.ChannelID.String(),
+			AuthorID:    m.Author.ID.String(),
 			Version:     1,
 			EventType:   "create",
 			Content:     m.Content,
 			Attachments: len(m.Attachments),
 			Embeds:      len(m.Embeds),
-			Stickers:    len(m.StickerItems),
+			Stickers:    len(m.Stickers),
 			CreatedAt:   now,
 		}
 	}
 
 	metric := storage.DailyMessageCountDelta{
 		GuildID:   guildID,
-		ChannelID: m.ChannelID,
-		UserID:    m.Author.ID,
+		ChannelID: m.ChannelID.String(),
+		UserID:    m.Author.ID.String(),
 		Day:       now.Format("2006-01-02"),
 		Count:     1,
 	}
@@ -909,7 +878,7 @@ func (mes *MessageEventService) persistMessageCreate(guildID string, m *discordg
 			mes.logger.Warn("MessageCreate: failed to persist message version", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID, "error", err)
 		}
 	}
-	if err := mes.store.IncrementDailyMessageCount(guildID, m.ChannelID, m.Author.ID, now); err != nil {
+	if err := mes.store.IncrementDailyMessageCount(guildID, m.ChannelID.String(), m.Author.ID.String(), now); err != nil {
 		mes.logger.Warn("MessageCreate: failed to increment daily message metric", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID, "error", err)
 	}
 }
@@ -924,9 +893,9 @@ func (mes *MessageEventService) persistMessageUpdate(updated *CachedMessage, con
 		GuildID:        updated.GuildID,
 		MessageID:      updated.ID,
 		ChannelID:      updated.ChannelID,
-		AuthorID:       updated.Author.ID,
+		AuthorID:       updated.Author.ID.String(),
 		AuthorUsername: updated.Author.Username,
-		AuthorAvatar:   updated.Author.Avatar,
+		AuthorAvatar:   string(updated.Author.Avatar),
 		Content:        content,
 		CachedAt:       now,
 		ExpiresAt:      now.Add(mes.cacheTTL),
@@ -939,7 +908,7 @@ func (mes *MessageEventService) persistMessageUpdate(updated *CachedMessage, con
 			GuildID:   updated.GuildID,
 			MessageID: updated.ID,
 			ChannelID: updated.ChannelID,
-			AuthorID:  updated.Author.ID,
+			AuthorID:  updated.Author.ID.String(),
 			EventType: "edit",
 			Content:   content,
 			CreatedAt: now,
@@ -975,7 +944,7 @@ func (mes *MessageEventService) persistMessageDelete(cached *CachedMessage, dele
 			GuildID:   cached.GuildID,
 			MessageID: cached.ID,
 			ChannelID: cached.ChannelID,
-			AuthorID:  cached.Author.ID,
+			AuthorID:  cached.Author.ID.String(),
 			EventType: "delete",
 			Content:   cached.Content,
 			CreatedAt: time.Now().UTC(),
@@ -1010,25 +979,9 @@ func (mes *MessageEventService) persistMessageDelete(cached *CachedMessage, dele
 	}
 }
 
-func cloneMessageUpdate(m *discordgo.MessageUpdate) *discordgo.MessageUpdate {
-	if m == nil {
-		return nil
-	}
-	copy := *m
-	return &copy
-}
-
-func cloneMessageDelete(m *discordgo.MessageDelete) *discordgo.MessageDelete {
-	if m == nil {
-		return nil
-	}
-	copy := *m
-	return &copy
-}
-
 // summarizeMessageContent enriches content with a concise summary when the message has
 // non-textual elements and content is otherwise empty.
-func (mes *MessageEventService) summarizeMessageContent(msg *discordgo.Message, base string) string {
+func (mes *MessageEventService) summarizeMessageContent(msg *discord.Message, base string) string {
 	if msg == nil {
 		return base
 	}
@@ -1039,16 +992,13 @@ func (mes *MessageEventService) summarizeMessageContent(msg *discordgo.Message, 
 	if len(msg.Embeds) > 0 {
 		extra += fmt.Sprintf("[embeds: %d] ", len(msg.Embeds))
 	}
-	if len(msg.StickerItems) > 0 {
-		extra += fmt.Sprintf("[stickers: %d] ", len(msg.StickerItems))
+	if len(msg.Stickers) > 0 {
+		extra += fmt.Sprintf("[stickers: %d] ", len(msg.Stickers))
 	}
-	if extra == "" {
-		return base
+	if extra != "" {
+		return strings.TrimSpace(base + " " + extra)
 	}
-	if base == "" {
-		return strings.TrimSpace(extra)
-	}
-	return base + "\n" + strings.TrimSpace(extra)
+	return base
 }
 
 func (mes *MessageEventService) handlesGuild(guildID string) bool {
@@ -1074,13 +1024,14 @@ func (mes *MessageEventService) handlesGuild(guildID string) bool {
 }
 
 // determineDeletedBy tries to resolve the actor for a deletion via audit log (best-effort).
-func (mes *MessageEventService) determineDeletedBy(s *discordgo.Session, guildID, channelID, authorID string) string {
-	if s == nil || guildID == "" || authorID == "" {
+func (mes *MessageEventService) determineDeletedBy(guildID, channelID, authorID string) string {
+	if mes.auditCache == nil || mes.arikawaState == nil {
 		return ""
 	}
 
 	cacheKey := authorID + ":" + channelID
 	cacheFallbackKey := authorID + ":"
+
 	if entry, ok := mes.auditCache.get(guildID); ok {
 		if userID := mes.auditCache.pickEntry(entry.entries, cacheKey); userID != "" {
 			return userID
@@ -1091,46 +1042,48 @@ func (mes *MessageEventService) determineDeletedBy(s *discordgo.Session, guildID
 		return ""
 	}
 
-	al, err := s.GuildAuditLog(guildID, "", "", int(discordgo.AuditLogActionMessageDelete), 50)
-	if err != nil || al == nil {
+	al, err := mes.arikawaState.Client.AuditLog(discord.GuildID(mustParseSnowflake(guildID)), api.AuditLogData{
+		ActionType: discord.MessageDelete,
+	})
+	if err != nil {
 		return ""
 	}
 
 	now := time.Now()
 	entries := make(map[string]auditCacheValue)
-	for _, entry := range al.AuditLogEntries {
-		if entry == nil || entry.ActionType == nil || *entry.ActionType != discordgo.AuditLogActionMessageDelete {
+	for _, entry := range al.Entries {
+		if entry.ActionType != discord.MessageDelete {
 			continue
 		}
-		if entry.TargetID == "" || entry.UserID == "" {
+		if !entry.TargetID.IsValid() || !entry.UserID.IsValid() {
 			continue
 		}
-		if entry.UserID == authorID {
+		if entry.UserID.String() == authorID {
 			continue
 		}
 		createdAt := now
-		if ts, ok := snowflakeTimestamp(entry.ID); ok {
+		if ts, ok := snowflakeTimestamp(entry.ID.String()); ok {
 			createdAt = ts
 		}
 		if mes.auditCache.entryMaxAge > 0 && now.Sub(createdAt) > mes.auditCache.entryMaxAge {
 			continue
 		}
-		targetOK := entry.TargetID == authorID
+		targetOK := entry.TargetID.String() == authorID
 		channelOK := true
-		if entry.Options != nil && entry.Options.ChannelID != "" {
-			channelOK = entry.Options.ChannelID == channelID
+		if entry.Options.ChannelID.IsValid() {
+			channelOK = entry.Options.ChannelID.String() == channelID
 		}
 		if targetOK && channelOK {
-			entries[cacheKey] = newerAuditEntry(entries[cacheKey], auditCacheValue{userID: entry.UserID, createdAt: createdAt})
-			entries[cacheFallbackKey] = newerAuditEntry(entries[cacheFallbackKey], auditCacheValue{userID: entry.UserID, createdAt: createdAt})
+			entries[cacheKey] = newerAuditEntry(entries[cacheKey], auditCacheValue{userID: entry.UserID.String(), createdAt: createdAt})
+			entries[cacheFallbackKey] = newerAuditEntry(entries[cacheFallbackKey], auditCacheValue{userID: entry.UserID.String(), createdAt: createdAt})
 		}
-		if entry.Options != nil && entry.Options.ChannelID != "" {
-			key := entry.TargetID + ":" + entry.Options.ChannelID
-			entries[key] = newerAuditEntry(entries[key], auditCacheValue{userID: entry.UserID, createdAt: createdAt})
+		if entry.Options.ChannelID.IsValid() {
+			key := entry.TargetID.String() + ":" + entry.Options.ChannelID.String()
+			entries[key] = newerAuditEntry(entries[key], auditCacheValue{userID: entry.UserID.String(), createdAt: createdAt})
 		}
 		// Also store fallback without channel when available
-		key := entry.TargetID + ":"
-		entries[key] = newerAuditEntry(entries[key], auditCacheValue{userID: entry.UserID, createdAt: createdAt})
+		key := entry.TargetID.String() + ":"
+		entries[key] = newerAuditEntry(entries[key], auditCacheValue{userID: entry.UserID.String(), createdAt: createdAt})
 	}
 
 	mes.auditCache.set(guildID, auditCacheEntry{

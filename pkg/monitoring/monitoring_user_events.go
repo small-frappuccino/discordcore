@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/state"
@@ -133,7 +134,7 @@ func (ms *MonitoringService) persistMemberRoleSnapshot(guildID, userID string, r
 	return nil
 }
 
-func (ms *MonitoringService) getRoleUpdateAuditEntries(guildID string, forceRefresh bool) ([]*discordgo.AuditLogEntry, bool, error) {
+func (ms *MonitoringService) getRoleUpdateAuditEntries(guildID string, forceRefresh bool) ([]discord.AuditLogEntry, bool, error) {
 	now := time.Now()
 
 	if !forceRefresh {
@@ -143,7 +144,15 @@ func (ms *MonitoringService) getRoleUpdateAuditEntries(guildID string, forceRefr
 		}
 	}
 
-	audit, err := ms.session.GuildAuditLog(guildID, "", "", int(discordgo.AuditLogActionMemberRoleUpdate), 10)
+	gID, err := discord.ParseSnowflake(guildID)
+	if err != nil {
+		return nil, false, err
+	}
+
+	audit, err := ms.arikawaState.Client.AuditLog(discord.GuildID(gID), api.AuditLogData{
+		ActionType: discord.MemberRoleUpdate,
+		Limit:      10,
+	})
 	ms.observability().RecordAuditLogCall()
 	if err != nil {
 		return nil, false, fmt.Errorf("MonitoringService.getRoleUpdateAuditEntries: %w", err)
@@ -152,9 +161,9 @@ func (ms *MonitoringService) getRoleUpdateAuditEntries(guildID string, forceRefr
 		return nil, false, nil
 	}
 
-	entries := make([]*discordgo.AuditLogEntry, 0, len(audit.AuditLogEntries))
-	for _, entry := range audit.AuditLogEntries {
-		if entry == nil || entry.ActionType == nil || *entry.ActionType != discordgo.AuditLogActionMemberRoleUpdate {
+	entries := make([]discord.AuditLogEntry, 0, len(audit.Entries))
+	for _, entry := range audit.Entries {
+		if entry.ActionType != discord.MemberRoleUpdate {
 			continue
 		}
 		entries = append(entries, entry)
@@ -169,15 +178,11 @@ func (ms *MonitoringService) shouldDebounceRoleUpdateAuditRefresh(guildID, userI
 	return ms.rolesCacheService.AuditShouldDebounce(guildID, userID, time.Now())
 }
 
-func isRecentRoleUpdateAuditEntry(entry *discordgo.AuditLogEntry) bool {
-	if entry == nil || entry.ID == "" {
+func isRecentRoleUpdateAuditEntry(entry discord.AuditLogEntry) bool {
+	if !entry.ID.IsValid() {
 		return true
 	}
-	entryTime, ok := snowflakeTimestamp(entry.ID)
-	if !ok {
-		return true
-	}
-	return time.Since(entryTime) <= monitoringRoleAuditEntryMaxAge
+	return time.Since(entry.ID.Time()) <= monitoringRoleAuditEntryMaxAge
 }
 
 func extractAuditRolePartials(v any) []auditRolePartial {
@@ -197,19 +202,13 @@ func extractAuditRolePartials(v any) []auditRolePartial {
 	return filtered
 }
 
-func extractAuditRoleDelta(entry *discordgo.AuditLogEntry) (added []auditRolePartial, removed []auditRolePartial) {
-	if entry == nil {
-		return nil, nil
-	}
+func extractAuditRoleDelta(entry discord.AuditLogEntry) (added []auditRolePartial, removed []auditRolePartial) {
 	for _, change := range entry.Changes {
-		if change == nil || change.Key == nil {
-			continue
-		}
-		switch *change.Key {
-		case discordgo.AuditLogChangeKeyRoleAdd:
+		switch change.Key {
+		case discord.AuditGuildRoleAdd:
 			added = append(added, extractAuditRolePartials(change.NewValue)...)
 			added = append(added, extractAuditRolePartials(change.OldValue)...)
-		case discordgo.AuditLogChangeKeyRoleRemove:
+		case discord.AuditGuildRoleRemove:
 			removed = append(removed, extractAuditRolePartials(change.NewValue)...)
 			removed = append(removed, extractAuditRolePartials(change.OldValue)...)
 		}
@@ -396,12 +395,12 @@ func (ms *MonitoringService) persistRoleSnapshotOrWarn(guildID, userID string, c
 // the updated member, cross-checks it against the locally verified delta, and on a match
 // sends the role-update notification (or persists a snapshot when verification empties the
 // delta). It reports whether a matching entry was handled.
-func (ms *MonitoringService) tryNotifyRoleUpdateFromAudit(e *gateway.GuildMemberUpdateEvent, channelID string, verifiedAdded, verifiedRemoved, curRoles []string, entries []*discordgo.AuditLogEntry) bool {
+func (ms *MonitoringService) tryNotifyRoleUpdateFromAudit(e *gateway.GuildMemberUpdateEvent, channelID string, verifiedAdded, verifiedRemoved, curRoles []string, entries []discord.AuditLogEntry) bool {
 	verifiedAddedSet := toIDSet(verifiedAdded)
 	verifiedRemovedSet := toIDSet(verifiedRemoved)
 
 	for _, entry := range entries {
-		if entry == nil || entry.TargetID != e.User.ID.String() || !isRecentRoleUpdateAuditEntry(entry) {
+		if entry.TargetID.String() != e.User.ID.String() || !isRecentRoleUpdateAuditEntry(entry) {
 			continue
 		}
 
@@ -441,7 +440,7 @@ func (ms *MonitoringService) tryNotifyRoleUpdateFromAudit(e *gateway.GuildMember
 			e.GuildID.String(),
 			channelID,
 			&e.User,
-			entry.UserID,
+			entry.UserID.String(),
 			buildAuditRoleList(filteredAdded),
 			buildAuditRoleList(filteredRemoved),
 			"Source: Audit Log",

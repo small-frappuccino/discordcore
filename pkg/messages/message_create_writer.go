@@ -10,8 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
-	"github.com/small-frappuccino/discordgo"
 )
 
 const (
@@ -267,10 +267,10 @@ func (w *messageCreateWriter) Lookup(guildID, messageID string) *CachedMessage {
 	return &CachedMessage{
 		ID:      record.MessageID,
 		Content: record.Content,
-		Author: &discordgo.User{
-			ID:       record.AuthorID,
+		Author: &discord.User{
+			ID:       discord.UserID(mustParseSnowflake(record.AuthorID)),
 			Username: record.AuthorUsername,
-			Avatar:   record.AuthorAvatar,
+			Avatar:   discord.Hash(record.AuthorAvatar),
 		},
 		ChannelID: record.ChannelID,
 		GuildID:   record.GuildID,
@@ -524,4 +524,9 @@ func messageCreatePendingKey(guildID, messageID string) string {
 		return ""
 	}
 	return guildID + ":" + messageID
+}
+
+func mustParseSnowflake(id string) discord.Snowflake {
+	sf, _ := discord.ParseSnowflake(id)
+	return sf
 }

@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordgo"
 )
 
 // RolesCacheService encapsulates role-related caching primitives and their lifecycles.
@@ -77,12 +77,12 @@ func (s *RolesCacheService) CacheRolesSize() int {
 }
 
 // AuditCachedEntries audits cached entries.
-func (s *RolesCacheService) AuditCachedEntries(guildID string, now time.Time) ([]*discordgo.AuditLogEntry, bool) {
+func (s *RolesCacheService) AuditCachedEntries(guildID string, now time.Time) ([]discord.AuditLogEntry, bool) {
 	return s.roleAudit.cachedEntries(guildID, now)
 }
 
 // AuditStoreEntries audits store entries.
-func (s *RolesCacheService) AuditStoreEntries(guildID string, now time.Time, entries []*discordgo.AuditLogEntry) {
+func (s *RolesCacheService) AuditStoreEntries(guildID string, now time.Time, entries []discord.AuditLogEntry) {
 	s.roleAudit.storeEntries(guildID, now, entries)
 }
 
