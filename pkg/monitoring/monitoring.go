@@ -483,6 +483,7 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 		ms.syncSchedulesLocked(serviceCtx, workload)
 
 		ms.registerBackfillHandlers(serviceCtx, workload)
+		ms.registerAutomodHandlers()
 
 		now := time.Now()
 		newState := monitoringRunState{}

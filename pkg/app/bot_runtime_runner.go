@@ -23,7 +23,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/monitoring"
-	"github.com/small-frappuccino/discordcore/pkg/notifications"
 	applicationqotd "github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordcore/pkg/service"
@@ -250,21 +249,7 @@ func buildAutomodService(runtime *botRuntime, opts botRuntimeOptions, routerConf
 		return nil
 	}
 
-	automodService := automod.NewAutomodService(runtime.session, opts.configManager, runtime.instanceID, opts.logger)
-	automodRouter := task.NewRouter(routerConfig)
-	notifier := notifications.NewNotificationSender(runtime.session, slog.Default())
-	if monitoringService != nil {
-		notifier = monitoringService.Notifier()
-	}
-	automodAdapters := &task.NotificationAdapters{
-		Router:   automodRouter,
-		Session:  runtime.session,
-		Config:   opts.configManager,
-		Store:    opts.store,
-		Notifier: notifier,
-	}
-	automodAdapters.RegisterHandlers()
-	automodService.SetAdapters(automodAdapters)
+	automodService := automod.NewService(runtime.session, monitoringService, opts.logger)
 
 	return automodService
 }

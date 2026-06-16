@@ -2,10 +2,7 @@ package task
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -27,16 +24,10 @@ type MessageNotificationSender interface {
 	SendMessageDeleteNotification(channelID string, deleted *CachedMessage, deletedBy string) error
 }
 
-// ModerationNotificationSender defines methods for sending automod-related notifications.
-type ModerationNotificationSender interface {
-	SendAutomodActionNotification(channelID string, event *discordgo.AutoModerationActionExecution) error
-}
-
 // NotificationSender defines dependency-free methods for sending notifications.
 type NotificationSender interface {
 	MemberNotificationSender
 	MessageNotificationSender
-	ModerationNotificationSender
 }
 
 // AvatarProcessor defines the logic for processing avatar changes.
@@ -66,7 +57,6 @@ const (
 	TaskTypeSendMemberLeave   = "notifications.member_leave"
 	TaskTypeSendMessageEdit   = "notifications.message_edit"
 	TaskTypeSendMessageDelete = "notifications.message_delete"
-	TaskTypeSendAutomodAction = "notifications.automod_action"
 
 	TaskTypeProcessAvatarChange = "avatar.process_change"
 	TaskTypeFlushAvatarCache    = "avatar.flush_cache"
@@ -99,12 +89,6 @@ type MessageDeletePayload struct {
 	ChannelID string
 	Deleted   *CachedMessage
 	DeletedBy string
-}
-
-// AutomodActionPayload holds information for an automod action notification task.
-type AutomodActionPayload struct {
-	ChannelID string
-	Event     *discordgo.AutoModerationActionExecution
 }
 
 // FlushAvatarCachePayload holds information for flushing the avatar cache.
@@ -140,7 +124,6 @@ func (a *NotificationAdapters) RegisterHandlers() {
 	a.Router.RegisterHandler(TaskTypeSendMemberLeave, a.handleSendMemberLeave)
 	a.Router.RegisterHandler(TaskTypeSendMessageEdit, a.handleSendMessageEdit)
 	a.Router.RegisterHandler(TaskTypeSendMessageDelete, a.handleSendMessageDelete)
-	a.Router.RegisterHandler(TaskTypeSendAutomodAction, a.handleSendAutomodAction)
 
 	a.Router.RegisterHandler(TaskTypeProcessAvatarChange, a.handleProcessAvatarChange)
 	a.Router.RegisterHandler(TaskTypeFlushAvatarCache, a.handleFlushAvatarCache)
@@ -246,110 +229,6 @@ func (a *NotificationAdapters) EnqueueMessageDelete(channelID string, deleted *C
 	})
 }
 
-// EnqueueAutomodAction enqueues an automod action notification using the
-// default idempotency key (computed without a gateway sequence number). Kept
-// for callers that do not have access to the raw *discordgo.Event envelope.
-func (a *NotificationAdapters) EnqueueAutomodAction(channelID string, event *discordgo.AutoModerationActionExecution) error {
-	return a.EnqueueAutomodActionWithKey(channelID, event, AutomodIdempotencyKey(event))
-}
-
-// EnqueueAutomodActionWithKey enqueues an automod action notification with an
-// explicit idempotency key. The key is typically computed by the caller via
-// AutomodIdempotencyKey, which prefers per-violation identifiers (MessageID,
-// MatchedContent, MatchedKeyword) over per-action ones so the multiple
-// AUTO_MODERATION_ACTION_EXECUTION events Discord fires for a single rule
-// trigger collapse to one notification. An empty key disables router-level
-// dedup for this event.
-func (a *NotificationAdapters) EnqueueAutomodActionWithKey(channelID string, event *discordgo.AutoModerationActionExecution, idempotencyKey string) error {
-	if event == nil {
-		return nil
-	}
-	return a.Router.Dispatch(context.Background(), Task{
-		Type: TaskTypeSendAutomodAction,
-		Payload: AutomodActionPayload{
-			ChannelID: channelID,
-			Event:     event,
-		},
-		Options: TaskOptions{
-			GroupKey:       event.GuildID,
-			IdempotencyKey: idempotencyKey,
-			IdempotencyTTL: 10 * time.Second,
-			MaxAttempts:    3,
-			InitialBackoff: 1 * time.Second,
-			MaxBackoff:     10 * time.Second,
-		},
-	})
-}
-
-// automodCoalesceBucketSec is the time-bucket width (seconds) for the
-// last-resort idempotency key fallback. Wide enough that the per-action
-// gateway events Discord fires for one violation (typically arriving
-// milliseconds apart) land in the same bucket and dedup, narrow enough
-// that genuinely-distinct violations on the same (guild, rule, user)
-// tuple stay independent.
-const automodCoalesceBucketSec = 3
-
-// AutomodIdempotencyKey computes the dedupe key for an AutoMod action event.
-//
-// Discord emits AUTO_MODERATION_ACTION_EXECUTION once per *action* configured
-// on a triggered rule (Block Message, Send Alert Message, Timeout, Block
-// Member Interactions). A single rule trigger therefore produces multiple
-// gateway events whose only stable shared identifiers are the per-violation
-// fields — MessageID for message triggers, MatchedContent/MatchedKeyword for
-// member-profile triggers. Keying on those collapses the per-action stream to
-// one notification, matching Discord's own chat-side "one notice per
-// violation" behavior. The gateway sequence number and the per-action
-// AlertSystemMessageID are intentionally NOT used here because they differ
-// across the actions of a single violation and would defeat the coalescing.
-//
-// Precedence: msg → content → keyword+second-bucket → (guild, rule, user)
-// tbucket fallback. The tbucket fallback always returns a non-empty key so
-// router-level dedup remains active even if a future trigger type carries
-// no per-violation payload identifiers.
-//
-// Exported so the synchronous fallback path in pkg/discord/logging can
-// compute the same key the router would and apply its own dedup before
-// sending.
-func AutomodIdempotencyKey(event *discordgo.AutoModerationActionExecution) string {
-	return automodIdempotencyKeyAt(event, time.Now())
-}
-
-func automodIdempotencyKeyAt(event *discordgo.AutoModerationActionExecution, now time.Time) string {
-	if event == nil {
-		return ""
-	}
-	if messageID := strings.TrimSpace(event.MessageID); messageID != "" {
-		// MessageID is set on every action event for a message-triggered
-		// violation (the blocked message), so all per-action events for one
-		// violation share it.
-		return fmt.Sprintf("automod:%s:%s:%s:msg:%s", event.GuildID, event.RuleID, event.UserID, messageID)
-	}
-	if content := strings.TrimSpace(event.MatchedContent); content != "" {
-		// MatchedContent is the offending substring — shared across the
-		// per-action events of one member-profile violation. Re-deliveries
-		// carry the same content; distinct profile updates carry different
-		// content. No time bucket needed.
-		digest := sha256.Sum256([]byte(content))
-		return fmt.Sprintf("automod:%s:%s:%s:content:%s", event.GuildID, event.RuleID, event.UserID, hex.EncodeToString(digest[:8]))
-	}
-	if keyword := strings.TrimSpace(event.MatchedKeyword); keyword != "" {
-		// MatchedKeyword is the rule's configured keyword — shared across
-		// distinct events of the same rule. Bucket by second so re-deliveries
-		// within the same second collide while distinct events seconds apart
-		// stay independent, instead of falsely deduping for the full TTL.
-		digest := sha256.Sum256([]byte(keyword))
-		return fmt.Sprintf("automod:%s:%s:%s:keyword:%s:t%d", event.GuildID, event.RuleID, event.UserID, hex.EncodeToString(digest[:8]), now.Unix())
-	}
-	// Defensive coalescing fallback. Triggered when no per-violation
-	// identifier is present — a shape Discord does not emit today on the
-	// rules in use, but worth keying anyway so a future trigger type's
-	// per-action stream still collapses to one embed per violation.
-	// AlertSystemMessageID is intentionally NOT used as a tiebreaker here
-	// because it is per-action; mixing it in would split a violation across
-	// its block + alert events.
-	return fmt.Sprintf("automod:%s:%s:%s:tbucket:%d", event.GuildID, event.RuleID, event.UserID, now.Unix()/automodCoalesceBucketSec)
-}
-
 // EnqueueProcessAvatarChange enqueues processing of an avatar change.
 func (a *NotificationAdapters) EnqueueProcessAvatarChange(guildID, userID, username, newAvatar string) error {
 	return a.Router.Dispatch(context.Background(), Task{
@@ -445,17 +324,6 @@ func (a *NotificationAdapters) handleSendMessageDelete(ctx context.Context, payl
 		return fmt.Errorf("NotificationAdapters.handleSendMessageDelete: %w", err)
 	}
 	return nil
-}
-
-func (a *NotificationAdapters) handleSendAutomodAction(ctx context.Context, payload any) error {
-	if a.Notifier == nil {
-		return fmt.Errorf("notifier is nil")
-	}
-	p, ok := payload.(AutomodActionPayload)
-	if !ok || p.Event == nil {
-		return fmt.Errorf("invalid payload for %s", TaskTypeSendAutomodAction)
-	}
-	return a.Notifier.SendAutomodActionNotification(p.ChannelID, p.Event)
 }
 
 func (a *NotificationAdapters) handleProcessAvatarChange(ctx context.Context, payload any) error {
