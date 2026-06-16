@@ -21,7 +21,7 @@ func (s *Server) handleGlobalFeaturesList(w http.ResponseWriter) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, WorkspaceResponse{
+	writeJSON(w, s.log(), http.StatusOK, WorkspaceResponse{
 		Status:    "ok",
 		Workspace: workspace,
 	})
@@ -44,7 +44,7 @@ func (s *Server) handleGlobalFeatureGet(w http.ResponseWriter, featureID string)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, FeatureResponse{
+	writeJSON(w, s.log(), http.StatusOK, FeatureResponse{
 		Status:  "ok",
 		Feature: record,
 	})
@@ -67,7 +67,7 @@ func (s *Server) handleGuildFeaturesList(w http.ResponseWriter, guildID string) 
 		return
 	}
 
-	writeJSON(w, http.StatusOK, WorkspaceResponse{
+	writeJSON(w, s.log(), http.StatusOK, WorkspaceResponse{
 		Status:    "ok",
 		Workspace: workspace,
 	})
@@ -93,7 +93,7 @@ func (s *Server) handleGuildFeatureGet(w http.ResponseWriter, guildID, featureID
 		return
 	}
 
-	writeJSON(w, http.StatusOK, GuildFeatureResponse{
+	writeJSON(w, s.log(), http.StatusOK, GuildFeatureResponse{
 		Status:  "ok",
 		GuildID: guildID,
 		Feature: record,

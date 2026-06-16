@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	"log/slog"
 )
 
 func decodeJSONBody(w http.ResponseWriter, r *http.Request, dst any) error {
@@ -19,10 +20,14 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request, dst any) error {
 	return nil
 }
 
-func writeJSON[T any](w http.ResponseWriter, status int, payload T) {
+func writeJSON[T any](w http.ResponseWriter, logger *slog.Logger, status int, payload T) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(payload); err != nil {
-		log.ApplicationLogger().Error("Failed to encode control response", "status", status, "err", err)
+		if logger != nil {
+			logger.Error("Failed to encode control response", "status", status, "err", err)
+		} else {
+			log.ApplicationLogger().Error("Failed to encode control response", "status", status, "err", err)
+		}
 	}
 }

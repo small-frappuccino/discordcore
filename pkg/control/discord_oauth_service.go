@@ -5,11 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
-
-	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
 type oauthErrorResponse struct {
@@ -55,6 +54,7 @@ type discordOAuthControlService struct {
 	guildAccessResolver        *accessibleGuildResolver
 	publicDashboardURL         func(string) string
 	publicDiscordOAuthLoginURL func(string) string
+	loggerSource               func() *slog.Logger
 }
 
 func newDiscordOAuthControlService(
@@ -62,13 +62,24 @@ func newDiscordOAuthControlService(
 	guildAccessResolver *accessibleGuildResolver,
 	publicDashboardURL func(string) string,
 	publicDiscordOAuthLoginURL func(string) string,
+	loggerSource func() *slog.Logger,
 ) *discordOAuthControlService {
 	return &discordOAuthControlService{
 		providerSource:             providerSource,
 		guildAccessResolver:        guildAccessResolver,
 		publicDashboardURL:         publicDashboardURL,
 		publicDiscordOAuthLoginURL: publicDiscordOAuthLoginURL,
+		loggerSource:               loggerSource,
 	}
+}
+
+func (svc *discordOAuthControlService) log() *slog.Logger {
+	if svc != nil && svc.loggerSource != nil {
+		if l := svc.loggerSource(); l != nil {
+			return l
+		}
+	}
+	return slog.Default()
 }
 
 func (s *Server) oauthControl() *discordOAuthControlService {
@@ -111,7 +122,7 @@ func (svc *discordOAuthControlService) handleLogin(w http.ResponseWriter, r *htt
 	provider := svc.provider()
 	state, err := provider.generateState()
 	if err != nil {
-		log.ApplicationLogger().Error("Failed to generate OAuth state", "operation", "control.oauth.login.generate_state", "err", err)
+		svc.log().Error("Failed to generate OAuth state", "operation", "control.oauth.login.generate_state", "err", err)
 		http.Error(w, "failed to initialize oauth state", http.StatusInternalServerError)
 		return
 	}
@@ -124,7 +135,7 @@ func (svc *discordOAuthControlService) handleLogin(w http.ResponseWriter, r *htt
 
 	redirectURL, err := provider.buildAuthorizationURL(state)
 	if err != nil {
-		log.ApplicationLogger().Error("Failed to build OAuth login URL", "operation", "control.oauth.login.build_url", "err", err)
+		svc.log().Error("Failed to build OAuth login URL", "operation", "control.oauth.login.build_url", "err", err)
 		http.Error(w, "failed to build oauth redirect", http.StatusInternalServerError)
 		return
 	}
@@ -157,7 +168,7 @@ func (svc *discordOAuthControlService) handleCallback(w http.ResponseWriter, r *
 
 	providedState := strings.TrimSpace(r.URL.Query().Get("state"))
 	if err := provider.validateState(r, providedState); err != nil {
-		log.ApplicationLogger().Warn("Discord OAuth state validation failed", "operation", "control.oauth.callback.state_validation", "err", err)
+		svc.log().Warn("Discord OAuth state validation failed", "operation", "control.oauth.callback.state_validation", "err", err)
 		http.Error(w, "invalid oauth state", http.StatusBadRequest)
 		return
 	}
@@ -173,7 +184,7 @@ func (svc *discordOAuthControlService) handleCallback(w http.ResponseWriter, r *
 
 	tokenPayload, rawError, status, err := provider.exchangeCode(ctx, code)
 	if err != nil {
-		log.ApplicationLogger().Error("Discord OAuth token exchange failed", "operation", "control.oauth.callback.exchange_token", "status", status, "err", err)
+		svc.log().Error("Discord OAuth token exchange failed", "operation", "control.oauth.callback.exchange_token", "status", status, "err", err)
 		if status < 400 {
 			status = http.StatusBadGateway
 		}
@@ -191,20 +202,20 @@ func (svc *discordOAuthControlService) handleCallback(w http.ResponseWriter, r *
 
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Pragma", "no-cache")
-		writeJSON(w, status, response)
+		writeJSON(w, svc.log(), status, response)
 		return
 	}
 
 	accessToken, refreshToken, tokenType, scopes, tokenTTL, err := parseTokenResponse(tokenPayload, provider.scopes)
 	if err != nil {
-		log.ApplicationLogger().Warn("Discord OAuth token payload validation failed", "operation", "control.oauth.callback.parse_token", "err", err)
+		svc.log().Warn("Discord OAuth token payload validation failed", "operation", "control.oauth.callback.parse_token", "err", err)
 		http.Error(w, "invalid oauth token response", http.StatusBadGateway)
 		return
 	}
 
 	user, err := provider.fetchUser(ctx, accessToken, tokenType)
 	if err != nil {
-		log.ApplicationLogger().Error("Discord OAuth user fetch failed", "operation", "control.oauth.callback.fetch_user", "err", err)
+		svc.log().Error("Discord OAuth user fetch failed", "operation", "control.oauth.callback.fetch_user", "err", err)
 		http.Error(w, "failed to resolve oauth user", http.StatusBadGateway)
 		return
 	}
@@ -219,7 +230,7 @@ func (svc *discordOAuthControlService) handleCallback(w http.ResponseWriter, r *
 		TTL:          provider.sessionTTL,
 	})
 	if err != nil {
-		log.ApplicationLogger().Error("Discord OAuth session creation failed", "operation", "control.oauth.callback.create_session", "err", err)
+		svc.log().Error("Discord OAuth session creation failed", "operation", "control.oauth.callback.create_session", "err", err)
 		http.Error(w, "failed to create oauth session", http.StatusInternalServerError)
 		return
 	}
@@ -231,7 +242,7 @@ func (svc *discordOAuthControlService) handleCallback(w http.ResponseWriter, r *
 
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
-	writeJSON(w, http.StatusOK, oauthSessionResponse{
+	writeJSON(w, svc.log(), http.StatusOK, oauthSessionResponse{
 		Status:    "ok",
 		User:      session.User,
 		Scopes:    session.Scopes,
@@ -258,7 +269,7 @@ func (svc *discordOAuthControlService) handleMe(w http.ResponseWriter, r *http.R
 
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
-	writeJSON(w, http.StatusOK, oauthSessionResponse{
+	writeJSON(w, svc.log(), http.StatusOK, oauthSessionResponse{
 		Status:    "ok",
 		User:      session.User,
 		Scopes:    session.Scopes,
@@ -285,7 +296,7 @@ func (svc *discordOAuthControlService) handleStatus(w http.ResponseWriter, r *ht
 	if !svc.configured() {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Pragma", "no-cache")
-		writeJSON(w, http.StatusOK, response)
+		writeJSON(w, svc.log(), http.StatusOK, response)
 		return
 	}
 
@@ -303,7 +314,7 @@ func (svc *discordOAuthControlService) handleStatus(w http.ResponseWriter, r *ht
 
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
-	writeJSON(w, http.StatusOK, response)
+	writeJSON(w, svc.log(), http.StatusOK, response)
 }
 
 func (svc *discordOAuthControlService) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -329,7 +340,7 @@ func (svc *discordOAuthControlService) handleLogout(w http.ResponseWriter, r *ht
 	provider := svc.provider()
 	if provider != nil {
 		if err := provider.sessions.Delete(session.ID); err != nil {
-			log.ApplicationLogger().Error(
+			svc.log().Error(
 				"Discord OAuth logout session delete failed",
 				"operation", "control.oauth.logout.delete_session",
 				"userID", session.User.ID,
@@ -344,7 +355,7 @@ func (svc *discordOAuthControlService) handleLogout(w http.ResponseWriter, r *ht
 
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
-	writeJSON(w, http.StatusOK, okResponse{
+	writeJSON(w, svc.log(), http.StatusOK, okResponse{
 		Status: "ok",
 	})
 }
@@ -391,7 +402,7 @@ func (svc *discordOAuthControlService) handleGuildAccessList(
 		if status == http.StatusUnauthorized {
 			message = "oauth session requires re-authentication"
 		}
-		log.ApplicationLogger().Error(
+		svc.log().Error(
 			"Failed to resolve accessible guilds",
 			"operation", "control.oauth.guild_access.resolve",
 			"userID", session.User.ID,
@@ -408,7 +419,7 @@ func (svc *discordOAuthControlService) handleGuildAccessList(
 
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
-	writeJSON(w, http.StatusOK, guildAccessListResponse{
+	writeJSON(w, svc.log(), http.StatusOK, guildAccessListResponse{
 		Status: "ok",
 		Guilds: accessible,
 		Count:  len(accessible),

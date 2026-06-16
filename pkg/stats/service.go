@@ -25,12 +25,23 @@ const (
 	monitoringDependencyTimeout   = 15 * time.Second
 )
 
+// StateStore abstracts the storage operations required by the StatsService.
+type StateStore interface {
+	GetActiveGuildMemberStatesContext(ctx context.Context, guildID string) iter.Seq2[storage.GuildMemberCurrentState, error]
+	Metadata(ctx context.Context, key string) (time.Time, bool, error)
+	SetMetadata(ctx context.Context, key string, at time.Time) error
+	UpsertMemberPresenceContext(ctx context.Context, input storage.MemberPresenceInput) error
+	UpsertMemberRoles(guildID, userID string, roles []string, at time.Time) error
+	MarkMemberLeftContext(ctx context.Context, guildID, userID string, at time.Time) error
+	HeartbeatForBot(ctx context.Context, botInstanceID string) (time.Time, bool, error)
+}
+
 // StatsService manages the stats-channel state. guilds and lastRun are protected by mu.
 // Construct with NewStatsService; the zero value has nil maps.
 type StatsService struct {
 	gateway       Gateway
 	configManager *files.ConfigManager
-	store         *storage.Store
+	store         StateStore
 	logger        *slog.Logger
 	botInstanceID string
 
@@ -46,7 +57,7 @@ type StatsService struct {
 func NewStatsService(
 	gateway Gateway,
 	configManager *files.ConfigManager,
-	store *storage.Store,
+	store StateStore,
 	logger *slog.Logger,
 	botInstanceID string,
 ) *StatsService {

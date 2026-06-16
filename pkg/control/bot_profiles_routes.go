@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordgo"
 	"golang.org/x/sync/singleflight"
 )
@@ -57,12 +56,12 @@ func (s *Server) handleGuildBotProfilesGet(w http.ResponseWriter, r *http.Reques
 		if err != nil {
 			errStr := err.Error()
 			if strings.Contains(errStr, "401") || strings.Contains(errStr, "4004") || strings.Contains(strings.ToLower(errStr), "authentication failed") {
-				log.ApplicationLogger().Warn("Bot token rejected by Discord, revoking from configuration", "guildID", guildID, "instanceID", instanceID, "err", err)
+				s.log().Warn("Bot token rejected by Discord, revoking from configuration", "guildID", guildID, "instanceID", instanceID, "err", err)
 				_ = s.configManager.RevokeBotInstance(instanceID, token)
 				continue
 			}
 
-			log.ApplicationLogger().Warn("Failed to fetch bot profile", "guildID", guildID, "instanceID", instanceID, "err", err)
+			s.log().Warn("Failed to fetch bot profile", "guildID", guildID, "instanceID", instanceID, "err", err)
 			status := http.StatusBadGateway
 			if strings.Contains(errStr, "429") {
 				status = http.StatusTooManyRequests
@@ -73,7 +72,7 @@ func (s *Server) handleGuildBotProfilesGet(w http.ResponseWriter, r *http.Reques
 		profiles = append(profiles, profile)
 	}
 
-	writeJSON(w, http.StatusOK, botProfilesResponse{
+	writeJSON(w, s.log(), http.StatusOK, botProfilesResponse{
 		Status:   "ok",
 		Profiles: profiles,
 	})

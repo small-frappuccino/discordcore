@@ -17,35 +17,47 @@ func RegisterDiscordGoEventHandlers(session *discordgo.Session, svc *domain.Stat
 		logger.Info("Registered DiscordGo event handlers for stats")
 	}
 	session.AddHandler(func(s *discordgo.Session, m *discordgo.GuildMemberAdd) {
-		if m == nil || m.Member == nil || m.Member.User == nil || svc == nil {
-			return
-		}
-		svc.ApplyMemberAdd(m.GuildID, m.User.ID, m.JoinedAt, m.User.Bot, func(yield func(string) bool) {
-			for _, r := range m.Roles {
-				if !yield(r) {
-					return
-				}
-			}
-		})
+		handleDiscordGoGuildMemberAdd(svc, m)
 	})
 
 	session.AddHandler(func(s *discordgo.Session, m *discordgo.GuildMemberRemove) {
-		if m == nil || m.User == nil || svc == nil {
-			return
-		}
-		svc.ApplyMemberRemove(m.GuildID, m.User.ID)
+		handleDiscordGoGuildMemberRemove(svc, m)
 	})
 
 	session.AddHandler(func(s *discordgo.Session, m *discordgo.GuildMemberUpdate) {
-		if m == nil || m.User == nil || svc == nil {
-			return
-		}
-		svc.ApplyStatsMemberUpdate(m.GuildID, m.User.ID, m.User.Bot, func(yield func(string) bool) {
-			for _, r := range m.Roles {
-				if !yield(r) {
-					return
-				}
+		handleDiscordGoGuildMemberUpdate(svc, m)
+	})
+}
+
+func handleDiscordGoGuildMemberAdd(svc *domain.StatsService, m *discordgo.GuildMemberAdd) {
+	if m == nil || m.Member == nil || m.Member.User == nil || svc == nil {
+		return
+	}
+	svc.ApplyMemberAdd(m.GuildID, m.User.ID, m.JoinedAt, m.User.Bot, func(yield func(string) bool) {
+		for _, r := range m.Roles {
+			if !yield(r) {
+				return
 			}
-		})
+		}
+	})
+}
+
+func handleDiscordGoGuildMemberRemove(svc *domain.StatsService, m *discordgo.GuildMemberRemove) {
+	if m == nil || m.User == nil || svc == nil {
+		return
+	}
+	svc.ApplyMemberRemove(m.GuildID, m.User.ID)
+}
+
+func handleDiscordGoGuildMemberUpdate(svc *domain.StatsService, m *discordgo.GuildMemberUpdate) {
+	if m == nil || m.User == nil || svc == nil {
+		return
+	}
+	svc.ApplyStatsMemberUpdate(m.GuildID, m.User.ID, m.User.Bot, func(yield func(string) bool) {
+		for _, r := range m.Roles {
+			if !yield(r) {
+				return
+			}
+		}
 	})
 }

@@ -31,7 +31,7 @@ func (s *Server) handleGuildChannelOptionsGet(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	writeJSON(w, http.StatusOK, GuildChannelsResponse{
+	writeJSON(w, s.log(), http.StatusOK, GuildChannelsResponse{
 		Status:   "ok",
 		GuildID:  guildID,
 		Channels: options,

@@ -65,9 +65,9 @@ func (s *Server) registerDashboardRoutes(mux *http.ServeMux) {
 		return s.publicControlURL("/")
 	}
 
-	mux.Handle(dashboardRoutePrefix, newProtectedEmbeddedDashboardHandler(isOAuthConfigured, publicControlURL, s.hasAuthenticatedDashboardSession))
+	mux.Handle(dashboardRoutePrefix, newProtectedEmbeddedDashboardHandler(s.newEmbeddedDashboardHandler(), isOAuthConfigured, publicControlURL, s.hasAuthenticatedDashboardSession))
 	mux.HandleFunc("/dashboard", s.handleDashboardRoot)
-	mux.Handle(dashboardLegacyRoutePrefix, newProtectedEmbeddedDashboardHandler(isOAuthConfigured, publicControlURL, s.hasAuthenticatedDashboardSession))
+	mux.Handle(dashboardLegacyRoutePrefix, newProtectedEmbeddedDashboardHandler(s.newEmbeddedDashboardHandler(), isOAuthConfigured, publicControlURL, s.hasAuthenticatedDashboardSession))
 }
 
 func (s *Server) handleManageRoot(w http.ResponseWriter, r *http.Request) {

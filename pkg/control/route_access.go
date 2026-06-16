@@ -5,8 +5,6 @@ import (
 	"crypto/subtle"
 	"net/http"
 	"strings"
-
-	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
 func (s *Server) authorizeRequest(w http.ResponseWriter, r *http.Request) (requestAuthorization, bool) {
@@ -80,7 +78,7 @@ func (s *Server) authorizeGlobalControlAccess(
 	case requestAuthModeBearer:
 		return true
 	case requestAuthModeDiscordOAuthSession:
-		log.ApplicationLogger().Warn(
+		s.log().Warn(
 			"Global control mutation denied",
 			"operation", "control.route_access.authorize_global",
 			"guildID", "",
@@ -135,7 +133,7 @@ func (s *Server) authorizeGuildControlAccess(
 			if status == http.StatusUnauthorized {
 				message = "oauth session requires re-authentication"
 			}
-			log.ApplicationLogger().Error(
+			s.log().Error(
 				"Failed to authorize guild route access",
 				"operation", "control.route_access.authorize_guild",
 				"userID", auth.oauthSession.User.ID,
@@ -155,7 +153,7 @@ func (s *Server) authorizeGuildControlAccess(
 				return true
 			}
 
-			log.ApplicationLogger().Warn(
+			s.log().Warn(
 				"Guild route access denied",
 				"operation", "control.route_access.authorize_guild",
 				"userID", auth.oauthSession.User.ID,
@@ -168,7 +166,7 @@ func (s *Server) authorizeGuildControlAccess(
 			return false
 		}
 
-		log.ApplicationLogger().Warn(
+		s.log().Warn(
 			"Guild route access denied",
 			"operation", "control.route_access.authorize_guild",
 			"userID", auth.oauthSession.User.ID,

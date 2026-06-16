@@ -91,7 +91,7 @@ func (s *Server) handleFeatureCatalogGet(w http.ResponseWriter) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, catalogResponse{
+	writeJSON(w, s.log(), http.StatusOK, catalogResponse{
 		Status:  "ok",
 		Catalog: svc.catalog(),
 	})
@@ -111,7 +111,7 @@ func (s *Server) handleGlobalFeaturePatch(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	writeJSON(w, http.StatusOK, featurePatchResponse{
+	writeJSON(w, s.log(), http.StatusOK, featurePatchResponse{
 		Status:  "ok",
 		Feature: record,
 	})
@@ -131,7 +131,7 @@ func (s *Server) handleGuildFeaturePatch(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	writeJSON(w, http.StatusOK, featurePatchResponse{
+	writeJSON(w, s.log(), http.StatusOK, featurePatchResponse{
 		Status:  "ok",
 		GuildID: guildID,
 		Feature: record,

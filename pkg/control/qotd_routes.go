@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
 )
 
@@ -104,7 +103,7 @@ func (s *Server) handleQOTDSummaryGet(w http.ResponseWriter, r *http.Request, gu
 		return
 	}
 
-	writeJSON(w, http.StatusOK, QOTDSummaryResponse{
+	writeJSON(w, s.log(), http.StatusOK, QOTDSummaryResponse{
 		Status:  "ok",
 		GuildID: guildID,
 		Summary: buildQOTDSummaryResponse(guildID, summary),
@@ -119,7 +118,7 @@ func (s *Server) handleQOTDSettingsGet(w http.ResponseWriter, _ *http.Request, g
 		return
 	}
 
-	writeJSON(w, http.StatusOK, QOTDSettingsResponse{
+	writeJSON(w, s.log(), http.StatusOK, QOTDSettingsResponse{
 		Status:   "ok",
 		GuildID:  guildID,
 		Settings: settings,
@@ -139,7 +138,7 @@ func (s *Server) handleQOTDSettingsPut(w http.ResponseWriter, r *http.Request, g
 		return
 	}
 
-	writeJSON(w, http.StatusOK, QOTDSettingsResponse{
+	writeJSON(w, s.log(), http.StatusOK, QOTDSettingsResponse{
 		Status:   "ok",
 		GuildID:  guildID,
 		Settings: settings,
@@ -154,7 +153,7 @@ func (s *Server) handleQOTDQuestionsGet(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	writeJSON(w, http.StatusOK, QOTDQuestionsResponse{
+	writeJSON(w, s.log(), http.StatusOK, QOTDQuestionsResponse{
 		Status:    "ok",
 		GuildID:   guildID,
 		Questions: buildQOTDQuestionsResponse(questions),
@@ -182,7 +181,7 @@ func (s *Server) handleQOTDQuestionsCreate(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, QOTDQuestionResponse{
+	writeJSON(w, s.log(), http.StatusCreated, QOTDQuestionResponse{
 		Status:   "ok",
 		GuildID:  guildID,
 		Question: buildQOTDQuestionsResponse([]qotd.QuestionRecord{*question})[0],
@@ -232,7 +231,7 @@ func (s *Server) handleQOTDQuestionsCreateBatch(w http.ResponseWriter, r *http.R
 		// Sending 207 is safer. Wait, qotdErrorStatus will return 400 or 500. We can just send that status, but still include the "questions".
 	}
 
-	writeJSON(w, statusCode, response)
+	writeJSON(w, s.log(), statusCode, response)
 }
 
 func (s *Server) handleQOTDQuestionsUpdate(w http.ResponseWriter, r *http.Request, guildID string, questionID int64) {
@@ -256,7 +255,7 @@ func (s *Server) handleQOTDQuestionsUpdate(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	writeJSON(w, http.StatusOK, QOTDQuestionResponse{
+	writeJSON(w, s.log(), http.StatusOK, QOTDQuestionResponse{
 		Status:   "ok",
 		GuildID:  guildID,
 		Question: buildQOTDQuestionsResponse([]qotd.QuestionRecord{*question})[0],
@@ -270,7 +269,7 @@ func (s *Server) handleQOTDQuestionsDelete(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	writeJSON(w, http.StatusOK, QOTDDeleteQuestionResponse{
+	writeJSON(w, s.log(), http.StatusOK, QOTDDeleteQuestionResponse{
 		Status:    "ok",
 		GuildID:   guildID,
 		DeletedID: questionID,
@@ -293,7 +292,7 @@ func (s *Server) handleQOTDQuestionsReorder(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	writeJSON(w, http.StatusOK, QOTDQuestionsResponse{
+	writeJSON(w, s.log(), http.StatusOK, QOTDQuestionsResponse{
 		Status:    "ok",
 		GuildID:   guildID,
 		Questions: buildQOTDQuestionsResponse(questions),
@@ -319,7 +318,7 @@ func (s *Server) handleQOTDPublishNowPost(w http.ResponseWriter, r *http.Request
 	})
 	if err != nil {
 		status := qotdErrorStatus(err)
-		log.ApplicationLogger().Warn(
+		s.log().Warn(
 			"QOTD manual publish failed",
 			"operation", "control.qotd.publish_now",
 			"guildID", guildID,
@@ -331,7 +330,7 @@ func (s *Server) handleQOTDPublishNowPost(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	writeJSON(w, http.StatusOK, QOTDPublishNowResponse{
+	writeJSON(w, s.log(), http.StatusOK, QOTDPublishNowResponse{
 		Status:  "ok",
 		GuildID: guildID,
 		Result: QOTDPublishResult{
@@ -346,7 +345,7 @@ func (s *Server) handleQOTDReconcilePost(w http.ResponseWriter, r *http.Request,
 
 	if err := s.qotdService.ReconcileGuild(r.Context(), guildID); err != nil {
 		status := qotdErrorStatus(err)
-		log.ApplicationLogger().Warn(
+		s.log().Warn(
 			"QOTD reconcile failed",
 			"operation", "control.qotd.reconcile",
 			"guildID", guildID,
@@ -364,7 +363,7 @@ func (s *Server) handleQOTDReconcilePost(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	writeJSON(w, http.StatusOK, QOTDSummaryResponse{
+	writeJSON(w, s.log(), http.StatusOK, QOTDSummaryResponse{
 		Status:  "ok",
 		GuildID: guildID,
 		Summary: buildQOTDSummaryResponse(guildID, summary),

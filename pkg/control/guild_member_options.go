@@ -45,7 +45,7 @@ func (s *Server) handleGuildMemberOptionsGet(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	writeJSON(w, http.StatusOK, GuildMembersResponse{
+	writeJSON(w, s.log(), http.StatusOK, GuildMembersResponse{
 		Status:  "ok",
 		GuildID: guildID,
 		Members: options,

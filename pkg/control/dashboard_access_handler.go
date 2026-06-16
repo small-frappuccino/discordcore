@@ -14,9 +14,9 @@ type dashboardAccessHandler struct {
 	hasSession     func(*http.Request) bool
 }
 
-func newProtectedEmbeddedDashboardHandler(oauthAvailable func() bool, redirectTarget func() string, hasSession func(*http.Request) bool) http.Handler {
+func newProtectedEmbeddedDashboardHandler(next http.Handler, oauthAvailable func() bool, redirectTarget func() string, hasSession func(*http.Request) bool) http.Handler {
 	return &dashboardAccessHandler{
-		next:           newEmbeddedDashboardHandler(),
+		next:           next,
 		oauthAvailable: oauthAvailable,
 		redirectTarget: redirectTarget,
 		hasSession:     hasSession,

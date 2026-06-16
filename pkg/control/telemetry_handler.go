@@ -3,8 +3,6 @@ package control
 import (
 	"encoding/json"
 	"net/http"
-
-	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
 type UITelemetryPayload struct {
@@ -25,7 +23,7 @@ func (s *Server) handleUITelemetry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.ApplicationLogger().Info("UI Performance Metric",
+	s.log().Info("UI Performance Metric",
 		"source", "frontend",
 		"metric", payload.Metric,
 		"value", payload.Value,
@@ -53,7 +51,7 @@ func (s *Server) handleUILogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger := log.ApplicationLogger()
+	logger := s.log()
 	args := []interface{}{
 		"source", "frontend",
 		"path", payload.Path,

@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"slices"
 	"sort"
 	"strings"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -93,7 +93,7 @@ func (s *Server) handleSettingsRoutes(w http.ResponseWriter, r *http.Request) {
 		if !s.authorizeGlobalControlAccess(w, r, auth, guildAccessLevelRead) {
 			return
 		}
-		writeJSON(w, http.StatusOK, settingsCatalogResponse{
+		writeJSON(w, s.log(), http.StatusOK, settingsCatalogResponse{
 			Status:  "ok",
 			Catalog: buildSettingsCatalog(),
 		})
@@ -147,7 +147,7 @@ func (s *Server) handleSettingsOverviewGet(w http.ResponseWriter, r *http.Reques
 	}
 
 	registry := buildGuildRegistryWorkspace(cfg, registrySources, allowedGuilds)
-	writeJSON(w, http.StatusOK, settingsOverviewResponse{
+	writeJSON(w, s.log(), http.StatusOK, settingsOverviewResponse{
 		Status:    "ok",
 		Workspace: buildSettingsOverview(cfg, s.configManager.ConfigPath(), registry, allowedGuilds),
 	})
@@ -155,7 +155,7 @@ func (s *Server) handleSettingsOverviewGet(w http.ResponseWriter, r *http.Reques
 
 func (s *Server) handleGlobalSettingsGet(w http.ResponseWriter, _ *http.Request) {
 	cfg := s.configManager.SnapshotConfig()
-	writeJSON(w, http.StatusOK, globalSettingsResponse{
+	writeJSON(w, s.log(), http.StatusOK, globalSettingsResponse{
 		Status:    "ok",
 		Workspace: buildGlobalSettingsWorkspace(cfg),
 	})
@@ -201,7 +201,7 @@ func (s *Server) handleGlobalSettingsPut(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, globalSettingsResponse{
+	writeJSON(w, s.log(), http.StatusOK, globalSettingsResponse{
 		Status:    "ok",
 		Workspace: buildGlobalSettingsWorkspace(updated),
 	})
@@ -220,7 +220,7 @@ func (s *Server) handleGuildRegistryGet(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	writeJSON(w, http.StatusOK, guildRegistryResponse{
+	writeJSON(w, s.log(), http.StatusOK, guildRegistryResponse{
 		Status:    "ok",
 		Workspace: buildGuildRegistryWorkspace(cfg, registrySources, allowedGuilds),
 		Guilds:    buildConfiguredGuildSummaries(cfg, allowedGuilds),
@@ -251,8 +251,8 @@ func (s *Server) handleGuildRegistrationPost(w http.ResponseWriter, r *http.Requ
 
 	current := s.configManager.SnapshotConfig()
 	if guild, ok := findGuildSettings(current, guildID); ok {
-		logSettingsRegistrationResult(auth, guildID, "control.settings.guild_registry.register.skip", nil)
-		writeJSON(w, http.StatusOK, guildRegistrationResponse{
+		logSettingsRegistrationResult(s.log(), auth, guildID, "control.settings.guild_registry.register.skip", nil)
+		writeJSON(w, s.log(), http.StatusOK, guildRegistrationResponse{
 			Status:    "ok",
 			GuildID:   guildID,
 			Created:   false,
@@ -262,14 +262,14 @@ func (s *Server) handleGuildRegistrationPost(w http.ResponseWriter, r *http.Requ
 	}
 	if s.guildRegistration == nil {
 		err := fmt.Errorf("%w: bootstrap is not configured for guild_id=%s", errGuildRegistrationUnavailable, guildID)
-		logSettingsRegistrationResult(auth, guildID, "control.settings.guild_registry.register.unavailable", err)
+		logSettingsRegistrationResult(s.log(), auth, guildID, "control.settings.guild_registry.register.unavailable", err)
 		http.Error(w, fmt.Sprintf("failed to register guild settings: %v", err), statusForSettingsMutationError(err))
 		return
 	}
 
-	logSettingsRegistrationAttempt(auth, guildID)
+	logSettingsRegistrationAttempt(s.log(), auth, guildID)
 	if err := s.guildRegistration(r.Context(), guildID); err != nil {
-		logSettingsRegistrationResult(auth, guildID, "control.settings.guild_registry.register.failed", err)
+		logSettingsRegistrationResult(s.log(), auth, guildID, "control.settings.guild_registry.register.failed", err)
 		http.Error(w, fmt.Sprintf("failed to register guild settings: %v", err), statusForSettingsMutationError(err))
 		return
 	}
@@ -278,13 +278,13 @@ func (s *Server) handleGuildRegistrationPost(w http.ResponseWriter, r *http.Requ
 	guild, ok := findGuildSettings(updated, guildID)
 	if !ok {
 		err := fmt.Errorf("registered guild settings not found for %s", guildID)
-		logSettingsRegistrationResult(auth, guildID, "control.settings.guild_registry.register.missing", err)
+		logSettingsRegistrationResult(s.log(), auth, guildID, "control.settings.guild_registry.register.missing", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	logSettingsRegistrationResult(auth, guildID, "control.settings.guild_registry.register.success", nil)
-	writeJSON(w, http.StatusCreated, guildRegistrationResponse{
+	logSettingsRegistrationResult(s.log(), auth, guildID, "control.settings.guild_registry.register.success", nil)
+	writeJSON(w, s.log(), http.StatusCreated, guildRegistrationResponse{
 		Status:    "ok",
 		GuildID:   guildID,
 		Created:   true,
@@ -304,7 +304,7 @@ func (s *Server) handleGuildSettingsGet(w http.ResponseWriter, r *http.Request, 
 		http.Error(w, fmt.Sprintf("failed to resolve guild bot instances: %v", err), statusForManageableGuildsError(err))
 		return
 	}
-	writeJSON(w, http.StatusOK, guildSettingsResponse{
+	writeJSON(w, s.log(), http.StatusOK, guildSettingsResponse{
 		Status:    "ok",
 		Workspace: buildGuildSettingsWorkspaceWithBindings(cfg, guild, availableBotInstanceIDs),
 	})
@@ -473,7 +473,7 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 			session, err := discordgo.New("Bot " + t)
 			if err == nil {
 				if err := session.GuildLeave(guildID); err != nil {
-					log.ApplicationLogger().Warn("Failed to leave guild for removed bot profile", "guildID", guildID, "err", err)
+					s.log().Warn("Failed to leave guild for removed bot profile", "guildID", guildID, "err", err)
 				}
 			}
 		}(token)
@@ -492,7 +492,7 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 		}
 	}
 
-	writeJSON(w, http.StatusOK, guildSettingsResponse{
+	writeJSON(w, s.log(), http.StatusOK, guildSettingsResponse{
 		Status:    "ok",
 		Workspace: buildGuildSettingsWorkspaceWithBindings(updated, guild, availableBotInstanceIDs),
 	})
@@ -524,7 +524,7 @@ func (s *Server) handleGuildSettingsDelete(w http.ResponseWriter, r *http.Reques
 		s.invalidateAccessibleGuildsCache()
 	}
 
-	writeJSON(w, http.StatusOK, guildDeletionResponse{
+	writeJSON(w, s.log(), http.StatusOK, guildDeletionResponse{
 		Status:  "ok",
 		GuildID: guildID,
 		Deleted: true,
@@ -784,19 +784,19 @@ func statusForSettingsMutationError(err error) int {
 	}
 }
 
-func logSettingsRegistrationAttempt(auth requestAuthorization, guildID string) {
-	fields := []any{
-		"operation", "control.settings.guild_registry.register",
+func logSettingsRegistrationAttempt(logger *slog.Logger, auth requestAuthorization, guildID string) {
+	fields := []interface{}{
+		"operation", "control.settings.guild_registry.register.attempt",
 		"guildID", guildID,
 	}
 	if userID := settingsRequestUserID(auth); userID != "" {
 		fields = append(fields, "userID", userID)
 	}
-	log.ApplicationLogger().Info("Registering guild settings", fields...)
+	logger.Info("Registering guild settings", fields...)
 }
 
-func logSettingsRegistrationResult(auth requestAuthorization, guildID, operation string, err error) {
-	fields := []any{
+func logSettingsRegistrationResult(logger *slog.Logger, auth requestAuthorization, guildID, operation string, err error) {
+	fields := []interface{}{
 		"operation", operation,
 		"guildID", guildID,
 	}
@@ -805,10 +805,10 @@ func logSettingsRegistrationResult(auth requestAuthorization, guildID, operation
 	}
 	if err != nil {
 		fields = append(fields, "err", err)
-		log.ApplicationLogger().Error("Guild settings registration failed", fields...)
+		logger.Error("Guild settings registration failed", fields...)
 		return
 	}
-	log.ApplicationLogger().Info("Guild settings registration completed", fields...)
+	logger.Info("Guild settings registration completed", fields...)
 }
 
 func settingsRequestUserID(auth requestAuthorization) string {

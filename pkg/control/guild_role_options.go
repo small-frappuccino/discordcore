@@ -30,7 +30,7 @@ func (s *Server) handleGuildRoleOptionsGet(w http.ResponseWriter, guildID string
 		return
 	}
 
-	writeJSON(w, http.StatusOK, GuildRolesResponse{
+	writeJSON(w, s.log(), http.StatusOK, GuildRolesResponse{
 		Status:  "ok",
 		GuildID: guildID,
 		Roles:   options,

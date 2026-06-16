@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"strings"
@@ -14,7 +15,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/monitoring"
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
@@ -103,6 +103,7 @@ type Server struct {
 	httpServer           *http.Server
 	listener             net.Listener
 	guildEventBroker     *guildEventBroker
+	logger               *slog.Logger
 }
 
 // NewServer returns nil if addr is empty.
@@ -137,6 +138,7 @@ func NewServer(addr string, configManager *files.ConfigManager, runtimeApplier *
 		guildAccessResolver,
 		s.publicDashboardURL,
 		s.publicDiscordOAuthLoginURL,
+		func() *slog.Logger { return s.log() },
 	)
 	s.httpServer = &http.Server{
 		Addr:              addr,
@@ -147,6 +149,21 @@ func NewServer(addr string, configManager *files.ConfigManager, runtimeApplier *
 	s.registerHTTPRoutes(mux)
 
 	return s
+}
+
+// SetLogger injects the slog.Logger.
+func (s *Server) SetLogger(logger *slog.Logger) {
+	if s == nil {
+		return
+	}
+	s.logger = logger
+}
+
+func (s *Server) log() *slog.Logger {
+	if s != nil && s.logger != nil {
+		return s.logger
+	}
+	return slog.Default()
 }
 
 // SetQOTDService overrides the QOTD application service used by QOTD routes.
@@ -313,9 +330,9 @@ func (s *Server) Start() error {
 	s.listener = ln
 
 	listenAddr, dashboardURL := controlServerListenAddrAndDashboardURL(ln.Addr(), tlsEnabled, s.publicControlOrigin())
-	log.ApplicationLogger().Info("Control server listening", "addr", listenAddr, "tls", tlsEnabled)
+	s.log().Info("Control server listening", "addr", listenAddr, "tls", tlsEnabled)
 	if dashboardURL != "" {
-		log.ApplicationLogger().Info("Control dashboard available", "url", dashboardURL)
+		s.log().Info("Control dashboard available", "url", dashboardURL)
 	}
 
 	go func() {
@@ -326,7 +343,7 @@ func (s *Server) Start() error {
 			err = s.httpServer.Serve(ln)
 		}
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.ApplicationLogger().Error("Control server stopped unexpectedly", "err", err)
+			s.log().Error("Control server stopped unexpectedly", "err", err)
 		}
 	}()
 
@@ -408,7 +425,7 @@ func (s *Server) Stop(ctx context.Context) error {
 		return fmt.Errorf("shutdown control server: %w", err)
 	}
 
-	log.ApplicationLogger().Info("Control server stopped", "addr", s.addr)
+	s.log().Info("Control server stopped", "addr", s.addr)
 	return nil
 }
 
@@ -441,7 +458,7 @@ func (s *Server) serveHealthRoute(w http.ResponseWriter, r *http.Request, resolv
 	w.Header().Set("Cache-Control", "no-store")
 	// Response status header is already in flight; nothing recoverable.
 	if err := json.NewEncoder(w).Encode(snapshot); err != nil {
-		log.ApplicationLogger().Warn("Failed to encode health snapshot response", "err", err)
+		s.log().Warn("Failed to encode health snapshot response", "err", err)
 	}
 }
 
@@ -494,7 +511,7 @@ func (s *Server) handleRuntimeConfig(w http.ResponseWriter, r *http.Request) {
 		Status:        "ok",
 		RuntimeConfig: updated,
 	}); err != nil {
-		log.ApplicationLogger().Error("Failed to encode runtime config response", "err", err)
+		s.log().Error("Failed to encode runtime config response", "err", err)
 	}
 }
 

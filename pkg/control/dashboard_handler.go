@@ -3,6 +3,7 @@ package control
 import (
 	"bytes"
 	"fmt"
+	embeddedui "github.com/small-frappuccino/discordcore/ui"
 	"io"
 	"io/fs"
 	"mime"
@@ -10,9 +11,6 @@ import (
 	"path"
 	"strings"
 	"time"
-
-	"github.com/small-frappuccino/discordcore/pkg/log"
-	embeddedui "github.com/small-frappuccino/discordcore/ui"
 )
 
 const (
@@ -27,10 +25,10 @@ type dashboardHandler struct {
 	knownDirs  map[string]struct{}
 }
 
-func newEmbeddedDashboardHandler() http.Handler {
+func (s *Server) newEmbeddedDashboardHandler() http.Handler {
 	assets, err := embeddedui.DistFS()
 	if err != nil {
-		log.ApplicationLogger().Error("Dashboard assets unavailable", "err", err)
+		s.log().Error("Dashboard assets unavailable", "err", err)
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "dashboard assets unavailable", http.StatusServiceUnavailable)
 		})
@@ -38,7 +36,7 @@ func newEmbeddedDashboardHandler() http.Handler {
 
 	handler, err := newDashboardHandler(assets)
 	if err != nil {
-		log.ApplicationLogger().Error("Dashboard handler unavailable", "err", err)
+		s.log().Error("Dashboard handler unavailable", "err", err)
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "dashboard handler unavailable", http.StatusServiceUnavailable)
 		})
