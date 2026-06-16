@@ -330,9 +330,9 @@ func (s *Server) Start() error {
 	s.listener = ln
 
 	listenAddr, dashboardURL := controlServerListenAddrAndDashboardURL(ln.Addr(), tlsEnabled, s.publicControlOrigin())
-	s.log().Info("Control server listening", "addr", listenAddr, "tls", tlsEnabled)
+	s.log().LogAttrs(context.Background(), slog.LevelInfo, "Control server listening", slog.String("addr", listenAddr), slog.Bool("tls", tlsEnabled))
 	if dashboardURL != "" {
-		s.log().Info("Control dashboard available", "url", dashboardURL)
+		s.log().LogAttrs(context.Background(), slog.LevelInfo, "Control dashboard available", slog.String("url", dashboardURL))
 	}
 
 	go func() {
@@ -343,7 +343,7 @@ func (s *Server) Start() error {
 			err = s.httpServer.Serve(ln)
 		}
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			s.log().Error("Control server stopped unexpectedly", "err", err)
+			s.log().LogAttrs(context.Background(), slog.LevelError, "Control server stopped unexpectedly", slog.Any("err", err))
 		}
 	}()
 
@@ -425,7 +425,7 @@ func (s *Server) Stop(ctx context.Context) error {
 		return fmt.Errorf("shutdown control server: %w", err)
 	}
 
-	s.log().Info("Control server stopped", "addr", s.addr)
+	s.log().LogAttrs(ctx, slog.LevelInfo, "Control server stopped", slog.String("addr", s.addr))
 	return nil
 }
 
@@ -458,7 +458,7 @@ func (s *Server) serveHealthRoute(w http.ResponseWriter, r *http.Request, resolv
 	w.Header().Set("Cache-Control", "no-store")
 	// Response status header is already in flight; nothing recoverable.
 	if err := json.NewEncoder(w).Encode(snapshot); err != nil {
-		s.log().Warn("Failed to encode health snapshot response", "err", err)
+		s.log().LogAttrs(r.Context(), slog.LevelWarn, "Failed to encode health snapshot response", slog.Any("err", err))
 	}
 }
 
@@ -511,7 +511,7 @@ func (s *Server) handleRuntimeConfig(w http.ResponseWriter, r *http.Request) {
 		Status:        "ok",
 		RuntimeConfig: updated,
 	}); err != nil {
-		s.log().Error("Failed to encode runtime config response", "err", err)
+		s.log().LogAttrs(r.Context(), slog.LevelError, "Failed to encode runtime config response", slog.Any("err", err))
 	}
 }
 

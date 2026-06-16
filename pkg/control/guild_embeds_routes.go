@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"log/slog"
 	"net/http"
 )
 
@@ -14,7 +15,7 @@ func (s *Server) handleGuildEmbedsRoutes(w http.ResponseWriter, r *http.Request,
 			if !s.authorizeGuildControlAccess(w, r, auth, guildID, guildAccessLevelRead) {
 				return
 			}
-			s.handleGuildEmbedsList(w, guildID)
+			s.handleGuildEmbedsList(w, r, guildID)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -28,7 +29,7 @@ func (s *Server) handleGuildEmbedsRoutes(w http.ResponseWriter, r *http.Request,
 			if !s.authorizeGuildControlAccess(w, r, auth, guildID, guildAccessLevelRead) {
 				return
 			}
-			s.handleGuildEmbedGet(w, guildID, key)
+			s.handleGuildEmbedGet(w, r, guildID, key)
 		case http.MethodPut:
 			if !s.authorizeGuildControlAccess(w, r, auth, guildID, guildAccessLevelWrite) {
 				return
@@ -38,7 +39,7 @@ func (s *Server) handleGuildEmbedsRoutes(w http.ResponseWriter, r *http.Request,
 			if !s.authorizeGuildControlAccess(w, r, auth, guildID, guildAccessLevelWrite) {
 				return
 			}
-			s.handleGuildEmbedDelete(w, guildID, key)
+			s.handleGuildEmbedDelete(w, r, guildID, key)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -48,14 +49,14 @@ func (s *Server) handleGuildEmbedsRoutes(w http.ResponseWriter, r *http.Request,
 	http.NotFound(w, r)
 }
 
-func (s *Server) handleGuildEmbedsList(w http.ResponseWriter, guildID string) {
+func (s *Server) handleGuildEmbedsList(w http.ResponseWriter, r *http.Request, guildID string) {
 	embeds, err := s.configManager.CustomEmbeds(guildID)
 	if err != nil {
 		if errors.Is(err, files.ErrInvalidCustomEmbedInput) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		s.log().Error("failed to get custom embeds", "guild_id", guildID, "error", err)
+		s.log().LogAttrs(r.Context(), slog.LevelError, "failed to get custom embeds", slog.String("guild_id", guildID), slog.Any("error", err))
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -68,7 +69,7 @@ func (s *Server) handleGuildEmbedsList(w http.ResponseWriter, guildID string) {
 	writeJSON(w, s.log(), http.StatusOK, embeds)
 }
 
-func (s *Server) handleGuildEmbedGet(w http.ResponseWriter, guildID, key string) {
+func (s *Server) handleGuildEmbedGet(w http.ResponseWriter, r *http.Request, guildID, key string) {
 	embed, err := s.configManager.CustomEmbed(guildID, key)
 	if err != nil {
 		if errors.Is(err, files.ErrCustomEmbedNotFound) {
@@ -79,7 +80,7 @@ func (s *Server) handleGuildEmbedGet(w http.ResponseWriter, guildID, key string)
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		s.log().Error("failed to get custom embed", "guild_id", guildID, "key", key, "error", err)
+		s.log().LogAttrs(r.Context(), slog.LevelError, "failed to get custom embed", slog.String("guild_id", guildID), slog.String("key", key), slog.Any("error", err))
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -106,7 +107,7 @@ func (s *Server) handleGuildEmbedPut(w http.ResponseWriter, r *http.Request, gui
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		s.log().Error("failed to set custom embed properties", "guild_id", guildID, "key", key, "error", err)
+		s.log().LogAttrs(r.Context(), slog.LevelError, "failed to set custom embed properties", slog.String("guild_id", guildID), slog.String("key", key), slog.Any("error", err))
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -117,14 +118,14 @@ func (s *Server) handleGuildEmbedPut(w http.ResponseWriter, r *http.Request, gui
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		s.log().Error("failed to set custom embed fields", "guild_id", guildID, "key", key, "error", err)
+		s.log().LogAttrs(r.Context(), slog.LevelError, "failed to set custom embed fields", slog.String("guild_id", guildID), slog.String("key", key), slog.Any("error", err))
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
 	embed, err := s.configManager.CustomEmbed(guildID, key)
 	if err != nil {
-		s.log().Error("failed to retrieve custom embed after update", "guild_id", guildID, "key", key, "error", err)
+		s.log().LogAttrs(r.Context(), slog.LevelError, "failed to retrieve custom embed after update", slog.String("guild_id", guildID), slog.String("key", key), slog.Any("error", err))
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -132,7 +133,7 @@ func (s *Server) handleGuildEmbedPut(w http.ResponseWriter, r *http.Request, gui
 	writeJSON(w, s.log(), http.StatusOK, embed)
 }
 
-func (s *Server) handleGuildEmbedDelete(w http.ResponseWriter, guildID, key string) {
+func (s *Server) handleGuildEmbedDelete(w http.ResponseWriter, r *http.Request, guildID, key string) {
 	deleted, err := s.configManager.DeleteCustomEmbed(guildID, key)
 	if err != nil {
 		if errors.Is(err, files.ErrCustomEmbedNotFound) {
@@ -143,7 +144,7 @@ func (s *Server) handleGuildEmbedDelete(w http.ResponseWriter, guildID, key stri
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		s.log().Error("failed to delete custom embed", "guild_id", guildID, "key", key, "error", err)
+		s.log().LogAttrs(r.Context(), slog.LevelError, "failed to delete custom embed", slog.String("guild_id", guildID), slog.String("key", key), slog.Any("error", err))
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}

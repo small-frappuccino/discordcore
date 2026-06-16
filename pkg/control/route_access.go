@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"crypto/subtle"
+	"log/slog"
 	"net/http"
 	"strings"
 )
@@ -78,15 +79,15 @@ func (s *Server) authorizeGlobalControlAccess(
 	case requestAuthModeBearer:
 		return true
 	case requestAuthModeDiscordOAuthSession:
-		s.log().Warn(
+		s.log().LogAttrs(r.Context(), slog.LevelWarn,
 			"Global control mutation denied",
-			"operation", "control.route_access.authorize_global",
-			"guildID", "",
-			"channelID", "",
-			"userID", auth.oauthSession.User.ID,
-			"reason", "global mutations require bearer authentication",
-			"method", r.Method,
-			"path", r.URL.Path,
+			slog.String("operation", "control.route_access.authorize_global"),
+			slog.String("guildID", ""),
+			slog.String("channelID", ""),
+			slog.String("userID", auth.oauthSession.User.ID),
+			slog.String("reason", "global mutations require bearer authentication"),
+			slog.String("method", r.Method),
+			slog.String("path", r.URL.Path),
 		)
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return false
@@ -133,13 +134,13 @@ func (s *Server) authorizeGuildControlAccess(
 			if status == http.StatusUnauthorized {
 				message = "oauth session requires re-authentication"
 			}
-			s.log().Error(
+			s.log().LogAttrs(r.Context(), slog.LevelError,
 				"Failed to authorize guild route access",
-				"operation", "control.route_access.authorize_guild",
-				"userID", auth.oauthSession.User.ID,
-				"guildID", guildID,
-				"requiredAccess", requiredAccess,
-				"err", err,
+				slog.String("operation", "control.route_access.authorize_guild"),
+				slog.String("userID", auth.oauthSession.User.ID),
+				slog.String("guildID", guildID),
+				slog.String("requiredAccess", string(requiredAccess)),
+				slog.Any("err", err),
 			)
 			http.Error(w, message, status)
 			return false
@@ -153,26 +154,26 @@ func (s *Server) authorizeGuildControlAccess(
 				return true
 			}
 
-			s.log().Warn(
+			s.log().LogAttrs(r.Context(), slog.LevelWarn,
 				"Guild route access denied",
-				"operation", "control.route_access.authorize_guild",
-				"userID", auth.oauthSession.User.ID,
-				"guildID", guildID,
-				"reason", "insufficient dashboard access level",
-				"requiredAccess", requiredAccess,
-				"actualAccess", guild.AccessLevel,
+				slog.String("operation", "control.route_access.authorize_guild"),
+				slog.String("userID", auth.oauthSession.User.ID),
+				slog.String("guildID", guildID),
+				slog.String("reason", "insufficient dashboard access level"),
+				slog.String("requiredAccess", string(requiredAccess)),
+				slog.String("actualAccess", string(guild.AccessLevel)),
 			)
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return false
 		}
 
-		s.log().Warn(
+		s.log().LogAttrs(r.Context(), slog.LevelWarn,
 			"Guild route access denied",
-			"operation", "control.route_access.authorize_guild",
-			"userID", auth.oauthSession.User.ID,
-			"guildID", guildID,
-			"reason", "guild not accessible by authenticated user",
-			"requiredAccess", requiredAccess,
+			slog.String("operation", "control.route_access.authorize_guild"),
+			slog.String("userID", auth.oauthSession.User.ID),
+			slog.String("guildID", guildID),
+			slog.String("reason", "guild not accessible by authenticated user"),
+			slog.String("requiredAccess", string(requiredAccess)),
 		)
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return false

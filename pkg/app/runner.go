@@ -83,11 +83,6 @@ func RunWithOptions(appName string, opts RunOptions) (err error) {
 func runWithOptions(appName string, opts RunOptions) error {
 	started := time.Now()
 
-	logger := opts.Logger
-	if logger == nil {
-		logger = slog.Default()
-	}
-
 	files.SetAppName(appName)
 
 	if err := idgen.Init(1); err != nil {
@@ -102,6 +97,11 @@ func runWithOptions(appName string, opts RunOptions) error {
 		return errWrap
 	}
 	defer log.GlobalLogger.Sync()
+
+	logger := opts.Logger
+	if logger == nil {
+		logger = slog.Default()
+	}
 
 	notifyLifecycleEvent("starting", "")
 

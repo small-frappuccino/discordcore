@@ -131,7 +131,7 @@ func resolveBotRuntimeCapabilities(
 		}
 	}
 
-	slog.Info("Architectural state transition: Gateway intent bitmask and runtime capabilities computed",
+	slog.Debug("Computed gateway intent bitmask and runtime capabilities",
 		slog.String("bot_instance_id", botInstanceID),
 		slog.Int("intents_bitmask", int(capabilities.intents)),
 		slog.Bool("has_commands", capabilities.hasCommands),

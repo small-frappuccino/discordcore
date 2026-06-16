@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -318,13 +319,13 @@ func (s *Server) handleQOTDPublishNowPost(w http.ResponseWriter, r *http.Request
 	})
 	if err != nil {
 		status := qotdErrorStatus(err)
-		s.log().Warn(
+		s.log().LogAttrs(r.Context(), slog.LevelWarn,
 			"QOTD manual publish failed",
-			"operation", "control.qotd.publish_now",
-			"guildID", guildID,
-			"consumeAutomaticSlot", payload.ConsumeAutomaticSlot == nil || *payload.ConsumeAutomaticSlot,
-			"userID", settingsRequestUserID(auth),
-			"err", err,
+			slog.String("operation", "control.qotd.publish_now"),
+			slog.String("guildID", guildID),
+			slog.Bool("consumeAutomaticSlot", payload.ConsumeAutomaticSlot == nil || *payload.ConsumeAutomaticSlot),
+			slog.String("userID", settingsRequestUserID(auth)),
+			slog.Any("err", err),
 		)
 		http.Error(w, fmt.Sprintf("failed to publish qotd: %v", err), status)
 		return
@@ -345,12 +346,12 @@ func (s *Server) handleQOTDReconcilePost(w http.ResponseWriter, r *http.Request,
 
 	if err := s.qotdService.ReconcileGuild(r.Context(), guildID); err != nil {
 		status := qotdErrorStatus(err)
-		s.log().Warn(
+		s.log().LogAttrs(r.Context(), slog.LevelWarn,
 			"QOTD reconcile failed",
-			"operation", "control.qotd.reconcile",
-			"guildID", guildID,
-			"userID", settingsRequestUserID(auth),
-			"err", err,
+			slog.String("operation", "control.qotd.reconcile"),
+			slog.String("guildID", guildID),
+			slog.String("userID", settingsRequestUserID(auth)),
+			slog.Any("err", err),
 		)
 		http.Error(w, fmt.Sprintf("failed to reconcile qotd: %v", err), status)
 		return

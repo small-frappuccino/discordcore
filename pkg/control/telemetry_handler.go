@@ -2,6 +2,7 @@ package control
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 )
 
@@ -23,11 +24,11 @@ func (s *Server) handleUITelemetry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.log().Info("UI Performance Metric",
-		"source", "frontend",
-		"metric", payload.Metric,
-		"value", payload.Value,
-		"path", payload.Path,
+	s.log().LogAttrs(r.Context(), slog.LevelInfo, "UI Performance Metric",
+		slog.String("source", "frontend"),
+		slog.String("metric", payload.Metric),
+		slog.Float64("value", payload.Value),
+		slog.String("path", payload.Path),
 	)
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -52,22 +53,23 @@ func (s *Server) handleUILogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	logger := s.log()
-	args := []interface{}{
-		"source", "frontend",
-		"path", payload.Path,
-	}
+	attrs := make([]slog.Attr, 0, 2+len(payload.Context))
+	attrs = append(attrs, slog.String("source", "frontend"), slog.String("path", payload.Path))
 	for k, v := range payload.Context {
-		args = append(args, k, v)
+		attrs = append(attrs, slog.Any(k, v))
 	}
 
+	var lvl slog.Level
 	switch payload.Level {
 	case "error":
-		logger.Error(payload.Message, args...)
+		lvl = slog.LevelError
 	case "warn":
-		logger.Warn(payload.Message, args...)
+		lvl = slog.LevelWarn
 	default:
-		logger.Info(payload.Message, args...)
+		lvl = slog.LevelInfo
 	}
+
+	logger.LogAttrs(r.Context(), lvl, payload.Message, attrs...)
 
 	w.WriteHeader(http.StatusNoContent)
 }

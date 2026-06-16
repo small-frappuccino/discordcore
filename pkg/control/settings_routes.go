@@ -251,7 +251,7 @@ func (s *Server) handleGuildRegistrationPost(w http.ResponseWriter, r *http.Requ
 
 	current := s.configManager.SnapshotConfig()
 	if guild, ok := findGuildSettings(current, guildID); ok {
-		logSettingsRegistrationResult(s.log(), auth, guildID, "control.settings.guild_registry.register.skip", nil)
+		logSettingsRegistrationResult(r.Context(), s.log(), auth, guildID, "control.settings.guild_registry.register.skip", nil)
 		writeJSON(w, s.log(), http.StatusOK, guildRegistrationResponse{
 			Status:    "ok",
 			GuildID:   guildID,
@@ -262,14 +262,14 @@ func (s *Server) handleGuildRegistrationPost(w http.ResponseWriter, r *http.Requ
 	}
 	if s.guildRegistration == nil {
 		err := fmt.Errorf("%w: bootstrap is not configured for guild_id=%s", errGuildRegistrationUnavailable, guildID)
-		logSettingsRegistrationResult(s.log(), auth, guildID, "control.settings.guild_registry.register.unavailable", err)
+		logSettingsRegistrationResult(r.Context(), s.log(), auth, guildID, "control.settings.guild_registry.register.unavailable", err)
 		http.Error(w, fmt.Sprintf("failed to register guild settings: %v", err), statusForSettingsMutationError(err))
 		return
 	}
 
-	logSettingsRegistrationAttempt(s.log(), auth, guildID)
+	logSettingsRegistrationAttempt(r.Context(), s.log(), auth, guildID)
 	if err := s.guildRegistration(r.Context(), guildID); err != nil {
-		logSettingsRegistrationResult(s.log(), auth, guildID, "control.settings.guild_registry.register.failed", err)
+		logSettingsRegistrationResult(r.Context(), s.log(), auth, guildID, "control.settings.guild_registry.register.failed", err)
 		http.Error(w, fmt.Sprintf("failed to register guild settings: %v", err), statusForSettingsMutationError(err))
 		return
 	}
@@ -278,12 +278,12 @@ func (s *Server) handleGuildRegistrationPost(w http.ResponseWriter, r *http.Requ
 	guild, ok := findGuildSettings(updated, guildID)
 	if !ok {
 		err := fmt.Errorf("registered guild settings not found for %s", guildID)
-		logSettingsRegistrationResult(s.log(), auth, guildID, "control.settings.guild_registry.register.missing", err)
+		logSettingsRegistrationResult(r.Context(), s.log(), auth, guildID, "control.settings.guild_registry.register.missing", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	logSettingsRegistrationResult(s.log(), auth, guildID, "control.settings.guild_registry.register.success", nil)
+	logSettingsRegistrationResult(r.Context(), s.log(), auth, guildID, "control.settings.guild_registry.register.success", nil)
 	writeJSON(w, s.log(), http.StatusCreated, guildRegistrationResponse{
 		Status:    "ok",
 		GuildID:   guildID,
@@ -473,7 +473,7 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 			session, err := discordgo.New("Bot " + t)
 			if err == nil {
 				if err := session.GuildLeave(guildID); err != nil {
-					s.log().Warn("Failed to leave guild for removed bot profile", "guildID", guildID, "err", err)
+					s.log().LogAttrs(context.Background(), slog.LevelWarn, "Failed to leave guild for removed bot profile", slog.String("guildID", guildID), slog.Any("err", err))
 				}
 			}
 		}(token)
@@ -784,31 +784,60 @@ func statusForSettingsMutationError(err error) int {
 	}
 }
 
-func logSettingsRegistrationAttempt(logger *slog.Logger, auth requestAuthorization, guildID string) {
-	fields := []interface{}{
-		"operation", "control.settings.guild_registry.register.attempt",
-		"guildID", guildID,
+func logSettingsRegistrationAttempt(ctx context.Context, logger *slog.Logger, auth requestAuthorization, guildID string) {
+	userID := settingsRequestUserID(auth)
+	if userID != "" {
+		logger.LogAttrs(ctx, slog.LevelInfo, "Registering guild settings",
+			slog.String("operation", "control.settings.guild_registry.register.attempt"),
+			slog.String("guildID", guildID),
+			slog.String("userID", userID),
+		)
+	} else {
+		logger.LogAttrs(ctx, slog.LevelInfo, "Registering guild settings",
+			slog.String("operation", "control.settings.guild_registry.register.attempt"),
+			slog.String("guildID", guildID),
+		)
 	}
-	if userID := settingsRequestUserID(auth); userID != "" {
-		fields = append(fields, "userID", userID)
-	}
-	logger.Info("Registering guild settings", fields...)
 }
 
-func logSettingsRegistrationResult(logger *slog.Logger, auth requestAuthorization, guildID, operation string, err error) {
-	fields := []interface{}{
-		"operation", operation,
-		"guildID", guildID,
-	}
-	if userID := settingsRequestUserID(auth); userID != "" {
-		fields = append(fields, "userID", userID)
-	}
+func logSettingsRegistrationResult(ctx context.Context, logger *slog.Logger, auth requestAuthorization, guildID, operation string, err error) {
+	userID := settingsRequestUserID(auth)
+	lvl := slog.LevelInfo
+	msg := "Guild settings registration completed"
 	if err != nil {
-		fields = append(fields, "err", err)
-		logger.Error("Guild settings registration failed", fields...)
-		return
+		lvl = slog.LevelError
+		msg = "Guild settings registration failed"
 	}
-	logger.Info("Guild settings registration completed", fields...)
+
+	if userID != "" {
+		if err != nil {
+			logger.LogAttrs(ctx, lvl, msg,
+				slog.String("operation", operation),
+				slog.String("guildID", guildID),
+				slog.String("userID", userID),
+				slog.Any("err", err),
+			)
+		} else {
+			logger.LogAttrs(ctx, lvl, msg,
+				slog.String("operation", operation),
+				slog.String("guildID", guildID),
+				slog.String("userID", userID),
+			)
+		}
+	} else {
+		if err != nil {
+			logger.LogAttrs(ctx, lvl, msg,
+				slog.String("operation", operation),
+				slog.String("guildID", guildID),
+				slog.Any("err", err),
+			)
+		} else {
+			logger.LogAttrs(ctx, lvl, msg,
+				slog.String("operation", operation),
+				slog.String("guildID", guildID),
+			)
+		}
+	}
 }
 
 func settingsRequestUserID(auth requestAuthorization) string {

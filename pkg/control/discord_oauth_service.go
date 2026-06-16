@@ -122,7 +122,7 @@ func (svc *discordOAuthControlService) handleLogin(w http.ResponseWriter, r *htt
 	provider := svc.provider()
 	state, err := provider.generateState()
 	if err != nil {
-		svc.log().Error("Failed to generate OAuth state", "operation", "control.oauth.login.generate_state", "err", err)
+		svc.log().LogAttrs(r.Context(), slog.LevelError, "Failed to generate OAuth state", slog.String("operation", "control.oauth.login.generate_state"), slog.Any("err", err))
 		http.Error(w, "failed to initialize oauth state", http.StatusInternalServerError)
 		return
 	}
@@ -135,7 +135,7 @@ func (svc *discordOAuthControlService) handleLogin(w http.ResponseWriter, r *htt
 
 	redirectURL, err := provider.buildAuthorizationURL(state)
 	if err != nil {
-		svc.log().Error("Failed to build OAuth login URL", "operation", "control.oauth.login.build_url", "err", err)
+		svc.log().LogAttrs(r.Context(), slog.LevelError, "Failed to build OAuth login URL", slog.String("operation", "control.oauth.login.build_url"), slog.Any("err", err))
 		http.Error(w, "failed to build oauth redirect", http.StatusInternalServerError)
 		return
 	}
@@ -168,7 +168,7 @@ func (svc *discordOAuthControlService) handleCallback(w http.ResponseWriter, r *
 
 	providedState := strings.TrimSpace(r.URL.Query().Get("state"))
 	if err := provider.validateState(r, providedState); err != nil {
-		svc.log().Warn("Discord OAuth state validation failed", "operation", "control.oauth.callback.state_validation", "err", err)
+		svc.log().LogAttrs(r.Context(), slog.LevelWarn, "Discord OAuth state validation failed", slog.String("operation", "control.oauth.callback.state_validation"), slog.Any("err", err))
 		http.Error(w, "invalid oauth state", http.StatusBadRequest)
 		return
 	}
@@ -184,7 +184,7 @@ func (svc *discordOAuthControlService) handleCallback(w http.ResponseWriter, r *
 
 	tokenPayload, rawError, status, err := provider.exchangeCode(ctx, code)
 	if err != nil {
-		svc.log().Error("Discord OAuth token exchange failed", "operation", "control.oauth.callback.exchange_token", "status", status, "err", err)
+		svc.log().LogAttrs(ctx, slog.LevelError, "Discord OAuth token exchange failed", slog.String("operation", "control.oauth.callback.exchange_token"), slog.Int("status", status), slog.Any("err", err))
 		if status < 400 {
 			status = http.StatusBadGateway
 		}
@@ -208,14 +208,14 @@ func (svc *discordOAuthControlService) handleCallback(w http.ResponseWriter, r *
 
 	accessToken, refreshToken, tokenType, scopes, tokenTTL, err := parseTokenResponse(tokenPayload, provider.scopes)
 	if err != nil {
-		svc.log().Warn("Discord OAuth token payload validation failed", "operation", "control.oauth.callback.parse_token", "err", err)
+		svc.log().LogAttrs(ctx, slog.LevelWarn, "Discord OAuth token payload validation failed", slog.String("operation", "control.oauth.callback.parse_token"), slog.Any("err", err))
 		http.Error(w, "invalid oauth token response", http.StatusBadGateway)
 		return
 	}
 
 	user, err := provider.fetchUser(ctx, accessToken, tokenType)
 	if err != nil {
-		svc.log().Error("Discord OAuth user fetch failed", "operation", "control.oauth.callback.fetch_user", "err", err)
+		svc.log().LogAttrs(ctx, slog.LevelError, "Discord OAuth user fetch failed", slog.String("operation", "control.oauth.callback.fetch_user"), slog.Any("err", err))
 		http.Error(w, "failed to resolve oauth user", http.StatusBadGateway)
 		return
 	}
@@ -230,7 +230,7 @@ func (svc *discordOAuthControlService) handleCallback(w http.ResponseWriter, r *
 		TTL:          provider.sessionTTL,
 	})
 	if err != nil {
-		svc.log().Error("Discord OAuth session creation failed", "operation", "control.oauth.callback.create_session", "err", err)
+		svc.log().LogAttrs(ctx, slog.LevelError, "Discord OAuth session creation failed", slog.String("operation", "control.oauth.callback.create_session"), slog.Any("err", err))
 		http.Error(w, "failed to create oauth session", http.StatusInternalServerError)
 		return
 	}
@@ -340,12 +340,12 @@ func (svc *discordOAuthControlService) handleLogout(w http.ResponseWriter, r *ht
 	provider := svc.provider()
 	if provider != nil {
 		if err := provider.sessions.Delete(session.ID); err != nil {
-			svc.log().Error(
+			svc.log().LogAttrs(r.Context(), slog.LevelError,
 				"Discord OAuth logout session delete failed",
-				"operation", "control.oauth.logout.delete_session",
-				"userID", session.User.ID,
-				"sessionID", session.ID,
-				"err", err,
+				slog.String("operation", "control.oauth.logout.delete_session"),
+				slog.String("userID", session.User.ID),
+				slog.String("sessionID", session.ID),
+				slog.Any("err", err),
 			)
 			http.Error(w, "failed to logout", http.StatusInternalServerError)
 			return
@@ -402,12 +402,12 @@ func (svc *discordOAuthControlService) handleGuildAccessList(
 		if status == http.StatusUnauthorized {
 			message = "oauth session requires re-authentication"
 		}
-		svc.log().Error(
+		svc.log().LogAttrs(ctx, slog.LevelError,
 			"Failed to resolve accessible guilds",
-			"operation", "control.oauth.guild_access.resolve",
-			"userID", session.User.ID,
-			"writeOnly", writeOnly,
-			"err", err,
+			slog.String("operation", "control.oauth.guild_access.resolve"),
+			slog.String("userID", session.User.ID),
+			slog.Bool("writeOnly", writeOnly),
+			slog.Any("err", err),
 		)
 		http.Error(w, message, status)
 		return

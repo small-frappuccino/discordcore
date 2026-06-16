@@ -170,8 +170,6 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 	// 2. Compute differences
 	toStart := make(map[string]string)
 	toStop := make([]string, 0, len(s.instances))
-	capsChangedMap := make(map[string]bool)
-
 	s.log().Debug("Tracking configuration deltas",
 		slog.Int("current_tokens", len(currentTokens)),
 		slog.Int("current_instances", len(s.instances)),
@@ -185,7 +183,6 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 			newCaps := resolveBotRuntimeCapabilities(newCfg, id)
 			if oldCaps != newCaps {
 				capsChanged = true
-				capsChangedMap[id] = true
 			}
 		}
 
