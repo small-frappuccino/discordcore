@@ -5,13 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"iter"
+	"log/slog"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
-	"github.com/small-frappuccino/discordcore/pkg/log"
 	svc "github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/task"
@@ -135,17 +135,17 @@ func (ms *MonitoringService) handleStartupDowntimeAndMaybeRefresh(ctx context.Co
 	lastHB := hb.at
 	okHB := hb.ok
 	if err != nil {
-		log.ErrorLoggerRaw().Error("Failed to read last heartbeat; skipping downtime check", "err", err)
+		ms.logger.LogAttrs(ctx, slog.LevelError, "Failed to read last heartbeat; skipping downtime check", slog.Any("err", err))
 	} else {
 		if !okHB || time.Since(lastHB) > downtimeThreshold {
 			downtimeDuration := "unknown"
 			if okHB {
 				downtimeDuration = time.Since(lastHB).Round(time.Second).String()
 			}
-			log.ApplicationLogger().Info("⏱️ Detected downtime; relying on background cache warmup and Gateway events for hydration", "downtime", downtimeDuration, "threshold", downtimeThreshold.String())
+			ms.logger.LogAttrs(ctx, slog.LevelInfo, "⏱️ Detected downtime; relying on background cache warmup and Gateway events for hydration", slog.String("downtime", downtimeDuration), slog.String("threshold", downtimeThreshold.String()))
 			cfg := ms.scopedConfig()
 			if cfg == nil || len(cfg.Guilds) == 0 {
-				log.ApplicationLogger().Info("No configured guilds for startup silent refresh")
+				ms.logger.LogAttrs(ctx, slog.LevelInfo, "No configured guilds for startup silent refresh")
 				return nil
 			}
 			// Background cache warmup worker and live Gateway events handle hydration dynamically.
@@ -153,7 +153,7 @@ func (ms *MonitoringService) handleStartupDowntimeAndMaybeRefresh(ctx context.Co
 			return nil
 		}
 	}
-	log.ApplicationLogger().Info("No significant downtime detected; skipping heavy avatar refresh")
+	ms.logger.LogAttrs(ctx, slog.LevelInfo, "No significant downtime detected; skipping heavy avatar refresh")
 	return nil
 }
 
@@ -188,7 +188,7 @@ func (ms *MonitoringService) StreamGuildMembersContext(ctx context.Context, guil
 				return
 			}
 			if len(members) == 0 {
-				log.ApplicationLogger().Info("Pagination completed successfully", "guildID", guildID, "total_members_fetched", total)
+				ms.logger.LogAttrs(ctx, slog.LevelInfo, "Pagination completed successfully", slog.String("guildID", guildID), slog.Int("total_members_fetched", total))
 				return
 			}
 			total += len(members)
@@ -198,7 +198,7 @@ func (ms *MonitoringService) StreamGuildMembersContext(ctx context.Context, guil
 				}
 			}
 			if len(members) < pageSize {
-				log.ApplicationLogger().Info("Pagination completed successfully", "guildID", guildID, "total_members_fetched", total)
+				ms.logger.LogAttrs(ctx, slog.LevelInfo, "Pagination completed successfully", slog.String("guildID", guildID), slog.Int("total_members_fetched", total))
 				return
 			}
 			last := members[len(members)-1]
@@ -212,10 +212,10 @@ func (ms *MonitoringService) StreamGuildMembersContext(ctx context.Context, guil
 }
 
 func (ms *MonitoringService) performPeriodicCheck(ctx context.Context) error {
-	log.ApplicationLogger().Info("Running periodic avatar check...")
+	ms.logger.LogAttrs(ctx, slog.LevelInfo, "Running periodic avatar check...")
 	cfg := ms.scopedConfig()
 	if cfg == nil || len(cfg.Guilds) == 0 {
-		log.ApplicationLogger().Info("No configured guilds for periodic check")
+		ms.logger.LogAttrs(ctx, slog.LevelInfo, "No configured guilds for periodic check")
 		return nil
 	}
 	for _, gcfg := range cfg.Guilds {
@@ -226,12 +226,12 @@ func (ms *MonitoringService) performPeriodicCheck(ctx context.Context) error {
 		flush := func() {
 			if ms.store != nil && len(joinSnapshots) > 0 {
 				if err := ms.store.UpsertGuildMemberSnapshotsContext(ctx, gcfg.GuildID, joinSnapshots, time.Now().UTC()); err != nil {
-					log.ApplicationLogger().Warn(
+					ms.logger.LogAttrs(ctx, slog.LevelWarn,
 						"Periodic check: failed to backfill member join page",
-						"operation", "monitoring.periodic_check.persist_joins_page",
-						"guildID", gcfg.GuildID,
-						"members", len(joinSnapshots),
-						"err", err,
+						slog.String("operation", "monitoring.periodic_check.persist_joins_page"),
+						slog.String("guildID", gcfg.GuildID),
+						slog.Int("members", len(joinSnapshots)),
+						slog.Any("err", err),
 					)
 				}
 			}
@@ -240,7 +240,7 @@ func (ms *MonitoringService) performPeriodicCheck(ctx context.Context) error {
 
 		for member, err := range ms.StreamGuildMembersContext(ctx, gcfg.GuildID) {
 			if err != nil {
-				log.ErrorLoggerRaw().Error("Error getting members for guild", "guildID", gcfg.GuildID, "err", err)
+				ms.logger.LogAttrs(ctx, slog.LevelError, "Error getting members for guild", slog.String("guildID", gcfg.GuildID), slog.Any("err", err))
 				continue
 			}
 			if member == nil || member.User == nil {

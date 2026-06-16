@@ -57,7 +57,7 @@ func NewReactionEventServiceForBot(
 			RunErr:        monitoring.RunErrWithTimeoutContext,
 			EventTimeout:  monitoring.DependencyTimeout,
 			BotInstanceID: files.NormalizeBotInstanceID(botInstanceID),
-			Warn:          slog.Warn,
+			Logger:        logger,
 		}),
 		lifecycle:      monitoring.NewServiceLifecycle("reaction event service"),
 		handlerCancels: make([]func(), 0, 2),

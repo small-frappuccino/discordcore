@@ -34,7 +34,8 @@ type RuntimeConfig struct {
 	// MODERATION LOGS
 	// true/nil: send moderation logs automatically
 	// false: do not send moderation logs
-	ModerationLogging *bool `json:"moderation_logging,omitempty"`
+	ModerationLogging  *bool  `json:"moderation_logging,omitempty"`
+	LogModerationScope string `json:"log_moderation_scope,omitempty"` // discordcore, all_bots, all
 
 	// PRESENCE WATCH
 	PresenceWatchUserID string `json:"presence_watch_user_id,omitempty"`
@@ -509,6 +510,9 @@ type GuildConfig struct {
 
 	// RuntimeConfig allows per-guild overrides for certain settings.
 	RuntimeConfig RuntimeConfig `json:"runtime_config,omitempty"`
+
+	// LogModerationScope determines what moderation events are logged.
+	LogModerationScope string `json:"log_moderation_scope,omitempty"`
 }
 
 // UnmarshalJSON unmarshals json.
@@ -701,6 +705,9 @@ func (cfg *BotConfig) ResolveRuntimeConfig(guildID string) RuntimeConfig {
 	}
 	if guildRC.ModerationLogging != nil {
 		resolved.ModerationLogging = boolPtr(*guildRC.ModerationLogging)
+	}
+	if guildRC.LogModerationScope != "" {
+		resolved.LogModerationScope = guildRC.LogModerationScope
 	}
 	if guildRC.PresenceWatchUserID != "" {
 		resolved.PresenceWatchUserID = guildRC.PresenceWatchUserID

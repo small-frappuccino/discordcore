@@ -171,7 +171,7 @@ func NewMessageEventServiceForBot(deps eventServiceDeps) *MessageEventService {
 			RunErr:        monitoring.RunErrWithTimeoutContext,
 			EventTimeout:  monitoring.DependencyTimeout,
 			BotInstanceID: files.NormalizeBotInstanceID(deps.BotInstanceID),
-			Warn:          slog.Warn,
+			Logger:        deps.Logger,
 		}),
 		lifecycle:      monitoring.NewServiceLifecycle("message event service"),
 		auditCache:     newAuditCacheState(2*time.Second, 15*time.Second),

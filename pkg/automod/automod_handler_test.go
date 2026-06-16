@@ -3,6 +3,7 @@ package automod
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -22,7 +23,9 @@ func TestAutomodHandleRawEvent_IgnoresUnrelatedTypes(t *testing.T) {
 	// AutomodService with no session/configManager/adapters: if the filter
 	// failed to short-circuit on the wrong type, downstream nil derefs would
 	// surface as a panic here.
-	as := &AutomodService{}
+	as := &AutomodService{
+		logger: slog.Default(),
+	}
 	as.handleRawEvent(nil, &discordgo.Event{
 		Type:     "MESSAGE_CREATE",
 		Sequence: 42,
@@ -35,7 +38,9 @@ func TestAutomodHandleRawEvent_IgnoresUnrelatedTypes(t *testing.T) {
 func TestAutomodHandleRawEvent_NilEnvelope(t *testing.T) {
 	t.Parallel()
 
-	as := &AutomodService{}
+	as := &AutomodService{
+		logger: slog.Default(),
+	}
 	as.handleRawEvent(nil, nil)
 }
 
@@ -48,7 +53,9 @@ func TestAutomodHandleRawEvent_NilEnvelope(t *testing.T) {
 func TestAutomodHandleRawEvent_AbortsOnEmptyGuildID(t *testing.T) {
 	t.Parallel()
 
-	as := &AutomodService{}
+	as := &AutomodService{
+		logger: slog.Default(),
+	}
 	as.handleRawEvent(nil, &discordgo.Event{
 		Type:     automodActionExecutionEventType,
 		Sequence: 7,
@@ -74,7 +81,9 @@ func TestAutomodHandleRawEvent_FallbackUnmarshalsFromRawData(t *testing.T) {
 		t.Fatalf("marshal payload: %v", err)
 	}
 
-	as := &AutomodService{}
+	as := &AutomodService{
+		logger: slog.Default(),
+	}
 	as.handleRawEvent(nil, &discordgo.Event{
 		Type:     automodActionExecutionEventType,
 		Sequence: 1234,
@@ -91,7 +100,9 @@ func TestAutomodHandleRawEvent_FallbackUnmarshalsFromRawData(t *testing.T) {
 func TestAutomodHandleRawEvent_FallbackOnInvalidRawData(t *testing.T) {
 	t.Parallel()
 
-	as := &AutomodService{}
+	as := &AutomodService{
+		logger: slog.Default(),
+	}
 	as.handleRawEvent(nil, &discordgo.Event{
 		Type:     automodActionExecutionEventType,
 		Sequence: 1,
@@ -144,7 +155,7 @@ func TestAutomodHandleRawEvent_DedupsSecondEventWithSameSequence(t *testing.T) {
 		return nil
 	})
 
-	svc := NewAutomodService(session, cm, "")
+	svc := NewAutomodService(session, cm, "", slog.Default())
 	svc.SetAdapters(&task.NotificationAdapters{Router: router})
 
 	payload := &discordgo.AutoModerationActionExecution{
@@ -225,7 +236,7 @@ func TestAutomodHandleRawEvent_CoalescesPerActionStream(t *testing.T) {
 		return nil
 	})
 
-	svc := NewAutomodService(session, cm, "")
+	svc := NewAutomodService(session, cm, "", slog.Default())
 	svc.SetAdapters(&task.NotificationAdapters{Router: router})
 
 	// Two per-action events for the same message violation: same MessageID,
@@ -316,7 +327,7 @@ func TestAutomodHandleRawEvent_DistinctViolationsBothRun(t *testing.T) {
 		return nil
 	})
 
-	svc := NewAutomodService(session, cm, "")
+	svc := NewAutomodService(session, cm, "", slog.Default())
 	svc.SetAdapters(&task.NotificationAdapters{Router: router})
 
 	violationA := &discordgo.AutoModerationActionExecution{
@@ -400,7 +411,7 @@ func TestAutomodHandleRawEvent_DropsSendAlertMessageEvents(t *testing.T) {
 		return nil
 	})
 
-	svc := NewAutomodService(session, cm, "")
+	svc := NewAutomodService(session, cm, "", slog.Default())
 	svc.SetAdapters(&task.NotificationAdapters{Router: router})
 
 	alertEvent := &discordgo.AutoModerationActionExecution{

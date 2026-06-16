@@ -241,7 +241,7 @@ func buildAutomodService(runtime *botRuntime, opts botRuntimeOptions, routerConf
 		return nil
 	}
 
-	automodService := automod.NewAutomodService(runtime.session, opts.configManager, runtime.instanceID)
+	automodService := automod.NewAutomodService(runtime.session, opts.configManager, runtime.instanceID, opts.logger)
 	automodRouter := task.NewRouter(routerConfig)
 	notifier := notifications.NewNotificationSender(runtime.session, slog.Default())
 	if monitoringService != nil {

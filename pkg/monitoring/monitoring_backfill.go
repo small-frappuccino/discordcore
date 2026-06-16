@@ -3,11 +3,11 @@ package monitoring
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/task"
 	"github.com/small-frappuccino/discordgo"
 )
@@ -58,7 +58,7 @@ func (ms *MonitoringService) registerBackfillHandlers(serviceCtx context.Context
 func (ms *MonitoringService) handleBackfillEntryExitDay(serviceCtx context.Context, payload any) error {
 	p, ok := payload.(BackfillEntryExitDayPayload)
 	if !ok {
-		log.ErrorLoggerRaw().Error("Invalid payload type for "+TaskTypeMonitorBackfillEntryExitDay, "type", fmt.Sprintf("%T", payload))
+		ms.logger.LogAttrs(context.Background(), slog.LevelError, "Invalid payload type for "+TaskTypeMonitorBackfillEntryExitDay, slog.String("type", fmt.Sprintf("%T", payload)))
 		return nil
 	}
 	channelID := strings.TrimSpace(p.ChannelID)
@@ -81,7 +81,7 @@ func (ms *MonitoringService) handleBackfillEntryExitDay(serviceCtx context.Conte
 func (ms *MonitoringService) handleBackfillEntryExitRange(serviceCtx context.Context, payload any) error {
 	p, ok := payload.(BackfillEntryExitRangePayload)
 	if !ok {
-		log.ErrorLoggerRaw().Error("Invalid payload type for "+TaskTypeMonitorBackfillEntryExitRange, "type", fmt.Sprintf("%T", payload))
+		ms.logger.LogAttrs(context.Background(), slog.LevelError, "Invalid payload type for "+TaskTypeMonitorBackfillEntryExitRange, slog.String("type", fmt.Sprintf("%T", payload)))
 		return nil
 	}
 
@@ -89,24 +89,24 @@ func (ms *MonitoringService) handleBackfillEntryExitRange(serviceCtx context.Con
 	startRaw := strings.TrimSpace(p.Start)
 	endRaw := strings.TrimSpace(p.End)
 	if channelID == "" || startRaw == "" || endRaw == "" {
-		log.ErrorLoggerRaw().Warn("Missing required fields for backfill range", "channelID", channelID, "start", startRaw, "end", endRaw)
+		ms.logger.LogAttrs(context.Background(), slog.LevelWarn, "Missing required fields for backfill range", slog.String("channelID", channelID), slog.String("start", startRaw), slog.String("end", endRaw))
 		return nil
 	}
 
 	start, err := time.Parse(time.RFC3339, startRaw)
 	if err != nil {
-		log.ErrorLoggerRaw().Error("Failed to parse start date for backfill range", "err", err, "start", startRaw)
+		ms.logger.LogAttrs(context.Background(), slog.LevelError, "Failed to parse start date for backfill range", slog.Any("err", err), slog.String("start", startRaw))
 		return nil
 	}
 	end, err := time.Parse(time.RFC3339, endRaw)
 	if err != nil {
-		log.ErrorLoggerRaw().Error("Failed to parse end date for backfill range", "err", err, "end", endRaw)
+		ms.logger.LogAttrs(context.Background(), slog.LevelError, "Failed to parse end date for backfill range", slog.Any("err", err), slog.String("end", endRaw))
 		return nil
 	}
 	start = start.UTC()
 	end = end.UTC()
 	if !end.After(start) {
-		log.ErrorLoggerRaw().Warn("End date must be after start date for backfill range", "start", start, "end", end)
+		ms.logger.LogAttrs(context.Background(), slog.LevelWarn, "End date must be after start date for backfill range", slog.Any("start", start), slog.Any("end", end))
 		return nil
 	}
 	return ms.runEntryExitBackfill(serviceCtx, channelID, start, end, "range")
@@ -118,11 +118,11 @@ func (ms *MonitoringService) handleBackfillEntryExitRange(serviceCtx context.Con
 func (ms *MonitoringService) runEntryExitBackfill(serviceCtx context.Context, channelID string, start, end time.Time, mode string) error {
 	guildID := ms.resolveGuildIDForChannel(channelID)
 	if guildID == "" {
-		log.ErrorLoggerRaw().Warn("Could not resolve guild ID for channel during backfill", "mode", mode, "channelID", channelID)
+		ms.logger.LogAttrs(context.Background(), slog.LevelWarn, "Could not resolve guild ID for channel during backfill", slog.String("mode", mode), slog.String("channelID", channelID))
 		return nil
 	}
 
-	log.ApplicationLogger().Info("📥 Starting entry/exit backfill", "mode", mode, "channelID", channelID, "guildID", guildID, "start", start.Format(time.RFC3339), "end", end.Format(time.RFC3339))
+	ms.logger.LogAttrs(context.Background(), slog.LevelInfo, "📥 Starting entry/exit backfill", slog.String("mode", mode), slog.String("channelID", channelID), slog.String("guildID", guildID), slog.String("start", start.Format(time.RFC3339)), slog.String("end", end.Format(time.RFC3339)))
 
 	botID := ""
 	if ms.session != nil && ms.session.State != nil && ms.session.State.User != nil {
@@ -142,7 +142,7 @@ func (ms *MonitoringService) runEntryExitBackfill(serviceCtx context.Context, ch
 			return ms.session.ChannelMessages(channelID, 100, before, "", "")
 		})
 		if err != nil {
-			log.ErrorLoggerRaw().Error("Failed to fetch channel messages for backfill", "mode", mode, "channelID", channelID, "err", err)
+			ms.logger.LogAttrs(context.Background(), slog.LevelError, "Failed to fetch channel messages for backfill", slog.String("mode", mode), slog.String("channelID", channelID), slog.Any("err", err))
 			break
 		}
 		if len(msgs) == 0 {
@@ -157,7 +157,7 @@ func (ms *MonitoringService) runEntryExitBackfill(serviceCtx context.Context, ch
 		eventsFound += page.eventsFound
 
 		if processedCount%500 == 0 || processedCount < 500 && processedCount%100 == 0 {
-			log.ApplicationLogger().Info("⏳ Backfill in progress...", "mode", mode, "channelID", channelID, "processed", processedCount, "events_found", eventsFound)
+			ms.logger.LogAttrs(context.Background(), slog.LevelInfo, "⏳ Backfill in progress...", slog.String("mode", mode), slog.String("channelID", channelID), slog.Int("processed", processedCount), slog.Int("events_found", eventsFound))
 		}
 
 		before = msgs[len(msgs)-1].ID
@@ -166,7 +166,7 @@ func (ms *MonitoringService) runEntryExitBackfill(serviceCtx context.Context, ch
 		}
 	}
 
-	log.ApplicationLogger().Info("✅ Backfill completed", "mode", mode, "channelID", channelID, "processed", processedCount, "events_found", eventsFound, "duration", time.Since(startTime).Round(time.Millisecond))
+	ms.logger.LogAttrs(context.Background(), slog.LevelInfo, "✅ Backfill completed", slog.String("mode", mode), slog.String("channelID", channelID), slog.Int("processed", processedCount), slog.Int("events_found", eventsFound), slog.Any("duration", time.Since(startTime).Round(time.Millisecond)))
 	return nil
 }
 
@@ -236,22 +236,22 @@ func (ms *MonitoringService) persistBackfillMessage(serviceCtx context.Context, 
 	switch evt {
 	case "join":
 		if err := ms.store.UpsertMemberJoin(scope.GuildID, userID, t); err != nil {
-			log.ApplicationLogger().Warn("Backfill: failed to persist member join", "mode", scope.Mode, "guildID", scope.GuildID, "channelID", scope.ChannelID, "userID", userID, "at", t, "err", err)
+			ms.logger.LogAttrs(context.Background(), slog.LevelWarn, "Backfill: failed to persist member join", slog.String("mode", scope.Mode), slog.String("guildID", scope.GuildID), slog.String("channelID", scope.ChannelID), slog.String("userID", userID), slog.Any("at", t), slog.Any("err", err))
 		}
 		if err := ms.store.IncrementDailyMemberJoin(scope.GuildID, userID, t); err != nil {
-			log.ApplicationLogger().Warn("Backfill: failed to increment daily member join", "mode", scope.Mode, "guildID", scope.GuildID, "channelID", scope.ChannelID, "userID", userID, "at", t, "err", err)
+			ms.logger.LogAttrs(context.Background(), slog.LevelWarn, "Backfill: failed to increment daily member join", slog.String("mode", scope.Mode), slog.String("guildID", scope.GuildID), slog.String("channelID", scope.ChannelID), slog.String("userID", userID), slog.Any("at", t), slog.Any("err", err))
 		}
 	case "leave":
 		// If the member is no longer in the guild, count the leave for the day.
 		if !ms.memberStillInGuild(serviceCtx, scope.GuildID, userID) {
 			if err := ms.store.IncrementDailyMemberLeave(scope.GuildID, userID, t); err != nil {
-				log.ApplicationLogger().Warn("Backfill: failed to increment daily member leave", "mode", scope.Mode, "guildID", scope.GuildID, "channelID", scope.ChannelID, "userID", userID, "at", t, "err", err)
+				ms.logger.LogAttrs(context.Background(), slog.LevelWarn, "Backfill: failed to increment daily member leave", slog.String("mode", scope.Mode), slog.String("guildID", scope.GuildID), slog.String("channelID", scope.ChannelID), slog.String("userID", userID), slog.Any("at", t), slog.Any("err", err))
 			}
 		}
 	}
 
 	if err := ms.store.SetMetadata(serviceCtx, "backfill_progress:"+scope.ChannelID, t); err != nil {
-		log.ApplicationLogger().Warn("Backfill: failed to persist progress metadata", "mode", scope.Mode, "guildID", scope.GuildID, "channelID", scope.ChannelID, "at", t, "err", err)
+		ms.logger.LogAttrs(context.Background(), slog.LevelWarn, "Backfill: failed to persist progress metadata", slog.String("mode", scope.Mode), slog.String("guildID", scope.GuildID), slog.String("channelID", scope.ChannelID), slog.Any("at", t), slog.Any("err", err))
 	}
 	return true
 }
@@ -300,13 +300,13 @@ type backfillTarget struct {
 func (ms *MonitoringService) dispatchStartupBackfills(serviceCtx context.Context) {
 	cfg := ms.scopedConfig()
 	if cfg == nil {
-		log.ApplicationLogger().Info("Backfill skip: config manager or config is nil")
+		ms.logger.LogAttrs(context.Background(), slog.LevelInfo, "Backfill skip: config manager or config is nil")
 		return
 	}
 
 	targets := ms.collectBackfillTargets(cfg)
 	if len(targets) == 0 {
-		log.ApplicationLogger().Debug("No target channels for backfill check")
+		ms.logger.LogAttrs(context.Background(), slog.LevelDebug, "No target channels for backfill check")
 		return
 	}
 
@@ -314,10 +314,10 @@ func (ms *MonitoringService) dispatchStartupBackfills(serviceCtx context.Context
 	if err != nil {
 		lastEvent = time.Time{}
 		hasLastEvent = false
-		log.ErrorLoggerRaw().Error(
+		ms.logger.LogAttrs(context.Background(), slog.LevelError,
 			"Failed to read last event for backfill recovery; downtime recovery disabled for this startup",
-			"operation", "monitoring.start.backfill.get_last_event",
-			"err", err,
+			slog.String("operation", "monitoring.start.backfill.get_last_event"),
+			slog.Any("err", err),
 		)
 	}
 	now := time.Now().UTC()
@@ -363,7 +363,7 @@ func (ms *MonitoringService) dispatchBackfillForTarget(serviceCtx context.Contex
 	rc := target.RC
 
 	if !target.FeatureEnabled {
-		log.ApplicationLogger().Debug("Backfill disabled by features.backfill.enabled", "channelID", cid)
+		ms.logger.LogAttrs(context.Background(), slog.LevelDebug, "Backfill disabled by features.backfill.enabled", slog.String("channelID", cid))
 		return
 	}
 
@@ -375,26 +375,26 @@ func (ms *MonitoringService) dispatchBackfillForTarget(serviceCtx context.Contex
 			Options: task.TaskOptions{GroupKey: "backfill:" + cid},
 		})
 		if err != nil {
-			log.ErrorLoggerRaw().Error("Failed to dispatch entry/exit backfill task (day)", "channelID", cid, "day", day, "err", err)
+			ms.logger.LogAttrs(context.Background(), slog.LevelError, "Failed to dispatch entry/exit backfill task (day)", slog.String("channelID", cid), slog.String("day", day), slog.Any("err", err))
 		} else {
-			log.ApplicationLogger().Info("▶️ Dispatched entry/exit backfill task (day)", "channelID", cid, "day", day)
+			ms.logger.LogAttrs(context.Background(), slog.LevelInfo, "▶️ Dispatched entry/exit backfill task (day)", slog.String("channelID", cid), slog.String("day", day))
 		}
 		return
 	}
 
 	initialDate := strings.TrimSpace(rc.BackfillInitialDate)
 	if initialDate == "" {
-		log.ApplicationLogger().Debug("Backfill skip for channel: no day set and initial_date is empty", "channelID", cid)
+		ms.logger.LogAttrs(context.Background(), slog.LevelDebug, "Backfill skip for channel: no day set and initial_date is empty", slog.String("channelID", cid))
 		return
 	}
 
 	_, hasProgress, err := ms.store.Metadata(serviceCtx, "backfill_progress:"+cid)
 	if err != nil {
-		log.ErrorLoggerRaw().Error(
+		ms.logger.LogAttrs(context.Background(), slog.LevelError,
 			"Failed to read backfill progress; skipping backfill dispatch for channel",
-			"operation", "monitoring.start.backfill.get_progress",
-			"channelID", cid,
-			"err", err,
+			slog.String("operation", "monitoring.start.backfill.get_progress"),
+			slog.String("channelID", cid),
+			slog.Any("err", err),
 		)
 		return
 	}
@@ -405,13 +405,13 @@ func (ms *MonitoringService) dispatchBackfillForTarget(serviceCtx context.Contex
 	}
 
 	if !hasLastEvent {
-		log.ApplicationLogger().Debug("No last event recorded, skipping downtime recovery", "channelID", cid)
+		ms.logger.LogAttrs(context.Background(), slog.LevelDebug, "No last event recorded, skipping downtime recovery", slog.String("channelID", cid))
 		return
 	}
 
 	downtime := now.Sub(lastEvent)
 	if downtime <= downtimeThreshold {
-		log.ApplicationLogger().Debug("Downtime below threshold, skipping recovery", "channelID", cid, "downtime", downtime)
+		ms.logger.LogAttrs(context.Background(), slog.LevelDebug, "Downtime below threshold, skipping recovery", slog.String("channelID", cid), slog.Any("downtime", downtime))
 		return
 	}
 
@@ -423,9 +423,9 @@ func (ms *MonitoringService) dispatchBackfillForTarget(serviceCtx context.Contex
 		Options: task.TaskOptions{GroupKey: "backfill:" + cid},
 	})
 	if err != nil {
-		log.ErrorLoggerRaw().Error("Failed to dispatch entry/exit backfill recovery (range)", "channelID", cid, "start", start, "end", end, "err", err)
+		ms.logger.LogAttrs(context.Background(), slog.LevelError, "Failed to dispatch entry/exit backfill recovery (range)", slog.String("channelID", cid), slog.String("start", start), slog.String("end", end), slog.Any("err", err))
 	} else {
-		log.ApplicationLogger().Info("▶️ Dispatched entry/exit backfill recovery (range)", "channelID", cid, "start", start, "end", end)
+		ms.logger.LogAttrs(context.Background(), slog.LevelInfo, "▶️ Dispatched entry/exit backfill recovery (range)", slog.String("channelID", cid), slog.String("start", start), slog.String("end", end))
 	}
 }
 
@@ -433,7 +433,7 @@ func (ms *MonitoringService) dispatchBackfillForTarget(serviceCtx context.Contex
 func (ms *MonitoringService) dispatchInitialBackfill(serviceCtx context.Context, cid, initialDate string, now time.Time) {
 	parsedDate, err := time.Parse("2006-01-02", initialDate)
 	if err != nil {
-		log.ApplicationLogger().Error("Failed to parse backfill_initial_date", "date", initialDate, "err", err)
+		ms.logger.LogAttrs(context.Background(), slog.LevelError, "Failed to parse backfill_initial_date", slog.String("date", initialDate), slog.Any("err", err))
 		return
 	}
 	start := parsedDate.Format(time.RFC3339)
@@ -444,9 +444,9 @@ func (ms *MonitoringService) dispatchInitialBackfill(serviceCtx context.Context,
 		Options: task.TaskOptions{GroupKey: "backfill:" + cid},
 	})
 	if err != nil {
-		log.ErrorLoggerRaw().Error("Failed to dispatch initial entry/exit backfill (range)", "channelID", cid, "start", start, "end", end, "err", err)
+		ms.logger.LogAttrs(context.Background(), slog.LevelError, "Failed to dispatch initial entry/exit backfill (range)", slog.String("channelID", cid), slog.String("start", start), slog.String("end", end), slog.Any("err", err))
 	} else {
-		log.ApplicationLogger().Info("▶️ Dispatched initial entry/exit backfill (range)", "channelID", cid, "start", start)
+		ms.logger.LogAttrs(context.Background(), slog.LevelInfo, "▶️ Dispatched initial entry/exit backfill (range)", slog.String("channelID", cid), slog.String("start", start))
 	}
 }
 

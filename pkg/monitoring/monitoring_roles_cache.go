@@ -1,10 +1,10 @@
 package monitoring
 
 import (
+	"context"
+	"log/slog"
 	"sync"
 	"time"
-
-	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
 type cachedRoles struct {
@@ -86,7 +86,7 @@ func (c *rolesCacheStore) evictExpired() {
 			delete(c.entries, key)
 		}
 		c.mu.Unlock()
-		log.ApplicationLogger().Info("Cleaned up expired roles cache entries", "count", len(toDelete))
+		slog.Default().LogAttrs(context.Background(), slog.LevelInfo, "Cleaned up expired roles cache entries", slog.Int("count", len(toDelete)))
 	}
 }
 

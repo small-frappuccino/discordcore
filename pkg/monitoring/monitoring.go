@@ -14,7 +14,6 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/log"
 	svc "github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/task"
@@ -36,12 +35,7 @@ func stopMonitoringSubService(ctx context.Context, operation, serviceName string
 		return nil
 	}
 	if err := RunErrWithTimeout(ctx, DependencyTimeout, stopFn); err != nil {
-		log.ErrorLoggerRaw().Error(
-			"Monitoring sub-service stop failed",
-			"operation", operation,
-			"service", serviceName,
-			"err", err,
-		)
+		slog.Error("Monitoring sub-service stop failed", slog.String("operation", operation), slog.String("service", serviceName), slog.Any("err", err))
 		return fmt.Errorf("%s: %w", operation, err)
 	}
 	return nil
@@ -358,10 +352,10 @@ func NewMonitoringServiceForBotWithMetrics(
 		configManager:     configManager,
 		botInstanceID:     files.NormalizeBotInstanceID(botInstanceID),
 		store:             store,
-		activity:          NewMonitoringRuntimeActivity(store, files.NormalizeBotInstanceID(botInstanceID)),
+		activity:          NewMonitoringRuntimeActivity(store, logger, files.NormalizeBotInstanceID(botInstanceID)),
 		notifier:          n,
 		unifiedCache:      unifiedCache,
-		userWatcher:       NewUserWatcher(session, configManager, store, n, unifiedCache),
+		userWatcher:       NewUserWatcher(session, configManager, store, n, unifiedCache, logger),
 		controlCh:         make(chan func()),
 		stopChan:          make(chan struct{}),
 		rolesCacheService: NewRolesCacheService(configManager),
@@ -415,7 +409,7 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 	return ms.doControl(func() error {
 		state := ms.runState.Load()
 		if state != nil && state.running {
-			log.ErrorLoggerRaw().Error("Monitoring service is already running")
+			ms.logger.LogAttrs(context.Background(), slog.LevelError, "Monitoring service is already running")
 			return fmt.Errorf("monitoring service is already running")
 		}
 
@@ -444,16 +438,16 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 		workload := ms.workloadState(globalRC)
 
 		if !workload.memberEventService {
-			log.ApplicationLogger().Info("🛑 Entry/exit logs and auto-role assignment are disabled; MemberEventService will not start")
+			ms.logger.LogAttrs(context.Background(), slog.LevelInfo, "🛑 Entry/exit logs and auto-role assignment are disabled; MemberEventService will not start")
 		}
 		if globalRC.DisableAutomodLogs || !globalFeatures.Logging.AutomodAction {
-			log.ApplicationLogger().Info("🛑 Automod logs disabled by runtime config/features")
+			ms.logger.LogAttrs(context.Background(), slog.LevelInfo, "🛑 Automod logs disabled by runtime config/features")
 		}
 		if !workload.messageEventService {
-			log.ApplicationLogger().Info("🛑 Message logging disabled by runtime config/features; MessageEventService will not start")
+			ms.logger.LogAttrs(context.Background(), slog.LevelInfo, "🛑 Message logging disabled by runtime config/features; MessageEventService will not start")
 		}
 		if !workload.reactionEventService {
-			log.ApplicationLogger().Info("🛑 Reaction event handling disabled by runtime config/features; ReactionEventService will not start")
+			ms.logger.LogAttrs(context.Background(), slog.LevelInfo, "🛑 Reaction event handling disabled by runtime config/features; ReactionEventService will not start")
 		}
 
 		ms.startHeartbeat(lifecycleCtx)
@@ -494,7 +488,7 @@ func (ms *MonitoringService) Start(ctx context.Context) error {
 		ms.runState.Store(&newState)
 
 		ms.scheduleEnsureGuildsListed(serviceCtx)
-		log.ApplicationLogger().Info("All monitoring services started successfully")
+		ms.logger.LogAttrs(context.Background(), slog.LevelInfo, "All monitoring services started successfully")
 		return nil
 	})
 }
@@ -618,7 +612,7 @@ func (ms *MonitoringService) Stop(ctx context.Context) error {
 	return ms.doControl(func() error {
 		state := ms.runState.Load()
 		if state == nil || !state.running {
-			log.ErrorLoggerRaw().Error("Monitoring service is not running")
+			ms.logger.LogAttrs(context.Background(), slog.LevelError, "Monitoring service is not running")
 			return fmt.Errorf("monitoring service is not running")
 		}
 
@@ -677,9 +671,9 @@ func (ms *MonitoringService) Stop(ctx context.Context) error {
 		}
 
 		if ms.unifiedCache != nil {
-			log.ApplicationLogger().Info("💾 Persisting cache to storage...")
+			ms.logger.LogAttrs(context.Background(), slog.LevelInfo, "💾 Persisting cache to storage...")
 			if err := RunErrWithTimeout(ctx, monitoringPersistenceTimeout, ms.unifiedCache.Persist); err != nil {
-				log.ErrorLoggerRaw().Error("Failed to persist cache", "err", err)
+				ms.logger.LogAttrs(context.Background(), slog.LevelError, "Failed to persist cache", slog.Any("err", err))
 				stopErrs = append(stopErrs, fmt.Errorf("persist unified cache: %w", err))
 			} else {
 				members := ms.unifiedCache.MemberCount()
@@ -687,7 +681,7 @@ func (ms *MonitoringService) Stop(ctx context.Context) error {
 				roles := ms.unifiedCache.RolesCount()
 				channels := ms.unifiedCache.ChannelCount()
 				total := members + guilds + roles + channels
-				log.ApplicationLogger().Info("✅ Cache persisted", "entries_saved", total)
+				ms.logger.LogAttrs(context.Background(), slog.LevelInfo, "✅ Cache persisted", slog.Int("entries_saved", total))
 			}
 			ms.unifiedCache.Stop()
 		}
@@ -710,7 +704,7 @@ func (ms *MonitoringService) Stop(ctx context.Context) error {
 			return errors.Join(stopErrs...)
 		}
 
-		log.ApplicationLogger().Info("Monitoring service cleanly stopped")
+		ms.logger.LogAttrs(context.Background(), slog.LevelInfo, "Monitoring service cleanly stopped")
 		return nil
 	})
 }
@@ -732,25 +726,25 @@ func compareSnowflakes(a, b string) int {
 
 func (ms *MonitoringService) initializeGuildCacheContext(ctx context.Context, guildID string) error {
 	if ms.store == nil {
-		log.ApplicationLogger().Warn("Store is nil; skipping cache initialization for guild", "guildID", guildID)
+		ms.logger.LogAttrs(ctx, slog.LevelWarn, "Store is nil; skipping cache initialization for guild", slog.String("guildID", guildID))
 		return nil
 	}
 
 	// Use unified cache for guild fetch
 	guild, err := ms.getGuildContext(ctx, guildID)
 	if err != nil {
-		log.ErrorLoggerRaw().Error("Error getting guild", "guildID", guildID, "err", err)
+		ms.logger.LogAttrs(ctx, slog.LevelError, "Error getting guild", slog.String("guildID", guildID), slog.Any("err", err))
 		return fmt.Errorf("MonitoringService.initializeGuildCacheContext: %w", err)
 	}
-	log.ApplicationLogger().Info("Initializing cache for guild", "guildName", guild.Name, "guildID", guild.ID)
+	ms.logger.LogAttrs(ctx, slog.LevelInfo, "Initializing cache for guild", slog.String("guildName", guild.Name), slog.String("guildID", guild.ID))
 	if err := ms.store.SetGuildOwnerID(guildID, guild.OwnerID); err != nil {
-		log.ApplicationLogger().Warn("Failed to persist guild owner ID during cache initialization", "guildID", guildID, "ownerID", guild.OwnerID, "err", err)
+		ms.logger.LogAttrs(ctx, slog.LevelWarn, "Failed to persist guild owner ID during cache initialization", slog.String("guildID", guildID), slog.String("ownerID", guild.OwnerID), slog.Any("err", err))
 	}
 
 	// Set bot join time if missing
 	_, hasBotSince, err := ms.store.BotSince(ctx, guildID)
 	if err != nil {
-		log.ErrorLoggerRaw().Error(
+		slog.Error(
 			"Failed to read bot join timestamp during cache initialization",
 			"operation", "monitoring.initialize_guild_cache.get_bot_since",
 			"guildID", guildID,
@@ -773,12 +767,12 @@ func (ms *MonitoringService) initializeGuildCacheContext(ctx context.Context, gu
 		}
 		if botMember != nil && !botMember.JoinedAt.IsZero() {
 			if err := ms.store.SetBotSince(ctx, guildID, botMember.JoinedAt); err != nil {
-				log.ApplicationLogger().Warn("Failed to persist bot join timestamp", "guildID", guildID, "joinedAt", botMember.JoinedAt, "err", err)
+				ms.logger.LogAttrs(ctx, slog.LevelWarn, "Failed to persist bot join timestamp", slog.String("guildID", guildID), slog.Time("joinedAt", botMember.JoinedAt), slog.Any("err", err))
 			}
 		} else {
 			now := time.Now()
 			if err := ms.store.SetBotSince(ctx, guildID, now); err != nil {
-				log.ApplicationLogger().Warn("Failed to persist fallback bot join timestamp", "guildID", guildID, "joinedAt", now, "err", err)
+				ms.logger.LogAttrs(ctx, slog.LevelWarn, "Failed to persist fallback bot join timestamp", slog.String("guildID", guildID), slog.Time("joinedAt", now), slog.Any("err", err))
 			}
 		}
 	}
@@ -791,7 +785,7 @@ func (ms *MonitoringService) initializeGuildCacheContext(ctx context.Context, gu
 			return nil
 		}
 		if err := ms.store.UpsertGuildMemberSnapshotsContext(ctx, guildID, snapshots, snapshotAt); err != nil {
-			log.ApplicationLogger().Warn(
+			slog.Warn(
 				"Failed to persist guild member snapshot page",
 				"operation", "monitoring.initialize_guild_cache.persist_page",
 				"guildID", guildID,
@@ -818,20 +812,20 @@ func (ms *MonitoringService) initializeGuildCacheContext(ctx context.Context, gu
 
 	for okDiscord || okDB {
 		if err := ctx.Err(); err != nil {
-			log.ErrorLoggerRaw().Error("Context canceled during cache initialization", "guildID", guildID, "err", err)
+			ms.logger.LogAttrs(ctx, slog.LevelError, "Context canceled during cache initialization", slog.String("guildID", guildID), slog.Any("err", err))
 			return fmt.Errorf("MonitoringService.initializeGuildCacheContext: %w", err)
 		}
 
 		var cmp int
 		if !okDiscord {
 			if errDB != nil {
-				log.ErrorLoggerRaw().Error("Error reading member state from DB", "guildID", guildID, "err", errDB)
+				ms.logger.LogAttrs(ctx, slog.LevelError, "Error reading member state from DB", slog.String("guildID", guildID), slog.Any("err", errDB))
 				return fmt.Errorf("MonitoringService.initializeGuildCacheContext (DB error): %w", errDB)
 			}
 			cmp = 1 // only DB has members left (DB is smaller, meaning we must advance DB)
 		} else if !okDB {
 			if errDiscord != nil {
-				log.ErrorLoggerRaw().Error("Error reading member from Discord", "guildID", guildID, "err", errDiscord)
+				ms.logger.LogAttrs(ctx, slog.LevelError, "Error reading member from Discord", slog.String("guildID", guildID), slog.Any("err", errDiscord))
 				return fmt.Errorf("MonitoringService.initializeGuildCacheContext (Discord error): %w", errDiscord)
 			}
 			cmp = -1 // only Discord has members left (Discord is smaller, advance Discord)
@@ -872,7 +866,7 @@ func (ms *MonitoringService) initializeGuildCacheContext(ctx context.Context, gu
 		} else if cmp > 0 {
 			// DB ID is smaller (or Discord is empty) -> Member left the server
 			if err := ms.store.MarkMemberLeftContext(ctx, guildID, dbMember.UserID, snapshotAt); err != nil {
-				log.ApplicationLogger().Warn(
+				slog.Warn(
 					"Failed to mark member as left during reconciliation",
 					"guildID", guildID,
 					"userID", dbMember.UserID,
@@ -909,7 +903,7 @@ func (ms *MonitoringService) initializeGuildCacheContext(ctx context.Context, gu
 	}
 
 	_ = flush()
-	log.ApplicationLogger().Info("Guild cache initialization member scan completed", "guildID", guildID, "members", totalMembers)
+	ms.logger.LogAttrs(ctx, slog.LevelInfo, "Guild cache initialization member scan completed", slog.String("guildID", guildID), slog.Int("members", totalMembers))
 	return nil
 }
 
@@ -980,7 +974,7 @@ func (ms *MonitoringService) scheduleEnsureGuildsListed(runCtx context.Context) 
 			ms.ensureGuildsListed()
 			return nil
 		}); err != nil && ctx.Err() == nil {
-			log.ApplicationLogger().Warn("Ensure guilds listed task failed", "err", err)
+			ms.logger.LogAttrs(context.Background(), slog.LevelWarn, "Ensure guilds listed task failed", slog.Any("err", err))
 		}
 	})
 }
@@ -999,7 +993,7 @@ func (ms *MonitoringService) dispatchMonitorTaskWithPayloadLocked(runCtx context
 		dispatchCtx, cancel := context.WithTimeout(workerCtx, monitoringStartupDispatchLimit)
 		defer cancel()
 		if err := router.Dispatch(dispatchCtx, dispatchTask); err != nil {
-			log.ErrorLoggerRaw().Error("Failed to dispatch startup monitor task", "taskType", dispatchTask.Type, "err", err)
+			ms.logger.LogAttrs(context.Background(), slog.LevelError, "Failed to dispatch startup monitor task", slog.String("taskType", string(dispatchTask.Type)), slog.Any("err", err))
 		}
 	})
 	return true
@@ -1056,7 +1050,7 @@ func (ms *MonitoringService) runRolesRefreshTask(runCtx context.Context) error {
 				return
 			}
 			if err := ms.store.UpsertGuildMemberSnapshotsContext(runCtx, gcfg.GuildID, snapshots, snapshotAt); err != nil {
-				log.ApplicationLogger().Warn(
+				slog.Warn(
 					"Failed to persist guild role snapshot page",
 					"operation", "monitoring.refresh_roles.persist_page",
 					"guildID", gcfg.GuildID,
@@ -1075,7 +1069,7 @@ func (ms *MonitoringService) runRolesRefreshTask(runCtx context.Context) error {
 
 		for member, err := range ms.StreamGuildMembersContext(runCtx, gcfg.GuildID) {
 			if err != nil {
-				log.ErrorLoggerRaw().Error("Error refreshing roles for guild", "guildID", gcfg.GuildID, "err", err)
+				ms.logger.LogAttrs(context.Background(), slog.LevelError, "Error refreshing roles for guild", slog.String("guildID", gcfg.GuildID), slog.Any("err", err))
 				break
 			}
 			if member == nil || member.User == nil {
@@ -1113,7 +1107,7 @@ func (ms *MonitoringService) runRolesRefreshTask(runCtx context.Context) error {
 			requiredRoles := gcfg.Roles.AutoAssignment.RequiredRoles
 			memberRolesStream, err := ms.store.StreamAllGuildMemberRoles(gcfg.GuildID)
 			if err != nil {
-				log.ApplicationLogger().Warn("Failed to load member roles from DB for reconciliation", "guildID", gcfg.GuildID, "err", err)
+				ms.logger.LogAttrs(context.Background(), slog.LevelWarn, "Failed to load member roles from DB for reconciliation", slog.String("guildID", gcfg.GuildID), slog.Any("err", err))
 				continue
 			}
 			botUsers := botUsersByGuild[gcfg.GuildID]
@@ -1124,13 +1118,13 @@ func (ms *MonitoringService) runRolesRefreshTask(runCtx context.Context) error {
 				switch evaluateAutoRoleDecision(roles, targetRoleID, requiredRoles) {
 				case autoRoleAddTarget:
 					if err := ms.session.GuildMemberRoleAdd(gcfg.GuildID, userID, targetRoleID); err != nil {
-						log.ApplicationLogger().Warn("Failed to grant target role during reconciliation", "guildID", gcfg.GuildID, "userID", userID, "roleID", targetRoleID, "err", err)
+						ms.logger.LogAttrs(context.Background(), slog.LevelWarn, "Failed to grant target role during reconciliation", slog.String("guildID", gcfg.GuildID), slog.String("userID", userID), slog.String("roleID", targetRoleID), slog.Any("err", err))
 					} else {
 						reconciledAdds++
 					}
 				case autoRoleRemoveTarget:
 					if err := ms.session.GuildMemberRoleRemove(gcfg.GuildID, userID, targetRoleID); err != nil {
-						log.ApplicationLogger().Warn("Failed to remove target role during reconciliation", "guildID", gcfg.GuildID, "userID", userID, "roleID", targetRoleID, "err", err)
+						ms.logger.LogAttrs(context.Background(), slog.LevelWarn, "Failed to remove target role during reconciliation", slog.String("guildID", gcfg.GuildID), slog.String("userID", userID), slog.String("roleID", targetRoleID), slog.Any("err", err))
 					} else {
 						reconciledRemoves++
 					}
@@ -1139,7 +1133,7 @@ func (ms *MonitoringService) runRolesRefreshTask(runCtx context.Context) error {
 		}
 	}
 
-	log.ApplicationLogger().Info("✅ Roles DB refresh completed", "members_updated", totalUpdates, "duration", time.Since(start).Round(time.Second), "reconciled_adds", reconciledAdds, "reconciled_removes", reconciledRemoves)
+	ms.logger.LogAttrs(context.Background(), slog.LevelInfo, "✅ Roles DB refresh completed", slog.Int("members_updated", totalUpdates), slog.Duration("duration", time.Since(start).Round(time.Second)), slog.Int("reconciled_adds", reconciledAdds), slog.Int("reconciled_removes", reconciledRemoves))
 	return nil
 }
 

@@ -12,7 +12,6 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/task"
@@ -82,7 +81,7 @@ func NewMemberEventServiceForBot(deps eventServiceDeps) *MemberEventService {
 			RunErr:        monitoring.RunErrWithTimeoutContext,
 			EventTimeout:  monitoring.DependencyTimeout,
 			BotInstanceID: files.NormalizeBotInstanceID(deps.BotInstanceID),
-			Warn:          slog.Warn,
+			Logger:        deps.Logger,
 		}),
 		lifecycle:      monitoring.NewServiceLifecycle("member event service"),
 		handlerCancels: make([]func(), 0, 3),
@@ -544,7 +543,7 @@ func (mes *MemberEventService) cleanupJoinTimes() {
 	}
 
 	if len(toDelete) > 0 {
-		log.ApplicationLogger().Info("Cleaned up old join time entries from memory", "count", len(toDelete))
+		mes.logger.Info("Cleaned up old join time entries from memory", slog.Int("count", len(toDelete)))
 	}
 }
 

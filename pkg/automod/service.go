@@ -12,7 +12,6 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
 	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/task"
@@ -119,6 +118,7 @@ type AutomodService struct {
 	startTime time.Time
 
 	botInstanceID string
+	logger        *slog.Logger
 
 	// Fallback dedup cache
 	dedupMu    sync.Mutex
@@ -126,11 +126,12 @@ type AutomodService struct {
 }
 
 // NewAutomodService initializes a new AutoMod logging service for the given bot instance.
-func NewAutomodService(session *discordgo.Session, configManager *files.ConfigManager, botInstanceID string) *AutomodService {
+func NewAutomodService(session *discordgo.Session, configManager *files.ConfigManager, botInstanceID string, logger *slog.Logger) *AutomodService {
 	return &AutomodService{
 		session:       session,
 		configManager: configManager,
 		botInstanceID: files.NormalizeBotInstanceID(botInstanceID),
+		logger:        logger,
 	}
 }
 
@@ -244,7 +245,7 @@ func (as *AutomodService) handleRawEvent(s *discordgo.Session, evt *discordgo.Ev
 		// type — small cost, defends the future-bump path.
 		fallback := &discordgo.AutoModerationActionExecution{}
 		if err := json.Unmarshal(evt.RawData, fallback); err != nil {
-			log.ErrorLoggerRaw().Error("Failed to decode automod action execution payload", "type", evt.Type, "seq", evt.Sequence, "err", err)
+			as.logger.Error("Failed to decode automod action execution payload", "type", evt.Type, "seq", evt.Sequence, "err", err)
 			return
 		}
 		e = fallback
@@ -281,7 +282,7 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 	defer done()
 
 	if int(e.Action.Type) == automodActionSendAlert {
-		log.ApplicationLogger().Debug("Dropping SEND_ALERT_MESSAGE automod event; Discord posts its own native alert", "guildID", e.GuildID, "ruleID", e.RuleID, "userID", e.UserID, "seq", sequence)
+		as.logger.Debug("Dropping SEND_ALERT_MESSAGE automod event; Discord posts its own native alert", "guildID", e.GuildID, "ruleID", e.RuleID, "userID", e.UserID, "seq", sequence)
 		return
 	}
 
@@ -302,7 +303,7 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 
 	emit := logpolicy.ShouldEmitLogEvent(s, as.configManager, logpolicy.LogEventAutomodAction, e.GuildID)
 	if !emit.Enabled {
-		log.ApplicationLogger().Debug("Automod action notification suppressed by policy", "guildID", e.GuildID, "channelID", e.ChannelID, "userID", e.UserID, "seq", sequence, "reason", emit.Reason)
+		as.logger.Debug("Automod action notification suppressed by policy", "guildID", e.GuildID, "channelID", e.ChannelID, "userID", e.UserID, "seq", sequence, "reason", emit.Reason)
 		return
 	}
 	logChannelID := emit.ChannelID
@@ -312,10 +313,10 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 	if as.adapters != nil {
 		if err := as.adapters.EnqueueAutomodActionWithKey(logChannelID, e, idempotencyKey); err != nil {
 			if errors.Is(err, task.ErrDuplicateTask) {
-				log.ApplicationLogger().Debug("Dropped duplicate automod log task", "guildID", e.GuildID, "channelID", logChannelID, "userID", e.UserID, "ruleID", e.RuleID, "seq", sequence, "messageID", e.MessageID, "alertSystemMessageID", e.AlertSystemMessageID)
+				as.logger.Debug("Dropped duplicate automod log task", "guildID", e.GuildID, "channelID", logChannelID, "userID", e.UserID, "ruleID", e.RuleID, "seq", sequence, "messageID", e.MessageID, "alertSystemMessageID", e.AlertSystemMessageID)
 				return
 			}
-			log.ErrorLoggerRaw().Error("Failed to enqueue automod log task; falling back to synchronous send", "guildID", e.GuildID, "channelID", logChannelID, "userID", e.UserID, "seq", sequence, "err", err)
+			as.logger.Error("Failed to enqueue automod log task; falling back to synchronous send", "guildID", e.GuildID, "channelID", logChannelID, "userID", e.UserID, "seq", sequence, "err", err)
 		} else {
 			return
 		}
@@ -324,13 +325,13 @@ func (as *AutomodService) handleAutoModerationAction(s *discordgo.Session, e *di
 	// Synchronous fallback (adapters nil or router enqueue failed). Apply an
 	// in-process dedup so Gateway re-deliveries do not duplicate the embed.
 	if as.fallbackShouldDedup(idempotencyKey) {
-		log.ApplicationLogger().Debug("Dropped duplicate automod log task on fallback path", "guildID", e.GuildID, "channelID", logChannelID, "userID", e.UserID, "ruleID", e.RuleID, "seq", sequence)
+		as.logger.Debug("Dropped duplicate automod log task on fallback path", "guildID", e.GuildID, "channelID", logChannelID, "userID", e.UserID, "ruleID", e.RuleID, "seq", sequence)
 		return
 	}
 
 	embed := BuildAutomodEmbed(e)
 	if _, err := s.ChannelMessageSendEmbed(logChannelID, embed); err != nil {
-		log.ErrorLoggerRaw().Error("Failed to send native automod log message", "guildID", e.GuildID, "channelID", logChannelID, "userID", e.UserID, "seq", sequence, "err", err)
+		as.logger.Error("Failed to send native automod log message", "guildID", e.GuildID, "channelID", logChannelID, "userID", e.UserID, "seq", sequence, "err", err)
 	}
 }
 

@@ -6,7 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/small-frappuccino/discordcore/pkg/log"
+	"log/slog"
+
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
@@ -17,7 +18,7 @@ type RuntimeActivityOptions struct {
 	EventTimeout     time.Duration
 	HeartbeatTimeout time.Duration
 	BotInstanceID    string
-	Warn             func(string, ...any)
+	Logger           *slog.Logger
 	Now              func() time.Time
 	// OnHeartbeatTick fires after every heartbeat persistence attempt
 	// (the startup attempt and each ticker firing), with the error
@@ -41,7 +42,7 @@ type RuntimeActivity struct {
 	eventTimeout     time.Duration
 	heartbeatTimeout time.Duration
 	botInstanceID    string
-	warn             func(string, ...any)
+	logger           *slog.Logger
 	now              func() time.Time
 	onHeartbeatTick  func(err error)
 
@@ -68,13 +69,13 @@ func NewRuntimeActivity(store *storage.Store, opts RuntimeActivityOptions) *Runt
 		eventTimeout:     opts.EventTimeout,
 		heartbeatTimeout: opts.HeartbeatTimeout,
 		botInstanceID:    strings.TrimSpace(opts.BotInstanceID),
-		warn:             opts.Warn,
+		logger:           opts.Logger,
 		now:              now,
 		onHeartbeatTick:  opts.OnHeartbeatTick,
 	}
 }
 
-func NewMonitoringRuntimeActivity(store *storage.Store, botInstanceID ...string) *RuntimeActivity {
+func NewMonitoringRuntimeActivity(store *storage.Store, logger *slog.Logger, botInstanceID ...string) *RuntimeActivity {
 	scopedBotInstanceID := ""
 	if len(botInstanceID) > 0 {
 		scopedBotInstanceID = botInstanceID[0]
@@ -84,7 +85,7 @@ func NewMonitoringRuntimeActivity(store *storage.Store, botInstanceID ...string)
 		EventTimeout:     monitoringPersistenceTimeout,
 		HeartbeatTimeout: monitoringPersistenceTimeout,
 		BotInstanceID:    scopedBotInstanceID,
-		Warn:             log.ApplicationLogger().Warn,
+		Logger:           logger,
 	})
 }
 
@@ -99,8 +100,8 @@ func (ra *RuntimeActivity) MarkEvent(ctx context.Context, source string) {
 
 	if err := ra.runErr(ctx, ra.eventTimeout, func(runCtx context.Context) error {
 		return ra.store.SetLastEventForBot(runCtx, ra.botInstanceID, ra.now())
-	}); err != nil && ra.warn != nil {
-		ra.warn("Failed to persist last event timestamp", "source", source, "error", err)
+	}); err != nil && ra.logger != nil {
+		ra.logger.LogAttrs(ctx, slog.LevelWarn, "Failed to persist last event timestamp", slog.String("source", source), slog.Any("error", err))
 	}
 }
 
@@ -156,8 +157,8 @@ func (ra *RuntimeActivity) attemptHeartbeat(ctx context.Context, failureMessage 
 	err := ra.runErr(ctx, ra.heartbeatTimeout, func(runCtx context.Context) error {
 		return ra.store.SetHeartbeatForBot(runCtx, ra.botInstanceID, ra.now())
 	})
-	if err != nil && ra.warn != nil {
-		ra.warn(failureMessage, "error", err)
+	if err != nil && ra.logger != nil {
+		ra.logger.LogAttrs(ctx, slog.LevelWarn, failureMessage, slog.Any("error", err))
 	}
 	if ra.onHeartbeatTick != nil {
 		ra.onHeartbeatTick(err)

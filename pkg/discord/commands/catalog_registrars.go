@@ -3,9 +3,9 @@ package commands
 import (
 	"log/slog"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/analytics"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	embedscmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/embeds"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/logging"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	partnercmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/partner"
 	qotdcmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/qotd"
@@ -33,7 +33,6 @@ type CommandCatalogRegistrar struct {
 func DefaultCommandCatalogRegistrars() []CommandCatalogRegistrar {
 	return []CommandCatalogRegistrar{
 		RuntimeCommandCatalogRegistrar(),
-		AnalyticsCommandCatalogRegistrar(),
 		PartnerCommandCatalogRegistrar(),
 		ModerationCommandCatalogRegistrar(),
 		RolesCommandCatalogRegistrar(),
@@ -41,6 +40,7 @@ func DefaultCommandCatalogRegistrars() []CommandCatalogRegistrar {
 		TicketsCommandCatalogRegistrar(),
 		QOTDCommandCatalogRegistrar(),
 		StatsCommandCatalogRegistrar(),
+		LoggingCommandCatalogRegistrar(),
 	}
 }
 
@@ -49,15 +49,6 @@ func RuntimeCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
 		Register: func(ch *CommandHandler, router *core.CommandRouter) {
 			runtime.NewRuntimeConfigCommands(ch.configManager).RegisterCommands(router)
-		},
-	}
-}
-
-// AnalyticsCommandCatalogRegistrar registers the analytics slash command surface.
-func AnalyticsCommandCatalogRegistrar() CommandCatalogRegistrar {
-	return CommandCatalogRegistrar{
-		Register: func(ch *CommandHandler, router *core.CommandRouter) {
-			analytics.RegisterAnalyticsCommands(router)
 		},
 	}
 }
@@ -126,6 +117,15 @@ func StatsCommandCatalogRegistrar() CommandCatalogRegistrar {
 		},
 		Register: func(ch *CommandHandler, router *core.CommandRouter) {
 			stats.NewStatsCommands(ch.configManager, ch.statsService, slog.Default()).RegisterCommands(ch.GetCommandManager().GetArikawaRouter())
+		},
+	}
+}
+
+// LoggingCommandCatalogRegistrar registers the logging slash command surface.
+func LoggingCommandCatalogRegistrar() CommandCatalogRegistrar {
+	return CommandCatalogRegistrar{
+		Register: func(ch *CommandHandler, router *core.CommandRouter) {
+			logging.NewLoggingCommands(ch.configManager).RegisterCommands(ch.GetCommandManager().GetArikawaRouter())
 		},
 	}
 }

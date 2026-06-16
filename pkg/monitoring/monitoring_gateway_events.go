@@ -1,13 +1,13 @@
 package monitoring
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"strings"
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -40,7 +40,7 @@ func (ms *MonitoringService) setupEventHandlersFromRuntimeConfig(rc files.Runtim
 		ms.session.AddHandler(ms.handleGuildUpdate),
 	)
 	if !state.presenceHandler && !state.memberUpdateHandler && !state.userUpdateHandler {
-		log.ApplicationLogger().Info("🛑 User and presence handlers are disabled by effective runtime/features")
+		ms.logger.LogAttrs(context.Background(), slog.LevelInfo, "🛑 User and presence handlers are disabled by effective runtime/features")
 	}
 	if state.botPermMirrorHandlers {
 		ms.eventHandlers = append(ms.eventHandlers,
@@ -73,9 +73,9 @@ func (ms *MonitoringService) ensureGuildsListed() {
 		}
 		if ms.configManager.GuildConfig(g.ID) == nil {
 			if err := ms.configManager.EnsureMinimalGuildConfig(g.ID); err != nil {
-				log.ErrorLoggerRaw().Error("Error adding minimal dormant guild entry", "guildID", g.ID, "err", err)
+				ms.logger.LogAttrs(context.Background(), slog.LevelError, "Error adding minimal dormant guild entry", slog.String("guildID", g.ID), slog.Any("err", err))
 			} else {
-				log.ApplicationLogger().Info("📘 Guild listed in config with disabled defaults", "guildID", g.ID)
+				ms.logger.LogAttrs(context.Background(), slog.LevelInfo, "📘 Guild listed in config with disabled defaults", slog.String("guildID", g.ID))
 			}
 		}
 	}
@@ -98,10 +98,10 @@ func (ms *MonitoringService) handleGuildCreate(s *discordgo.Session, e *discordg
 
 	if ms.configManager.GuildConfig(guildID) == nil {
 		if err := ms.configManager.EnsureMinimalGuildConfig(guildID); err != nil {
-			log.ErrorLoggerRaw().Error("Error adding dormant guild entry for new guild", "guildID", guildID, "err", err)
+			ms.logger.LogAttrs(context.Background(), slog.LevelError, "Error adding dormant guild entry for new guild", slog.String("guildID", guildID), slog.Any("err", err))
 			return
 		}
-		log.ApplicationLogger().Info("🆕 New guild listed in config with disabled defaults", "guildID", guildID)
+		ms.logger.LogAttrs(context.Background(), slog.LevelInfo, "🆕 New guild listed in config with disabled defaults", slog.String("guildID", guildID))
 		ms.initializeGuildCache(guildID)
 	}
 }
@@ -124,22 +124,22 @@ func (ms *MonitoringService) handleGuildUpdate(s *discordgo.Session, e *discordg
 	if ms.store != nil {
 		prev, ok, err := ms.store.GetGuildOwnerID(e.Guild.ID)
 		if err != nil {
-			log.ErrorLoggerRaw().Error(
+			ms.logger.LogAttrs(context.Background(), slog.LevelError,
 				"Failed to read guild owner cache during guild update",
-				"operation", "monitoring.handle_guild_update.get_owner",
-				"guildID", e.Guild.ID,
-				"err", err,
+				slog.String("operation", "monitoring.handle_guild_update.get_owner"),
+				slog.String("guildID", e.Guild.ID),
+				slog.Any("err", err),
 			)
 		} else if ok && prev != e.Guild.OwnerID {
-			log.ApplicationLogger().Info("Guild owner changed", "guildID", e.Guild.ID, "from", prev, "to", e.Guild.OwnerID)
+			ms.logger.LogAttrs(context.Background(), slog.LevelInfo, "Guild owner changed", slog.String("guildID", e.Guild.ID), slog.String("from", prev), slog.String("to", e.Guild.OwnerID))
 		}
 		if err := ms.store.SetGuildOwnerID(e.Guild.ID, e.Guild.OwnerID); err != nil {
-			log.ErrorLoggerRaw().Error(
+			ms.logger.LogAttrs(context.Background(), slog.LevelError,
 				"Failed to persist guild owner cache during guild update",
-				"operation", "monitoring.handle_guild_update.set_owner",
-				"guildID", e.Guild.ID,
-				"ownerID", e.Guild.OwnerID,
-				"err", err,
+				slog.String("operation", "monitoring.handle_guild_update.set_owner"),
+				slog.String("guildID", e.Guild.ID),
+				slog.String("ownerID", e.Guild.OwnerID),
+				slog.Any("err", err),
 			)
 		}
 	}
@@ -157,7 +157,7 @@ func (ms *MonitoringService) handlePresenceUpdate(s *discordgo.Session, m *disco
 		return
 	}
 	if m.User.Username == "" {
-		log.ApplicationLogger().Debug("PresenceUpdate ignored (empty username)", "userID", m.User.ID, "guildID", m.GuildID)
+		ms.logger.LogAttrs(context.Background(), slog.LevelDebug, "PresenceUpdate ignored (empty username)", slog.String("userID", m.User.ID), slog.String("guildID", m.GuildID))
 		ms.handlePresenceWatch(m)
 		return
 	}
@@ -244,24 +244,24 @@ func (ms *MonitoringService) handlePresenceWatch(m *discordgo.PresenceUpdate) {
 		target = "bot"
 	}
 
-	fields := []any{
-		"target", target,
-		"userID", userID,
-		"username", username,
-		"status", presenceStatusLabel(snap.Status, snap.ClientStatus),
-		"devices", clientStatusSummary(snap.ClientStatus),
+	fields := []slog.Attr{
+		slog.String("target", target),
+		slog.String("userID", userID),
+		slog.String("username", username),
+		slog.String("status", presenceStatusLabel(snap.Status, snap.ClientStatus)),
+		slog.String("devices", clientStatusSummary(snap.ClientStatus)),
 	}
 	if m.GuildID != "" {
-		fields = append(fields, "guildID", m.GuildID)
+		fields = append(fields, slog.String("guildID", m.GuildID))
 	}
 	if statusChange != "" {
-		fields = append(fields, "status_change", statusChange)
+		fields = append(fields, slog.String("status_change", statusChange))
 	}
 	if len(deviceChanges) > 0 {
-		fields = append(fields, "device_changes", strings.Join(deviceChanges, "; "))
+		fields = append(fields, slog.String("device_changes", strings.Join(deviceChanges, "; ")))
 	}
 
-	log.ApplicationLogger().Info("Presence watch update", fields...)
+	ms.logger.LogAttrs(context.Background(), slog.LevelInfo, "Presence watch update", fields...)
 }
 
 func presenceSnapshotEqual(a, b presenceSnapshot) bool {
