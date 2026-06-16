@@ -17,7 +17,7 @@ import (
 func newPermissionCheckerWithCache(t *testing.T, session *discordgo.Session) (*PermissionChecker, *cache.UnifiedCache) {
 	t.Helper()
 
-	cfg := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cfg := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	checker := NewPermissionChecker(session, cfg)
 	unifiedCache := cache.NewUnifiedCache(cache.DefaultCacheConfig())
 	t.Cleanup(unifiedCache.Stop)
@@ -143,7 +143,7 @@ func TestPermissionCheckerResolveMember_ReturnsErrorOnRESTFailure(t *testing.T) 
 		_, _ = w.Write([]byte(`{"message":"not found","code":0}`))
 	})
 
-	cfg := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cfg := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	checker := NewPermissionChecker(session, cfg)
 
 	member, ok, err := checker.ResolveMember("g1", "u1")
@@ -161,7 +161,7 @@ func TestPermissionCheckerResolveMember_ReturnsNotFoundOnREST404(t *testing.T) {
 		_, _ = w.Write([]byte(`{"message":"not found","code":0}`))
 	})
 
-	cfg := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cfg := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	checker := NewPermissionChecker(session, cfg)
 
 	member, ok, err := checker.ResolveMember("g1", "u1")
@@ -218,7 +218,7 @@ func TestPermissionCheckerResolveRoles_UsesStateAndCache(t *testing.T) {
 		t.Fatalf("guild add: %v", err)
 	}
 
-	cfg := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cfg := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	checker := NewPermissionChecker(session, cfg)
 
 	unifiedCache := cache.NewUnifiedCache(cache.DefaultCacheConfig())
@@ -260,7 +260,7 @@ func TestPermissionCheckerResolveRoles_ReturnsErrorOnRESTFailure(t *testing.T) {
 		_, _ = w.Write([]byte(`{"message":"not found","code":0}`))
 	})
 
-	cfg := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cfg := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	checker := NewPermissionChecker(session, cfg)
 
 	roles, err := checker.ResolveRoles("g1")
@@ -278,7 +278,7 @@ func TestPermissionCheckerResolveRoles_ReturnsNotFoundOnREST404(t *testing.T) {
 		_, _ = w.Write([]byte(`{"message":"not found","code":0}`))
 	})
 
-	cfg := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cfg := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	checker := NewPermissionChecker(session, cfg)
 
 	roles, err := checker.ResolveRoles("g1")

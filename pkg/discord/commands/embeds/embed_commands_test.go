@@ -95,7 +95,7 @@ func TestEmbedCommandsIntegration(t *testing.T) {
 		session.State = discordgo.NewState()
 	}
 
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	guildID := "guild-embed-test"
 	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: guildID}); err != nil {
 		t.Fatalf("add guild config: %v", err)

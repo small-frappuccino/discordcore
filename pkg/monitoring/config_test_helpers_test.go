@@ -10,7 +10,7 @@ import (
 
 func newTestConfigManager(t *testing.T) *files.ConfigManager {
 	t.Helper()
-	return files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	return files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 }
 
 func mustUpdateConfig(t *testing.T, cm *files.ConfigManager, fn func(*files.BotConfig)) {

@@ -43,7 +43,7 @@ func openRunnerConfigStore(t *testing.T) (files.DatabaseRuntimeConfig, *files.Po
 		MaxOpenConns:  5,
 		MaxIdleConns:  5,
 		PingTimeoutMS: 5000,
-	}, files.NewPostgresConfigStore(db, files.DefaultPostgresConfigStoreKey)
+	}, files.NewPostgresConfigStore(db, files.DefaultPostgresConfigStoreKey, nil)
 }
 
 func setRunnerDatabaseBootstrapEnv(t *testing.T, cfg files.DatabaseRuntimeConfig) {

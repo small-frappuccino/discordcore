@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/persistence"
@@ -21,8 +22,8 @@ func main() {
 	}
 	defer db.Close()
 
-	configStore := files.NewPostgresConfigStore(db, files.DefaultPostgresConfigStoreKey)
-	configManager := files.NewConfigManagerWithStore(configStore)
+	configStore := files.NewPostgresConfigStore(db, files.DefaultPostgresConfigStoreKey, slog.Default())
+	configManager := files.NewConfigManagerWithStore(configStore, slog.Default())
 	if err := configManager.LoadConfig(); err != nil {
 		log.Fatalf("load config: %v", err)
 	}

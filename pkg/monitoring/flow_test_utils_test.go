@@ -53,7 +53,7 @@ func newLoggingStore(t *testing.T, _ string) (*storage.Store, *pgxpool.Pool) {
 func newLoggingConfigManager(t *testing.T, guildID string, channels files.ChannelsConfig) *files.ConfigManager {
 	t.Helper()
 
-	mgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	mgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	if err := mgr.AddGuildConfig(files.GuildConfig{
 		GuildID:  guildID,
 		Channels: channels}); err != nil {

@@ -51,11 +51,11 @@ func TestRunner_ResolveRuntimeCapabilities(t *testing.T) {
 }
 
 func TestRunner_ApplyConfiguredTheme(t *testing.T) {
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	applyConfiguredTheme(cm)
 }
 
 func TestRunner_ScheduleDBCleanup(t *testing.T) {
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	scheduleDBCleanup(nil, cm)
 }

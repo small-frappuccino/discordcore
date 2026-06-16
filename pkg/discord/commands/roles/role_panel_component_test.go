@@ -99,7 +99,7 @@ func stubMemberHasRole(hasRole bool) func(*discordgo.Session, *discordgo.Interac
 
 func newRolePanelTestConfigManager(t *testing.T, guildID, roleID string) *files.ConfigManager {
 	t.Helper()
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: guildID}); err != nil {
 		t.Fatalf("add guild config: %v", err)
 	}
@@ -243,7 +243,7 @@ func TestRolePanelComponentRespectsFeatureToggle(t *testing.T) {
 	guildID := "guild-disabled"
 	userID := "user-disabled"
 	roleID := "1391513234091151430"
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	disabled := false
 	if err := cm.AddGuildConfig(files.GuildConfig{
 		GuildID: guildID,

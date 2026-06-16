@@ -32,7 +32,7 @@ func openIsolatedPostgresConfigStore(t *testing.T) *PostgresConfigStore {
 		}
 	})
 
-	return NewPostgresConfigStore(db, "test")
+	return NewPostgresConfigStore(db, "test", nil)
 }
 
 func TestPostgresConfigStoreSaveLoadRoundTrip(t *testing.T) {

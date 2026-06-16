@@ -43,7 +43,7 @@ func (m *mockConfigStore) Exists() (bool, error) {
 
 func newTestConfigManager(t *testing.T) *files.ConfigManager {
 	t.Helper()
-	cm := files.NewConfigManagerWithStore(&mockConfigStore{})
+	cm := files.NewConfigManagerWithStore(&mockConfigStore{}, nil)
 	cfg, _, err := cm.LoadConfigFromStore()
 	if err != nil {
 		t.Fatalf("failed to load config manager: %v", err)

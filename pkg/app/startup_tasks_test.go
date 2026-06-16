@@ -49,12 +49,12 @@ func TestScheduleStartupWebhookEmbedUpdates(t *testing.T) {
 
 func TestStartControlServerStartupTask(t *testing.T) {
 	runtimes := make(map[string]*botRuntime)
-	resolver := newBotRuntimeResolver(files.NewConfigManagerWithStore(nil), runtimes)
+	resolver := newBotRuntimeResolver(files.NewConfigManagerWithStore(nil, nil), runtimes)
 	opts := controlStartupTaskOptions{
 		runOptions: RunOptions{
 			DisableControl: false,
 		},
-		configManager:      files.NewConfigManagerWithStore(&files.MemoryConfigStore{}),
+		configManager:      files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil),
 		runtimeResolver:    resolver,
 		controlBearerToken: "test",
 	}

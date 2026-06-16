@@ -16,7 +16,7 @@ func TestBotRuntimeResolver_AggregateCachesAndMetrics(t *testing.T) {
 
 	// Setup runtimes
 	mockSession := &discordgo.Session{Token: "test-token", State: discordgo.NewState()}
-	mockConfigManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	mockConfigManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	mockStore := storagetest.NewFailingStore()
 
 	ms1, _ := monitoring.NewMonitoringServiceForBotWithMetrics(mockSession, mockConfigManager, mockStore, "bot1", &monitoring.InMemoryMetrics{}, log.ApplicationLogger())
@@ -33,7 +33,7 @@ func TestBotRuntimeResolver_AggregateCachesAndMetrics(t *testing.T) {
 		// No monitoring service / cache
 	}
 
-	resolver := newBotRuntimeResolver(files.NewConfigManagerWithStore(&files.MemoryConfigStore{}), runtimes)
+	resolver := newBotRuntimeResolver(files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil), runtimes)
 
 	caches := resolver.aggregateUnifiedCaches()
 	_ = caches // Can be zero if error occurred in NewMonitoringService
@@ -53,7 +53,7 @@ func TestBotRuntimeResolver_SessionForGuild(t *testing.T) {
 		session:    session,
 	}
 
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
 			{
@@ -163,7 +163,7 @@ func TestBotRuntimeResolver_knownBotInstanceCatalog(t *testing.T) {
 }
 
 func TestBotRuntimeResolver_registerGuild(t *testing.T) {
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	resolver := newBotRuntimeResolver(cm, nil)
 	resolver.registerGuild(context.Background(), "guild1")
 

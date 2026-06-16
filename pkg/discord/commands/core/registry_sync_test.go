@@ -53,7 +53,7 @@ func TestCommandManager_GuildScopedSync(t *testing.T) {
 			return mockJSONResponse(http.StatusOK, nil), nil
 		}),
 	}
-	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	_ = config.AddGuildConfig(files.GuildConfig{
 		GuildID:           "guild-1",
 		BotInstanceTokens: map[string]files.EncryptedString{"bot": "token"},
@@ -100,7 +100,7 @@ func TestCommandManager_GlobalSync(t *testing.T) {
 			return mockJSONResponse(http.StatusOK, nil), nil
 		}),
 	}
-	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	manager := NewCommandManager(session, config)
 	manager.GetRouter().RegisterSlashCommand(testCommand{name: "globalcmd"})
 	if manager.usesGuildScopedSync() {
@@ -145,7 +145,7 @@ func TestCommandManager_SyncErrors(t *testing.T) {
 			return mockJSONResponse(http.StatusOK, nil), nil
 		}),
 	}
-	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	manager := NewCommandManager(session, config)
 
 	// register 2 commands: one matches existing ("updatecmd") -> PATCH, one doesn't ("createcmd") -> POST

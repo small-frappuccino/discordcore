@@ -72,7 +72,7 @@ func TestSupervisorFaultIsolation(t *testing.T) {
 		return nil
 	}
 
-	cfgManager := files.NewConfigManagerWithStore(nil)
+	cfgManager := files.NewConfigManagerWithStore(nil, nil)
 	cfg := files.BotConfig{
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
@@ -143,7 +143,7 @@ func TestSupervisorFaultIsolation(t *testing.T) {
 }
 
 func TestZeroStateIdling(t *testing.T) {
-	cfgManager := files.NewConfigManagerWithStore(nil)
+	cfgManager := files.NewConfigManagerWithStore(nil, nil)
 	cfg := files.BotConfig{
 		Guilds: []files.GuildConfig{},
 	}
@@ -212,7 +212,7 @@ func TestSupervisorSwarmTopology(t *testing.T) {
 		return nil
 	}
 
-	cfgManager := files.NewConfigManagerWithStore(nil)
+	cfgManager := files.NewConfigManagerWithStore(nil, nil)
 
 	tokens := make(map[string]files.EncryptedString)
 	for i := 0; i < 10; i++ {
@@ -311,7 +311,7 @@ func TestSupervisorConfigChange(t *testing.T) {
 		return nil
 	}
 
-	cfgManager := files.NewConfigManagerWithStore(nil)
+	cfgManager := files.NewConfigManagerWithStore(nil, nil)
 	cfg := files.BotConfig{
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{

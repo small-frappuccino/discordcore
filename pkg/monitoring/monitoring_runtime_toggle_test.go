@@ -15,7 +15,7 @@ import (
 func newMonitoringTestConfigManager(t *testing.T) *files.ConfigManager {
 	t.Helper()
 
-	mgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	mgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	if err := mgr.AddGuildConfig(files.GuildConfig{GuildID: "g1"}); err != nil {
 		t.Fatalf("add guild config: %v", err)
 	}

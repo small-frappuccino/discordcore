@@ -104,7 +104,7 @@ func TestCommandHandlerSetupAndShutdownLifecycle(t *testing.T) {
 		}
 	})
 
-	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	handler := NewCommandHandler(session, cfgMgr)
 
 	if err := handler.SetupCommands(); err != nil {
@@ -150,7 +150,7 @@ func TestCommandHandlerSetupRollbackOnManagerFailure(t *testing.T) {
 	session.State = discordgo.NewState()
 	session.State.User = nil
 
-	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	handler := NewCommandHandler(session, cfgMgr)
 
 	err = handler.SetupCommands()
@@ -167,7 +167,7 @@ func TestCommandHandlerSetupRollbackOnManagerFailure(t *testing.T) {
 
 func TestCommandHandlerSkipsGuildWithoutCommandsFeature(t *testing.T) {
 	boolPtr := func(v bool) *bool { return &v }
-	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	if _, err := cfgMgr.UpdateConfig(func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
 			{

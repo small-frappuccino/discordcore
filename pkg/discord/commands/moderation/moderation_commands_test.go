@@ -44,7 +44,7 @@ func TestRegisterModerationCommandsRegistersTopLevel(t *testing.T) {
 	t.Parallel()
 
 	session := &discordgo.Session{State: discordgo.NewState()}
-	router := core.NewCommandRouter(session, files.NewConfigManagerWithStore(&files.MemoryConfigStore{}))
+	router := core.NewCommandRouter(session, files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil))
 
 	RegisterModerationCommands(router)
 
@@ -70,7 +70,7 @@ func TestModerationCommandsDeclareDefaultMemberPermissions(t *testing.T) {
 	t.Parallel()
 
 	session := &discordgo.Session{State: discordgo.NewState()}
-	router := core.NewCommandRouter(session, files.NewConfigManagerWithStore(&files.MemoryConfigStore{}))
+	router := core.NewCommandRouter(session, files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil))
 
 	RegisterModerationCommands(router)
 

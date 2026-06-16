@@ -83,7 +83,7 @@ func newStatsCommandTestRouter(
 ) (*core.ArikawaCommandRouter, *files.ConfigManager, *mockStatsService, *interactionRecorder) {
 	t.Helper()
 
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	if err := cm.AddGuildConfig(cfg); err != nil {
 		t.Fatalf("failed to add guild config: %v", err)
 	}

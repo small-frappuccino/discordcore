@@ -48,7 +48,7 @@ func newTransactionalTestManager(t *testing.T, cfg *BotConfig, saveErr error) (*
 		cfg:     cloneBotConfigPtr(cfg),
 		saveErr: saveErr,
 	}
-	mgr := NewConfigManagerWithStore(store)
+	mgr := NewConfigManagerWithStore(store, nil)
 	mgr.config = cloneBotConfigPtr(cfg)
 	if _, err := mgr.rebuildGuildIndexLocked("test"); err != nil {
 		t.Fatalf("rebuild index: %v", err)

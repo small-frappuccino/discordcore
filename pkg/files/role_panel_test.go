@@ -9,7 +9,7 @@ import (
 
 func newRolePanelTestManager(t *testing.T, guildID string) *ConfigManager {
 	t.Helper()
-	mgr := NewConfigManagerWithStore(&MemoryConfigStore{})
+	mgr := NewConfigManagerWithStore(&MemoryConfigStore{}, nil)
 	mgr.config = &BotConfig{Guilds: []GuildConfig{{GuildID: guildID}}}
 	return mgr
 }

@@ -9,7 +9,7 @@ import (
 
 func TestCommandHandlerRoutesFeaturesToCorrectBotInstance(t *testing.T) {
 	boolPtr := func(v bool) *bool { return &v }
-	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	if _, err := cfgMgr.UpdateConfig(func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
 			{

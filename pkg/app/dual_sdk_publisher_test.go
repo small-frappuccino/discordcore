@@ -10,7 +10,7 @@ import (
 )
 
 func TestDualSDKPublisher_ResolutionFailure(t *testing.T) {
-	resolver := newBotRuntimeResolver(files.NewConfigManagerWithStore(&files.MemoryConfigStore{}), make(map[string]*botRuntime))
+	resolver := newBotRuntimeResolver(files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil), make(map[string]*botRuntime))
 	// Unregistered guild will fail to resolve
 	pub := newDualSDKPublisher(resolver)
 

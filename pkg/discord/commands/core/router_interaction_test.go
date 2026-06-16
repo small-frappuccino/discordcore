@@ -107,7 +107,7 @@ func TestHandleInteraction(t *testing.T) {
 				},
 			}
 			session.Client = &http.Client{Transport: rt}
-			config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+			config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 			router := core.NewCommandRouter(session, config)
 			router.RegisterCommand(testCommand{
 				name:      "gatewaytest",

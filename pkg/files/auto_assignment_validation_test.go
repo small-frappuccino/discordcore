@@ -105,7 +105,7 @@ func TestConfigManagerLoadConfigMigratesAutoAssignmentBoosterRole(t *testing.T) 
 		t.Fatalf("seed config store: %v", err)
 	}
 
-	mgr := NewConfigManagerWithStore(store)
+	mgr := NewConfigManagerWithStore(store, nil)
 	if err := mgr.LoadConfig(); err != nil {
 		t.Fatalf("load config: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestConfigManagerLoadConfigMigratesAutoAssignmentBoosterRole(t *testing.T) 
 }
 
 func TestConfigManagerSaveConfigRejectsInvalidAutoAssignmentOrder(t *testing.T) {
-	mgr := NewConfigManagerWithStore(&MemoryConfigStore{})
+	mgr := NewConfigManagerWithStore(&MemoryConfigStore{}, nil)
 	mgr.config = &BotConfig{
 		Guilds: []GuildConfig{
 			{

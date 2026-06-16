@@ -22,7 +22,7 @@ func TestInitializeBotRuntimeSkipsCommandHandlerWhenCommandsDisabled(t *testing.
 	}
 	session.Token = "" // clear it so we don't trigger the commands-clear cleanup logic
 
-	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 
 	if _, err := cfgMgr.UpdateConfig(func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
@@ -134,7 +134,7 @@ func TestInitializeBotRuntime_FullCapabilities(t *testing.T) {
 	setupCommandHandler = func(ch *commands.CommandHandler) error { return nil }
 
 	session, _ := discordgo.New("Bot fake")
-	cfgMgr := files.NewConfigManagerWithStore(nil)
+	cfgMgr := files.NewConfigManagerWithStore(nil, nil)
 	cfg := files.BotConfig{
 		Guilds: []files.GuildConfig{{GuildID: "g1", BotInstanceTokens: map[string]files.EncryptedString{"test": "a"}}},
 	}

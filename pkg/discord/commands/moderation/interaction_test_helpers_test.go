@@ -101,7 +101,7 @@ func newModerationCommandTestSession(t *testing.T) (*discordgo.Session, *moderat
 func newModerationCommandTestRouter(t *testing.T, session *discordgo.Session, guildID, ownerID string) (*core.CommandRouter, *files.ConfigManager) {
 	t.Helper()
 
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: guildID}); err != nil {
 		t.Fatalf("failed to add guild config: %v", err)
 	}

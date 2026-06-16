@@ -678,8 +678,8 @@ func setupStorage(dbb resolvedDatabaseBootstrap) (*storage.Store, *files.ConfigM
 		slog.String("driver", "postgres"),
 	)
 
-	configStore := files.NewPostgresConfigStore(db, files.DefaultPostgresConfigStoreKey)
-	configManager := files.NewConfigManagerWithStore(configStore)
+	configStore := files.NewPostgresConfigStore(db, files.DefaultPostgresConfigStoreKey, slog.Default())
+	configManager := files.NewConfigManagerWithStore(configStore, slog.Default())
 
 	slog.Debug("Executing cross-boundary extraction for master configuration tree")
 	if err := configManager.LoadConfig(); err != nil {

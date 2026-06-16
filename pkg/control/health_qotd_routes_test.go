@@ -163,7 +163,7 @@ func TestQOTDHealthRouteRejectsNonGETMethods(t *testing.T) {
 func newQOTDHealthTestServer(t *testing.T) *Server {
 	t.Helper()
 
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	srv := NewServer("127.0.0.1:0", cm, nil)
 	if srv == nil {
 		t.Fatal("NewServer returned nil")

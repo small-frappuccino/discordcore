@@ -301,7 +301,7 @@ func TestNextScheduledPublishTimeProjectsTodayOrTomorrow(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+			cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 			if err := cm.AddGuildConfig(files.GuildConfig{GuildID: "g1", QOTD: tc.cfg}); err != nil {
 				t.Fatalf("AddGuildConfig: %v", err)
 			}

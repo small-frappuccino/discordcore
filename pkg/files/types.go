@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -785,6 +786,7 @@ type ConfigManager struct {
 	configFilePath  string
 	logsDirPath     string
 	store           ConfigStore
+	logger          *slog.Logger
 	config          *BotConfig
 	guildIndex      map[string]int
 	published       atomic.Pointer[publishedConfigSnapshot]

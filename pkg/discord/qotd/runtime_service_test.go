@@ -111,7 +111,7 @@ func (f *blockingContextLifecycleService) NextScheduledPublishTime(string, time.
 }
 
 func TestRuntimeServiceLoopRunsPublishCycleOnStartAndInterval(t *testing.T) {
-	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	for _, guild := range []files.GuildConfig{
 		{
 			GuildID:           "g-enabled",
@@ -198,7 +198,7 @@ func TestRuntimeServiceLoopRunsPublishCycleOnStartAndInterval(t *testing.T) {
 func TestRuntimeServiceCyclesUseScopedGuilds(t *testing.T) {
 	t.Parallel()
 
-	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	for _, guild := range []files.GuildConfig{
 		{
 			GuildID:           "g-enabled",
@@ -286,7 +286,7 @@ func TestRuntimeServiceCyclesUseScopedGuilds(t *testing.T) {
 func TestRuntimeServiceCyclesUseQOTDDomainScopedGuilds(t *testing.T) {
 	t.Parallel()
 
-	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	for _, guild := range []files.GuildConfig{
 		{
 			GuildID:           "g-qotd-enabled",
@@ -362,7 +362,7 @@ func TestRuntimeServiceCyclesUseQOTDDomainScopedGuilds(t *testing.T) {
 func TestRuntimeServiceIdentityDoesNotDriftDuringPublish(t *testing.T) {
 	t.Parallel()
 
-	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	if err := configManager.AddGuildConfig(files.GuildConfig{
 		GuildID:           "g-identity-lock",
 		BotInstanceTokens: map[string]files.EncryptedString{"generic": "a"},
@@ -400,7 +400,7 @@ func TestRuntimeServiceIdentityDoesNotDriftDuringPublish(t *testing.T) {
 }
 
 func TestRuntimeServiceRestartResumesIntervalCycles(t *testing.T) {
-	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	if err := configManager.AddGuildConfig(files.GuildConfig{
 		GuildID:           "g-enabled",
 		BotInstanceTokens: map[string]files.EncryptedString{"generic": "test-token"},
@@ -466,7 +466,7 @@ func TestRuntimeServiceRestartResumesIntervalCycles(t *testing.T) {
 // reset logic only manifests on the second-or-later restart (e.g. failing to
 // reseat stopOnce after a previous reset), this test catches it.
 func TestRuntimeServiceMultipleRestartsResumeIntervalCycles(t *testing.T) {
-	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	if err := configManager.AddGuildConfig(files.GuildConfig{
 		GuildID:           "g-enabled",
 		BotInstanceTokens: map[string]files.EncryptedString{"generic": "test-token"},
@@ -535,7 +535,7 @@ func TestRuntimeServiceMultipleRestartsResumeIntervalCycles(t *testing.T) {
 }
 
 func TestRuntimeServiceStopCancelsInflightPublish(t *testing.T) {
-	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	if err := configManager.AddGuildConfig(files.GuildConfig{
 		GuildID:           "g-enabled",
 		BotInstanceTokens: map[string]files.EncryptedString{"generic": "test-token"},
@@ -648,7 +648,7 @@ func TestNextPublishDelayClampsToConfiguredBounds(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+			cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 			if err := cm.AddGuildConfig(files.GuildConfig{
 				GuildID:           "g",
 				BotInstanceTokens: map[string]files.EncryptedString{"generic": "a"},
@@ -689,7 +689,7 @@ func TestNextPublishDelayClampsToConfiguredBounds(t *testing.T) {
 // loop and is the regression most likely to surface in production (publishes
 // firing late by up to one cap interval).
 func TestRuntimeServiceLoopWakesAtScheduledMoment(t *testing.T) {
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	if err := cm.AddGuildConfig(files.GuildConfig{
 		GuildID:           "g-enabled",
 		BotInstanceTokens: map[string]files.EncryptedString{"generic": "test-token"},
@@ -757,7 +757,7 @@ func TestRuntimeServiceLoopWakesAtScheduledMoment(t *testing.T) {
 // configuration changes are still discovered. Regression guard for a future
 // "if no schedule, sleep forever" mistake.
 func TestRuntimeServiceLoopFallsBackToCapWithoutSchedule(t *testing.T) {
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	if err := cm.AddGuildConfig(files.GuildConfig{
 		GuildID:           "g-enabled",
 		BotInstanceTokens: map[string]files.EncryptedString{"generic": "test-token"},

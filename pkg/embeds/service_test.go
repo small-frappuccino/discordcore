@@ -60,7 +60,7 @@ func TestRenderCustomEmbed(t *testing.T) {
 func TestCustomEmbedPostingSyncer(t *testing.T) {
 	t.Parallel()
 
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	guildID := "guild-sync"
 	key := "embed-key"
 

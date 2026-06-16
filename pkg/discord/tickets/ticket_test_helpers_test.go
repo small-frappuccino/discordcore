@@ -103,7 +103,7 @@ func newTicketCommandTestHarness(t *testing.T, guildID, ownerID string) *ticketC
 		t.Fatalf("failed to init store: %v", err)
 	}
 
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	if err := cm.AddGuildConfig(files.GuildConfig{
 		GuildID: guildID,
 		Tickets: files.TicketsConfig{

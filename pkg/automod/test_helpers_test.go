@@ -9,7 +9,7 @@ import (
 
 func newTestConfigManager(t *testing.T) *files.ConfigManager {
 	t.Helper()
-	return files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	return files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 }
 
 func testSessionWithChannel(t *testing.T, guildID, channelID, botID string, perms int64) *discordgo.Session {

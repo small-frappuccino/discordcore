@@ -193,7 +193,7 @@ func TestCommandRegistryRegisterLookup(t *testing.T) {
 
 func TestHandleSlashCommandUnknownCommand(t *testing.T) {
 	session, rec := newTestSession(t)
-	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	router := NewCommandRouter(session, config)
 
 	router.handleSlashCommand(buildInteraction("missing", "guild", "user"))
@@ -212,7 +212,7 @@ func TestHandleSlashCommandUnknownCommand(t *testing.T) {
 
 func TestHandleSlashCommandRequiresGuild(t *testing.T) {
 	session, rec := newTestSession(t)
-	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	router := NewCommandRouter(session, config)
 
 	router.RegisterCommand(testCommand{name: "guild", requiresGuild: true, handler: func(*Context) error {
@@ -233,7 +233,7 @@ func TestHandleSlashCommandRequiresGuild(t *testing.T) {
 
 func TestHandleSlashCommandPermissionDenied(t *testing.T) {
 	session, rec := newTestSession(t)
-	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	_ = config.AddGuildConfig(files.GuildConfig{GuildID: "guild", Roles: files.RolesConfig{Allowed: []string{"role"}}})
 	router := NewCommandRouter(session, config)
 
@@ -269,7 +269,7 @@ func TestHandleSlashCommandCommandErrorMapping(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			session, rec := newTestSession(t)
-			config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+			config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 			router := NewCommandRouter(session, config)
 
 			router.RegisterCommand(testCommand{name: "cmd", handler: func(*Context) error {
@@ -294,7 +294,7 @@ func TestHandleSlashCommandCommandErrorMapping(t *testing.T) {
 }
 
 func TestGroupCommandDispatch(t *testing.T) {
-	cfg := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cfg := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	checker := NewPermissionChecker(nil, cfg)
 	group := NewGroupCommand("group", "", checker)
 
@@ -326,7 +326,7 @@ func TestGroupCommandDispatch(t *testing.T) {
 
 func TestHandleComponentRouteUsesExactRouteID(t *testing.T) {
 	session, _ := newTestSession(t)
-	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	router := NewCommandRouter(session, config)
 
 	called := 0
@@ -360,7 +360,7 @@ func TestHandleComponentRouteUsesExactRouteID(t *testing.T) {
 
 func TestHandleModalRouteUsesExactRouteID(t *testing.T) {
 	session, _ := newTestSession(t)
-	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	router := NewCommandRouter(session, config)
 
 	called := 0
@@ -394,7 +394,7 @@ func TestHandleModalRouteUsesExactRouteID(t *testing.T) {
 
 func TestHandleSlashCommandUsesFullRoutePathRegistry(t *testing.T) {
 	session, _ := newTestSession(t)
-	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	router := NewCommandRouter(session, config)
 	checker := NewPermissionChecker(session, config)
 
@@ -438,7 +438,7 @@ func TestHandleSlashCommandUsesFullRoutePathRegistry(t *testing.T) {
 
 func TestHandleAutocompleteUsesFullRoutePathRegistry(t *testing.T) {
 	session, _ := newTestSession(t)
-	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	router := NewCommandRouter(session, config)
 
 	called := 0
@@ -494,7 +494,7 @@ func TestHandleAutocompleteUsesFullRoutePathRegistry(t *testing.T) {
 
 func TestExplicitSlashRouteOverridesCompatibilityRegistration(t *testing.T) {
 	session, _ := newTestSession(t)
-	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	router := NewCommandRouter(session, config)
 	checker := NewPermissionChecker(session, config)
 
@@ -537,7 +537,7 @@ func TestExplicitSlashRouteOverridesCompatibilityRegistration(t *testing.T) {
 
 func TestRegisterSlashCommandRefreshesDerivedRouteHandlers(t *testing.T) {
 	session, _ := newTestSession(t)
-	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	router := NewCommandRouter(session, config)
 	checker := NewPermissionChecker(session, config)
 
@@ -581,7 +581,7 @@ func TestRegisterSlashCommandRefreshesDerivedRouteHandlers(t *testing.T) {
 
 func TestRegisterSlashCommandDerivesAutocompleteHandler(t *testing.T) {
 	session, _ := newTestSession(t)
-	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	router := NewCommandRouter(session, config)
 	checker := NewPermissionChecker(session, config)
 
@@ -629,7 +629,7 @@ func TestRegisterSlashCommandDerivesAutocompleteHandler(t *testing.T) {
 
 func TestRegisterInteractionRouteDispatchesComponentAndModalHandlers(t *testing.T) {
 	session, _ := newTestSession(t)
-	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	router := NewCommandRouter(session, config)
 
 	componentCalls := 0
@@ -670,7 +670,7 @@ func TestRegisterInteractionRouteDispatchesComponentAndModalHandlers(t *testing.
 
 func TestInteractionRouteDomainTracksSlashAutocompleteComponentAndModal(t *testing.T) {
 	session, _ := newTestSession(t)
-	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	router := NewCommandRouter(session, config)
 	checker := NewPermissionChecker(session, config)
 
@@ -722,7 +722,7 @@ func TestInteractionRouteDomainTracksSlashAutocompleteComponentAndModal(t *testi
 
 func TestHandleInteractionUsesGuildRouteFilter(t *testing.T) {
 	session, _ := newTestSession(t)
-	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	router := NewCommandRouter(session, config)
 
 	allowedCalls := 0

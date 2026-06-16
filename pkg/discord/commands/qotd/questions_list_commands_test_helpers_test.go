@@ -234,7 +234,7 @@ func newQOTDCommandTestRouterWithService(
 ) (*core.CommandRouter, *files.ConfigManager) {
 	t.Helper()
 
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: guildID}); err != nil {
 		t.Fatalf("failed to add guild config: %v", err)
 	}

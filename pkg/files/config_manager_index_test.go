@@ -159,7 +159,7 @@ func TestGuildConfigIndexDedupePersistsOnLoad(t *testing.T) {
 		t.Fatalf("seed config store: %v", err)
 	}
 
-	mgr := NewConfigManagerWithStore(store)
+	mgr := NewConfigManagerWithStore(store, nil)
 	if err := mgr.LoadConfig(); err != nil {
 		t.Fatalf("load config: %v", err)
 	}

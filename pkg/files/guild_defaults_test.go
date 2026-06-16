@@ -66,7 +66,7 @@ func TestEnsureMinimalGuildConfigPersistsDormantGuild(t *testing.T) {
 	t.Parallel()
 
 	store := &MemoryConfigStore{}
-	mgr := NewConfigManagerWithStore(store)
+	mgr := NewConfigManagerWithStore(store, nil)
 
 	if err := mgr.EnsureMinimalGuildConfig("guild-new"); err != nil {
 		t.Fatalf("ensure minimal guild config: %v", err)
@@ -99,7 +99,7 @@ func TestEnsureMinimalGuildConfigPreservesDomainOverridesOnExistingGuild(t *test
 	t.Parallel()
 
 	store := &MemoryConfigStore{}
-	mgr := NewConfigManagerWithStore(store)
+	mgr := NewConfigManagerWithStore(store, nil)
 	if _, err := mgr.UpdateConfig(func(cfg *BotConfig) error {
 		cfg.Guilds = []GuildConfig{{
 			GuildID: "guild-existing",
@@ -121,7 +121,7 @@ func TestEnsureMinimalGuildConfigPreservesDomainOverridesOnExistingGuild(t *test
 
 func TestEnsureMinimalGuildConfigPersistsDormantGuildToPostgres(t *testing.T) {
 	store := openIsolatedPostgresConfigStore(t)
-	mgr := NewConfigManagerWithStore(store)
+	mgr := NewConfigManagerWithStore(store, nil)
 
 	if err := mgr.EnsureMinimalGuildConfig("guild-pg"); err != nil {
 		t.Fatalf("ensure minimal guild config in postgres: %v", err)

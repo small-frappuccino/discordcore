@@ -23,7 +23,7 @@ func TestMonitoringServiceRestartRebuildsTaskPipeline(t *testing.T) {
 		t.Fatalf("seed heartbeat: %v", err)
 	}
 
-	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	if _, err := cfgMgr.UpdateRuntimeConfig(func(rc *files.RuntimeConfig) error {
 		rc.DisableEntryExitLogs = true
 		rc.DisableMessageLogs = true

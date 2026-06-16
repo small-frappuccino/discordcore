@@ -299,7 +299,7 @@ func TestEditInteractionMessageWithLog_LogsFailure(t *testing.T) {
 
 func TestHandleModalSubmit_WarnsWhenHotApplyFailsButPersists(t *testing.T) {
 	session, rec := newRuntimePanelTestSession(t, http.StatusOK, http.StatusOK)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	if err := cm.LoadConfig(); err != nil {
 		t.Fatalf("failed to load config manager: %v", err)
 	}
@@ -336,7 +336,7 @@ func TestHandleModalSubmit_WarnsWhenHotApplyFailsButPersists(t *testing.T) {
 
 func TestRuntimeSubCommand_AdminPanelUsesEphemeralPolicy(t *testing.T) {
 	session, rec := newRuntimePanelTestSession(t, http.StatusOK, http.StatusOK)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	if err := cm.LoadConfig(); err != nil {
 		t.Fatalf("failed to load config manager: %v", err)
 	}
@@ -365,7 +365,7 @@ func TestRuntimeSubCommand_AdminPanelUsesEphemeralPolicy(t *testing.T) {
 
 func TestRegisterCommands_RoutesRuntimeComponentThroughCoreRouter(t *testing.T) {
 	session, rec := newRuntimePanelTestSession(t, http.StatusOK, http.StatusOK)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	if err := cm.LoadConfig(); err != nil {
 		t.Fatalf("failed to load config manager: %v", err)
 	}
@@ -391,7 +391,7 @@ func TestRegisterCommands_RoutesRuntimeComponentThroughCoreRouter(t *testing.T) 
 
 func TestRegisterCommands_RuntimeComponentRejectsDifferentUser(t *testing.T) {
 	session, rec := newRuntimePanelTestSession(t, http.StatusOK, http.StatusOK)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	if err := cm.LoadConfig(); err != nil {
 		t.Fatalf("failed to load config manager: %v", err)
 	}
@@ -431,7 +431,7 @@ func TestRegisterCommands_RuntimeComponentRejectsDifferentUser(t *testing.T) {
 
 func TestRegisterCommands_RoutesRuntimeModalThroughCoreRouter(t *testing.T) {
 	session, rec := newRuntimePanelTestSession(t, http.StatusOK, http.StatusOK)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	if err := cm.LoadConfig(); err != nil {
 		t.Fatalf("failed to load config manager: %v", err)
 	}
@@ -465,7 +465,7 @@ func TestRegisterCommands_RoutesRuntimeModalThroughCoreRouter(t *testing.T) {
 
 func TestRegisterCommands_RuntimeModalRejectsDifferentUser(t *testing.T) {
 	session, rec := newRuntimePanelTestSession(t, http.StatusOK, http.StatusOK)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	if err := cm.LoadConfig(); err != nil {
 		t.Fatalf("failed to load config manager: %v", err)
 	}

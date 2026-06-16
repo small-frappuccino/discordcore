@@ -64,7 +64,7 @@ func TestPermissionCheckerHasPermissionAllowsAdministratorRoleWithoutAllowedRole
 		t.Fatalf("member add: %v", err)
 	}
 
-	cfg := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cfg := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	if err := cfg.AddGuildConfig(files.GuildConfig{GuildID: "g1"}); err != nil {
 		t.Fatalf("add guild config: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestPermissionCheckerHasPermissionAllowsManageGuildWithoutAllowedRoles(t *t
 		t.Fatalf("member add: %v", err)
 	}
 
-	cfg := files.NewConfigManagerWithStore(&files.MemoryConfigStore{})
+	cfg := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	if err := cfg.AddGuildConfig(files.GuildConfig{GuildID: "g1"}); err != nil {
 		t.Fatalf("add guild config: %v", err)
 	}
