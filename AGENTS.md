@@ -68,7 +68,7 @@ Respect package ownership:
 - keep routine user workflows in Discord when a slash command is the natural surface
 - use the dashboard for setup, review, bulk edits, diagnostics, and cross-feature visibility rather than as a duplicate command console
 - keep router and provider entrypoints thin when a focused sibling file or service already exists
-- explicitly prohibit telemetry, operational logging, or asynchronous I/O side-effects within the `pkg/files/` namespace. Functions within this namespace must remain pure. State resolution must return deterministic values or sentinel errors to be evaluated and logged by the caller in `pkg/app/` or `pkg/discord/`
+- `pkg/files/` functions must isolate side-effects via explicit dependency injection. Operational logging and telemetry are permitted exclusively via `slog.Logger` or metrics accessors passed explicitly during struct initialization or extracted from `context.Context`. Direct usage of global state (`slog.Default()`) or asynchronous I/O remains prohibited to ensure deterministic testability.
 
 ## Universal Working Style
 
