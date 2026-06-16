@@ -134,6 +134,13 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 
 	runtime.serviceManager = service.NewServiceManager(slog.Default())
 
+	token := runtime.session.Token
+	if !strings.HasPrefix(token, "Bot ") {
+		token = "Bot " + token
+	}
+	arikawaState := state.New(token)
+	runtime.arikawaState = arikawaState
+
 	monitoringService, err := setupMonitoringService(runtime, opts, routerConfig)
 	if err != nil {
 		return err
@@ -164,13 +171,7 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 		return err
 	}
 
-	token := runtime.session.Token
-	if !strings.HasPrefix(token, "Bot ") {
-		token = "Bot " + token
-	}
-	arikawaState := state.New(token)
-	runtime.arikawaState = arikawaState
-	statsGateway := discordstats.NewArikawaGateway(arikawaState, slog.Default())
+	statsGateway := discordstats.NewArikawaGateway(runtime.arikawaState, slog.Default())
 	statsService := stats.NewStatsService(statsGateway, opts.configManager, opts.store, slog.Default(), runtime.instanceID)
 	discordstats.RegisterDiscordGoEventHandlers(runtime.session, statsService, slog.Default())
 
