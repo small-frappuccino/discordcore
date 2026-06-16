@@ -168,9 +168,9 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 		token = "Bot " + token
 	}
 	arikawaState := state.New(token)
-	statsGateway := discordstats.NewArikawaGateway(arikawaState)
+	statsGateway := discordstats.NewArikawaGateway(arikawaState, slog.Default())
 	statsService := stats.NewStatsService(statsGateway, opts.configManager, opts.store, slog.Default(), runtime.instanceID)
-	discordstats.RegisterDiscordGoEventHandlers(runtime.session, statsService)
+	discordstats.RegisterDiscordGoEventHandlers(runtime.session, statsService, slog.Default())
 
 	if err := runtime.serviceManager.Register(statsService); err != nil {
 		errWrap := fmt.Errorf("register stats service for %s: %w", runtime.instanceID, err)

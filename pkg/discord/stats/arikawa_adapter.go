@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"iter"
+	"log/slog"
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
@@ -13,13 +14,15 @@ import (
 
 // ArikawaGateway implements the domain.Gateway interface using Arikawa.
 type ArikawaGateway struct {
-	state *state.State
+	state  *state.State
+	logger *slog.Logger
 }
 
 // NewArikawaGateway creates a new ArikawaGateway.
-func NewArikawaGateway(s *state.State) *ArikawaGateway {
+func NewArikawaGateway(s *state.State, logger *slog.Logger) *ArikawaGateway {
 	return &ArikawaGateway{
-		state: s,
+		state:  s,
+		logger: logger,
 	}
 }
 
@@ -90,14 +93,16 @@ func (g *ArikawaGateway) StreamGuildMembers(ctx context.Context, guildID string)
 			}
 
 			for _, m := range members {
-				roles := make([]string, len(m.RoleIDs))
-				for i, r := range m.RoleIDs {
-					roles[i] = r.String()
-				}
 				snap := domain.MemberSnapshot{
 					UserID: m.User.ID.String(),
 					IsBot:  m.User.Bot,
-					Roles:  roles,
+					Roles: func(yield func(string) bool) {
+						for _, r := range m.RoleIDs {
+							if !yield(r.String()) {
+								return
+							}
+						}
+					},
 				}
 				if !yield(snap, nil) {
 					return

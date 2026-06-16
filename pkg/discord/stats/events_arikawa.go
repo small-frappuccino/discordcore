@@ -1,6 +1,8 @@
 package stats
 
 import (
+	"log/slog"
+
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/state"
 	domain "github.com/small-frappuccino/discordcore/pkg/stats"
@@ -8,17 +10,22 @@ import (
 
 // RegisterEventHandlers registers the necessary gateway event handlers
 // to keep the stats service updated using Arikawa.
-func RegisterEventHandlers(s *state.State, svc *domain.StatsService) {
+func RegisterEventHandlers(s *state.State, svc *domain.StatsService, logger *slog.Logger) {
+	if logger != nil {
+		logger.Info("Registered Arikawa event handlers for stats")
+	}
 	s.AddHandler(func(e *gateway.GuildMemberAddEvent) {
 		if e == nil || svc == nil {
 			return
 		}
-		roles := make([]string, len(e.RoleIDs))
-		for i, r := range e.RoleIDs {
-			roles[i] = r.String()
-		}
 		// Assuming member.Joined is available in Arikawa
-		svc.ApplyMemberAdd(e.GuildID.String(), e.User.ID.String(), e.Joined.Time(), e.User.Bot, roles)
+		svc.ApplyMemberAdd(e.GuildID.String(), e.User.ID.String(), e.Joined.Time(), e.User.Bot, func(yield func(string) bool) {
+			for _, r := range e.RoleIDs {
+				if !yield(r.String()) {
+					return
+				}
+			}
+		})
 	})
 
 	s.AddHandler(func(e *gateway.GuildMemberRemoveEvent) {
@@ -32,10 +39,12 @@ func RegisterEventHandlers(s *state.State, svc *domain.StatsService) {
 		if e == nil || svc == nil {
 			return
 		}
-		roles := make([]string, len(e.RoleIDs))
-		for i, r := range e.RoleIDs {
-			roles[i] = r.String()
-		}
-		svc.ApplyStatsMemberUpdate(e.GuildID.String(), e.User.ID.String(), e.User.Bot, roles)
+		svc.ApplyStatsMemberUpdate(e.GuildID.String(), e.User.ID.String(), e.User.Bot, func(yield func(string) bool) {
+			for _, r := range e.RoleIDs {
+				if !yield(r.String()) {
+					return
+				}
+			}
+		})
 	})
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"iter"
 	"log/slog"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -662,17 +663,17 @@ func statsSnapshotFromStoredState(member storage.GuildMemberCurrentState, tracke
 	}
 	return userID, statsMemberSnapshot{
 		isBot:        member.IsBot,
-		trackedRoles: filterTrackedRoles(member.Roles, trackedRoles),
+		trackedRoles: filterTrackedRoles(slices.Values(member.Roles), trackedRoles),
 	}, true
 }
 
-func filterTrackedRoles(roles []string, trackedRoles map[string]struct{}) []string {
-	if len(roles) == 0 || len(trackedRoles) == 0 {
+func filterTrackedRoles(roles iter.Seq[string], trackedRoles map[string]struct{}) []string {
+	if len(trackedRoles) == 0 {
 		return nil
 	}
-	seen := make(map[string]struct{}, len(roles))
-	filtered := make([]string, 0, len(roles))
-	for _, roleID := range roles {
+	seen := make(map[string]struct{})
+	var filtered []string
+	for roleID := range roles {
 		roleID = strings.TrimSpace(roleID)
 		if roleID == "" {
 			continue
@@ -823,7 +824,7 @@ func renderStatsChannelName(label, template string, count int) string {
 }
 
 // ApplyMemberAdd is called by the adapter when a member joins.
-func (s *StatsService) ApplyMemberAdd(guildID string, userID string, joinedAt time.Time, isBot bool, roles []string) {
+func (s *StatsService) ApplyMemberAdd(guildID string, userID string, joinedAt time.Time, isBot bool, roles iter.Seq[string]) {
 	guildID = strings.TrimSpace(guildID)
 	userID = strings.TrimSpace(userID)
 	if guildID == "" || userID == "" {
@@ -834,7 +835,7 @@ func (s *StatsService) ApplyMemberAdd(guildID string, userID string, joinedAt ti
 	if !enabled {
 		return
 	}
-	s.persistStatsMemberActive(guildID, userID, joinedAt, isBot, roles)
+
 	snapshot := statsMemberSnapshot{
 		isBot:        isBot,
 		trackedRoles: filterTrackedRoles(roles, trackedRoles),
@@ -842,18 +843,24 @@ func (s *StatsService) ApplyMemberAdd(guildID string, userID string, joinedAt ti
 
 	state := s.getOrInitStatsGuildState(guildID)
 	state.mu.Lock()
-	defer state.mu.Unlock()
 	if !state.initialized || state.trackedRolesKey != trackedRolesKey {
 		state.dirty = true
-		return
-	}
-	if !state.applyAdd(userID, snapshot) {
+	} else if !state.applyAdd(userID, snapshot) {
 		state.dirty = true
 	}
+	state.mu.Unlock()
+
+	var rolesSlice []string
+	if roles != nil {
+		for r := range roles {
+			rolesSlice = append(rolesSlice, r)
+		}
+	}
+	s.persistStatsMemberActive(guildID, userID, joinedAt, isBot, rolesSlice)
 }
 
 // ApplyStatsMemberUpdate applys stats member update.
-func (s *StatsService) ApplyStatsMemberUpdate(guildID, userID string, isBot bool, roles []string) {
+func (s *StatsService) ApplyStatsMemberUpdate(guildID, userID string, isBot bool, roles iter.Seq[string]) {
 	guildID = strings.TrimSpace(guildID)
 	userID = strings.TrimSpace(userID)
 	if guildID == "" || userID == "" {
@@ -864,7 +871,7 @@ func (s *StatsService) ApplyStatsMemberUpdate(guildID, userID string, isBot bool
 	if !enabled {
 		return
 	}
-	s.persistStatsMemberActive(guildID, userID, time.Time{}, isBot, roles)
+
 	snapshot := statsMemberSnapshot{
 		isBot:        isBot,
 		trackedRoles: filterTrackedRoles(roles, trackedRoles),
@@ -872,14 +879,20 @@ func (s *StatsService) ApplyStatsMemberUpdate(guildID, userID string, isBot bool
 
 	state := s.getOrInitStatsGuildState(guildID)
 	state.mu.Lock()
-	defer state.mu.Unlock()
 	if !state.initialized || state.trackedRolesKey != trackedRolesKey {
 		state.dirty = true
-		return
-	}
-	if !state.applyUpdate(userID, snapshot) {
+	} else if !state.applyUpdate(userID, snapshot) {
 		state.dirty = true
 	}
+	state.mu.Unlock()
+
+	var rolesSlice []string
+	if roles != nil {
+		for r := range roles {
+			rolesSlice = append(rolesSlice, r)
+		}
+	}
+	s.persistStatsMemberActive(guildID, userID, time.Time{}, isBot, rolesSlice)
 }
 
 // ApplyMemberRemove is called by the adapter when a member leaves.

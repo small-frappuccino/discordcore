@@ -29,5 +29,5 @@ type Channel struct {
 type MemberSnapshot struct {
 	UserID string
 	IsBot  bool
-	Roles  []string
+	Roles  iter.Seq[string]
 }
