@@ -3,6 +3,7 @@ package control
 import (
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -39,37 +40,53 @@ type LiveHealthSnapshot struct {
 // failure-mode branch — the only way this endpoint does not return 200
 // is if the process or socket is unreachable, which is precisely the
 // signal the external poller needs.
-func (s *Server) handleLiveHealthRoute(w http.ResponseWriter, r *http.Request) {
-	s.serveHealthRoute(w, r, func() (any, string) {
-		startedAt := s.startedAt
-		if startedAt.IsZero() {
-			startedAt = time.Now().UTC()
-		}
-		uptime := time.Since(startedAt)
-		if uptime < 0 {
-			uptime = 0
-		}
-		botUser := strings.TrimSpace(files.DiscordBotName)
-		botAvatarURL := ""
-		if s.discordSession != nil {
-			session, err := s.discordSession("")
-			if err == nil && session != nil && session.State != nil && session.State.User != nil {
-				if session.State.User.Username != "" {
-					botUser = session.State.User.Username
-				}
-				botAvatarURL = session.State.User.AvatarURL("")
-			}
-		}
+var liveHealthSnapshotPool = sync.Pool{
+	New: func() any {
+		return new(LiveHealthSnapshot)
+	},
+}
 
-		return LiveHealthSnapshot{
-			Status:        "ok",
-			App:           strings.TrimSpace(files.ConfiguredAppName),
-			AppVersion:    strings.TrimSpace(files.AppVersion),
-			CoreVersion:   files.DiscordCoreVersion,
-			BotUser:       botUser,
-			BotAvatarURL:  botAvatarURL,
-			StartedAt:     startedAt.UTC().Format(time.RFC3339),
-			UptimeSeconds: int64(uptime.Seconds()),
-		}, ""
-	})
+type liveHealthResolver struct {
+	s    *Server
+	snap *LiveHealthSnapshot
+}
+
+func (res liveHealthResolver) resolve() (any, string) {
+	startedAt := res.s.startedAt
+	if startedAt.IsZero() {
+		startedAt = time.Now().UTC()
+	}
+	uptime := time.Since(startedAt)
+	if uptime < 0 {
+		uptime = 0
+	}
+	botUser := strings.TrimSpace(files.DiscordBotName)
+	botAvatarURL := ""
+	if res.s.discordSession != nil {
+		session, err := res.s.discordSession("")
+		if err == nil && session != nil && session.State != nil && session.State.User != nil {
+			if session.State.User.Username != "" {
+				botUser = session.State.User.Username
+			}
+			botAvatarURL = session.State.User.AvatarURL("")
+		}
+	}
+
+	res.snap.Status = "ok"
+	res.snap.App = strings.TrimSpace(files.ConfiguredAppName)
+	res.snap.AppVersion = strings.TrimSpace(files.AppVersion)
+	res.snap.CoreVersion = files.DiscordCoreVersion
+	res.snap.BotUser = botUser
+	res.snap.BotAvatarURL = botAvatarURL
+	res.snap.StartedAt = startedAt.UTC().Format(time.RFC3339)
+	res.snap.UptimeSeconds = int64(uptime.Seconds())
+
+	return res.snap, ""
+}
+
+func (s *Server) handleLiveHealthRoute(w http.ResponseWriter, r *http.Request) {
+	snap := liveHealthSnapshotPool.Get().(*LiveHealthSnapshot)
+	defer liveHealthSnapshotPool.Put(snap)
+
+	serveHealthRoute(s, w, r, liveHealthResolver{s: s, snap: snap})
 }

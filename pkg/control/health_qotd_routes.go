@@ -18,15 +18,21 @@ import (
 // enabled" (the service runs with NopMetrics, the default constructor's
 // no-snapshot sink). The fix for the latter is wiring NewInMemoryMetrics
 // in app startup, not hunting a missing route.
+type qotdHealthResolver struct {
+	s *Server
+}
+
+func (res qotdHealthResolver) resolve() (any, string) {
+	if res.s.qotdService == nil {
+		return nil, "qotd service unavailable"
+	}
+	provider, ok := res.s.qotdService.Metrics().(qotd.SnapshotProvider)
+	if !ok {
+		return nil, "qotd metrics not enabled (no SnapshotProvider attached)"
+	}
+	return provider.Snapshot(), ""
+}
+
 func (s *Server) handleQOTDHealthRoute(w http.ResponseWriter, r *http.Request) {
-	s.serveHealthRoute(w, r, func() (any, string) {
-		if s.qotdService == nil {
-			return nil, "qotd service unavailable"
-		}
-		provider, ok := s.qotdService.Metrics().(qotd.SnapshotProvider)
-		if !ok {
-			return nil, "qotd metrics not enabled (no SnapshotProvider attached)"
-		}
-		return provider.Snapshot(), ""
-	})
+	serveHealthRoute(s, w, r, qotdHealthResolver{s: s})
 }

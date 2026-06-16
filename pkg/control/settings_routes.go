@@ -618,20 +618,22 @@ func normalizeDashboardAccessRoleIDs(roleIDs []string) []string {
 		return nil
 	}
 
-	out := make([]string, 0, len(roleIDs))
+	n := 0
 	for _, roleID := range roleIDs {
 		roleID = strings.TrimSpace(roleID)
 		if roleID == "" {
 			continue
 		}
-		out = append(out, roleID)
+		roleIDs[n] = roleID
+		n++
 	}
-	if len(out) == 0 {
+	roleIDs = roleIDs[:n]
+	if len(roleIDs) == 0 {
 		return nil
 	}
 
-	sort.Strings(out)
-	return slices.Compact(out)
+	sort.Strings(roleIDs)
+	return slices.Compact(roleIDs)
 }
 
 func (s *Server) resolveAvailableBotInstanceIDsForGuild(
@@ -740,21 +742,21 @@ func normalizeBotInstanceIDs(ids []string) []string {
 	if len(ids) == 0 {
 		return nil
 	}
-	out := make([]string, 0, len(ids))
-	seen := make(map[string]struct{}, len(ids))
+	n := 0
 	for _, id := range ids {
 		trimmed := strings.TrimSpace(id)
 		if trimmed == "" {
 			continue
 		}
-		if _, ok := seen[trimmed]; ok {
-			continue
-		}
-		seen[trimmed] = struct{}{}
-		out = append(out, trimmed)
+		ids[n] = trimmed
+		n++
 	}
-	sort.Strings(out)
-	return out
+	ids = ids[:n]
+	if len(ids) == 0 {
+		return nil
+	}
+	sort.Strings(ids)
+	return slices.Compact(ids)
 }
 
 func statusForSettingsMutationError(err error) int {

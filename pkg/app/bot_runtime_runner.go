@@ -10,8 +10,8 @@ import (
 	"github.com/small-frappuccino/discordgo"
 
 	"github.com/diamondburned/arikawa/v3/state"
-	"github.com/small-frappuccino/discordcore/pkg/automod"
 	"github.com/small-frappuccino/discordcore/pkg/clock"
+	discord_automod "github.com/small-frappuccino/discordcore/pkg/discord/automod"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
@@ -249,7 +249,7 @@ func buildAutomodService(runtime *botRuntime, opts botRuntimeOptions, routerConf
 		return nil
 	}
 
-	automodService := automod.NewService(runtime.session, monitoringService, opts.logger)
+	automodService := discord_automod.NewArikawaAdapter(runtime.arikawaState, monitoringService, opts.logger)
 
 	return automodService
 }

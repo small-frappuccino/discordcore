@@ -408,7 +408,7 @@ func normalizeStringList(values []string) []string {
 	if len(values) == 0 {
 		return nil
 	}
-	out := make([]string, 0, len(values))
+	n := 0
 	seen := make(map[string]struct{}, len(values))
 	for _, value := range values {
 		trimmed := strings.TrimSpace(value)
@@ -419,9 +419,14 @@ func normalizeStringList(values []string) []string {
 			continue
 		}
 		seen[trimmed] = struct{}{}
-		out = append(out, trimmed)
+		values[n] = trimmed
+		n++
 	}
-	return out
+	values = values[:n]
+	if len(values) == 0 {
+		return nil
+	}
+	return values
 }
 
 func setLogFeatureChannelID(guild *files.GuildConfig, eventType logpolicy.LogEventType, channelID string) {

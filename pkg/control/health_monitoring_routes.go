@@ -19,19 +19,25 @@ import (
 // but only NopMetrics is attached, i.e. observability disabled). The fix
 // for the last case is wiring NewInMemoryMetrics in app startup, not
 // hunting a missing route.
+type monitoringHealthResolver struct {
+	s *Server
+}
+
+func (res monitoringHealthResolver) resolve() (any, string) {
+	if res.s.health.monitoringMetricsResolve == nil {
+		return nil, "monitoring metrics not wired"
+	}
+	metrics := res.s.health.monitoringMetricsResolve()
+	if metrics == nil {
+		return nil, "monitoring metrics not available"
+	}
+	provider, ok := metrics.(monitoring.SnapshotProvider)
+	if !ok {
+		return nil, "monitoring metrics not enabled (no SnapshotProvider attached)"
+	}
+	return provider.Snapshot(), ""
+}
+
 func (s *Server) handleMonitoringHealthRoute(w http.ResponseWriter, r *http.Request) {
-	s.serveHealthRoute(w, r, func() (any, string) {
-		if s.health.monitoringMetricsResolve == nil {
-			return nil, "monitoring metrics not wired"
-		}
-		metrics := s.health.monitoringMetricsResolve()
-		if metrics == nil {
-			return nil, "monitoring metrics not available"
-		}
-		provider, ok := metrics.(monitoring.SnapshotProvider)
-		if !ok {
-			return nil, "monitoring metrics not enabled (no SnapshotProvider attached)"
-		}
-		return provider.Snapshot(), ""
-	})
+	serveHealthRoute(s, w, r, monitoringHealthResolver{s: s})
 }

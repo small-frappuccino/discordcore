@@ -6,10 +6,10 @@ import (
 	"time"
 
 	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/small-frappuccino/discordcore/pkg/automod"
 	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
 	"github.com/small-frappuccino/discordcore/pkg/task"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
-	"github.com/small-frappuccino/discordgo"
 )
 
 // TaskTypeProcessAutomodEvent is the task type for processing automod events safely.
@@ -18,7 +18,7 @@ const TaskTypeProcessAutomodEvent = "monitor.process_automod_event"
 // ProcessAutomodEventPayload holds the AutoMod execution trigger.
 type ProcessAutomodEventPayload struct {
 	GuildID discord.GuildID
-	Entry   *discordgo.AutoModerationActionExecution
+	Entry   *automod.ExecutionEvent
 }
 
 // registerAutomodHandlers wires the automod processing task handlers.
@@ -29,7 +29,7 @@ func (ms *MonitoringService) registerAutomodHandlers() {
 }
 
 // OnAutomodBlock implements automod.Sink.
-func (ms *MonitoringService) OnAutomodBlock(ctx context.Context, guildID discord.GuildID, entry *discordgo.AutoModerationActionExecution) {
+func (ms *MonitoringService) OnAutomodBlock(ctx context.Context, guildID discord.GuildID, entry *automod.ExecutionEvent) {
 	if !ms.IsRunning() || !ms.handlesGuild(guildID.String()) {
 		return
 	}
@@ -42,14 +42,13 @@ func (ms *MonitoringService) OnAutomodBlock(ctx context.Context, guildID discord
 		Entry:   entry,
 	}
 
-	// Calculate idempotency key like we used to do in adapters, but now localized here.
 	var idemKey string
-	if entry.MessageID != "" {
-		idemKey = fmt.Sprintf("automod_exec:%s:%s", guildID.String(), entry.MessageID)
+	if entry.MessageID.IsValid() {
+		idemKey = fmt.Sprintf("automod_exec:%s:%s", guildID.String(), entry.MessageID.String())
 	} else if entry.MatchedContent != "" {
-		idemKey = fmt.Sprintf("automod_exec:%s:%s:content", guildID.String(), entry.UserID)
+		idemKey = fmt.Sprintf("automod_exec:%s:%s:content", guildID.String(), entry.UserID.String())
 	} else {
-		idemKey = fmt.Sprintf("automod_exec:%s:%s:generic", guildID.String(), entry.UserID)
+		idemKey = fmt.Sprintf("automod_exec:%s:%s:generic", guildID.String(), entry.UserID.String())
 	}
 
 	_ = ms.router.Dispatch(context.Background(), task.Task{
@@ -84,7 +83,7 @@ func (ms *MonitoringService) handleProcessAutomodEvent(ctx context.Context, payl
 
 	desc := "Blocked content detected (AutoMod)."
 	if entry.RuleTriggerType != 0 {
-		desc = fmt.Sprintf("AutoMod rule **%s** triggered.", entry.RuleID)
+		desc = fmt.Sprintf("AutoMod rule **%s** triggered.", entry.RuleID.String())
 	}
 
 	embed := &discord.Embed{
@@ -93,13 +92,13 @@ func (ms *MonitoringService) handleProcessAutomodEvent(ctx context.Context, payl
 		Color:       discord.Color(theme.AutomodAction()),
 		Timestamp:   discord.NewTimestamp(time.Now()),
 		Fields: []discord.EmbedField{
-			{Name: "User", Value: fmt.Sprintf("<@%s>", entry.UserID), Inline: true},
+			{Name: "User", Value: fmt.Sprintf("<@%s>", entry.UserID.String()), Inline: true},
 		},
 	}
 
-	if entry.ChannelID != "" {
+	if entry.ChannelID.IsValid() {
 		embed.Fields = append(embed.Fields, discord.EmbedField{
-			Name: "Channel", Value: fmt.Sprintf("<#%s>", entry.ChannelID), Inline: true,
+			Name: "Channel", Value: fmt.Sprintf("<#%s>", entry.ChannelID.String()), Inline: true,
 		})
 	}
 

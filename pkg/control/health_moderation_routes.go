@@ -18,15 +18,21 @@ import (
 // enabled (no SnapshotProvider attached)" (a NopMetrics value was wired
 // but does not expose a snapshot). The fix for the latter is wiring
 // NewInMemoryMetrics in app startup, not hunting a missing route.
+type moderationHealthResolver struct {
+	s *Server
+}
+
+func (res moderationHealthResolver) resolve() (any, string) {
+	if res.s.health.moderationMetrics == nil {
+		return nil, "moderation metrics not enabled"
+	}
+	provider, ok := res.s.health.moderationMetrics.(moderation.SnapshotProvider)
+	if !ok {
+		return nil, "moderation metrics not enabled (no SnapshotProvider attached)"
+	}
+	return provider.Snapshot(), ""
+}
+
 func (s *Server) handleModerationHealthRoute(w http.ResponseWriter, r *http.Request) {
-	s.serveHealthRoute(w, r, func() (any, string) {
-		if s.health.moderationMetrics == nil {
-			return nil, "moderation metrics not enabled"
-		}
-		provider, ok := s.health.moderationMetrics.(moderation.SnapshotProvider)
-		if !ok {
-			return nil, "moderation metrics not enabled (no SnapshotProvider attached)"
-		}
-		return provider.Snapshot(), ""
-	})
+	serveHealthRoute(s, w, r, moderationHealthResolver{s: s})
 }

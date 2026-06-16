@@ -430,12 +430,16 @@ func (s *Server) Stop(ctx context.Context) error {
 }
 
 // serveHealthRoute consolidates the auth, method-check, JSON-header, and
-// encode boilerplate every /v1/health/* snapshot route shares. resolve
+// encode boilerplate every /v1/health/* snapshot route shares. resolver
 // returns the snapshot to encode for a 200 response, or a non-empty reason
 // string for 503 Service Unavailable with that body so each subsystem keeps
 // its own distinct "wired but inactive" vs "service unavailable" message
 // without reimplementing the surrounding auth/method/header policy.
-func (s *Server) serveHealthRoute(w http.ResponseWriter, r *http.Request, resolve func() (snapshot any, unavailable string)) {
+type healthSnapshotResolver interface {
+	resolve() (snapshot any, unavailable string)
+}
+
+func serveHealthRoute[T healthSnapshotResolver](s *Server, w http.ResponseWriter, r *http.Request, resolver T) {
 	auth, ok := s.authorizeRequest(w, r)
 	if !ok {
 		return
@@ -448,7 +452,7 @@ func (s *Server) serveHealthRoute(w http.ResponseWriter, r *http.Request, resolv
 		return
 	}
 
-	snapshot, unavailable := resolve()
+	snapshot, unavailable := resolver.resolve()
 	if unavailable != "" {
 		http.Error(w, unavailable, http.StatusServiceUnavailable)
 		return
@@ -487,7 +491,7 @@ func (s *Server) handleRuntimeConfig(w http.ResponseWriter, r *http.Request) {
 
 	var patch map[string]json.RawMessage
 	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
-		http.Error(w, fmt.Sprintf("invalid payload: %v", err), http.StatusBadRequest)
+		http.Error(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
 	if len(patch) == 0 {
@@ -520,10 +524,10 @@ func (s *Server) applyRuntimePatch(patch map[string]json.RawMessage) (files.Runt
 		for field, raw := range patch {
 			setter, ok := runtimeConfigFieldSetters[field]
 			if !ok {
-				return badRequest(fmt.Errorf("unknown field %q", field))
+				return badRequest(errUnknownField)
 			}
 			if err := setter(rc, raw); err != nil {
-				return badRequest(fmt.Errorf("field %s: %w", field, err))
+				return badRequest(errInvalidField)
 			}
 		}
 		return nil
@@ -575,7 +579,7 @@ func stringSetter(assign func(*files.RuntimeConfig, string)) setterFunc {
 	return func(rc *files.RuntimeConfig, raw json.RawMessage) error {
 		v, err := decodeString(raw)
 		if err != nil {
-			return fmt.Errorf("stringSetter: %w", err)
+			return err
 		}
 		assign(rc, v)
 		return nil
@@ -586,7 +590,7 @@ func boolSetter(assign func(*files.RuntimeConfig, bool)) setterFunc {
 	return func(rc *files.RuntimeConfig, raw json.RawMessage) error {
 		v, err := decodeBool(raw)
 		if err != nil {
-			return fmt.Errorf("boolSetter: %w", err)
+			return err
 		}
 		assign(rc, v)
 		return nil
@@ -597,7 +601,7 @@ func intSetter(assign func(*files.RuntimeConfig, int)) setterFunc {
 	return func(rc *files.RuntimeConfig, raw json.RawMessage) error {
 		v, err := decodeInt(raw)
 		if err != nil {
-			return fmt.Errorf("intSetter: %w", err)
+			return err
 		}
 		assign(rc, v)
 		return nil
@@ -608,10 +612,10 @@ func nonNegativeIntSetter(field string, assign func(*files.RuntimeConfig, int)) 
 	return func(rc *files.RuntimeConfig, raw json.RawMessage) error {
 		v, err := decodeInt(raw)
 		if err != nil {
-			return fmt.Errorf("nonNegativeIntSetter: %w", err)
+			return err
 		}
 		if v < 0 {
-			return fmt.Errorf("%s must be >= 0", field)
+			return errNegativeValue
 		}
 		assign(rc, v)
 		return nil
@@ -636,9 +640,21 @@ func (e *httpError) Error() string { return e.err.Error() }
 // Unwrap unwraps.
 func (e *httpError) Unwrap() error { return e.err }
 
+var (
+	errEmptyStringValue = errors.New("empty string value")
+	errEmptyBoolValue   = errors.New("empty bool value")
+	errEmptyIntValue    = errors.New("empty int value")
+	errNegativeValue    = errors.New("must be >= 0")
+	errUnknownField     = errors.New("unknown field")
+	errInvalidField     = errors.New("invalid field")
+	errDecodeStringFail = errors.New("decode string failed")
+	errDecodeBoolFail   = errors.New("decode bool failed")
+	errDecodeIntFail    = errors.New("decode int failed")
+)
+
 func decodeString(raw json.RawMessage) (string, error) {
 	if len(raw) == 0 {
-		return "", fmt.Errorf("empty string value")
+		return "", errEmptyStringValue
 	}
 	if bytes.Equal(raw, []byte("null")) {
 		return "", nil
@@ -646,14 +662,14 @@ func decodeString(raw json.RawMessage) (string, error) {
 
 	var v string
 	if err := json.Unmarshal(raw, &v); err != nil {
-		return "", fmt.Errorf("decodeString: %w", err)
+		return "", errDecodeStringFail
 	}
 	return v, nil
 }
 
 func decodeBool(raw json.RawMessage) (bool, error) {
 	if len(raw) == 0 {
-		return false, fmt.Errorf("empty bool value")
+		return false, errEmptyBoolValue
 	}
 	if bytes.Equal(raw, []byte("null")) {
 		return false, nil
@@ -661,14 +677,14 @@ func decodeBool(raw json.RawMessage) (bool, error) {
 
 	var v bool
 	if err := json.Unmarshal(raw, &v); err != nil {
-		return false, fmt.Errorf("decodeBool: %w", err)
+		return false, errDecodeBoolFail
 	}
 	return v, nil
 }
 
 func decodeInt(raw json.RawMessage) (int, error) {
 	if len(raw) == 0 {
-		return 0, fmt.Errorf("empty int value")
+		return 0, errEmptyIntValue
 	}
 	if bytes.Equal(raw, []byte("null")) {
 		return 0, nil
@@ -676,14 +692,14 @@ func decodeInt(raw json.RawMessage) (int, error) {
 
 	var n json.Number
 	if err := json.Unmarshal(raw, &n); err != nil {
-		return 0, fmt.Errorf("decodeInt: %w", err)
+		return 0, errDecodeIntFail
 	}
 	if i, err := n.Int64(); err == nil {
 		return int(i), nil
 	}
 	f, err := n.Float64()
 	if err != nil {
-		return 0, fmt.Errorf("decodeInt: %w", err)
+		return 0, errDecodeIntFail
 	}
 	return int(f), nil
 }
