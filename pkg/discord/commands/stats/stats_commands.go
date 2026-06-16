@@ -3,6 +3,7 @@ package stats
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/diamondburned/arikawa/v3/api"
@@ -23,13 +24,15 @@ type StatsService interface {
 type StatsCommands struct {
 	configManager *files.ConfigManager
 	statsService  StatsService
+	logger        *slog.Logger
 }
 
 // NewStatsCommands returns the root stats command tree.
-func NewStatsCommands(configManager *files.ConfigManager, statsService StatsService) *StatsCommands {
+func NewStatsCommands(configManager *files.ConfigManager, statsService StatsService, logger *slog.Logger) *StatsCommands {
 	return &StatsCommands{
 		configManager: configManager,
 		statsService:  statsService,
+		logger:        logger,
 	}
 }
 
@@ -42,12 +45,14 @@ func (c *StatsCommands) RegisterCommands(router *core.ArikawaCommandRouter) {
 	router.Register(&statsRootCommand{
 		configManager: c.configManager,
 		statsService:  c.statsService,
+		logger:        c.logger,
 	})
 }
 
 type statsRootCommand struct {
 	configManager *files.ConfigManager
 	statsService  StatsService
+	logger        *slog.Logger
 }
 
 func (c *statsRootCommand) Name() string              { return "stats" }
@@ -134,7 +139,7 @@ func (c *statsRootCommand) Options() []discord.CommandOption {
 	}
 }
 
-func ensureStatsEnabled(ctx *core.ArikawaContext) error {
+func (c *statsRootCommand) ensureStatsEnabled(ctx *core.ArikawaContext) error {
 	if ctx == nil || ctx.Config == nil {
 		return fmt.Errorf("invalid context")
 	}
@@ -142,13 +147,15 @@ func ensureStatsEnabled(ctx *core.ArikawaContext) error {
 	features := cfg.ResolveFeatures(ctx.GuildID.String())
 	route, isFallback := ctx.Config.GuildConfig(ctx.GuildID.String()).ResolveFeatureBotInstanceID("stats")
 
-	ctx.Logger.Debug("Transient state inspection: Evaluated feature enablement for Stats",
-		slog.Bool("toggle_enabled", features.StatsChannels),
-		slog.String("resolved_route", route),
-		slog.Bool("route_is_fallback", isFallback),
-	)
+	if c.logger != nil {
+		c.logger.Debug("Transient state inspection: Evaluated feature enablement for Stats",
+			slog.Bool("toggle_enabled", features.StatsChannels),
+			slog.String("resolved_route", route),
+			slog.Bool("route_is_fallback", isFallback),
+		)
+	}
 
-	if route == "<unrouted>" {
+	if route == "<unrouted>" || !features.StatsChannels {
 		_ = ctx.Respond(api.InteractionResponseData{
 			Content: option.NewNullableString("Stats channels feature is currently disabled for this server."),
 			Flags:   discord.EphemeralMessage,
@@ -180,7 +187,7 @@ func (c *statsRootCommand) Handle(ctx *core.ArikawaContext) error {
 }
 
 func (c *statsRootCommand) handleAdd(ctx *core.ArikawaContext, opts []discord.CommandInteractionOption) error {
-	if err := ensureStatsEnabled(ctx); err != nil {
+	if err := c.ensureStatsEnabled(ctx); err != nil {
 		return err
 	}
 
@@ -228,20 +235,22 @@ func (c *statsRootCommand) handleAdd(ctx *core.ArikawaContext, opts []discord.Co
 		_ = c.statsService.UpdateStatsChannels(context.WithoutCancel(context.Background()))
 	}
 
-	ctx.Logger.Debug("Added or updated stats channel",
-		slog.String("guild_id", ctx.GuildID.String()),
-		slog.String("channel_id", channelID),
-		slog.String("member_type", memberType),
-	)
+	if c.logger != nil {
+		c.logger.Debug("Added or updated stats channel",
+			slog.String("guild_id", ctx.GuildID.String()),
+			slog.String("channel_id", channelID),
+			slog.String("member_type", memberType),
+		)
+	}
 
 	return ctx.Respond(api.InteractionResponseData{
-		Content: option.NewNullableString(fmt.Sprintf("Updated stats configuration for <#%s>.", channelID)),
+		Content: option.NewNullableString("Updated stats configuration for <#" + channelID + ">."),
 		Flags:   discord.EphemeralMessage,
 	})
 }
 
 func (c *statsRootCommand) handleRemove(ctx *core.ArikawaContext, opts []discord.CommandInteractionOption) error {
-	if err := ensureStatsEnabled(ctx); err != nil {
+	if err := c.ensureStatsEnabled(ctx); err != nil {
 		return err
 	}
 
@@ -271,7 +280,7 @@ func (c *statsRootCommand) handleRemove(ctx *core.ArikawaContext, opts []discord
 	}
 	if !removed {
 		return ctx.Respond(api.InteractionResponseData{
-			Content: option.NewNullableString(fmt.Sprintf("<#%s> is not configured as a stats channel.", channelID)),
+			Content: option.NewNullableString("<#" + channelID + "> is not configured as a stats channel."),
 			Flags:   discord.EphemeralMessage,
 		})
 	}
@@ -280,19 +289,21 @@ func (c *statsRootCommand) handleRemove(ctx *core.ArikawaContext, opts []discord
 		_ = c.statsService.UpdateStatsChannels(context.WithoutCancel(context.Background()))
 	}
 
-	ctx.Logger.Debug("Removed stats channel",
-		slog.String("guild_id", ctx.GuildID.String()),
-		slog.String("channel_id", channelID),
-	)
+	if c.logger != nil {
+		c.logger.Debug("Removed stats channel",
+			slog.String("guild_id", ctx.GuildID.String()),
+			slog.String("channel_id", channelID),
+		)
+	}
 
 	return ctx.Respond(api.InteractionResponseData{
-		Content: option.NewNullableString(fmt.Sprintf("Removed <#%s> from stats channels.", channelID)),
+		Content: option.NewNullableString("Removed <#" + channelID + "> from stats channels."),
 		Flags:   discord.EphemeralMessage,
 	})
 }
 
 func (c *statsRootCommand) handleList(ctx *core.ArikawaContext) error {
-	if err := ensureStatsEnabled(ctx); err != nil {
+	if err := c.ensureStatsEnabled(ctx); err != nil {
 		return err
 	}
 
@@ -321,7 +332,15 @@ func (c *statsRootCommand) handleList(ctx *core.ArikawaContext) error {
 			templateStr = "{label}{count}"
 		}
 
-		buf.WriteString(fmt.Sprintf("• <#%s>\n  Label: `%s`\n  Filter: %s\n  Template: `%s`\n\n", ch.ChannelID, ch.Label, filterStr, templateStr))
+		buf.WriteString("• <#")
+		buf.WriteString(ch.ChannelID)
+		buf.WriteString(">\n  Label: `")
+		buf.WriteString(ch.Label)
+		buf.WriteString("`\n  Filter: ")
+		buf.WriteString(filterStr)
+		buf.WriteString("\n  Template: `")
+		buf.WriteString(templateStr)
+		buf.WriteString("`\n\n")
 	}
 
 	interval := cfg.Stats.UpdateIntervalMins
@@ -334,7 +353,7 @@ func (c *statsRootCommand) handleList(ctx *core.ArikawaContext) error {
 		Description: buf.String(),
 		Color:       0x5865F2, // Discord Blurple
 		Footer: &discord.EmbedFooter{
-			Text: fmt.Sprintf("Update Interval: %d minutes", interval),
+			Text: "Update Interval: " + strconv.Itoa(int(interval)) + " minutes",
 		},
 	}
 
@@ -345,12 +364,32 @@ func (c *statsRootCommand) handleList(ctx *core.ArikawaContext) error {
 }
 
 func (c *statsRootCommand) handleSettings(ctx *core.ArikawaContext, opts []discord.CommandInteractionOption) error {
-	if err := ensureStatsEnabled(ctx); err != nil {
+	if err := c.ensureStatsEnabled(ctx); err != nil {
 		return err
 	}
 
 	parsedOpts := core.ArikawaOptionList(opts)
-	interval := parsedOpts.Float("interval")
+	interval := parsedOpts.Float("update_interval_mins")
+	if interval == 0 {
+		interval = parsedOpts.Float("interval")
+	}
+
+	if len(opts) == 0 {
+		cfg := ctx.Config.GuildConfig(ctx.GuildID.String())
+		status := "Disabled"
+		if cfg.Stats.Enabled {
+			status = "Enabled"
+		}
+		currInterval := cfg.Stats.UpdateIntervalMins
+		if currInterval == 0 {
+			currInterval = 30
+		}
+
+		return ctx.Respond(api.InteractionResponseData{
+			Content: option.NewNullableString("Stats Channels: **" + status + "**\nUpdate Interval: **" + strconv.Itoa(currInterval) + " minutes**"),
+			Flags:   discord.EphemeralMessage,
+		})
+	}
 
 	if interval < 5 {
 		interval = 5
@@ -365,13 +404,17 @@ func (c *statsRootCommand) handleSettings(ctx *core.ArikawaContext, opts []disco
 		return err
 	}
 
-	ctx.Logger.Debug("Updated stats update interval",
-		slog.String("guild_id", ctx.GuildID.String()),
-		slog.Float64("interval_mins", interval),
-	)
+	if c.logger != nil {
+		c.logger.Debug("Updated stats update interval",
+			slog.String("guild_id", ctx.GuildID.String()),
+			slog.Float64("interval_mins", interval),
+		)
+	}
+
+	go c.statsService.UpdateStatsChannels(context.Background())
 
 	return ctx.Respond(api.InteractionResponseData{
-		Content: option.NewNullableString(fmt.Sprintf("Stats update interval set to **%d minutes**.", int(interval))),
+		Content: option.NewNullableString("Stats update interval set to **" + strconv.Itoa(int(interval)) + " minutes**."),
 		Flags:   discord.EphemeralMessage,
 	})
 }

@@ -1,6 +1,8 @@
 package commands
 
 import (
+	"log/slog"
+
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/analytics"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	embedscmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/embeds"
@@ -123,7 +125,7 @@ func StatsCommandCatalogRegistrar() CommandCatalogRegistrar {
 			Stats: true,
 		},
 		Register: func(ch *CommandHandler, router *core.CommandRouter) {
-			stats.NewStatsCommands(ch.configManager, ch.statsService).RegisterCommands(ch.GetCommandManager().GetArikawaRouter())
+			stats.NewStatsCommands(ch.configManager, ch.statsService, slog.Default()).RegisterCommands(ch.GetCommandManager().GetArikawaRouter())
 		},
 	}
 }
