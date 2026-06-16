@@ -12,7 +12,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
+	"github.com/small-frappuccino/discordcore/pkg/discord/eventlog"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	svc "github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
@@ -70,6 +72,8 @@ var heartbeatTickInterval = heartbeatInterval
 // MonitoringService coordinates multi-guild handlers and delegates specific tasks (e.g., user).
 type MonitoringService struct {
 	session       *discordgo.Session
+	arikawaState  *state.State
+	eventLogger   *eventlog.Logger
 	configManager *files.ConfigManager
 	botInstanceID string
 	store         *storage.Store
@@ -296,23 +300,31 @@ func (ms *MonitoringService) recordLifecycleErrorLocked() {
 }
 
 // NewMonitoringService creates the multi-guild monitoring service. Returns error if any dependency is nil.
-func NewMonitoringService(session *discordgo.Session, configManager *files.ConfigManager, store *storage.Store, logger *slog.Logger) (*MonitoringService, error) {
-	return NewMonitoringServiceForBot(session, configManager, store, "", logger)
+func NewMonitoringService(
+	session *discordgo.Session,
+	arikawaState *state.State,
+	eventLogger *eventlog.Logger,
+	configManager *files.ConfigManager,
+	store *storage.Store,
+	logger *slog.Logger,
+) (*MonitoringService, error) {
+	return NewMonitoringServiceForBot(session, arikawaState, eventLogger, configManager, store, "", logger)
 }
 
 // NewMonitoringServiceForBot creates a monitoring service scoped to the
-// guilds assigned to a specific bot instance. The service is constructed
-// with NopMetrics; callers that want /v1/health/monitoring telemetry
+// provided bot instance ID. For the primary runtime with metrics, callers
 // should use NewMonitoringServiceForBotWithMetrics instead, or invoke
-// SetMetrics on the returned service before Start.
+// SetMetrics immediately after creation.
 func NewMonitoringServiceForBot(
 	session *discordgo.Session,
+	arikawaState *state.State,
+	eventLogger *eventlog.Logger,
 	configManager *files.ConfigManager,
 	store *storage.Store,
 	botInstanceID string,
 	logger *slog.Logger,
 ) (*MonitoringService, error) {
-	return NewMonitoringServiceForBotWithMetrics(session, configManager, store, botInstanceID, nil, logger)
+	return NewMonitoringServiceForBotWithMetrics(session, arikawaState, eventLogger, configManager, store, botInstanceID, nil, logger)
 }
 
 // NewMonitoringServiceForBotWithMetrics is the constructor production startup
@@ -324,6 +336,8 @@ func NewMonitoringServiceForBot(
 // back to NopMetrics when nil.
 func NewMonitoringServiceForBotWithMetrics(
 	session *discordgo.Session,
+	arikawaState *state.State,
+	eventLogger *eventlog.Logger,
 	configManager *files.ConfigManager,
 	store *storage.Store,
 	botInstanceID string,
@@ -355,13 +369,16 @@ func NewMonitoringServiceForBotWithMetrics(
 		activity:          NewMonitoringRuntimeActivity(store, logger, files.NormalizeBotInstanceID(botInstanceID)),
 		notifier:          n,
 		unifiedCache:      unifiedCache,
-		userWatcher:       NewUserWatcher(session, configManager, store, n, unifiedCache, logger),
+		changeDebounce:    changeDebouncer{},
+		userWatcher:       NewUserWatcher(session, arikawaState, configManager, store, n, unifiedCache, logger),
 		controlCh:         make(chan func()),
 		stopChan:          make(chan struct{}),
 		rolesCacheService: NewRolesCacheService(configManager),
 		eventHandlers:     make([]func(), 0),
 		metrics:           metrics,
 		logger:            logger,
+		arikawaState:      arikawaState,
+		eventLogger:       eventLogger,
 	}
 	ms.runState.Store(&monitoringRunState{})
 	go ms.serveControl()

@@ -60,7 +60,7 @@ func TestMonitoringServiceRestartRebuildsTaskPipeline(t *testing.T) {
 	})
 	session.State.User = &discordgo.User{ID: "bot-1"}
 
-	ms, err := NewMonitoringServiceForBot(session, cfgMgr, store, "default", slog.Default())
+	ms, err := NewMonitoringServiceForBot(session, nil, nil, cfgMgr, store, "default", slog.Default())
 	if err != nil {
 		t.Fatalf("new monitoring service: %v", err)
 	}

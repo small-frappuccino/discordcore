@@ -15,6 +15,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
+	"github.com/small-frappuccino/discordcore/pkg/discord/eventlog"
 	"github.com/small-frappuccino/discordcore/pkg/discord/maintenance"
 	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/discord/session"
@@ -169,6 +170,7 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 		token = "Bot " + token
 	}
 	arikawaState := state.New(token)
+	runtime.arikawaState = arikawaState
 	statsGateway := discordstats.NewArikawaGateway(arikawaState, slog.Default())
 	statsService := stats.NewStatsService(statsGateway, opts.configManager, opts.store, slog.Default(), runtime.instanceID)
 	discordstats.RegisterDiscordGoEventHandlers(runtime.session, statsService, slog.Default())
@@ -209,8 +211,15 @@ func setupMonitoringService(runtime *botRuntime, opts botRuntimeOptions, routerC
 		return nil, nil
 	}
 
+	var eventLogger *eventlog.Logger
+	if runtime.arikawaState != nil && runtime.arikawaState.Session != nil {
+		eventLogger = eventlog.NewLogger(runtime.arikawaState.Session.Client, opts.configManager, runtime.session, slog.Default())
+	}
+
 	monitoringService, err := monitoring.NewMonitoringServiceForBotWithMetrics(
 		runtime.session,
+		runtime.arikawaState,
+		eventLogger,
 		opts.configManager,
 		opts.store,
 		runtime.instanceID,

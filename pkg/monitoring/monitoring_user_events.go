@@ -6,15 +6,18 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
+	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/gateway"
+	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/task"
-	"github.com/small-frappuccino/discordcore/pkg/theme"
 	"github.com/small-frappuccino/discordgo"
 	log_slog "log/slog"
 
@@ -26,6 +29,7 @@ import (
 // UserWatcher contains the specific logic for processing user changes.
 type UserWatcher struct {
 	session       *discordgo.Session
+	arikawaState  *state.State
 	logger        *log_slog.Logger
 	configManager *files.ConfigManager
 	store         *storage.Store
@@ -34,9 +38,10 @@ type UserWatcher struct {
 }
 
 // NewUserWatcher news user watcher.
-func NewUserWatcher(session *discordgo.Session, configManager *files.ConfigManager, store *storage.Store, notifier *notifications.NotificationSender, unifiedCache *cache.UnifiedCache, logger *log_slog.Logger) *UserWatcher {
+func NewUserWatcher(session *discordgo.Session, arikawaState *state.State, configManager *files.ConfigManager, store *storage.Store, notifier *notifications.NotificationSender, unifiedCache *cache.UnifiedCache, logger *log_slog.Logger) *UserWatcher {
 	return &UserWatcher{
 		session:       session,
+		arikawaState:  arikawaState,
 		configManager: configManager,
 		store:         store,
 		notifier:      notifier,
@@ -76,10 +81,12 @@ func diffStringIDs(prev, cur []string) (added []string, removed []string) {
 	return added, removed
 }
 
-func (ms *MonitoringService) computeMemberRoleDiff(guildID, userID string, proposed []string) (cur []string, added []string, removed []string, known bool) {
+func (ms *MonitoringService) computeMemberRoleDiff(guildID, userID string, proposed []discord.RoleID) (cur []string, added []string, removed []string, known bool) {
 	switch {
 	case proposed != nil:
-		cur = append([]string(nil), proposed...)
+		for _, r := range proposed {
+			cur = append(cur, r.String())
+		}
 		known = true
 	default:
 		member, err := ms.getGuildMember(guildID, userID)
@@ -258,85 +265,99 @@ func buildRoleIDList(list []string) string {
 	return out
 }
 
-func (ms *MonitoringService) sendRoleUpdateNotification(channelID string, user *discordgo.User, actorID string, added string, removed string, source string) error {
+func (ms *MonitoringService) sendRoleUpdateNotification(guildID string, channelID string, user *discord.User, actorID string, added string, removed string, source string) error {
 	if user == nil {
 		return fmt.Errorf("role update user is nil")
 	}
-	targetLabel := notifications.FormatUserLabel(user.Username, user.ID)
-	actorLabel := notifications.FormatUserRef(actorID)
-	desc := fmt.Sprintf("**Target:** %s\n**Actor:** %s", targetLabel, actorLabel)
-	embed := &discordgo.MessageEmbed{
-		Title:       "Roles Updated",
-		Color:       theme.MemberRoleUpdate(),
-		Description: desc,
-		Fields: []*discordgo.MessageEmbedField{
-			{Name: "Added", Value: added, Inline: true},
-			{Name: "Removed", Value: removed, Inline: true},
-		},
-		Timestamp: time.Now().Format(time.RFC3339),
-		Footer: &discordgo.MessageEmbedFooter{
-			Text: source,
-		},
+	if ms.eventLogger == nil {
+		return fmt.Errorf("eventLogger is nil")
 	}
 
-	ms.observability().RecordMessageSent()
-	_, err := ms.session.ChannelMessageSendEmbed(channelID, embed)
-	return err
+	ariUser := *user
+
+	// We extract RoleIDs from the added/removed strings for the Sink
+	var addedRoles, removedRoles []discord.RoleID
+	extractRoles := func(r string) []discord.RoleID {
+		var roles []discord.RoleID
+		for _, part := range strings.Split(r, ",") {
+			part = strings.TrimSpace(part)
+			if strings.HasPrefix(part, "<@&") && strings.HasSuffix(part, ">") {
+				id, _ := discord.ParseSnowflake(part[3 : len(part)-1])
+				roles = append(roles, discord.RoleID(id))
+			} else if strings.HasPrefix(part, "`") && strings.HasSuffix(part, "`") {
+				id, _ := discord.ParseSnowflake(part[1 : len(part)-1])
+				roles = append(roles, discord.RoleID(id))
+			}
+		}
+		return roles
+	}
+
+	if added != "None" {
+		addedRoles = extractRoles(added)
+	}
+	if removed != "None" {
+		removedRoles = extractRoles(removed)
+	}
+
+	ms.eventLogger.OnRoleUpdate(context.Background(), guildID, ariUser, addedRoles, removedRoles)
+	return nil
 }
 
 // handleMemberUpdate processes member updates.
-func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discordgo.GuildMemberUpdate) {
-	if m.User == nil {
+func (ms *MonitoringService) handleMemberUpdate(e *gateway.GuildMemberUpdateEvent) {
+	if e.User.ID == 0 {
 		return
 	}
-	if !ms.handlesGuild(m.GuildID) {
+	guildID := e.GuildID.String()
+	userID := e.User.ID.String()
+	if !ms.handlesGuild(guildID) {
 		return
 	}
-	if !ms.isFeatureBot(m.GuildID, "roles") {
+	if !ms.isFeatureBot(guildID, "roles") {
 		return
 	}
 
 	done := perf.StartGatewayEvent(
 		"guild_member_update.monitoring",
-		slog.String("guildID", m.GuildID),
-		slog.String("userID", m.User.ID),
+		slog.String("guildID", guildID),
+		slog.String("userID", userID),
 	)
 	defer done()
 
-	gcfg := ms.configManager.GuildConfig(m.GuildID)
+	gcfg := ms.configManager.GuildConfig(guildID)
 	if gcfg == nil {
 		return
 	}
 
-	ms.checkAvatarChange(m.GuildID, m.User.ID, m.User.Avatar, m.User.Username)
+	ms.checkAvatarChange(guildID, userID, string(e.User.Avatar), e.User.Username)
 
-	emit := logpolicy.ShouldEmitLogEvent(ms.session, ms.configManager, logpolicy.LogEventRoleChange, m.GuildID)
+	emit := logpolicy.ShouldEmitLogEvent(ms.session, ms.configManager, logpolicy.LogEventRoleChange, guildID)
 	if !emit.Enabled {
-		ms.logger.LogAttrs(context.Background(), log_slog.LevelDebug, "Role update notification suppressed by policy", log_slog.String("guildID", m.GuildID), log_slog.String("userID", m.User.ID), log_slog.String("reason", string(emit.Reason)))
+		ms.logger.LogAttrs(context.Background(), log_slog.LevelDebug, "Role update notification suppressed by policy", log_slog.String("guildID", guildID), log_slog.String("userID", userID), log_slog.String("reason", string(emit.Reason)))
 		return
 	}
 	channelID := emit.ChannelID
 
-	curRoles, verifiedAdded, verifiedRemoved, known := ms.computeMemberRoleDiff(m.GuildID, m.User.ID, m.Roles)
+	curRoles, verifiedAdded, verifiedRemoved, known := ms.computeMemberRoleDiff(guildID, userID, e.RoleIDs)
 	if !known {
 		ms.logger.LogAttrs(context.Background(), log_slog.LevelDebug,
 			"Role update skipped because current role state could not be resolved",
-			log_slog.String("guildID", m.GuildID),
-			log_slog.String("userID", m.User.ID),
+			log_slog.String("guildID", guildID),
+			log_slog.String("userID", userID),
 		)
 		return
 	}
 
 	if len(verifiedAdded) == 0 && len(verifiedRemoved) == 0 {
-		ms.persistRoleSnapshotOrWarn(m.GuildID, m.User.ID, curRoles, "Failed to persist role snapshot after empty local diff")
+		ms.persistRoleSnapshotOrWarn(guildID, userID, curRoles, "Failed to persist role snapshot after empty local diff")
 		return
 	}
 
-	auditLookupDebounced := ms.shouldDebounceRoleUpdateAuditRefresh(m.GuildID, m.User.ID)
-	entries, fromCache, err := ms.getRoleUpdateAuditEntries(m.GuildID, false)
+	auditLookupDebounced := ms.shouldDebounceRoleUpdateAuditRefresh(guildID, userID)
+	entries, fromCache, err := ms.getRoleUpdateAuditEntries(guildID, false)
 	if err != nil {
-		ms.logger.LogAttrs(context.Background(), log_slog.LevelWarn, "Failed to fetch audit logs for role update", log_slog.String("guildID", m.GuildID), log_slog.String("userID", m.User.ID), log_slog.Any("err", err))
-	} else if ms.tryNotifyRoleUpdateFromAudit(m, channelID, verifiedAdded, verifiedRemoved, curRoles, entries) {
+		ms.logger.LogAttrs(context.Background(), log_slog.LevelWarn, "Failed to fetch audit logs for role update", log_slog.String("guildID", guildID), log_slog.String("userID", userID), log_slog.Any("err", err))
+	} else if ms.tryNotifyRoleUpdateFromAudit(e, channelID, verifiedAdded, verifiedRemoved, curRoles, entries) {
 		return
 	}
 
@@ -352,15 +373,15 @@ func (ms *MonitoringService) handleMemberUpdate(s *discordgo.Session, m *discord
 			return
 		case <-time.After(monitoringRoleAuditRetryDelay):
 		}
-		refreshedEntries, _, refreshErr := ms.getRoleUpdateAuditEntries(m.GuildID, true)
+		refreshedEntries, _, refreshErr := ms.getRoleUpdateAuditEntries(guildID, true)
 		if refreshErr != nil {
-			ms.logger.LogAttrs(context.Background(), log_slog.LevelWarn, "Failed to refresh audit logs for role update", log_slog.String("guildID", m.GuildID), log_slog.String("userID", m.User.ID), log_slog.Any("err", refreshErr))
-		} else if ms.tryNotifyRoleUpdateFromAudit(m, channelID, verifiedAdded, verifiedRemoved, curRoles, refreshedEntries) {
+			ms.logger.LogAttrs(context.Background(), log_slog.LevelWarn, "Failed to refresh audit logs for role update", log_slog.String("guildID", guildID), log_slog.String("userID", userID), log_slog.Any("err", refreshErr))
+		} else if ms.tryNotifyRoleUpdateFromAudit(e, channelID, verifiedAdded, verifiedRemoved, curRoles, refreshedEntries) {
 			return
 		}
 	}
 
-	ms.sendFallbackRoleUpdateNotification(m, channelID, verifiedAdded, verifiedRemoved, curRoles)
+	ms.sendFallbackRoleUpdateNotification(e, channelID, verifiedAdded, verifiedRemoved, curRoles)
 }
 
 // persistRoleSnapshotOrWarn persists the member's current role set, logging warnMsg on
@@ -375,12 +396,12 @@ func (ms *MonitoringService) persistRoleSnapshotOrWarn(guildID, userID string, c
 // the updated member, cross-checks it against the locally verified delta, and on a match
 // sends the role-update notification (or persists a snapshot when verification empties the
 // delta). It reports whether a matching entry was handled.
-func (ms *MonitoringService) tryNotifyRoleUpdateFromAudit(m *discordgo.GuildMemberUpdate, channelID string, verifiedAdded, verifiedRemoved, curRoles []string, entries []*discordgo.AuditLogEntry) bool {
+func (ms *MonitoringService) tryNotifyRoleUpdateFromAudit(e *gateway.GuildMemberUpdateEvent, channelID string, verifiedAdded, verifiedRemoved, curRoles []string, entries []*discordgo.AuditLogEntry) bool {
 	verifiedAddedSet := toIDSet(verifiedAdded)
 	verifiedRemovedSet := toIDSet(verifiedRemoved)
 
 	for _, entry := range entries {
-		if entry == nil || entry.TargetID != m.User.ID || !isRecentRoleUpdateAuditEntry(entry) {
+		if entry == nil || entry.TargetID != e.User.ID.String() || !isRecentRoleUpdateAuditEntry(entry) {
 			continue
 		}
 
@@ -405,29 +426,30 @@ func (ms *MonitoringService) tryNotifyRoleUpdateFromAudit(m *discordgo.GuildMemb
 		if len(filteredAdded) == 0 && len(filteredRemoved) == 0 {
 			ms.logger.LogAttrs(context.Background(), log_slog.LevelDebug,
 				"Role update skipped after verification produced empty delta",
-				log_slog.String("guildID", m.GuildID),
-				log_slog.String("userID", m.User.ID),
+				log_slog.String("guildID", e.GuildID.String()),
+				log_slog.String("userID", e.User.ID.String()),
 				log_slog.Int("auditAddedCount", len(auditAdded)),
 				log_slog.Int("auditRemovedCount", len(auditRemoved)),
 				log_slog.Int("verifiedAddedCount", len(verifiedAdded)),
 				log_slog.Int("verifiedRemovedCount", len(verifiedRemoved)),
 			)
-			ms.persistRoleSnapshotOrWarn(m.GuildID, m.User.ID, curRoles, "Failed to persist role snapshot after verification skip")
+			ms.persistRoleSnapshotOrWarn(e.GuildID.String(), e.User.ID.String(), curRoles, "Failed to persist role snapshot after verification skip")
 			return true
 		}
 
 		if err := ms.sendRoleUpdateNotification(
+			e.GuildID.String(),
 			channelID,
-			m.User,
+			&e.User,
 			entry.UserID,
 			buildAuditRoleList(filteredAdded),
 			buildAuditRoleList(filteredRemoved),
 			"Source: Audit Log",
 		); err != nil {
-			ms.logger.LogAttrs(context.Background(), log_slog.LevelError, "Failed to send role update notification", log_slog.String("guildID", m.GuildID), log_slog.String("userID", m.User.ID), log_slog.String("channelID", channelID), log_slog.Any("err", err))
+			ms.logger.LogAttrs(context.Background(), log_slog.LevelError, "Failed to send role update notification", log_slog.String("guildID", e.GuildID.String()), log_slog.String("userID", e.User.ID.String()), log_slog.String("channelID", channelID), log_slog.Any("err", err))
 		} else {
-			ms.logger.LogAttrs(context.Background(), log_slog.LevelInfo, "Role update notification sent successfully", log_slog.String("guildID", m.GuildID), log_slog.String("userID", m.User.ID), log_slog.String("channelID", channelID))
-			ms.persistRoleSnapshotOrWarn(m.GuildID, m.User.ID, curRoles, "Failed to persist role snapshot after role update notification")
+			ms.logger.LogAttrs(context.Background(), log_slog.LevelInfo, "Role update notification sent successfully", log_slog.String("guildID", e.GuildID.String()), log_slog.String("userID", e.User.ID.String()), log_slog.String("channelID", channelID))
+			ms.persistRoleSnapshotOrWarn(e.GuildID.String(), e.User.ID.String(), curRoles, "Failed to persist role snapshot after role update notification")
 		}
 		return true
 	}
@@ -437,32 +459,33 @@ func (ms *MonitoringService) tryNotifyRoleUpdateFromAudit(m *discordgo.GuildMemb
 // sendFallbackRoleUpdateNotification sends the role-update notification derived purely from
 // the locally verified diff when no audit-log entry confirmed the change, persisting the
 // role snapshot on success.
-func (ms *MonitoringService) sendFallbackRoleUpdateNotification(m *discordgo.GuildMemberUpdate, channelID string, verifiedAdded, verifiedRemoved, curRoles []string) {
+func (ms *MonitoringService) sendFallbackRoleUpdateNotification(e *gateway.GuildMemberUpdateEvent, channelID string, verifiedAdded, verifiedRemoved, curRoles []string) {
 	if err := ms.sendRoleUpdateNotification(
+		e.GuildID.String(),
 		channelID,
-		m.User,
+		&e.User,
 		"",
 		buildRoleIDList(verifiedAdded),
 		buildRoleIDList(verifiedRemoved),
 		"Source: Role Diff",
 	); err != nil {
-		ms.logger.LogAttrs(context.Background(), log_slog.LevelError, "Failed to send fallback role update notification", log_slog.String("guildID", m.GuildID), log_slog.String("userID", m.User.ID), log_slog.String("channelID", channelID), log_slog.Any("err", err))
+		ms.logger.LogAttrs(context.Background(), log_slog.LevelError, "Failed to send fallback role update notification", log_slog.String("guildID", e.GuildID.String()), log_slog.String("userID", e.User.ID.String()), log_slog.String("channelID", channelID), log_slog.Any("err", err))
 		return
 	}
 
-	ms.logger.LogAttrs(context.Background(), log_slog.LevelInfo, "Fallback role update notification sent successfully", log_slog.String("guildID", m.GuildID), log_slog.String("userID", m.User.ID), log_slog.String("channelID", channelID))
-	ms.persistRoleSnapshotOrWarn(m.GuildID, m.User.ID, curRoles, "Failed to persist role snapshot after fallback role update notification")
+	ms.logger.LogAttrs(context.Background(), log_slog.LevelInfo, "Fallback role update notification sent successfully", log_slog.String("guildID", e.GuildID.String()), log_slog.String("userID", e.User.ID.String()), log_slog.String("channelID", channelID))
+	ms.persistRoleSnapshotOrWarn(e.GuildID.String(), e.User.ID.String(), curRoles, "Failed to persist role snapshot after fallback role update notification")
 }
 
 // handleUserUpdate processes user updates across all configured guilds.
-func (ms *MonitoringService) handleUserUpdate(s *discordgo.Session, m *discordgo.UserUpdate) {
-	if m == nil || m.User == nil {
+func (ms *MonitoringService) handleUserUpdate(e *gateway.UserUpdateEvent) {
+	if e == nil {
 		return
 	}
 
 	done := perf.StartGatewayEvent(
 		"user_update",
-		slog.String("userID", m.User.ID),
+		slog.String("userID", e.ID.String()),
 	)
 	defer done()
 
@@ -471,14 +494,16 @@ func (ms *MonitoringService) handleUserUpdate(s *discordgo.Session, m *discordgo
 		return
 	}
 	for _, gcfg := range cfg.Guilds {
-		var member *discordgo.Member
-		if m2, err := ms.getGuildMember(gcfg.GuildID, m.User.ID); err == nil {
-			member = m2
-		}
-		if member == nil || member.User == nil {
+		gID, err := discord.ParseSnowflake(gcfg.GuildID)
+		guildID := discord.GuildID(gID)
+		if err != nil {
 			continue
 		}
-		ms.checkAvatarChange(gcfg.GuildID, member.User.ID, member.User.Avatar, member.User.Username)
+		member, err := ms.arikawaState.Member(guildID, e.ID)
+		if err != nil {
+			continue
+		}
+		ms.checkAvatarChange(gcfg.GuildID, member.User.ID.String(), string(member.User.Avatar), member.User.Username)
 	}
 }
 
@@ -493,10 +518,14 @@ func (ms *MonitoringService) checkAvatarChange(guildID, userID, currentAvatar, u
 	}
 
 	changed := true
-	if ms.unifiedCache != nil {
-		if member, ok := ms.unifiedCache.GetMember(guildID, userID); ok {
-			if member.User != nil && member.User.Avatar == currentAvatar {
-				changed = false
+	if ms.arikawaState != nil {
+		gID, errG := discord.ParseSnowflake(guildID)
+		uID, errU := discord.ParseSnowflake(userID)
+		if errG == nil && errU == nil {
+			if member, err := ms.arikawaState.Member(discord.GuildID(gID), discord.UserID(uID)); err == nil {
+				if string(member.User.Avatar) == currentAvatar {
+					changed = false
+				}
 			}
 		}
 	}
@@ -566,46 +595,19 @@ func (aw *UserWatcher) ProcessChange(guildID, userID, currentAvatar, username st
 }
 
 func (aw *UserWatcher) getUsernameForNotification(guildID, userID string) string {
-	if aw.cache != nil {
-		if member, ok := aw.cache.GetMember(guildID, userID); ok {
-			if member.Nick != "" {
-				return member.Nick
-			}
-			if member.User != nil && member.User.Username != "" {
-				return member.User.Username
-			}
-		}
-	}
-
-	if aw.session != nil && aw.session.State != nil {
-		if m, _ := aw.session.State.Member(guildID, userID); m != nil {
-			if aw.cache != nil {
-				aw.cache.SetMember(guildID, userID, m)
-			}
-			if m.Nick != "" {
-				return m.Nick
-			}
-			if m.User != nil && m.User.Username != "" {
-				return m.User.Username
+	if aw.arikawaState != nil {
+		gID, errG := discord.ParseSnowflake(guildID)
+		uID, errU := discord.ParseSnowflake(userID)
+		if errG == nil && errU == nil {
+			if member, err := aw.arikawaState.Member(discord.GuildID(gID), discord.UserID(uID)); err == nil {
+				if member.Nick != "" {
+					return member.Nick
+				}
+				if member.User.Username != "" {
+					return member.User.Username
+				}
 			}
 		}
-	}
-
-	member, err := aw.session.GuildMember(guildID, userID)
-	if err != nil || member == nil {
-		aw.logger.LogAttrs(context.Background(), log_slog.LevelInfo, "Error getting member for username; using ID", log_slog.String("userID", userID), log_slog.String("guildID", guildID), log_slog.Any("err", err))
-		return userID
-	}
-
-	if aw.cache != nil {
-		aw.cache.SetMember(guildID, userID, member)
-	}
-
-	if member.Nick != "" {
-		return member.Nick
-	}
-	if member.User != nil && member.User.Username != "" {
-		return member.User.Username
 	}
 	return userID
 }

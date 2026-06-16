@@ -21,6 +21,9 @@ const unifiedCachePersistTimeout = 30 * time.Second
 // UnifiedCache holds segmented Discord entity caches (members, guilds, roles, channels)
 // to reduce API calls and improve performance. It includes TTL-based expiration, LRU eviction,
 // and optional Postgres-backed persistence.
+// TODO(arikawa-migration): Reconsider the necessity of this discordgo-based UnifiedCache
+// once the transition to Arikawa is 100% complete in the near future. The Arikawa Cabinet
+// native state manager may render this redundant.
 type UnifiedCache struct {
 	// Member cache segment: guildID:userID -> *discordgo.Member
 	members *Segment[*discordgo.Member]

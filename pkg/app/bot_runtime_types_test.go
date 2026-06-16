@@ -19,8 +19,8 @@ func TestBotRuntimeResolver_AggregateCachesAndMetrics(t *testing.T) {
 	mockConfigManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	mockStore := storagetest.NewFailingStore()
 
-	ms1, _ := monitoring.NewMonitoringServiceForBotWithMetrics(mockSession, mockConfigManager, mockStore, "bot1", &monitoring.InMemoryMetrics{}, log.ApplicationLogger())
-	ms2, _ := monitoring.NewMonitoringServiceForBotWithMetrics(mockSession, mockConfigManager, mockStore, "bot2", &monitoring.InMemoryMetrics{}, log.ApplicationLogger())
+	ms1, _ := monitoring.NewMonitoringServiceForBotWithMetrics(mockSession, nil, nil, mockConfigManager, mockStore, "bot1", &monitoring.InMemoryMetrics{}, log.ApplicationLogger())
+	ms2, _ := monitoring.NewMonitoringServiceForBotWithMetrics(mockSession, nil, nil, mockConfigManager, mockStore, "bot2", &monitoring.InMemoryMetrics{}, log.ApplicationLogger())
 
 	runtimes["bot1"] = &botRuntime{
 		monitoringService: ms1,

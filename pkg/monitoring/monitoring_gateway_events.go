@@ -6,9 +6,10 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordgo"
 )
 
 // setupEventHandlers registra handlers do Discord.
@@ -26,26 +27,26 @@ func (ms *MonitoringService) setupEventHandlersFromRuntimeConfig(rc files.Runtim
 	state := ms.workloadState(rc)
 
 	if state.presenceHandler {
-		ms.eventHandlers = append(ms.eventHandlers, ms.session.AddHandler(ms.handlePresenceUpdate))
+		ms.eventHandlers = append(ms.eventHandlers, ms.arikawaState.AddHandler(ms.handlePresenceUpdate))
 	}
 	if state.memberUpdateHandler {
-		ms.eventHandlers = append(ms.eventHandlers, ms.session.AddHandler(ms.handleMemberUpdate))
+		ms.eventHandlers = append(ms.eventHandlers, ms.arikawaState.AddHandler(ms.handleMemberUpdate))
 	}
 
 	if state.userUpdateHandler {
-		ms.eventHandlers = append(ms.eventHandlers, ms.session.AddHandler(ms.handleUserUpdate))
+		ms.eventHandlers = append(ms.eventHandlers, ms.arikawaState.AddHandler(ms.handleUserUpdate))
 	}
 	ms.eventHandlers = append(ms.eventHandlers,
-		ms.session.AddHandler(ms.handleGuildCreate),
-		ms.session.AddHandler(ms.handleGuildUpdate),
+		ms.arikawaState.AddHandler(ms.handleGuildCreate),
+		ms.arikawaState.AddHandler(ms.handleGuildUpdate),
 	)
 	if !state.presenceHandler && !state.memberUpdateHandler && !state.userUpdateHandler {
 		ms.logger.LogAttrs(context.Background(), slog.LevelInfo, "🛑 User and presence handlers are disabled by effective runtime/features")
 	}
 	if state.botPermMirrorHandlers {
 		ms.eventHandlers = append(ms.eventHandlers,
-			ms.session.AddHandler(ms.handleRoleUpdateForBotPermMirroring),
-			ms.session.AddHandler(ms.handleRoleCreateForBotPermMirroring),
+			ms.arikawaState.AddHandler(ms.handleRoleUpdateForBotPermMirroring),
+			ms.arikawaState.AddHandler(ms.handleRoleCreateForBotPermMirroring),
 		)
 	}
 }
@@ -81,11 +82,11 @@ func (ms *MonitoringService) ensureGuildsListed() {
 	}
 }
 
-func (ms *MonitoringService) handleGuildCreate(s *discordgo.Session, e *discordgo.GuildCreate) {
+func (ms *MonitoringService) handleGuildCreate(e *gateway.GuildCreateEvent) {
 	if e == nil {
 		return
 	}
-	guildID := e.ID
+	guildID := e.ID.String()
 	if guildID == "" {
 		return
 	}
@@ -107,38 +108,40 @@ func (ms *MonitoringService) handleGuildCreate(s *discordgo.Session, e *discordg
 }
 
 // handleGuildUpdate updates the OwnerID cache when the server ownership changes.
-func (ms *MonitoringService) handleGuildUpdate(s *discordgo.Session, e *discordgo.GuildUpdate) {
-	if e == nil || e.Guild == nil || e.Guild.ID == "" {
+func (ms *MonitoringService) handleGuildUpdate(e *gateway.GuildUpdateEvent) {
+	if e == nil || e.ID == 0 {
 		return
 	}
-	if !ms.handlesGuild(e.Guild.ID) {
+	guildID := e.ID.String()
+	if !ms.handlesGuild(guildID) {
 		return
 	}
 
 	done := perf.StartGatewayEvent(
 		"guild_update",
-		slog.String("guildID", e.Guild.ID),
+		slog.String("guildID", guildID),
 	)
 	defer done()
 
+	ownerID := e.OwnerID.String()
 	if ms.store != nil {
-		prev, ok, err := ms.store.GetGuildOwnerID(e.Guild.ID)
+		prev, ok, err := ms.store.GetGuildOwnerID(guildID)
 		if err != nil {
 			ms.logger.LogAttrs(context.Background(), slog.LevelError,
 				"Failed to read guild owner cache during guild update",
 				slog.String("operation", "monitoring.handle_guild_update.get_owner"),
-				slog.String("guildID", e.Guild.ID),
+				slog.String("guildID", guildID),
 				slog.Any("err", err),
 			)
-		} else if ok && prev != e.Guild.OwnerID {
-			ms.logger.LogAttrs(context.Background(), slog.LevelInfo, "Guild owner changed", slog.String("guildID", e.Guild.ID), slog.String("from", prev), slog.String("to", e.Guild.OwnerID))
+		} else if ok && prev != ownerID {
+			ms.logger.LogAttrs(context.Background(), slog.LevelInfo, "Guild owner changed", slog.String("guildID", guildID), slog.String("from", prev), slog.String("to", ownerID))
 		}
-		if err := ms.store.SetGuildOwnerID(e.Guild.ID, e.Guild.OwnerID); err != nil {
+		if err := ms.store.SetGuildOwnerID(guildID, ownerID); err != nil {
 			ms.logger.LogAttrs(context.Background(), slog.LevelError,
 				"Failed to persist guild owner cache during guild update",
 				slog.String("operation", "monitoring.handle_guild_update.set_owner"),
-				slog.String("guildID", e.Guild.ID),
-				slog.String("ownerID", e.Guild.OwnerID),
+				slog.String("guildID", guildID),
+				slog.String("ownerID", ownerID),
 				slog.Any("err", err),
 			)
 		}
@@ -146,46 +149,48 @@ func (ms *MonitoringService) handleGuildUpdate(s *discordgo.Session, e *discordg
 }
 
 // handlePresenceUpdate processes presence updates (includes avatar).
-func (ms *MonitoringService) handlePresenceUpdate(s *discordgo.Session, m *discordgo.PresenceUpdate) {
-	if m.User == nil {
+func (ms *MonitoringService) handlePresenceUpdate(e *gateway.PresenceUpdateEvent) {
+	if e == nil {
 		return
 	}
-	if !ms.handlesGuild(m.GuildID) {
+	guildID := e.GuildID.String()
+	if !ms.handlesGuild(guildID) {
 		return
 	}
-	if !ms.isFeatureBot(m.GuildID, "moderation") {
+	if !ms.isFeatureBot(guildID, "moderation") {
 		return
 	}
-	if m.User.Username == "" {
-		ms.logger.LogAttrs(context.Background(), slog.LevelDebug, "PresenceUpdate ignored (empty username)", slog.String("userID", m.User.ID), slog.String("guildID", m.GuildID))
-		ms.handlePresenceWatch(m)
+	if e.User.Username == "" {
+		ms.logger.LogAttrs(context.Background(), slog.LevelDebug, "PresenceUpdate ignored (empty username)", slog.String("userID", e.User.ID.String()), slog.String("guildID", guildID))
+		ms.handlePresenceWatch(e)
 		return
 	}
 
 	done := perf.StartGatewayEvent(
 		"presence_update",
-		slog.String("guildID", m.GuildID),
-		slog.String("userID", m.User.ID),
+		slog.String("guildID", guildID),
+		slog.String("userID", e.User.ID.String()),
 	)
 	defer done()
 
 	if runCtx := ms.currentRunCtx(); runCtx != nil {
 		ms.markEvent(runCtx)
 	}
-	ms.checkAvatarChange(m.GuildID, m.User.ID, m.User.Avatar, m.User.Username)
-	ms.handlePresenceWatch(m)
+	ms.checkAvatarChange(guildID, e.User.ID.String(), string(e.User.Avatar), e.User.Username)
+	ms.handlePresenceWatch(e)
 }
 
-func (ms *MonitoringService) handlePresenceWatch(m *discordgo.PresenceUpdate) {
-	if m == nil || m.User == nil || ms.configManager == nil {
+func (ms *MonitoringService) handlePresenceWatch(e *gateway.PresenceUpdateEvent) {
+	if e == nil || ms.configManager == nil {
 		return
 	}
+	guildID := e.GuildID.String()
 	cfg := ms.scopedConfig()
 	if cfg == nil {
 		return
 	}
-	rc := cfg.ResolveRuntimeConfig(m.GuildID)
-	features := cfg.ResolveFeatures(m.GuildID)
+	rc := cfg.ResolveRuntimeConfig(guildID)
+	features := cfg.ResolveFeatures(guildID)
 	watchUserID := strings.TrimSpace(rc.PresenceWatchUserID)
 	watchBot := rc.PresenceWatchBot
 	if !features.PresenceWatch.User {
@@ -198,14 +203,16 @@ func (ms *MonitoringService) handlePresenceWatch(m *discordgo.PresenceUpdate) {
 		return
 	}
 
-	userID := strings.TrimSpace(m.User.ID)
+	userID := e.User.ID.String()
 	if userID == "" {
 		return
 	}
 
 	botID := ""
-	if ms.session != nil && ms.session.State != nil && ms.session.State.User != nil {
-		botID = ms.session.State.User.ID
+	if ms.arikawaState != nil {
+		if me, err := ms.arikawaState.Me(); err == nil {
+			botID = me.ID.String()
+		}
 	}
 	isBotTarget := watchBot && botID != "" && userID == botID
 	isUserTarget := watchUserID != "" && userID == watchUserID
@@ -214,8 +221,8 @@ func (ms *MonitoringService) handlePresenceWatch(m *discordgo.PresenceUpdate) {
 	}
 
 	snap := presenceSnapshot{
-		Status:       normalizeStatus(m.Status),
-		ClientStatus: normalizeClientStatus(m.ClientStatus),
+		Status:       normalizeStatus(string(e.Status)),
+		ClientStatus: normalizeClientStatusArikawa(e.ClientStatus),
 	}
 
 	prev, hasPrev, changed := ms.presence.observe(userID, snap)
@@ -234,7 +241,7 @@ func (ms *MonitoringService) handlePresenceWatch(m *discordgo.PresenceUpdate) {
 
 	deviceChanges := deviceStatusChanges(prev.ClientStatus, snap.ClientStatus)
 
-	username := strings.TrimSpace(m.User.Username)
+	username := strings.TrimSpace(e.User.Username)
 	if username == "" {
 		username = userID
 	}
@@ -251,8 +258,8 @@ func (ms *MonitoringService) handlePresenceWatch(m *discordgo.PresenceUpdate) {
 		slog.String("status", presenceStatusLabel(snap.Status, snap.ClientStatus)),
 		slog.String("devices", clientStatusSummary(snap.ClientStatus)),
 	}
-	if m.GuildID != "" {
-		fields = append(fields, slog.String("guildID", m.GuildID))
+	if guildID != "" {
+		fields = append(fields, slog.String("guildID", guildID))
 	}
 	if statusChange != "" {
 		fields = append(fields, slog.String("status_change", statusChange))
@@ -271,53 +278,67 @@ func presenceSnapshotEqual(a, b presenceSnapshot) bool {
 	return clientStatusEqual(a.ClientStatus, b.ClientStatus)
 }
 
-func normalizeStatus(status discordgo.Status) discordgo.Status {
-	if strings.TrimSpace(string(status)) == "" {
-		return discordgo.StatusOffline
+func normalizeStatus(status string) string {
+	if strings.TrimSpace(status) == "" {
+		return "offline"
 	}
 	return status
 }
 
-func normalizeClientStatus(cs discordgo.ClientStatus) discordgo.ClientStatus {
+type clientStatus struct {
+	Desktop string
+	Mobile  string
+	Web     string
+}
+
+func normalizeClientStatusArikawa(cs discord.ClientStatus) clientStatus {
+	return clientStatus{
+		Desktop: normalizeStatus(string(cs.Desktop)),
+		Mobile:  normalizeStatus(string(cs.Mobile)),
+		Web:     normalizeStatus(string(cs.Web)),
+	}
+}
+
+func normalizeClientStatus(cs clientStatus) clientStatus {
 	cs.Desktop = normalizeStatus(cs.Desktop)
 	cs.Mobile = normalizeStatus(cs.Mobile)
 	cs.Web = normalizeStatus(cs.Web)
 	return cs
 }
 
-func clientStatusEqual(a, b discordgo.ClientStatus) bool {
+func clientStatusEqual(a, b clientStatus) bool {
 	a = normalizeClientStatus(a)
 	b = normalizeClientStatus(b)
 	return a.Desktop == b.Desktop && a.Mobile == b.Mobile && a.Web == b.Web
 }
 
-func isActiveStatus(status discordgo.Status) bool {
+func isActiveStatus(status string) bool {
 	switch normalizeStatus(status) {
-	case discordgo.StatusOnline, discordgo.StatusIdle, discordgo.StatusDoNotDisturb:
+	case "online", "idle", "dnd":
 		return true
 	default:
 		return false
 	}
 }
 
-func statusDisplay(status discordgo.Status) string {
+func statusDisplay(status string) string {
 	switch normalizeStatus(status) {
-	case discordgo.StatusOnline:
+	case "online":
 		return "online"
-	case discordgo.StatusIdle:
+	case "idle":
 		return "idle (away)"
-	case discordgo.StatusDoNotDisturb:
+	case "dnd":
 		return "dnd"
-	case discordgo.StatusInvisible:
+	case "invisible":
 		return "invisible"
-	case discordgo.StatusOffline:
+	case "offline":
 		return "offline"
 	default:
-		return string(status)
+		return status
 	}
 }
 
-func presenceStatusLabel(status discordgo.Status, client discordgo.ClientStatus) string {
+func presenceStatusLabel(status string, client clientStatus) string {
 	label := statusDisplay(status)
 	if isActiveStatus(client.Mobile) {
 		label += " (mobile)"
@@ -325,16 +346,16 @@ func presenceStatusLabel(status discordgo.Status, client discordgo.ClientStatus)
 	return label
 }
 
-func clientStatusSummary(cs discordgo.ClientStatus) string {
+func clientStatusSummary(cs clientStatus) string {
 	cs = normalizeClientStatus(cs)
 	return fmt.Sprintf("desktop=%s mobile=%s web=%s", statusDisplay(cs.Desktop), statusDisplay(cs.Mobile), statusDisplay(cs.Web))
 }
 
-func deviceStatusChanges(prev, cur discordgo.ClientStatus) []string {
+func deviceStatusChanges(prev, cur clientStatus) []string {
 	prev = normalizeClientStatus(prev)
 	cur = normalizeClientStatus(cur)
 	changes := []string{}
-	addChange := func(label string, prevStatus, curStatus discordgo.Status) {
+	addChange := func(label string, prevStatus, curStatus string) {
 		prevActive := isActiveStatus(prevStatus)
 		curActive := isActiveStatus(curStatus)
 		if prevActive != curActive {
