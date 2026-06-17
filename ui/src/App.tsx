@@ -6,6 +6,7 @@ import { Toaster } from "react-hot-toast";
 import { ErrorBoundary } from "react-error-boundary";
 import { AppRoutes } from "./app/AppRoutes";
 import { DashboardSessionProvider } from "./context/DashboardSessionContext";
+import { UserPreferencesProvider } from "./context/UserPreferencesContext";
 import { ErrorFallback } from "./components/ui/ErrorFallback/ErrorFallback";
 import { logger } from "./lib/logger";
 import { initPerformanceTelemetry } from "./lib/telemetry";
@@ -52,8 +53,10 @@ export default function App() {
       <PersistQueryClientProvider client={queryClient} persistOptions={{ persister }}>
         <BrowserRouter>
           <DashboardSessionProvider>
-            <AppRoutes />
-            <Toaster position="bottom-right" />
+            <UserPreferencesProvider>
+              <AppRoutes />
+              <Toaster position="bottom-right" />
+            </UserPreferencesProvider>
           </DashboardSessionProvider>
         </BrowserRouter>
       </PersistQueryClientProvider>
