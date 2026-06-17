@@ -71,30 +71,20 @@ type FeatureSafetyToggles struct {
 	BotRolePermMirror *bool `json:"bot_role_perm_mirror,omitempty"`
 }
 
-// FeatureBackfillToggles controls the historical backfill subsystem. A nil
-// Enabled leaves backfill at its default.
-type FeatureBackfillToggles struct {
-	Enabled *bool `json:"enabled,omitempty"`
-}
-
 // FeatureToggles is the per-guild override surface for optional behavior,
 // grouped by domain. Pointer fields are tri-state: nil means inherit the
 // default, while a non-nil value forces the feature on or off. Resolve to
 // concrete booleans via ResolvedFeatureToggles.
 type FeatureToggles struct {
-	Services       FeatureServiceToggles       `json:"services,omitempty"`
-	Logging        FeatureLoggingToggles       `json:"logging,omitempty"`
-	Moderation     FeatureModerationToggles    `json:"moderation,omitempty"`
-	MessageCache   FeatureMessageCacheToggles  `json:"message_cache,omitempty"`
-	PresenceWatch  FeaturePresenceWatchToggles `json:"presence_watch,omitempty"`
-	Maintenance    FeatureMaintenanceToggles   `json:"maintenance,omitempty"`
-	Safety         FeatureSafetyToggles        `json:"safety,omitempty"`
-	Backfill       FeatureBackfillToggles      `json:"backfill,omitempty"`
-	MuteRole       *bool                       `json:"mute_role,omitempty"`
-	StatsChannels  *bool                       `json:"stats_channels,omitempty"`
-	AutoRoleAssign *bool                       `json:"auto_role_assignment,omitempty"`
-	UserPrune      *bool                       `json:"user_prune,omitempty"`
-	RolePanels     *bool                       `json:"role_panels,omitempty"`
+	Services      FeatureServiceToggles       `json:"services,omitempty"`
+	Logging       FeatureLoggingToggles       `json:"logging,omitempty"`
+	Moderation    FeatureModerationToggles    `json:"moderation,omitempty"`
+	MessageCache  FeatureMessageCacheToggles  `json:"message_cache,omitempty"`
+	PresenceWatch FeaturePresenceWatchToggles `json:"presence_watch,omitempty"`
+	Maintenance   FeatureMaintenanceToggles   `json:"maintenance,omitempty"`
+	Safety        FeatureSafetyToggles        `json:"safety,omitempty"`
+	MuteRole      *bool                       `json:"mute_role,omitempty"`
+	RolePanels    *bool                       `json:"role_panels,omitempty"`
 }
 
 // UnmarshalJSON unmarshals json.
@@ -154,14 +144,8 @@ type ResolvedFeatureToggles struct {
 	Safety struct {
 		BotRolePermMirror bool
 	}
-	Backfill struct {
-		Enabled bool
-	}
-	MuteRole       bool
-	StatsChannels  bool
-	AutoRoleAssign bool
-	UserPrune      bool
-	RolePanels     bool
+	MuteRole   bool
+	RolePanels bool
 }
 
 func boolPtr(v bool) *bool {

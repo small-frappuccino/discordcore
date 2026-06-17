@@ -746,7 +746,7 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 
 		srv, cm := newControlTestServer(t)
 		_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
-			cfg.Guilds[0].Features.StatsChannels = testBoolPtr(true)
+
 			cfg.Guilds[0].Stats.Channels = []files.StatsChannelConfig{
 				{
 					ChannelID:    "stats-total",
@@ -801,7 +801,7 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 
 		srv, cm := newControlTestServer(t)
 		_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
-			cfg.Guilds[0].Features.AutoRoleAssign = testBoolPtr(true)
+
 			cfg.Guilds[0].Roles.AutoAssignment.Enabled = true
 			cfg.Guilds[0].Roles.AutoAssignment.TargetRoleID = "target-role"
 			cfg.Guilds[0].Roles.AutoAssignment.RequiredRoles = []string{"level-role", "booster-role"}

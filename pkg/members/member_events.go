@@ -198,10 +198,9 @@ func (mes *MemberEventService) handleGuildMemberAdd(ctx context.Context, m *gate
 	if guildConfig == nil {
 		return
 	}
-	features := cfg.ResolveFeatures(m.GuildID.String())
 
 	// Composite automatic role assignment (per-guild config).
-	if mes.arikawaState != nil && features.AutoRoleAssign && guildConfig.Roles.AutoAssignment.Enabled {
+	if mes.arikawaState != nil && guildConfig.Roles.AutoAssignment.Enabled {
 		targetRoleID := guildConfig.Roles.AutoAssignment.TargetRoleID
 		required := guildConfig.Roles.AutoAssignment.RequiredRoles
 		if targetRoleID != "" && len(required) >= 2 {
@@ -355,9 +354,6 @@ func (mes *MemberEventService) handleGuildMemberUpdate(ctx context.Context, m *g
 	}
 	guildConfig := mes.configManager.GuildConfig(m.GuildID.String())
 	if guildConfig == nil || !guildConfig.Roles.AutoAssignment.Enabled {
-		return
-	}
-	if !cfg.ResolveFeatures(m.GuildID.String()).AutoRoleAssign {
 		return
 	}
 

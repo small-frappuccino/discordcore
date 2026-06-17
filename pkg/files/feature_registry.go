@@ -227,13 +227,7 @@ var featureRegistry = []toggleSpec{
 		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.Safety.BotRolePermMirror },
 		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Safety.BotRolePermMirror = val },
 	},
-	{
-		ID: "backfill.enabled", Default: true,
-		Get:         func(ft *FeatureToggles) *bool { return ft.Backfill.Enabled },
-		Set:         func(ft *FeatureToggles, val *bool) { ft.Backfill.Enabled = cloneBoolPtr(val) },
-		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.Backfill.Enabled },
-		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Backfill.Enabled = val },
-	},
+
 	{
 		ID: "moderation.mute_role", Default: true,
 		Get:         func(ft *FeatureToggles) *bool { return ft.MuteRole },
@@ -241,27 +235,7 @@ var featureRegistry = []toggleSpec{
 		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.MuteRole },
 		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.MuteRole = val },
 	},
-	{
-		ID: "stats_channels", Default: true,
-		Get:         func(ft *FeatureToggles) *bool { return ft.StatsChannels },
-		Set:         func(ft *FeatureToggles, val *bool) { ft.StatsChannels = cloneBoolPtr(val) },
-		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.StatsChannels },
-		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.StatsChannels = val },
-	},
-	{
-		ID: "auto_role_assignment", Default: true,
-		Get:         func(ft *FeatureToggles) *bool { return ft.AutoRoleAssign },
-		Set:         func(ft *FeatureToggles, val *bool) { ft.AutoRoleAssign = cloneBoolPtr(val) },
-		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.AutoRoleAssign },
-		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.AutoRoleAssign = val },
-	},
-	{
-		ID: "user_prune", Default: true,
-		Get:         func(ft *FeatureToggles) *bool { return ft.UserPrune },
-		Set:         func(ft *FeatureToggles, val *bool) { ft.UserPrune = cloneBoolPtr(val) },
-		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.UserPrune },
-		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.UserPrune = val },
-	},
+
 	{
 		ID: "role_panels", Default: true,
 		Get:         func(ft *FeatureToggles) *bool { return ft.RolePanels },

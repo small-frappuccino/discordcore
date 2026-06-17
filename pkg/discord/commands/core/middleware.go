@@ -173,6 +173,9 @@ func respondToSlashError(ctx *Context, err error) {
 		if cmdErr.Ephemeral {
 			builder = builder.Ephemeral()
 		}
+		if len(cmdErr.Components) > 0 {
+			builder = builder.WithComponents(cmdErr.Components...)
+		}
 		builder.Error(ctx.Interaction, cmdErr.Message)
 		return
 	}

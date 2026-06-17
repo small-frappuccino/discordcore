@@ -48,7 +48,7 @@ func (c *massBanCommand) DefaultMemberPermissions() int64 { return discordgo.Per
 // Handle handles.
 func (c *massBanCommand) Handle(ctx *core.Context) error {
 	if enabled, _ := ctx.Config.Config().ResolveFeatures(ctx.GuildID).Lookup("moderation.massban"); !enabled {
-		return &core.CommandError{Message: "Mass ban command is disabled for this server.", Ephemeral: true}
+		return core.NewMissingConfigError(ctx.GuildID, "Moderation Mass Ban", "/moderation")
 	}
 	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 

@@ -457,7 +457,7 @@ func resolveConfiguredMuteRole(ctx *core.Context, actionCtx *banContext) (*disco
 		}
 	}
 	if roleID == "" {
-		return nil, "", &core.CommandError{Message: "Mute role is not configured for this server.", Ephemeral: true}
+		return nil, "", core.NewMissingConfigError(ctx.GuildID, "Mute Role", "/roles")
 	}
 	if actionCtx == nil {
 		return nil, roleID, &core.CommandError{Message: "Mute role context is not available right now.", Ephemeral: true}

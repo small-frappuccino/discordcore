@@ -15,10 +15,8 @@ func TestStatsAddPersistsChannelConfig(t *testing.T) {
 	)
 
 	router, cm, mockSvc, rec := newStatsCommandTestRouter(t, guildID, ownerID, files.GuildConfig{
-		GuildID: guildID,
-		Features: files.FeatureToggles{
-			StatsChannels: testBoolPtr(true),
-		},
+		GuildID:  guildID,
+		Features: files.FeatureToggles{},
 	})
 
 	handleRawStatsInteraction(t, router, cm, rec, newStatsSlashInteraction(guildID, ownerID, "add", []discord.CommandInteractionOption{
@@ -53,10 +51,8 @@ func TestStatsAddUpdatesExistingChannelConfig(t *testing.T) {
 	)
 
 	router, cm, _, rec := newStatsCommandTestRouter(t, guildID, ownerID, files.GuildConfig{
-		GuildID: guildID,
-		Features: files.FeatureToggles{
-			StatsChannels: testBoolPtr(true),
-		},
+		GuildID:  guildID,
+		Features: files.FeatureToggles{},
 		Stats: files.StatsConfig{
 			Channels: []files.StatsChannelConfig{
 				{ChannelID: "111111111", MemberType: "all", NameTemplate: "Old: {count}"},
@@ -89,10 +85,8 @@ func TestStatsAddWithRoleFilter(t *testing.T) {
 	)
 
 	router, cm, _, rec := newStatsCommandTestRouter(t, guildID, ownerID, files.GuildConfig{
-		GuildID: guildID,
-		Features: files.FeatureToggles{
-			StatsChannels: testBoolPtr(true),
-		},
+		GuildID:  guildID,
+		Features: files.FeatureToggles{},
 	})
 
 	handleRawStatsInteraction(t, router, cm, rec, newStatsSlashInteraction(guildID, ownerID, "add", []discord.CommandInteractionOption{
@@ -119,10 +113,8 @@ func TestStatsRemoveDeletesChannelConfig(t *testing.T) {
 	)
 
 	router, cm, mockSvc, rec := newStatsCommandTestRouter(t, guildID, ownerID, files.GuildConfig{
-		GuildID: guildID,
-		Features: files.FeatureToggles{
-			StatsChannels: testBoolPtr(true),
-		},
+		GuildID:  guildID,
+		Features: files.FeatureToggles{},
 		Stats: files.StatsConfig{
 			Channels: []files.StatsChannelConfig{
 				{ChannelID: "111111111", MemberType: "all"},
@@ -161,10 +153,8 @@ func TestStatsRemoveReportsErrorForUnknownChannel(t *testing.T) {
 	)
 
 	router, cm, _, rec := newStatsCommandTestRouter(t, guildID, ownerID, files.GuildConfig{
-		GuildID: guildID,
-		Features: files.FeatureToggles{
-			StatsChannels: testBoolPtr(true),
-		},
+		GuildID:  guildID,
+		Features: files.FeatureToggles{},
 	})
 
 	handleRawStatsInteraction(t, router, cm, rec, newStatsSlashInteraction(guildID, ownerID, "remove", []discord.CommandInteractionOption{
@@ -173,8 +163,8 @@ func TestStatsRemoveReportsErrorForUnknownChannel(t *testing.T) {
 
 	resp := rec.lastResponse(t)
 	requireEphemeralResponse(t, resp)
-	if !strings.Contains(resp.Data.Content.Val, "disabled") {
-		t.Fatalf("expected not-configured error, got %q", resp.Data.Content.Val)
+	if !strings.Contains(resp.Data.Content.Val, "configured") {
+		t.Fatalf("expected configured error, got %q", resp.Data.Content.Val)
 	}
 }
 
@@ -185,10 +175,8 @@ func TestStatsListShowsConfiguredChannels(t *testing.T) {
 	)
 
 	router, cm, _, rec := newStatsCommandTestRouter(t, guildID, ownerID, files.GuildConfig{
-		GuildID: guildID,
-		Features: files.FeatureToggles{
-			StatsChannels: testBoolPtr(true),
-		},
+		GuildID:  guildID,
+		Features: files.FeatureToggles{},
 		Stats: files.StatsConfig{
 			Channels: []files.StatsChannelConfig{
 				{ChannelID: "voice-total", MemberType: "all", Label: "Total: "},
@@ -225,21 +213,16 @@ func TestStatsListShowsEmptyStateWhenNoChannels(t *testing.T) {
 	)
 
 	router, cm, _, rec := newStatsCommandTestRouter(t, guildID, ownerID, files.GuildConfig{
-		GuildID: guildID,
-		Features: files.FeatureToggles{
-			StatsChannels: testBoolPtr(true),
-		},
+		GuildID:  guildID,
+		Features: files.FeatureToggles{},
 	})
 
 	handleRawStatsInteraction(t, router, cm, rec, newStatsSlashInteraction(guildID, ownerID, "list", nil))
 
 	resp := rec.lastResponse(t)
-	requireNonEphemeralResponse(t, resp)
-	if resp.Data.Embeds == nil || len(*resp.Data.Embeds) == 0 {
-		t.Fatalf("expected embed")
-	}
-	if !strings.Contains((*resp.Data.Embeds)[0].Description, "disabled") {
-		t.Fatalf("expected disabled message")
+	requireEphemeralResponse(t, resp)
+	if resp.Data.Content.Val == "" || !strings.Contains(resp.Data.Content.Val, "configured") {
+		t.Fatalf("expected missing config message")
 	}
 }
 
@@ -250,10 +233,8 @@ func TestStatsListShowsRoleFilter(t *testing.T) {
 	)
 
 	router, cm, _, rec := newStatsCommandTestRouter(t, guildID, ownerID, files.GuildConfig{
-		GuildID: guildID,
-		Features: files.FeatureToggles{
-			StatsChannels: testBoolPtr(true),
-		},
+		GuildID:  guildID,
+		Features: files.FeatureToggles{},
 		Stats: files.StatsConfig{
 			Channels: []files.StatsChannelConfig{
 				{ChannelID: "voice-vip", MemberType: "all", RoleID: "333333333"},

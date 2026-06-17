@@ -337,7 +337,7 @@ func (ms *MonitoringService) collectBackfillTargets(cfg *files.BotConfig) []back
 		targets = append(targets, backfillTarget{
 			ChannelID:      strings.TrimSpace(globalRC.BackfillChannelID),
 			RC:             globalRC,
-			FeatureEnabled: cfg.ResolveFeatures("").Backfill.Enabled,
+			FeatureEnabled: true,
 		})
 	}
 
@@ -349,7 +349,7 @@ func (ms *MonitoringService) collectBackfillTargets(cfg *files.BotConfig) []back
 		targets = append(targets, backfillTarget{
 			ChannelID:      cid,
 			RC:             cfg.ResolveRuntimeConfig(g.GuildID),
-			FeatureEnabled: cfg.ResolveFeatures(g.GuildID).Backfill.Enabled,
+			FeatureEnabled: true,
 		})
 	}
 

@@ -52,12 +52,7 @@ func TestNewMinimalGuildConfigDisablesAllFeatures(t *testing.T) {
 		resolved.PresenceWatch.Bot ||
 		resolved.PresenceWatch.User ||
 		resolved.Maintenance.DBCleanup ||
-		resolved.Safety.BotRolePermMirror ||
-		resolved.Backfill.Enabled ||
-		resolved.MuteRole ||
-		resolved.StatsChannels ||
-		resolved.AutoRoleAssign ||
-		resolved.UserPrune {
+		resolved.Safety.BotRolePermMirror {
 		t.Fatalf("expected all resolved feature defaults to be disabled, got %+v", resolved)
 	}
 }

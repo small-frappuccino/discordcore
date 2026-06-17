@@ -198,10 +198,7 @@ func (c *statsRootCommand) handleAdd(ctx *core.ArikawaContext, opts []discord.Co
 func (c *statsRootCommand) handleRemove(ctx *core.ArikawaContext, opts []discord.CommandInteractionOption) error {
 	cfg := ctx.GuildConfig
 	if len(cfg.Stats.Channels) == 0 {
-		_ = ctx.Respond(api.InteractionResponseData{
-			Content: option.NewNullableString("Stats channels feature is currently disabled for this server."),
-			Flags:   discord.EphemeralMessage,
-		})
+		_ = ctx.Respond(core.NewArikawaMissingConfigErrorData(ctx.GuildID.String(), "Stats Channels", "/stats"))
 		return core.ErrAlreadyAcknowledged
 	}
 
@@ -255,14 +252,7 @@ func (c *statsRootCommand) handleRemove(ctx *core.ArikawaContext, opts []discord
 func (c *statsRootCommand) handleList(ctx *core.ArikawaContext) error {
 	cfg := ctx.GuildConfig
 	if len(cfg.Stats.Channels) == 0 {
-		embed := discord.Embed{
-			Title:       "Stats Channels",
-			Description: "Stats channels feature is currently disabled for this server.",
-			Color:       0x5865F2,
-		}
-		return ctx.Respond(api.InteractionResponseData{
-			Embeds: &[]discord.Embed{embed},
-		})
+		return ctx.Respond(core.NewArikawaMissingConfigErrorData(ctx.GuildID.String(), "Stats Channels", "/stats"))
 	}
 
 	var buf strings.Builder

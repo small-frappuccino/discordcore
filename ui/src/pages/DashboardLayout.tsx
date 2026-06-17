@@ -14,6 +14,7 @@ import { RolesIcon } from "../components/icons/RolesIcon";
 import { PartnersIcon } from "../components/icons/PartnersIcon";
 import { EmbedsIcon } from "../components/icons/EmbedsIcon";
 import { TicketsIcon } from "../components/icons/TicketsIcon";
+import { LoggingIcon } from "../components/icons/LoggingIcon";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { guildFeatureQueryKey } from "../api/hooks/useGuildFeatures";
@@ -36,6 +37,7 @@ const navigation: NavItem[] = [
   { id: "roles", label: "Roles", to: "/roles", icon: RolesIcon },
   { id: "partners", label: "Partners", to: "/partners", icon: PartnersIcon },
   { id: "embeds", label: "Embeds", to: "/embeds", icon: EmbedsIcon },
+  { id: "logging", label: "Logging", to: "/logging", icon: LoggingIcon },
   { id: "tickets", label: "Tickets", to: "/tickets", icon: TicketsIcon },
 ];
 

@@ -74,7 +74,7 @@ func resolveBotRuntimeCapabilities(
 			}
 		}
 
-		if features.UserPrune && guild.UserPrune.Enabled {
+		if guild.UserPrune.Enabled {
 			resolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation")
 			if resolvedID == botInstanceID {
 				capabilities.userPrune = true
@@ -203,13 +203,13 @@ func botRuntimeNeedsMemberData(
 		return true
 	}
 
-	if features.AutoRoleAssign && guild.Roles.AutoAssignment.Enabled {
+	if guild.Roles.AutoAssignment.Enabled {
 		return true
 	}
-	if features.StatsChannels && len(guild.Stats.Channels) > 0 {
+	if len(guild.Stats.Channels) > 0 {
 		return true
 	}
-	return features.Backfill.Enabled && strings.TrimSpace(runtimeConfig.BackfillChannelID) != ""
+	return strings.TrimSpace(runtimeConfig.BackfillChannelID) != ""
 }
 
 func botRuntimeNeedsBotPermMirror(runtimeConfig files.RuntimeConfig) bool {

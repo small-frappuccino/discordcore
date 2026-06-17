@@ -119,7 +119,6 @@ func TestGlobalSettingsPutPersistsGroupedRuntimeAndFeatures(t *testing.T) {
 			Services: files.FeatureServiceToggles{
 				Monitoring: testBoolPtr(false),
 			},
-			StatsChannels: testBoolPtr(true),
 		},
 		Runtime: &runtimeSettingsSections{
 			Appearance: runtimeAppearanceSection{
@@ -461,10 +460,7 @@ func TestGuildRegistrationPostCreatesDormantGuildWorkspace(t *testing.T) {
 	}
 	if response.Workspace.Effective.Features.Services.Monitoring ||
 		response.Workspace.Effective.Features.Logging.MemberJoin ||
-		response.Workspace.Effective.Features.MuteRole ||
-		response.Workspace.Effective.Features.StatsChannels ||
-		response.Workspace.Effective.Features.AutoRoleAssign ||
-		response.Workspace.Effective.Features.UserPrune {
+		response.Workspace.Effective.Features.MuteRole {
 		t.Fatalf("expected dormant effective features to stay disabled, got %+v", response.Workspace.Effective.Features)
 	}
 
@@ -710,5 +706,103 @@ func TestGuildSettingsPutScrubsDanglingFeatureRouting(t *testing.T) {
 	guild, _ = findGuildSettings(cfg, "g1")
 	if _, ok := guild.FeatureRouting["music"]; ok {
 		t.Fatalf("expected music routing to be scrubbed")
+	}
+}
+
+func TestGuildSettingsPut_TokenUniqueness(t *testing.T) {
+	t.Parallel()
+
+	srv, cm := newControlTestServer(t)
+	setTestBotGuildBindings(srv, BotGuildBinding{GuildID: "g1"}, BotGuildBinding{GuildID: "g2"})
+
+	_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+		cfg.Guilds = []files.GuildConfig{
+			{
+				GuildID: "g1",
+				BotInstanceTokens: map[string]files.EncryptedString{
+					"bot-1": "secret-token",
+				},
+			},
+			{
+				GuildID: "g2",
+			},
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed config: %v", err)
+	}
+
+	getCV := func(guildID string) *int64 {
+		for _, g := range cm.SnapshotConfig().Guilds {
+			if g.GuildID == guildID {
+				v := g.ConfigVersion
+				return &v
+			}
+		}
+		return nil
+	}
+
+	tokens := map[string]string{"bot-2": "secret-token"}
+	payload := updateGuildSettingsRequest{
+		ConfigVersion:     getCV("g2"),
+		BotInstanceTokens: &tokens,
+	}
+
+	rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodPut, "/v1/guilds/g2/settings", payload)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request due to token conflict, got %d body=%q", rec.Code, rec.Body.String())
+	}
+}
+
+func TestGuildSettingsPut_StatusCleanup(t *testing.T) {
+	t.Parallel()
+
+	srv, cm := newControlTestServer(t)
+	setTestBotGuildBindings(srv, BotGuildBinding{GuildID: "g1"})
+
+	_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+		cfg.Guilds = []files.GuildConfig{
+			{
+				GuildID: "g1",
+				BotInstanceTokens: map[string]files.EncryptedString{
+					"bot-1": "secret-token",
+				},
+				BotInstanceStatuses: map[string]string{
+					"bot-1": "idle",
+				},
+			},
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("seed config: %v", err)
+	}
+
+	getCV := func(guildID string) *int64 {
+		for _, g := range cm.SnapshotConfig().Guilds {
+			if g.GuildID == guildID {
+				v := g.ConfigVersion
+				return &v
+			}
+		}
+		return nil
+	}
+
+	tokens := map[string]string{"bot-1": ""}
+	payload := updateGuildSettingsRequest{
+		ConfigVersion:     getCV("g1"),
+		BotInstanceTokens: &tokens,
+	}
+
+	rec := performHandlerJSONRequest(t, srv.httpServer.Handler, http.MethodPut, "/v1/guilds/g1/settings", payload)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d body=%q", rec.Code, rec.Body.String())
+	}
+
+	cfg := cm.SnapshotConfig()
+	guild, _ := findGuildSettings(cfg, "g1")
+	if _, ok := guild.BotInstanceStatuses["bot-1"]; ok {
+		t.Fatalf("expected bot-1 status to be scrubbed when token is deleted")
 	}
 }

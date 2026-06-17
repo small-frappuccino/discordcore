@@ -47,7 +47,7 @@ func (c *banCommand) DefaultMemberPermissions() int64 { return discordgo.Permiss
 // Handle handles.
 func (c *banCommand) Handle(ctx *core.Context) error {
 	if enabled, _ := ctx.Config.Config().ResolveFeatures(ctx.GuildID).Lookup("moderation.ban"); !enabled {
-		return &core.CommandError{Message: "Ban command is disabled for this server.", Ephemeral: true}
+		return core.NewMissingConfigError(ctx.GuildID, "Moderation Ban", "/moderation")
 	}
 	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 

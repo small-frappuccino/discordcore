@@ -52,7 +52,7 @@ func (c *warningsCommand) DefaultMemberPermissions() int64 {
 // Handle handles.
 func (c *warningsCommand) Handle(ctx *core.Context) error {
 	if enabled, _ := ctx.Config.Config().ResolveFeatures(ctx.GuildID).Lookup("moderation.warnings"); !enabled {
-		return &core.CommandError{Message: "Warnings command is disabled for this server.", Ephemeral: true}
+		return core.NewMissingConfigError(ctx.GuildID, "Moderation Warnings", "/moderation")
 	}
 	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 

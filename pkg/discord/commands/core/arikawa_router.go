@@ -3,13 +3,14 @@ package core
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/utils/json/option"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordgo"
-	"log/slog"
 )
 
 // ErrAlreadyAcknowledged is returned by handlers that have already sent a response to Discord
@@ -116,4 +117,19 @@ func ConvertArikawaOptions(opts []discord.CommandOption) []*discordgo.Applicatio
 		return nil
 	}
 	return dgoOpts
+}
+
+// NewArikawaMissingConfigErrorData constructs an actionable error response data for Arikawa
+func NewArikawaMissingConfigErrorData(guildID, featureName, dashboardPath string) api.InteractionResponseData {
+	url := "https://discordcore.app/manage/" + guildID + dashboardPath
+	return api.InteractionResponseData{
+		Content: option.NewNullableString("The **" + featureName + "** feature has not been fully configured on the dashboard. Please configure it to use this command."),
+		Flags:   discord.EphemeralMessage,
+		Components: discord.ComponentsPtr(
+			&discord.ButtonComponent{
+				Label: "Configure Feature",
+				Style: discord.LinkButtonStyle(discord.URL(url)),
+			},
+		),
+	}
 }

@@ -143,7 +143,7 @@ func (c *cleanCommand) Handle(ctx *core.Context) error {
 	c.metrics.RecordCleanAttempt()
 
 	if enabled, _ := ctx.Config.Config().ResolveFeatures(ctx.GuildID).Lookup("moderation.clean"); !enabled {
-		err := &core.CommandError{Message: "Clean command is disabled for this server.", Ephemeral: true}
+		err := core.NewMissingConfigError(ctx.GuildID, "Moderation Clean", "/moderation")
 		c.recordEarlyFailure(ctx, "", CleanFailureCauseFeatureDisabled, start, err)
 		return err
 	}

@@ -38,7 +38,7 @@ func TestMonitoringServiceRestartRebuildsTaskPipeline(t *testing.T) {
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
 				Monitoring: testBoolPtr(true)},
-			StatsChannels: testBoolPtr(true)},
+		},
 		Stats: files.StatsConfig{
 			Enabled:            true,
 			UpdateIntervalMins: 1,

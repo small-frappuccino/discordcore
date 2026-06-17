@@ -48,9 +48,7 @@ func TestReconcileGuild(t *testing.T) {
 				FeatureRouting: map[string]string{
 					"stats": "generic",
 				},
-				Features: files.FeatureToggles{
-					StatsChannels: testBoolPtr(true),
-				},
+				Features: files.FeatureToggles{},
 				Stats: files.StatsConfig{Channels: []files.StatsChannelConfig{
 					{ChannelID: "c1"},
 				},
@@ -113,9 +111,7 @@ func TestReconcileAllGuilds(t *testing.T) {
 				FeatureRouting: map[string]string{
 					"stats": "generic",
 				},
-				Features: files.FeatureToggles{
-					StatsChannels: testBoolPtr(true),
-				},
+				Features: files.FeatureToggles{},
 				Stats: files.StatsConfig{Channels: []files.StatsChannelConfig{
 					{ChannelID: "c1"},
 				},

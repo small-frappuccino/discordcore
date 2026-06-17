@@ -58,7 +58,7 @@ func (c *timeoutCommand) DefaultMemberPermissions() int64 {
 // Handle handles.
 func (c *timeoutCommand) Handle(ctx *core.Context) error {
 	if enabled, _ := ctx.Config.Config().ResolveFeatures(ctx.GuildID).Lookup("moderation.timeout"); !enabled {
-		return &core.CommandError{Message: "Timeout command is disabled for this server.", Ephemeral: true}
+		return core.NewMissingConfigError(ctx.GuildID, "Moderation Timeout", "/moderation")
 	}
 	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 

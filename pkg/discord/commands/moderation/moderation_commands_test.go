@@ -113,7 +113,7 @@ func TestBanCommandHandleRejectsWhenFeatureDisabled(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected *core.CommandError, got %T", err)
 	}
-	if cmdErr.Message != "Ban command is disabled for this server." {
+	if cmdErr.Message != "The **Moderation Ban** feature has not been fully configured on the dashboard. Please configure it to use this command." {
 		t.Fatalf("unexpected error message: %q", cmdErr.Message)
 	}
 }

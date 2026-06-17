@@ -532,7 +532,7 @@ func shouldRunMemberEventService(cfg *files.BotConfig, globalRC files.RuntimeCon
 		if !guildDisableEntryExit && (features.Logging.MemberJoin || features.Logging.MemberLeave) {
 			return true
 		}
-		if features.AutoRoleAssign && guildCfg.Roles.AutoAssignment.Enabled {
+		if guildCfg.Roles.AutoAssignment.Enabled {
 			return true
 		}
 	}
@@ -1117,8 +1117,8 @@ func (ms *MonitoringService) runRolesRefreshTask(runCtx context.Context) error {
 	reconciledRemoves := 0
 	if ms.session != nil {
 		for _, gcfg := range cfg.Guilds {
-			features := cfg.ResolveFeatures(gcfg.GuildID)
-			if !features.AutoRoleAssign || !gcfg.Roles.AutoAssignment.Enabled || gcfg.Roles.AutoAssignment.TargetRoleID == "" || len(gcfg.Roles.AutoAssignment.RequiredRoles) < 2 {
+
+			if !gcfg.Roles.AutoAssignment.Enabled || gcfg.Roles.AutoAssignment.TargetRoleID == "" || len(gcfg.Roles.AutoAssignment.RequiredRoles) < 2 {
 				continue
 			}
 			targetRoleID := gcfg.Roles.AutoAssignment.TargetRoleID

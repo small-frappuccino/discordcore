@@ -57,13 +57,13 @@ func resolveMonitoringWorkloadState(cfg *files.BotConfig) monitoringWorkloadStat
 		if (!rc.DisableReactionLogs && features.Logging.ReactionMetric) || !guildCfg.ReactionBlocks.IsZero() {
 			state.reactionEventService = true
 		}
-		if features.Backfill.Enabled && strings.TrimSpace(rc.BackfillChannelID) != "" {
+		if strings.TrimSpace(rc.BackfillChannelID) != "" {
 			state.backfill = true
 		}
 		if features.Safety.BotRolePermMirror && !rc.DisableBotRolePermMirror {
 			state.botPermMirrorHandlers = true
 		}
-		if roleEnabled || (features.AutoRoleAssign && guildCfg.Roles.AutoAssignment.Enabled) {
+		if roleEnabled || guildCfg.Roles.AutoAssignment.Enabled {
 			state.rolesRefresh = true
 		}
 	}

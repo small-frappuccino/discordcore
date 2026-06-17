@@ -47,7 +47,7 @@ func (c *kickCommand) DefaultMemberPermissions() int64 { return discordgo.Permis
 // Handle handles.
 func (c *kickCommand) Handle(ctx *core.Context) error {
 	if enabled, _ := ctx.Config.Config().ResolveFeatures(ctx.GuildID).Lookup("moderation.kick"); !enabled {
-		return &core.CommandError{Message: "Kick command is disabled for this server.", Ephemeral: true}
+		return core.NewMissingConfigError(ctx.GuildID, "Moderation Kick", "/moderation")
 	}
 	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 

@@ -18,6 +18,7 @@ var (
 	errGuildRegistrationRequired    = errors.New("guild registration required")
 	errGuildRegistrationUnavailable = errors.New("guild registration unavailable")
 	errGuildDiscoveryRequired       = errors.New("guild discovery required")
+	errTokenAlreadyInUse            = errors.New("bot token is already in use by another guild")
 )
 
 type registerGuildRequest struct {
@@ -371,7 +372,18 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 						deletedTokens = append(deletedTokens, string(encToken))
 					}
 					delete(guild.BotInstanceTokens, k)
+					delete(guild.BotInstanceStatuses, k)
 				} else {
+					for _, otherGuild := range cfg.Guilds {
+						if otherGuild.GuildID == guildID {
+							continue
+						}
+						for _, enc := range otherGuild.BotInstanceTokens {
+							if string(enc) == v {
+								return errTokenAlreadyInUse
+							}
+						}
+					}
 					guild.BotInstanceTokens[k] = files.EncryptedString(v)
 				}
 			}
@@ -426,30 +438,6 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 				return fmt.Errorf("Server.handleGuildSettingsPut: %w", err)
 			}
 			guild.RuntimeConfig = next
-		}
-
-		// Auto-populate tokens for any routed or active bot instances from the global config.
-		// This permits Administrators to use available bots without needing the raw token.
-		activeInstances := make(map[string]struct{})
-		for _, instanceID := range guild.FeatureRouting {
-			activeInstances[instanceID] = struct{}{}
-		}
-		for instanceID := range guild.BotInstanceStatuses {
-			activeInstances[instanceID] = struct{}{}
-		}
-
-		for instanceID := range activeInstances {
-			if _, ok := guild.BotInstanceTokens[instanceID]; !ok {
-				for _, otherGuild := range cfg.Guilds {
-					if enc, ok := otherGuild.BotInstanceTokens[instanceID]; ok && string(enc) != "" {
-						if guild.BotInstanceTokens == nil {
-							guild.BotInstanceTokens = make(map[string]files.EncryptedString)
-						}
-						guild.BotInstanceTokens[instanceID] = enc
-						break
-					}
-				}
-			}
 		}
 
 		for feature, instanceID := range guild.FeatureRouting {
@@ -767,6 +755,8 @@ func statusForSettingsMutationError(err error) int {
 	switch {
 	case errors.Is(err, errGuildRegistrationRequired):
 		return http.StatusConflict
+	case errors.Is(err, errTokenAlreadyInUse):
+		return http.StatusBadRequest
 	case errors.Is(err, errGuildRegistrationUnavailable):
 		return http.StatusServiceUnavailable
 	case errors.Is(err, files.ErrGuildConfigNotFound):

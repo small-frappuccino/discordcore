@@ -204,9 +204,7 @@ func (s *UserPruneService) runIfDue(now time.Time) {
 	botID := s.currentBotID()
 
 	for _, gcfg := range guilds {
-		if !cfg.ResolveFeatures(gcfg.GuildID).UserPrune {
-			continue
-		}
+
 		if !gcfg.UserPrune.Enabled {
 			continue
 		}

@@ -349,7 +349,7 @@ func (s *StatsService) UpdateStatsChannels(ctx context.Context) error {
 			return fmt.Errorf("MonitoringService.updateStatsChannels: %w", err)
 		}
 		features := cfg.ResolveFeatures(gcfg.GuildID)
-		if !features.Services.Monitoring || !features.StatsChannels || !Enabled(gcfg.Stats) {
+		if !features.Services.Monitoring || !Enabled(gcfg.Stats) {
 			continue
 		}
 		if !s.handlesGuild(gcfg.GuildID) {
@@ -992,7 +992,7 @@ func (s *StatsService) statsGuildConfig(guildID string) (files.GuildConfig, map[
 			continue
 		}
 		features := cfg.ResolveFeatures(guildID)
-		if !features.Services.Monitoring || !features.StatsChannels || !Enabled(gcfg.Stats) {
+		if !features.Services.Monitoring || !Enabled(gcfg.Stats) {
 			return gcfg, nil, "", false
 		}
 		trackedRoles, trackedRolesKey := statsTrackedRoles(gcfg.Stats.Channels)

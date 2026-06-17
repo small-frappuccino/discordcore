@@ -1379,7 +1379,7 @@ func ensureRolePanelEnabled(ctx *core.Context) error {
 	)
 
 	if !enabled {
-		return rolePanelDetailedCommandError("Role panels are disabled for this server.")
+		return core.NewMissingConfigError(ctx.GuildID, "Role Panels", "/roles")
 	}
 	return nil
 }

@@ -16,7 +16,7 @@ func TestStatsChannelsWorkspaceExposesFullConfig(t *testing.T) {
 
 	srv, cm := newControlTestServer(t)
 	_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
-		cfg.Guilds[0].Features.StatsChannels = testBoolPtr(true)
+
 		cfg.Guilds[0].Stats.Channels = []files.StatsChannelConfig{
 			{ChannelID: "vc-total", Label: "Server Total", NameTemplate: "{label}: {count}", MemberType: "all"},
 			{ChannelID: "vc-humans", Label: "Humans", MemberType: "humans"},
@@ -85,70 +85,6 @@ func TestStatsChannelsWorkspaceEmptyConfig(t *testing.T) {
 	d := response.Feature.Details
 	if d.ConfiguredChannelCount != 0 {
 		t.Fatalf("expected configured_channel_count=0, got %d", d.ConfiguredChannelCount)
-	}
-}
-
-// TestStatsChannelsFeatureToggleInheritance verifies the feature toggle
-// resolution chain: global disable → guild override enable → guild clear
-// inherits from global. This ensures the dashboard renders the correct
-// effective state at each step.
-func TestStatsChannelsFeatureToggleInheritance(t *testing.T) {
-	t.Parallel()
-
-	srv, cm := newControlTestServer(t)
-	handler := srv.httpServer.Handler
-
-	getCV := func() int64 {
-		for _, g := range cm.SnapshotConfig().Guilds {
-			if g.GuildID == "g1" {
-				return g.ConfigVersion
-			}
-		}
-		return 0
-	}
-
-	globalDisable := performHandlerJSONRequest(t, handler, http.MethodPatch, "/v1/features/stats_channels", map[string]any{
-		"enabled": false,
-	})
-	if globalDisable.Code != http.StatusOK {
-		t.Fatalf("global disable status=%d body=%q", globalDisable.Code, globalDisable.Body.String())
-	}
-
-	disabledResp := decodeFeatureResponse[featureRecordResponse](t, globalDisable)
-	if disabledResp.Feature.EffectiveEnabled {
-		t.Fatal("expected effective_enabled=false after global disable")
-	}
-
-	guildEnable := performHandlerJSONRequest(t, handler, http.MethodPatch, "/v1/guilds/g1/features/stats_channels", map[string]any{
-		"enabled":        true,
-		"config_version": getCV(),
-	})
-	if guildEnable.Code != http.StatusOK {
-		t.Fatalf("guild enable status=%d body=%q", guildEnable.Code, guildEnable.Body.String())
-	}
-
-	enabledResp := decodeFeatureResponse[featureRecordResponse](t, guildEnable)
-	if !enabledResp.Feature.EffectiveEnabled {
-		t.Fatal("expected effective_enabled=true after guild override")
-	}
-	if enabledResp.Feature.EffectiveSource != "guild" {
-		t.Fatalf("expected effective_source=guild, got %q", enabledResp.Feature.EffectiveSource)
-	}
-
-	guildClear := performHandlerJSONRequest(t, handler, http.MethodPatch, "/v1/guilds/g1/features/stats_channels", map[string]any{
-		"enabled":        nil,
-		"config_version": getCV(),
-	})
-	if guildClear.Code != http.StatusOK {
-		t.Fatalf("guild clear status=%d body=%q", guildClear.Code, guildClear.Body.String())
-	}
-
-	clearedResp := decodeFeatureResponse[featureRecordResponse](t, guildClear)
-	if clearedResp.Feature.EffectiveEnabled {
-		t.Fatal("expected effective_enabled=false after guild clear inherits from global")
-	}
-	if clearedResp.Feature.EffectiveSource != "global" {
-		t.Fatalf("expected effective_source=global after guild clear, got %q", clearedResp.Feature.EffectiveSource)
 	}
 }
 

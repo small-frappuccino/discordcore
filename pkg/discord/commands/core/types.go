@@ -305,9 +305,10 @@ const (
 
 // CommandError represents command-specific errors
 type CommandError struct {
-	Message   string
-	Ephemeral bool
-	Code      string
+	Message    string
+	Ephemeral  bool
+	Code       string
+	Components []discordgo.MessageComponent
 }
 
 // CommandErrorCode commands error code.
@@ -340,4 +341,25 @@ func (e *ValidationError) ValidationField() string {
 // Error errors.
 func (e *ValidationError) Error() string {
 	return e.Message
+}
+
+// NewMissingConfigError constructs an actionable error directing the user to the dashboard
+func NewMissingConfigError(guildID, featureName, dashboardPath string) *CommandError {
+	url := "https://discordcore.app/manage/" + guildID + dashboardPath
+	return &CommandError{
+		Message:   "The **" + featureName + "** feature has not been fully configured on the dashboard. Please configure it to use this command.",
+		Ephemeral: true,
+		Code:      "MISSING_CONFIG",
+		Components: []discordgo.MessageComponent{
+			discordgo.ActionsRow{
+				Components: []discordgo.MessageComponent{
+					discordgo.Button{
+						Label: "Configure Feature",
+						Style: discordgo.LinkButton,
+						URL:   url,
+					},
+				},
+			},
+		},
+	}
 }

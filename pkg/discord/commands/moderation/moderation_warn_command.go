@@ -48,7 +48,7 @@ func (c *warnCommand) DefaultMemberPermissions() int64 { return discordgo.Permis
 // Handle handles.
 func (c *warnCommand) Handle(ctx *core.Context) error {
 	if enabled, _ := ctx.Config.Config().ResolveFeatures(ctx.GuildID).Lookup("moderation.warn"); !enabled {
-		return &core.CommandError{Message: "Warn command is disabled for this server.", Ephemeral: true}
+		return core.NewMissingConfigError(ctx.GuildID, "Moderation Warn", "/moderation")
 	}
 	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 

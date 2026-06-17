@@ -35,12 +35,6 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 			Safety: files.FeatureSafetyToggles{
 				BotRolePermMirror: new(bool(false)),
 			},
-			Backfill: files.FeatureBackfillToggles{
-				Enabled: new(bool(false)),
-			},
-			StatsChannels:  new(bool(false)),
-			AutoRoleAssign: new(bool(false)),
-			UserPrune:      new(bool(false)),
 		},
 		Guilds: []files.GuildConfig{
 			{
@@ -77,7 +71,6 @@ func TestResolveBotRuntimeCapabilitiesUsesScopedGuildsAndMinimalIntents(t *testi
 					Logging: files.FeatureLoggingToggles{
 						ReactionMetric: new(bool(true)),
 					},
-					UserPrune: new(bool(true)),
 				},
 				UserPrune: files.UserPruneConfig{Enabled: true},
 				QOTD: files.QOTDConfig{
