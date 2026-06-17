@@ -49,35 +49,34 @@ export function SelectMenuMultiple({ options, value = [], onChange, placeholder 
     onChange?.(newVals);
   };
 
+  const displayText = useMemo(() => {
+    if (selectedOptions.length === 0) return "";
+    if (selectedOptions.length <= 2) {
+      return selectedOptions.map(o => o.label).join(", ");
+    }
+    const firstTwo = selectedOptions.slice(0, 2).map(o => o.label).join(", ");
+    return `${firstTwo} +${selectedOptions.length - 2}`;
+  }, [selectedOptions]);
+
   return (
     <div className={`relative ${className}`} ref={containerRef}>
-      <div
+      <button
+        type="button"
+        role="combobox"
+        aria-expanded={isOpen}
         className="tahoe-select-multiple-trigger"
         onClick={() => setIsOpen(!isOpen)}
       >
-        {selectedOptions.length === 0 ? (
-          <span className="text-muted text-sm px-2">{placeholder}</span>
-        ) : (
-          selectedOptions.map((opt) => (
-            <div key={opt.value} className="tahoe-select-token" onClick={(e) => e.stopPropagation()}>
-              <span>{opt.label}</span>
-              <svg 
-                viewBox="0 0 24 24" 
-                width="14" 
-                height="14" 
-                fill="none" 
-                stroke="currentColor" 
-                strokeWidth="2" 
-                className="tahoe-select-token-remove"
-                onClick={(e) => toggleOption(opt.value, e)}
-              >
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </div>
-          ))
-        )}
-        <div className="tahoe-select-chevron ml-auto pr-2">
+        <div className="tahoe-select-multiple-content">
+          {selectedOptions.length === 0 ? (
+            <span className="text-text-muted text-sm">{placeholder}</span>
+          ) : (
+            <span className="tahoe-select-multiple-text" title={selectedOptions.map(o => o.label).join(", ")}>
+              {displayText}
+            </span>
+          )}
+        </div>
+        <div className="tahoe-select-chevron">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <polyline points="6 15 12 9 18 15" />
           </svg>
@@ -85,7 +84,7 @@ export function SelectMenuMultiple({ options, value = [], onChange, placeholder 
             <polyline points="6 9 12 15 18 9" />
           </svg>
         </div>
-      </div>
+      </button>
 
       {isOpen && (
         <div 
@@ -109,12 +108,16 @@ export function SelectMenuMultiple({ options, value = [], onChange, placeholder 
                     height: `${virtualRow.size}px`,
                     transform: `translateY(${virtualRow.start}px)`,
                   }}
-                  onClick={() => !option.disabled && toggleOption(option.value)}
+                  onClick={(e) => {
+                    if (!option.disabled) {
+                      toggleOption(option.value, e);
+                    }
+                  }}
                 >
                   {option.label}
                   {option.disabled && <span className="ml-auto text-xs text-text-muted">Missing Perms</span>}
                   {isSelected && !option.disabled && (
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="3">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="3" className="ml-auto">
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
                   )}
