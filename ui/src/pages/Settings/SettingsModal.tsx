@@ -19,19 +19,19 @@ export const SettingsModal = memo(function SettingsModal() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+          className="absolute inset-0 bg-black/80"
           onClick={closeSettings}
         />
 
         {/* Modal */}
         <motion.div
-          initial={{ scale: 0.95, opacity: 0, y: 10 }}
+          initial={{ scale: 0.98, opacity: 0, y: 5 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
-          exit={{ scale: 0.95, opacity: 0, y: 10 }}
-          className="relative flex w-full max-w-5xl h-[85vh] bg-surface-base rounded-2xl shadow-2xl overflow-hidden border border-border-subtle"
+          exit={{ scale: 0.98, opacity: 0, y: 5 }}
+          className="relative flex w-full max-w-[1200px] h-[85vh] bg-bg-base rounded-2xl shadow-2xl overflow-hidden border border-border-subtle"
         >
           {/* Sidebar */}
-          <aside className="w-64 bg-surface-active flex-shrink-0 flex flex-col py-6 border-r border-border-subtle overflow-y-auto">
+          <aside className="w-64 bg-bg-surface flex-shrink-0 flex flex-col py-8 border-r border-border-subtle overflow-y-auto">
             <nav className="flex flex-col gap-1 px-3">
               <h3 className="px-3 text-xs font-bold text-text-muted uppercase tracking-wider mb-2">User Settings</h3>
               <SidebarItem 
@@ -60,9 +60,9 @@ export const SettingsModal = memo(function SettingsModal() {
           </aside>
 
           {/* Main Content Area */}
-          <main className="flex-1 overflow-y-auto p-10 relative bg-bg-surface-base">
+          <main className="flex-1 overflow-y-auto p-12 relative bg-transparent">
             <button 
-              className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center rounded-full bg-surface-active hover:bg-surface-hover text-text-secondary hover:text-text-primary transition-colors"
+              className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center rounded-md hover:bg-white/10 text-text-secondary hover:text-text-primary transition-colors"
               onClick={closeSettings}
             >
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -92,9 +92,9 @@ export const SettingsModal = memo(function SettingsModal() {
 function SidebarItem({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
     <button
-      className={`text-left px-3 py-2 rounded-md text-sm transition-colors font-medium ${
+      className={`text-left px-3 py-2 rounded-md text-sm transition-colors font-medium w-full ${
         active 
-          ? "bg-brand-primary/10 text-brand-primary" 
+          ? "bg-surface-active text-text-primary" 
           : "text-text-secondary hover:bg-surface-hover hover:text-text-primary"
       }`}
       onClick={onClick}

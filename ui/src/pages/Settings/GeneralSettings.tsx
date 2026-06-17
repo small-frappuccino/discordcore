@@ -16,8 +16,12 @@ export function GeneralSettings() {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-6 text-text-primary">General Settings</h2>
-      
+      <h2 className="text-2xl font-bold mb-2 text-text-primary">Account</h2>
+      <p className="text-sm text-text-secondary mb-8">
+        Manage your plan, credentials, and general preferences.
+      </p>
+
+      <h3 className="text-sm font-bold text-text-primary mb-3">General</h3>
       <SettingsGroup>
         <SettingsRow
           title="Theme"

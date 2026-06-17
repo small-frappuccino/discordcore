@@ -61,13 +61,13 @@ export function GuildDangerZone({ guildId }: { guildId: string }) {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-6 text-text-primary">Guild Settings: {guild.name}</h2>
-      
+      <h2 className="text-2xl font-bold mb-2 text-text-primary">Guild Settings</h2>
+      <p className="text-sm text-text-secondary mb-8">
+        Manage destructive operations and data for {guild.name}.
+      </p>
+
       <div className="mb-8">
-        <h3 className="text-lg font-bold text-status-danger mb-4">Danger Zone</h3>
-        <p className="text-sm text-text-secondary mb-4">
-          The following operations are destructive and cannot be undone. They will immediately clear data from our databases for this guild.
-        </p>
+        <h3 className="text-sm font-bold text-text-primary mb-3">Danger Zone</h3>
 
         <SettingsGroup>
           <SettingsRow
