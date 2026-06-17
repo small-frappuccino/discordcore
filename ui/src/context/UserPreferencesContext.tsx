@@ -48,7 +48,7 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
     staleTime: 1000 * 60 * 60, // 1 hour
   });
 
-  const mutation = useMutation({
+  const { mutateAsync, isPending } = useMutation({
     mutationFn: (newPrefs: UserPreferences) =>
       updateUserPreferences(client, newPrefs),
     onSuccess: (data) => {
@@ -62,9 +62,9 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
 
   const updatePreferences = useCallback(
     async (newPrefs: UserPreferences) => {
-      await mutation.mutateAsync(newPrefs);
+      await mutateAsync(newPrefs);
     },
-    [mutation.mutateAsync],
+    [mutateAsync],
   );
 
   const contextValue = useMemo(
@@ -73,9 +73,9 @@ export function UserPreferencesProvider({ children }: { children: ReactNode }) {
       isLoading,
       isError,
       updatePreferences,
-      isUpdating: mutation.isPending,
+      isUpdating: isPending,
     }),
-    [preferences, isLoading, isError, updatePreferences, mutation.isPending],
+    [preferences, isLoading, isError, updatePreferences, isPending],
   );
 
   // Apply theme class to document body

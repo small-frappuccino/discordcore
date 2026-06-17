@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect, memo } from "react";
 import { useDashboardSession } from "../../context/DashboardSessionContext";
+import { useSettingsModal } from "../../context/SettingsModalContext";
 
 export const AccountSelector = memo(function AccountSelector() {
   const { session, sessionAvatarURL, logout, authState } = useDashboardSession();
+  const { openSettings } = useSettingsModal();
 
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement>(null);
@@ -69,6 +71,15 @@ export const AccountSelector = memo(function AccountSelector() {
           <div className="text-xs text-muted truncate">{session?.user?.id}</div>
         </div>
         <div className="shell-dropdown-divider"></div>
+        <button
+          className="shell-dropdown-item"
+          onClick={() => {
+            setIsAccountMenuOpen(false);
+            openSettings("general");
+          }}
+        >
+          Settings
+        </button>
         <button
           className="shell-dropdown-item danger"
           onClick={() => {

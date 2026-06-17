@@ -4,6 +4,7 @@ import { GuildProvider } from "../context/GuildContext";
 import { ServerSelector } from "../components/layout/ServerSelector";
 import { AccountSelector } from "../components/layout/AccountSelector";
 import { useDashboardSession } from "../context/DashboardSessionContext";
+import { SettingsModal } from "./Settings/SettingsModal";
 
 const siteBrandIconSrc = "/favicon.ico";
 
@@ -137,6 +138,9 @@ export const DashboardLayout = memo(function DashboardLayout() {
           </GuildProvider>
         </div>
       </main>
+      
+      {/* Settings Modal */}
+      <SettingsModal />
     </div>
   );
 });

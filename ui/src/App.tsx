@@ -7,6 +7,7 @@ import { ErrorBoundary } from "react-error-boundary";
 import { AppRoutes } from "./app/AppRoutes";
 import { DashboardSessionProvider } from "./context/DashboardSessionContext";
 import { UserPreferencesProvider } from "./context/UserPreferencesContext";
+import { SettingsModalProvider } from "./context/SettingsModalContext";
 import { ErrorFallback } from "./components/ui/ErrorFallback/ErrorFallback";
 import { logger } from "./lib/logger";
 import { initPerformanceTelemetry } from "./lib/telemetry";
@@ -54,8 +55,10 @@ export default function App() {
         <BrowserRouter>
           <DashboardSessionProvider>
             <UserPreferencesProvider>
-              <AppRoutes />
-              <Toaster position="bottom-right" />
+              <SettingsModalProvider>
+                <AppRoutes />
+                <Toaster position="bottom-right" />
+              </SettingsModalProvider>
             </UserPreferencesProvider>
           </DashboardSessionProvider>
         </BrowserRouter>

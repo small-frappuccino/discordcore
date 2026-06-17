@@ -12,9 +12,10 @@ type SelectMenuProps = {
   onChange?: (value: string) => void;
   placeholder?: string;
   className?: string;
+  disabled?: boolean;
 };
 
-export function SelectMenu({ options, value, onChange, placeholder = "Select...", className = "" }: SelectMenuProps) {
+export function SelectMenu({ options, value, onChange, placeholder = "Select...", className = "", disabled }: SelectMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -43,8 +44,9 @@ export function SelectMenu({ options, value, onChange, placeholder = "Select..."
     <div className={`relative ${className}`} ref={containerRef}>
       <button
         type="button"
-        className="tahoe-select-trigger"
-        onClick={() => setIsOpen(!isOpen)}
+        className={`tahoe-select-trigger ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        disabled={disabled}
       >
         <span>{selectedOption ? selectedOption.label : placeholder}</span>
         <div className="tahoe-select-chevron ml-auto pr-2">
