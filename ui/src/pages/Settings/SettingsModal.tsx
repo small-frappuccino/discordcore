@@ -73,12 +73,12 @@ export const SettingsModal = memo(function SettingsModal() {
             </div>
 
             {/* Esc Button Area */}
-            <div className="absolute top-6 right-6 flex items-center justify-center">
+            <div className="absolute top-6 right-6 flex items-center justify-center z-50">
               <button 
-                className="w-10 h-10 flex items-center justify-center rounded-xl bg-transparent hover:bg-surface-hover text-secondary hover:text-primary transition-all"
+                className="group w-10 h-10 flex items-center justify-center rounded-xl bg-transparent hover:bg-surface-active transition-colors duration-200 cursor-pointer"
                 onClick={closeSettings}
               >
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <svg className="text-secondary group-hover:text-white transition-colors duration-200" width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M14 1.41L12.59 0L7 5.59L1.41 0L0 1.41L5.59 7L0 12.59L1.41 14L7 8.41L12.59 14L14 12.59L8.41 7L14 1.41Z" fill="currentColor"/>
                 </svg>
               </button>
