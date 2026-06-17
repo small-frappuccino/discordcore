@@ -17,8 +17,17 @@ export const ServerSelector = memo(function ServerSelector() {
         setIsServerMenuOpen(false);
       }
     }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsServerMenuOpen(false);
+      }
+    }
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, []);
 
   const currentGuild = accessibleGuilds?.find((g) => g.id === guildId) || manageableGuilds?.find((g) => g.id === guildId);

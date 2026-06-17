@@ -26,8 +26,17 @@ export function SelectMenu({ options, value, onChange, placeholder = "Select..."
         setIsOpen(false);
       }
     }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setIsOpen(false);
+      }
+    }
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, []);
 
   return (
@@ -48,27 +57,30 @@ export function SelectMenu({ options, value, onChange, placeholder = "Select..."
         </div>
       </button>
 
-      {isOpen && (
-        <div className="tahoe-select-dropdown" style={{ top: "100%", right: 0, marginTop: "4px" }}>
-          {options.map((option) => (
-            <div
-              key={option.value}
-              className="tahoe-select-option"
-              onClick={() => {
-                onChange?.(option.value);
-                setIsOpen(false);
-              }}
-            >
-              {option.label}
-              {value === option.value && (
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="3">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+      <div 
+        className={`tahoe-select-dropdown transition-all duration-200 ease-out origin-top-right ${
+          isOpen ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 pointer-events-none'
+        }`}
+        style={{ top: "100%", right: 0, marginTop: "4px" }}
+      >
+        {options.map((option) => (
+          <div
+            key={option.value}
+            className="tahoe-select-option"
+            onClick={() => {
+              onChange?.(option.value);
+              setIsOpen(false);
+            }}
+          >
+            {option.label}
+            {value === option.value && (
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="3">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

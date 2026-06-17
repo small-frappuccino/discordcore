@@ -31,8 +31,17 @@ export function SelectMenuMultiple({ options, value = [], onChange, placeholder 
         setIsOpen(false);
       }
     }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setIsOpen(false);
+      }
+    }
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, []);
 
   const toggleOption = (optValue: string, e?: React.MouseEvent) => {
@@ -86,47 +95,47 @@ export function SelectMenuMultiple({ options, value = [], onChange, placeholder 
         </div>
       </button>
 
-      {isOpen && (
-        <div 
-          className="tahoe-select-dropdown" 
-          ref={dropdownRef}
-          style={{ top: "100%", left: 0, right: 0, marginTop: "4px", maxHeight: "240px", overflowY: "auto" }}
-        >
-          <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
-            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-              const option = options[virtualRow.index];
-              const isSelected = selectedOptionsSet.has(option.value);
-              return (
-                <div
-                  key={virtualRow.key}
-                  className={`tahoe-select-option ${option.disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: `${virtualRow.size}px`,
-                    transform: `translateY(${virtualRow.start}px)`,
-                  }}
-                  onClick={(e) => {
-                    if (!option.disabled) {
-                      toggleOption(option.value, e);
-                    }
-                  }}
-                >
-                  {option.label}
-                  {option.disabled && <span className="ml-auto text-xs text-text-muted">Missing Perms</span>}
-                  {isSelected && !option.disabled && (
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="3" className="ml-auto">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+      <div 
+        className={`tahoe-select-dropdown transition-all duration-200 ease-out origin-top-right ${
+          isOpen ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 pointer-events-none'
+        }`}
+        ref={dropdownRef}
+        style={{ top: "100%", left: 0, right: 0, marginTop: "4px", maxHeight: "240px", overflowY: "auto" }}
+      >
+        <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
+          {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+            const option = options[virtualRow.index];
+            const isSelected = selectedOptionsSet.has(option.value);
+            return (
+              <div
+                key={virtualRow.key}
+                className={`tahoe-select-option ${option.disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: `${virtualRow.size}px`,
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+                onClick={(e) => {
+                  if (!option.disabled) {
+                    toggleOption(option.value, e);
+                  }
+                }}
+              >
+                {option.label}
+                {option.disabled && <span className="ml-auto text-xs text-text-muted">Missing Perms</span>}
+                {isSelected && !option.disabled && (
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="3" className="ml-auto">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                )}
+              </div>
+            );
+          })}
         </div>
-      )}
+      </div>
     </div>
   );
 }

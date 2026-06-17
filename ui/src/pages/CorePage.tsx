@@ -49,8 +49,15 @@ export function CorePage() {
 
   useEffect(() => {
     const handleClickOutside = () => setOpenMenuId(null);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpenMenuId(null);
+    };
     document.addEventListener("click", handleClickOutside);
-    return () => document.removeEventListener("click", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("click", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, []);
 
   const allInstances = useMemo(() => {
@@ -170,8 +177,11 @@ export function CorePage() {
                               <circle cx="12" cy="19" r="1"></circle>
                             </svg>
                           </button>
-                          {openMenuId === instanceId && (
-                            <div className="shell-dropdown">
+                            <div 
+                              className={`shell-dropdown transition-all duration-200 ease-out origin-top-right ${
+                                openMenuId === instanceId ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 pointer-events-none'
+                              }`}
+                            >
                               <button 
                                 className="shell-dropdown-item danger"
                                 onClick={(e) => {
@@ -187,7 +197,6 @@ export function CorePage() {
                                 Delete Profile
                               </button>
                             </div>
-                          )}
                         </div>
                       </div>
 
