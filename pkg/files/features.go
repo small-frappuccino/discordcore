@@ -13,8 +13,12 @@ type FeatureServiceToggles struct {
 	Commands   *bool `json:"commands,omitempty"`
 }
 
-// FeatureLoggingToggles overrides individual log-event categories. A nil field
-// leaves that category at its default; false disables emitting that event.
+// FeatureLoggingToggles overrides individual log-event categories.
+//
+// Deprecated: Logging features are implicitly enabled when their respective
+// channel targets are populated. These boolean toggles remain in the struct
+// to preserve Config Schema Evolution JSON parsing compatibility, but they
+// are ignored by the runtime logging policy and bot capability resolver.
 type FeatureLoggingToggles struct {
 	AvatarLogging  *bool `json:"avatar_logging,omitempty"`
 	RoleUpdate     *bool `json:"role_update,omitempty"`

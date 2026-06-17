@@ -52,6 +52,12 @@ var featureRegistry = []toggleSpec{
 		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Services.Commands = val },
 	},
 
+	// --------------------------------------------------------------------
+	// DEPRECATED LOGGING TOGGLES
+	// Logging features are implicitly enabled by the presence of a target
+	// channel configuration. These registry entries are retained solely to
+	// preserve JSON schema deserialization backwards-compatibility.
+	// --------------------------------------------------------------------
 	{
 		ID: "logging.avatar_logging", Default: true,
 		Get:         func(ft *FeatureToggles) *bool { return ft.Logging.AvatarLogging },
@@ -129,6 +135,7 @@ var featureRegistry = []toggleSpec{
 		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.Logging.CleanAction },
 		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Logging.CleanAction = val },
 	},
+	// --------------------------------------------------------------------
 	{
 		ID: "moderation.ban", Default: true,
 		Get:         func(ft *FeatureToggles) *bool { return ft.Moderation.Ban },

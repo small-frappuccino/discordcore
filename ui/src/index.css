@@ -738,15 +738,20 @@ select[multiple].form-select {
 }
 
 .tahoe-text-input {
-  background-color: var(--bg-surface-active);
+  background-color: rgba(0, 0, 0, 0.2);
   color: var(--text-primary);
-  border: 1px solid var(--border-strong);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 6px;
-  padding: 6px 12px;
+  padding: 8px 12px;
+  min-height: 36px;
   outline: none;
   font-family: inherit;
   font-size: 0.95rem;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.tahoe-text-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .tahoe-text-input:focus {
