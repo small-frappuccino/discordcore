@@ -96,7 +96,7 @@ export const ServerSelector = memo(function ServerSelector() {
               className="shell-dropdown-item"
               onClick={() => {
                 setIsServerMenuOpen(false);
-                navigate(`/manage/${g.id}/core`);
+                navigate(`/manage/${g.id}`);
               }}
             >
               {g.icon && !imageErrors[g.id] ? (

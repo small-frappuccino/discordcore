@@ -10,6 +10,7 @@ const RolesPage = lazy(() => import("../pages/RolesPage").then(m => ({ default: 
 const PartnersPage = lazy(() => import("../pages/PartnersPage").then(m => ({ default: m.PartnersPage })));
 const EmbedsPage = lazy(() => import("../pages/EmbedsPage").then(m => ({ default: m.EmbedsPage })));
 const TahoeMockPage = lazy(() => import("../pages/TahoeMockPage").then(m => ({ default: m.TahoeMockPage })));
+const GuildOverviewPage = lazy(() => import("../pages/GuildOverviewPage").then(m => ({ default: m.GuildOverviewPage })));
 const BotProfileOverviewPage = lazy(() => import("../pages/BotProfileOverviewPage").then(m => ({ default: m.BotProfileOverviewPage })));
 const TicketsLayout = lazy(() => import("../pages/Tickets/TicketsLayout").then(m => ({ default: m.TicketsLayout })));
 const TicketsPanelsPage = lazy(() => import("../pages/Tickets/TicketsPanelsPage").then(m => ({ default: m.TicketsPanelsPage })));
@@ -26,6 +27,7 @@ export function AppRoutes() {
           <Route path="/manage/tahoe" element={<TahoeMockPage />} />
           <Route path="/manage" element={<DashboardLayout />}>
             <Route path=":guildId">
+              <Route index element={<GuildOverviewPage />} />
               <Route path="bots/:botInstanceId">
                 <Route index element={<BotProfileOverviewPage />} />
                 <Route path="core" element={<CorePage />} />
