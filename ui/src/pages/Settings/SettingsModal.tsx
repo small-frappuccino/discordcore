@@ -13,27 +13,27 @@ export const SettingsModal = memo(function SettingsModal() {
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex justify-center items-center">
-        {/* Backdrop */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8">
+        {/* Subtle Darkened Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="absolute inset-0 bg-black/80"
+          className="absolute inset-0 bg-black/40"
           onClick={closeSettings}
         />
 
-        {/* Modal */}
+        {/* Floating Modal Component */}
         <motion.div
-          initial={{ scale: 0.98, opacity: 0, y: 5 }}
+          initial={{ scale: 0.98, opacity: 0, y: 10 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
-          exit={{ scale: 0.98, opacity: 0, y: 5 }}
-          className="relative flex w-full max-w-[1200px] h-[85vh] bg-bg-base rounded-2xl shadow-2xl overflow-hidden border border-border-subtle"
+          exit={{ scale: 0.98, opacity: 0, y: 10 }}
+          className="relative flex w-full max-w-[1100px] h-[85vh] min-h-[500px] bg-bg-base rounded-2xl shadow-2xl overflow-hidden border border-border-subtle"
         >
           {/* Sidebar */}
-          <aside className="w-64 bg-bg-surface flex flex-col">
-            <nav className="shell-nav">
-              <div className="shell-nav-section-title">User Settings</div>
+          <aside className="w-64 bg-bg-surface flex flex-col shrink-0 border-r border-border-subtle pt-10 pb-6">
+            <nav className="shell-nav px-2">
+              <div className="shell-nav-section-title px-3">User Settings</div>
               <SidebarItem 
                 label="General" 
                 active={activeTab === "general"} 
@@ -44,10 +44,8 @@ export const SettingsModal = memo(function SettingsModal() {
                 active={activeTab === "account"} 
                 onClick={() => setActiveTab("account")} 
               />
-              
-              <div className="shell-dropdown-divider my-4 mx-3" />
-              
-              <div className="shell-nav-section-title">Projects</div>
+              <div className="h-px bg-border-subtle my-4 mx-3" />
+              <div className="shell-nav-section-title px-3">Projects</div>
               {manageableGuilds.map((guild) => (
                 <SidebarItem 
                   key={guild.id}
@@ -60,16 +58,7 @@ export const SettingsModal = memo(function SettingsModal() {
           </aside>
 
           {/* Main Content Area */}
-          <main className="flex-1 overflow-y-auto p-12 relative bg-transparent">
-            <button 
-              className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center rounded-md hover:bg-white/10 text-text-secondary hover:text-text-primary transition-colors"
-              onClick={closeSettings}
-            >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M14 1.41L12.59 0L7 5.59L1.41 0L0 1.41L5.59 7L0 12.59L1.41 14L7 8.41L12.59 14L14 12.59L8.41 7L14 1.41Z" fill="currentColor"/>
-              </svg>
-            </button>
-
+          <main className="flex-1 overflow-y-auto relative bg-bg-base pt-10 px-10 pb-8">
             <div className="max-w-2xl">
               {activeTab === "general" && <GeneralSettings />}
               {activeTab === "account" && (
@@ -81,6 +70,19 @@ export const SettingsModal = memo(function SettingsModal() {
               {activeTab.startsWith("guild-") && (
                 <GuildDangerZone guildId={activeTab.replace("guild-", "")} />
               )}
+            </div>
+
+            {/* Esc Button Area */}
+            <div className="absolute top-8 right-8 flex flex-col items-center">
+              <button 
+                className="w-8 h-8 flex items-center justify-center rounded-xl bg-bg-surface-active hover:bg-surface-hover text-text-secondary hover:text-text-primary transition-all border border-border-subtle hover:border-text-muted"
+                onClick={closeSettings}
+              >
+                <svg width="12" height="12" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M14 1.41L12.59 0L7 5.59L1.41 0L0 1.41L5.59 7L0 12.59L1.41 14L7 8.41L12.59 14L14 12.59L8.41 7L14 1.41Z" fill="currentColor"/>
+                </svg>
+              </button>
+              <span className="text-[10px] font-bold text-text-muted mt-1.5">ESC</span>
             </div>
           </main>
         </motion.div>
