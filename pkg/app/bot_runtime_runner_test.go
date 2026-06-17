@@ -213,7 +213,7 @@ func TestScheduleRuntimeWarmup(t *testing.T) {
 
 	intelligentWarmupFn = func(ctx context.Context, s *discordgo.Session, c *cache.UnifiedCache, store *storage.Store, config cache.WarmupConfig) error {
 		count++
-		if count == 2 {
+		if count == 1 {
 			close(done)
 		}
 		return nil
@@ -237,7 +237,7 @@ func TestScheduleRuntimeWarmup(t *testing.T) {
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
-		t.Errorf("expected warmup to be called twice")
+		t.Errorf("expected warmup to be called once")
 	}
 }
 

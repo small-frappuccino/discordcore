@@ -58,6 +58,9 @@ type UnifiedCache struct {
 	store          *storage.Store
 	persistEnabled bool
 
+	// Session for lazy fetching (optional)
+	session *discordgo.Session
+
 	// Last warmup timestamp for recency checks
 	lastWarmup time.Time
 }
@@ -194,6 +197,9 @@ type CacheConfig struct {
 	// Persistent store
 	Store          *storage.Store
 	PersistEnabled bool
+
+	// Session for lazy fetch fallback
+	Session *discordgo.Session
 }
 
 // DefaultCacheConfig returns sensible defaults for the cache
@@ -240,18 +246,33 @@ func NewUnifiedCache(cfg CacheConfig) *UnifiedCache {
 
 		store:          cfg.Store,
 		persistEnabled: cfg.PersistEnabled && cfg.Store != nil,
+		session:        cfg.Session,
 	}
 
 	return uc
 }
 
-// GetMember retrieves a cached member or returns nil if not found/expired
+// GetMember retrieves a cached member or returns nil if not found/expired.
+// If the member is not in cache and a session is configured, it will perform a lazy fetch.
 func (uc *UnifiedCache) GetMember(guildID, userID string) (*discordgo.Member, bool) {
 	key := uc.memberKey(guildID, userID)
 	if key == "" || uc.members == nil {
 		return nil, false
 	}
-	return uc.members.Get(key)
+	member, ok := uc.members.Get(key)
+	if ok {
+		return member, true
+	}
+
+	// Lazy fetch fallback
+	if uc.session != nil {
+		fetched, err := uc.session.GuildMember(guildID, userID)
+		if err == nil && fetched != nil {
+			uc.members.Set(key, fetched)
+			return fetched, true
+		}
+	}
+	return nil, false
 }
 
 // SetMember stores a member in the cache with TTL and LRU eviction
@@ -281,12 +302,24 @@ func (uc *UnifiedCache) InvalidateMember(guildID, userID string) {
 	}
 }
 
-// GetGuild retrieves a cached guild or returns nil if not found/expired
+// GetGuild retrieves a cached guild or returns nil if not found/expired.
+// Performs lazy fetch if not in cache.
 func (uc *UnifiedCache) GetGuild(guildID string) (*discordgo.Guild, bool) {
 	if guildID == "" || uc.guilds == nil {
 		return nil, false
 	}
-	return uc.guilds.Get(guildID)
+	guild, ok := uc.guilds.Get(guildID)
+	if ok {
+		return guild, true
+	}
+
+	if uc.session != nil {
+		if fetched, err := uc.session.Guild(guildID); err == nil && fetched != nil {
+			uc.guilds.Set(guildID, fetched)
+			return fetched, true
+		}
+	}
+	return nil, false
 }
 
 // SetGuild stores a guild in the cache with TTL and LRU eviction
@@ -312,12 +345,24 @@ func (uc *UnifiedCache) InvalidateGuild(guildID string) {
 	}
 }
 
-// GetRoles retrieves cached roles for a guild or returns nil if not found/expired
+// GetRoles retrieves cached roles for a guild or returns nil if not found/expired.
+// Performs lazy fetch if not in cache.
 func (uc *UnifiedCache) GetRoles(guildID string) ([]*discordgo.Role, bool) {
 	if guildID == "" || uc.roles == nil {
 		return nil, false
 	}
-	return uc.roles.Get(guildID)
+	roles, ok := uc.roles.Get(guildID)
+	if ok {
+		return roles, true
+	}
+
+	if uc.session != nil {
+		if fetched, err := uc.session.GuildRoles(guildID); err == nil && fetched != nil {
+			uc.roles.Set(guildID, fetched)
+			return fetched, true
+		}
+	}
+	return nil, false
 }
 
 // SetRoles stores guild roles in the cache with TTL and LRU eviction
@@ -342,12 +387,24 @@ func (uc *UnifiedCache) InvalidateRoles(guildID string) {
 	}
 }
 
-// GetChannel retrieves a cached channel or returns nil if not found/expired
+// GetChannel retrieves a cached channel or returns nil if not found/expired.
+// Performs lazy fetch if not in cache.
 func (uc *UnifiedCache) GetChannel(channelID string) (*discordgo.Channel, bool) {
 	if channelID == "" || uc.channels == nil {
 		return nil, false
 	}
-	return uc.channels.Get(channelID)
+	channel, ok := uc.channels.Get(channelID)
+	if ok {
+		return channel, true
+	}
+
+	if uc.session != nil {
+		if fetched, err := uc.session.Channel(channelID); err == nil && fetched != nil {
+			uc.SetChannel(channelID, fetched)
+			return fetched, true
+		}
+	}
+	return nil, false
 }
 
 // SetChannel stores a channel in the cache with TTL and LRU eviction

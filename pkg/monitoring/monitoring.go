@@ -359,6 +359,7 @@ func NewMonitoringServiceForBotWithMetrics(
 	cacheConfig := cache.DefaultCacheConfig()
 	cacheConfig.Store = store
 	cacheConfig.PersistEnabled = true
+	cacheConfig.Session = session
 	unifiedCache := cache.NewUnifiedCache(cacheConfig)
 
 	ms := &MonitoringService{
@@ -974,9 +975,7 @@ func (ms *MonitoringService) registerStartupWarmupHandler(runCtx context.Context
 		config, ok := payload.(cache.WarmupConfig)
 		if !ok {
 			config = cache.DefaultWarmupConfig()
-			config.FetchMissingGuilds = false
-			config.FetchMissingRoles = false
-			config.FetchMissingChannels = false
+			config.FetchMissingMembers = true
 			config.MaxMembersPerGuild = 500
 		}
 		return monitoringWarmupTaskFn(runCtx, ms.session, ms.unifiedCache, ms.store, config)

@@ -408,23 +408,13 @@ func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *stor
 		return
 	}
 
-	baseWarmupConfig, memberWarmupConfig := runtimeWarmupPhases()
+	_, memberWarmupConfig := runtimeWarmupPhases()
 	runWarmup := func(ctx context.Context, config cache.WarmupConfig) error {
 		return intelligentWarmupFn(ctx, runtime.session, unifiedCache, store, config)
 	}
 
 	if startupTasks == nil {
 		go func() {
-			if err := runWarmup(ctx, baseWarmupConfig); err != nil {
-				if ctx.Err() != nil {
-					return
-				}
-				slog.Warn("Mitigated service degradation: Cache warmup base phase failed, executing compensatory bypass",
-					slog.String("botInstanceID", runtime.instanceID),
-					slog.String("error", err.Error()),
-				)
-				return
-			}
 			if scheduleStartupMemberWarmupFn(runtime.monitoringService, memberWarmupConfig) {
 				return
 			}
@@ -432,7 +422,7 @@ func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *stor
 				if ctx.Err() != nil {
 					return
 				}
-				slog.Warn("Mitigated service degradation: Cache warmup member phase failed, executing compensatory bypass",
+				slog.Warn("Mitigated service degradation: Cache warmup failed, executing compensatory bypass",
 					slog.String("botInstanceID", runtime.instanceID),
 					slog.String("error", err.Error()),
 				)
@@ -441,10 +431,10 @@ func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *stor
 		return
 	}
 
-	slog.Debug("Delegating cache warmup base phase to orchestrator scheduling queue",
+	slog.Debug("Delegating cache warmup to orchestrator scheduling queue",
 		slog.String("botInstanceID", runtime.instanceID),
 	)
-	startupTasks.GoHeavy("cache_warmup_base:"+runtime.instanceID, func(taskCtx context.Context) error {
+	startupTasks.GoHeavy("cache_warmup:"+runtime.instanceID, func(taskCtx context.Context) error {
 		localCtx, localCancel := context.WithCancel(taskCtx)
 		defer localCancel()
 		go func() {
@@ -454,17 +444,6 @@ func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *stor
 			case <-localCtx.Done():
 			}
 		}()
-
-		if err := runWarmup(localCtx, baseWarmupConfig); err != nil {
-			if localCtx.Err() != nil {
-				return nil
-			}
-			slog.Warn("Mitigated service degradation: Orchestrated cache warmup base phase failed, pipeline resumes",
-				slog.String("botInstanceID", runtime.instanceID),
-				slog.String("error", err.Error()),
-			)
-			return nil
-		}
 
 		if scheduleStartupMemberWarmupFn(runtime.monitoringService, memberWarmupConfig) {
 			slog.Debug("Prioritized member phase execution behind startup tasks lock",
@@ -477,7 +456,7 @@ func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *stor
 			if localCtx.Err() != nil {
 				return nil
 			}
-			slog.Warn("Mitigated service degradation: Orchestrated cache warmup member phase failed, pipeline resumes",
+			slog.Warn("Mitigated service degradation: Orchestrated cache warmup failed, pipeline resumes",
 				slog.String("botInstanceID", runtime.instanceID),
 				slog.String("error", err.Error()),
 			)
@@ -492,9 +471,7 @@ func runtimeWarmupPhases() (cache.WarmupConfig, cache.WarmupConfig) {
 	base.MaxMembersPerGuild = 500
 
 	members := cache.DefaultWarmupConfig()
-	members.FetchMissingGuilds = false
-	members.FetchMissingRoles = false
-	members.FetchMissingChannels = false
+	members.FetchMissingMembers = true
 	members.MaxMembersPerGuild = 500
 
 	return base, members

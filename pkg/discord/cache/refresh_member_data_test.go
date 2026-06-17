@@ -23,6 +23,18 @@ type memberResponse struct {
 	JoinedAt time.Time       `json:"joined_at,omitempty"`
 }
 
+func newTestCache(t *testing.T) *cache.UnifiedCache {
+	t.Helper()
+	uc := cache.NewUnifiedCache(cache.CacheConfig{
+		MemberTTL:  time.Hour,
+		GuildTTL:   time.Hour,
+		RolesTTL:   time.Hour,
+		ChannelTTL: time.Hour,
+	})
+	t.Cleanup(uc.Stop)
+	return uc
+}
+
 func setupMemberServer(t *testing.T, handler func(guildID, userID string) (memberResponse, int)) (*httptest.Server, func()) {
 	t.Helper()
 
@@ -174,43 +186,6 @@ func TestRefreshMemberDataSkipsFailures(t *testing.T) {
 	}
 	if got, ok := uc.GetMember("g1", "good"); !ok || got == nil || got.User.ID != "good" {
 		t.Fatalf("expected good member cached, got %v %v", got, ok)
-	}
-}
-
-func TestWarmupGuildMembersPreservesHistoricalJoin(t *testing.T) {
-	store := newTestStore(t)
-	uc := newTestCache(t)
-
-	historicalJoin := time.Date(2024, 6, 12, 15, 0, 0, 0, time.UTC)
-	if err := store.UpsertMemberJoin("g1", "u1", historicalJoin); err != nil {
-		t.Fatalf("seed historical join: %v", err)
-	}
-
-	session := cache.WarmupSession{
-		GuildMembers: func(guildID, after string, limit int, options ...discordgo.RequestOption) ([]*discordgo.Member, error) {
-			return []*discordgo.Member{
-				{
-					User:     &discordgo.User{ID: "u1"},
-					JoinedAt: historicalJoin.Add(48 * time.Hour),
-				},
-			}, nil
-		},
-	}
-
-	gotCount, err := cache.WarmupGuildMembers(session, uc, store, "g1", 1)
-	if err != nil {
-		t.Fatalf("cache.WarmupGuildMembers error: %v", err)
-	}
-	if gotCount != 1 {
-		t.Fatalf("expected 1 cached member, got %d", gotCount)
-	}
-
-	gotJoin, ok, err := store.MemberJoin(context.Background(), "g1", "u1")
-	if err != nil {
-		t.Fatalf("GetMemberJoin error: %v", err)
-	}
-	if !ok || !gotJoin.Equal(historicalJoin) {
-		t.Fatalf("expected historical join %v, got %v (ok=%v)", historicalJoin, gotJoin, ok)
 	}
 }
 

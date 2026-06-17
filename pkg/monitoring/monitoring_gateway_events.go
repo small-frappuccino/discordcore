@@ -10,6 +10,8 @@ import (
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordgo"
+	"time"
 )
 
 // setupEventHandlers registra handlers do Discord.
@@ -39,6 +41,9 @@ func (ms *MonitoringService) setupEventHandlersFromRuntimeConfig(rc files.Runtim
 	ms.eventHandlers = append(ms.eventHandlers,
 		ms.arikawaState.AddHandler(ms.handleGuildCreate),
 		ms.arikawaState.AddHandler(ms.handleGuildUpdate),
+		// DiscordGo native handlers for cache hydration
+		ms.session.AddHandler(ms.handleGuildCreateDiscordGo),
+		ms.session.AddHandler(ms.handleGuildMembersChunkDiscordGo),
 	)
 	if !state.presenceHandler && !state.memberUpdateHandler && !state.userUpdateHandler {
 		ms.logger.LogAttrs(context.Background(), slog.LevelInfo, "🛑 User and presence handlers are disabled by effective runtime/features")
@@ -145,6 +150,60 @@ func (ms *MonitoringService) handleGuildUpdate(e *gateway.GuildUpdateEvent) {
 				slog.Any("err", err),
 			)
 		}
+	}
+}
+
+// handleGuildCreateDiscordGo extracts embedded payloads to implicitly hydrate the unified cache and persistent store.
+func (ms *MonitoringService) handleGuildCreateDiscordGo(s *discordgo.Session, e *discordgo.GuildCreate) {
+	if e == nil || e.Guild == nil || e.Guild.ID == "" {
+		return
+	}
+	guildID := e.Guild.ID
+	if ms.unifiedCache != nil {
+		ms.unifiedCache.SetGuild(guildID, e.Guild)
+		if len(e.Guild.Roles) > 0 {
+			ms.unifiedCache.SetRoles(guildID, e.Guild.Roles)
+		}
+		for _, channel := range e.Guild.Channels {
+			ms.unifiedCache.SetChannel(channel.ID, channel)
+		}
+		for _, member := range e.Guild.Members {
+			if member.User != nil {
+				ms.unifiedCache.SetMember(guildID, member.User.ID, member)
+			}
+		}
+	}
+}
+
+// handleGuildMembersChunkDiscordGo processes asynchronous Opcode 8 member streams.
+func (ms *MonitoringService) handleGuildMembersChunkDiscordGo(s *discordgo.Session, e *discordgo.GuildMembersChunk) {
+	if e == nil || e.GuildID == "" || len(e.Members) == 0 {
+		return
+	}
+	guildID := e.GuildID
+	if ms.unifiedCache != nil {
+		for _, member := range e.Members {
+			if member.User != nil {
+				ms.unifiedCache.SetMember(guildID, member.User.ID, member)
+			}
+		}
+	}
+
+	if ms.store != nil {
+		// Incrementally upsert member presence data into persistent store without blocking.
+		go func() {
+			for _, member := range e.Members {
+				if member.User == nil {
+					continue
+				}
+				if !member.JoinedAt.IsZero() {
+					_ = ms.store.UpsertMemberJoin(guildID, member.User.ID, member.JoinedAt)
+				}
+				if len(member.Roles) > 0 {
+					_ = ms.store.UpsertMemberRoles(guildID, member.User.ID, member.Roles, time.Now().UTC())
+				}
+			}
+		}()
 	}
 }
 
