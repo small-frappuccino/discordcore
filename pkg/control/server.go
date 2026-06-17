@@ -104,6 +104,7 @@ type Server struct {
 	listener             net.Listener
 	guildEventBroker     *guildEventBroker
 	logger               *slog.Logger
+	storage              *storage.Store
 }
 
 // NewServer returns nil if addr is empty.
@@ -197,6 +198,14 @@ func (s *Server) SetCacheObservability(resolver CacheSnapshotResolver, store *st
 	}
 	s.health.cacheSnapshotResolve = resolver
 	s.health.cacheSnapshotStore = store
+}
+
+// SetStorage injects the persistent Postgres store for users and metrics routes.
+func (s *Server) SetStorage(store *storage.Store) {
+	if s == nil || store == nil {
+		return
+	}
+	s.storage = store
 }
 
 // SetMonitoringMetricsResolver wires the late-binding accessor /v1/health/monitoring

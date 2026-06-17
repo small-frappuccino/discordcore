@@ -43,7 +43,7 @@ const navigation: NavItem[] = [
 
 export const DashboardLayout = memo(function DashboardLayout() {
   const location = useLocation();
-  const { guildId } = useParams<{ guildId: string }>();
+  const { guildId, botInstanceId } = useParams<{ guildId: string, botInstanceId: string }>();
   const { fetchDisplayBotProfile, displayBotProfile, client } = useDashboardSession();
   const queryClient = useQueryClient();
   const [brandIconError, setBrandIconError] = useState(false);
@@ -86,8 +86,8 @@ export const DashboardLayout = memo(function DashboardLayout() {
 
         <nav className="shell-nav">
           <div className="shell-nav-section-title">Features</div>
-          {guildId && navigation.map((item) => {
-            const fullPath = `/manage/${guildId}${item.to}`;
+          {guildId && botInstanceId && navigation.map((item) => {
+            const fullPath = `/manage/${guildId}/bots/${encodeURIComponent(botInstanceId)}${item.to}`;
             const isActive = location.pathname.startsWith(fullPath);
             return (
               <Link

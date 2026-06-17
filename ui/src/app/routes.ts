@@ -9,6 +9,7 @@ export const appRoutes = {
   tahoeMock: "/manage/tahoe",
   transcriptView: "/transcripts/view",
   dashboardGuildPattern: "/manage/:guildId",
+  dashboardBotProfilePattern: "/manage/:guildId/bots/:botInstanceId",
   dashboardHomePattern: "/manage/:guildId/home",
   dashboardCorePattern: "/manage/:guildId/core",
   dashboardCoreControlPanelPattern: "/manage/:guildId/core/control-panel",
@@ -31,6 +32,8 @@ export const appRoutes = {
   ticketsFormsPattern: "/manage/:guildId/tickets/forms",
   ticketsTranscriptsPattern: "/manage/:guildId/tickets/transcripts",
   ticketsSettingsPattern: "/manage/:guildId/tickets/settings",
+  dashboardBotProfileOverview: (guildId: string, botInstanceId: string) => 
+    `/manage/${encodeGuildID(guildId)}/bots/${encodeURIComponent(botInstanceId)}`,
   dashboardHome: (guildId: string) => `/manage/${encodeGuildID(guildId)}/home`,
   dashboardCore: (guildId: string) => `/manage/${encodeGuildID(guildId)}/core`,
   dashboardCoreControlPanel: (guildId: string) =>

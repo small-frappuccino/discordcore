@@ -17,6 +17,43 @@ func (s *Server) registerHTTPRoutes(mux *http.ServeMux) {
 }
 
 func (s *Server) registerAuthRoutes(mux *http.ServeMux) {
+
+	mux.HandleFunc("/v1/guilds/{guildId}/data/moderation", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		s.handleDangerPurgeModeration(w, r)
+	})
+	mux.HandleFunc("/v1/guilds/{guildId}/data/qotd", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		s.handleDangerPurgeQOTD(w, r)
+	})
+	mux.HandleFunc("/v1/guilds/{guildId}/data/engagement", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		s.handleDangerPurgeEngagement(w, r)
+	})
+	mux.HandleFunc("/v1/guilds/{guildId}/data/cache", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		s.handleDangerPurgeCache(w, r)
+	})
+	mux.HandleFunc("/v1/guilds/{guildId}/wipe", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		s.handleDangerWipeGuild(w, r)
+	})
+
 	mux.HandleFunc("/auth/discord/login", s.handleDiscordOAuthLogin)
 	mux.HandleFunc("/auth/discord/status", s.handleDiscordOAuthStatus)
 	mux.HandleFunc("/auth/discord/callback", s.handleDiscordOAuthCallback)
@@ -27,6 +64,16 @@ func (s *Server) registerAuthRoutes(mux *http.ServeMux) {
 }
 
 func (s *Server) registerAPIRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/v1/users/@me/preferences", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			s.handleUserPreferencesGet(w, r)
+		case http.MethodPut:
+			s.handleUserPreferencesPut(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
 	mux.HandleFunc("/v1/features", s.handleFeatureRoutes)
 	mux.HandleFunc("/v1/features/", s.handleFeatureRoutes)
 	mux.HandleFunc("/v1/settings", s.handleSettingsRoutes)

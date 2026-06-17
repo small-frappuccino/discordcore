@@ -10,6 +10,7 @@ const RolesPage = lazy(() => import("../pages/RolesPage").then(m => ({ default: 
 const PartnersPage = lazy(() => import("../pages/PartnersPage").then(m => ({ default: m.PartnersPage })));
 const EmbedsPage = lazy(() => import("../pages/EmbedsPage").then(m => ({ default: m.EmbedsPage })));
 const TahoeMockPage = lazy(() => import("../pages/TahoeMockPage").then(m => ({ default: m.TahoeMockPage })));
+const BotProfileOverviewPage = lazy(() => import("../pages/BotProfileOverviewPage").then(m => ({ default: m.BotProfileOverviewPage })));
 const TicketsLayout = lazy(() => import("../pages/Tickets/TicketsLayout").then(m => ({ default: m.TicketsLayout })));
 const TicketsPanelsPage = lazy(() => import("../pages/Tickets/TicketsPanelsPage").then(m => ({ default: m.TicketsPanelsPage })));
 const TicketsFormsPage = lazy(() => import("../pages/Tickets/TicketsFormsPage").then(m => ({ default: m.TicketsFormsPage })));
@@ -25,20 +26,22 @@ export function AppRoutes() {
           <Route path="/manage/tahoe" element={<TahoeMockPage />} />
           <Route path="/manage" element={<DashboardLayout />}>
             <Route path=":guildId">
-              <Route index element={<Navigate to="core" replace />} />
-              <Route path="core" element={<CorePage />} />
-              <Route path="qotd" element={<QOTDPage />} />
-              <Route path="moderation" element={<ModerationPage />} />
-              <Route path="logging" element={<LoggingPage />} />
-              <Route path="roles" element={<RolesPage />} />
-              <Route path="partners" element={<PartnersPage />} />
-              <Route path="embeds" element={<EmbedsPage />} />
-              <Route path="tickets" element={<TicketsLayout />}>
-                <Route index element={<Navigate to="panels" replace />} />
-                <Route path="panels" element={<TicketsPanelsPage />} />
-                <Route path="forms" element={<TicketsFormsPage />} />
-                <Route path="transcripts" element={<TicketsTranscriptsPage />} />
-                <Route path="settings" element={<TicketsSettingsPage />} />
+              <Route path="bots/:botInstanceId">
+                <Route index element={<BotProfileOverviewPage />} />
+                <Route path="core" element={<CorePage />} />
+                <Route path="qotd" element={<QOTDPage />} />
+                <Route path="moderation" element={<ModerationPage />} />
+                <Route path="logging" element={<LoggingPage />} />
+                <Route path="roles" element={<RolesPage />} />
+                <Route path="partners" element={<PartnersPage />} />
+                <Route path="embeds" element={<EmbedsPage />} />
+                <Route path="tickets" element={<TicketsLayout />}>
+                  <Route index element={<Navigate to="panels" replace />} />
+                  <Route path="panels" element={<TicketsPanelsPage />} />
+                  <Route path="forms" element={<TicketsFormsPage />} />
+                  <Route path="transcripts" element={<TicketsTranscriptsPage />} />
+                  <Route path="settings" element={<TicketsSettingsPage />} />
+                </Route>
               </Route>
             </Route>
           </Route>

@@ -28,6 +28,7 @@ var requiredSchemaTables = []string{
 	"daily_member_leaves",
 	"ticket_sequences",
 	"guild_configs",
+	"user_preferences",
 }
 
 var requiredSchemaColumns = map[string][]string{

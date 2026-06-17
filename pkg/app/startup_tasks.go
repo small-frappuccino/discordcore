@@ -247,6 +247,7 @@ func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskO
 	}
 	controlServer.SetQOTDService(opts.qotdService)
 	controlServer.SetModerationMetrics(opts.moderationMetrics)
+	controlServer.SetStorage(opts.store)
 	controlServer.SetCacheObservability(func() *cache.UnifiedCache {
 		if opts.runtimeResolver == nil {
 			return nil

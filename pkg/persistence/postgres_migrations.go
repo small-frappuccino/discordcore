@@ -761,4 +761,19 @@ var postgresMigrations = []migration{
 			`DROP INDEX IF EXISTS idx_qotd_official_posts_guild_date`,
 		},
 	},
+	{
+		Version: 28,
+		UpSQL: []string{
+			`CREATE TABLE IF NOT EXISTS user_preferences (
+				user_id    TEXT PRIMARY KEY,
+				theme      TEXT NOT NULL DEFAULT 'system',
+				timezone   TEXT NOT NULL DEFAULT 'UTC',
+				created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+				updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+			)`,
+		},
+		DownSQL: []string{
+			`DROP TABLE IF EXISTS user_preferences`,
+		},
+	},
 }
