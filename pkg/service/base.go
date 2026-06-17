@@ -91,25 +91,46 @@ func (bs *BaseService) Dependencies() []string {
 // Start starts the service
 func (bs *BaseService) Start(ctx context.Context) error {
 	bs.stateMutex.Lock()
-	defer bs.stateMutex.Unlock()
-
 	if bs.isRunning {
+		bs.stateMutex.Unlock()
 		return nil // Already running
 	}
 
 	bs.log().Info("Starting service...", "service", bs.name)
 	bs.state = StateInitializing
+	bs.stateMutex.Unlock()
 
+	var startErr error
 	// Call the start hook if provided
 	if bs.startHook != nil {
-		if err := bs.startHook(ctx); err != nil {
-			bs.state = StateError
-			bs.errorCount++
-			serviceErr := fmt.Errorf("service start hook failed: %w", err)
-			bs.lastError = serviceErr
-			bs.log().Error("Service start failed", "service", bs.name, "err", err)
-			return serviceErr
+		errCh := make(chan error, 1)
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					errCh <- fmt.Errorf("panic in start hook: %v", r)
+				}
+			}()
+			errCh <- bs.startHook(ctx)
+		}()
+
+		select {
+		case err := <-errCh:
+			startErr = err
+		case <-ctx.Done():
+			startErr = ctx.Err()
 		}
+	}
+
+	bs.stateMutex.Lock()
+	defer bs.stateMutex.Unlock()
+
+	if startErr != nil {
+		bs.state = StateError
+		bs.errorCount++
+		serviceErr := fmt.Errorf("service start hook failed: %w", startErr)
+		bs.lastError = serviceErr
+		bs.log().Error("Service start failed", "service", bs.name, "err", startErr)
+		return serviceErr
 	}
 
 	// Update state
@@ -126,25 +147,46 @@ func (bs *BaseService) Start(ctx context.Context) error {
 // Stop stops the service
 func (bs *BaseService) Stop(ctx context.Context) error {
 	bs.stateMutex.Lock()
-	defer bs.stateMutex.Unlock()
-
 	if !bs.isRunning {
+		bs.stateMutex.Unlock()
 		return nil // Already stopped
 	}
 
 	bs.log().Info("Stopping service...", "service", bs.name)
 	bs.state = StateStopping
+	bs.stateMutex.Unlock()
 
+	var stopErr error
 	// Call the stop hook if provided
 	if bs.stopHook != nil {
-		if err := bs.stopHook(ctx); err != nil {
-			bs.errorCount++
-			serviceErr := fmt.Errorf("service stop hook failed: %w", err)
-			bs.lastError = serviceErr
-			bs.state = StateError
-			bs.log().Error("Service stop failed", "service", bs.name, "err", err)
-			return serviceErr
+		errCh := make(chan error, 1)
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					errCh <- fmt.Errorf("panic in stop hook: %v", r)
+				}
+			}()
+			errCh <- bs.stopHook(ctx)
+		}()
+
+		select {
+		case err := <-errCh:
+			stopErr = err
+		case <-ctx.Done():
+			stopErr = ctx.Err()
 		}
+	}
+
+	bs.stateMutex.Lock()
+	defer bs.stateMutex.Unlock()
+
+	if stopErr != nil {
+		bs.errorCount++
+		serviceErr := fmt.Errorf("service stop hook failed: %w", stopErr)
+		bs.lastError = serviceErr
+		bs.state = StateError
+		bs.log().Error("Service stop failed", "service", bs.name, "err", stopErr)
+		return serviceErr
 	}
 
 	// Update state
