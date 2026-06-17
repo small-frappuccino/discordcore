@@ -16,9 +16,7 @@ export const appRoutes = {
   dashboardCoreCommandsPattern: "/manage/:guildId/core/commands",
   dashboardCoreHealthPattern: "/manage/:guildId/core/health",
   dashboardModerationPattern: "/manage/:guildId/moderation",
-  dashboardModerationModerationPattern:
-    "/manage/:guildId/moderation/moderation",
-  dashboardModerationLoggingPattern: "/manage/:guildId/moderation/logging",
+  dashboardLoggingPattern: "/manage/:guildId/logging",
   dashboardPartnerBoardPattern: "/manage/:guildId/partner-board",
   partnerBoardEntriesPattern: "/manage/:guildId/partner-board/entries",
   partnerBoardLayoutPattern: "/manage/:guildId/partner-board/layout",
@@ -45,10 +43,8 @@ export const appRoutes = {
     `/manage/${encodeGuildID(guildId)}/core/health`,
   dashboardModeration: (guildId: string) =>
     `/manage/${encodeGuildID(guildId)}/moderation`,
-  dashboardModerationModeration: (guildId: string) =>
-    `/manage/${encodeGuildID(guildId)}/moderation/moderation`,
-  dashboardModerationLogging: (guildId: string) =>
-    `/manage/${encodeGuildID(guildId)}/moderation/logging`,
+  dashboardLogging: (guildId: string) =>
+    `/manage/${encodeGuildID(guildId)}/logging`,
   dashboardPartnerBoard: (guildId: string) =>
     `/manage/${encodeGuildID(guildId)}/partner-board`,
   partnerBoardBase: (guildId: string) =>
@@ -161,9 +157,9 @@ export function mapLegacyDashboardPathForGuild(
     case "commands":
       return appRoutes.dashboardCoreCommands(normalizedGuildID);
     case "moderation":
-      return appRoutes.dashboardModerationModeration(normalizedGuildID);
+      return appRoutes.dashboardModeration(normalizedGuildID);
     case "logging":
-      return appRoutes.dashboardModerationLogging(normalizedGuildID);
+      return appRoutes.dashboardLogging(normalizedGuildID);
     case "stats":
       return appRoutes.dashboardCoreStats(normalizedGuildID);
     case "partner-board":

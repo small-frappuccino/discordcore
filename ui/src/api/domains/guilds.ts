@@ -77,6 +77,7 @@ export interface GuildSettingsWorkspace {
     bot_instance_statuses?: Record<string, string>;
     feature_routing?: Record<string, string>;
     roles: GuildRolesSettingsSection;
+    channels?: Record<string, string>;
   };
 }
 
@@ -140,6 +141,7 @@ export async function updateGuildSettings(
     bot_instance_statuses?: Record<string, string>;
     feature_routing?: Record<string, string>;
     roles?: GuildRolesSettingsSection;
+    channels?: Record<string, string>;
   },
 ): Promise<GuildSettingsWorkspaceResponse> {
   const { delay } = await import("../client");
@@ -203,6 +205,12 @@ export async function updateGuildSettings(
         if (currentPayload.roles !== undefined) {
           const changedConcurrently = JSON.stringify(latestWorkspace.sections.roles) !== JSON.stringify(originalWorkspace.sections.roles);
           if (changedConcurrently && JSON.stringify(latestWorkspace.sections.roles) !== JSON.stringify(currentPayload.roles)) {
+            collision = true;
+          }
+        }
+        if (currentPayload.channels !== undefined) {
+          const changedConcurrently = JSON.stringify(latestWorkspace.sections.channels) !== JSON.stringify(originalWorkspace.sections.channels);
+          if (changedConcurrently && JSON.stringify(latestWorkspace.sections.channels) !== JSON.stringify(currentPayload.channels)) {
             collision = true;
           }
         }

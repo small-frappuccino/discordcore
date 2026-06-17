@@ -22,11 +22,9 @@ export function ModerationPage() {
     isLoading,
     isSaving,
     automodEnabled,
-    loggingEnabled,
     form,
     onSubmit,
     handleToggleAutomod,
-    handleToggleLogging,
   } = useModerationPageLogic();
 
   if (!selectedGuildID) {
@@ -77,11 +75,6 @@ export function ModerationPage() {
                   title="AutoMod Engine"
                   description="Automatically detect and block forbidden content."
                   control={<ToggleSwitch checked={automodEnabled} onChange={handleToggleAutomod} />}
-                />
-                <SettingsRow
-                  title="Audit Logging"
-                  description="Log moderation actions and deleted messages to a dedicated channel."
-                  control={<ToggleSwitch checked={loggingEnabled} onChange={handleToggleLogging} />}
                 />
               </SettingsGroup>
               

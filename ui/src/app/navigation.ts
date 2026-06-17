@@ -62,6 +62,7 @@ export function getDashboardSidebarNavigationSections(
   return [
     getDashboardCoreNavigationSection(guildId),
     getDashboardModerationNavigationSection(guildId),
+    getDashboardLoggingNavigationSection(guildId),
     getDashboardEngagementNavigationSection(guildId),
     getDashboardRolesNavigationSection(guildId),
   ];
@@ -147,15 +148,26 @@ function getDashboardModerationNavigationSection(
       {
         id: "moderation",
         label: "Moderation",
-        to: appRoutes.dashboardModerationModeration(guildId),
-        activePath: appRoutes.dashboardModerationModeration(guildId),
+        to: appRoutes.dashboardModeration(guildId),
+        activePath: appRoutes.dashboardModeration(guildId),
         homeActionLabel: "Open Moderation",
       },
+    ],
+  };
+}
+
+function getDashboardLoggingNavigationSection(
+  guildId: string,
+): NavigationSection {
+  return {
+    id: "logging",
+    label: "Logging",
+    items: [
       {
         id: "logging",
         label: "Logging",
-        to: appRoutes.dashboardModerationLogging(guildId),
-        activePath: appRoutes.dashboardModerationLogging(guildId),
+        to: appRoutes.dashboardLogging(guildId),
+        activePath: appRoutes.dashboardLogging(guildId),
         homeActionLabel: "Open Logging",
       },
     ],

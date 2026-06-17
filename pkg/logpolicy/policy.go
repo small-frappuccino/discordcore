@@ -320,78 +320,45 @@ func evaluateEventToggle(eventType LogEventType, rc files.RuntimeConfig, feature
 		if rc.DisableUserLogs {
 			return EmitReasonRuntimeDisableUserLogs, true
 		}
-		if !features.Logging.AvatarLogging {
-			return EmitReasonFeatureLoggingUserDisabled, true
-		}
 	case LogEventRoleChange:
 		if rc.DisableUserLogs {
 			return EmitReasonRuntimeDisableUserLogs, true
-		}
-		if !features.Logging.RoleUpdate {
-			return EmitReasonFeatureLoggingUserDisabled, true
 		}
 	case LogEventMemberJoin:
 		if rc.DisableEntryExitLogs {
 			return EmitReasonRuntimeDisableEntryExitLogs, true
 		}
-		if !features.Logging.MemberJoin {
-			return EmitReasonFeatureLoggingEntryExitDisabled, true
-		}
 	case LogEventMemberLeave:
 		if rc.DisableEntryExitLogs {
 			return EmitReasonRuntimeDisableEntryExitLogs, true
-		}
-		if !features.Logging.MemberLeave {
-			return EmitReasonFeatureLoggingEntryExitDisabled, true
 		}
 	case LogEventMessageProcess:
 		if rc.DisableMessageLogs {
 			return EmitReasonRuntimeDisableMessageLogs, true
 		}
-		if !features.Logging.MessageProcess {
-			return EmitReasonFeatureLoggingMessageDisabled, true
-		}
 	case LogEventMessageEdit:
 		if rc.DisableMessageLogs {
 			return EmitReasonRuntimeDisableMessageLogs, true
-		}
-		if !features.Logging.MessageEdit {
-			return EmitReasonFeatureLoggingMessageDisabled, true
 		}
 	case LogEventMessageDelete:
 		if rc.DisableMessageLogs {
 			return EmitReasonRuntimeDisableMessageLogs, true
 		}
-		if !features.Logging.MessageDelete {
-			return EmitReasonFeatureLoggingMessageDisabled, true
-		}
 	case LogEventReactionMetric:
 		if rc.DisableReactionLogs {
 			return EmitReasonRuntimeDisableReactionLogs, true
-		}
-		if !features.Logging.ReactionMetric {
-			return EmitReasonFeatureLoggingReactionDisabled, true
 		}
 	case LogEventAutomodAction:
 		if rc.DisableAutomodLogs {
 			return EmitReasonRuntimeDisableAutomodLogs, true
 		}
-		if !features.Logging.AutomodAction {
-			return EmitReasonFeatureLoggingAutomodDisabled, true
-		}
 	case LogEventModerationCase:
 		if !rc.ModerationLoggingEnabled() {
 			return EmitReasonRuntimeModerationLoggingOff, true
 		}
-		if !features.Logging.ModerationCase {
-			return EmitReasonFeatureLoggingModerationDisabled, true
-		}
 	case LogEventCleanAction:
 		if rc.DisableCleanLog {
 			return EmitReasonRuntimeDisableCleanLog, true
-		}
-		if !features.Logging.CleanAction {
-			return EmitReasonFeatureLoggingCleanDisabled, true
 		}
 	}
 	return "", false

@@ -66,7 +66,7 @@ func resolveBotRuntimeCapabilities(
 			}
 		}
 
-		if features.Services.Automod && features.Logging.AutomodAction && !runtimeConfig.DisableAutomodLogs {
+		if features.Services.Automod && guild.Channels.AutomodAction != "" && !runtimeConfig.DisableAutomodLogs {
 			resolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation")
 			if resolvedID == botInstanceID {
 				capabilities.automod = true
@@ -126,14 +126,14 @@ func resolveBotRuntimeCapabilities(
 		}
 
 		if isModBot || isLoggingBot {
-			if botRuntimeNeedsPresence(features, runtimeConfig) {
+			if botRuntimeNeedsPresence(features, runtimeConfig, guild) {
 				capabilities.intents |= discordgo.IntentsGuildPresences
 				capabilities.warmup = true
 			}
-			if botRuntimeNeedsMessages(features, runtimeConfig) {
+			if botRuntimeNeedsMessages(runtimeConfig, guild) {
 				capabilities.intents |= discordgo.IntentsGuildMessages | discordgo.IntentMessageContent
 			}
-			if botRuntimeNeedsReactions(features, runtimeConfig) {
+			if botRuntimeNeedsReactions(runtimeConfig) {
 				capabilities.intents |= discordgo.IntentsGuildMessageReactions
 			}
 		}
@@ -162,26 +162,27 @@ func botRuntimeNeedsMonitoring(
 	runtimeConfig files.RuntimeConfig,
 	guild files.GuildConfig,
 ) bool {
-	return botRuntimeNeedsMessages(features, runtimeConfig) ||
-		botRuntimeNeedsReactions(features, runtimeConfig) ||
-		botRuntimeNeedsPresence(features, runtimeConfig) ||
+	return botRuntimeNeedsMessages(runtimeConfig, guild) ||
+		botRuntimeNeedsReactions(runtimeConfig) ||
+		botRuntimeNeedsPresence(features, runtimeConfig, guild) ||
 		botRuntimeNeedsMemberData(features, runtimeConfig, guild) ||
-		botRuntimeNeedsBotPermMirror(features, runtimeConfig)
+		botRuntimeNeedsBotPermMirror(runtimeConfig)
 }
 
-func botRuntimeNeedsMessages(features files.ResolvedFeatureToggles, runtimeConfig files.RuntimeConfig) bool {
+func botRuntimeNeedsMessages(runtimeConfig files.RuntimeConfig, guild files.GuildConfig) bool {
 	if runtimeConfig.DisableMessageLogs {
 		return false
 	}
-	return features.Logging.MessageProcess || features.Logging.MessageEdit || features.Logging.MessageDelete
+	return guild.Channels.MessageEdit != "" || guild.Channels.MessageDelete != ""
 }
 
-func botRuntimeNeedsReactions(features files.ResolvedFeatureToggles, runtimeConfig files.RuntimeConfig) bool {
-	return !runtimeConfig.DisableReactionLogs && features.Logging.ReactionMetric
+func botRuntimeNeedsReactions(runtimeConfig files.RuntimeConfig) bool {
+	// Reaction logs are metrics-only and don't require a channel configuration.
+	return !runtimeConfig.DisableReactionLogs
 }
 
-func botRuntimeNeedsPresence(features files.ResolvedFeatureToggles, runtimeConfig files.RuntimeConfig) bool {
-	if !runtimeConfig.DisableUserLogs && features.Logging.AvatarLogging {
+func botRuntimeNeedsPresence(features files.ResolvedFeatureToggles, runtimeConfig files.RuntimeConfig, guild files.GuildConfig) bool {
+	if !runtimeConfig.DisableUserLogs && guild.Channels.AvatarLogging != "" {
 		return true
 	}
 	if features.PresenceWatch.User && strings.TrimSpace(runtimeConfig.PresenceWatchUserID) != "" {
@@ -195,12 +196,13 @@ func botRuntimeNeedsMemberData(
 	runtimeConfig files.RuntimeConfig,
 	guild files.GuildConfig,
 ) bool {
-	if !runtimeConfig.DisableUserLogs && features.Logging.RoleUpdate {
+	if !runtimeConfig.DisableUserLogs && guild.Channels.RoleUpdate != "" {
 		return true
 	}
-	if !runtimeConfig.DisableEntryExitLogs && (features.Logging.MemberJoin || features.Logging.MemberLeave) {
+	if guild.Channels.MemberJoin != "" || guild.Channels.MemberLeave != "" {
 		return true
 	}
+
 	if features.AutoRoleAssign && guild.Roles.AutoAssignment.Enabled {
 		return true
 	}
@@ -210,6 +212,6 @@ func botRuntimeNeedsMemberData(
 	return features.Backfill.Enabled && strings.TrimSpace(runtimeConfig.BackfillChannelID) != ""
 }
 
-func botRuntimeNeedsBotPermMirror(features files.ResolvedFeatureToggles, runtimeConfig files.RuntimeConfig) bool {
-	return features.Safety.BotRolePermMirror && !runtimeConfig.DisableBotRolePermMirror
+func botRuntimeNeedsBotPermMirror(runtimeConfig files.RuntimeConfig) bool {
+	return !runtimeConfig.DisableBotRolePermMirror && strings.TrimSpace(runtimeConfig.BotRolePermMirrorActorRoleID) != ""
 }

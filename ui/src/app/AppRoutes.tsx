@@ -5,6 +5,7 @@ const DashboardLayout = lazy(() => import("../pages/DashboardLayout").then(m => 
 const CorePage = lazy(() => import("../pages/CorePage").then(m => ({ default: m.CorePage })));
 const QOTDPage = lazy(() => import("../pages/QOTDPage").then(m => ({ default: m.QOTDPage })));
 const ModerationPage = lazy(() => import("../pages/ModerationPage").then(m => ({ default: m.ModerationPage })));
+const LoggingPage = lazy(() => import("../pages/LoggingPage").then(m => ({ default: m.LoggingPage })));
 const RolesPage = lazy(() => import("../pages/RolesPage").then(m => ({ default: m.RolesPage })));
 const PartnersPage = lazy(() => import("../pages/PartnersPage").then(m => ({ default: m.PartnersPage })));
 const EmbedsPage = lazy(() => import("../pages/EmbedsPage").then(m => ({ default: m.EmbedsPage })));
@@ -28,6 +29,7 @@ export function AppRoutes() {
               <Route path="core" element={<CorePage />} />
               <Route path="qotd" element={<QOTDPage />} />
               <Route path="moderation" element={<ModerationPage />} />
+              <Route path="logging" element={<LoggingPage />} />
               <Route path="roles" element={<RolesPage />} />
               <Route path="partners" element={<PartnersPage />} />
               <Route path="embeds" element={<EmbedsPage />} />
