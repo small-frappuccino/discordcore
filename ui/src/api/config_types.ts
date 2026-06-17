@@ -5,42 +5,6 @@ export interface testConfigContainer {
   secret: string;
 }
 
-export interface DiscohookJSON {
-  content?: string;
-  embeds?: DiscohookEmbed[];
-}
-
-export interface DiscohookEmbed {
-  title?: string;
-  description?: string;
-  color?: number;
-  author?: DiscohookAuthor;
-  footer?: DiscohookFooter;
-  image?: DiscohookImage;
-  thumbnail?: DiscohookImage;
-  fields?: DiscohookField[];
-}
-
-export interface DiscohookAuthor {
-  name?: string;
-  icon_url?: string;
-}
-
-export interface DiscohookFooter {
-  text?: string;
-  icon_url?: string;
-}
-
-export interface DiscohookImage {
-  url?: string;
-}
-
-export interface DiscohookField {
-  name?: string;
-  value?: string;
-  inline?: boolean;
-}
-
 export interface FeatureServiceToggles {
   monitoring?: boolean;
   automod?: boolean;
@@ -129,6 +93,47 @@ export interface CustomEmbedConfig {
   postings?: CustomEmbedPostingConfig[];
 }
 
+export interface DiscohookJSON {
+  content?: string;
+  embeds?: DiscohookEmbed[];
+}
+
+export interface DiscohookEmbed {
+  title?: string;
+  description?: string;
+  color?: number;
+  author?: DiscohookAuthor;
+  footer?: DiscohookFooter;
+  image?: DiscohookImage;
+  thumbnail?: DiscohookImage;
+  fields?: DiscohookField[];
+}
+
+export interface DiscohookAuthor {
+  name?: string;
+  icon_url?: string;
+}
+
+export interface DiscohookFooter {
+  text?: string;
+  icon_url?: string;
+}
+
+export interface DiscohookImage {
+  url?: string;
+}
+
+export interface DiscohookField {
+  name?: string;
+  value?: string;
+  inline?: boolean;
+}
+
+export interface payload {
+  name: string;
+  count: number;
+}
+
 export interface rawQOTDDeckConfig {
   id?: string;
   name?: string;
@@ -165,11 +170,6 @@ export interface rawQOTDConfig {
   publish_minute_utc?: number;
   qotd_time_hour_utc?: number;
   qotd_time_minute_utc?: number;
-}
-
-export interface payload {
-  name: string;
-  count: number;
 }
 
 export interface RuntimeConfig {

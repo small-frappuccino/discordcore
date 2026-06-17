@@ -31,7 +31,7 @@ export const SettingsModal = memo(function SettingsModal() {
           className="relative flex w-full max-w-[1100px] h-[85vh] min-h-[500px] bg-base rounded-2xl shadow-2xl overflow-hidden border border-border-subtle"
         >
           {/* Sidebar */}
-          <aside className="w-64 bg-surface flex flex-col shrink-0 border-r border-border-subtle pt-10 pb-6">
+          <aside className="w-64 bg-surface flex flex-col shrink-0 border-r border-border-subtle pt-4 pb-6">
             <nav className="shell-nav px-2">
               <div className="shell-nav-section-title px-3">User Settings</div>
               <SidebarItem 
@@ -44,8 +44,7 @@ export const SettingsModal = memo(function SettingsModal() {
                 active={activeTab === "account"} 
                 onClick={() => setActiveTab("account")} 
               />
-              <div className="h-px bg-border-subtle my-4 mx-3" />
-              <div className="shell-nav-section-title px-3">Projects</div>
+              <div className="shell-nav-section-title px-3 mt-2">Projects</div>
               {manageableGuilds.map((guild) => (
                 <SidebarItem 
                   key={guild.id}
@@ -59,7 +58,7 @@ export const SettingsModal = memo(function SettingsModal() {
 
           {/* Main Content Area */}
           <main className="flex-1 overflow-y-auto relative bg-base pt-10 px-10 pb-8">
-            <div className="max-w-2xl">
+            <div className="max-w-2xl mx-auto w-full">
               {activeTab === "general" && <GeneralSettings />}
               {activeTab === "account" && (
                 <div>
