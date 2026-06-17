@@ -7,6 +7,7 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
 	"github.com/small-frappuccino/discordgo"
@@ -172,9 +173,33 @@ func (l *Logger) OnMessageEdit(ctx context.Context, guildID string, channelID di
 	l.sendEmbed(ctx, discord.ChannelID(logChannelID), embed, logpolicy.LogEventMessageEdit)
 }
 
-// OnMessageDelete handles message delete events.
-func (l *Logger) OnMessageDelete(ctx context.Context, guildID string, channelID discord.ChannelID, message discord.Message) {
-	decision, ok := l.checkPolicy(logpolicy.LogEventMessageDelete, guildID)
+// OnMessageUpdate handles message update events to satisfy messages.MessageSink.
+func (l *Logger) OnMessageUpdate(ctx context.Context, m *gateway.MessageUpdateEvent, cachedMessage *discord.Message) {
+	if cachedMessage == nil {
+		slog.Warn("Message update event dropped by event logger: no cached content available",
+			slog.String("guild_id", m.GuildID.String()),
+			slog.String("message_id", m.ID.String()),
+		)
+		return
+	}
+	newMessage := *cachedMessage
+	if m.Content != "" {
+		newMessage.Content = m.Content
+	}
+	l.OnMessageEdit(ctx, m.GuildID.String(), m.ChannelID, *cachedMessage, newMessage)
+}
+
+// OnMessageDelete handles message delete events to satisfy messages.MessageSink.
+func (l *Logger) OnMessageDelete(ctx context.Context, m *gateway.MessageDeleteEvent, cachedMessage *discord.Message, executor *discord.User) {
+	if cachedMessage == nil {
+		slog.Warn("Message delete event dropped by event logger: no cached content available",
+			slog.String("guild_id", m.GuildID.String()),
+			slog.String("message_id", m.ID.String()),
+		)
+		return
+	}
+
+	decision, ok := l.checkPolicy(logpolicy.LogEventMessageDelete, m.GuildID.String())
 	if !ok {
 		return
 	}
@@ -186,16 +211,29 @@ func (l *Logger) OnMessageDelete(ctx context.Context, guildID string, channelID 
 
 	embed := discord.Embed{
 		Title:       "Message Deleted",
-		Description: fmt.Sprintf("**Channel:** <#%d>\n**Author:** <@%d>", channelID, message.Author.ID),
+		Description: fmt.Sprintf("**Channel:** <#%d>\n**Author:** <@%d>", m.ChannelID, cachedMessage.Author.ID),
 		Color:       0xf04747, // Red
 		Fields: []discord.EmbedField{
-			{Name: "Content", Value: message.Content},
+			{Name: "Content", Value: cachedMessage.Content},
 		},
 		Footer: &discord.EmbedFooter{
-			Text: fmt.Sprintf("Message ID: %d | Author ID: %d", message.ID, message.Author.ID),
+			Text: fmt.Sprintf("Message ID: %d | Author ID: %d", cachedMessage.ID, cachedMessage.Author.ID),
 		},
 	}
+
+	if executor != nil {
+		embed.Description += fmt.Sprintf("\n**Deleted By:** <@%d>", executor.ID)
+	}
+
 	l.sendEmbed(ctx, discord.ChannelID(logChannelID), embed, logpolicy.LogEventMessageDelete)
+}
+
+// OnMessageDeleteBulk handles bulk message deletions to satisfy messages.MessageSink.
+func (l *Logger) OnMessageDeleteBulk(ctx context.Context, guildID discord.GuildID, channelID discord.ChannelID, messageIDs []string) {
+	slog.Info("Bulk delete event received but not fully forwarded to eventlog",
+		slog.String("guild_id", guildID.String()),
+		slog.Int("count", len(messageIDs)),
+	)
 }
 
 // OnModerationAction handles moderation actions (from our bot or external).

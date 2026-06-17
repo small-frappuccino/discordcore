@@ -12,12 +12,6 @@ type MemberEventSink interface {
 	OnRoleUpdate(ctx context.Context, guildID string, user discord.User, addedRoles, removedRoles []discord.RoleID)
 }
 
-// MessageEventSink defines the contract for logging message-related events.
-type MessageEventSink interface {
-	OnMessageEdit(ctx context.Context, guildID string, channelID discord.ChannelID, oldMessage, newMessage discord.Message)
-	OnMessageDelete(ctx context.Context, guildID string, channelID discord.ChannelID, message discord.Message)
-}
-
 // ModerationEventSink defines the contract for logging moderation actions.
 type ModerationEventSink interface {
 	OnModerationAction(ctx context.Context, guildID string, actionType string, targetUser discord.User, reason string, moderator discord.User)

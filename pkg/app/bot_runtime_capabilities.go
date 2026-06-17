@@ -9,14 +9,15 @@ import (
 )
 
 type botRuntimeCapabilities struct {
-	monitoring  bool
-	automod     bool
-	userPrune   bool
-	qotdRuntime bool
-	stats       bool
-	warmup      bool
-	intents     discordgo.Intent
-	hasCommands bool
+	monitoring          bool
+	automod             bool
+	userPrune           bool
+	qotdRuntime         bool
+	stats               bool
+	warmup              bool
+	intents             discordgo.Intent
+	hasCommands         bool
+	messageEventService bool
 }
 
 // hasCommands reports whether any command catalog should be installed.
@@ -89,13 +90,19 @@ func resolveBotRuntimeCapabilities(
 		rolesResolvedID, _ := guild.ResolveFeatureBotInstanceID("roles")
 		modResolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation")
 		statsResolvedID, _ := guild.ResolveFeatureBotInstanceID("stats")
+		loggingResolvedID, _ := guild.ResolveFeatureBotInstanceID("logging")
 
 		isRolesBot := rolesResolvedID == botInstanceID
 		isModBot := modResolvedID == botInstanceID
 		isStatsBot := statsResolvedID == botInstanceID
+		isLoggingBot := loggingResolvedID == botInstanceID
 
-		if !isRolesBot && !isModBot && !isStatsBot {
+		if !isRolesBot && !isModBot && !isStatsBot && !isLoggingBot {
 			continue
+		}
+
+		if isLoggingBot {
+			capabilities.messageEventService = true
 		}
 
 		slog.Debug("Tracking complex conditional branch: Evaluating monitoring sub-capabilities for target runtime",
@@ -104,20 +111,21 @@ func resolveBotRuntimeCapabilities(
 			slog.Bool("is_roles_bot", isRolesBot),
 			slog.Bool("is_mod_bot", isModBot),
 			slog.Bool("is_stats_bot", isStatsBot),
+			slog.Bool("is_logging_bot", isLoggingBot),
 		)
 
 		if botRuntimeNeedsMonitoring(features, runtimeConfig, guild) {
 			capabilities.monitoring = true
 		}
 
-		if isRolesBot || isStatsBot {
+		if isRolesBot || isStatsBot || isLoggingBot {
 			if botRuntimeNeedsMemberData(features, runtimeConfig, guild) {
 				capabilities.intents |= discordgo.IntentsGuildMembers
 				capabilities.warmup = true
 			}
 		}
 
-		if isModBot {
+		if isModBot || isLoggingBot {
 			if botRuntimeNeedsPresence(features, runtimeConfig) {
 				capabilities.intents |= discordgo.IntentsGuildPresences
 				capabilities.warmup = true
@@ -128,6 +136,14 @@ func resolveBotRuntimeCapabilities(
 			if botRuntimeNeedsReactions(features, runtimeConfig) {
 				capabilities.intents |= discordgo.IntentsGuildMessageReactions
 			}
+		}
+
+		if isLoggingBot {
+			slog.Info("Logging bot runtime capability activated",
+				slog.String("guild_id", guild.GuildID),
+				slog.String("bot_instance_id", botInstanceID),
+				slog.Int("intents_mask", int(capabilities.intents)),
+			)
 		}
 	}
 

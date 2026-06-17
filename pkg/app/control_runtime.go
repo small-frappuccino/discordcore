@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	defaultLocalHTTPSControlAddr    = "127.0.0.1:8443"
+	defaultLocalHTTPSControlAddr    = ":8443"
 	defaultLocalHTTPSPublicOrigin   = "https://localhost:8443"
 	controlPublicOriginEnv          = "DISCORDCORE_CONTROL_PUBLIC_ORIGIN"
 	defaultLocalTLSCommonName       = "localhost"

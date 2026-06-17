@@ -14,6 +14,7 @@ const BASE_FEATURE_OPTIONS = [
   { label: "Embeds", value: "embeds" },
   { label: "Tickets", value: "tickets" },
   { label: "Stats", value: "stats" },
+  { label: "Logging", value: "logging" },
 ];
 
 export function CorePage() {

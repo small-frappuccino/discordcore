@@ -18,6 +18,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
 	"github.com/small-frappuccino/discordcore/pkg/monitoring"
+	svc "github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/task"
 )
@@ -148,7 +149,8 @@ type MessageDeleteTaskPayload struct {
 	ReceivedAt time.Time
 }
 
-type eventServiceDeps struct {
+// EventServiceDeps holds dependencies for the MessageEventService
+type EventServiceDeps struct {
 	ArikawaState  *state.State
 	ConfigManager *files.ConfigManager
 	Sink          MessageSink
@@ -159,7 +161,7 @@ type eventServiceDeps struct {
 
 // NewMessageEventServiceForBot creates a message event service scoped to a bot
 // instance assignment.
-func NewMessageEventServiceForBot(deps eventServiceDeps) *MessageEventService {
+func NewMessageEventServiceForBot(deps EventServiceDeps) *MessageEventService {
 	return &MessageEventService{
 		arikawaState:  deps.ArikawaState,
 		configManager: deps.ConfigManager,
@@ -283,6 +285,32 @@ func (mes *MessageEventService) Stop(ctx context.Context) error {
 // IsRunning returns whether the service is running
 func (mes *MessageEventService) IsRunning() bool {
 	return mes.lifecycle.IsRunning()
+}
+
+// Name returns the unique name of the service
+func (mes *MessageEventService) Name() string { return "messages" }
+
+// Type returns the service type
+func (mes *MessageEventService) Type() svc.ServiceType { return svc.ServiceType("messages") }
+
+// Priority returns the startup priority
+func (mes *MessageEventService) Priority() svc.ServicePriority { return svc.PriorityNormal }
+
+// Dependencies returns a list of dependencies
+func (mes *MessageEventService) Dependencies() []string { return nil }
+
+// HealthCheck returns the current health status
+func (mes *MessageEventService) HealthCheck(ctx context.Context) svc.HealthStatus {
+	return svc.HealthStatus{
+		Healthy:   mes.IsRunning(),
+		Message:   "Message Event Service running",
+		LastCheck: time.Now(),
+	}
+}
+
+// Stats returns runtime statistics
+func (mes *MessageEventService) Stats() svc.ServiceStats {
+	return svc.ServiceStats{}
 }
 
 // handleMessageCreate stores messages for future comparisons
