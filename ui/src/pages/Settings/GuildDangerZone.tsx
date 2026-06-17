@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { SettingsGroup, SettingsRow, ActionTrigger } from "../../components/ui/tahoe";
-import { ConfirmationModal } from "../../components/ui";
+import { ConfirmationModal, PageHeader } from "../../components/ui";
+import { Stack } from "../../components/layout";
 import { useDashboardSession } from "../../context/DashboardSessionContext";
 import toast from "react-hot-toast";
 
@@ -60,14 +61,16 @@ export function GuildDangerZone({ guildId }: { guildId: string }) {
   };
 
   return (
-    <div>
-      <h2 className="text-2xl font-bold mb-2 text-text-primary">Guild Settings</h2>
-      <p className="text-sm text-text-secondary mb-8">
-        Manage destructive operations and data for {guild.name}.
-      </p>
+    <Stack spacing="xl" className="settings-form w-full max-w-none">
+      <PageHeader>
+        <PageHeader.TitleRow>
+          <PageHeader.Title>Guild Settings</PageHeader.Title>
+        </PageHeader.TitleRow>
+        <PageHeader.Description>Manage destructive operations and data for {guild.name}.</PageHeader.Description>
+      </PageHeader>
 
-      <div className="mb-8">
-        <h3 className="text-sm font-bold text-text-primary mb-3">Danger Zone</h3>
+      <Stack spacing="sm">
+        <h3 className="text-lg font-semibold tracking-tight text-text-primary">Danger Zone</h3>
 
         <SettingsGroup>
           <SettingsRow
@@ -163,7 +166,7 @@ export function GuildDangerZone({ guildId }: { guildId: string }) {
             }
           />
         </SettingsGroup>
-      </div>
+      </Stack>
 
       <ConfirmationModal
         isOpen={confirmModal.isOpen}
@@ -195,6 +198,6 @@ export function GuildDangerZone({ guildId }: { guildId: string }) {
         confirmText={confirmModal.actionLabel}
         isConfirming={isExecuting}
       />
-    </div>
+    </Stack>
   );
 }

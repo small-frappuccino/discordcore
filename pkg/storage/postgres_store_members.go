@@ -373,7 +373,12 @@ func upsertMemberJoinsBatch(ctx context.Context, tx pgx.Tx, guildID string, snap
                  ELSE member_joins.last_seen_at
                END,
                is_bot = COALESCE(excluded.is_bot, member_joins.is_bot),
-               left_at = NULL`,
+               left_at = NULL
+             WHERE excluded.joined_at < member_joins.joined_at
+                OR member_joins.last_seen_at IS NULL
+                OR excluded.last_seen_at > member_joins.last_seen_at + interval '5 minutes'
+                OR (excluded.is_bot IS NOT NULL AND excluded.is_bot != member_joins.is_bot)
+                OR member_joins.left_at IS NOT NULL`,
 			guildID, userIDs, joinedAts, seenAts, isBots,
 		)
 		return err
@@ -406,7 +411,11 @@ func (s *Store) UpsertMemberJoinContext(ctx context.Context, guildID, userID str
              WHEN member_joins.last_seen_at IS NULL OR excluded.last_seen_at > member_joins.last_seen_at THEN excluded.last_seen_at
              ELSE member_joins.last_seen_at
            END,
-           left_at = NULL`,
+           left_at = NULL
+         WHERE excluded.joined_at < member_joins.joined_at
+            OR member_joins.last_seen_at IS NULL
+            OR excluded.last_seen_at > member_joins.last_seen_at + interval '5 minutes'
+            OR member_joins.left_at IS NOT NULL`,
 		guildID, userID, joinedAt, seenAt,
 	)
 	return err
@@ -455,7 +464,12 @@ func (s *Store) UpsertMemberPresenceContext(ctx context.Context, input MemberPre
              ELSE member_joins.last_seen_at
            END,
            is_bot = excluded.is_bot,
-           left_at = NULL`,
+           left_at = NULL
+         WHERE excluded.joined_at < member_joins.joined_at
+            OR member_joins.last_seen_at IS NULL
+            OR excluded.last_seen_at > member_joins.last_seen_at + interval '5 minutes'
+            OR member_joins.is_bot != excluded.is_bot
+            OR member_joins.left_at IS NOT NULL`,
 		input.GuildID, input.UserID, input.JoinedAt, input.SeenAt, input.IsBot,
 	)
 	return err
@@ -496,7 +510,8 @@ func (s *Store) MarkMemberLeftContext(ctx context.Context, guildID, userID strin
 		          WHEN last_seen_at IS NULL OR $3 > last_seen_at THEN $4
 		          ELSE last_seen_at
 		        END
-		  WHERE guild_id=$5 AND user_id=$6`,
+		  WHERE guild_id=$5 AND user_id=$6
+		    AND (left_at IS NULL OR $1 > left_at OR last_seen_at IS NULL OR $3 > last_seen_at)`,
 		leftAt, leftAt, leftAt, leftAt, guildID, userID,
 	); err != nil {
 		return err
@@ -744,7 +759,8 @@ func (s *Store) TouchMemberJoin(guildID, userID string) error {
            ELSE last_seen_at
          END,
              left_at = NULL
-         WHERE guild_id=$3 AND user_id=$4`,
+         WHERE guild_id=$3 AND user_id=$4
+           AND (last_seen_at IS NULL OR $1 > last_seen_at + interval '5 minutes' OR left_at IS NOT NULL)`,
 		seenAt, seenAt, guildID, userID,
 	)
 	return err

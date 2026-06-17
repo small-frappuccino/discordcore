@@ -31,9 +31,9 @@ export const SettingsModal = memo(function SettingsModal() {
           className="relative flex w-full max-w-[1200px] h-[85vh] bg-bg-base rounded-2xl shadow-2xl overflow-hidden border border-border-subtle"
         >
           {/* Sidebar */}
-          <aside className="w-64 bg-bg-surface flex-shrink-0 flex flex-col py-8 border-r border-border-subtle overflow-y-auto">
-            <nav className="flex flex-col gap-1 px-3">
-              <h3 className="px-3 text-xs font-bold text-text-muted uppercase tracking-wider mb-2">User Settings</h3>
+          <aside className="w-64 bg-bg-surface flex flex-col">
+            <nav className="shell-nav">
+              <div className="shell-nav-section-title">User Settings</div>
               <SidebarItem 
                 label="General" 
                 active={activeTab === "general"} 
@@ -44,11 +44,11 @@ export const SettingsModal = memo(function SettingsModal() {
                 active={activeTab === "account"} 
                 onClick={() => setActiveTab("account")} 
               />
-
-              <div className="my-4 border-t border-border-subtle mx-3" />
-
-              <h3 className="px-3 text-xs font-bold text-text-muted uppercase tracking-wider mb-2">Projects</h3>
-              {manageableGuilds.map(guild => (
+              
+              <div className="shell-dropdown-divider my-4 mx-3" />
+              
+              <div className="shell-nav-section-title">Projects</div>
+              {manageableGuilds.map((guild) => (
                 <SidebarItem 
                   key={guild.id}
                   label={guild.name} 
@@ -92,14 +92,10 @@ export const SettingsModal = memo(function SettingsModal() {
 function SidebarItem({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
     <button
-      className={`text-left px-3 py-2 rounded-md text-sm transition-colors font-medium w-full ${
-        active 
-          ? "bg-surface-active text-text-primary" 
-          : "text-text-secondary hover:bg-surface-hover hover:text-text-primary"
-      }`}
+      className={`shell-nav-link w-full text-left justify-start ${active ? "is-active" : ""}`}
       onClick={onClick}
     >
-      {label}
+      <span>{label}</span>
     </button>
   );
 }
