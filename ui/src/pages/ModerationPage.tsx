@@ -37,38 +37,40 @@ export function ModerationPage() {
     <>
       {isLoading ? (
         <PageContainer>
+          <div className="settings-form">
+            <Stack spacing="xl">
+              <PageHeader>
+                <PageHeader.TitleRow>
+                  <PageHeader.Title>Moderation</PageHeader.Title>
+                  <Badge variant="neutral">Loading</Badge>
+                </PageHeader.TitleRow>
+                <PageHeader.Description>Configure AutoMod, Logging, and specific moderation roles.</PageHeader.Description>
+              </PageHeader>
+              <Stack spacing="xl">
+                <Stack spacing="sm">
+                  <Skeleton className="h-6 w-48" />
+                  <SettingsGroupSkeleton rows={2} />
+                </Stack>
+                <Stack spacing="sm">
+                  <Skeleton className="h-6 w-48" />
+                  <SettingsGroupSkeleton rows={1} />
+                </Stack>
+              </Stack>
+            </Stack>
+          </div>
+        </PageContainer>
+      ) : (
+      <PageContainer>
+        <form className="settings-form" onSubmit={onSubmit}>
           <Stack spacing="xl">
             <PageHeader>
               <PageHeader.TitleRow>
                 <PageHeader.Title>Moderation</PageHeader.Title>
-                <Badge variant="neutral">Loading</Badge>
+                <Badge variant="success">Active</Badge>
               </PageHeader.TitleRow>
               <PageHeader.Description>Configure AutoMod, Logging, and specific moderation roles.</PageHeader.Description>
             </PageHeader>
-            <Stack spacing="xl">
-              <Stack spacing="sm">
-                <Skeleton className="h-6 w-48" />
-                <SettingsGroupSkeleton rows={2} />
-              </Stack>
-              <Stack spacing="sm">
-                <Skeleton className="h-6 w-48" />
-                <SettingsGroupSkeleton rows={1} />
-              </Stack>
-            </Stack>
-          </Stack>
-        </PageContainer>
-      ) : (
-      <PageContainer>
-        <Stack spacing="xl">
-          <PageHeader>
-            <PageHeader.TitleRow>
-              <PageHeader.Title>Moderation</PageHeader.Title>
-              <Badge variant="success">Active</Badge>
-            </PageHeader.TitleRow>
-            <PageHeader.Description>Configure AutoMod, Logging, and specific moderation roles.</PageHeader.Description>
-          </PageHeader>
 
-          <form className="settings-form" onSubmit={onSubmit}>
             <Stack spacing="xl">
               <SettingsGroup>
                 <SettingsRow
@@ -100,8 +102,8 @@ export function ModerationPage() {
                 </FormProvider>
               </fieldset>
             </Stack>
-          </form>
-        </Stack>
+          </Stack>
+        </form>
         <SaveActionBar
           isDirty={form.formState.isDirty}
           isSaving={isSaving}

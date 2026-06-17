@@ -587,6 +587,7 @@ select[multiple].form-select {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  border-radius: 4px;
 }
 
 .tahoe-select-option:hover {
