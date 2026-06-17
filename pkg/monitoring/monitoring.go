@@ -576,7 +576,8 @@ func (ms *MonitoringService) handlesGuild(guildID string) bool {
 	}
 	rolesResolvedID, _ := guild.ResolveFeatureBotInstanceID("roles")
 	modResolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation")
-	return rolesResolvedID == ms.botInstanceID || modResolvedID == ms.botInstanceID
+	loggingResolvedID, _ := guild.ResolveFeatureBotInstanceID("logging")
+	return rolesResolvedID == ms.botInstanceID || modResolvedID == ms.botInstanceID || loggingResolvedID == ms.botInstanceID
 }
 
 func (ms *MonitoringService) isFeatureBot(guildID string, feature string) bool {

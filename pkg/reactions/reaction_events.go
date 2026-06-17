@@ -297,6 +297,6 @@ func (rs *ReactionEventService) handlesGuild(guildID string) bool {
 	if !guild.BelongsToBotInstance(rs.botID) {
 		return false
 	}
-	resolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation")
+	resolvedID, _ := guild.ResolveFeatureBotInstanceID("logging")
 	return resolvedID == rs.botID
 }

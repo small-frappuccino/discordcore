@@ -1047,7 +1047,7 @@ func (mes *MessageEventService) handlesGuild(guildID string) bool {
 	if !guild.BelongsToBotInstance(mes.botInstanceID) {
 		return false
 	}
-	resolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation")
+	resolvedID, _ := guild.ResolveFeatureBotInstanceID("logging")
 	return resolvedID == mes.botInstanceID
 }
 
