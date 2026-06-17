@@ -298,7 +298,7 @@ func deleteRolesForUsersBatch(ctx context.Context, tx pgx.Tx, guildID string, us
 	}
 
 	_, err := tx.Exec(ctx,
-		`UPDATE roles_current SET deleted_at = $3, updated_at = $3 WHERE guild_id=$1 AND user_id = ANY($2::text[]) AND updated_at < $3`,
+		`UPDATE roles_current SET deleted_at = $3, updated_at = $3 WHERE guild_id=$1 AND user_id = ANY($2::text[]) AND deleted_at IS NULL`,
 		guildID, userIDs, updatedAt,
 	)
 	return err
@@ -329,7 +329,7 @@ func insertMemberRolesBatch(ctx context.Context, tx pgx.Tx, guildID string, snap
 		`INSERT INTO roles_current (guild_id, user_id, role_id, updated_at)
          SELECT $1::text, * FROM UNNEST($2::text[], $3::text[], $4::timestamptz[])
          ON CONFLICT(guild_id, user_id, role_id) DO UPDATE SET updated_at=excluded.updated_at, deleted_at=NULL
-         WHERE roles_current.updated_at < excluded.updated_at`,
+         WHERE roles_current.deleted_at IS NOT NULL OR roles_current.updated_at < excluded.updated_at - interval '5 minutes'`,
 		guildID, userIDs, roleIDs, updatedAts,
 	)
 	return err
@@ -377,7 +377,7 @@ func upsertMemberJoinsBatch(ctx context.Context, tx pgx.Tx, guildID string, snap
              WHERE excluded.joined_at < member_joins.joined_at
                 OR member_joins.last_seen_at IS NULL
                 OR excluded.last_seen_at > member_joins.last_seen_at + interval '5 minutes'
-                OR (excluded.is_bot IS NOT NULL AND excluded.is_bot != member_joins.is_bot)
+                OR member_joins.is_bot IS DISTINCT FROM COALESCE(excluded.is_bot, member_joins.is_bot)
                 OR member_joins.left_at IS NOT NULL`,
 			guildID, userIDs, joinedAts, seenAts, isBots,
 		)
@@ -468,7 +468,7 @@ func (s *Store) UpsertMemberPresenceContext(ctx context.Context, input MemberPre
          WHERE excluded.joined_at < member_joins.joined_at
             OR member_joins.last_seen_at IS NULL
             OR excluded.last_seen_at > member_joins.last_seen_at + interval '5 minutes'
-            OR member_joins.is_bot != excluded.is_bot
+            OR member_joins.is_bot IS DISTINCT FROM excluded.is_bot
             OR member_joins.left_at IS NOT NULL`,
 		input.GuildID, input.UserID, input.JoinedAt, input.SeenAt, input.IsBot,
 	)
@@ -772,7 +772,7 @@ func (s *Store) TouchMemberRoles(guildID, userID string) error {
 		return nil
 	}
 	_, err := s.exec(
-		`UPDATE roles_current SET updated_at=$1 WHERE guild_id=$2 AND user_id=$3`,
+		`UPDATE roles_current SET updated_at=$1 WHERE guild_id=$2 AND user_id=$3 AND updated_at < $1 - interval '5 minutes'`,
 		time.Now().UTC(), guildID, userID,
 	)
 	return err

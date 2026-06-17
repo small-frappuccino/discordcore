@@ -241,15 +241,21 @@ func (s *Store) UpsertMemberRoles(guildID, userID string, roles []string, update
 		}
 	}()
 
-	if _, err = tx.Exec(ctx, `UPDATE roles_current SET deleted_at=$3, updated_at=$3 WHERE guild_id=$1 AND user_id=$2 AND updated_at < $3`, guildID, userID, updatedAt); err != nil {
-		return err
-	}
-
 	var validRoles []string
 	for _, rid := range roles {
 		if rid != "" {
 			validRoles = append(validRoles, rid)
 		}
+	}
+
+	if _, err = tx.Exec(ctx, `
+		UPDATE roles_current
+		SET deleted_at=$3, updated_at=$3
+		WHERE guild_id=$1 AND user_id=$2
+		  AND deleted_at IS NULL
+		  AND role_id <> ALL($4::text[])
+	`, guildID, userID, updatedAt, validRoles); err != nil {
+		return err
 	}
 
 	if len(validRoles) > 0 {
@@ -266,7 +272,8 @@ func (s *Store) UpsertMemberRoles(guildID, userID string, roles []string, update
 			INSERT INTO roles_current (guild_id, user_id, role_id, updated_at)
 			SELECT $1::text, * FROM UNNEST($2::text[], $3::text[], $4::timestamptz[])
 			ON CONFLICT(guild_id, user_id, role_id) DO UPDATE SET updated_at=excluded.updated_at, deleted_at=NULL
-			WHERE roles_current.updated_at < excluded.updated_at`,
+			WHERE roles_current.deleted_at IS NOT NULL
+			   OR roles_current.updated_at < excluded.updated_at - interval '5 minutes'`,
 			guildID, userIDs, validRoles, updatedAts,
 		); err != nil {
 			return err
