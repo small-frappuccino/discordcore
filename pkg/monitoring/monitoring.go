@@ -548,7 +548,28 @@ func (ms *MonitoringService) scopedConfig() *files.BotConfig {
 	if cfg == nil {
 		return nil
 	}
-	scopedGuilds := cfg.GuildsForBotInstanceFeature(ms.botInstanceID, "monitoring")
+
+	isDefault := files.NormalizeBotInstanceID(ms.botInstanceID) == ""
+	var scopedGuilds []files.GuildConfig
+
+	for _, guild := range cfg.Guilds {
+		if isDefault {
+			scopedGuilds = append(scopedGuilds, guild)
+			continue
+		}
+		if !guild.BelongsToBotInstance(ms.botInstanceID) {
+			continue
+		}
+
+		rolesResolvedID, _ := guild.ResolveFeatureBotInstanceID("roles")
+		modResolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation")
+		loggingResolvedID, _ := guild.ResolveFeatureBotInstanceID("logging")
+
+		if rolesResolvedID == ms.botInstanceID || modResolvedID == ms.botInstanceID || loggingResolvedID == ms.botInstanceID {
+			scopedGuilds = append(scopedGuilds, guild)
+		}
+	}
+
 	if len(scopedGuilds) == len(cfg.Guilds) {
 		return cfg
 	}

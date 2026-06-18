@@ -18,6 +18,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
 	"github.com/small-frappuccino/discordcore/pkg/monitoring"
+	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
@@ -43,10 +44,10 @@ type MemberEventService struct {
 	store *storage.Store
 }
 
-// eventServiceDeps bundles the shared dependencies for the bot-scoped logging
+// EventServiceDeps bundles the shared dependencies for the bot-scoped logging
 // event services. BotInstanceID is normalized by the
 // constructors via files.NormalizeBotInstanceID.
-type eventServiceDeps struct {
+type EventServiceDeps struct {
 	ArikawaState  *state.State
 	ConfigManager *files.ConfigManager
 	Sink          MemberSink
@@ -57,7 +58,7 @@ type eventServiceDeps struct {
 
 // NewMemberEventService creates a new instance of the member events service
 func NewMemberEventService(arikawaState *state.State, configManager *files.ConfigManager, sink MemberSink, store *storage.Store, logger *slog.Logger) *MemberEventService {
-	return NewMemberEventServiceForBot(eventServiceDeps{
+	return NewMemberEventServiceForBot(EventServiceDeps{
 		ArikawaState:  arikawaState,
 		ConfigManager: configManager,
 		Sink:          sink,
@@ -67,7 +68,7 @@ func NewMemberEventService(arikawaState *state.State, configManager *files.Confi
 }
 
 // NewMemberEventServiceForBot creates a member event service scoped to one bot instance.
-func NewMemberEventServiceForBot(deps eventServiceDeps) *MemberEventService {
+func NewMemberEventServiceForBot(deps EventServiceDeps) *MemberEventService {
 	return &MemberEventService{
 		arikawaState:  deps.ArikawaState,
 		configManager: deps.ConfigManager,
@@ -165,6 +166,36 @@ func (mes *MemberEventService) Stop(ctx context.Context) error {
 // IsRunning returns whether the service is running
 func (mes *MemberEventService) IsRunning() bool {
 	return mes.lifecycle.IsRunning()
+}
+
+// Dependencies returns the service dependencies.
+func (mes *MemberEventService) Dependencies() []string {
+	return nil
+}
+
+// Name returns the service name.
+func (mes *MemberEventService) Name() string {
+	return "member_events_" + mes.botInstanceID
+}
+
+// Type returns the service type.
+func (mes *MemberEventService) Type() service.ServiceType {
+	return service.TypeMonitoring
+}
+
+// Priority returns the startup priority.
+func (mes *MemberEventService) Priority() service.ServicePriority {
+	return service.PriorityNormal
+}
+
+// HealthCheck returns the health status of the service.
+func (mes *MemberEventService) HealthCheck(ctx context.Context) service.HealthStatus {
+	return service.HealthStatus{Healthy: true, Message: "OK", LastCheck: time.Now()}
+}
+
+// Stats returns runtime statistics.
+func (mes *MemberEventService) Stats() service.ServiceStats {
+	return service.ServiceStats{}
 }
 
 // handleGuildMemberAdd processes when a user joins the server

@@ -9,15 +9,17 @@ import (
 )
 
 type botRuntimeCapabilities struct {
-	monitoring          bool
-	automod             bool
-	userPrune           bool
-	qotdRuntime         bool
-	stats               bool
-	warmup              bool
-	intents             discordgo.Intent
-	hasCommands         bool
-	messageEventService bool
+	monitoring           bool
+	automod              bool
+	userPrune            bool
+	qotdRuntime          bool
+	stats                bool
+	warmup               bool
+	intents              discordgo.Intent
+	hasCommands          bool
+	messageEventService  bool
+	memberEventService   bool
+	reactionEventService bool
 }
 
 // hasCommands reports whether any command catalog should be installed.
@@ -122,6 +124,9 @@ func resolveBotRuntimeCapabilities(
 			if botRuntimeNeedsMemberData(features, runtimeConfig, guild) {
 				capabilities.intents |= discordgo.IntentsGuildMembers
 				capabilities.warmup = true
+				if isRolesBot || isLoggingBot {
+					capabilities.memberEventService = true
+				}
 			}
 		}
 
@@ -135,6 +140,7 @@ func resolveBotRuntimeCapabilities(
 			}
 			if botRuntimeNeedsReactions(runtimeConfig) {
 				capabilities.intents |= discordgo.IntentsGuildMessageReactions
+				capabilities.reactionEventService = true
 			}
 		}
 

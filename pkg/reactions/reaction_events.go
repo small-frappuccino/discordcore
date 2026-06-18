@@ -10,6 +10,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
+	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordgo"
 
@@ -107,6 +108,36 @@ func (rs *ReactionEventService) Stop(ctx context.Context) error {
 // IsRunning indicates whether the service is active.
 func (rs *ReactionEventService) IsRunning() bool {
 	return rs.lifecycle.IsRunning()
+}
+
+// Dependencies returns the service dependencies.
+func (rs *ReactionEventService) Dependencies() []string {
+	return nil
+}
+
+// Name returns the service name.
+func (rs *ReactionEventService) Name() string {
+	return "reaction_events_" + rs.botID
+}
+
+// Type returns the service type.
+func (rs *ReactionEventService) Type() service.ServiceType {
+	return service.TypeMonitoring
+}
+
+// Priority returns the startup priority.
+func (rs *ReactionEventService) Priority() service.ServicePriority {
+	return service.PriorityNormal
+}
+
+// HealthCheck returns the health status of the service.
+func (rs *ReactionEventService) HealthCheck(ctx context.Context) service.HealthStatus {
+	return service.HealthStatus{Healthy: true, Message: "OK", LastCheck: time.Now()}
+}
+
+// Stats returns runtime statistics.
+func (rs *ReactionEventService) Stats() service.ServiceStats {
+	return service.ServiceStats{}
 }
 
 // handleReactionAdd processes MessageReactionAdd events, removing blocked

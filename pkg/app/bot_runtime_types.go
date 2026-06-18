@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordgo"
@@ -46,9 +47,8 @@ type botRuntime struct {
 }
 
 type botRuntimeResolver struct {
-	mu            sync.RWMutex
 	configManager *files.ConfigManager
-	runtimes      map[string]*botRuntime
+	runtimes      atomic.Pointer[map[string]*botRuntime]
 	readyCh       chan struct{}
 	readyOnce     sync.Once
 }
@@ -83,20 +83,19 @@ func (r *botRuntimeResolver) waitForReady(ctx context.Context) error {
 }
 
 func (r *botRuntimeResolver) getRuntimes() map[string]*botRuntime {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return r.runtimes
+	ptr := r.runtimes.Load()
+	if ptr == nil {
+		return nil
+	}
+	return *ptr
 }
 
 func (r *botRuntimeResolver) swapRuntimes(newMap map[string]*botRuntime) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	slog.Debug("Granular inspection: Executing atomic pointer rotation for active runtimes map",
 		slog.Int("new_map_size", len(newMap)),
 	)
 
-	r.runtimes = newMap
+	r.runtimes.Store(&newMap)
 }
 
 func knownBotInstanceCatalog(runtimes map[string]*botRuntime, additional []string) map[string]struct{} {
@@ -135,11 +134,12 @@ func newBotRuntimeResolver(configManager *files.ConfigManager, initialRuntimes m
 	slog.Info("Architectural state transition: Initializing memory barrier for bot runtime multiplexing",
 		slog.Int("initial_runtimes_count", len(initialRuntimes)),
 	)
-	return &botRuntimeResolver{
+	resolver := &botRuntimeResolver{
 		configManager: configManager,
-		runtimes:      initialRuntimes,
 		readyCh:       make(chan struct{}),
 	}
+	resolver.runtimes.Store(&initialRuntimes)
+	return resolver
 }
 
 // aggregateUnifiedCaches collects the UnifiedCache of all active bot instances.
@@ -147,11 +147,10 @@ func (r *botRuntimeResolver) aggregateUnifiedCaches() map[string]*cache.UnifiedC
 	if r == nil {
 		return nil
 	}
-	r.mu.RLock()
-	defer r.mu.RUnlock()
 
 	caches := make(map[string]*cache.UnifiedCache)
-	for id, runtime := range r.runtimes {
+	runtimes := r.getRuntimes()
+	for id, runtime := range runtimes {
 		if runtime.monitoringService != nil && runtime.monitoringService.GetUnifiedCache() != nil {
 			caches[id] = runtime.monitoringService.GetUnifiedCache()
 		}
@@ -167,11 +166,10 @@ func (r *botRuntimeResolver) aggregateMonitoringMetrics() map[string]monitoring.
 	if r == nil {
 		return nil
 	}
-	r.mu.RLock()
-	defer r.mu.RUnlock()
 
 	metrics := make(map[string]monitoring.Metrics)
-	for id, runtime := range r.runtimes {
+	runtimes := r.getRuntimes()
+	for id, runtime := range runtimes {
 		if runtime.monitoringService != nil {
 			m := runtime.monitoringService.Metrics()
 			if m != nil {
@@ -212,10 +210,7 @@ func (r *botRuntimeResolver) runtimeForGuild(guildID string, feature string) (*b
 	}
 	bestInstanceID, _ := guild.ResolveFeatureBotInstanceID(feature)
 
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	runtimes := r.runtimes
+	runtimes := r.getRuntimes()
 	if len(runtimes) == 0 {
 		slog.Warn("Mitigated service degradation: Primary runtime vector exhausted or uninitialized",
 			slog.String("guild_id", guildID),

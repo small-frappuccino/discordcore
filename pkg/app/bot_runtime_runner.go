@@ -9,6 +9,7 @@ import (
 
 	"github.com/small-frappuccino/discordgo"
 
+	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordcore/pkg/clock"
 	discord_automod "github.com/small-frappuccino/discordcore/pkg/discord/automod"
@@ -22,9 +23,11 @@ import (
 	discordstats "github.com/small-frappuccino/discordcore/pkg/discord/stats"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/members"
 	"github.com/small-frappuccino/discordcore/pkg/messages"
 	"github.com/small-frappuccino/discordcore/pkg/monitoring"
 	applicationqotd "github.com/small-frappuccino/discordcore/pkg/qotd"
+	"github.com/small-frappuccino/discordcore/pkg/reactions"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/stats"
@@ -46,6 +49,22 @@ type botRuntimeOptions struct {
 	appClock                 clock.Clock
 	controlServerRegistry    *controlServerHolder
 	logger                   *slog.Logger
+}
+
+type memberSinkWrapper struct {
+	logger *eventlog.Logger
+}
+
+func (w memberSinkWrapper) OnMemberJoin(ctx context.Context, e *gateway.GuildMemberAddEvent, accountAge time.Duration) {
+	if w.logger != nil {
+		w.logger.OnMemberJoin(ctx, e.GuildID.String(), e.Member)
+	}
+}
+
+func (w memberSinkWrapper) OnMemberLeave(ctx context.Context, e *gateway.GuildMemberRemoveEvent, serverTime time.Duration, botTime time.Duration) {
+	if w.logger != nil {
+		w.logger.OnMemberLeave(ctx, e.GuildID.String(), e.User)
+	}
 }
 
 var openBotDiscordSession = session.OpenSession
@@ -178,6 +197,44 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 
 		if err := runtime.serviceManager.Register(mes); err != nil {
 			errWrap := fmt.Errorf("register message event service for %s: %w", runtime.instanceID, err)
+			log.EmitBlockingError("Blocking structural failure during service registry update", errWrap, log.GenerateRequestID())
+			return errWrap
+		}
+	}
+
+	if runtime.capabilities.memberEventService {
+		var eventLogger *eventlog.Logger
+		if runtime.arikawaState != nil && runtime.arikawaState.Session != nil {
+			eventLogger = eventlog.NewLogger(runtime.arikawaState.Session.Client, opts.configManager, runtime.session, slog.Default())
+		}
+
+		memSvc := members.NewMemberEventServiceForBot(members.EventServiceDeps{
+			ArikawaState:  runtime.arikawaState,
+			ConfigManager: opts.configManager,
+			Sink:          memberSinkWrapper{logger: eventLogger},
+			Store:         opts.store,
+			BotInstanceID: runtime.instanceID,
+			Logger:        slog.Default(),
+		})
+
+		if err := runtime.serviceManager.Register(memSvc); err != nil {
+			errWrap := fmt.Errorf("register member event service for %s: %w", runtime.instanceID, err)
+			log.EmitBlockingError("Blocking structural failure during service registry update", errWrap, log.GenerateRequestID())
+			return errWrap
+		}
+	}
+
+	if runtime.capabilities.reactionEventService {
+		reSvc := reactions.NewReactionEventServiceForBot(
+			runtime.session,
+			opts.configManager,
+			opts.store,
+			runtime.instanceID,
+			slog.Default(),
+		)
+
+		if err := runtime.serviceManager.Register(reSvc); err != nil {
+			errWrap := fmt.Errorf("register reaction event service for %s: %w", runtime.instanceID, err)
 			log.EmitBlockingError("Blocking structural failure during service registry update", errWrap, log.GenerateRequestID())
 			return errWrap
 		}

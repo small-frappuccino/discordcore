@@ -77,7 +77,7 @@ func TestBotRuntimeResolver_SessionForGuild(t *testing.T) {
 	// Test sessionForGuild
 	s, err := resolver.sessionForGuild("g1", "dashboard")
 	if err != nil {
-		t.Fatalf("unexpected error: %v, runtimes: %+v", err, resolver.runtimes)
+		t.Fatalf("unexpected error: %v, runtimes: %+v", err, resolver.getRuntimes())
 	}
 	if s == nil || s.Token != "test-token" {
 		t.Fatalf("expected test-token session")
