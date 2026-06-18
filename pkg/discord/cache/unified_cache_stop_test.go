@@ -1,8 +1,9 @@
 package cache_test
 
 import (
-	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"testing"
+
+	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 )
 
 func TestUnifiedCacheStopIdempotency(t *testing.T) {

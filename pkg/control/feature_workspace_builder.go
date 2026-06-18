@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
+	"github.com/small-frappuccino/discordcore/pkg/logging"
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -290,9 +290,9 @@ var featureDetailBuilders = map[string]func(*files.BotConfig, string) *featureDe
 func buildLogFeatureDetails(
 	cfg *files.BotConfig,
 	guildID string,
-	logEvent logpolicy.LogEventType,
+	logEvent logging.LogEventType,
 ) *featureDetails {
-	capability, ok := logpolicy.LogEventCapabilities()[logEvent]
+	capability, ok := logging.LogEventCapabilities()[logEvent]
 	if !ok {
 		return nil
 	}
@@ -336,28 +336,28 @@ func buildStatsChannelDetails(channels []files.StatsChannelConfig) []featureStat
 	return out
 }
 
-func logFeatureChannelID(guild *files.GuildConfig, eventType logpolicy.LogEventType) string {
+func logFeatureChannelID(guild *files.GuildConfig, eventType logging.LogEventType) string {
 	if guild == nil {
 		return ""
 	}
 	switch eventType {
-	case logpolicy.LogEventAvatarChange:
+	case logging.LogEventAvatarChange:
 		return strings.TrimSpace(guild.Channels.AvatarLogging)
-	case logpolicy.LogEventRoleChange:
+	case logging.LogEventRoleChange:
 		return strings.TrimSpace(guild.Channels.RoleUpdate)
-	case logpolicy.LogEventMemberJoin:
+	case logging.LogEventMemberJoin:
 		return strings.TrimSpace(guild.Channels.MemberJoin)
-	case logpolicy.LogEventMemberLeave:
+	case logging.LogEventMemberLeave:
 		return strings.TrimSpace(guild.Channels.MemberLeave)
-	case logpolicy.LogEventMessageEdit:
+	case logging.LogEventMessageEdit:
 		return strings.TrimSpace(guild.Channels.MessageEdit)
-	case logpolicy.LogEventMessageDelete:
+	case logging.LogEventMessageDelete:
 		return strings.TrimSpace(guild.Channels.MessageDelete)
-	case logpolicy.LogEventAutomodAction:
+	case logging.LogEventAutomodAction:
 		return strings.TrimSpace(guild.Channels.AutomodAction)
-	case logpolicy.LogEventModerationCase:
+	case logging.LogEventModerationCase:
 		return strings.TrimSpace(guild.Channels.ModerationCase)
-	case logpolicy.LogEventCleanAction:
+	case logging.LogEventCleanAction:
 		return strings.TrimSpace(guild.Channels.CleanAction)
 	default:
 		return ""

@@ -9,7 +9,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/cleanup"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/log"
-	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
+	"github.com/small-frappuccino/discordcore/pkg/logging"
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -685,7 +685,7 @@ func (c *cleanCommand) sendCleanActionLog(ctx *core.Context, request cleanReques
 		RequestedBy: ctx.UserID,
 		Extra:       buildCleanLogDetails(request, result),
 	}
-	emit := postModerationEventEmbed(ctx, payload, logpolicy.LogEventCleanAction)
+	emit := postModerationEventEmbed(ctx, payload, logging.LogEventCleanAction)
 	if !emit.Enabled {
 		return
 	}

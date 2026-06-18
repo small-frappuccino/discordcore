@@ -1,4 +1,4 @@
-package monitoring
+package service
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 
 type lifecycleState uint8
 
-const loggingDependencyTimeout = 15 * time.Second
+const DependencyTimeout = 15 * time.Second
 
 const (
 	lifecycleStateStopped lifecycleState = iota
@@ -17,7 +17,7 @@ const (
 	lifecycleStateStopping
 )
 
-type ServiceLifecycle struct {
+type BaseLifecycle struct {
 	name   string
 	mu     sync.RWMutex
 	state  lifecycleState
@@ -26,12 +26,12 @@ type ServiceLifecycle struct {
 	wg     sync.WaitGroup
 }
 
-func NewServiceLifecycle(name string) ServiceLifecycle {
-	return ServiceLifecycle{name: name}
+func NewBaseLifecycle(name string) BaseLifecycle {
+	return BaseLifecycle{name: name}
 }
 
 // Start starts.
-func (sl *ServiceLifecycle) Start(parent context.Context) (context.Context, error) {
+func (sl *BaseLifecycle) Start(parent context.Context) (context.Context, error) {
 	if parent == nil {
 		parent = context.Background()
 	}
@@ -58,7 +58,7 @@ func (sl *ServiceLifecycle) Start(parent context.Context) (context.Context, erro
 }
 
 // Begin begins.
-func (sl *ServiceLifecycle) Begin() (context.Context, func(), bool) {
+func (sl *BaseLifecycle) Begin() (context.Context, func(), bool) {
 	sl.mu.RLock()
 	if sl.state != lifecycleStateRunning || sl.runCtx == nil {
 		sl.mu.RUnlock()
@@ -72,7 +72,7 @@ func (sl *ServiceLifecycle) Begin() (context.Context, func(), bool) {
 }
 
 // Cancel cancels.
-func (sl *ServiceLifecycle) Cancel() error {
+func (sl *BaseLifecycle) Cancel() error {
 	sl.mu.Lock()
 	if sl.state != lifecycleStateRunning {
 		sl.mu.Unlock()
@@ -92,7 +92,7 @@ func (sl *ServiceLifecycle) Cancel() error {
 }
 
 // Wait waits.
-func (sl *ServiceLifecycle) Wait(ctx context.Context) error {
+func (sl *BaseLifecycle) Wait(ctx context.Context) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -117,15 +117,15 @@ func (sl *ServiceLifecycle) Wait(ctx context.Context) error {
 }
 
 // Stop stops.
-func (sl *ServiceLifecycle) Stop(ctx context.Context) error {
+func (sl *BaseLifecycle) Stop(ctx context.Context) error {
 	if err := sl.Cancel(); err != nil {
-		return fmt.Errorf("ServiceLifecycle.Stop: %w", err)
+		return fmt.Errorf("BaseLifecycle.Stop: %w", err)
 	}
 	return sl.Wait(ctx)
 }
 
 // IsRunning is running.
-func (sl *ServiceLifecycle) IsRunning() bool {
+func (sl *BaseLifecycle) IsRunning() bool {
 	sl.mu.RLock()
 	defer sl.mu.RUnlock()
 	return sl.state == lifecycleStateRunning

@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"strings"
 
+	"log/slog"
+
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"log/slog"
 )
 
 // StatsService interface for dependency injection.

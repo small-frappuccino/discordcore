@@ -1,7 +1,8 @@
-package eventlog
+package logging
 
 import (
 	"context"
+
 	"github.com/diamondburned/arikawa/v3/discord"
 )
 

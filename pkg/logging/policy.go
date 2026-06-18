@@ -1,4 +1,4 @@
-package logpolicy
+package logging
 
 import (
 	"fmt"

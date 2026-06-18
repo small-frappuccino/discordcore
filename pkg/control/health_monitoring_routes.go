@@ -1,13 +1,14 @@
 package control
 
 import (
-	"github.com/small-frappuccino/discordcore/pkg/monitoring"
 	"net/http"
+
+	"github.com/small-frappuccino/discordcore/pkg/telemetry"
 )
 
 // handleMonitoringHealthRoute serves the GET /v1/health/monitoring snapshot.
 // Mirrors /v1/health/qotd and /v1/health/moderation: the payload is
-// monitoring.MetricsSnapshot so operators can poll one endpoint and see Discord
+// telemetry.MetricsSnapshot so operators can poll one endpoint and see Discord
 // API call counts (audit_log/guild_member/messages_sent) and the in-process
 // cache hit counters monitoring uses to avoid those API calls — without
 // grepping the structured-log stream.
@@ -31,7 +32,7 @@ func (res monitoringHealthResolver) resolve() (any, string) {
 	if metrics == nil {
 		return nil, "monitoring metrics not available"
 	}
-	provider, ok := metrics.(monitoring.SnapshotProvider)
+	provider, ok := metrics.(telemetry.SnapshotProvider)
 	if !ok {
 		return nil, "monitoring metrics not enabled (no SnapshotProvider attached)"
 	}

@@ -1,4 +1,4 @@
-package monitoring
+package telemetry
 
 import (
 	"sync/atomic"

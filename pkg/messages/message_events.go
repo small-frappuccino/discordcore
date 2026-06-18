@@ -14,11 +14,11 @@ import (
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/state"
+
 	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
-	"github.com/small-frappuccino/discordcore/pkg/monitoring"
-	svc "github.com/small-frappuccino/discordcore/pkg/service"
+	"github.com/small-frappuccino/discordcore/pkg/logging"
+	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/task"
 )
@@ -96,15 +96,13 @@ func (s *auditCacheState) pickEntry(entries map[string]auditCacheValue, key stri
 
 // MessageEventService manages message events (delete/edit)
 type MessageEventService struct {
-	arikawaState   *state.State
-	configManager  *files.ConfigManager
-	botInstanceID  string
-	sink           MessageSink
-	store          *storage.Store
-	activity       *monitoring.RuntimeActivity
-	lifecycle      monitoring.ServiceLifecycle
-	handlerCancels []func()
-	logger         *slog.Logger
+	configManager *files.ConfigManager
+	botInstanceID string
+	sink          MessageSink
+	store         *storage.Store
+	activity      *service.RuntimeActivity
+	lifecycle     service.BaseLifecycle
+	logger        *slog.Logger
 
 	// Message cache configuration (populated from persisted runtime_config)
 	cacheEnabled   bool
@@ -121,6 +119,8 @@ type MessageEventService struct {
 
 	messageCreateWriter *messageCreateWriter
 	writerMetrics       MessageWriterMetrics
+
+	arikawaState *state.State
 }
 
 const (
@@ -151,42 +151,37 @@ type MessageDeleteTaskPayload struct {
 
 // EventServiceDeps holds dependencies for the MessageEventService
 type EventServiceDeps struct {
-	ArikawaState  *state.State
 	ConfigManager *files.ConfigManager
 	Sink          MessageSink
 	Store         *storage.Store
 	BotInstanceID string
 	Logger        *slog.Logger
+	ArikawaState  *state.State
 }
 
 // NewMessageEventServiceForBot creates a message event service scoped to a bot
 // instance assignment.
 func NewMessageEventServiceForBot(deps EventServiceDeps) *MessageEventService {
 	return &MessageEventService{
-		arikawaState:  deps.ArikawaState,
 		configManager: deps.ConfigManager,
 		botInstanceID: files.NormalizeBotInstanceID(deps.BotInstanceID),
 		sink:          deps.Sink,
 		store:         deps.Store,
 		logger:        deps.Logger,
-		activity: monitoring.NewRuntimeActivity(deps.Store, monitoring.RuntimeActivityOptions{
-			RunErr:        monitoring.RunErrWithTimeoutContext,
-			EventTimeout:  monitoring.DependencyTimeout,
+		activity: service.NewRuntimeActivity(deps.Store, service.RuntimeActivityOptions{
+			RunErr:        service.RunErrWithTimeoutContext,
+			EventTimeout:  service.DependencyTimeout,
 			BotInstanceID: files.NormalizeBotInstanceID(deps.BotInstanceID),
 			Logger:        deps.Logger,
 		}),
-		lifecycle:      monitoring.NewServiceLifecycle("message event service"),
-		auditCache:     newAuditCacheState(2*time.Second, 15*time.Second),
-		handlerCancels: make([]func(), 0, 4),
+		lifecycle:    service.NewBaseLifecycle("message event service"),
+		arikawaState: deps.ArikawaState,
+		auditCache:   newAuditCacheState(2*time.Second, 15*time.Second),
 	}
 }
 
 // Start registers message event handlers
 func (mes *MessageEventService) Start(ctx context.Context) error {
-	if mes.arikawaState == nil {
-		return fmt.Errorf("message event service arikawa state is nil")
-	}
-
 	if _, err := mes.lifecycle.Start(ctx); err != nil {
 		return fmt.Errorf("MessageEventService.Start: %w", err)
 	}
@@ -230,19 +225,6 @@ func (mes *MessageEventService) Start(ctx context.Context) error {
 		mes.messageCreateWriter.Start()
 	}
 
-	mes.handlerCancels = mes.handlerCancels[:0]
-	mes.handlerCancels = append(mes.handlerCancels,
-		mes.arikawaState.AddHandler(func(e *gateway.MessageCreateEvent) {
-			mes.handleMessageCreate(context.Background(), e)
-		}),
-		mes.arikawaState.AddHandler(func(e *gateway.MessageUpdateEvent) {
-			mes.handleMessageUpdate(context.Background(), e)
-		}),
-		mes.arikawaState.AddHandler(func(e *gateway.MessageDeleteEvent) {
-			mes.handleMessageDelete(context.Background(), e)
-		}),
-	)
-
 	if mes.taskRouter != nil {
 		mes.taskRouter.RegisterHandler(taskTypeMessageUpdateProcess, mes.handleMessageUpdateTask)
 		mes.taskRouter.RegisterHandler(taskTypeMessageDeleteProcess, mes.handleMessageDeleteTask)
@@ -259,13 +241,6 @@ func (mes *MessageEventService) Stop(ctx context.Context) error {
 	if err := mes.lifecycle.Cancel(); err != nil {
 		return fmt.Errorf("MessageEventService.Stop: %w", err)
 	}
-
-	for _, cancel := range mes.handlerCancels {
-		if cancel != nil {
-			cancel()
-		}
-	}
-	mes.handlerCancels = nil
 
 	waitErr := mes.lifecycle.Wait(ctx)
 	if mes.messageCreateWriter != nil {
@@ -291,17 +266,17 @@ func (mes *MessageEventService) IsRunning() bool {
 func (mes *MessageEventService) Name() string { return "messages" }
 
 // Type returns the service type
-func (mes *MessageEventService) Type() svc.ServiceType { return svc.ServiceType("messages") }
+func (mes *MessageEventService) Type() service.ServiceType { return service.ServiceType("messages") }
 
 // Priority returns the startup priority
-func (mes *MessageEventService) Priority() svc.ServicePriority { return svc.PriorityNormal }
+func (mes *MessageEventService) Priority() service.ServicePriority { return service.PriorityNormal }
 
 // Dependencies returns a list of dependencies
 func (mes *MessageEventService) Dependencies() []string { return nil }
 
 // HealthCheck returns the current health status
-func (mes *MessageEventService) HealthCheck(ctx context.Context) svc.HealthStatus {
-	return svc.HealthStatus{
+func (mes *MessageEventService) HealthCheck(ctx context.Context) service.HealthStatus {
+	return service.HealthStatus{
 		Healthy:   mes.IsRunning(),
 		Message:   "Message Event Service running",
 		LastCheck: time.Now(),
@@ -309,12 +284,12 @@ func (mes *MessageEventService) HealthCheck(ctx context.Context) svc.HealthStatu
 }
 
 // Stats returns runtime statistics
-func (mes *MessageEventService) Stats() svc.ServiceStats {
-	return svc.ServiceStats{}
+func (mes *MessageEventService) Stats() service.ServiceStats {
+	return service.ServiceStats{}
 }
 
-// handleMessageCreate stores messages for future comparisons
-func (mes *MessageEventService) handleMessageCreate(ctx context.Context, m *gateway.MessageCreateEvent) {
+// IngestMessageCreate stores messages for future comparisons
+func (mes *MessageEventService) IngestMessageCreate(ctx context.Context, m *gateway.MessageCreateEvent) {
 	if m == nil {
 		mes.logger.Debug("MessageCreate: nil event")
 		return
@@ -381,7 +356,7 @@ func (mes *MessageEventService) handleMessageCreate(ctx context.Context, m *gate
 		return
 	}
 
-	emit := logpolicy.ShouldEmitLogEvent(nil, mes.configManager, logpolicy.LogEventMessageProcess, guildID.String())
+	emit := logging.ShouldEmitLogEvent(nil, mes.configManager, logging.LogEventMessageProcess, guildID.String())
 	if !emit.Enabled {
 		mes.logger.Debug("MessageCreate: message processing suppressed by policy", "guildID", guildID, "reason", emit.Reason)
 		return
@@ -400,8 +375,8 @@ func (mes *MessageEventService) handleMessageCreate(ctx context.Context, m *gate
 	mes.logger.Info("Message cached for monitoring", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID)
 }
 
-// handleMessageUpdate processes message edits
-func (mes *MessageEventService) handleMessageUpdate(ctx context.Context, m *gateway.MessageUpdateEvent) {
+// IngestMessageUpdate processes message edits
+func (mes *MessageEventService) IngestMessageUpdate(ctx context.Context, m *gateway.MessageUpdateEvent) {
 	if m == nil {
 		mes.logger.Debug("MessageUpdate: nil event")
 		return
@@ -443,7 +418,7 @@ func (mes *MessageEventService) handleMessageUpdate(ctx context.Context, m *gate
 }
 
 // handleMessageDelete processes message deletions
-func (mes *MessageEventService) handleMessageDelete(ctx context.Context, m *gateway.MessageDeleteEvent) {
+func (mes *MessageEventService) IngestMessageDelete(ctx context.Context, m *gateway.MessageDeleteEvent) {
 	if m == nil {
 		return
 	}
@@ -623,9 +598,9 @@ func (mes *MessageEventService) processMessageUpdate(ctx context.Context, m *gat
 	}
 
 	// Logging delegated to sink
-	emit := logpolicy.ShouldEmitLogEvent(nil, mes.configManager, logpolicy.LogEventMessageEdit, cached.GuildID)
+	emit := logging.ShouldEmitLogEvent(nil, mes.configManager, logging.LogEventMessageEdit, cached.GuildID)
 	if !emit.Enabled {
-		if emit.Reason == logpolicy.EmitReasonNoChannelConfigured {
+		if emit.Reason == logging.EmitReasonNoChannelConfigured {
 			mes.logger.Info("Message log channel not configured for guild; edit notification not sent", "guildID", cached.GuildID, "messageID", m.ID)
 		} else {
 			mes.logger.Debug("MessageUpdate: notification suppressed by policy", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID, "reason", emit.Reason)
@@ -720,9 +695,9 @@ func (mes *MessageEventService) processMessageDelete(ctx context.Context, m *gat
 		return nil
 	}
 
-	emit := logpolicy.ShouldEmitLogEvent(nil, mes.configManager, logpolicy.LogEventMessageDelete, cached.GuildID)
+	emit := logging.ShouldEmitLogEvent(nil, mes.configManager, logging.LogEventMessageDelete, cached.GuildID)
 	if !emit.Enabled {
-		if emit.Reason == logpolicy.EmitReasonNoChannelConfigured {
+		if emit.Reason == logging.EmitReasonNoChannelConfigured {
 			mes.logger.Info("Message log channel not configured for guild; delete notification not sent", "guildID", cached.GuildID, "messageID", m.ID)
 		} else {
 			mes.logger.Debug("MessageDelete: notification suppressed by policy", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", m.ID, "reason", emit.Reason)
@@ -777,12 +752,12 @@ func (mes *MessageEventService) shouldRetryMessageDeleteCacheMiss(guildID string
 		return false
 	}
 
-	processDecision := logpolicy.ShouldEmitLogEvent(nil, mes.configManager, logpolicy.LogEventMessageProcess, guildID)
+	processDecision := logging.ShouldEmitLogEvent(nil, mes.configManager, logging.LogEventMessageProcess, guildID)
 	if !processDecision.Enabled {
 		return false
 	}
 
-	deleteDecision := logpolicy.ShouldEmitLogEvent(nil, mes.configManager, logpolicy.LogEventMessageDelete, guildID)
+	deleteDecision := logging.ShouldEmitLogEvent(nil, mes.configManager, logging.LogEventMessageDelete, guildID)
 	if !deleteDecision.Enabled {
 		return false
 	}

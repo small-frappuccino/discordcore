@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
+	"github.com/small-frappuccino/discordcore/pkg/logging"
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -210,7 +210,7 @@ func buildLogFeatureReadiness(
 	cfg *files.BotConfig,
 	configManager *files.ConfigManager,
 	guildID string,
-	eventType logpolicy.LogEventType,
+	eventType logging.LogEventType,
 	session *discordgo.Session,
 ) (string, []featureBlocker) {
 	if guildID == "" {
@@ -220,7 +220,7 @@ func buildLogFeatureReadiness(
 		return "blocked", []featureBlocker{{Code: "config_unavailable", Message: "Config manager is unavailable."}}
 	}
 
-	decision := logpolicy.ShouldEmitLogEvent(session, configManager, eventType, guildID)
+	decision := logging.ShouldEmitLogEvent(session, configManager, eventType, guildID)
 	if decision.Enabled {
 		return "ready", nil
 	}
@@ -229,14 +229,14 @@ func buildLogFeatureReadiness(
 
 func buildGlobalLogFeatureReadiness(
 	cfg *files.BotConfig,
-	eventType logpolicy.LogEventType,
+	eventType logging.LogEventType,
 	session *discordgo.Session,
 ) (string, []featureBlocker) {
 	if blocker, ok := globalLogRuntimeBlocker(cfg.ResolveRuntimeConfig(""), eventType); ok {
 		return "blocked", []featureBlocker{blocker}
 	}
 
-	capability, ok := logpolicy.LogEventCapabilities()[eventType]
+	capability, ok := logging.LogEventCapabilities()[eventType]
 	if ok && capability.RequiredIntentsMask != 0 && session != nil {
 		currentMask := int(session.Identify.Intents)
 		missing := capability.RequiredIntentsMask &^ currentMask
@@ -250,58 +250,58 @@ func buildGlobalLogFeatureReadiness(
 	return "ready", nil
 }
 
-func logDecisionToReadiness(decision logpolicy.EmitDecision) (string, []featureBlocker) {
+func logDecisionToReadiness(decision logging.EmitDecision) (string, []featureBlocker) {
 	switch decision.Reason {
-	case logpolicy.EmitReasonRuntimeDisableUserLogs,
-		logpolicy.EmitReasonRuntimeDisableEntryExitLogs,
-		logpolicy.EmitReasonRuntimeDisableMessageLogs,
-		logpolicy.EmitReasonRuntimeDisableReactionLogs,
-		logpolicy.EmitReasonRuntimeDisableAutomodLogs,
-		logpolicy.EmitReasonRuntimeModerationLoggingOff,
-		logpolicy.EmitReasonRuntimeDisableCleanLog:
+	case logging.EmitReasonRuntimeDisableUserLogs,
+		logging.EmitReasonRuntimeDisableEntryExitLogs,
+		logging.EmitReasonRuntimeDisableMessageLogs,
+		logging.EmitReasonRuntimeDisableReactionLogs,
+		logging.EmitReasonRuntimeDisableAutomodLogs,
+		logging.EmitReasonRuntimeModerationLoggingOff,
+		logging.EmitReasonRuntimeDisableCleanLog:
 		return "blocked", []featureBlocker{{Code: "runtime_kill_switch", Message: "A runtime kill switch currently disables this feature."}}
-	case logpolicy.EmitReasonNoChannelConfigured:
+	case logging.EmitReasonNoChannelConfigured:
 		return "blocked", []featureBlocker{{Code: "missing_channel", Message: "A channel must be configured for this feature.", Field: "channel_id"}}
-	case logpolicy.EmitReasonMissingIntent:
+	case logging.EmitReasonMissingIntent:
 		return "blocked", []featureBlocker{{Code: "missing_intent", Message: fmt.Sprintf("Gateway intents are missing required bits %d.", decision.MissingMask)}}
-	case logpolicy.EmitReasonChannelInvalid:
+	case logging.EmitReasonChannelInvalid:
 		return "blocked", []featureBlocker{{Code: "invalid_channel", Message: "The configured channel failed validation for this feature.", Field: "channel_id"}}
-	case logpolicy.EmitReasonGuildConfigMissing:
+	case logging.EmitReasonGuildConfigMissing:
 		return "blocked", []featureBlocker{{Code: "missing_guild_registration", Message: "This guild is not registered in settings yet."}}
-	case logpolicy.EmitReasonConfigManagerUnavailable, logpolicy.EmitReasonConfigUnavailable:
+	case logging.EmitReasonConfigManagerUnavailable, logging.EmitReasonConfigUnavailable:
 		return "blocked", []featureBlocker{{Code: "config_unavailable", Message: "Feature config is unavailable."}}
 	default:
 		return "blocked", []featureBlocker{{Code: "blocked", Message: string(decision.Reason)}}
 	}
 }
 
-func globalLogRuntimeBlocker(rc files.RuntimeConfig, eventType logpolicy.LogEventType) (featureBlocker, bool) {
+func globalLogRuntimeBlocker(rc files.RuntimeConfig, eventType logging.LogEventType) (featureBlocker, bool) {
 	switch eventType {
-	case logpolicy.LogEventAvatarChange, logpolicy.LogEventRoleChange:
+	case logging.LogEventAvatarChange, logging.LogEventRoleChange:
 		if rc.DisableUserLogs {
 			return featureBlocker{Code: "runtime_kill_switch", Message: "Runtime user logging is disabled."}, true
 		}
-	case logpolicy.LogEventMemberJoin, logpolicy.LogEventMemberLeave:
+	case logging.LogEventMemberJoin, logging.LogEventMemberLeave:
 		if rc.DisableEntryExitLogs {
 			return featureBlocker{Code: "runtime_kill_switch", Message: "Runtime entry/exit logging is disabled."}, true
 		}
-	case logpolicy.LogEventMessageProcess, logpolicy.LogEventMessageEdit, logpolicy.LogEventMessageDelete:
+	case logging.LogEventMessageProcess, logging.LogEventMessageEdit, logging.LogEventMessageDelete:
 		if rc.DisableMessageLogs {
 			return featureBlocker{Code: "runtime_kill_switch", Message: "Runtime message logging is disabled."}, true
 		}
-	case logpolicy.LogEventReactionMetric:
+	case logging.LogEventReactionMetric:
 		if rc.DisableReactionLogs {
 			return featureBlocker{Code: "runtime_kill_switch", Message: "Runtime reaction logging is disabled."}, true
 		}
-	case logpolicy.LogEventAutomodAction:
+	case logging.LogEventAutomodAction:
 		if rc.DisableAutomodLogs {
 			return featureBlocker{Code: "runtime_kill_switch", Message: "Runtime AutoMod logging is disabled."}, true
 		}
-	case logpolicy.LogEventModerationCase:
+	case logging.LogEventModerationCase:
 		if !rc.ModerationLoggingEnabled() {
 			return featureBlocker{Code: "runtime_kill_switch", Message: "Runtime moderation logging is disabled."}, true
 		}
-	case logpolicy.LogEventCleanAction:
+	case logging.LogEventCleanAction:
 		if rc.DisableCleanLog {
 			return featureBlocker{Code: "runtime_kill_switch", Message: "Runtime clean logging is disabled."}, true
 		}

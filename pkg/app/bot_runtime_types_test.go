@@ -4,43 +4,36 @@ import (
 	"context"
 	"testing"
 
+	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/log"
-	"github.com/small-frappuccino/discordcore/pkg/monitoring"
-	"github.com/small-frappuccino/discordcore/pkg/storage/storagetest"
+
 	"github.com/small-frappuccino/discordgo"
 )
 
 func TestBotRuntimeResolver_AggregateCachesAndMetrics(t *testing.T) {
 	runtimes := make(map[string]*botRuntime)
 
-	// Setup runtimes
-	mockSession := &discordgo.Session{Token: "test-token", State: discordgo.NewState()}
-	mockConfigManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
-	mockStore := storagetest.NewFailingStore()
-
-	ms1, _ := monitoring.NewMonitoringServiceForBotWithMetrics(mockSession, nil, nil, mockConfigManager, mockStore, "bot1", &monitoring.InMemoryMetrics{}, log.ApplicationLogger())
-	ms2, _ := monitoring.NewMonitoringServiceForBotWithMetrics(mockSession, nil, nil, mockConfigManager, mockStore, "bot2", &monitoring.InMemoryMetrics{}, log.ApplicationLogger())
-
 	runtimes["bot1"] = &botRuntime{
-		monitoringService: ms1,
-		session:           &discordgo.Session{Token: "test-token"},
+		unifiedCache: cache.NewUnifiedCache(cache.CacheConfig{}),
+		session:      &discordgo.Session{Token: "test-token"},
 	}
 	runtimes["bot2"] = &botRuntime{
-		monitoringService: ms2,
+		unifiedCache: cache.NewUnifiedCache(cache.CacheConfig{}),
 	}
 	runtimes["bot3"] = &botRuntime{
-		// No monitoring service / cache
+		// No cache
 	}
 
 	resolver := newBotRuntimeResolver(files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil), runtimes)
 
 	caches := resolver.aggregateUnifiedCaches()
-	_ = caches // Can be zero if error occurred in NewMonitoringService
+	if len(caches) != 2 {
+		t.Fatalf("expected 2 caches, got %d", len(caches))
+	}
 
 	metrics := resolver.aggregateMonitoringMetrics()
-	if len(metrics) != 2 {
-		t.Fatalf("expected 2 metrics, got %d", len(metrics))
+	if len(metrics) != 0 {
+		t.Fatalf("expected 0 metrics, got %d", len(metrics))
 	}
 }
 

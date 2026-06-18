@@ -3,9 +3,10 @@ package control
 import (
 	"encoding/json"
 	"errors"
-	"github.com/small-frappuccino/discordcore/pkg/files"
 	"log/slog"
 	"net/http"
+
+	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 func (s *Server) handleGuildEmbedsRoutes(w http.ResponseWriter, r *http.Request, guildID string, tail []string, auth requestAuthorization) {

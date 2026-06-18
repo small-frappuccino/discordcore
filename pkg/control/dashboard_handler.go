@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	embeddedui "github.com/small-frappuccino/discordcore/ui"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -13,6 +12,8 @@ import (
 	"path"
 	"strings"
 	"time"
+
+	embeddedui "github.com/small-frappuccino/discordcore/ui"
 )
 
 const (

@@ -1,4 +1,4 @@
-package monitoring
+package service
 
 import (
 	"context"
@@ -82,8 +82,8 @@ func NewMonitoringRuntimeActivity(store *storage.Store, logger *slog.Logger, bot
 	}
 	return NewRuntimeActivity(store, RuntimeActivityOptions{
 		RunErr:           RunErrWithTimeoutContext,
-		EventTimeout:     monitoringPersistenceTimeout,
-		HeartbeatTimeout: monitoringPersistenceTimeout,
+		EventTimeout:     15 * time.Second,
+		HeartbeatTimeout: 15 * time.Second,
 		BotInstanceID:    scopedBotInstanceID,
 		Logger:           logger,
 	})

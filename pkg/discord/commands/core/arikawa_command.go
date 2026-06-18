@@ -3,10 +3,11 @@ package core
 import (
 	"context"
 
+	"log/slog"
+
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"log/slog"
 )
 
 // ArikawaCommand represents a Discord slash command fully native to Arikawa.

@@ -6,8 +6,9 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/small-frappuccino/discordcore/pkg/log"
 	"log/slog"
+
+	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
 // ErrDecodeJSONBody represents a JSON decoding failure in control endpoints.

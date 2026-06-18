@@ -16,7 +16,8 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
-	"github.com/small-frappuccino/discordcore/pkg/discord/eventlog"
+	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
+
 	"github.com/small-frappuccino/discordcore/pkg/discord/maintenance"
 	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/discord/session"
@@ -25,7 +26,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/members"
 	"github.com/small-frappuccino/discordcore/pkg/messages"
-	"github.com/small-frappuccino/discordcore/pkg/monitoring"
+
 	applicationqotd "github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/reactions"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
@@ -52,7 +53,7 @@ type botRuntimeOptions struct {
 }
 
 type memberSinkWrapper struct {
-	logger *eventlog.Logger
+	logger *logging.Logger
 }
 
 func (w memberSinkWrapper) OnMemberJoin(ctx context.Context, e *gateway.GuildMemberAddEvent, accountAge time.Duration) {
@@ -161,26 +162,14 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 	arikawaState := state.New(token)
 	runtime.arikawaState = arikawaState
 
-	monitoringService, err := setupMonitoringService(runtime, opts, routerConfig)
-	if err != nil {
-		return err
-	}
 	if opts.runtimeApplier != nil {
-		opts.runtimeApplier.AddRuntime(runtime.serviceManager, monitoringService)
-	}
-
-	if monitoringService != nil {
-		if err := runtime.serviceManager.Register(monitoringService); err != nil {
-			errWrap := fmt.Errorf("register monitoring service for %s: %w", runtime.instanceID, err)
-			log.EmitBlockingError("Blocking structural failure during service registry update", errWrap, log.GenerateRequestID())
-			return errWrap
-		}
+		opts.runtimeApplier.AddRuntime(runtime.serviceManager, nil)
 	}
 
 	if runtime.capabilities.messageEventService {
-		var eventLogger *eventlog.Logger
+		var eventLogger *logging.Logger
 		if runtime.arikawaState != nil && runtime.arikawaState.Session != nil {
-			eventLogger = eventlog.NewLogger(runtime.arikawaState.Session.Client, opts.configManager, runtime.session, slog.Default())
+			eventLogger = logging.NewLogger(runtime.arikawaState.Session.Client, opts.configManager, runtime.session, slog.Default())
 		}
 
 		mes := messages.NewMessageEventServiceForBot(messages.EventServiceDeps{
@@ -191,9 +180,7 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 			BotInstanceID: runtime.instanceID,
 			Logger:        slog.Default(),
 		})
-		if monitoringService != nil {
-			mes.SetTaskRouter(monitoringService.TaskRouter())
-		}
+		mes.SetTaskRouter(runtime.taskRouter)
 
 		if err := runtime.serviceManager.Register(mes); err != nil {
 			errWrap := fmt.Errorf("register message event service for %s: %w", runtime.instanceID, err)
@@ -203,9 +190,9 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 	}
 
 	if runtime.capabilities.memberEventService {
-		var eventLogger *eventlog.Logger
+		var eventLogger *logging.Logger
 		if runtime.arikawaState != nil && runtime.arikawaState.Session != nil {
-			eventLogger = eventlog.NewLogger(runtime.arikawaState.Session.Client, opts.configManager, runtime.session, slog.Default())
+			eventLogger = logging.NewLogger(runtime.arikawaState.Session.Client, opts.configManager, runtime.session, slog.Default())
 		}
 
 		memSvc := members.NewMemberEventServiceForBot(members.EventServiceDeps{
@@ -240,7 +227,7 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 		}
 	}
 
-	if automodService := buildAutomodService(runtime, opts, routerConfig, runtimeConfig, monitoringService); automodService != nil {
+	if automodService := buildAutomodService(runtime, opts, routerConfig, runtimeConfig); automodService != nil {
 		if err := runtime.serviceManager.Register(automodService); err != nil {
 			errWrap := fmt.Errorf("register automod service for %s: %w", runtime.instanceID, err)
 			log.EmitBlockingError("Blocking structural failure during service registry update", errWrap, log.GenerateRequestID())
@@ -248,7 +235,7 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 		}
 	}
 
-	if err := registerUserPruneService(runtime, opts, monitoringService); err != nil {
+	if err := registerUserPruneService(runtime, opts, runtime.taskRouter); err != nil {
 		return err
 	}
 	if err := registerQOTDRuntimeService(runtime, opts); err != nil {
@@ -265,7 +252,7 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 		return errWrap
 	}
 
-	if commandHandler := setupRuntimeCommandHandler(runtime, opts, cfg, monitoringService, statsService); commandHandler != nil {
+	if commandHandler := setupRuntimeCommandHandler(runtime, opts, cfg, runtime.unifiedCache, runtime.taskRouter, statsService); commandHandler != nil {
 		if err := runtime.serviceManager.Register(commandHandler); err != nil {
 			errWrap := fmt.Errorf("register command handler service for %s: %w", runtime.instanceID, err)
 			log.EmitBlockingError("Blocking structural failure during service registry update", errWrap, log.GenerateRequestID())
@@ -287,40 +274,7 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 	return nil
 }
 
-func setupMonitoringService(runtime *botRuntime, opts botRuntimeOptions, routerConfig task.RouterConfig) (*monitoring.MonitoringService, error) {
-	if !runtime.capabilities.monitoring {
-		slog.Info("Architectural state bypass: Monitoring runtime skipped due to explicit capability flags",
-			slog.String("botInstanceID", runtime.instanceID),
-		)
-		return nil, nil
-	}
-
-	var eventLogger *eventlog.Logger
-	if runtime.arikawaState != nil && runtime.arikawaState.Session != nil {
-		eventLogger = eventlog.NewLogger(runtime.arikawaState.Session.Client, opts.configManager, runtime.session, slog.Default())
-	}
-
-	monitoringService, err := monitoring.NewMonitoringServiceForBotWithMetrics(
-		runtime.session,
-		runtime.arikawaState,
-		eventLogger,
-		opts.configManager,
-		opts.store,
-		runtime.instanceID,
-		&monitoring.InMemoryMetrics{},
-		slog.Default(),
-	)
-	if err != nil {
-		errWrap := fmt.Errorf("create monitoring service for %s: %w", runtime.instanceID, err)
-		log.EmitBlockingError("Blocking structural failure during monitoring instantiation", errWrap, log.GenerateRequestID())
-		return nil, errWrap
-	}
-	monitoringService.SetTaskRouterConfig(routerConfig)
-	runtime.monitoringService = monitoringService
-	return monitoringService, nil
-}
-
-func buildAutomodService(runtime *botRuntime, opts botRuntimeOptions, routerConfig task.RouterConfig, runtimeConfig files.RuntimeConfig, monitoringService *monitoring.MonitoringService) service.Service {
+func buildAutomodService(runtime *botRuntime, opts botRuntimeOptions, routerConfig task.RouterConfig, runtimeConfig files.RuntimeConfig) service.Service {
 	if !runtime.capabilities.automod {
 		slog.Info("Architectural state bypass: Automod service skipped due to explicit capability flags",
 			slog.String("botInstanceID", runtime.instanceID),
@@ -334,20 +288,22 @@ func buildAutomodService(runtime *botRuntime, opts botRuntimeOptions, routerConf
 		return nil
 	}
 
-	automodService := discord_automod.NewArikawaAdapter(runtime.arikawaState, monitoringService, opts.logger)
+	var eventLogger *logging.Logger
+	if runtime.arikawaState != nil && runtime.arikawaState.Session != nil {
+		eventLogger = logging.NewLogger(runtime.arikawaState.Session.Client, opts.configManager, runtime.session, slog.Default())
+	}
+
+	automodService := discord_automod.NewArikawaAdapter(runtime.arikawaState, eventLogger, opts.logger)
 
 	return automodService
 }
 
-func registerUserPruneService(runtime *botRuntime, opts botRuntimeOptions, monitoringService *monitoring.MonitoringService) error {
+func registerUserPruneService(runtime *botRuntime, opts botRuntimeOptions, taskRouter *task.TaskRouter) error {
 	if !runtime.capabilities.userPrune {
 		return nil
 	}
 	userPruneService := maintenance.NewUserPruneService(runtime.session, opts.configManager, opts.store, runtime.instanceID)
 	userPruneDependencies := []string{}
-	if monitoringService != nil {
-		userPruneDependencies = []string{"monitoring"}
-	}
 	userPruneService.SetDependencies(userPruneDependencies)
 
 	if err := runtime.serviceManager.Register(userPruneService); err != nil {
@@ -385,7 +341,7 @@ func registerQOTDRuntimeService(runtime *botRuntime, opts botRuntimeOptions) err
 	return nil
 }
 
-func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg *files.BotConfig, monitoringService *monitoring.MonitoringService, statsService *stats.StatsService) service.Service {
+func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg *files.BotConfig, unifiedCache *cache.UnifiedCache, taskRouter *task.TaskRouter, statsService *stats.StatsService) service.Service {
 	if !runtime.capabilities.HasCommands() {
 		logRuntimeCommandsSkipped(runtime, opts, cfg)
 
@@ -410,9 +366,11 @@ func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg
 	if cm := commandHandler.GetCommandManager(); cm != nil {
 		if router := cm.GetRouter(); router != nil {
 			router.SetStore(opts.store)
-			if monitoringService != nil {
-				router.SetCache(monitoringService.GetUnifiedCache())
-				router.SetTaskRouter(monitoringService.TaskRouter())
+			if unifiedCache != nil {
+				router.SetCache(unifiedCache)
+			}
+			if taskRouter != nil {
+				router.SetTaskRouter(taskRouter)
 			}
 			router.SetRuntimeApplier(opts.runtimeApplier)
 		}
@@ -420,9 +378,6 @@ func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg
 	runtime.commandHandler = commandHandler
 
 	deps := []string{}
-	if monitoringService != nil {
-		deps = append(deps, "monitoring")
-	}
 	commandHandler.SetDependencies(deps)
 
 	return commandHandler
@@ -435,25 +390,13 @@ func logRuntimeCommandsSkipped(runtime *botRuntime, opts botRuntimeOptions, cfg 
 }
 
 var intelligentWarmupFn = cache.IntelligentWarmupContext
-var monitoringUnifiedCacheFn = func(ms *monitoring.MonitoringService) *cache.UnifiedCache {
-	if ms == nil {
-		return nil
-	}
-	return ms.GetUnifiedCache()
-}
-var scheduleStartupMemberWarmupFn = func(ms *monitoring.MonitoringService, config cache.WarmupConfig) bool {
-	if ms == nil {
-		return false
-	}
-	return ms.ScheduleStartupMemberWarmup(config)
-}
 
 func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *storage.Store, startupTasks *StartupTaskOrchestrator) {
-	if runtime == nil || runtime.session == nil || !runtime.capabilities.warmup || runtime.monitoringService == nil {
+	if runtime == nil || runtime.session == nil || !runtime.capabilities.warmup || runtime.unifiedCache == nil {
 		return
 	}
 
-	unifiedCache := monitoringUnifiedCacheFn(runtime.monitoringService)
+	unifiedCache := runtime.unifiedCache
 	if unifiedCache == nil {
 		return
 	}
@@ -472,9 +415,6 @@ func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *stor
 
 	if startupTasks == nil {
 		go func() {
-			if scheduleStartupMemberWarmupFn(runtime.monitoringService, memberWarmupConfig) {
-				return
-			}
 			if err := runWarmup(ctx, memberWarmupConfig); err != nil {
 				if ctx.Err() != nil {
 					return
@@ -501,13 +441,6 @@ func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *stor
 			case <-localCtx.Done():
 			}
 		}()
-
-		if scheduleStartupMemberWarmupFn(runtime.monitoringService, memberWarmupConfig) {
-			slog.Debug("Prioritized member phase execution behind startup tasks lock",
-				slog.String("botInstanceID", runtime.instanceID),
-			)
-			return nil
-		}
 
 		if err := runWarmup(localCtx, memberWarmupConfig); err != nil {
 			if localCtx.Err() != nil {

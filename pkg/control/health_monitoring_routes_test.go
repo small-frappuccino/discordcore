@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/monitoring"
+	"github.com/small-frappuccino/discordcore/pkg/telemetry"
 )
 
 const healthMonitoringTestToken = "test-bearer-token"
@@ -42,7 +42,7 @@ func TestMonitoringHealthRouteReturns503WhenResolverYieldsNil(t *testing.T) {
 
 	srv := newMonitoringHealthTestServer(t)
 	srv.SetBearerToken(healthMonitoringTestToken)
-	srv.SetMonitoringMetricsResolver(func() monitoring.Metrics { return nil })
+	srv.SetMonitoringMetricsResolver(func() telemetry.Metrics { return nil })
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/v1/health/monitoring", nil)
@@ -63,7 +63,7 @@ func TestMonitoringHealthRouteReturns503WhenMetricsAreNopOnly(t *testing.T) {
 
 	srv := newMonitoringHealthTestServer(t)
 	srv.SetBearerToken(healthMonitoringTestToken)
-	srv.SetMonitoringMetricsResolver(func() monitoring.Metrics { return monitoring.NopMetrics{} })
+	srv.SetMonitoringMetricsResolver(func() telemetry.Metrics { return telemetry.NopMetrics{} })
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/v1/health/monitoring", nil)
@@ -84,7 +84,7 @@ func TestMonitoringHealthRouteSurfacesRecordedMetrics(t *testing.T) {
 	srv := newMonitoringHealthTestServer(t)
 	srv.SetBearerToken(healthMonitoringTestToken)
 
-	metrics := &monitoring.InMemoryMetrics{}
+	metrics := &telemetry.InMemoryMetrics{}
 	metrics.RecordAuditLogCall()
 	metrics.RecordAuditLogCall()
 	metrics.RecordGuildMemberCall()
@@ -94,7 +94,7 @@ func TestMonitoringHealthRouteSurfacesRecordedMetrics(t *testing.T) {
 	metrics.RecordRolesCacheStoreHit()
 	metrics.RecordRolesAuditCacheHit()
 
-	srv.SetMonitoringMetricsResolver(func() monitoring.Metrics { return metrics })
+	srv.SetMonitoringMetricsResolver(func() telemetry.Metrics { return metrics })
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/v1/health/monitoring", nil)
@@ -111,7 +111,7 @@ func TestMonitoringHealthRouteSurfacesRecordedMetrics(t *testing.T) {
 		t.Fatalf("expected no-store cache control, got %q", got)
 	}
 
-	var snap monitoring.MetricsSnapshot
+	var snap telemetry.MetricsSnapshot
 	if err := json.Unmarshal(rec.Body.Bytes(), &snap); err != nil {
 		t.Fatalf("decode snapshot: %v body=%q", err, rec.Body.String())
 	}
@@ -131,7 +131,7 @@ func TestMonitoringHealthRouteRejectsUnauthenticatedRequests(t *testing.T) {
 
 	srv := newMonitoringHealthTestServer(t)
 	srv.SetBearerToken(healthMonitoringTestToken)
-	srv.SetMonitoringMetricsResolver(func() monitoring.Metrics { return &monitoring.InMemoryMetrics{} })
+	srv.SetMonitoringMetricsResolver(func() telemetry.Metrics { return &telemetry.InMemoryMetrics{} })
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/v1/health/monitoring", nil)
@@ -149,7 +149,7 @@ func TestMonitoringHealthRouteRejectsNonGETMethods(t *testing.T) {
 
 	srv := newMonitoringHealthTestServer(t)
 	srv.SetBearerToken(healthMonitoringTestToken)
-	srv.SetMonitoringMetricsResolver(func() monitoring.Metrics { return &monitoring.InMemoryMetrics{} })
+	srv.SetMonitoringMetricsResolver(func() telemetry.Metrics { return &telemetry.InMemoryMetrics{} })
 
 	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
 		method := method

@@ -8,10 +8,10 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/monitoring"
+
 	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
-	"github.com/small-frappuccino/discordcore/pkg/task"
+
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -143,7 +143,6 @@ func TestInitializeBotRuntime_FullCapabilities(t *testing.T) {
 	rt := &botRuntime{
 		instanceID: "test",
 		capabilities: botRuntimeCapabilities{
-			monitoring:  false,
 			automod:     true,
 			userPrune:   true,
 			qotdRuntime: true,
@@ -200,12 +199,8 @@ func (m *mockQotdLifecycleService) CancelDailyAutomatedArchiveForGuild(guildID s
 
 func TestScheduleRuntimeWarmup(t *testing.T) {
 	origIntelligent := intelligentWarmupFn
-	origUnifiedCache := monitoringUnifiedCacheFn
-	origSchedule := scheduleStartupMemberWarmupFn
 	t.Cleanup(func() {
 		intelligentWarmupFn = origIntelligent
-		monitoringUnifiedCacheFn = origUnifiedCache
-		scheduleStartupMemberWarmupFn = origSchedule
 	})
 
 	done := make(chan struct{})
@@ -218,18 +213,12 @@ func TestScheduleRuntimeWarmup(t *testing.T) {
 		}
 		return nil
 	}
-	monitoringUnifiedCacheFn = func(ms *monitoring.MonitoringService) *cache.UnifiedCache {
-		return cache.NewUnifiedCache(cache.CacheConfig{})
-	}
-	scheduleStartupMemberWarmupFn = func(ms *monitoring.MonitoringService, config cache.WarmupConfig) bool {
-		return false
-	}
 
 	rt := &botRuntime{
-		instanceID:        "test",
-		capabilities:      botRuntimeCapabilities{warmup: true},
-		session:           &discordgo.Session{},
-		monitoringService: &monitoring.MonitoringService{},
+		instanceID:   "test",
+		capabilities: botRuntimeCapabilities{warmup: true},
+		session:      &discordgo.Session{},
+		unifiedCache: cache.NewUnifiedCache(cache.CacheConfig{}),
 	}
 
 	scheduleRuntimeWarmup(context.Background(), rt, nil, nil)
@@ -241,30 +230,13 @@ func TestScheduleRuntimeWarmup(t *testing.T) {
 	}
 }
 
-func TestBotRuntimeRunner_setupMonitoringService(t *testing.T) {
-	rt := &botRuntime{
-		instanceID: "test",
-		capabilities: botRuntimeCapabilities{
-			monitoring: true,
-		},
-		session: &discordgo.Session{},
-	}
-
-	// Should fail due to nil store/configManager
-	_, err := setupMonitoringService(rt, botRuntimeOptions{}, task.RouterConfig{})
-	if err == nil {
-		t.Fatal("expected err")
-	}
-}
-
 func TestBotRuntimeRunner_registerUserPruneService(t *testing.T) {
 	rt := &botRuntime{
 		instanceID: "test",
 		capabilities: botRuntimeCapabilities{
 			userPrune: true,
 		},
-		monitoringService: &monitoring.MonitoringService{},
-		serviceManager:    service.NewServiceManager(nil),
+		serviceManager: service.NewServiceManager(nil),
 	}
 	err := registerUserPruneService(rt, botRuntimeOptions{}, nil)
 	if err != nil {

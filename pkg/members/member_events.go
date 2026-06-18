@@ -3,21 +3,20 @@ package members
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"log/slog"
-
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/state"
+
 	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
-	"github.com/small-frappuccino/discordcore/pkg/monitoring"
+	"github.com/small-frappuccino/discordcore/pkg/logging"
 	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
@@ -27,14 +26,12 @@ const unknownServerTimeSentinel time.Duration = -1
 
 // MemberEventService manages member join/leave events
 type MemberEventService struct {
-	arikawaState   *state.State
-	configManager  *files.ConfigManager
-	botInstanceID  string
-	sink           MemberSink
-	activity       *monitoring.RuntimeActivity
-	lifecycle      monitoring.ServiceLifecycle
-	handlerCancels []func()
-	logger         *slog.Logger
+	configManager *files.ConfigManager
+	botInstanceID string
+	sink          MemberSink
+	activity      *service.RuntimeActivity
+	lifecycle     service.BaseLifecycle
+	logger        *slog.Logger
 
 	// Cache for join times (member and bot)
 	joinTimes map[string]time.Time // key: guildID:userID
@@ -42,56 +39,54 @@ type MemberEventService struct {
 
 	// Complementary persistence (Postgres)
 	store *storage.Store
+
+	arikawaState *state.State
 }
 
 // EventServiceDeps bundles the shared dependencies for the bot-scoped logging
 // event services. BotInstanceID is normalized by the
 // constructors via files.NormalizeBotInstanceID.
 type EventServiceDeps struct {
-	ArikawaState  *state.State
 	ConfigManager *files.ConfigManager
 	Sink          MemberSink
 	Store         *storage.Store
 	BotInstanceID string
 	Logger        *slog.Logger
+	ArikawaState  *state.State
 }
 
 // NewMemberEventService creates a new instance of the member events service
-func NewMemberEventService(arikawaState *state.State, configManager *files.ConfigManager, sink MemberSink, store *storage.Store, logger *slog.Logger) *MemberEventService {
+func NewMemberEventService(configManager *files.ConfigManager, sink MemberSink, store *storage.Store, logger *slog.Logger) *MemberEventService {
 	return NewMemberEventServiceForBot(EventServiceDeps{
-		ArikawaState:  arikawaState,
 		ConfigManager: configManager,
 		Sink:          sink,
 		Store:         store,
 		Logger:        logger,
+		ArikawaState:  nil, // Fallback if no arikawa state
 	})
 }
 
 // NewMemberEventServiceForBot creates a member event service scoped to one bot instance.
 func NewMemberEventServiceForBot(deps EventServiceDeps) *MemberEventService {
 	return &MemberEventService{
-		arikawaState:  deps.ArikawaState,
 		configManager: deps.ConfigManager,
 		botInstanceID: files.NormalizeBotInstanceID(deps.BotInstanceID),
 		sink:          deps.Sink,
 		store:         deps.Store,
 		logger:        deps.Logger,
-		activity: monitoring.NewRuntimeActivity(deps.Store, monitoring.RuntimeActivityOptions{
-			RunErr:        monitoring.RunErrWithTimeoutContext,
-			EventTimeout:  monitoring.DependencyTimeout,
+		activity: service.NewRuntimeActivity(deps.Store, service.RuntimeActivityOptions{
+			RunErr:        service.RunErrWithTimeoutContext,
+			EventTimeout:  service.DependencyTimeout,
 			BotInstanceID: files.NormalizeBotInstanceID(deps.BotInstanceID),
 			Logger:        deps.Logger,
 		}),
-		lifecycle:      monitoring.NewServiceLifecycle("member event service"),
-		handlerCancels: make([]func(), 0, 3),
+		lifecycle:    service.NewBaseLifecycle("member event service"),
+		arikawaState: deps.ArikawaState,
 	}
 }
 
 // Start registers member event handlers
 func (mes *MemberEventService) Start(ctx context.Context) error {
-	if mes.arikawaState == nil {
-		return fmt.Errorf("member event service arikawa state is nil")
-	}
 	runCtx, err := mes.lifecycle.Start(ctx)
 	if err != nil {
 		return fmt.Errorf("MemberEventService.Start: %w", err)
@@ -104,32 +99,15 @@ func (mes *MemberEventService) Start(ctx context.Context) error {
 
 	// Store should be injected and already initialized
 	if mes.store != nil {
-		if err := monitoring.RunErrWithTimeoutContext(runCtx, monitoring.DependencyTimeout, func(context.Context) error { return mes.store.Init() }); err != nil {
+		if err := service.RunErrWithTimeoutContext(runCtx, service.DependencyTimeout, func(context.Context) error { return mes.store.Init() }); err != nil {
 			mes.logger.Warn(fmt.Sprintf("Member event service: failed to initialize store (continuing): %v", err))
 		}
 	}
 
-	mes.handlerCancels = mes.handlerCancels[:0]
-	mes.handlerCancels = append(mes.handlerCancels,
-		mes.arikawaState.AddHandler(func(e *gateway.GuildMemberAddEvent) {
-			mes.handleGuildMemberAdd(context.Background(), e)
-		}),
-		mes.arikawaState.AddHandler(func(e *gateway.GuildMemberUpdateEvent) {
-			mes.handleGuildMemberUpdate(context.Background(), e)
-		}),
-		mes.arikawaState.AddHandler(func(e *gateway.GuildMemberRemoveEvent) {
-			mes.handleGuildMemberRemove(context.Background(), e)
-		}),
-	)
+	// Handlers are managed externally
 
 	cleanupCtx, done, ok := mes.lifecycle.Begin()
 	if !ok {
-		for _, cancel := range mes.handlerCancels {
-			if cancel != nil {
-				cancel()
-			}
-		}
-		mes.handlerCancels = nil
 		_ = mes.lifecycle.Cancel()
 		return fmt.Errorf("member event service cleanup worker failed to start")
 	}
@@ -147,13 +125,6 @@ func (mes *MemberEventService) Stop(ctx context.Context) error {
 	if err := mes.lifecycle.Cancel(); err != nil {
 		return fmt.Errorf("MemberEventService.Stop: %w", err)
 	}
-
-	for _, cancel := range mes.handlerCancels {
-		if cancel != nil {
-			cancel()
-		}
-	}
-	mes.handlerCancels = nil
 
 	if err := mes.lifecycle.Wait(ctx); err != nil {
 		return fmt.Errorf("MemberEventService.Stop: %w", err)
@@ -199,7 +170,7 @@ func (mes *MemberEventService) Stats() service.ServiceStats {
 }
 
 // handleGuildMemberAdd processes when a user joins the server
-func (mes *MemberEventService) handleGuildMemberAdd(ctx context.Context, m *gateway.GuildMemberAddEvent) {
+func (mes *MemberEventService) IngestGuildMemberAdd(ctx context.Context, m *gateway.GuildMemberAddEvent) {
 	if m == nil || m.User.Bot {
 		return
 	}
@@ -250,9 +221,9 @@ func (mes *MemberEventService) handleGuildMemberAdd(ctx context.Context, m *gate
 	}
 
 	// Logging is now delegated to Sink
-	emit := logpolicy.ShouldEmitLogEvent(nil, mes.configManager, logpolicy.LogEventMemberJoin, m.GuildID.String())
+	emit := logging.ShouldEmitLogEvent(nil, mes.configManager, logging.LogEventMemberJoin, m.GuildID.String())
 	if !emit.Enabled {
-		if emit.Reason == logpolicy.EmitReasonNoChannelConfigured {
+		if emit.Reason == logging.EmitReasonNoChannelConfigured {
 			mes.logger.Info("User entry/leave channel not configured for guild, member join notification not sent", "guildID", m.GuildID, "userID", m.User.ID)
 		} else {
 			mes.logger.Debug("Member join notification suppressed by policy", "guildID", m.GuildID, "userID", m.User.ID, "reason", emit.Reason)
@@ -267,12 +238,12 @@ func (mes *MemberEventService) handleGuildMemberAdd(ctx context.Context, m *gate
 
 	// Persist absolute join time to Postgres store (best effort)
 	if mes.store != nil && !joinedAt.IsZero() {
-		if err := monitoring.RunErrWithTimeoutContext(ctx, monitoring.DependencyTimeout, func(runCtx context.Context) error {
+		if err := service.RunErrWithTimeoutContext(ctx, service.DependencyTimeout, func(runCtx context.Context) error {
 			return mes.store.UpsertMemberJoinContext(runCtx, m.GuildID.String(), m.User.ID.String(), joinedAt)
 		}); err != nil {
 			mes.logger.Warn("Failed to persist member join timestamp", "guildID", m.GuildID, "userID", m.User.ID, "joinedAt", joinedAt, "error", err)
 		}
-		if err := monitoring.RunErrWithTimeoutContext(ctx, monitoring.DependencyTimeout, func(runCtx context.Context) error {
+		if err := service.RunErrWithTimeoutContext(ctx, service.DependencyTimeout, func(runCtx context.Context) error {
 			return mes.store.IncrementDailyMemberJoinContext(runCtx, m.GuildID.String(), m.User.ID.String(), joinedAt)
 		}); err != nil {
 			mes.logger.Warn("Failed to increment daily member join metric", "guildID", m.GuildID, "userID", m.User.ID, "joinedAt", joinedAt, "error", err)
@@ -298,7 +269,7 @@ func (mes *MemberEventService) handleGuildMemberAdd(ctx context.Context, m *gate
 }
 
 // handleGuildMemberRemove processes when a user leaves the server
-func (mes *MemberEventService) handleGuildMemberRemove(ctx context.Context, m *gateway.GuildMemberRemoveEvent) {
+func (mes *MemberEventService) IngestGuildMemberRemove(ctx context.Context, m *gateway.GuildMemberRemoveEvent) {
 	if m == nil || m.User.Bot {
 		return
 	}
@@ -341,7 +312,7 @@ func (mes *MemberEventService) handleGuildMemberRemove(ctx context.Context, m *g
 
 	// Increment daily member leave metric
 	if mes.store != nil {
-		if err := monitoring.RunErrWithTimeoutContext(ctx, monitoring.DependencyTimeout, func(runCtx context.Context) error {
+		if err := service.RunErrWithTimeoutContext(ctx, service.DependencyTimeout, func(runCtx context.Context) error {
 			return mes.store.IncrementDailyMemberLeaveContext(runCtx, m.GuildID.String(), m.User.ID.String(), time.Now().UTC())
 		}); err != nil {
 			mes.logger.Warn("Failed to increment daily member leave metric", "guildID", m.GuildID, "userID", m.User.ID, "error", err)
@@ -358,7 +329,7 @@ func (mes *MemberEventService) handleGuildMemberRemove(ctx context.Context, m *g
 // handleGuildMemberUpdate maintains the role relationship:
 // - If the user loses role A, remove the target role.
 // - If the user has both A and B, grant the target role (if not already present).
-func (mes *MemberEventService) handleGuildMemberUpdate(ctx context.Context, m *gateway.GuildMemberUpdateEvent) {
+func (mes *MemberEventService) IngestGuildMemberUpdate(ctx context.Context, m *gateway.GuildMemberUpdateEvent) {
 	if m == nil || m.User.Bot {
 		return
 	}
@@ -451,7 +422,7 @@ func (mes *MemberEventService) calculateServerTime(ctx context.Context, guildID,
 			at time.Time
 			ok bool
 		}
-		res, err := monitoring.RunWithTimeoutContext(ctx, monitoring.DependencyTimeout, func(runCtx context.Context) (joinLookup, error) {
+		res, err := service.RunWithTimeoutContext(ctx, service.DependencyTimeout, func(runCtx context.Context) (joinLookup, error) {
 			at, ok, err := mes.store.MemberJoin(runCtx, guildID, userID)
 			return joinLookup{at: at, ok: ok}, err
 		})
@@ -550,7 +521,7 @@ func (mes *MemberEventService) getGuildMember(ctx context.Context, guildID, user
 	if err != nil {
 		return nil, err
 	}
-	return monitoring.RunWithTimeout(ctx, monitoring.DependencyTimeout, func() (*discord.Member, error) {
+	return service.RunWithTimeout(ctx, service.DependencyTimeout, func() (*discord.Member, error) {
 		return mes.arikawaState.Member(discord.GuildID(gID), discord.UserID(uID))
 	})
 }
@@ -562,7 +533,7 @@ func (mes *MemberEventService) guildMemberRoleAdd(ctx context.Context, guildID, 
 	gID, _ := discord.ParseSnowflake(guildID)
 	uID, _ := discord.ParseSnowflake(userID)
 	rID, _ := discord.ParseSnowflake(roleID)
-	return monitoring.RunErrWithTimeout(ctx, monitoring.DependencyTimeout, func() error {
+	return service.RunErrWithTimeout(ctx, service.DependencyTimeout, func() error {
 		return mes.arikawaState.Client.AddRole(discord.GuildID(gID), discord.UserID(uID), discord.RoleID(rID), api.AddRoleData{})
 	})
 }
@@ -574,7 +545,7 @@ func (mes *MemberEventService) guildMemberRoleRemove(ctx context.Context, guildI
 	gID, _ := discord.ParseSnowflake(guildID)
 	uID, _ := discord.ParseSnowflake(userID)
 	rID, _ := discord.ParseSnowflake(roleID)
-	return monitoring.RunErrWithTimeout(ctx, monitoring.DependencyTimeout, func() error {
+	return service.RunErrWithTimeout(ctx, service.DependencyTimeout, func() error {
 		return mes.arikawaState.Client.RemoveRole(discord.GuildID(gID), discord.UserID(uID), discord.RoleID(rID), "")
 	})
 }

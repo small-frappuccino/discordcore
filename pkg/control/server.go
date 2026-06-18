@@ -15,10 +15,10 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/monitoring"
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordcore/pkg/telemetry"
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -33,7 +33,7 @@ type CacheSnapshotResolver func() *cache.UnifiedCache
 // CacheSnapshotResolver — monitoring is constructed per bot runtime, so the
 // resolver is called per request and may return nil while the runtime is
 // still booting; the route surfaces 503 in that window.
-type MonitoringMetricsResolver func() monitoring.Metrics
+type MonitoringMetricsResolver func() telemetry.Metrics
 
 const (
 	defaultMaxBodyBytes          = 64 * 1024

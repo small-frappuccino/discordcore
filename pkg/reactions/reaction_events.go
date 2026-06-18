@@ -9,12 +9,10 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
+	"github.com/small-frappuccino/discordcore/pkg/logging"
 	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordgo"
-
-	"github.com/small-frappuccino/discordcore/pkg/monitoring"
 )
 
 // ReactionEventService listens to reaction add events, enforces configured
@@ -27,8 +25,8 @@ type ReactionEventService struct {
 	configManager *files.ConfigManager
 	botID         string
 	store         *storage.Store
-	activity      *monitoring.RuntimeActivity
-	lifecycle     monitoring.ServiceLifecycle
+	activity      *service.RuntimeActivity
+	lifecycle     service.BaseLifecycle
 
 	// handlerCancels keeps unsubscribe functions for all registered handlers
 	handlerCancels []func()
@@ -54,13 +52,13 @@ func NewReactionEventServiceForBot(
 		botID:         files.NormalizeBotInstanceID(botInstanceID),
 		store:         store,
 		logger:        logger,
-		activity: monitoring.NewRuntimeActivity(store, monitoring.RuntimeActivityOptions{
-			RunErr:        monitoring.RunErrWithTimeoutContext,
-			EventTimeout:  monitoring.DependencyTimeout,
+		activity: service.NewRuntimeActivity(store, service.RuntimeActivityOptions{
+			RunErr:        service.RunErrWithTimeoutContext,
+			EventTimeout:  service.DependencyTimeout,
 			BotInstanceID: files.NormalizeBotInstanceID(botInstanceID),
 			Logger:        logger,
 		}),
-		lifecycle:      monitoring.NewServiceLifecycle("reaction event service"),
+		lifecycle:      service.NewBaseLifecycle("reaction event service"),
 		handlerCancels: make([]func(), 0, 2),
 	}
 }
@@ -78,7 +76,7 @@ func (rs *ReactionEventService) Start(ctx context.Context) error {
 
 	// Register only the add handler for now (count "reactions added").
 	// If you want to also track removals, add another counter/table or logic accordingly.
-	unsubAdd := rs.session.AddHandler(monitoring.GuardedHandler(&rs.lifecycle, rs.handleReactionAdd))
+	unsubAdd := rs.session.AddHandler(rs.handleReactionAdd)
 	rs.handlerCancels = append(rs.handlerCancels, unsubAdd)
 
 	rs.logger.Info("Reaction event service started")
@@ -140,9 +138,12 @@ func (rs *ReactionEventService) Stats() service.ServiceStats {
 	return service.ServiceStats{}
 }
 
-// handleReactionAdd processes MessageReactionAdd events, removing blocked
-// reactions first and then recording daily metrics when enabled.
-func (rs *ReactionEventService) handleReactionAdd(ctx context.Context, s *discordgo.Session, e *discordgo.MessageReactionAdd) {
+// handleReactionAdd processes a MessageReactionAdd event.
+func (rs *ReactionEventService) handleReactionAdd(s *discordgo.Session, e *discordgo.MessageReactionAdd) {
+	if !rs.lifecycle.IsRunning() {
+		return
+	}
+	ctx := context.Background()
 	if e == nil {
 		return
 	}
@@ -194,14 +195,14 @@ func (rs *ReactionEventService) handleReactionAdd(ctx context.Context, s *discor
 		return
 	}
 
-	emit := logpolicy.ShouldEmitLogEvent(rs.session, rs.configManager, logpolicy.LogEventReactionMetric, guildID)
+	emit := logging.ShouldEmitLogEvent(rs.session, rs.configManager, logging.LogEventReactionMetric, guildID)
 	if !emit.Enabled {
 		rs.logger.Debug("ReactionAdd: metrics suppressed by policy", "guildID", guildID, "channelID", e.ChannelID, "userID", e.UserID, "reason", emit.Reason)
 		return
 	}
 
 	// Increment per-day reaction count for the reactor.
-	if err := monitoring.RunErrWithTimeoutContext(ctx, monitoring.DependencyTimeout, func(runCtx context.Context) error {
+	if err := service.RunErrWithTimeoutContext(ctx, service.DependencyTimeout, func(runCtx context.Context) error {
 		return rs.store.IncrementDailyReactionCountContext(runCtx, guildID, e.ChannelID, e.UserID, time.Now().UTC())
 	}); err != nil {
 		rs.logger.Error("Failed to increment daily reaction count", "guildID", guildID, "channelID", e.ChannelID, "userID", e.UserID, "err", err)

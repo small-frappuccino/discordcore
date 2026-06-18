@@ -10,7 +10,7 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	"github.com/small-frappuccino/discordcore/pkg/log"
-	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
+	"github.com/small-frappuccino/discordcore/pkg/logging"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
 	"github.com/small-frappuccino/discordgo"
@@ -685,7 +685,7 @@ func buildModerationCaseTitle(caseNumber int64, hasCaseNumber bool, actionType s
 	return actionType + " | case " + casePart
 }
 func sendModerationLog(ctx *core.Context, payload moderationLogPayload) {
-	sendModerationLogForEvent(ctx, payload, logpolicy.LogEventModerationCase)
+	sendModerationLogForEvent(ctx, payload, logging.LogEventModerationCase)
 }
 
 // moderationEventEmit reports the outcome of an attempt to publish a
@@ -714,7 +714,7 @@ type moderationEventEmit struct {
 // guild has the event type disabled. When enabled, returns the resolved
 // channel ID and any send error so callers can decide whether to record
 // the failure as a metric.
-func postModerationEventEmbed(ctx *core.Context, payload moderationLogPayload, eventType logpolicy.LogEventType) moderationEventEmit {
+func postModerationEventEmbed(ctx *core.Context, payload moderationLogPayload, eventType logging.LogEventType) moderationEventEmit {
 	if ctx == nil || ctx.Session == nil || ctx.Config == nil || ctx.GuildID == "" {
 		return moderationEventEmit{}
 	}
@@ -722,7 +722,7 @@ func postModerationEventEmbed(ctx *core.Context, payload moderationLogPayload, e
 	if ctx.Session.State != nil && ctx.Session.State.User != nil {
 		botID = ctx.Session.State.User.ID
 	}
-	emit := logpolicy.ShouldEmitLogEvent(ctx.Session, ctx.Config, eventType, ctx.GuildID)
+	emit := logging.ShouldEmitLogEvent(ctx.Session, ctx.Config, eventType, ctx.GuildID)
 	if !emit.Enabled {
 		return moderationEventEmit{}
 	}
@@ -800,7 +800,7 @@ func postModerationEventEmbed(ctx *core.Context, payload moderationLogPayload, e
 // to match the existing convention in user_prune, automod, and the
 // monitoring user-event paths. Callers that want a metric should invoke
 // postModerationEventEmbed directly and react to the returned error.
-func sendModerationLogForEvent(ctx *core.Context, payload moderationLogPayload, eventType logpolicy.LogEventType) {
+func sendModerationLogForEvent(ctx *core.Context, payload moderationLogPayload, eventType logging.LogEventType) {
 	emit := postModerationEventEmbed(ctx, payload, eventType)
 	if !emit.Enabled || emit.Err == nil {
 		return
@@ -849,7 +849,7 @@ func sendModerationCaseActionLog(ctx *core.Context, payload moderationLogPayload
 	if ctx.Session.State != nil && ctx.Session.State.User != nil {
 		botID = ctx.Session.State.User.ID
 	}
-	emit := logpolicy.ShouldEmitLogEvent(ctx.Session, ctx.Config, logpolicy.LogEventModerationCase, ctx.GuildID)
+	emit := logging.ShouldEmitLogEvent(ctx.Session, ctx.Config, logging.LogEventModerationCase, ctx.GuildID)
 	if !emit.Enabled {
 		return
 	}

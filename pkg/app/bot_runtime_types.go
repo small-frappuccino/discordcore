@@ -18,7 +18,9 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
-	"github.com/small-frappuccino/discordcore/pkg/monitoring"
+	"github.com/small-frappuccino/discordcore/pkg/task"
+
+	"github.com/small-frappuccino/discordcore/pkg/telemetry"
 
 	"github.com/small-frappuccino/discordcore/pkg/service"
 )
@@ -37,13 +39,14 @@ type resolvedBotInstance struct {
 }
 
 type botRuntime struct {
-	instanceID        string
-	capabilities      botRuntimeCapabilities
-	session           *discordgo.Session
-	arikawaState      *state.State
-	serviceManager    *service.ServiceManager
-	monitoringService *monitoring.MonitoringService
-	commandHandler    *commands.CommandHandler
+	instanceID     string
+	capabilities   botRuntimeCapabilities
+	session        *discordgo.Session
+	arikawaState   *state.State
+	serviceManager *service.ServiceManager
+	unifiedCache   *cache.UnifiedCache
+	taskRouter     *task.TaskRouter
+	commandHandler *commands.CommandHandler
 }
 
 type botRuntimeResolver struct {
@@ -151,8 +154,8 @@ func (r *botRuntimeResolver) aggregateUnifiedCaches() map[string]*cache.UnifiedC
 	caches := make(map[string]*cache.UnifiedCache)
 	runtimes := r.getRuntimes()
 	for id, runtime := range runtimes {
-		if runtime.monitoringService != nil && runtime.monitoringService.GetUnifiedCache() != nil {
-			caches[id] = runtime.monitoringService.GetUnifiedCache()
+		if runtime.unifiedCache != nil {
+			caches[id] = runtime.unifiedCache
 		}
 	}
 	if len(caches) == 0 {
@@ -161,22 +164,13 @@ func (r *botRuntimeResolver) aggregateUnifiedCaches() map[string]*cache.UnifiedC
 	return caches
 }
 
-// aggregateMonitoringMetrics collects the monitoring.Metrics of all active bot instances.
-func (r *botRuntimeResolver) aggregateMonitoringMetrics() map[string]monitoring.Metrics {
+// aggregateMonitoringMetrics collects the telemetry.Metrics of all active bot instances.
+func (r *botRuntimeResolver) aggregateMonitoringMetrics() map[string]telemetry.Metrics {
 	if r == nil {
 		return nil
 	}
 
-	metrics := make(map[string]monitoring.Metrics)
-	runtimes := r.getRuntimes()
-	for id, runtime := range runtimes {
-		if runtime.monitoringService != nil {
-			m := runtime.monitoringService.Metrics()
-			if m != nil {
-				metrics[id] = m
-			}
-		}
-	}
+	metrics := make(map[string]telemetry.Metrics)
 	if len(metrics) == 0 {
 		return nil
 	}

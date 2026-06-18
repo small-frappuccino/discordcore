@@ -42,6 +42,113 @@ export interface payload {
   count: number;
 }
 
+export interface testConfigContainer {
+  secret: string;
+}
+
+export interface RolePanelEmbedFieldConfig {
+  name: string;
+  value: string;
+  inline?: boolean;
+}
+
+export interface RolePanelButtonConfig {
+  role_id: string;
+  label: string;
+  emoji_name?: string;
+  emoji_id?: string;
+  emoji_animated?: boolean;
+}
+
+export interface RolePanelPostingConfig {
+  channel_id: string;
+  message_id: string;
+  webhook_id?: string;
+  webhook_token?: string;
+}
+
+export interface RolePanelConfig {
+  key: string;
+  title?: string;
+  description?: string;
+  color?: number;
+  author_name?: string;
+  author_icon_url?: string;
+  footer_text?: string;
+  footer_icon_url?: string;
+  image_url?: string;
+  thumbnail_url?: string;
+  fields?: RolePanelEmbedFieldConfig[];
+  buttons?: RolePanelButtonConfig[];
+  postings?: RolePanelPostingConfig[];
+}
+
+export interface CustomEmbedFieldConfig {
+  name: string;
+  value: string;
+  inline?: boolean;
+}
+
+export interface CustomEmbedPostingConfig {
+  channel_id: string;
+  message_id: string;
+  webhook_id?: string;
+  webhook_token?: string;
+}
+
+export interface CustomEmbedConfig {
+  key: string;
+  title?: string;
+  description?: string;
+  color?: number;
+  author_name?: string;
+  author_icon_url?: string;
+  footer_text?: string;
+  footer_icon_url?: string;
+  image_url?: string;
+  thumbnail_url?: string;
+  fields?: CustomEmbedFieldConfig[];
+  postings?: CustomEmbedPostingConfig[];
+}
+
+export interface rawQOTDDeckConfig {
+  id?: string;
+  name?: string;
+  enabled?: boolean;
+  channel_id?: string;
+  forum_channel_id?: string;
+  question_channel_id?: string;
+  response_channel_id?: string;
+  selection_strategy?: string;
+}
+
+export interface rawQOTDPublishScheduleConfig {
+  hour_utc?: number;
+  minute_utc?: number;
+  publish_hour_utc?: number;
+  publish_minute_utc?: number;
+  qotd_time_hour_utc?: number;
+  qotd_time_minute_utc?: number;
+}
+
+export interface rawQOTDConfig {
+  verified_role_id?: string;
+  active_deck_id?: string;
+  decks?: QOTDDeckConfig[];
+  schedule?: rawQOTDPublishScheduleConfig;
+  suppress_scheduled_publish_dates_utc?: string[];
+  suppress_scheduled_publish_date_utc?: string;
+  enabled?: boolean;
+  channel_id?: string;
+  forum_channel_id?: string;
+  question_channel_id?: string;
+  response_channel_id?: string;
+  publish_hour_utc?: number;
+  publish_minute_utc?: number;
+  qotd_time_hour_utc?: number;
+  qotd_time_minute_utc?: number;
+}
+
 export interface FeatureServiceToggles {
   monitoring?: boolean;
   automod?: boolean;
@@ -100,44 +207,6 @@ export interface FeatureToggles {
   safety?: FeatureSafetyToggles;
   mute_role?: boolean;
   role_panels?: boolean;
-}
-
-export interface rawQOTDDeckConfig {
-  id?: string;
-  name?: string;
-  enabled?: boolean;
-  channel_id?: string;
-  forum_channel_id?: string;
-  question_channel_id?: string;
-  response_channel_id?: string;
-  selection_strategy?: string;
-}
-
-export interface rawQOTDPublishScheduleConfig {
-  hour_utc?: number;
-  minute_utc?: number;
-  publish_hour_utc?: number;
-  publish_minute_utc?: number;
-  qotd_time_hour_utc?: number;
-  qotd_time_minute_utc?: number;
-}
-
-export interface rawQOTDConfig {
-  verified_role_id?: string;
-  active_deck_id?: string;
-  decks?: QOTDDeckConfig[];
-  schedule?: rawQOTDPublishScheduleConfig;
-  suppress_scheduled_publish_dates_utc?: string[];
-  suppress_scheduled_publish_date_utc?: string;
-  enabled?: boolean;
-  channel_id?: string;
-  forum_channel_id?: string;
-  question_channel_id?: string;
-  response_channel_id?: string;
-  publish_hour_utc?: number;
-  publish_minute_utc?: number;
-  qotd_time_hour_utc?: number;
-  qotd_time_minute_utc?: number;
 }
 
 export interface RuntimeConfig {
@@ -430,74 +499,5 @@ export interface RPCAssetsConfig {
 export interface RPCButtonConfig {
   label?: string;
   url?: string;
-}
-
-export interface testConfigContainer {
-  secret: string;
-}
-
-export interface CustomEmbedFieldConfig {
-  name: string;
-  value: string;
-  inline?: boolean;
-}
-
-export interface CustomEmbedPostingConfig {
-  channel_id: string;
-  message_id: string;
-  webhook_id?: string;
-  webhook_token?: string;
-}
-
-export interface CustomEmbedConfig {
-  key: string;
-  title?: string;
-  description?: string;
-  color?: number;
-  author_name?: string;
-  author_icon_url?: string;
-  footer_text?: string;
-  footer_icon_url?: string;
-  image_url?: string;
-  thumbnail_url?: string;
-  fields?: CustomEmbedFieldConfig[];
-  postings?: CustomEmbedPostingConfig[];
-}
-
-export interface RolePanelEmbedFieldConfig {
-  name: string;
-  value: string;
-  inline?: boolean;
-}
-
-export interface RolePanelButtonConfig {
-  role_id: string;
-  label: string;
-  emoji_name?: string;
-  emoji_id?: string;
-  emoji_animated?: boolean;
-}
-
-export interface RolePanelPostingConfig {
-  channel_id: string;
-  message_id: string;
-  webhook_id?: string;
-  webhook_token?: string;
-}
-
-export interface RolePanelConfig {
-  key: string;
-  title?: string;
-  description?: string;
-  color?: number;
-  author_name?: string;
-  author_icon_url?: string;
-  footer_text?: string;
-  footer_icon_url?: string;
-  image_url?: string;
-  thumbnail_url?: string;
-  fields?: RolePanelEmbedFieldConfig[];
-  buttons?: RolePanelButtonConfig[];
-  postings?: RolePanelPostingConfig[];
 }
 

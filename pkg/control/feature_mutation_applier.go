@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/logpolicy"
+	"github.com/small-frappuccino/discordcore/pkg/logging"
 )
 
 type featureMutationApplier struct {
@@ -429,28 +429,28 @@ func normalizeStringList(values []string) []string {
 	return values
 }
 
-func setLogFeatureChannelID(guild *files.GuildConfig, eventType logpolicy.LogEventType, channelID string) {
+func setLogFeatureChannelID(guild *files.GuildConfig, eventType logging.LogEventType, channelID string) {
 	if guild == nil {
 		return
 	}
 	switch eventType {
-	case logpolicy.LogEventAvatarChange:
+	case logging.LogEventAvatarChange:
 		guild.Channels.AvatarLogging = channelID
-	case logpolicy.LogEventRoleChange:
+	case logging.LogEventRoleChange:
 		guild.Channels.RoleUpdate = channelID
-	case logpolicy.LogEventMemberJoin:
+	case logging.LogEventMemberJoin:
 		guild.Channels.MemberJoin = channelID
-	case logpolicy.LogEventMemberLeave:
+	case logging.LogEventMemberLeave:
 		guild.Channels.MemberLeave = channelID
-	case logpolicy.LogEventMessageEdit:
+	case logging.LogEventMessageEdit:
 		guild.Channels.MessageEdit = channelID
-	case logpolicy.LogEventMessageDelete:
+	case logging.LogEventMessageDelete:
 		guild.Channels.MessageDelete = channelID
-	case logpolicy.LogEventAutomodAction:
+	case logging.LogEventAutomodAction:
 		guild.Channels.AutomodAction = channelID
-	case logpolicy.LogEventModerationCase:
+	case logging.LogEventModerationCase:
 		guild.Channels.ModerationCase = channelID
-	case logpolicy.LogEventCleanAction:
+	case logging.LogEventCleanAction:
 		guild.Channels.CleanAction = channelID
 	}
 }
