@@ -24,6 +24,8 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/idgen"
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/members"
+	"github.com/small-frappuccino/discordcore/pkg/messages"
 	"github.com/small-frappuccino/discordcore/pkg/persistence"
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
@@ -183,6 +185,8 @@ func runWithOptions(appName string, opts RunOptions) error {
 	qotdService.SetClock(appClock)
 
 	moderationMetrics := &moderation.InMemoryMetrics{}
+	membersMetrics := members.NewInMemoryMetrics()
+	messagesMetrics := messages.NewInMemoryMetrics()
 	appServiceManager := service.NewServiceManager(logger)
 
 	storeService := service.NewLegacyServiceWrapper(service.LegacyServiceWrapperSpec{
@@ -211,6 +215,8 @@ func runWithOptions(appName string, opts RunOptions) error {
 		qotdCommandService:       qotdService,
 		qotdLifecycleService:     qotdService,
 		moderationMetrics:        moderationMetrics,
+		membersMetrics:           membersMetrics,
+		messagesMetrics:          messagesMetrics,
 		startupTasks:             startupTasks,
 		profile:                  opts.Profile,
 		appClock:                 appClock,
@@ -285,6 +291,8 @@ func runWithOptions(appName string, opts RunOptions) error {
 			store:                 store,
 			qotdService:           qotdService,
 			moderationMetrics:     moderationMetrics,
+			membersMetrics:        membersMetrics,
+			messagesMetrics:       messagesMetrics,
 			controlServerRegistry: controlServerRegistry,
 		})
 		slog.Info("Architectural state transition: Command tree sync complete")

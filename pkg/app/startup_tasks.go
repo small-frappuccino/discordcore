@@ -14,10 +14,11 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/webhook"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
+	"github.com/small-frappuccino/discordcore/pkg/members"
+	"github.com/small-frappuccino/discordcore/pkg/messages"
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
-	"github.com/small-frappuccino/discordcore/pkg/telemetry"
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -92,6 +93,8 @@ type controlStartupTaskOptions struct {
 	store                 *storage.Store
 	qotdService           *qotd.Service
 	moderationMetrics     moderation.Metrics
+	membersMetrics        members.Metrics
+	messagesMetrics       messages.Metrics
 	controlServerRegistry *controlServerHolder
 }
 
@@ -247,6 +250,8 @@ func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskO
 	}
 	controlServer.SetQOTDService(opts.qotdService)
 	controlServer.SetModerationMetrics(opts.moderationMetrics)
+	controlServer.SetMembersMetricsResolver(func() members.Metrics { return opts.membersMetrics })
+	controlServer.SetMessagesMetricsResolver(func() messages.Metrics { return opts.messagesMetrics })
 	controlServer.SetStorage(opts.store)
 	controlServer.SetCacheObservability(func() *cache.UnifiedCache {
 		if opts.runtimeResolver == nil {
@@ -262,19 +267,7 @@ func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskO
 		}
 		return nil
 	}, opts.store)
-	controlServer.SetMonitoringMetricsResolver(func() telemetry.Metrics {
-		if opts.runtimeResolver == nil {
-			return nil
-		}
-		metrics := opts.runtimeResolver.aggregateMonitoringMetrics()
-		if len(metrics) == 0 {
-			return nil
-		}
-		for _, m := range metrics {
-			return m
-		}
-		return nil
-	})
+
 	controlServer.SetDiscordSessionResolver(func(guildID string) (*discordgo.Session, error) {
 		return opts.runtimeResolver.sessionForGuild(guildID, "dashboard")
 	})

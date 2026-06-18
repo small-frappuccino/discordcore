@@ -85,7 +85,8 @@ func (s *Server) registerAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/v1/telemetry/logs", s.handleUILogs)
 	mux.HandleFunc("/v1/health/qotd", s.handleQOTDHealthRoute)
 	mux.HandleFunc("/v1/health/moderation", s.handleModerationHealthRoute)
-	mux.HandleFunc("/v1/health/monitoring", s.handleMonitoringHealthRoute)
+	mux.HandleFunc("/v1/health/members", s.handleMembersHealthRoute)
+	mux.HandleFunc("/v1/health/messages", s.handleMessagesHealthRoute)
 	mux.HandleFunc("/v1/health/cache", s.handleCacheHealthRoute)
 	mux.HandleFunc("/v1/health/live", s.handleLiveHealthRoute)
 }

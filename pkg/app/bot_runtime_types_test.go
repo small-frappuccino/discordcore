@@ -31,10 +31,6 @@ func TestBotRuntimeResolver_AggregateCachesAndMetrics(t *testing.T) {
 		t.Fatalf("expected 2 caches, got %d", len(caches))
 	}
 
-	metrics := resolver.aggregateMonitoringMetrics()
-	if len(metrics) != 0 {
-		t.Fatalf("expected 0 metrics, got %d", len(metrics))
-	}
 }
 
 func TestBotRuntimeResolver_SessionForGuild(t *testing.T) {

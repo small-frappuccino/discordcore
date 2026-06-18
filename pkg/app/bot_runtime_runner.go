@@ -45,6 +45,8 @@ type botRuntimeOptions struct {
 	qotdCommandService       *applicationqotd.Service
 	qotdLifecycleService     discordqotd.GuildLifecycleService
 	moderationMetrics        moderation.Metrics
+	membersMetrics           members.Metrics
+	messagesMetrics          messages.Metrics
 	startupTasks             *StartupTaskOrchestrator
 	profile                  RunProfile
 	appClock                 clock.Clock

@@ -4,6 +4,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/small-frappuccino/discordcore/pkg/observability"
 )
 
 // MessageWriterMetrics is the narrow observability seam the async message
@@ -134,22 +136,12 @@ type MessageWriterEnqueueSnapshot struct {
 // batch and sequential paths; FallbackByOp counts rows that the batch
 // store call rejected and forced through the sequential fallback.
 type MessageWriterFlushSnapshot struct {
-	CyclesTotal   int64                        `json:"cycles_total"`
-	RequestsTotal int64                        `json:"requests_total"`
-	LastBatchSize int64                        `json:"last_batch_size"`
-	Duration      MessageWriterSummarySnapshot `json:"duration_seconds"`
-	FlushedByOp   map[string]int64             `json:"flushed_by_op,omitempty"`
-	FallbackByOp  map[string]int64             `json:"fallback_by_op,omitempty"`
-}
-
-// MessageWriterSummarySnapshot is the count/sum/max shape mirroring a
-// Prometheus summary minus quantiles. Operators get average via sum/count
-// and tail behavior via max; a Prometheus migration is one transform per
-// field, not a redesign.
-type MessageWriterSummarySnapshot struct {
-	Count      int64   `json:"count"`
-	SumSeconds float64 `json:"sum_seconds"`
-	MaxSeconds float64 `json:"max_seconds"`
+	CyclesTotal   int64                         `json:"cycles_total"`
+	RequestsTotal int64                         `json:"requests_total"`
+	LastBatchSize int64                         `json:"last_batch_size"`
+	Duration      observability.SummarySnapshot `json:"duration_seconds"`
+	FlushedByOp   map[string]int64              `json:"flushed_by_op,omitempty"`
+	FallbackByOp  map[string]int64              `json:"fallback_by_op,omitempty"`
 }
 
 // NopMessageWriterMetrics is the default implementation when the writer
@@ -204,7 +196,7 @@ type InMemoryMessageWriterMetrics struct {
 	flushCycles   atomic.Int64
 	flushRequests atomic.Int64
 	lastBatchSize atomic.Int64
-	flushDuration messageWriterSummary
+	flushDuration observability.Summary
 
 	flushedByOp  map[string]*atomic.Int64
 	fallbackByOp map[string]*atomic.Int64
@@ -248,7 +240,7 @@ func (m *InMemoryMessageWriterMetrics) RecordEnqueueVersion() {
 
 // RecordEnqueueFailure records enqueue failure.
 func (m *InMemoryMessageWriterMetrics) RecordEnqueueFailure(cause string) {
-	getOrCreateMessageWriterLabeledCounter(&m.mu, m.enqueueFailures, cause).Add(1)
+	observability.GetOrCreateLabeledCounter(&m.mu, &m.enqueueFailures, cause).Add(1)
 }
 
 // ObserveQueueDepth observes queue depth.
@@ -275,7 +267,7 @@ func (m *InMemoryMessageWriterMetrics) RecordFlush(batchSize int, duration time.
 		m.flushRequests.Add(int64(batchSize))
 		m.lastBatchSize.Store(int64(batchSize))
 	}
-	m.flushDuration.observe(duration)
+	m.flushDuration.Observe(duration)
 }
 
 // RecordFlushSuccess records flush success.
@@ -283,7 +275,7 @@ func (m *InMemoryMessageWriterMetrics) RecordFlushSuccess(op string, count int) 
 	if count <= 0 {
 		return
 	}
-	getOrCreateMessageWriterLabeledCounter(&m.mu, m.flushedByOp, op).Add(int64(count))
+	observability.GetOrCreateLabeledCounter(&m.mu, &m.flushedByOp, op).Add(int64(count))
 }
 
 // RecordFlushFallback records flush fallback.
@@ -291,7 +283,7 @@ func (m *InMemoryMessageWriterMetrics) RecordFlushFallback(op string, count int)
 	if count <= 0 {
 		return
 	}
-	getOrCreateMessageWriterLabeledCounter(&m.mu, m.fallbackByOp, op).Add(int64(count))
+	observability.GetOrCreateLabeledCounter(&m.mu, &m.fallbackByOp, op).Add(int64(count))
 }
 
 // Snapshot returns a JSON-friendly view of the current counter state. The
@@ -314,7 +306,7 @@ func (m *InMemoryMessageWriterMetrics) Snapshot() MessageWriterMetricsSnapshot {
 			CyclesTotal:   m.flushCycles.Load(),
 			RequestsTotal: m.flushRequests.Load(),
 			LastBatchSize: m.lastBatchSize.Load(),
-			Duration:      m.flushDuration.snapshot(),
+			Duration:      m.flushDuration.Snapshot(),
 			FlushedByOp:   copyMessageWriterCounterMap(m.flushedByOp),
 			FallbackByOp:  copyMessageWriterCounterMap(m.fallbackByOp),
 		},
@@ -330,60 +322,4 @@ func copyMessageWriterCounterMap(src map[string]*atomic.Int64) map[string]int64 
 		out[k] = v.Load()
 	}
 	return out
-}
-
-func getOrCreateMessageWriterLabeledCounter(mu *sync.RWMutex, m map[string]*atomic.Int64, key string) *atomic.Int64 {
-	mu.RLock()
-	if c, ok := m[key]; ok {
-		mu.RUnlock()
-		return c
-	}
-	mu.RUnlock()
-
-	mu.Lock()
-	defer mu.Unlock()
-	if c, ok := m[key]; ok {
-		return c
-	}
-	c := &atomic.Int64{}
-	m[key] = c
-	return c
-}
-
-// messageWriterSummary is the count + sum + max tracker behind
-// MessageWriterSummarySnapshot. Three atomics — observe is lock-free,
-// snapshot is one load each.
-type messageWriterSummary struct {
-	count    atomic.Int64
-	sumNanos atomic.Int64
-	maxNanos atomic.Int64
-}
-
-func (s *messageWriterSummary) observe(d time.Duration) {
-	if d < 0 {
-		d = 0
-	}
-	s.count.Add(1)
-	s.sumNanos.Add(d.Nanoseconds())
-	candidate := d.Nanoseconds()
-	for {
-		cur := s.maxNanos.Load()
-		if candidate <= cur {
-			return
-		}
-		if s.maxNanos.CompareAndSwap(cur, candidate) {
-			return
-		}
-	}
-}
-
-func (s *messageWriterSummary) snapshot() MessageWriterSummarySnapshot {
-	if s == nil {
-		return MessageWriterSummarySnapshot{}
-	}
-	return MessageWriterSummarySnapshot{
-		Count:      s.count.Load(),
-		SumSeconds: time.Duration(s.sumNanos.Load()).Seconds(),
-		MaxSeconds: time.Duration(s.maxNanos.Load()).Seconds(),
-	}
 }

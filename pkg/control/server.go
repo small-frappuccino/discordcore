@@ -15,10 +15,11 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/members"
+	"github.com/small-frappuccino/discordcore/pkg/messages"
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
-	"github.com/small-frappuccino/discordcore/pkg/telemetry"
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -28,12 +29,15 @@ import (
 // the route in its 503 "cache observability not wired" state without panic.
 type CacheSnapshotResolver func() *cache.UnifiedCache
 
-// MonitoringMetricsResolver returns the monitoring observability sink the
-// control server should snapshot for /v1/health/monitoring. Mirrors
-// CacheSnapshotResolver — monitoring is constructed per bot runtime, so the
-// resolver is called per request and may return nil while the runtime is
-// still booting; the route surfaces 503 in that window.
-type MonitoringMetricsResolver func() telemetry.Metrics
+// MembersMetricsResolver returns the members observability sink the
+// control server should snapshot for /v1/health/members. The resolver
+// is called per request and may return nil while the runtime is still
+// booting; the route surfaces 503 in that window.
+type MembersMetricsResolver func() members.Metrics
+
+// MessagesMetricsResolver returns the messages observability sink the
+// control server should snapshot for /v1/health/messages.
+type MessagesMetricsResolver func() messages.Metrics
 
 const (
 	defaultMaxBodyBytes          = 64 * 1024
@@ -74,10 +78,11 @@ type requestAuthorization struct {
 // while the corresponding subsystem is still booting, in which case the route
 // surfaces 503 rather than panicking.
 type healthSources struct {
-	moderationMetrics        moderation.Metrics
-	cacheSnapshotResolve     CacheSnapshotResolver
-	cacheSnapshotStore       *storage.Store
-	monitoringMetricsResolve MonitoringMetricsResolver
+	moderationMetrics      moderation.Metrics
+	cacheSnapshotResolve   CacheSnapshotResolver
+	cacheSnapshotStore     *storage.Store
+	membersMetricsResolve  MembersMetricsResolver
+	messagesMetricsResolve MessagesMetricsResolver
 }
 
 // Server exposes operational controls for a running Discordcore instance.
@@ -208,18 +213,24 @@ func (s *Server) SetStorage(store *storage.Store) {
 	s.storage = store
 }
 
-// SetMonitoringMetricsResolver wires the late-binding accessor /v1/health/monitoring
-// uses to obtain the monitoring service's Metrics. Late binding because the
-// monitoring service is built per bot runtime — the control server boots
-// before any runtime publishes a Metrics value. The resolver may return nil
+// SetMembersMetricsResolver wires the late-binding accessor /v1/health/members
+// uses to obtain the members service's Metrics. The resolver may return nil
 // (no runtime ready) or NopMetrics (runtime ready but observability disabled);
-// the route distinguishes both as 503 with different bodies so operators can
-// tell them apart.
-func (s *Server) SetMonitoringMetricsResolver(resolver MonitoringMetricsResolver) {
+// the route distinguishes both as 503 with different bodies.
+func (s *Server) SetMembersMetricsResolver(resolver MembersMetricsResolver) {
 	if s == nil {
 		return
 	}
-	s.health.monitoringMetricsResolve = resolver
+	s.health.membersMetricsResolve = resolver
+}
+
+// SetMessagesMetricsResolver wires the late-binding accessor /v1/health/messages
+// uses to obtain the messages service's Metrics.
+func (s *Server) SetMessagesMetricsResolver(resolver MessagesMetricsResolver) {
+	if s == nil {
+		return
+	}
+	s.health.messagesMetricsResolve = resolver
 }
 
 // SetBearerToken configures bearer token authentication for control routes.

@@ -20,8 +20,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/task"
 
-	"github.com/small-frappuccino/discordcore/pkg/telemetry"
-
 	"github.com/small-frappuccino/discordcore/pkg/service"
 )
 
@@ -162,19 +160,6 @@ func (r *botRuntimeResolver) aggregateUnifiedCaches() map[string]*cache.UnifiedC
 		return nil
 	}
 	return caches
-}
-
-// aggregateMonitoringMetrics collects the telemetry.Metrics of all active bot instances.
-func (r *botRuntimeResolver) aggregateMonitoringMetrics() map[string]telemetry.Metrics {
-	if r == nil {
-		return nil
-	}
-
-	metrics := make(map[string]telemetry.Metrics)
-	if len(metrics) == 0 {
-		return nil
-	}
-	return metrics
 }
 
 func (r *botRuntimeResolver) runtimeForGuild(guildID string, feature string) (*botRuntime, string, error) {
