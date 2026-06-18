@@ -7,16 +7,11 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
 
-	"github.com/small-frappuccino/discordgo"
-	"golang.org/x/sync/errgroup"
-
 	"github.com/small-frappuccino/discordcore/pkg/clock"
-	"github.com/small-frappuccino/discordcore/pkg/control"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
@@ -31,6 +26,8 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordgo"
+	"golang.org/x/sync/errgroup"
 )
 
 var (
@@ -42,8 +39,8 @@ var (
 	shutdownCommandHandler       = func(ch *commands.CommandHandler) error { return ch.Shutdown() }
 	closeStore                   = func(c interface{ Close() error }) error { return c.Close() }
 	closeDiscordSession          = func(c interface{ Close() error }) error { return c.Close() }
-	openDiscordSession           = func(s interface{ Open() error }) error { return s.Open() }
 	shutdownDelay                = time.Sleep
+	testShutdownCh               <-chan struct{}
 )
 
 const (
@@ -66,6 +63,10 @@ func Run(appName string) error {
 
 // RunWithOptions bootstraps the bot and allows hosts to override control-plane wiring.
 func RunWithOptions(appName string, opts RunOptions) (err error) {
+	defer func() {
+		log.GlobalLogger.Sync()
+		_ = log.CloseGlobalLogger()
+	}()
 	defer func() {
 		if r := recover(); r != nil {
 			errWrap := fmt.Errorf("panic recovered during runtime: %v", r)
@@ -98,7 +99,6 @@ func runWithOptions(appName string, opts RunOptions) error {
 		log.EmitBlockingError("Structural dependency failure: Core logging infrastructure aborted", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
-	defer log.GlobalLogger.Sync()
 
 	logger := opts.Logger
 	if logger == nil {
@@ -358,6 +358,10 @@ func runWithOptions(appName string, opts RunOptions) error {
 			} else {
 				slog.Info("Architectural state transition: Configuration topology refreshed directly from disk")
 			}
+
+		case <-testShutdownCh:
+			slog.Info("Architectural state transition: Test simulated shutdown initiated")
+			goto shutdown
 		}
 	}
 
@@ -374,10 +378,13 @@ shutdown:
 		errWrap := fmt.Errorf("shutdown: %w", err)
 		log.EmitBlockingError("Structural teardown failure: Zombie sub-processes detected during stop iteration", errWrap, log.GenerateRequestID())
 		if runErr != nil {
+			_ = appServiceManager.Wait()
 			return stdErrors.Join(runErr, errWrap)
 		}
+		_ = appServiceManager.Wait()
 		return errWrap
 	}
+	_ = appServiceManager.Wait()
 	return runErr
 }
 
@@ -460,88 +467,15 @@ func rollbackStoreClose(enabled bool, store *storage.Store) {
 func shutdownStartupServices(startupTasks *StartupTaskOrchestrator, controlServerRegistry *controlServerHolder, tasksWarn string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	if err := controlServerRegistry.Stop(ctx); err != nil {
+		log.EmitBlockingError("Structural teardown failure: Interface server socket release hung", err, log.GenerateRequestID())
+	}
 	if err := startupTasks.Shutdown(ctx); err != nil && !stdErrors.Is(err, context.DeadlineExceeded) {
 		slog.Warn("Mitigated shutdown degradation: Async orchestrator missed synchronization lock",
 			slog.String("warning_context", tasksWarn),
 			slog.String("error", err.Error()),
 		)
 	}
-	if err := controlServerRegistry.Stop(ctx); err != nil {
-		log.EmitBlockingError("Structural teardown failure: Interface server socket release hung", err, log.GenerateRequestID())
-	}
-}
-
-func loadControlDiscordOAuthConfigFromEnv(publicOrigin string) (*control.DiscordOAuthConfig, error) {
-	clientID := strings.TrimSpace(files.EnvString(controlDiscordOAuthClientIDEnv, defaultControlDiscordOAuthClientID))
-	clientSecret := strings.TrimSpace(files.EnvString(controlDiscordOAuthClientSecretEnv, ""))
-	redirectURI := strings.TrimSpace(files.EnvString(controlDiscordOAuthRedirectURIEnv, ""))
-	includeGuildMembersRead := files.EnvBool(controlDiscordOAuthIncludeGuildMembersReadEnv)
-	sessionStorePath := strings.TrimSpace(files.EnvString(controlDiscordOAuthSessionStorePathEnv, ""))
-
-	slog.Debug("Inspecting environment map for dynamic OAuth injections",
-		slog.String("client_id", clientID),
-	)
-
-	if clientSecret == "" && redirectURI == "" {
-		if includeGuildMembersRead {
-			return nil, fmt.Errorf(
-				"%s=true requires %s and %s",
-				controlDiscordOAuthIncludeGuildMembersReadEnv,
-				controlDiscordOAuthClientSecretEnv,
-				controlDiscordOAuthRedirectURIEnv,
-			)
-		}
-		return nil, nil
-	}
-	if clientSecret != "" && redirectURI == "" {
-		redirectURI = strings.TrimSpace(publicOrigin)
-		if redirectURI != "" {
-			redirectURI = strings.TrimRight(redirectURI, "/") + "/auth/discord/callback"
-		}
-	}
-
-	missing := make([]string, 0, 2)
-	if clientSecret == "" {
-		missing = append(missing, controlDiscordOAuthClientSecretEnv)
-	}
-	if redirectURI == "" {
-		missing = append(missing, controlDiscordOAuthRedirectURIEnv)
-	}
-	if len(missing) > 0 {
-		return nil, fmt.Errorf("incomplete Discord OAuth configuration: missing %s", strings.Join(missing, ", "))
-	}
-	if sessionStorePath == "" {
-		sessionStorePath = filepath.Join(files.ApplicationCachesPath, "control", "oauth_sessions.json")
-	}
-
-	return &control.DiscordOAuthConfig{
-		ClientID:                 clientID,
-		ClientSecret:             clientSecret,
-		RedirectURI:              redirectURI,
-		IncludeGuildsMembersRead: includeGuildMembersRead,
-		SessionStorePath:         sessionStorePath,
-	}, nil
-}
-
-func loadControlTLSFilesFromEnv() (certFile string, keyFile string, err error) {
-	certFile = strings.TrimSpace(files.EnvString(controlTLSCertFileEnv, ""))
-	keyFile = strings.TrimSpace(files.EnvString(controlTLSKeyFileEnv, ""))
-	if certFile == "" && keyFile == "" {
-		return "", "", nil
-	}
-
-	missing := make([]string, 0, 2)
-	if certFile == "" {
-		missing = append(missing, controlTLSCertFileEnv)
-	}
-	if keyFile == "" {
-		missing = append(missing, controlTLSKeyFileEnv)
-	}
-	if len(missing) > 0 {
-		return "", "", fmt.Errorf("incomplete control TLS configuration: missing %s", strings.Join(missing, ", "))
-	}
-
-	return certFile, keyFile, nil
 }
 
 func listBotGuildIDsFromSessionState(session *discordgo.Session) ([]string, error) {
@@ -584,44 +518,6 @@ func formatStartupMessage(appName, appVersion, coreVersion string) string {
 	}
 
 	return msg + fmt.Sprintf(" (discordcore %s)...", coreVersion)
-}
-
-type startupWebhookEmbedUpdate struct {
-	scope  string
-	index  int
-	update files.WebhookEmbedUpdateConfig
-}
-
-func collectStartupWebhookEmbedUpdates(cfg *files.BotConfig) []startupWebhookEmbedUpdate {
-	if cfg == nil {
-		return nil
-	}
-
-	var out []startupWebhookEmbedUpdate
-
-	for idx, update := range cfg.RuntimeConfig.NormalizedWebhookEmbedUpdates() {
-		out = append(out, startupWebhookEmbedUpdate{
-			scope:  "global",
-			index:  idx,
-			update: update,
-		})
-	}
-
-	for _, guild := range cfg.Guilds {
-		guildID := strings.TrimSpace(guild.GuildID)
-		if guildID == "" {
-			continue
-		}
-		for idx, update := range guild.RuntimeConfig.NormalizedWebhookEmbedUpdates() {
-			out = append(out, startupWebhookEmbedUpdate{
-				scope:  "guild:" + guildID,
-				index:  idx,
-				update: update,
-			})
-		}
-	}
-
-	return out
 }
 
 func setupStorage(dbb resolvedDatabaseBootstrap) (*storage.Store, *files.ConfigManager, error) {

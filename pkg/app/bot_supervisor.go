@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"math/rand/v2"
 	"reflect"
@@ -10,10 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/small-frappuccino/discordgo"
-
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/service"
+	"github.com/small-frappuccino/discordgo"
 )
 
 var identifyStaggerDelay = 5 * time.Second
@@ -93,6 +94,7 @@ func (s *BotSupervisor) Stop(ctx context.Context) error {
 	s.cancel() // signal background goroutines to abort
 
 	var globalWG sync.WaitGroup
+	errsCh := make(chan error, len(s.instances))
 
 	s.mu.Lock()
 	for id, state := range s.instances {
@@ -103,7 +105,9 @@ func (s *BotSupervisor) Stop(ctx context.Context) error {
 			s.bgWG.Add(1)
 			go func(id string, state *botInstanceState) {
 				defer s.bgWG.Done()
-				s.executeStopAndRemove(ctx, id, state, &globalWG)
+				if err := s.executeStopAndRemove(ctx, id, state, &globalWG); err != nil {
+					errsCh <- err
+				}
 			}(id, state)
 		}
 	}
@@ -114,11 +118,17 @@ func (s *BotSupervisor) Stop(ctx context.Context) error {
 	go func() {
 		globalWG.Wait()
 		s.bgWG.Wait() // Secondary barrier: ensures bg processes like retries clean up memory
+		close(errsCh)
 		close(done)
 	}()
 
+	var stopErrors []error
+
 	select {
 	case <-done:
+		for err := range errsCh {
+			stopErrors = append(stopErrors, err)
+		}
 	case <-ctx.Done():
 		s.log().Error("BotSupervisor stop timeout exceeded before background task completion",
 			slog.String("request_id", "supervisor_shutdown"),
@@ -126,9 +136,12 @@ func (s *BotSupervisor) Stop(ctx context.Context) error {
 			slog.String("stacktrace", string(debug.Stack())),
 			slog.Any("error", ctx.Err()),
 		)
-		return ctx.Err()
+		stopErrors = append(stopErrors, ctx.Err())
 	}
 
+	if len(stopErrors) > 0 {
+		return errors.Join(stopErrors...)
+	}
 	return nil
 }
 
@@ -219,7 +232,7 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 			s.bgWG.Add(1)
 			go func(id string, state *botInstanceState) {
 				defer s.bgWG.Done()
-				s.executeStopAndRemove(context.Background(), id, state, nil)
+				_ = s.executeStopAndRemove(context.Background(), id, state, nil)
 			}(id, state)
 		}
 	}
@@ -240,7 +253,7 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 				s.bgWG.Add(1)
 				go func(id string, state *botInstanceState) {
 					defer s.bgWG.Done()
-					s.executeStopAndRemove(context.Background(), id, state, nil)
+					_ = s.executeStopAndRemove(context.Background(), id, state, nil)
 				}(id, state)
 			}
 			oldState = state
@@ -346,7 +359,7 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 	}()
 }
 
-func (s *BotSupervisor) executeStopAndRemove(ctx context.Context, id string, state *botInstanceState, wgGlobal *sync.WaitGroup) {
+func (s *BotSupervisor) executeStopAndRemove(ctx context.Context, id string, state *botInstanceState, wgGlobal *sync.WaitGroup) error {
 	if wgGlobal != nil {
 		defer wgGlobal.Done()
 	}
@@ -359,19 +372,6 @@ func (s *BotSupervisor) executeStopAndRemove(ctx context.Context, id string, sta
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
-	if err != nil {
-		s.serviceManager.ForceRemove("bot-runtime-" + id)
-		state.Status = StatusError
-		s.log().Error("Failed to purge I/O, escalated to ForceRemove",
-			slog.String("request_id", "stop_remove_"+id),
-			slog.Int("synthetic_status_code", 500),
-			slog.String("stacktrace", string(debug.Stack())),
-			slog.String("botInstanceID", id),
-			slog.Any("error", err),
-		)
-		return
-	}
 
 	// Conditional deletion: ensures overwritten pointers are not deleted
 	if current, exists := s.instances[id]; exists && current == state {
@@ -387,6 +387,25 @@ func (s *BotSupervisor) executeStopAndRemove(ctx context.Context, id string, sta
 		}
 	}
 	s.resolver.swapRuntimes(newRuntimes)
+
+	if err != nil && strings.Contains(err.Error(), "not found") {
+		err = nil
+	}
+
+	if err != nil {
+		s.serviceManager.ForceRemove("bot-runtime-" + id)
+		state.Status = StatusError
+		s.log().Error("Failed to purge I/O, escalated to ForceRemove",
+			slog.String("request_id", "stop_remove_"+id),
+			slog.Int("synthetic_status_code", 500),
+			slog.String("stacktrace", string(debug.Stack())),
+			slog.String("botInstanceID", id),
+			slog.Any("error", err),
+		)
+		return err
+	}
+
+	return nil
 }
 
 func (s *BotSupervisor) awaitStopAndStart(id, token, status string, oldState *botInstanceState) {
@@ -548,6 +567,25 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token, status str
 		Type:     service.TypeMonitoring,
 		Priority: service.PriorityNormal,
 		Start: func(ctx context.Context) error {
+			s.log().Info("Architectural state transition: Executing StartAll across service manager instances",
+				slog.String("botInstanceID", runtime.instanceID),
+			)
+			if err := runtime.serviceManager.StartAll(); err != nil {
+				errWrap := fmt.Errorf("start services for %s: %w", runtime.instanceID, err)
+				s.log().Error("Blocking structural failure: Service manager execution sequence aborted",
+					slog.String("request_id", "startall_"+instanceID),
+					slog.Int("synthetic_status_code", 500),
+					slog.String("botInstanceID", instanceID),
+					slog.Any("error", errWrap),
+				)
+				return errWrap
+			}
+			scheduleRuntimeConfiguredGuildLogging(runtime, s.opts.configManager, s.opts.startupTasks)
+			scheduleRuntimeWarmup(ctx, runtime, s.opts.store, s.opts.startupTasks)
+
+			s.log().Info("Runtime do bot totalmente operacional",
+				slog.String("botInstanceID", runtime.instanceID),
+			)
 			return nil
 		},
 		Stop: func(ctx context.Context) error {

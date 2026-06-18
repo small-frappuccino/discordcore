@@ -210,3 +210,76 @@ func localTLSSANs(profile RunProfile, publicOrigin string) (string, []net.IP, er
 	}
 	return host, nil, nil
 }
+
+func loadControlDiscordOAuthConfigFromEnv(publicOrigin string) (*control.DiscordOAuthConfig, error) {
+	clientID := strings.TrimSpace(files.EnvString(controlDiscordOAuthClientIDEnv, defaultControlDiscordOAuthClientID))
+	clientSecret := strings.TrimSpace(files.EnvString(controlDiscordOAuthClientSecretEnv, ""))
+	redirectURI := strings.TrimSpace(files.EnvString(controlDiscordOAuthRedirectURIEnv, ""))
+	includeGuildMembersRead := files.EnvBool(controlDiscordOAuthIncludeGuildMembersReadEnv)
+	sessionStorePath := strings.TrimSpace(files.EnvString(controlDiscordOAuthSessionStorePathEnv, ""))
+
+	slog.Debug("Inspecting environment map for dynamic OAuth injections",
+		slog.String("client_id", clientID),
+	)
+
+	if clientSecret == "" && redirectURI == "" && clientID == defaultControlDiscordOAuthClientID {
+		if includeGuildMembersRead {
+			return nil, fmt.Errorf(
+				"%s=true requires %s and %s",
+				controlDiscordOAuthIncludeGuildMembersReadEnv,
+				controlDiscordOAuthClientSecretEnv,
+				controlDiscordOAuthRedirectURIEnv,
+			)
+		}
+		return nil, nil
+	}
+	if clientSecret != "" && redirectURI == "" {
+		redirectURI = strings.TrimSpace(publicOrigin)
+		if redirectURI != "" {
+			redirectURI = strings.TrimRight(redirectURI, "/") + "/auth/discord/callback"
+		}
+	}
+
+	missing := make([]string, 0, 2)
+	if clientSecret == "" {
+		missing = append(missing, controlDiscordOAuthClientSecretEnv)
+	}
+	if redirectURI == "" {
+		missing = append(missing, controlDiscordOAuthRedirectURIEnv)
+	}
+	if len(missing) > 0 {
+		return nil, fmt.Errorf("incomplete Discord OAuth configuration: missing %s", strings.Join(missing, ", "))
+	}
+	if sessionStorePath == "" {
+		sessionStorePath = filepath.Join(files.ApplicationCachesPath, "control", "oauth_sessions.json")
+	}
+
+	return &control.DiscordOAuthConfig{
+		ClientID:                 clientID,
+		ClientSecret:             clientSecret,
+		RedirectURI:              redirectURI,
+		IncludeGuildsMembersRead: includeGuildMembersRead,
+		SessionStorePath:         sessionStorePath,
+	}, nil
+}
+
+func loadControlTLSFilesFromEnv() (certFile string, keyFile string, err error) {
+	certFile = strings.TrimSpace(files.EnvString(controlTLSCertFileEnv, ""))
+	keyFile = strings.TrimSpace(files.EnvString(controlTLSKeyFileEnv, ""))
+	if certFile == "" && keyFile == "" {
+		return "", "", nil
+	}
+
+	missing := make([]string, 0, 2)
+	if certFile == "" {
+		missing = append(missing, controlTLSCertFileEnv)
+	}
+	if keyFile == "" {
+		missing = append(missing, controlTLSKeyFileEnv)
+	}
+	if len(missing) > 0 {
+		return "", "", fmt.Errorf("incomplete control TLS configuration: missing %s", strings.Join(missing, ", "))
+	}
+
+	return certFile, keyFile, nil
+}

@@ -2,7 +2,9 @@ package log
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	stdlog "log"
 	"os"
 	"path/filepath"
@@ -48,6 +50,8 @@ type Logger struct {
 	discord     *slog.Logger
 	database    *slog.Logger
 	error       *slog.Logger
+
+	closers []io.Closer
 
 	// A shared runtime-adjustable log level for all handlers
 	levelVar slog.LevelVar
@@ -318,6 +322,8 @@ func SetupLogger(botName, logFilePath string) error {
 	dbFile := rollingWriter(filepath.Join(logDir, "database.log"))
 	errFile := rollingWriter(filepath.Join(logDir, "error.log"))
 
+	l.closers = []io.Closer{appFile, discordFile, dbFile, errFile}
+
 	// Console routing: stdout for most, stderr for errors
 	l.application = buildCategoryLogger("application", appFile, os.Stdout, &l.levelVar, botName)
 	l.discord = buildCategoryLogger("discord", discordFile, os.Stdout, &l.levelVar, botName)
@@ -337,9 +343,34 @@ func SetupLogger(botName, logFilePath string) error {
 	return nil
 }
 
+// CloseGlobalLogger safely closes all underlying file handles for the global logger.
+func CloseGlobalLogger() error {
+	if globalLogger != nil {
+		err := globalLogger.Close()
+		globalLogger = nil
+		GlobalLogger = nil
+		return err
+	}
+	return nil
+}
+
 // Sync is a best-effort flush for outputs.
 // slog itself does not buffer; lumberjack writes synchronously.
 // We keep this method so callers can defer GlobalLogger.Sync() safely.
 func (l *Logger) Sync() {
 	// No-op for slog + lumberjack; present for API symmetry and future extensibility.
+}
+
+// Close closes all underlying file writers.
+func (l *Logger) Close() error {
+	var errs []error
+	for _, c := range l.closers {
+		if err := c.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	return nil
 }

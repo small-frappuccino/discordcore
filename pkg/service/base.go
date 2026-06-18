@@ -336,6 +336,14 @@ type LegacyServiceWrapper struct {
 	wrappedStop  func(context.Context) error
 	wrappedCheck func() bool
 	doneChan     chan struct{}
+	closeDone    sync.Once
+}
+
+// Stop stops the wrapper and safely signals done
+func (s *LegacyServiceWrapper) Stop(ctx context.Context) error {
+	err := s.BaseService.Stop(ctx)
+	s.closeDone.Do(func() { close(s.doneChan) })
+	return err
 }
 
 // LegacyServiceWrapperSpec configures a LegacyServiceWrapper: identity/metadata plus the
@@ -370,7 +378,7 @@ func NewLegacyServiceWrapper(spec LegacyServiceWrapperSpec) *LegacyServiceWrappe
 	})
 
 	wrapper.SetStopHook(func(ctx context.Context) error {
-		defer close(wrapper.doneChan)
+		defer wrapper.closeDone.Do(func() { close(wrapper.doneChan) })
 		if wrapper.wrappedStop != nil {
 			return wrapper.wrappedStop(ctx)
 		}

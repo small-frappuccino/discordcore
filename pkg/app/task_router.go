@@ -1,6 +1,8 @@
 package app
 
 import (
+	"log/slog"
+
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/task"
 )
@@ -60,6 +62,11 @@ func newRuntimeTaskRouterConfig(
 ) task.RouterConfig {
 	workers := resolveRuntimeTaskRouterWorkers(cfg, botInstanceID, runtimeCount)
 	limiter := task.NewExecutionLimiter(workers)
+
+	slog.Info("Architectural state transition: Configured background worker budget for task router",
+		slog.String("botInstanceID", botInstanceID),
+		slog.Int("concurrency_budget", workers),
+	)
 
 	routerCfg := task.Defaults()
 	routerCfg.GlobalMaxWorkers = workers

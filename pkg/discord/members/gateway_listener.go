@@ -3,6 +3,7 @@ package members
 import (
 	"context"
 
+	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordcore/pkg/members"
@@ -31,11 +32,17 @@ func (l *GatewayListener) Start(ctx context.Context) error {
 		l.state.AddHandler(func(e *gateway.GuildMemberAddEvent) {
 			l.memberService.IngestGuildMemberAdd(context.Background(), e)
 		}),
-		l.state.AddHandler(func(e *gateway.GuildMemberUpdateEvent) {
-			l.memberService.IngestGuildMemberUpdate(context.Background(), e)
-		}),
 		l.state.AddHandler(func(e *gateway.GuildMemberRemoveEvent) {
 			l.memberService.IngestGuildMemberRemove(context.Background(), e)
+		}),
+		l.state.PreHandler.AddSyncHandler(func(e *gateway.GuildMemberUpdateEvent) {
+			oldMember, _ := l.state.Cabinet.Member(e.GuildID, e.User.ID)
+			var oldMemberCopy *discord.Member
+			if oldMember != nil {
+				copied := *oldMember
+				oldMemberCopy = &copied
+			}
+			go l.memberService.IngestGuildMemberUpdate(context.Background(), e, oldMemberCopy)
 		}),
 	)
 	return nil

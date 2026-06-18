@@ -329,7 +329,8 @@ func (mes *MemberEventService) IngestGuildMemberRemove(ctx context.Context, m *g
 // handleGuildMemberUpdate maintains the role relationship:
 // - If the user loses role A, remove the target role.
 // - If the user has both A and B, grant the target role (if not already present).
-func (mes *MemberEventService) IngestGuildMemberUpdate(ctx context.Context, m *gateway.GuildMemberUpdateEvent) {
+// It also tracks role changes and avatar updates to dispatch to MemberSink.
+func (mes *MemberEventService) IngestGuildMemberUpdate(ctx context.Context, m *gateway.GuildMemberUpdateEvent, oldMember *discord.Member) {
 	if m == nil || m.User.Bot {
 		return
 	}
@@ -377,12 +378,48 @@ func (mes *MemberEventService) IngestGuildMemberUpdate(ctx context.Context, m *g
 		} else {
 			mes.logger.Info("Removed target role on update", "guildID", m.GuildID, "userID", m.User.ID, "roleID", targetRoleID)
 		}
-		return
 	case AutoRoleAddTarget:
 		if err := mes.guildMemberRoleAdd(ctx, m.GuildID.String(), m.User.ID.String(), targetRoleID); err != nil {
 			mes.logger.Error("Failed to grant target role on update", "guildID", m.GuildID, "userID", m.User.ID, "roleID", targetRoleID, "error", err)
 		} else {
 			mes.logger.Info("Granted target role on update", "guildID", m.GuildID, "userID", m.User.ID, "roleID", targetRoleID)
+		}
+	}
+
+	if mes.sink != nil && oldMember != nil {
+		// Compare roles
+		var addedRoles, removedRoles []discord.RoleID
+		oldRolesMap := make(map[discord.RoleID]bool, len(oldMember.RoleIDs))
+		for _, r := range oldMember.RoleIDs {
+			oldRolesMap[r] = true
+		}
+		newRolesMap := make(map[discord.RoleID]bool, len(m.RoleIDs))
+		for _, r := range m.RoleIDs {
+			newRolesMap[r] = true
+			if !oldRolesMap[r] {
+				addedRoles = append(addedRoles, r)
+			}
+		}
+		for r := range oldRolesMap {
+			if !newRolesMap[r] {
+				removedRoles = append(removedRoles, r)
+			}
+		}
+
+		if len(addedRoles) > 0 || len(removedRoles) > 0 {
+			mes.sink.OnRoleUpdate(ctx, m.GuildID.String(), m.User, addedRoles, removedRoles)
+		}
+
+		// Compare avatar
+		var oldAvatarHash, newAvatarHash string
+		if oldMember.User.Avatar != "" {
+			oldAvatarHash = string(oldMember.User.Avatar)
+		}
+		if m.User.Avatar != "" {
+			newAvatarHash = string(m.User.Avatar)
+		}
+		if oldAvatarHash != newAvatarHash {
+			mes.sink.OnAvatarUpdate(ctx, m.GuildID.String(), m.User, oldAvatarHash, newAvatarHash)
 		}
 	}
 }

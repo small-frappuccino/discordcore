@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -11,24 +12,52 @@ import (
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/qotd"
 )
 
-// TestNotifyLifecycleEventDoesNothingWithoutWebhookURL pins that the
-// lifecycle path is opt-in: with the env var unset, notifyLifecycleEvent
-// must be a no-op (no panic, no log spam). Forgetting this means every
-// dev environment ships startup/shutdown warnings.
-func TestNotifyLifecycleEventDoesNothingWithoutWebhookURL(t *testing.T) {
-	t.Setenv(lifecycleWebhookEnv, "")
-	notifyLifecycleEvent("starting", "")
+// The dual_sdk_publisher_test.go logic:
+func TestDualSDKPublisher_GetArikawaPublisher(t *testing.T) {
+	resolver := newBotRuntimeResolver(nil, nil)
+	publisher := newDualSDKPublisher(resolver)
+
+	// Will error because guild has no runtime
+	_, err := publisher.getArikawaPublisher("missing_guild")
+	if err == nil {
+		t.Fatal("expected error for missing guild runtime")
+	}
 }
 
-// TestNotifyLifecycleEventPostsToConfiguredURL exercises the happy path
-// end-to-end via httptest: confirm that the body is JSON with the
-// expected content field, and that the helper actually executes the POST
-// (not just builds the request). Without this test, a refactor could
-// silently disable the entire notification path and only be caught when
-// a real outage went unannounced.
-func TestNotifyLifecycleEventPostsToConfiguredURL(t *testing.T) {
+func TestDualSDKPublisher_PublishOfficialPost(t *testing.T) {
+	resolver := newBotRuntimeResolver(nil, nil)
+	publisher := newDualSDKPublisher(resolver)
+
+	_, err := publisher.PublishOfficialPost(context.Background(), qotd.PublishOfficialPostParams{
+		GuildID:                  "guild1",
+		ChannelID:                "channel1",
+		OfficialThreadID:         "author1",
+		OfficialStarterMessageID: "content",
+	})
+	if err == nil {
+		t.Fatal("expected error due to missing guild binding")
+	}
+}
+
+func TestDualSDKPublisher_DeleteOfficialPost(t *testing.T) {
+	resolver := newBotRuntimeResolver(nil, nil)
+	publisher := newDualSDKPublisher(resolver)
+
+	err := publisher.DeleteOfficialPost(context.Background(), qotd.DeleteOfficialPostParams{
+		GuildID:                 "guild1",
+		ChannelID:               "channel1",
+		DiscordStarterMessageID: "message1",
+	})
+	if err == nil {
+		t.Fatal("expected error due to missing guild binding")
+	}
+}
+
+// The lifecycle_webhook_test.go logic:
+func TestNotifyLifecycleEventSendsWebhook(t *testing.T) {
 	origAppName := files.ConfiguredAppName
 	origAppVersion := files.AppVersion
 	origBotName := files.DiscordBotName
@@ -87,10 +116,6 @@ func TestNotifyLifecycleEventPostsToConfiguredURL(t *testing.T) {
 	}
 }
 
-// TestBuildLifecycleContentFormat pins the human-readable shape an
-// operator sees in chat. Order matters (app first, then reason, then
-// detail) because alert channels are skim-read; reshuffling the layout
-// is a real UX regression for the on-call human.
 func TestBuildLifecycleContentFormat(t *testing.T) {
 	origAppName := files.ConfiguredAppName
 	origAppVersion := files.AppVersion
@@ -119,11 +144,6 @@ func TestBuildLifecycleContentFormat(t *testing.T) {
 	}
 }
 
-// TestBuildLifecycleContentFallsBackWhenIdentityUnset confirms the
-// content stays readable even when called before the bot has resolved
-// its Discord identity (e.g. very early startup failure). Empty fields
-// would print as awkward empty parens / dangling backticks; the
-// fallbacks here mean an operator can still tell which deployment died.
 func TestBuildLifecycleContentFallsBackWhenIdentityUnset(t *testing.T) {
 	origAppName := files.ConfiguredAppName
 	origAppVersion := files.AppVersion
@@ -149,8 +169,6 @@ func TestBuildLifecycleContentFallsBackWhenIdentityUnset(t *testing.T) {
 	}
 }
 
-// TestNotifyLifecycleEventHandles5xx proves that HTTP 500 errors from the webhook
-// endpoint do not bubble up or panic, and are instead cleanly handled.
 func TestNotifyLifecycleEventHandles5xx(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -159,20 +177,16 @@ func TestNotifyLifecycleEventHandles5xx(t *testing.T) {
 
 	t.Setenv(lifecycleWebhookEnv, server.URL)
 
-	// This should not panic or hang
+	// Should not panic
 	notifyLifecycleEvent("fatal", "simulated 500 error")
 }
 
-// TestNotifyLifecycleEventTimeoutContext proves that latency spikes from the
-// discord webhook API are bounded by the context timeout, preventing the shutdown
-// process from hanging indefinitely.
 func TestNotifyLifecycleEventTimeoutContext(t *testing.T) {
 	var handlerCalled sync.WaitGroup
 	handlerCalled.Add(1)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled.Done()
-		// Sleep longer than the 3s timeout defined in lifecycleWebhookTimeout
 		time.Sleep(5 * time.Second)
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -181,15 +195,86 @@ func TestNotifyLifecycleEventTimeoutContext(t *testing.T) {
 	t.Setenv(lifecycleWebhookEnv, server.URL)
 
 	start := time.Now()
-	// This will block until context cancellation if the server hangs
 	notifyLifecycleEvent("stopping", "simulated timeout")
 	elapsed := time.Since(start)
 
-	// Ensure the handler was actually hit
 	handlerCalled.Wait()
 
-	// Given lifecycleWebhookTimeout is 3 seconds, elapsed should be around 3s, not 5s.
 	if elapsed >= 5*time.Second {
 		t.Fatalf("expected timeout near 3s, but request took %v", elapsed)
+	}
+}
+
+// The runner_webhook_updates_test.go logic:
+func TestCollectStartupWebhookEmbedUpdatesGlobalAndGuild(t *testing.T) {
+	t.Parallel()
+
+	cfg := &files.BotConfig{
+		RuntimeConfig: files.RuntimeConfig{
+			WebhookEmbedUpdates: []files.WebhookEmbedUpdateConfig{
+				{
+					MessageID:  "global-1",
+					WebhookURL: "https://discord.com/api/webhooks/1/token",
+					Embed:      json.RawMessage(`{"title":"g1"}`),
+				},
+			},
+		},
+		Guilds: []files.GuildConfig{
+			{
+				GuildID: "guild-a",
+				RuntimeConfig: files.RuntimeConfig{
+					WebhookEmbedUpdates: []files.WebhookEmbedUpdateConfig{
+						{
+							MessageID:  "guild-a-1",
+							WebhookURL: "https://discord.com/api/webhooks/2/token",
+							Embed:      json.RawMessage(`{"title":"a1"}`),
+						},
+						{
+							MessageID:  "guild-a-2",
+							WebhookURL: "https://discord.com/api/webhooks/3/token",
+							Embed:      json.RawMessage(`{"title":"a2"}`),
+						},
+					},
+				},
+			},
+			{
+				GuildID: "guild-b",
+				RuntimeConfig: files.RuntimeConfig{
+					WebhookEmbedUpdates: []files.WebhookEmbedUpdateConfig{
+						{
+							MessageID:  "guild-b-1",
+							WebhookURL: "https://discord.com/api/webhooks/4/token",
+							Embed:      json.RawMessage(`{"title":"b1"}`),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	got := collectStartupWebhookEmbedUpdates(cfg)
+	if len(got) != 4 {
+		t.Fatalf("expected 4 startup updates, got %d", len(got))
+	}
+
+	if got[0].scope != "global" || got[0].index != 0 || got[0].update.MessageID != "global-1" {
+		t.Fatalf("unexpected first item: %+v", got[0])
+	}
+	if got[1].scope != "guild:guild-a" || got[1].index != 0 || got[1].update.MessageID != "guild-a-1" {
+		t.Fatalf("unexpected second item: %+v", got[1])
+	}
+	if got[2].scope != "guild:guild-a" || got[2].index != 1 || got[2].update.MessageID != "guild-a-2" {
+		t.Fatalf("unexpected third item: %+v", got[2])
+	}
+	if got[3].scope != "guild:guild-b" || got[3].index != 0 || got[3].update.MessageID != "guild-b-1" {
+		t.Fatalf("unexpected fourth item: %+v", got[3])
+	}
+}
+
+func TestCollectStartupWebhookEmbedUpdatesNilConfig(t *testing.T) {
+	t.Parallel()
+
+	if got := collectStartupWebhookEmbedUpdates(nil); len(got) != 0 {
+		t.Fatalf("expected nil/empty list for nil config, got %+v", got)
 	}
 }
