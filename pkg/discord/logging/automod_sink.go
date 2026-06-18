@@ -7,6 +7,8 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/small-frappuccino/discordcore/pkg/automod"
+	"github.com/small-frappuccino/discordcore/pkg/embeds"
+	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/logging"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
@@ -28,31 +30,33 @@ func (l *Logger) OnAutomodBlock(ctx context.Context, guildID discord.GuildID, en
 		desc = fmt.Sprintf("AutoMod rule **%s** triggered.", entry.RuleID.String())
 	}
 
-	embed := discord.Embed{
+	ce := files.CustomEmbedConfig{
 		Title:       "AutoMod • Action Executed",
 		Description: desc,
-		Color:       discord.Color(theme.AutomodAction()),
-		Timestamp:   discord.NewTimestamp(time.Now()),
-		Fields: []discord.EmbedField{
+		Color:       theme.AutomodAction(),
+		Fields: []files.CustomEmbedFieldConfig{
 			{Name: "User", Value: fmt.Sprintf("<@%s>", entry.UserID.String()), Inline: true},
 		},
 	}
 
 	if entry.ChannelID.IsValid() {
-		embed.Fields = append(embed.Fields, discord.EmbedField{
+		ce.Fields = append(ce.Fields, files.CustomEmbedFieldConfig{
 			Name: "Channel", Value: fmt.Sprintf("<#%s>", entry.ChannelID.String()), Inline: true,
 		})
 	}
 	if entry.MatchedKeyword != "" {
-		embed.Fields = append(embed.Fields, discord.EmbedField{
+		ce.Fields = append(ce.Fields, files.CustomEmbedFieldConfig{
 			Name: "Keyword", Value: entry.MatchedKeyword, Inline: true,
 		})
 	}
 	if entry.MatchedContent != "" {
-		embed.Fields = append(embed.Fields, discord.EmbedField{
+		ce.Fields = append(ce.Fields, files.CustomEmbedFieldConfig{
 			Name: "Matched Content", Value: logging.TruncateString(entry.MatchedContent, 1000), Inline: false,
 		})
 	}
+
+	embed := embeds.RenderArikawa(ce)
+	embed.Timestamp = discord.NewTimestamp(time.Now())
 
 	l.sendEmbed(ctx, discord.ChannelID(channelID), embed, logging.LogEventAutomodAction)
 }

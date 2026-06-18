@@ -10,6 +10,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
+	"github.com/small-frappuccino/discordcore/pkg/embeds"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/logging"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
@@ -77,22 +78,21 @@ func (l *Logger) OnMemberJoin(ctx context.Context, guildID string, member discor
 		joinAgeText = joinAgeText + " ago"
 	}
 
-	embed := discord.Embed{
-		Title:       "Member Joined",
-		Description: logging.FormatUserLabel(member.User.Username, member.User.ID.String()),
-		Color:       discord.Color(theme.MemberJoin()),
-		Thumbnail: &discord.EmbedThumbnail{
-			URL: member.User.AvatarURL(),
-		},
-		Fields: []discord.EmbedField{
+	ce := files.CustomEmbedConfig{
+		Title:        "Member Joined",
+		Description:  logging.FormatUserLabel(member.User.Username, member.User.ID.String()),
+		Color:        theme.MemberJoin(),
+		ThumbnailURL: member.User.AvatarURL(),
+		Fields: []files.CustomEmbedFieldConfig{
 			{
 				Name:   "Account Created",
 				Value:  joinAgeText,
 				Inline: true,
 			},
 		},
-		Timestamp: discord.NowTimestamp(),
 	}
+	embed := embeds.RenderArikawa(ce)
+	embed.Timestamp = discord.NowTimestamp()
 	l.sendEmbed(ctx, discord.ChannelID(channelID), embed, logging.LogEventMemberJoin)
 }
 
@@ -108,22 +108,21 @@ func (l *Logger) OnMemberLeave(ctx context.Context, guildID string, user discord
 		return
 	}
 
-	embed := discord.Embed{
-		Title:       "Member Left",
-		Description: logging.FormatUserLabel(user.Username, user.ID.String()),
-		Color:       discord.Color(theme.MemberLeave()),
-		Thumbnail: &discord.EmbedThumbnail{
-			URL: user.AvatarURL(),
-		},
-		Fields: []discord.EmbedField{
+	ce := files.CustomEmbedConfig{
+		Title:        "Member Left",
+		Description:  logging.FormatUserLabel(user.Username, user.ID.String()),
+		Color:        theme.MemberLeave(),
+		ThumbnailURL: user.AvatarURL(),
+		Fields: []files.CustomEmbedFieldConfig{
 			{
 				Name:   "Time on Server",
 				Value:  "N/A", // This could be enriched by passing joinedAt from the domain event
 				Inline: true,
 			},
 		},
-		Timestamp: discord.NowTimestamp(),
 	}
+	embed := embeds.RenderArikawa(ce)
+	embed.Timestamp = discord.NowTimestamp()
 	l.sendEmbed(ctx, discord.ChannelID(channelID), embed, logging.LogEventMemberLeave)
 }
 
@@ -144,40 +143,41 @@ func (l *Logger) OnRoleUpdate(ctx context.Context, guildID string, user discord.
 	}
 
 	targetLabel := logging.FormatUserLabel(user.Username, user.ID.String())
-	embed := discord.Embed{
+	ce := files.CustomEmbedConfig{
 		Title:       "Role Updated",
 		Description: targetLabel,
-		Color:       discord.Color(theme.MemberRoleUpdate()),
-		Timestamp:   discord.NowTimestamp(),
+		Color:       theme.MemberRoleUpdate(),
 	}
 
-	var fields []discord.EmbedField
+	var fields []files.CustomEmbedFieldConfig
 	for _, r := range addedRoles {
-		fields = append(fields, discord.EmbedField{
+		fields = append(fields, files.CustomEmbedFieldConfig{
 			Name:   "Role",
 			Value:  logging.FormatRoleLabel(r.String(), ""),
 			Inline: true,
 		})
-		fields = append(fields, discord.EmbedField{
+		fields = append(fields, files.CustomEmbedFieldConfig{
 			Name:   "Action",
 			Value:  "Added",
 			Inline: true,
 		})
 	}
 	for _, r := range removedRoles {
-		fields = append(fields, discord.EmbedField{
+		fields = append(fields, files.CustomEmbedFieldConfig{
 			Name:   "Role",
 			Value:  logging.FormatRoleLabel(r.String(), ""),
 			Inline: true,
 		})
-		fields = append(fields, discord.EmbedField{
+		fields = append(fields, files.CustomEmbedFieldConfig{
 			Name:   "Action",
 			Value:  "Removed",
 			Inline: true,
 		})
 	}
 
-	embed.Fields = fields
+	ce.Fields = fields
+	embed := embeds.RenderArikawa(ce)
+	embed.Timestamp = discord.NowTimestamp()
 	l.sendEmbed(ctx, discord.ChannelID(channelID), embed, logging.LogEventRoleChange)
 }
 
@@ -200,26 +200,24 @@ func (l *Logger) OnMessageEdit(ctx context.Context, guildID string, channelID di
 	channelField := logging.FormatChannelLabel(channelID.String())
 	messageTime := newMessage.Timestamp.Time().Format("January 2, 2006 at 3:04 PM")
 
-	embed := discord.Embed{
-		Title:       "Message Edited",
-		Description: desc,
-		Color:       discord.Color(theme.MessageEdit()),
-		Author: &discord.EmbedAuthor{
-			Name: "Message Edited",
-			Icon: newMessage.Author.AvatarURL(),
-		},
-		Fields: []discord.EmbedField{
+	ce := files.CustomEmbedConfig{
+		Title:         "Message Edited",
+		Description:   desc,
+		Color:         theme.MessageEdit(),
+		AuthorName:    "Message Edited",
+		AuthorIconURL: newMessage.Author.AvatarURL(),
+		Fields: []files.CustomEmbedFieldConfig{
 			{Name: "User", Value: userField, Inline: true},
 			{Name: "Channel", Value: channelField, Inline: true},
 			{Name: "Message Timestamp", Value: messageTime, Inline: true},
 			{Name: "Before", Value: logging.TruncateString(oldMessage.Content, 1000), Inline: false},
 			{Name: "After", Value: logging.TruncateString(newMessage.Content, 1000), Inline: false},
 		},
-		Footer: &discord.EmbedFooter{
-			Text: fmt.Sprintf("Message ID: %s", newMessage.ID.String()),
-		},
-		Timestamp: discord.NowTimestamp(),
+		FooterText: fmt.Sprintf("Message ID: %s", newMessage.ID.String()),
 	}
+
+	embed := embeds.RenderArikawa(ce)
+	embed.Timestamp = discord.NowTimestamp()
 	l.sendEmbed(ctx, discord.ChannelID(logChannelID), embed, logging.LogEventMessageEdit)
 }
 
@@ -263,28 +261,26 @@ func (l *Logger) OnMessageDelete(ctx context.Context, m *gateway.MessageDeleteEv
 	channelField := logging.FormatChannelLabel(m.ChannelID.String())
 	messageTime := cachedMessage.Timestamp.Time().Format("January 2, 2006 at 3:04 PM")
 
-	embed := discord.Embed{
-		Title: "Message Deleted",
-		Color: discord.Color(theme.MessageDelete()),
-		Author: &discord.EmbedAuthor{
-			Name: "Message Deleted",
-			Icon: cachedMessage.Author.AvatarURL(),
-		},
-		Fields: []discord.EmbedField{
+	ce := files.CustomEmbedConfig{
+		Title:         "Message Deleted",
+		Color:         theme.MessageDelete(),
+		AuthorName:    "Message Deleted",
+		AuthorIconURL: cachedMessage.Author.AvatarURL(),
+		Fields: []files.CustomEmbedFieldConfig{
 			{Name: "User", Value: userField, Inline: true},
 			{Name: "Channel", Value: channelField, Inline: true},
 			{Name: "Message Timestamp", Value: messageTime, Inline: true},
 			{Name: "Message", Value: logging.TruncateString(cachedMessage.Content, 1000), Inline: false},
 		},
-		Footer: &discord.EmbedFooter{
-			Text: fmt.Sprintf("Message ID: %s", cachedMessage.ID.String()),
-		},
-		Timestamp: discord.NowTimestamp(),
+		FooterText: fmt.Sprintf("Message ID: %s", cachedMessage.ID.String()),
 	}
 
 	if executor != nil {
-		embed.Description += fmt.Sprintf("\n**Deleted By:** <@%s>", executor.ID.String())
+		ce.Description += fmt.Sprintf("\n**Deleted By:** <@%s>", executor.ID.String())
 	}
+
+	embed := embeds.RenderArikawa(ce)
+	embed.Timestamp = discord.NowTimestamp()
 
 	l.sendEmbed(ctx, discord.ChannelID(logChannelID), embed, logging.LogEventMessageDelete)
 }
@@ -313,18 +309,17 @@ func (l *Logger) OnModerationAction(ctx context.Context, guildID string, actionT
 		reason = "No reason provided."
 	}
 
-	embed := discord.Embed{
+	ce := files.CustomEmbedConfig{
 		Title: fmt.Sprintf("Moderation Action: %s", actionType),
-		Color: discord.Color(theme.Danger()),
+		Color: theme.Danger(),
 		Description: fmt.Sprintf("**Target:** %s\n**Moderator:** %s\n**Reason:** %s",
 			logging.FormatUserRef(targetUser.ID.String()),
 			logging.FormatUserRef(moderator.ID.String()),
 			reason),
-		Footer: &discord.EmbedFooter{
-			Text: fmt.Sprintf("Target ID: %s", targetUser.ID.String()),
-		},
-		Timestamp: discord.NowTimestamp(),
+		FooterText: fmt.Sprintf("Target ID: %s", targetUser.ID.String()),
 	}
+	embed := embeds.RenderArikawa(ce)
+	embed.Timestamp = discord.NowTimestamp()
 	l.sendEmbed(ctx, discord.ChannelID(logChannelID), embed, logging.LogEventModerationCase)
 }
 
@@ -340,19 +335,14 @@ func (l *Logger) OnAvatarUpdate(ctx context.Context, guildID string, user discor
 		return
 	}
 
-	embed := discord.Embed{
-		Title: "Avatar Updated",
-		Color: discord.Color(theme.AvatarChange()),
-		Thumbnail: &discord.EmbedThumbnail{
-			URL: user.AvatarURL(),
-		},
-		Fields: []discord.EmbedField{
+	ce := files.CustomEmbedConfig{
+		Title:        "Avatar Updated",
+		Color:        theme.AvatarChange(),
+		ThumbnailURL: user.AvatarURL(),
+		Fields: []files.CustomEmbedFieldConfig{
 			{Name: "User", Value: logging.FormatUserLabel(user.Username, user.ID.String()), Inline: true},
 		},
-		Footer: &discord.EmbedFooter{
-			Text: fmt.Sprintf("User ID: %s", user.ID.String()),
-		},
-		Timestamp: discord.NowTimestamp(),
+		FooterText: fmt.Sprintf("User ID: %s", user.ID.String()),
 	}
 
 	if oldAvatarHash != "" {
@@ -360,12 +350,15 @@ func (l *Logger) OnAvatarUpdate(ctx context.Context, guildID string, user discor
 		if strings.HasPrefix(oldAvatarHash, "a_") {
 			oldUrl = fmt.Sprintf("https://cdn.discordapp.com/avatars/%s/%s.gif", user.ID.String(), oldAvatarHash)
 		}
-		embed.Fields = append(embed.Fields, discord.EmbedField{
+		ce.Fields = append(ce.Fields, files.CustomEmbedFieldConfig{
 			Name:   "Previous Avatar",
 			Value:  "[See previous avatar](" + oldUrl + ")",
 			Inline: true,
 		})
 	}
+
+	embed := embeds.RenderArikawa(ce)
+	embed.Timestamp = discord.NowTimestamp()
 
 	l.sendEmbed(ctx, discord.ChannelID(logChannelID), embed, logging.LogEventAvatarChange)
 }

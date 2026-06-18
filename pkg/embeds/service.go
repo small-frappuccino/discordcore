@@ -1,6 +1,7 @@
 package embeds
 
 import (
+	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordgo"
 )
@@ -33,6 +34,11 @@ func (s *EmbedService) Sync(
 // Render returns the Discord embed payload for a given custom embed configuration.
 func (s *EmbedService) Render(ce files.CustomEmbedConfig) *discordgo.MessageEmbed {
 	return renderCustomEmbed(ce)
+}
+
+// RenderArikawa returns the Discord embed payload for a given custom embed configuration natively for Arikawa.
+func (s *EmbedService) RenderArikawa(ce files.CustomEmbedConfig) discord.Embed {
+	return RenderArikawa(ce)
 }
 
 // FormatSyncSummary returns a human-readable summary of the sync operation.
