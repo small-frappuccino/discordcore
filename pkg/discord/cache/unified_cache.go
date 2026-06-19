@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math/rand"
 	"runtime"
+	"runtime/debug"
 	"slices"
 	"strings"
 	"sync"
@@ -936,6 +938,12 @@ func (uc *UnifiedCache) PersistAndStop() error {
 	return nil
 }
 
+func calculateJitter(base time.Duration) time.Duration {
+	jitterFraction := 0.1 + rand.Float64()*0.1
+	jitterAmount := time.Duration(float64(base) * jitterFraction)
+	return base + jitterAmount
+}
+
 // SetPersistInterval configures automatic persistence interval (0 disables auto-persist)
 // SetPersistInterval starts a background ticker to periodically call Persist.
 //
@@ -951,16 +959,37 @@ func (uc *UnifiedCache) SetPersistInterval(interval time.Duration) chan struct{}
 	stopChan := make(chan struct{})
 
 	go func() {
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
+		defer func() {
+			if r := recover(); r != nil {
+				log.ErrorLoggerRaw().Error("Cache persist loop panic caught", "panic", r, "stack", string(debug.Stack()))
+			}
+		}()
+
+		// Initial warm-up dispatch
+		if err := uc.Persist(); err != nil {
+			// Log error but continue
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		go func() {
+			select {
+			case <-stopChan:
+				cancel()
+			case <-ctx.Done():
+			}
+		}()
 
 		for {
+			timer := time.NewTimer(calculateJitter(interval))
 			select {
-			case <-ticker.C:
+			case <-timer.C:
 				if err := uc.Persist(); err != nil {
 					// Log error but continue
 				}
-			case <-stopChan:
+			case <-ctx.Done():
+				timer.Stop()
 				return
 			}
 		}

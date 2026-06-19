@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math/rand"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -474,16 +476,27 @@ func (mes *MemberEventService) calculateServerTime(ctx context.Context, guildID,
 	return 0, false, nil
 }
 
+func calculateJitter(base time.Duration) time.Duration {
+	jitterFraction := 0.1 + rand.Float64()*0.1
+	jitterAmount := time.Duration(float64(base) * jitterFraction)
+	return base + jitterAmount
+}
+
 // cleanupLoop periodically removes old entries from joinTimes map
 func (mes *MemberEventService) cleanupLoop(ctx context.Context) {
-	ticker := time.NewTicker(10 * time.Minute)
-	defer ticker.Stop()
+	defer func() {
+		if r := recover(); r != nil {
+			mes.logger.Error("MemberEventService cleanup loop panic caught", "panic", r, "stack", string(debug.Stack()))
+		}
+	}()
 
 	for {
+		timer := time.NewTimer(calculateJitter(10 * time.Minute))
 		select {
-		case <-ticker.C:
+		case <-timer.C:
 			mes.cleanupJoinTimes()
 		case <-ctx.Done():
+			timer.Stop()
 			return
 		}
 	}

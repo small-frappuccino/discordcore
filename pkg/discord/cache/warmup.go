@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/log"
@@ -180,17 +181,37 @@ func SchedulePeriodicCleanup(store *storage.Store, interval time.Duration) chan 
 	stopChan := make(chan struct{})
 
 	go func() {
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
+		defer func() {
+			if r := recover(); r != nil {
+				log.ErrorLoggerRaw().Error("Warmup cleanup loop panic caught", "panic", r, "stack", string(debug.Stack()))
+			}
+		}()
+
+		// Initial warm-up dispatch
+		if err := store.CleanupAllObsoleteData(); err != nil {
+			log.ErrorLoggerRaw().Error(fmt.Sprintf("Initial cleanup failed: %v", err))
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		go func() {
+			select {
+			case <-stopChan:
+				cancel()
+			case <-ctx.Done():
+			}
+		}()
 
 		for {
+			timer := time.NewTimer(calculateJitter(interval))
 			select {
-			case <-ticker.C:
+			case <-timer.C:
 				if err := store.CleanupAllObsoleteData(); err != nil {
 					log.ErrorLoggerRaw().Error(fmt.Sprintf("Periodic cleanup failed: %v", err))
 				}
-			case <-stopChan:
-
+			case <-ctx.Done():
+				timer.Stop()
 				return
 			}
 		}

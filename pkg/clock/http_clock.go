@@ -19,6 +19,11 @@ func (c *HTTPClock) Now() time.Time {
 	return time.Now().Add(c.offset)
 }
 
+// NewTimer creates a new Timer using the system time (duration doesn't need offset).
+func (c *HTTPClock) NewTimer(d time.Duration) Timer {
+	return &RealTimer{t: time.NewTimer(d)}
+}
+
 // NewHTTPClock performs a single HEAD request to the target URL to capture
 // the server's HTTP Date header and calculate the delta between the OS clock
 // and the server clock. If the request fails or times out, it falls back to

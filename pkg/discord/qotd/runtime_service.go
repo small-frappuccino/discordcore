@@ -3,6 +3,8 @@ package qotd
 import (
 	"context"
 	"errors"
+	"math/rand"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -214,16 +216,35 @@ func (s *RuntimeService) IsRunning() bool {
 	return s.running
 }
 
+func calculateJitter(base time.Duration) time.Duration {
+	jitterFraction := 0.1 + rand.Float64()*0.1
+	jitterAmount := time.Duration(float64(base) * jitterFraction)
+	return base + jitterAmount
+}
+
 func (s *RuntimeService) loop() {
 	defer s.wg.Done()
+	defer func() {
+		if r := recover(); r != nil {
+			log.ApplicationLogger().Error("QOTD runtime loop panic caught", "panic", r, "stack", string(debug.Stack()))
+		}
+	}()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		select {
+		case <-s.stopCh:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
 
 	// Startup catch-up: handle any slot that became due while the bot was
 	// down, and reconcile state once before entering the timer loop.
 	s.runPublishCycle(s.clock())
 	s.runReconcileCycle(s.clock())
-
-	reconcileTicker := time.NewTicker(s.reconcileEvery)
-	defer reconcileTicker.Stop()
 
 	for {
 		// Compute the wake-up delay each iteration so newly-added guilds,
@@ -231,12 +252,14 @@ func (s *RuntimeService) loop() {
 		// slots (whose next moment is now tomorrow) are all reflected on the
 		// very next sleep. The cap (publishInterval) is the worst-case
 		// discovery latency for any of those changes.
-		publishTimer := time.NewTimer(s.nextPublishDelay(s.clock()))
+		publishTimer := time.NewTimer(calculateJitter(s.nextPublishDelay(s.clock())))
+		reconcileTimer := time.NewTimer(calculateJitter(s.reconcileEvery))
 
 		select {
 		case <-publishTimer.C:
+			reconcileTimer.Stop()
 			s.runPublishCycle(s.clock())
-		case <-reconcileTicker.C:
+		case <-reconcileTimer.C:
 			// Reconcile interrupts an in-flight publish sleep. Stopping
 			// the timer is best-effort; if it already fired we ignore the
 			// pending tick rather than running the publish cycle eagerly,
@@ -244,8 +267,9 @@ func (s *RuntimeService) loop() {
 			// that the next loop iteration will re-arm against.
 			publishTimer.Stop()
 			s.runReconcileCycle(s.clock())
-		case <-s.stopCh:
+		case <-ctx.Done():
 			publishTimer.Stop()
+			reconcileTimer.Stop()
 			return
 		}
 	}

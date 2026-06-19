@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math/rand"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -278,14 +280,20 @@ func (w *messageCreateWriter) Lookup(guildID, messageID string) *CachedMessage {
 	}
 }
 
+func calculateJitter(base time.Duration) time.Duration {
+	jitterFraction := 0.1 + rand.Float64()*0.1
+	jitterAmount := time.Duration(float64(base) * jitterFraction)
+	return base + jitterAmount
+}
+
 func (w *messageCreateWriter) run() {
 	defer func() {
+		if r := recover(); r != nil {
+			w.logger.Error("MessageCreateWriter loop panic caught", "panic", r, "stack", string(debug.Stack()))
+		}
 		w.state.Store(uint32(writerStateClosed))
 		close(w.done)
 	}()
-
-	ticker := time.NewTicker(w.flushInterval)
-	defer ticker.Stop()
 
 	batch := make([]messageWriteRequest, 0, w.maxBatch)
 	flush := func() {
@@ -296,15 +304,26 @@ func (w *messageCreateWriter) run() {
 		batch = batch[:0]
 	}
 
+	timer := time.NewTimer(calculateJitter(w.flushInterval))
+	defer timer.Stop()
+
 	for {
 		select {
 		case req := <-w.queue:
 			batch = append(batch, req)
 			if len(batch) >= w.maxBatch {
 				flush()
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+				timer.Reset(calculateJitter(w.flushInterval))
 			}
-		case <-ticker.C:
+		case <-timer.C:
 			flush()
+			timer.Reset(calculateJitter(w.flushInterval))
 		case <-w.stopCh:
 			for {
 				select {

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -163,25 +165,46 @@ func (s *UserPruneService) IsRunning() bool {
 	return s.running
 }
 
+func calculateJitter(base time.Duration) time.Duration {
+	jitterFraction := 0.1 + rand.Float64()*0.1
+	jitterAmount := time.Duration(float64(base) * jitterFraction)
+	return base + jitterAmount
+}
+
 func (s *UserPruneService) loop() {
 	defer s.wg.Done()
+	defer func() {
+		if r := recover(); r != nil {
+			log.ApplicationLogger().Error("UserPrune maintenance loop panic caught", "panic", r, "stack", string(debug.Stack()))
+		}
+	}()
 
-	s.runIfDue(time.Now().UTC())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	ticker := time.NewTicker(pruneCheckInterval)
-	defer ticker.Stop()
+	go func() {
+		select {
+		case <-s.stopCh:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+
+	s.runIfDue(ctx, time.Now().UTC())
 
 	for {
+		timer := time.NewTimer(calculateJitter(pruneCheckInterval))
 		select {
-		case <-ticker.C:
-			s.runIfDue(time.Now().UTC())
-		case <-s.stopCh:
+		case <-timer.C:
+			s.runIfDue(ctx, time.Now().UTC())
+		case <-ctx.Done():
+			timer.Stop()
 			return
 		}
 	}
 }
 
-func (s *UserPruneService) runIfDue(now time.Time) {
+func (s *UserPruneService) runIfDue(ctx context.Context, now time.Time) {
 	if s.configManager == nil {
 		return
 	}
@@ -199,7 +222,7 @@ func (s *UserPruneService) runIfDue(now time.Time) {
 	if !isPruneExecutionDay(now) {
 		return
 	}
-	runCtx := context.Background()
+	runCtx := ctx
 
 	botID := s.currentBotID()
 

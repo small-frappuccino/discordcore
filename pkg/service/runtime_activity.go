@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -132,21 +133,28 @@ func (ra *RuntimeActivity) StartHeartbeat(ctx context.Context, interval time.Dur
 	// only wedges the inner attempt goroutine (which is left to leak until
 	// its blocking call returns), never close(done) or StopHeartbeat.
 	go func() {
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		defer close(done)
+		defer func() {
+			if r := recover(); r != nil {
+				if ra.logger != nil {
+					ra.logger.Error("RuntimeActivity heartbeat loop panic caught", "panic", r, "stack", string(debug.Stack()))
+				}
+			}
+			close(done)
+		}()
 
 		if !ra.runCancellableHeartbeat(hbCtx, "Failed to persist startup heartbeat") {
 			return
 		}
 
 		for {
+			timer := time.NewTimer(calculateJitter(interval))
 			select {
-			case <-ticker.C:
+			case <-timer.C:
 				if !ra.runCancellableHeartbeat(hbCtx, "Failed to persist heartbeat") {
 					return
 				}
 			case <-hbCtx.Done():
+				timer.Stop()
 				return
 			}
 		}

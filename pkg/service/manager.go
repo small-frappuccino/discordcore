@@ -4,6 +4,8 @@ import (
 	"context"
 	stdErrors "errors"
 	"fmt"
+	"math/rand"
+	"runtime/debug"
 	"slices"
 	"sync"
 	"time"
@@ -545,18 +547,30 @@ func (sm *ServiceManager) updateServiceState(info *ServiceInfo, state ServiceSta
 	info.LastStateTime = time.Now()
 }
 
+func calculateJitter(base time.Duration) time.Duration {
+	jitterFraction := 0.1 + rand.Float64()*0.1
+	jitterAmount := time.Duration(float64(base) * jitterFraction)
+	return base + jitterAmount
+}
+
 // healthMonitor runs periodic health checks on all services
 func (sm *ServiceManager) healthMonitor() {
-	ticker := time.NewTicker(sm.healthInterval)
-	defer ticker.Stop()
+	defer func() {
+		if r := recover(); r != nil {
+			sm.logger.Error("ServiceManager healthMonitor panic caught", "panic", r, "stack", string(debug.Stack()))
+		}
+	}()
 
 	for {
+		timer := time.NewTimer(calculateJitter(sm.healthInterval))
 		select {
 		case <-sm.ctx.Done():
+			timer.Stop()
 			return
 		case <-sm.healthStop:
+			timer.Stop()
 			return
-		case <-ticker.C:
+		case <-timer.C:
 			sm.performHealthChecks()
 		}
 	}

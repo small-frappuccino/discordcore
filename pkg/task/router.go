@@ -822,12 +822,12 @@ func (tr *TaskRouter) retryLoop() {
 		}
 
 		if delay > 0 {
-			timer := time.NewTimer(delay)
+			timer := tr.cfg.Clock.NewTimer(delay)
 			select {
 			case <-tr.stopCh:
 				if !timer.Stop() {
 					select {
-					case <-timer.C:
+					case <-timer.C():
 					default:
 					}
 				}
@@ -835,12 +835,12 @@ func (tr *TaskRouter) retryLoop() {
 			case <-tr.retryWakeCh:
 				if !timer.Stop() {
 					select {
-					case <-timer.C:
+					case <-timer.C():
 					default:
 					}
 				}
 				continue
-			case <-timer.C:
+			case <-timer.C():
 			}
 		}
 
@@ -1044,15 +1044,38 @@ func clampDuration(v, lo, hi time.Duration) time.Duration {
 	return max(min(v, hi), lo)
 }
 
+func calculateJitter(base time.Duration) time.Duration {
+	jitterFraction := 0.1 + rand.Float64()*0.1
+	jitterAmount := time.Duration(float64(base) * jitterFraction)
+	return base + jitterAmount
+}
+
 func (tr *TaskRouter) backgroundLoop() {
 	defer tr.wg.Done()
-	t := time.NewTicker(tr.cfg.CleanupInterval)
-	defer t.Stop()
-	for {
+	defer func() {
+		if r := recover(); r != nil {
+			log.ApplicationLogger().Error("TaskRouter background loop panic caught", "panic", r, "stack", string(debug.Stack()))
+		}
+	}()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
 		select {
 		case <-tr.stopCh:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+
+	for {
+		timer := tr.cfg.Clock.NewTimer(calculateJitter(tr.cfg.CleanupInterval))
+		select {
+		case <-ctx.Done():
+			timer.Stop()
 			return
-		case <-t.C:
+		case <-timer.C():
 			tr.cleanupOnce()
 			tr.runCronOnce()
 		}

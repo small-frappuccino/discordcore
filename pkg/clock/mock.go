@@ -36,3 +36,9 @@ func (m *MockClock) Advance(d time.Duration) {
 	defer m.mu.Unlock()
 	m.now = m.now.Add(d)
 }
+
+// NewTimer creates a new Timer. For MockClock, we just return a RealTimer for now
+// to preserve previous behavior where components used OS timers directly.
+func (m *MockClock) NewTimer(d time.Duration) Timer {
+	return &RealTimer{t: time.NewTimer(d)}
+}
