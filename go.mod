@@ -27,6 +27,7 @@ require (
 	github.com/kr/text v0.2.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rogpeppe/go-internal v1.15.0 // indirect
+	go.uber.org/goleak v1.3.0 // indirect
 	golang.org/x/crypto v0.41.0 // indirect
 	golang.org/x/text v0.29.0 // indirect
 	golang.org/x/time v0.10.0 // indirect

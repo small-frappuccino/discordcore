@@ -1,6 +1,7 @@
 package files
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -93,7 +94,6 @@ func (mgr *ConfigManager) ApplyConfig(cfg *BotConfig) int {
 		return 0
 	}
 	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
 
 	mgr.log().Debug("Starting atomic transition of configuration state",
 		slog.Int("guilds_payload_size", len(cfg.Guilds)),
@@ -117,7 +117,9 @@ func (mgr *ConfigManager) ApplyConfig(cfg *BotConfig) int {
 	}
 
 	mgr.publishSnapshotLocked()
-	mgr.notifySubscribersLocked(oldCfg, cfg)
+	mgr.mu.Unlock()
+
+	_ = mgr.notifySubscribers(context.Background(), oldCfg, cfg)
 
 	mgr.log().Info("Configuration state transition completed",
 		slog.Int("duplicates_removed", dupCount),
@@ -209,12 +211,13 @@ func (mgr *ConfigManager) saveConfigLocked() error {
 
 // UpdateRuntimeConfig mutates runtime_config and persists the change to disk.
 func (mgr *ConfigManager) UpdateRuntimeConfig(fn func(*RuntimeConfig) error) (RuntimeConfig, error) {
-	snapshot, err := mgr.UpdateConfig(func(cfg *BotConfig) error {
+	snapshot, err := mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
 		if fn == nil {
 			return nil
 		}
 		return fn(&cfg.RuntimeConfig)
 	})
+
 	if err != nil {
 		errWrap := fmt.Errorf("ConfigManager.UpdateRuntimeConfig: %w", err)
 		EmitBlockingError(mgr.log(), "Mutational failure in runtime configuration", errWrap, GenerateRequestID())
@@ -497,10 +500,11 @@ func (mgr *ConfigManager) DetectGuildsForBot(session *discordgo.Session, botInst
 		)
 	}
 
-	_, err := mgr.UpdateConfig(func(cfg *BotConfig) error {
+	_, err := mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
 		cfg.Guilds = detected
 		return nil
 	})
+
 	if err != nil {
 		EmitBlockingError(mgr.log(), "Block update failure during heuristic detection phase", err, GenerateRequestID())
 	}
@@ -556,7 +560,7 @@ func (mgr *ConfigManager) RegisterGuildForBot(session *discordgo.Session, guildI
 		},
 	}
 
-	if _, err := mgr.UpdateConfig(func(cfg *BotConfig) error {
+	if _, err := mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
 		cfg.Guilds = append(cfg.Guilds, guildCfg)
 		return nil
 	}); err != nil {

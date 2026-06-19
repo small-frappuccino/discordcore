@@ -1,6 +1,7 @@
 package partner
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -135,7 +136,7 @@ func (c *partnerPostSubCommand) Handle(ctx *core.Context) error {
 	}
 
 	if !posting.IsZero() {
-		if _, err := c.configManager.UpdateConfig(func(cfg *files.BotConfig) error {
+		if _, err := c.configManager.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 			for i := range cfg.Guilds {
 				if cfg.Guilds[i].GuildID == ctx.GuildID {
 					cfg.Guilds[i].PartnerBoard.Postings = append(cfg.Guilds[i].PartnerBoard.Postings, posting)
@@ -201,7 +202,7 @@ func (c *partnerUnpostSubCommand) Handle(ctx *core.Context) error {
 	foundPosting := false
 	var targetPosting files.CustomEmbedPostingConfig
 
-	if _, err := c.configManager.UpdateConfig(func(cfg *files.BotConfig) error {
+	if _, err := c.configManager.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		for idx := range cfg.Guilds {
 			if cfg.Guilds[idx].GuildID == ctx.GuildID {
 				bc := &cfg.Guilds[idx].PartnerBoard

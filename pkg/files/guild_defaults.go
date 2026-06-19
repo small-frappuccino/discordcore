@@ -1,6 +1,7 @@
 package files
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -44,7 +45,7 @@ func (mgr *ConfigManager) EnsureMinimalGuildConfig(guildID string) error {
 		return err
 	}
 
-	_, err := mgr.UpdateConfig(func(cfg *BotConfig) error {
+	_, err := mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
 		for idx := range cfg.Guilds {
 			if cfg.Guilds[idx].GuildID != guildID {
 				continue

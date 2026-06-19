@@ -16,6 +16,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordgo"
+	"golang.org/x/sync/errgroup"
 )
 
 var identifyStaggerDelay = 5 * time.Second
@@ -86,7 +87,7 @@ func (s *BotSupervisor) SetFatalCallback(cb func(error)) {
 
 func (s *BotSupervisor) Start() error {
 	s.log().Info("Initializing primary routines of BotSupervisor", slog.String("component", "BotSupervisor"))
-	s.onConfigChanged(nil, nil) // trigger initial resolution
+	_ = s.onConfigChanged(context.Background(), nil, nil) // trigger initial resolution
 	return nil
 }
 
@@ -150,10 +151,14 @@ func (s *BotSupervisor) GetResolver() *botRuntimeResolver {
 	return s.resolver
 }
 
-func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
+func (s *BotSupervisor) onConfigChanged(ctx context.Context, oldCfg, newCfg *files.BotConfig) error {
 	if newCfg == nil {
 		snap := s.configManager.SnapshotConfig()
 		newCfg = &snap
+	}
+
+	if ctx == nil {
+		ctx = context.Background()
 	}
 
 	s.mu.Lock()
@@ -327,50 +332,72 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 		}
 	}
 
+	s.bgWG.Add(1)
 	go func() {
+		defer s.bgWG.Done()
+
+		// Wait for starts before synchronizing commands
 		startWG.Wait()
 		s.resolver.markReady()
 
+		if len(syncTasks) == 0 {
+			return
+		}
+
+		eg, egCtx := errgroup.WithContext(ctx)
+		// Bounded limit to prevent OOM
+		eg.SetLimit(10)
+
 		for _, task := range syncTasks {
-			s.bgWG.Add(1)
-			go func(gID string, instances []string) {
-				defer s.bgWG.Done()
+			t := task
+			eg.Go(func() error {
 				// Small debounce jitter
-				time.Sleep(time.Duration(rand.Float64()*500) * time.Millisecond)
+				select {
+				case <-egCtx.Done():
+					return egCtx.Err()
+				case <-time.After(time.Duration(rand.Float64()*500) * time.Millisecond):
+				}
 
 				currentRuntimes := s.resolver.getRuntimes()
-				for _, instanceID := range instances {
+				for _, instanceID := range t.instances {
+					if egCtx.Err() != nil {
+						return egCtx.Err()
+					}
 					runtime, ok := currentRuntimes[instanceID]
 					if !ok || runtime == nil || runtime.commandHandler == nil {
 						continue
 					}
 					if cm := runtime.commandHandler.GetCommandManager(); cm != nil {
-						if syncErr := cm.SyncGuildCommands(gID); syncErr != nil {
+						if syncErr := cm.SyncGuildCommands(t.guildID); syncErr != nil {
 							if strings.Contains(syncErr.Error(), "403") {
 								s.log().Warn("Dynamic command synchronization ignored due to authorization barrier",
-									slog.String("guildID", gID),
+									slog.String("guildID", t.guildID),
 									slog.String("botInstanceID", instanceID),
 									slog.String("mitigation", "permission bypass"),
 									slog.Any("error", syncErr),
 								)
 							} else {
 								s.log().Error("Structural failure synchronizing guild commands",
-									slog.String("request_id", "sync_"+gID+"_"+instanceID),
+									slog.String("request_id", "sync_"+t.guildID+"_"+instanceID),
 									slog.Int("synthetic_status_code", 500),
 									slog.String("stacktrace", string(debug.Stack())),
-									slog.String("guildID", gID),
+									slog.String("guildID", t.guildID),
 									slog.String("botInstanceID", instanceID),
 									slog.Any("error", syncErr),
 								)
 							}
 						} else {
-							s.log().Info("Dynamic guild command synchronization completed", slog.String("guildID", gID), slog.String("botInstanceID", instanceID))
+							s.log().Info("Dynamic guild command synchronization completed", slog.String("guildID", t.guildID), slog.String("botInstanceID", instanceID))
 						}
 					}
 				}
-			}(task.guildID, task.instances)
+				return nil
+			})
 		}
+		_ = eg.Wait()
 	}()
+
+	return nil
 }
 
 func (s *BotSupervisor) executeStopAndRemove(ctx context.Context, id string, state *botInstanceState, wgGlobal *sync.WaitGroup) error {

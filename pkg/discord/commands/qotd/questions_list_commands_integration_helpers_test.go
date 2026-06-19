@@ -122,7 +122,7 @@ func qotdIntOpt(name string, value int64) *discordgo.ApplicationCommandInteracti
 
 func mustConfigureQOTDDecks(t *testing.T, cm *files.ConfigManager, guildID string, cfg files.QOTDConfig) {
 	t.Helper()
-	_, err := cm.UpdateConfig(func(botCfg *files.BotConfig) error {
+	_, err := cm.UpdateConfig(context.Background(), func(botCfg *files.BotConfig) error {
 		for idx := range botCfg.Guilds {
 			if botCfg.Guilds[idx].GuildID != guildID {
 				continue
@@ -132,6 +132,7 @@ func mustConfigureQOTDDecks(t *testing.T, cm *files.ConfigManager, guildID strin
 		}
 		return fmt.Errorf("guild config not found: %s", guildID)
 	})
+
 	if err != nil {
 		t.Fatalf("update qotd config: %v", err)
 	}

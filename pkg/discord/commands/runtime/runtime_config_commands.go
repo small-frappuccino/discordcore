@@ -303,7 +303,7 @@ func saveRuntimeConfig(cm *files.ConfigManager, rc files.RuntimeConfig, scope st
 		return err
 	}
 
-	_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+	_, err := cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		for i := range cfg.Guilds {
 			if cfg.Guilds[i].GuildID == scope {
 				cfg.Guilds[i].RuntimeConfig = rc
@@ -312,6 +312,7 @@ func saveRuntimeConfig(cm *files.ConfigManager, rc files.RuntimeConfig, scope st
 		}
 		return fmt.Errorf("guild config for %s not found in memory during save", scope)
 	})
+
 	return err
 }
 

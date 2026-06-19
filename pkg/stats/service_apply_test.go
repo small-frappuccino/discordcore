@@ -1,6 +1,7 @@
 package stats
 
 import (
+	"context"
 	"log/slog"
 	"testing"
 	"time"
@@ -12,7 +13,7 @@ func TestApplyMemberAdd(t *testing.T) {
 	// test store
 
 	cm := newTestConfigManager(t)
-	_, _ = cm.UpdateConfig(func(cfg *files.BotConfig) error {
+	_, _ = cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
 			{
 				GuildID: "guild-stats-main",
@@ -51,7 +52,7 @@ func TestApplyMemberAdd(t *testing.T) {
 
 func TestApplyMemberRemove(t *testing.T) {
 	cm := newTestConfigManager(t)
-	_, _ = cm.UpdateConfig(func(cfg *files.BotConfig) error {
+	_, _ = cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
 			{GuildID: "guild-stats-main", BotInstanceTokens: map[string]files.EncryptedString{"generic": "token"}, FeatureRouting: map[string]string{"stats": "generic"}, Features: files.FeatureToggles{}, Stats: files.StatsConfig{Channels: []files.StatsChannelConfig{{ChannelID: "c1"}}}},
 		}
@@ -70,12 +71,13 @@ func TestApplyMemberRemove(t *testing.T) {
 
 func TestApplyStatsMemberUpdate(t *testing.T) {
 	cm := newTestConfigManager(t)
-	_, _ = cm.UpdateConfig(func(cfg *files.BotConfig) error {
+	_, _ = cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
 			{GuildID: "guild-stats-main", BotInstanceTokens: map[string]files.EncryptedString{"generic": "token"}, FeatureRouting: map[string]string{"stats": "generic"}, Features: files.FeatureToggles{}, Stats: files.StatsConfig{Channels: []files.StatsChannelConfig{{ChannelID: "c1"}}}},
 		}
 		return nil
 	})
+
 	// Testing early return with nil store
 	svcNil := NewStatsService(nil, cm, nil, slog.Default(), "generic")
 	svcNil.ApplyStatsMemberUpdate("guild-stats-main", "user1", true, func(yield func(string) bool) {

@@ -161,7 +161,7 @@ func TestResolveAccessibleGuildsRecomputesDiscordRoleAccessOnCacheHit(t *testing
 		return []string{"g1"}, nil
 	})
 
-	if _, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+	if _, err := cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		for index := range cfg.Guilds {
 			if cfg.Guilds[index].GuildID != "g1" {
 				continue

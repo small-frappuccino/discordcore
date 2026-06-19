@@ -183,7 +183,7 @@ func (s *Server) handleGlobalSettingsPut(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	updated, err := s.configManager.UpdateConfig(func(cfg *files.BotConfig) error {
+	updated, err := s.configManager.UpdateConfig(r.Context(), func(cfg *files.BotConfig) error {
 		if payload.ConfigVersion != nil {
 			cfg.ConfigVersion++
 		}
@@ -199,6 +199,7 @@ func (s *Server) handleGlobalSettingsPut(w http.ResponseWriter, r *http.Request)
 		}
 		return nil
 	})
+
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to update global settings: %v", err), statusForSettingsMutationError(err))
 		return
@@ -356,7 +357,7 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	updated, err := s.configManager.UpdateConfig(func(cfg *files.BotConfig) error {
+	updated, err := s.configManager.UpdateConfig(r.Context(), func(cfg *files.BotConfig) error {
 		guild, ok := findGuildSettingsMutable(cfg, guildID)
 		if !ok {
 			return fmt.Errorf("%w: register this guild first (guild_id=%s)", errGuildRegistrationRequired, guildID)
@@ -450,6 +451,7 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 
 		return nil
 	})
+
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to update guild settings: %v", err), statusForSettingsMutationError(err))
 		return
@@ -499,7 +501,7 @@ func (s *Server) handleGuildSettingsDelete(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	invalidateAccessCache := false
-	_, err := s.configManager.UpdateConfig(func(cfg *files.BotConfig) error {
+	_, err := s.configManager.UpdateConfig(r.Context(), func(cfg *files.BotConfig) error {
 		for idx := range cfg.Guilds {
 			if cfg.Guilds[idx].GuildID != guildID {
 				continue
@@ -510,6 +512,7 @@ func (s *Server) handleGuildSettingsDelete(w http.ResponseWriter, r *http.Reques
 		}
 		return fmt.Errorf("%w: guild_id=%s", files.ErrGuildConfigNotFound, guildID)
 	})
+
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to delete guild settings: %v", err), statusForSettingsMutationError(err))
 		return

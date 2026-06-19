@@ -1,9 +1,12 @@
 package files
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+)
 
 func (mgr *ConfigManager) updateGuildConfig(guildID string, fn func(*GuildConfig) error) error {
-	_, err := mgr.UpdateConfig(func(cfg *BotConfig) error {
+	_, err := mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
 		guildConfig, err := guildConfigByID(cfg, guildID)
 		if err != nil {
 			return fmt.Errorf("ConfigManager.updateGuildConfig: %w", err)
@@ -13,6 +16,7 @@ func (mgr *ConfigManager) updateGuildConfig(guildID string, fn func(*GuildConfig
 		}
 		return fn(guildConfig)
 	})
+
 	return err
 }
 
@@ -22,7 +26,7 @@ func (mgr *ConfigManager) UpdateGuildConfig(guildID string, fn func(*GuildConfig
 }
 
 func (mgr *ConfigManager) updateRuntimeConfigScope(scopeGuildID string, fn func(*RuntimeConfig) error) error {
-	_, err := mgr.UpdateConfig(func(cfg *BotConfig) error {
+	_, err := mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
 		runtimeConfig, err := runtimeConfigForScope(cfg, scopeGuildID)
 		if err != nil {
 			return fmt.Errorf("ConfigManager.updateRuntimeConfigScope: %w", err)
@@ -32,6 +36,7 @@ func (mgr *ConfigManager) updateRuntimeConfigScope(scopeGuildID string, fn func(
 		}
 		return fn(runtimeConfig)
 	})
+
 	return err
 }
 
@@ -53,7 +58,7 @@ func runtimeConfigForScope(cfg *BotConfig, scopeGuildID string) (*RuntimeConfig,
 // RevokeBotInstance removes the given instance from the configuration across all guilds,
 // provided that its configured token exactly matches the revoked token.
 func (mgr *ConfigManager) RevokeBotInstance(instanceID, token string) error {
-	_, err := mgr.UpdateConfig(func(cfg *BotConfig) error {
+	_, err := mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
 		for i := range cfg.Guilds {
 			guild := &cfg.Guilds[i]
 			encToken, exists := guild.BotInstanceTokens[instanceID]
@@ -64,7 +69,6 @@ func (mgr *ConfigManager) RevokeBotInstance(instanceID, token string) error {
 				continue
 			}
 
-			// Token matches exactly. Remove it.
 			delete(guild.BotInstanceTokens, instanceID)
 
 			if guild.BotInstanceStatuses != nil {
@@ -81,5 +85,6 @@ func (mgr *ConfigManager) RevokeBotInstance(instanceID, token string) error {
 		}
 		return nil
 	})
+
 	return err
 }

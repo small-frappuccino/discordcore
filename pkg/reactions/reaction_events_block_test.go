@@ -56,7 +56,7 @@ func TestReactionEventServiceRemovesBlockedReactionWithoutMetricsStore(t *testin
 	})
 
 	cfgMgr := newLoggingConfigManager(t, guildID, files.ChannelsConfig{})
-	if _, err := cfgMgr.UpdateConfig(func(cfg *files.BotConfig) error {
+	if _, err := cfgMgr.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		cfg.Guilds[0].ReactionBlocks = files.ReactionBlockConfig{Rules: []files.ReactionBlockRuleConfig{{
 			ReactorUserID: reactorUserID,
 			TargetUserID:  targetUserID,

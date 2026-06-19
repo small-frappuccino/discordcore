@@ -32,7 +32,7 @@ func TestSettingsOverviewReturnsCatalogGlobalWorkspaceAndGuildSummaries(t *testi
 
 	srv, cm := newControlTestServer(t)
 	setTestBotGuildBindings(srv, BotGuildBinding{GuildID: "g1"})
-	_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+	_, err := cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		cfg.Features = files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
 				Monitoring: testBoolPtr(true),
@@ -54,6 +54,7 @@ func TestSettingsOverviewReturnsCatalogGlobalWorkspaceAndGuildSummaries(t *testi
 		}
 		return nil
 	})
+
 	if err != nil {
 		t.Fatalf("seed config: %v", err)
 	}
@@ -325,12 +326,13 @@ func TestGuildSettingsPutAutoRegistersMissingGuild(t *testing.T) {
 
 	// Setup a mock guild registration function since auto-register depends on it
 	srv.SetGuildRegistrationFunc(func(_ context.Context, guildID string) error {
-		_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+		_, err := cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 			cfg.Guilds = append(cfg.Guilds, files.GuildConfig{
 				GuildID: guildID,
 			})
 			return nil
 		})
+
 		return err
 	})
 
@@ -395,7 +397,7 @@ func TestGuildRegistrationPostCreatesGuildWorkspace(t *testing.T) {
 	callCount := 0
 	srv.SetGuildRegistrationFunc(func(_ context.Context, guildID string) error {
 		callCount++
-		_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+		_, err := cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 			cfg.Guilds = append(cfg.Guilds, files.GuildConfig{
 				GuildID: guildID,
 				Channels: files.ChannelsConfig{
@@ -404,6 +406,7 @@ func TestGuildRegistrationPostCreatesGuildWorkspace(t *testing.T) {
 			})
 			return nil
 		})
+
 		return err
 	})
 
@@ -643,7 +646,7 @@ func TestGuildSettingsPutScrubsDanglingFeatureRouting(t *testing.T) {
 	srv, cm := newControlTestServer(t)
 	setTestBotGuildBindings(srv, BotGuildBinding{GuildID: "g1"})
 
-	_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+	_, err := cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		guild, ok := findGuildSettingsMutable(cfg, "g1")
 		if !ok {
 			return fmt.Errorf("guild g1 not found")
@@ -658,6 +661,7 @@ func TestGuildSettingsPutScrubsDanglingFeatureRouting(t *testing.T) {
 		}
 		return nil
 	})
+
 	if err != nil {
 		t.Fatalf("seed config: %v", err)
 	}
@@ -715,7 +719,7 @@ func TestGuildSettingsPut_TokenUniqueness(t *testing.T) {
 	srv, cm := newControlTestServer(t)
 	setTestBotGuildBindings(srv, BotGuildBinding{GuildID: "g1"}, BotGuildBinding{GuildID: "g2"})
 
-	_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+	_, err := cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
 			{
 				GuildID: "g1",
@@ -729,6 +733,7 @@ func TestGuildSettingsPut_TokenUniqueness(t *testing.T) {
 		}
 		return nil
 	})
+
 	if err != nil {
 		t.Fatalf("seed config: %v", err)
 	}
@@ -761,7 +766,7 @@ func TestGuildSettingsPut_StatusCleanup(t *testing.T) {
 	srv, cm := newControlTestServer(t)
 	setTestBotGuildBindings(srv, BotGuildBinding{GuildID: "g1"})
 
-	_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+	_, err := cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
 			{
 				GuildID: "g1",
@@ -775,6 +780,7 @@ func TestGuildSettingsPut_StatusCleanup(t *testing.T) {
 		}
 		return nil
 	})
+
 	if err != nil {
 		t.Fatalf("seed config: %v", err)
 	}

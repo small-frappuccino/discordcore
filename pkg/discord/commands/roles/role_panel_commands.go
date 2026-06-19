@@ -1227,7 +1227,7 @@ func (c *rolePanelToggleSubCommand) RequiresPermissions() bool { return true }
 // Handle handles.
 func (c *rolePanelToggleSubCommand) Handle(ctx *core.Context) error {
 	var newValue bool
-	_, err := c.configManager.UpdateConfig(func(cfg *files.BotConfig) error {
+	_, err := c.configManager.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		for i := range cfg.Guilds {
 			if cfg.Guilds[i].GuildID == ctx.GuildID {
 				cfg.Guilds[i].RuntimeConfig.DisableInteractiveEphemeral = !cfg.Guilds[i].RuntimeConfig.DisableInteractiveEphemeral
@@ -1237,6 +1237,7 @@ func (c *rolePanelToggleSubCommand) Handle(ctx *core.Context) error {
 		}
 		return fmt.Errorf("guild config for %s not found in memory during save", ctx.GuildID)
 	})
+
 	if err != nil {
 		return rolePanelDetailedCommandError(fmt.Sprintf("Failed to update configuration: %v", err))
 	}

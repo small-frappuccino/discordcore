@@ -1,6 +1,7 @@
 package control
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -352,11 +353,12 @@ func TestLoggingFeatureReadinessStates(t *testing.T) {
 		t.Parallel()
 
 		srv, cm := newControlTestServer(t)
-		_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+		_, err := cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 			cfg.Guilds[0].Channels.MemberJoin = "join-channel"
 			cfg.Guilds[0].RuntimeConfig.DisableEntryExitLogs = true
 			return nil
 		})
+
 		if err != nil {
 			t.Fatalf("seed runtime kill switch: %v", err)
 		}
@@ -376,10 +378,11 @@ func TestLoggingFeatureReadinessStates(t *testing.T) {
 		t.Parallel()
 
 		srv, cm := newControlTestServer(t)
-		_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+		_, err := cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 			cfg.Guilds[0].Channels.MemberJoin = "join-channel"
 			return nil
 		})
+
 		if err != nil {
 			t.Fatalf("seed member_join channel: %v", err)
 		}
@@ -402,11 +405,12 @@ func TestLoggingFeatureReadinessStates(t *testing.T) {
 		t.Parallel()
 
 		srv, cm := newControlTestServer(t)
-		_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+		_, err := cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 			cfg.Guilds[0].Channels.ModerationCase = "shared-channel"
 			cfg.Guilds[0].Channels.AvatarLogging = "shared-channel"
 			return nil
 		})
+
 		if err != nil {
 			t.Fatalf("seed shared moderation channel: %v", err)
 		}
@@ -426,12 +430,13 @@ func TestLoggingFeatureReadinessStates(t *testing.T) {
 		t.Parallel()
 
 		srv, cm := newControlTestServer(t)
-		_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+		_, err := cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 			cfg.Guilds[0].Features.Logging.CleanAction = testBoolPtr(true)
 			cfg.Guilds[0].Channels.CleanAction = "clean-log"
 			cfg.Guilds[0].RuntimeConfig.DisableCleanLog = true
 			return nil
 		})
+
 		if err != nil {
 			t.Fatalf("seed clean action config: %v", err)
 		}
@@ -480,11 +485,12 @@ func TestModerationCommandFeatureReadinessStates(t *testing.T) {
 		t.Parallel()
 
 		srv, cm := newControlTestServer(t)
-		_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+		_, err := cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 			cfg.Guilds[0].Features.Moderation.Ban = testBoolPtr(true)
 			cfg.Guilds[0].Features.Services.Commands = testBoolPtr(false)
 			return nil
 		})
+
 		if err != nil {
 			t.Fatalf("seed moderation command config: %v", err)
 		}
@@ -507,11 +513,12 @@ func TestModerationCommandFeatureReadinessStates(t *testing.T) {
 		t.Parallel()
 
 		srv, cm := newControlTestServer(t)
-		_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+		_, err := cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 			cfg.Guilds[0].Features.Moderation.Ban = testBoolPtr(true)
 			cfg.Guilds[0].Features.Services.Commands = testBoolPtr(true)
 			return nil
 		})
+
 		if err != nil {
 			t.Fatalf("seed moderation command config: %v", err)
 		}
@@ -656,11 +663,12 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 		t.Parallel()
 
 		srv, cm := newControlTestServer(t)
-		_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+		_, err := cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 			cfg.Guilds[0].Features.MuteRole = testBoolPtr(true)
 			cfg.Guilds[0].Roles.MuteRole = ""
 			return nil
 		})
+
 		if err != nil {
 			t.Fatalf("seed mute role config: %v", err)
 		}
@@ -680,11 +688,12 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 		t.Parallel()
 
 		srv, cm := newControlTestServer(t)
-		_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+		_, err := cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 			cfg.Guilds[0].Features.MuteRole = testBoolPtr(true)
 			cfg.Guilds[0].Roles.MuteRole = "mute-role"
 			return nil
 		})
+
 		if err != nil {
 			t.Fatalf("seed mute role config: %v", err)
 		}
@@ -711,11 +720,12 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 		t.Parallel()
 
 		srv, cm := newControlTestServer(t)
-		_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+		_, err := cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 			cfg.Guilds[0].Features.MuteRole = testBoolPtr(true)
 			cfg.Guilds[0].Roles.MuteRole = "mute-role"
 			return nil
 		})
+
 		if err != nil {
 			t.Fatalf("seed mute role config: %v", err)
 		}
@@ -745,7 +755,7 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 		t.Parallel()
 
 		srv, cm := newControlTestServer(t)
-		_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+		_, err := cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 
 			cfg.Guilds[0].Stats.Channels = []files.StatsChannelConfig{
 				{
@@ -762,6 +772,7 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 			}
 			return nil
 		})
+
 		if err != nil {
 			t.Fatalf("seed stats config: %v", err)
 		}
@@ -800,7 +811,7 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 		t.Parallel()
 
 		srv, cm := newControlTestServer(t)
-		_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+		_, err := cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 
 			cfg.Guilds[0].Roles.AutoAssignment.Enabled = true
 			cfg.Guilds[0].Roles.AutoAssignment.TargetRoleID = "target-role"
@@ -808,6 +819,7 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 			cfg.Guilds[0].Roles.BoosterRole = "booster-role"
 			return nil
 		})
+
 		if err != nil {
 			t.Fatalf("seed auto role config: %v", err)
 		}
@@ -844,12 +856,13 @@ func TestGuildRoleOptionsRouteAndRoleBackedFeatureReadiness(t *testing.T) {
 		t.Parallel()
 
 		srv, cm := newControlTestServer(t)
-		_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+		_, err := cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 			cfg.Guilds[0].Features.Safety.BotRolePermMirror = testBoolPtr(true)
 			cfg.Guilds[0].RuntimeConfig.BotRolePermMirrorActorRoleID = "actor-role"
 			cfg.Guilds[0].RuntimeConfig.DisableBotRolePermMirror = false
 			return nil
 		})
+
 		if err != nil {
 			t.Fatalf("seed permission mirror config: %v", err)
 		}

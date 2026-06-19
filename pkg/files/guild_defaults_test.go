@@ -1,6 +1,7 @@
 package files
 
 import (
+	"context"
 	"testing"
 )
 
@@ -94,7 +95,7 @@ func TestEnsureMinimalGuildConfigPreservesDomainOverridesOnExistingGuild(t *test
 
 	store := &MemoryConfigStore{}
 	mgr := NewConfigManagerWithStore(store, nil)
-	if _, err := mgr.UpdateConfig(func(cfg *BotConfig) error {
+	if _, err := mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
 		cfg.Guilds = []GuildConfig{{
 			GuildID: "guild-existing",
 		}}

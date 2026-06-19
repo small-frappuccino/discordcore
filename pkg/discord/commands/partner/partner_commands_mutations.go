@@ -1,6 +1,7 @@
 package partner
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -69,7 +70,7 @@ func (c *partnerAddSubCommand) Handle(ctx *core.Context) error {
 	}
 
 	entry := files.PartnerEntryConfig{Name: name, Fandom: fandom, Link: link}
-	if _, err := c.configManager.UpdateConfig(func(cfg *files.BotConfig) error {
+	if _, err := c.configManager.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		for i := range cfg.Guilds {
 			if cfg.Guilds[i].GuildID == ctx.GuildID {
 				cfg.Guilds[i].PartnerBoard.Partners = append(cfg.Guilds[i].PartnerBoard.Partners, entry)
@@ -126,7 +127,7 @@ func (c *partnerRemoveSubCommand) Handle(ctx *core.Context) error {
 	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
 	name, _ := extractor.StringRequired(optionName)
 
-	if _, err := c.configManager.UpdateConfig(func(cfg *files.BotConfig) error {
+	if _, err := c.configManager.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		for idx := range cfg.Guilds {
 			if cfg.Guilds[idx].GuildID == ctx.GuildID {
 				bc := &cfg.Guilds[idx].PartnerBoard
@@ -198,7 +199,7 @@ func (c *partnerLinkSubCommand) Handle(ctx *core.Context) error {
 	name, _ := extractor.StringRequired(optionName)
 	link, _ := extractor.StringRequired(optionLink)
 
-	if _, err := c.configManager.UpdateConfig(func(cfg *files.BotConfig) error {
+	if _, err := c.configManager.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		for idx := range cfg.Guilds {
 			if cfg.Guilds[idx].GuildID == ctx.GuildID {
 				bc := &cfg.Guilds[idx].PartnerBoard
@@ -281,7 +282,7 @@ func (c *partnerRenameSubCommand) Handle(ctx *core.Context) error {
 		return partnerDetailedCommandError("New name must not be empty.")
 	}
 
-	if _, err := c.configManager.UpdateConfig(func(cfg *files.BotConfig) error {
+	if _, err := c.configManager.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		for idx := range cfg.Guilds {
 			if cfg.Guilds[idx].GuildID == ctx.GuildID {
 				bc := &cfg.Guilds[idx].PartnerBoard

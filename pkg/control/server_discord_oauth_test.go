@@ -1003,7 +1003,7 @@ func TestGuildRoutesAllowReadOnlyOAuthAccessForGetAndDenyWrites(t *testing.T) {
 			},
 		)
 	})
-	if _, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+	if _, err := cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		for index := range cfg.Guilds {
 			if strings.TrimSpace(cfg.Guilds[index].GuildID) != "g1" {
 				continue
@@ -1632,7 +1632,7 @@ func TestDiscordOAuthGuildAccessEndpoints(t *testing.T) {
 			},
 		)
 	})
-	if _, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+	if _, err := cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		cfg.Guilds = append(cfg.Guilds, files.GuildConfig{
 			GuildID: "g-read",
 			Roles: files.RolesConfig{

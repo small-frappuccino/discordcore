@@ -2,6 +2,7 @@ package files
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -776,7 +777,7 @@ func (rc RuntimeConfig) ModerationLoggingEnabled() bool {
 }
 
 // ConfigSubscriber receives notifications when the bot configuration changes.
-type ConfigSubscriber func(oldCfg, newCfg *BotConfig)
+type ConfigSubscriber func(ctx context.Context, oldCfg, newCfg *BotConfig) error
 
 // ConfigManager handles bot configuration management.
 //
@@ -900,7 +901,7 @@ func (mgr *ConfigManager) SetRolesCacheTTL(guildID string, ttl string) error {
 			return fmt.Errorf("invalid ttl: %w", err)
 		}
 	}
-	_, err := mgr.UpdateConfig(func(cfg *BotConfig) error {
+	_, err := mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
 		gcfg, err := guildConfigByID(cfg, guildID)
 		if err != nil {
 			return fmt.Errorf("guild not found")
@@ -908,6 +909,7 @@ func (mgr *ConfigManager) SetRolesCacheTTL(guildID string, ttl string) error {
 		gcfg.RolesCacheTTL = ttl
 		return nil
 	})
+
 	return err
 }
 

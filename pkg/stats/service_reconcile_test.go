@@ -38,7 +38,7 @@ func (m *mockGateway) StreamGuildMembers(ctx context.Context, guildID string) it
 func TestReconcileGuild(t *testing.T) {
 
 	cm := newTestConfigManager(t)
-	_, _ = cm.UpdateConfig(func(cfg *files.BotConfig) error {
+	_, _ = cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
 			{
 				GuildID: "guild-stats-main",
@@ -101,7 +101,7 @@ func TestReconcileGuild(t *testing.T) {
 func TestReconcileAllGuilds(t *testing.T) {
 
 	cm := newTestConfigManager(t)
-	_, _ = cm.UpdateConfig(func(cfg *files.BotConfig) error {
+	_, _ = cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
 			{
 				GuildID: "guild-stats-main",
@@ -120,6 +120,7 @@ func TestReconcileAllGuilds(t *testing.T) {
 		}
 		return nil
 	})
+
 	gateway := &mockGateway{}
 
 	store := newMockStateStore()

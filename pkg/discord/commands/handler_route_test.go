@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"testing"
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
@@ -10,7 +11,7 @@ import (
 func TestCommandHandlerRoutesFeaturesToCorrectBotInstance(t *testing.T) {
 	boolPtr := func(v bool) *bool { return &v }
 	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
-	if _, err := cfgMgr.UpdateConfig(func(cfg *files.BotConfig) error {
+	if _, err := cfgMgr.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
 			{
 				GuildID:           "guild-1",

@@ -55,7 +55,7 @@ func (applier *featureMutationApplier) ApplyPatch(
 		}
 	}
 
-	updated, err := applier.configManager.UpdateConfig(func(cfg *files.BotConfig) error {
+	updated, err := applier.configManager.UpdateConfig(r.Context(), func(cfg *files.BotConfig) error {
 		if guildID == "" {
 			return applier.applyGlobalPatch(cfg, def, payload)
 		}
@@ -71,6 +71,7 @@ func (applier *featureMutationApplier) ApplyPatch(
 		}
 		return applier.applyGuildPatch(cfg, guild, def, payload)
 	})
+
 	if err != nil {
 		return files.BotConfig{}, fmt.Errorf("featureMutationApplier.ApplyPatch: %w", err)
 	}

@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -287,7 +288,7 @@ func TestCommandManagerSetupCommandsUsesGuildSyncWhenBotInstanceTokensExist(t *t
 			})
 
 			cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
-			if _, err := cfgMgr.UpdateConfig(func(cfg *files.BotConfig) error {
+			if _, err := cfgMgr.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 				cfg.Guilds = []files.GuildConfig{{
 					GuildID:           "g1",
 					BotInstanceTokens: map[string]files.EncryptedString{"generic": "a"},
@@ -394,7 +395,7 @@ func TestCommandManagerSetupCommandsSkipsConfiguredGuildsMissingFromSessionState
 	session.State.Guilds = []*discordgo.Guild{{ID: "g1"}}
 
 	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
-	if _, err := cfgMgr.UpdateConfig(func(cfg *files.BotConfig) error {
+	if _, err := cfgMgr.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
 			{
 				GuildID:           "g1",

@@ -1,8 +1,11 @@
 package files
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+
+	"golang.org/x/sync/errgroup"
 )
 
 func (mgr *ConfigManager) currentPublishedSnapshot() *publishedConfigSnapshot {
@@ -83,12 +86,11 @@ func (mgr *ConfigManager) SnapshotConfig() BotConfig {
 
 // UpdateConfig applies a full-config mutation transactionally and persists the
 // result. On error, in-memory state is restored to the previous snapshot.
-func (mgr *ConfigManager) UpdateConfig(fn func(*BotConfig) error) (BotConfig, error) {
+func (mgr *ConfigManager) UpdateConfig(ctx context.Context, fn func(*BotConfig) error) (BotConfig, error) {
 	if mgr == nil {
 		return BotConfig{}, fmt.Errorf("config manager is nil")
 	}
 	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
 
 	if mgr.config == nil {
 		mgr.config = &BotConfig{Guilds: []GuildConfig{}}
@@ -100,6 +102,7 @@ func (mgr *ConfigManager) UpdateConfig(fn func(*BotConfig) error) (BotConfig, er
 
 	if fn != nil {
 		if err := fn(next); err != nil {
+			mgr.mu.Unlock()
 			return BotConfig{}, fmt.Errorf("ConfigManager.UpdateConfig: %w", err)
 		}
 	}
@@ -114,13 +117,19 @@ func (mgr *ConfigManager) UpdateConfig(fn func(*BotConfig) error) (BotConfig, er
 		mgr.config = previous
 		mgr.guildIndex = previousIndex
 		mgr.publishSnapshotLocked()
+		mgr.mu.Unlock()
 		return BotConfig{}, fmt.Errorf("ConfigManager.UpdateConfig: %w", err)
 	}
 
 	snapshot := mgr.publishSnapshotLocked()
+	mgr.mu.Unlock() // Release lock before notifying subscribers
 
-	// Notify subscribers asynchronously
-	mgr.notifySubscribersLocked(previous, snapshot.config)
+	// Notify subscribers asynchronously with context propagation
+	if err := mgr.notifySubscribers(ctx, previous, snapshot.config); err != nil {
+		// We do not rollback the persistence since it was already saved,
+		// but we return the propagation error to inform the caller
+		return cloneBotConfig(*snapshot.config), fmt.Errorf("ConfigManager.UpdateConfig (propagation error): %w", err)
+	}
 
 	if snapshot == nil || snapshot.config == nil {
 		return BotConfig{Guilds: []GuildConfig{}}, nil
@@ -138,17 +147,40 @@ func (mgr *ConfigManager) AddSubscriber(sub ConfigSubscriber) {
 	mgr.subscribers = append(mgr.subscribers, sub)
 }
 
-func (mgr *ConfigManager) notifySubscribersLocked(oldCfg, newCfg *BotConfig) {
+func (mgr *ConfigManager) notifySubscribers(ctx context.Context, oldCfg, newCfg *BotConfig) error {
+	mgr.mu.Lock()
 	if len(mgr.subscribers) == 0 {
-		return
+		mgr.mu.Unlock()
+		return nil
 	}
-	// Copy to avoid holding the lock during execution or referencing it unsafely
 	subs := make([]ConfigSubscriber, len(mgr.subscribers))
 	copy(subs, mgr.subscribers)
+	mgr.mu.Unlock()
 
-	for _, sub := range subs {
-		go sub(oldCfg, newCfg)
+	eg, egCtx := errgroup.WithContext(ctx)
+	eg.SetLimit(10)
+
+	for _, subscriber := range subs {
+		sub := subscriber
+		eg.Go(func() (err error) {
+			defer func() {
+				if r := recover(); r != nil {
+					err = fmt.Errorf("subscriber panic intercepted: %v", r)
+				}
+			}()
+
+			if subErr := sub(egCtx, oldCfg, newCfg); subErr != nil {
+				return fmt.Errorf("subscriber execution failed: %w", subErr)
+			}
+			return nil
+		})
 	}
+
+	if err := eg.Wait(); err != nil {
+		// Return error so UpdateConfig caller knows synchronization failed
+		return err
+	}
+	return nil
 }
 
 func cloneBotConfigPtr(in *BotConfig) *BotConfig {

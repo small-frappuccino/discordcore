@@ -1,6 +1,7 @@
 package control
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"testing"
@@ -15,7 +16,7 @@ func TestStatsChannelsWorkspaceExposesFullConfig(t *testing.T) {
 	t.Parallel()
 
 	srv, cm := newControlTestServer(t)
-	_, err := cm.UpdateConfig(func(cfg *files.BotConfig) error {
+	_, err := cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 
 		cfg.Guilds[0].Stats.Channels = []files.StatsChannelConfig{
 			{ChannelID: "vc-total", Label: "Server Total", NameTemplate: "{label}: {count}", MemberType: "all"},
@@ -24,6 +25,7 @@ func TestStatsChannelsWorkspaceExposesFullConfig(t *testing.T) {
 		}
 		return nil
 	})
+
 	if err != nil {
 		t.Fatalf("seed stats config: %v", err)
 	}

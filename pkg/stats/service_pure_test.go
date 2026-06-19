@@ -96,7 +96,7 @@ func (m *mockStateStore) HeartbeatForBot(ctx context.Context, botInstanceID stri
 
 func TestHandlesGuild(t *testing.T) {
 	cm := newTestConfigManager(t)
-	_, _ = cm.UpdateConfig(func(cfg *files.BotConfig) error {
+	_, _ = cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
 			{GuildID: "g1", BotInstanceTokens: map[string]files.EncryptedString{"generic": "token"}, FeatureRouting: map[string]string{"stats": "generic"}},
 			{GuildID: "g2", BotInstanceTokens: map[string]files.EncryptedString{"other": "token"}, FeatureRouting: map[string]string{"stats": "other"}},
@@ -371,7 +371,7 @@ func TestStatsGuildStateMemoryHelpers(t *testing.T) {
 
 func TestStatsReconcileInterval(t *testing.T) {
 	cm := newTestConfigManager(t)
-	_, _ = cm.UpdateConfig(func(cfg *files.BotConfig) error {
+	_, _ = cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
 			{
 				GuildID:           "g1",
@@ -382,6 +382,7 @@ func TestStatsReconcileInterval(t *testing.T) {
 		}
 		return nil
 	})
+
 	_ = NewStatsService(nil, cm, newMockStateStore(), slog.Default(), "generic")
 
 	if statsReconcileInterval() != defaultStatsReconcileInterval {

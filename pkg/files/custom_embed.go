@@ -1,6 +1,7 @@
 package files
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -329,7 +330,7 @@ func (mgr *ConfigManager) SetCustomEmbedProperties(guildID, key string, embed Cu
 		return fmt.Errorf("ConfigManager.SetCustomEmbedProperties: %w", err)
 	}
 
-	_, err = mgr.UpdateConfig(func(cfg *BotConfig) error {
+	_, err = mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
 		gc, err := guildConfigByID(cfg, guildID)
 		if err != nil {
 			return fmt.Errorf("ConfigManager.SetCustomEmbedProperties: %w", err)
@@ -373,6 +374,7 @@ func (mgr *ConfigManager) SetCustomEmbedProperties(guildID, key string, embed Cu
 		}
 		return nil
 	})
+
 	return err
 }
 
@@ -387,7 +389,7 @@ func (mgr *ConfigManager) DeleteCustomEmbed(guildID, key string) (CustomEmbedCon
 	}
 
 	var deleted CustomEmbedConfig
-	_, err = mgr.UpdateConfig(func(cfg *BotConfig) error {
+	_, err = mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
 		gc, err := guildConfigByID(cfg, guildID)
 		if err != nil {
 			return fmt.Errorf("ConfigManager.DeleteCustomEmbed: %w", err)
@@ -402,6 +404,7 @@ func (mgr *ConfigManager) DeleteCustomEmbed(guildID, key string) (CustomEmbedCon
 		gc.CustomEmbeds = append(gc.CustomEmbeds[:idx], gc.CustomEmbeds[idx+1:]...)
 		return nil
 	})
+
 	return deleted, err
 }
 
@@ -418,7 +421,7 @@ func (mgr *ConfigManager) AddCustomEmbedPosting(guildID, key string, posting Cus
 		return fmt.Errorf("ConfigManager.AddCustomEmbedPosting: %w", err)
 	}
 
-	_, err = mgr.UpdateConfig(func(cfg *BotConfig) error {
+	_, err = mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
 		gc, err := guildConfigByID(cfg, guildID)
 		if err != nil {
 			return fmt.Errorf("ConfigManager.AddCustomEmbedPosting: %w", err)
@@ -447,6 +450,7 @@ func (mgr *ConfigManager) AddCustomEmbedPosting(guildID, key string, posting Cus
 		})
 		return nil
 	})
+
 	return err
 }
 
@@ -464,7 +468,7 @@ func (mgr *ConfigManager) RemoveCustomEmbedPosting(guildID, key, messageID strin
 		return fmt.Errorf("ConfigManager.RemoveCustomEmbedPosting: %w", err)
 	}
 
-	_, err = mgr.UpdateConfig(func(cfg *BotConfig) error {
+	_, err = mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
 		gc, err := guildConfigByID(cfg, guildID)
 		if err != nil {
 			return fmt.Errorf("ConfigManager.RemoveCustomEmbedPosting: %w", err)
@@ -484,6 +488,7 @@ func (mgr *ConfigManager) RemoveCustomEmbedPosting(guildID, key, messageID strin
 		}
 		return fmt.Errorf("%w: message_id=%s", ErrCustomEmbedPostingNotFound, msgID)
 	})
+
 	return err
 }
 
@@ -511,7 +516,7 @@ func (mgr *ConfigManager) RemoveCustomEmbedPostings(guildID, key string, message
 		return nil
 	}
 
-	_, err = mgr.UpdateConfig(func(cfg *BotConfig) error {
+	_, err = mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
 		gc, err := guildConfigByID(cfg, guildID)
 		if err != nil {
 			return fmt.Errorf("ConfigManager.RemoveCustomEmbedPostings: %w", err)
@@ -532,6 +537,7 @@ func (mgr *ConfigManager) RemoveCustomEmbedPostings(guildID, key string, message
 		embed.Postings = kept
 		return nil
 	})
+
 	return err
 }
 
@@ -558,7 +564,7 @@ func (mgr *ConfigManager) SetCustomEmbedFields(guildID, key string, fields []Cus
 		normalized = append(normalized, nf)
 	}
 
-	_, err = mgr.UpdateConfig(func(cfg *BotConfig) error {
+	_, err = mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
 		gc, err := guildConfigByID(cfg, guildID)
 		if err != nil {
 			return fmt.Errorf("ConfigManager.SetCustomEmbedFields: %w", err)
@@ -579,6 +585,7 @@ func (mgr *ConfigManager) SetCustomEmbedFields(guildID, key string, fields []Cus
 		gc.CustomEmbeds[idx] = copyEmbed
 		return nil
 	})
+
 	return err
 }
 
@@ -636,7 +643,7 @@ func (mgr *ConfigManager) AddCustomEmbedField(guildID, key string, field CustomE
 		return fmt.Errorf("ConfigManager.AddCustomEmbedField: %w", err)
 	}
 
-	_, err = mgr.UpdateConfig(func(cfg *BotConfig) error {
+	_, err = mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
 		gc, err := guildConfigByID(cfg, scope)
 		if err != nil {
 			return fmt.Errorf("ConfigManager.AddCustomEmbedField: %w", err)
@@ -659,6 +666,7 @@ func (mgr *ConfigManager) AddCustomEmbedField(guildID, key string, field CustomE
 		gc.CustomEmbeds[idx] = copyEmbed
 		return nil
 	})
+
 	return err
 }
 
@@ -673,7 +681,7 @@ func (mgr *ConfigManager) RemoveCustomEmbedField(guildID, key string, fieldIndex
 		return fmt.Errorf("ConfigManager.RemoveCustomEmbedField: %w", err)
 	}
 
-	_, err = mgr.UpdateConfig(func(cfg *BotConfig) error {
+	_, err = mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
 		gc, err := guildConfigByID(cfg, scope)
 		if err != nil {
 			return fmt.Errorf("ConfigManager.RemoveCustomEmbedField: %w", err)
@@ -689,6 +697,7 @@ func (mgr *ConfigManager) RemoveCustomEmbedField(guildID, key string, fieldIndex
 		gc.CustomEmbeds[idx].Fields = append(fields[:fieldIndex], fields[fieldIndex+1:]...)
 		return nil
 	})
+
 	return err
 }
 
