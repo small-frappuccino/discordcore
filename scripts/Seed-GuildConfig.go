@@ -10,6 +10,7 @@ import (
 )
 
 func boolPtr(b bool) *bool { return &b }
+func intPtr(i int) *int { return &i }
 
 func main() {
 	dbURL := flag.String("db", "", "Postgres database URL to seed")
@@ -32,18 +33,26 @@ func main() {
 	}
 
 	cfg := files.GuildConfig{
-		GuildID: "1375650791251120179",
+		GuildID:       "1375650791251120179",
+		BotInstanceID: "main",
+		DomainBotInstanceIDs: map[string]string{
+			"qotd": "companion",
+		},
 		Channels: files.ChannelsConfig{
 			RoleUpdate:    "1397390179492171806",
 			AvatarLogging: "1397390179492171806",
-			MessageEdit:   "1413465672708657216",
-			MessageDelete: "1413465672708657216",
+			MemberJoin:    "1413465672708657216",
+			MemberLeave:   "1413465672708657216",
+			MessageEdit:   "1396973382372687983",
+			MessageDelete: "1396973382372687983",
 			AutomodAction: "1396973495715631287",
 		},
 		Features: files.FeatureToggles{
 			Logging: files.FeatureLoggingToggles{
 				RoleUpdate:    boolPtr(true),
 				AvatarLogging: boolPtr(true),
+				MemberJoin:    boolPtr(true),
+				MemberLeave:   boolPtr(true),
 				MessageEdit:   boolPtr(true),
 				MessageDelete: boolPtr(true),
 				AutomodAction: boolPtr(true),
@@ -87,6 +96,21 @@ func main() {
 					NameTemplate: "{label}: {count}",
 					MemberType:   "bots",
 				},
+			},
+		},
+		QOTD: files.QOTDConfig{
+			ActiveDeckID: "default",
+			Decks: []files.QOTDDeckConfig{
+				{
+					ID:        "default",
+					Name:      "Default",
+					Enabled:   true,
+					ChannelID: "1376373100622512148",
+				},
+			},
+			Schedule: files.QOTDPublishScheduleConfig{
+				HourUTC:   intPtr(12),
+				MinuteUTC: intPtr(43),
 			},
 		},
 	}
