@@ -485,7 +485,11 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token, status str
 		}
 
 		errStr := err.Error()
-		if strings.Contains(errStr, "401") || strings.Contains(errStr, "4004") || strings.Contains(strings.ToLower(errStr), "authentication failed") {
+		isAuthFail := strings.Contains(errStr, "4004") ||
+			strings.Contains(strings.ToLower(errStr), "authentication failed") ||
+			(strings.Contains(errStr, "401") && !strings.Contains(errStr, "4014"))
+
+		if isAuthFail {
 			s.log().Error("Instance authentication compromised, triggering token revocation in configuration",
 				slog.String("request_id", "auth_bot_"+instanceID),
 				slog.Int("synthetic_status_code", 500),

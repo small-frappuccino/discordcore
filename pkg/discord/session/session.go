@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordgo"
@@ -75,7 +76,12 @@ func NewDiscordSessionWithIntents(token string, intents discordgo.Intent) (*disc
 	// Add detailed logging for session creation
 	log.DiscordLogger().Info("Creating Discord session (token redacted)")
 
-	s, err := newSession("Bot " + token)
+	tokenStr := strings.TrimSpace(token)
+	if strings.HasPrefix(tokenStr, "Bot ") {
+		tokenStr = strings.TrimPrefix(tokenStr, "Bot ")
+	}
+
+	s, err := newSession("Bot " + tokenStr)
 	if err != nil {
 		log.ErrorLoggerRaw().Error(fmt.Sprintf("Failed to create Discord session: %v", err))
 		return nil, fmt.Errorf(ErrSessionCreationFailed, err)

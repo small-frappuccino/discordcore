@@ -60,7 +60,10 @@ func (s *Server) handleGuildBotProfilesGet(w http.ResponseWriter, r *http.Reques
 				return
 			}
 			errStr := err.Error()
-			if strings.Contains(errStr, "401") || strings.Contains(errStr, "4004") || strings.Contains(strings.ToLower(errStr), "authentication failed") {
+			isAuthFail := strings.Contains(errStr, "4004") ||
+				strings.Contains(strings.ToLower(errStr), "authentication failed") ||
+				(strings.Contains(errStr, "401") && !strings.Contains(errStr, "4014"))
+			if isAuthFail {
 				s.log().LogAttrs(r.Context(), slog.LevelWarn, "Bot token rejected by Discord, revoking from configuration", slog.String("guildID", guildID), slog.String("instanceID", instanceID), slog.Any("err", err))
 				_ = s.configManager.RevokeBotInstance(instanceID, token)
 				continue

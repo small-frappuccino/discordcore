@@ -230,6 +230,14 @@ func buildLogFeatureReadiness(
 		return logDecisionToReadiness(decision)
 	}
 
+	if decision.Capability.RequireExclusiveModeration && decision.ChannelID != "" {
+		gcfg := configManager.GuildConfig(guildID)
+		if logging.IsSharedModerationChannel(decision.ChannelID, gcfg) {
+			decision.Reason = logging.EmitReasonChannelInvalid
+			return logDecisionToReadiness(decision)
+		}
+	}
+
 	if decision.Capability.RequiredIntentsMask != 0 && session != nil {
 		currentMask := int(session.Identify.Intents)
 		missing := int(decision.Capability.RequiredIntentsMask) &^ currentMask
