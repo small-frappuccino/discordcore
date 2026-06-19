@@ -276,6 +276,19 @@ func (sm *ServiceManager) Fatal(err error) {
 	})
 }
 
+// RunBackground runs a function in the background tracked by the manager's errgroup.
+func (sm *ServiceManager) RunBackground(fn func(context.Context)) {
+	sm.eg.Go(func() error {
+		defer func() {
+			if r := recover(); r != nil {
+				sm.log().Error("panic in background task", "panic", r)
+			}
+		}()
+		fn(sm.ctx)
+		return nil
+	})
+}
+
 // Wait blocks until the service manager's error group finishes.
 func (sm *ServiceManager) Wait() error {
 	return sm.eg.Wait()
@@ -561,7 +574,10 @@ func (sm *ServiceManager) performHealthChecks() {
 	sm.mu.RUnlock()
 
 	for _, info := range runningServices {
-		go sm.checkServiceHealth(info)
+		i := info
+		sm.RunBackground(func(ctx context.Context) {
+			sm.checkServiceHealth(i)
+		})
 	}
 }
 
@@ -580,12 +596,12 @@ func (sm *ServiceManager) checkServiceHealth(info *ServiceInfo) {
 		info.ErrorCount++
 		if info.RestartCount < sm.maxRestarts {
 			sm.mu.Unlock()
-			go func() {
+			sm.RunBackground(func(ctx context.Context) {
 				sm.log().Warn("Attempting to restart unhealthy service", "service", info.Service.Name())
-				if err := sm.RestartService(context.Background(), info.Service.Name()); err != nil {
+				if err := sm.RestartService(ctx, info.Service.Name()); err != nil {
 					sm.log().Error("Failed to restart unhealthy service", "service", info.Service.Name(), "err", err)
 				}
-			}()
+			})
 		} else {
 			sm.mu.Unlock()
 			sm.log().Error("Service exceeded maximum restart attempts", "service", info.Service.Name())

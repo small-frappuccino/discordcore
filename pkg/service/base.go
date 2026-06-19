@@ -103,22 +103,7 @@ func (bs *BaseService) Start(ctx context.Context) error {
 	var startErr error
 	// Call the start hook if provided
 	if bs.startHook != nil {
-		errCh := make(chan error, 1)
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					errCh <- fmt.Errorf("panic in start hook: %v", r)
-				}
-			}()
-			errCh <- bs.startHook(ctx)
-		}()
-
-		select {
-		case err := <-errCh:
-			startErr = err
-		case <-ctx.Done():
-			startErr = ctx.Err()
-		}
+		startErr = ExecuteOrchestration(ctx, bs.startHook)
 	}
 
 	bs.stateMutex.Lock()
@@ -159,22 +144,7 @@ func (bs *BaseService) Stop(ctx context.Context) error {
 	var stopErr error
 	// Call the stop hook if provided
 	if bs.stopHook != nil {
-		errCh := make(chan error, 1)
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					errCh <- fmt.Errorf("panic in stop hook: %v", r)
-				}
-			}()
-			errCh <- bs.stopHook(ctx)
-		}()
-
-		select {
-		case err := <-errCh:
-			stopErr = err
-		case <-ctx.Done():
-			stopErr = ctx.Err()
-		}
+		stopErr = ExecuteOrchestration(ctx, bs.stopHook)
 	}
 
 	bs.stateMutex.Lock()
@@ -457,11 +427,15 @@ func (ms *ManagedService) HandleError(err error) {
 	if ms.autoRestart && ms.restartCount < ms.maxRestarts {
 		// Use the package logger (simple categories are available)
 		ms.log().Warn("Service error detected, attempting restart", "service", ms.name, "err", err)
-		go func() {
-			time.Sleep(ms.restartDelay)
-			if restartErr := ms.manager.RestartService(context.Background(), ms.name); restartErr != nil {
+		ms.manager.RunBackground(func(ctx context.Context) {
+			select {
+			case <-time.After(ms.restartDelay):
+			case <-ctx.Done():
+				return
+			}
+			if restartErr := ms.manager.RestartService(ctx, ms.name); restartErr != nil {
 				ms.log().Error("Failed to restart service after error", "service", ms.name, "err", restartErr)
 			}
-		}()
+		})
 	}
 }
