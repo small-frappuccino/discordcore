@@ -71,7 +71,6 @@ type EmitReason string
 // EmitReasonGuildConfigMissing defines emit reason guild config missing.
 // EmitReasonFeatureLoggingEntryExitDisabled defines emit reason feature logging entry exit disabled.
 // EmitReasonRuntimeDisableReactionLogs defines emit reason runtime disable reaction logs.
-// EmitReasonRuntimeDisableAutomodLogs defines emit reason runtime disable automod logs.
 // EmitReasonRuntimeModerationLoggingOff defines emit reason runtime moderation logging off.
 // EmitReasonRuntimeDisableCleanLog defines emit reason runtime disable clean log.
 // EmitReasonNoChannelConfigured defines emit reason no channel configured.
@@ -96,7 +95,6 @@ const (
 	EmitReasonRuntimeDisableEntryExitLogs      EmitReason = "runtime_disable_entry_exit_logs"
 	EmitReasonRuntimeDisableMessageLogs        EmitReason = "runtime_disable_message_logs"
 	EmitReasonRuntimeDisableReactionLogs       EmitReason = "runtime_disable_reaction_logs"
-	EmitReasonRuntimeDisableAutomodLogs        EmitReason = "runtime_disable_automod_logs"
 	EmitReasonRuntimeModerationLoggingOff      EmitReason = "runtime_moderation_logging_off"
 	EmitReasonRuntimeDisableCleanLog           EmitReason = "runtime_disable_clean_log"
 	EmitReasonNoChannelConfigured              EmitReason = "no_channel_configured"
@@ -358,9 +356,7 @@ func evaluateEventToggle(eventType LogEventType, rc files.RuntimeConfig, feature
 			return EmitReasonRuntimeDisableReactionLogs, true
 		}
 	case LogEventAutomodAction:
-		if rc.DisableAutomodLogs {
-			return EmitReasonRuntimeDisableAutomodLogs, true
-		}
+		// No runtime config disable override for automod logs.
 	case LogEventModerationCase:
 		if !rc.ModerationLoggingEnabled() {
 			return EmitReasonRuntimeModerationLoggingOff, true

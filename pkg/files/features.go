@@ -9,7 +9,6 @@ import (
 // When unset, defaults preserve current behavior.
 type FeatureServiceToggles struct {
 	Monitoring *bool `json:"monitoring,omitempty"`
-	Automod    *bool `json:"automod,omitempty"`
 	Commands   *bool `json:"commands,omitempty"`
 }
 
@@ -105,7 +104,6 @@ func (ft *FeatureToggles) UnmarshalJSON(data []byte) error {
 type ResolvedFeatureToggles struct {
 	Services struct {
 		Monitoring bool
-		Automod    bool
 		Commands   bool
 	}
 	Logging struct {

@@ -163,7 +163,6 @@ const (
 
 	// SERVICES (LOGGING)
 	runtimeKeyDisableDBCleanup     runtimeKey = "disable_db_cleanup"
-	runtimeKeyDisableAutomodLogs   runtimeKey = "disable_automod_logs"
 	runtimeKeyDisableMessageLogs   runtimeKey = "disable_message_logs"
 	runtimeKeyDisableEntryExitLogs runtimeKey = "disable_entry_exit_logs"
 	runtimeKeyDisableReactionLogs  runtimeKey = "disable_reaction_logs"
@@ -325,8 +324,6 @@ func getValue(rc files.RuntimeConfig, k runtimeKey) (string, bool) {
 
 	case runtimeKeyDisableDBCleanup:
 		return fmtBool(rc.DisableDBCleanup), true
-	case runtimeKeyDisableAutomodLogs:
-		return fmtBool(rc.DisableAutomodLogs), true
 	case runtimeKeyDisableMessageLogs:
 		return fmtBool(rc.DisableMessageLogs), true
 	case runtimeKeyDisableEntryExitLogs:
@@ -375,9 +372,6 @@ func resetValue(rc files.RuntimeConfig, k runtimeKey) (files.RuntimeConfig, bool
 
 	case runtimeKeyDisableDBCleanup:
 		rc.DisableDBCleanup = false
-		return rc, true
-	case runtimeKeyDisableAutomodLogs:
-		rc.DisableAutomodLogs = false
 		return rc, true
 	case runtimeKeyDisableMessageLogs:
 		rc.DisableMessageLogs = false
@@ -534,8 +528,6 @@ func setBool(rc files.RuntimeConfig, k runtimeKey, v bool) (files.RuntimeConfig,
 	switch k {
 	case runtimeKeyDisableDBCleanup:
 		rc.DisableDBCleanup = v
-	case runtimeKeyDisableAutomodLogs:
-		rc.DisableAutomodLogs = v
 	case runtimeKeyDisableMessageLogs:
 		rc.DisableMessageLogs = v
 	case runtimeKeyDisableEntryExitLogs:

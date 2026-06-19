@@ -99,7 +99,7 @@ func resolveBotRuntimeCapabilities(
 			}
 		}
 
-		if features.Services.Automod && guild.Channels.AutomodAction != "" && !runtimeConfig.DisableAutomodLogs {
+		if guild.Channels.AutomodAction != "" {
 			resolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation")
 			if resolvedID == botInstanceID {
 				capabilities.automod = true
@@ -819,12 +819,6 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 func buildAutomodService(runtime *botRuntime, opts botRuntimeOptions, routerConfig task.RouterConfig, runtimeConfig files.RuntimeConfig) service.Service {
 	if !runtime.capabilities.automod {
 		slog.Info("Architectural state bypass: Automod service skipped due to explicit capability flags",
-			slog.String("botInstanceID", runtime.instanceID),
-		)
-		return nil
-	}
-	if runtimeConfig.DisableAutomodLogs {
-		slog.Info("Architectural state bypass: Automod logs strictly disabled via configuration manifest",
 			slog.String("botInstanceID", runtime.instanceID),
 		)
 		return nil

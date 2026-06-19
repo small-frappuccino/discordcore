@@ -195,7 +195,6 @@ func TestRun_CascadingRollbackFailures(t *testing.T) {
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
 				Monitoring: new(bool(false)),
-				Automod:    new(bool(false)),
 				Commands:   new(bool(true)),
 			},
 			Maintenance: files.FeatureMaintenanceToggles{
@@ -305,7 +304,6 @@ func TestRun_ResourceCleanupOnBootFailure(t *testing.T) {
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
 				Monitoring: new(bool(false)),
-				Automod:    new(bool(false)),
 				Commands:   new(bool(true)),
 			},
 			Maintenance: files.FeatureMaintenanceToggles{

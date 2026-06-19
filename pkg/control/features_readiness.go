@@ -279,7 +279,6 @@ func logDecisionToReadiness(decision logging.EmitDecision) (string, []featureBlo
 		logging.EmitReasonRuntimeDisableEntryExitLogs,
 		logging.EmitReasonRuntimeDisableMessageLogs,
 		logging.EmitReasonRuntimeDisableReactionLogs,
-		logging.EmitReasonRuntimeDisableAutomodLogs,
 		logging.EmitReasonRuntimeModerationLoggingOff,
 		logging.EmitReasonRuntimeDisableCleanLog:
 		return "blocked", []featureBlocker{{Code: "runtime_kill_switch", Message: "A runtime kill switch currently disables this feature."}}
@@ -317,9 +316,6 @@ func globalLogRuntimeBlocker(rc files.RuntimeConfig, eventType logging.LogEventT
 			return featureBlocker{Code: "runtime_kill_switch", Message: "Runtime reaction logging is disabled."}, true
 		}
 	case logging.LogEventAutomodAction:
-		if rc.DisableAutomodLogs {
-			return featureBlocker{Code: "runtime_kill_switch", Message: "Runtime AutoMod logging is disabled."}, true
-		}
 	case logging.LogEventModerationCase:
 		if !rc.ModerationLoggingEnabled() {
 			return featureBlocker{Code: "runtime_kill_switch", Message: "Runtime moderation logging is disabled."}, true

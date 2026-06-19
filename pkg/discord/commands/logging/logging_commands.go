@@ -61,6 +61,18 @@ func (c *loggingRootCommand) Options() []discord.CommandOption {
 			},
 		},
 		&discord.SubcommandOption{
+			OptionName:  "role_update",
+			Description: "Configure role update logging",
+			Options: []discord.CommandOptionValue{
+				&discord.ChannelOption{
+					OptionName:   "channel",
+					Description:  "Channel to send role updates to",
+					Required:     true,
+					ChannelTypes: []discord.ChannelType{discord.GuildText},
+				},
+			},
+		},
+		&discord.SubcommandOption{
 			OptionName:  "automod",
 			Description: "Configure Discord native automod logging",
 			Options: []discord.CommandOptionValue{
@@ -149,6 +161,8 @@ func (c *loggingRootCommand) Handle(ctx *core.ArikawaContext) error {
 	switch subcommand.Name {
 	case "avatar":
 		return c.handleAvatar(ctx, subcommand.Options)
+	case "role_update":
+		return c.handleRoleUpdate(ctx, subcommand.Options)
 	case "automod":
 		return c.handleAutomod(ctx, subcommand.Options)
 	case "messages":
@@ -169,8 +183,6 @@ func (c *loggingRootCommand) handleAvatar(ctx *core.ArikawaContext, opts []disco
 
 	err := c.configManager.UpdateGuildConfig(ctx.GuildID.String(), func(cfg *files.GuildConfig) error {
 		cfg.Channels.AvatarLogging = channelID
-		b := true
-		cfg.Features.Logging.AvatarLogging = &b
 		return nil
 	})
 	if err != nil {
@@ -179,6 +191,23 @@ func (c *loggingRootCommand) handleAvatar(ctx *core.ArikawaContext, opts []disco
 
 	return ctx.Respond(api.InteractionResponseData{
 		Content: option.NewNullableString("Avatar update logs will now be sent to <#" + channelID + ">."),
+	})
+}
+
+func (c *loggingRootCommand) handleRoleUpdate(ctx *core.ArikawaContext, opts []discord.CommandInteractionOption) error {
+	parsedOpts := core.ArikawaOptionList(opts)
+	channelID := parsedOpts.ChannelID("channel")
+
+	err := c.configManager.UpdateGuildConfig(ctx.GuildID.String(), func(cfg *files.GuildConfig) error {
+		cfg.Channels.RoleUpdate = channelID
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	return ctx.Respond(api.InteractionResponseData{
+		Content: option.NewNullableString("Role update logs will now be sent to <#" + channelID + ">."),
 	})
 }
 
@@ -255,8 +284,6 @@ func (c *loggingRootCommand) handleAutomod(ctx *core.ArikawaContext, opts []disc
 
 	err := c.configManager.UpdateGuildConfig(ctx.GuildID.String(), func(cfg *files.GuildConfig) error {
 		cfg.Channels.AutomodAction = channelID
-		b := true
-		cfg.Features.Logging.AutomodAction = &b
 		return nil
 	})
 	if err != nil {
@@ -275,9 +302,6 @@ func (c *loggingRootCommand) handleMessages(ctx *core.ArikawaContext, opts []dis
 	err := c.configManager.UpdateGuildConfig(ctx.GuildID.String(), func(cfg *files.GuildConfig) error {
 		cfg.Channels.MessageEdit = channelID
 		cfg.Channels.MessageDelete = channelID
-		b := true
-		cfg.Features.Logging.MessageEdit = &b
-		cfg.Features.Logging.MessageDelete = &b
 		return nil
 	})
 	if err != nil {
@@ -295,8 +319,6 @@ func (c *loggingRootCommand) handleEntry(ctx *core.ArikawaContext, opts []discor
 
 	err := c.configManager.UpdateGuildConfig(ctx.GuildID.String(), func(cfg *files.GuildConfig) error {
 		cfg.Channels.MemberJoin = channelID
-		b := true
-		cfg.Features.Logging.MemberJoin = &b
 		return nil
 	})
 	if err != nil {
@@ -314,8 +336,6 @@ func (c *loggingRootCommand) handleExit(ctx *core.ArikawaContext, opts []discord
 
 	err := c.configManager.UpdateGuildConfig(ctx.GuildID.String(), func(cfg *files.GuildConfig) error {
 		cfg.Channels.MemberLeave = channelID
-		b := true
-		cfg.Features.Logging.MemberLeave = &b
 		return nil
 	})
 	if err != nil {
@@ -339,8 +359,6 @@ func (c *loggingRootCommand) handleWarnings(ctx *core.ArikawaContext, opts []dis
 	err := c.configManager.UpdateGuildConfig(ctx.GuildID.String(), func(cfg *files.GuildConfig) error {
 		cfg.Channels.ModerationCase = channelID
 		cfg.LogModerationScope = scope
-		b := true
-		cfg.Features.Logging.ModerationCase = &b
 		return nil
 	})
 	if err != nil {

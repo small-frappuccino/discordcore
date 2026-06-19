@@ -261,7 +261,6 @@ func cloneRuntimeConfig(in RuntimeConfig) RuntimeConfig {
 		Database:                     in.Database,
 		BotTheme:                     in.BotTheme,
 		DisableDBCleanup:             in.DisableDBCleanup,
-		DisableAutomodLogs:           in.DisableAutomodLogs,
 		DisableMessageLogs:           in.DisableMessageLogs,
 		DisableEntryExitLogs:         in.DisableEntryExitLogs,
 		DisableReactionLogs:          in.DisableReactionLogs,

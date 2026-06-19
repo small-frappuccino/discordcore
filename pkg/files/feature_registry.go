@@ -38,13 +38,6 @@ var featureRegistry = []toggleSpec{
 		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Services.Monitoring = val },
 	},
 	{
-		ID: "services.automod", Default: true,
-		Get:         func(ft *FeatureToggles) *bool { return ft.Services.Automod },
-		Set:         func(ft *FeatureToggles, val *bool) { ft.Services.Automod = cloneBoolPtr(val) },
-		GetResolved: func(rft *ResolvedFeatureToggles) bool { return rft.Services.Automod },
-		SetResolved: func(rft *ResolvedFeatureToggles, val bool) { rft.Services.Automod = val },
-	},
-	{
 		ID: "services.commands", Default: true,
 		Get:         func(ft *FeatureToggles) *bool { return ft.Services.Commands },
 		Set:         func(ft *FeatureToggles, val *bool) { ft.Services.Commands = cloneBoolPtr(val) },

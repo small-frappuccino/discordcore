@@ -115,20 +115,7 @@ func (m *Manager) Apply(ctx context.Context, next files.RuntimeConfig) error {
 	// In this repo today, `monitoring` is registered, `automod` may be registered depending
 	// on startup gating.
 	if len(m.serviceManagers) > 0 {
-		if prev.DisableAutomodLogs != next.DisableAutomodLogs {
-			// If disabled => stop. If enabled => start.
-			for _, manager := range m.serviceManagers {
-				if manager == nil {
-					continue
-				}
-				if next.DisableAutomodLogs {
-					_ = manager.StopService(ctx, "automod")
-				} else {
-					_ = manager.StartService("automod")
-				}
-			}
-		}
-
+		// Removed DisableAutomodLogs check.
 		// DB cleanup is not a service wrapper in ServiceManager; it is a goroutine in app runner,
 		// so we intentionally do nothing here.
 	}

@@ -189,9 +189,6 @@ func (builder *featureWorkspaceBuilder) buildFeatureDetails(
 }
 
 var featureDetailBuilders = map[string]func(*files.BotConfig, string) *featureDetails{
-	"services.automod": func(_ *files.BotConfig, _ string) *featureDetails {
-		return &featureDetails{Mode: "logging_only"}
-	},
 	"moderation.mute_role": func(cfg *files.BotConfig, guildID string) *featureDetails {
 		if guildID == "" {
 			return nil

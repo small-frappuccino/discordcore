@@ -44,14 +44,6 @@ func loggingServiceSpecs() []spec {
 			RestartHint: restartRequired, // still a goroutine in runner; hot-apply intentionally not handled
 		},
 		{
-			Key:         runtimeKeyDisableAutomodLogs,
-			Group:       "SERVICES (LOGGING)",
-			Type:        vtBool,
-			DefaultHint: "false",
-			ShortHelp:   "Disable automod logging service startup",
-			RestartHint: restartRecommended,
-		},
-		{
 			Key:         runtimeKeyDisableMessageLogs,
 			Group:       "SERVICES (LOGGING)",
 			Type:        vtBool,

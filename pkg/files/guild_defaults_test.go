@@ -29,7 +29,6 @@ func TestNewMinimalGuildConfigDisablesAllFeatures(t *testing.T) {
 
 	resolved := cfg.ResolveFeatures("guild-new")
 	if resolved.Services.Monitoring ||
-		resolved.Services.Automod ||
 		resolved.Logging.AvatarLogging ||
 		resolved.Logging.RoleUpdate ||
 		resolved.Logging.MemberJoin ||

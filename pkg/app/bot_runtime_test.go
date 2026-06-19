@@ -119,7 +119,6 @@ func TestBotRuntime_InitializationRouting(t *testing.T) {
 						},
 						Features: files.FeatureToggles{
 							Services: files.FeatureServiceToggles{
-								Automod:    new(bool(true)),
 								Commands:   new(bool(true)),
 								Monitoring: new(bool(true)), // Moderation implicitly needs commands
 							},
@@ -169,7 +168,6 @@ func TestBotRuntime_InitializationRouting(t *testing.T) {
 						BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
 						Features: files.FeatureToggles{
 							Services: files.FeatureServiceToggles{
-								Automod:  new(bool(false)),
 								Commands: new(bool(false)),
 							},
 							Logging: files.FeatureLoggingToggles{

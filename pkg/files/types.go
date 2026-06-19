@@ -25,7 +25,6 @@ type RuntimeConfig struct {
 
 	// SERVICES (LOGGING)
 	DisableDBCleanup     bool `json:"disable_db_cleanup,omitempty"`
-	DisableAutomodLogs   bool `json:"disable_automod_logs,omitempty"`
 	DisableMessageLogs   bool `json:"disable_message_logs,omitempty"`
 	DisableEntryExitLogs bool `json:"disable_entry_exit_logs,omitempty"`
 	DisableReactionLogs  bool `json:"disable_reaction_logs,omitempty"`
@@ -684,9 +683,6 @@ func (cfg *BotConfig) ResolveRuntimeConfig(guildID string) RuntimeConfig {
 
 	if guildRC.DisableDBCleanup {
 		resolved.DisableDBCleanup = true
-	}
-	if guildRC.DisableAutomodLogs {
-		resolved.DisableAutomodLogs = true
 	}
 	if guildRC.DisableMessageLogs {
 		resolved.DisableMessageLogs = true

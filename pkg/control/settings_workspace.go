@@ -141,7 +141,6 @@ type runtimeAppearanceSection struct {
 
 type runtimeLoggingSection struct {
 	DisableDBCleanup     bool  `json:"disable_db_cleanup,omitempty"`
-	DisableAutomodLogs   bool  `json:"disable_automod_logs,omitempty"`
 	DisableMessageLogs   bool  `json:"disable_message_logs,omitempty"`
 	DisableEntryExitLogs bool  `json:"disable_entry_exit_logs,omitempty"`
 	DisableReactionLogs  bool  `json:"disable_reaction_logs,omitempty"`
@@ -497,7 +496,6 @@ func groupRuntimeSettings(rc files.RuntimeConfig) runtimeSettingsSections {
 		Appearance: runtimeAppearanceSection{BotTheme: rc.BotTheme},
 		Logging: runtimeLoggingSection{
 			DisableDBCleanup:     rc.DisableDBCleanup,
-			DisableAutomodLogs:   rc.DisableAutomodLogs,
 			DisableMessageLogs:   rc.DisableMessageLogs,
 			DisableEntryExitLogs: rc.DisableEntryExitLogs,
 			DisableReactionLogs:  rc.DisableReactionLogs,
@@ -538,7 +536,6 @@ func flattenRuntimeSettingsSections(in runtimeSettingsSections) files.RuntimeCon
 		Database:                     in.Database,
 		BotTheme:                     in.Appearance.BotTheme,
 		DisableDBCleanup:             in.Logging.DisableDBCleanup,
-		DisableAutomodLogs:           in.Logging.DisableAutomodLogs,
 		DisableMessageLogs:           in.Logging.DisableMessageLogs,
 		DisableEntryExitLogs:         in.Logging.DisableEntryExitLogs,
 		DisableReactionLogs:          in.Logging.DisableReactionLogs,
@@ -622,7 +619,6 @@ func hasRuntimeOverrides(rc files.RuntimeConfig) bool {
 	}
 	return rc.BotTheme != "" ||
 		rc.DisableDBCleanup ||
-		rc.DisableAutomodLogs ||
 		rc.DisableMessageLogs ||
 		rc.DisableEntryExitLogs ||
 		rc.DisableReactionLogs ||
