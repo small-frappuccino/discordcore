@@ -9,6 +9,10 @@ import (
 	"github.com/small-frappuccino/discordgo"
 )
 
+// LegacySession is a boundary-crossing alias to isolate discordgo dependency
+// and eradicate redundant allocation layers for external controllers.
+type LegacySession = discordgo.Session
+
 // Injectable seams to allow testing without real network calls.
 var (
 	newSession     = discordgo.New
@@ -57,6 +61,17 @@ const (
 	ErrSessionCreationFailed   = "failed to create Discord session: %w"
 	ErrSessionConnectionFailed = "failed to connect to Discord: %w"
 )
+
+// NewEmptySessionForCompat creates a dummy session specifically to satisfy
+// downstream struct constructors that still expect *discordgo.Session without
+// initiating any gateway or REST connections.
+func NewEmptySessionForCompat(token string) *LegacySession {
+	s, _ := newSession(token)
+	if s != nil {
+		s.StateEnabled = false
+	}
+	return s
+}
 
 // NewDiscordSession creates a new Discord session
 func NewDiscordSession(token string) (*discordgo.Session, error) {

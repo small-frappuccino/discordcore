@@ -12,10 +12,11 @@ import (
 
 	"log/slog"
 
+	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/persistence"
 	"github.com/small-frappuccino/discordcore/pkg/testdb"
-	"github.com/small-frappuccino/discordgo"
 )
 
 func TestRun_MissingDatabaseURL(t *testing.T) {
@@ -197,6 +198,18 @@ func seedRunnerConfig(t *testing.T, dbCfg files.DatabaseRuntimeConfig, cfg files
 }
 
 func TestRun_CascadingRollbackFailures(t *testing.T) {
+	origFetchBotArikawaMe := fetchBotArikawaMe
+	t.Cleanup(func() {
+		fetchBotArikawaMe = origFetchBotArikawaMe
+	})
+	fetchBotArikawaMe = func(s *state.State) (*discord.User, error) {
+		return &discord.User{ID: 123, Username: "test"}, nil
+	}
+	origOpenBotArikawaState := openBotArikawaState
+	t.Cleanup(func() {
+		openBotArikawaState = origOpenBotArikawaState
+	})
+	openBotArikawaState = func(ctx context.Context, s *state.State) error { return nil }
 	const appName = "discordmain-cascading-rollback-test"
 
 	appDataDir := t.TempDir()
@@ -226,45 +239,18 @@ func TestRun_CascadingRollbackFailures(t *testing.T) {
 	}
 	seedRunnerConfig(t, dbCfg, cfg)
 
-	session, err := discordgo.New("Bot test-token")
-	if err != nil {
-		t.Fatalf("create fake discord session: %v", err)
-	}
-	session.State.User = &discordgo.User{
-		ID:            "bot-id",
-		Username:      "testuser",
-		Discriminator: "0001",
-		Bot:           true,
-	}
-	session.State.Guilds = []*discordgo.Guild{{ID: "guild-1"}}
-
-	origNewDiscordSession := newDiscordSession
-	origNewDiscordSessionWithIntents := newDiscordSessionWithIntents
 	origShutdownDelay := shutdownDelay
 	origSetupCommandHandler := setupCommandHandler
 	origCloseStore := closeStore
 	origCloseDiscordSession := closeDiscordSession
 
 	t.Cleanup(func() {
-		newDiscordSession = origNewDiscordSession
-		newDiscordSessionWithIntents = origNewDiscordSessionWithIntents
 		shutdownDelay = origShutdownDelay
 		setupCommandHandler = origSetupCommandHandler
 		closeStore = origCloseStore
 		closeDiscordSession = origCloseDiscordSession
 	})
 
-	newDiscordSession = func(string) (*discordgo.Session, error) {
-		return session, nil
-	}
-	newDiscordSessionWithIntents = func(string, discordgo.Intent) (*discordgo.Session, error) {
-		return session, nil
-	}
-	origOpenBotDiscordSession := openBotDiscordSession
-	t.Cleanup(func() {
-		openBotDiscordSession = origOpenBotDiscordSession
-	})
-	openBotDiscordSession = func(ctx context.Context, s *discordgo.Session) error { return nil }
 	shutdownDelay = func(time.Duration) {}
 
 	sabotageErr := errors.New("store close failure")
@@ -287,7 +273,7 @@ func TestRun_CascadingRollbackFailures(t *testing.T) {
 		close(shutdownCh)
 	}()
 
-	err = Run(appName)
+	err := Run(appName)
 
 	if err == nil {
 		t.Fatalf("expected Run to return cascading errors on shutdown")
@@ -306,6 +292,18 @@ func TestRun_CascadingRollbackFailures(t *testing.T) {
 }
 
 func TestRun_ResourceCleanupOnBootFailure(t *testing.T) {
+	origFetchBotArikawaMe := fetchBotArikawaMe
+	t.Cleanup(func() {
+		fetchBotArikawaMe = origFetchBotArikawaMe
+	})
+	fetchBotArikawaMe = func(s *state.State) (*discord.User, error) {
+		return &discord.User{ID: 123, Username: "test"}, nil
+	}
+	origOpenBotArikawaState := openBotArikawaState
+	t.Cleanup(func() {
+		openBotArikawaState = origOpenBotArikawaState
+	})
+	openBotArikawaState = func(ctx context.Context, s *state.State) error { return nil }
 	const appName = "discordmain-resource-cleanup-test"
 
 	appDataDir := t.TempDir()
@@ -335,45 +333,18 @@ func TestRun_ResourceCleanupOnBootFailure(t *testing.T) {
 	}
 	seedRunnerConfig(t, dbCfg, cfg)
 
-	session, err := discordgo.New("Bot test-token")
-	if err != nil {
-		t.Fatalf("create fake discord session: %v", err)
-	}
-	session.State.User = &discordgo.User{
-		ID:            "bot-id",
-		Username:      "testuser",
-		Discriminator: "0001",
-		Bot:           true,
-	}
-	session.State.Guilds = []*discordgo.Guild{{ID: "guild-1"}}
-
-	origNewDiscordSession := newDiscordSession
-	origNewDiscordSessionWithIntents := newDiscordSessionWithIntents
 	origShutdownDelay := shutdownDelay
 	origSetupCommandHandler := setupCommandHandler
 	origCloseStore := closeStore
 	origCloseDiscordSession := closeDiscordSession
 
 	t.Cleanup(func() {
-		newDiscordSession = origNewDiscordSession
-		newDiscordSessionWithIntents = origNewDiscordSessionWithIntents
 		shutdownDelay = origShutdownDelay
 		setupCommandHandler = origSetupCommandHandler
 		closeStore = origCloseStore
 		closeDiscordSession = origCloseDiscordSession
 	})
 
-	newDiscordSession = func(string) (*discordgo.Session, error) {
-		return session, nil
-	}
-	newDiscordSessionWithIntents = func(string, discordgo.Intent) (*discordgo.Session, error) {
-		return session, nil
-	}
-	origOpenBotDiscordSession := openBotDiscordSession
-	t.Cleanup(func() {
-		openBotDiscordSession = origOpenBotDiscordSession
-	})
-	openBotDiscordSession = func(ctx context.Context, s *discordgo.Session) error { return nil }
 	shutdownDelay = func(time.Duration) {}
 
 	var storeCloseCalls int32
@@ -399,7 +370,7 @@ func TestRun_ResourceCleanupOnBootFailure(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	goroutinesBefore := runtime.NumGoroutine()
 
-	err = Run(appName)
+	err := Run(appName)
 
 	if err != nil {
 		t.Fatalf("expected clean shutdown, got: %v", err)

@@ -6,21 +6,36 @@ import (
 	"testing"
 	"time"
 
+	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordgo"
 )
 
 func TestSupervisorFaultIsolation(t *testing.T) {
-	origNewDiscordSession := newDiscordSession
-	origNewDiscordSessionWithIntents := newDiscordSessionWithIntents
-	origOpenBotDiscordSession := openBotDiscordSession
+	origFetchBotArikawaMe := fetchBotArikawaMe
+	t.Cleanup(func() {
+		fetchBotArikawaMe = origFetchBotArikawaMe
+	})
+	fetchBotArikawaMe = func(s *state.State) (*discord.User, error) {
+		return &discord.User{ID: 123, Username: "test"}, nil
+	}
+	origOpenBotArikawaState := openBotArikawaState
+	t.Cleanup(func() {
+		openBotArikawaState = origOpenBotArikawaState
+	})
+	openBotArikawaState = func(ctx context.Context, s *state.State) error {
+		token := s.Token
+		if token == "Bot token2" {
+			return errors.New("simulated gateway panic in child runtime ID 2")
+		} else if token == "Bot token3" {
+			return errors.New("HTTP 401 Unauthorized")
+		}
+		return nil
+	}
 	origSetupCommandHandler := setupCommandHandler
 	origShutdownCommandHandler := shutdownCommandHandler
 	t.Cleanup(func() {
-		newDiscordSession = origNewDiscordSession
-		newDiscordSessionWithIntents = origNewDiscordSessionWithIntents
-		openBotDiscordSession = origOpenBotDiscordSession
 		setupCommandHandler = origSetupCommandHandler
 		shutdownCommandHandler = origShutdownCommandHandler
 		identifyStaggerDelay = 5 * time.Second
@@ -29,48 +44,6 @@ func TestSupervisorFaultIsolation(t *testing.T) {
 	identifyStaggerDelay = 0
 	setupCommandHandler = func(ch *commands.CommandHandler) error { return nil }
 	shutdownCommandHandler = func(ch *commands.CommandHandler) error { return nil }
-
-	session1, _ := discordgo.New("Bot token1")
-	session1.State.User = &discordgo.User{ID: "child1"}
-	session2, _ := discordgo.New("Bot token2")
-	session2.State.User = &discordgo.User{ID: "child2"}
-	session3, _ := discordgo.New("Bot token3")
-	session3.State.User = &discordgo.User{ID: "child3"}
-
-	newDiscordSession = func(token string) (*discordgo.Session, error) {
-		if token == "token1" {
-			return session1, nil
-		}
-		if token == "token2" {
-			return session2, nil
-		}
-		if token == "token3" {
-			return session3, nil
-		}
-		return nil, errors.New("unknown token")
-	}
-	newDiscordSessionWithIntents = func(token string, _ discordgo.Intent) (*discordgo.Session, error) {
-		if token == "token1" {
-			return session1, nil
-		}
-		if token == "token2" {
-			return session2, nil
-		}
-		if token == "token3" {
-			return session3, nil
-		}
-		return nil, errors.New("unknown token")
-	}
-
-	openBotDiscordSession = func(ctx context.Context, s *discordgo.Session) error {
-		if s == session2 {
-			return errors.New("simulated gateway panic in child runtime ID 2")
-		}
-		if s == session3 {
-			return errors.New("HTTP 401 Unauthorized")
-		}
-		return nil
-	}
 
 	cfgManager := files.NewConfigManagerWithStore(nil, nil)
 	cfg := files.BotConfig{
@@ -180,15 +153,21 @@ func TestZeroStateIdling(t *testing.T) {
 }
 
 func TestSupervisorSwarmTopology(t *testing.T) {
-	origNewDiscordSession := newDiscordSession
-	origNewDiscordSessionWithIntents := newDiscordSessionWithIntents
-	origOpenBotDiscordSession := openBotDiscordSession
+	origFetchBotArikawaMe := fetchBotArikawaMe
+	t.Cleanup(func() {
+		fetchBotArikawaMe = origFetchBotArikawaMe
+	})
+	fetchBotArikawaMe = func(s *state.State) (*discord.User, error) {
+		return &discord.User{ID: 123, Username: "test"}, nil
+	}
+	origOpenBotArikawaState := openBotArikawaState
+	t.Cleanup(func() {
+		openBotArikawaState = origOpenBotArikawaState
+	})
+	openBotArikawaState = func(ctx context.Context, s *state.State) error { return nil }
 	origSetupCommandHandler := setupCommandHandler
 	origShutdownCommandHandler := shutdownCommandHandler
 	t.Cleanup(func() {
-		newDiscordSession = origNewDiscordSession
-		newDiscordSessionWithIntents = origNewDiscordSessionWithIntents
-		openBotDiscordSession = origOpenBotDiscordSession
 		setupCommandHandler = origSetupCommandHandler
 		shutdownCommandHandler = origShutdownCommandHandler
 		identifyStaggerDelay = 5 * time.Second
@@ -197,20 +176,6 @@ func TestSupervisorSwarmTopology(t *testing.T) {
 	identifyStaggerDelay = 0
 	setupCommandHandler = func(ch *commands.CommandHandler) error { return nil }
 	shutdownCommandHandler = func(ch *commands.CommandHandler) error { return nil }
-
-	newDiscordSession = func(token string) (*discordgo.Session, error) {
-		s, _ := discordgo.New(token)
-		s.State.User = &discordgo.User{ID: token}
-		return s, nil
-	}
-	newDiscordSessionWithIntents = func(token string, _ discordgo.Intent) (*discordgo.Session, error) {
-		s, _ := discordgo.New(token)
-		s.State.User = &discordgo.User{ID: token}
-		return s, nil
-	}
-	openBotDiscordSession = func(ctx context.Context, s *discordgo.Session) error {
-		return nil
-	}
 
 	cfgManager := files.NewConfigManagerWithStore(nil, nil)
 
@@ -274,15 +239,21 @@ func TestSupervisorSwarmTopology(t *testing.T) {
 }
 
 func TestSupervisorConfigChange(t *testing.T) {
-	origNewDiscordSession := newDiscordSession
-	origNewDiscordSessionWithIntents := newDiscordSessionWithIntents
-	origOpenBotDiscordSession := openBotDiscordSession
+	origFetchBotArikawaMe := fetchBotArikawaMe
+	t.Cleanup(func() {
+		fetchBotArikawaMe = origFetchBotArikawaMe
+	})
+	fetchBotArikawaMe = func(s *state.State) (*discord.User, error) {
+		return &discord.User{ID: 123, Username: "test"}, nil
+	}
+	origOpenBotArikawaState := openBotArikawaState
+	t.Cleanup(func() {
+		openBotArikawaState = origOpenBotArikawaState
+	})
+	openBotArikawaState = func(ctx context.Context, s *state.State) error { return nil }
 	origSetupCommandHandler := setupCommandHandler
 	origShutdownCommandHandler := shutdownCommandHandler
 	t.Cleanup(func() {
-		newDiscordSession = origNewDiscordSession
-		newDiscordSessionWithIntents = origNewDiscordSessionWithIntents
-		openBotDiscordSession = origOpenBotDiscordSession
 		setupCommandHandler = origSetupCommandHandler
 		shutdownCommandHandler = origShutdownCommandHandler
 		identifyStaggerDelay = 5 * time.Second
@@ -291,25 +262,6 @@ func TestSupervisorConfigChange(t *testing.T) {
 	identifyStaggerDelay = 0
 	setupCommandHandler = func(ch *commands.CommandHandler) error { return nil }
 	shutdownCommandHandler = func(ch *commands.CommandHandler) error { return nil }
-
-	session1, _ := discordgo.New("token1")
-	session1.State.User = &discordgo.User{ID: "child1"}
-
-	newDiscordSession = func(token string) (*discordgo.Session, error) {
-		if token == "token1" || token == "token2" {
-			return session1, nil
-		}
-		return nil, errors.New("unknown token")
-	}
-	newDiscordSessionWithIntents = func(token string, _ discordgo.Intent) (*discordgo.Session, error) {
-		if token == "token1" || token == "token2" {
-			return session1, nil
-		}
-		return nil, errors.New("unknown token")
-	}
-	openBotDiscordSession = func(ctx context.Context, s *discordgo.Session) error {
-		return nil
-	}
 
 	cfgManager := files.NewConfigManagerWithStore(nil, nil)
 	cfg := files.BotConfig{

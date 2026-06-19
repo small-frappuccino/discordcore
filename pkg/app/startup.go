@@ -12,6 +12,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/control"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
+	"github.com/small-frappuccino/discordcore/pkg/discord/session"
 	"github.com/small-frappuccino/discordcore/pkg/discord/webhook"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
@@ -20,7 +21,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
-	"github.com/small-frappuccino/discordgo"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -198,12 +198,12 @@ func scheduleRuntimeConfiguredGuildLogging(
 	configManager *files.ConfigManager,
 	startupTasks *StartupTaskOrchestrator,
 ) {
-	if runtime == nil || runtime.session == nil || configManager == nil {
+	if runtime == nil || runtime.legacySession == nil || configManager == nil {
 		return
 	}
 
 	run := func(context.Context) error {
-		err := files.LogConfiguredGuildsForBot(configManager, runtime.session, runtime.instanceID)
+		err := files.LogConfiguredGuildsForBot(configManager, runtime.legacySession, runtime.instanceID)
 		if err != nil {
 			slog.Warn("Mitigated degradation: Some configured guilds could not be accessed during runtime logging",
 				slog.String("botInstanceID", runtime.instanceID),
@@ -228,7 +228,7 @@ func scheduleRuntimeConfiguredGuildLogging(
 func scheduleStartupWebhookEmbedUpdates(
 	startupTasks *StartupTaskOrchestrator,
 	cfg *files.BotConfig,
-	sessionResolver func(guildID string) *discordgo.Session,
+	sessionResolver func(guildID string) *session.LegacySession,
 ) {
 	if cfg == nil || sessionResolver == nil {
 		return
@@ -363,7 +363,7 @@ func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskO
 		return nil
 	}, opts.store)
 
-	controlServer.SetDiscordSessionResolver(func(guildID string) (*discordgo.Session, error) {
+	controlServer.SetDiscordSessionResolver(func(guildID string) (*session.LegacySession, error) {
 		return opts.runtimeResolver.sessionForGuild(guildID, "dashboard")
 	})
 	controlServer.SetBotGuildBindingsProvider(func(ctx context.Context) ([]control.BotGuildBinding, error) {

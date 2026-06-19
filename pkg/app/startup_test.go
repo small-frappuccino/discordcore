@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/small-frappuccino/discordcore/pkg/control"
+	"github.com/small-frappuccino/discordcore/pkg/discord/session"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordgo"
 )
 
 func TestResolveDatabaseBootstrapFromEnv(t *testing.T) {
@@ -228,7 +228,7 @@ func TestScheduleControlServerStartup(t *testing.T) {
 }
 
 func TestScheduleStartupWebhookEmbedUpdates(t *testing.T) {
-	scheduleStartupWebhookEmbedUpdates(nil, &files.BotConfig{}, func(g string) *discordgo.Session { return nil })
+	scheduleStartupWebhookEmbedUpdates(nil, &files.BotConfig{}, func(g string) *session.LegacySession { return nil })
 }
 
 func TestStartControlServerStartupTask(t *testing.T) {

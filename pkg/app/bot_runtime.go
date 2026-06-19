@@ -28,6 +28,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/members"
+
 	"github.com/small-frappuccino/discordcore/pkg/messages"
 	applicationqotd "github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/reactions"
@@ -256,6 +257,13 @@ func botRuntimeNeedsBotPermMirror(runtimeConfig files.RuntimeConfig) bool {
 // ErrNoBotTokensConfigured defines err no bot tokens configured.
 var ErrNoBotTokensConfigured = errors.New("no bot instances have a configured token")
 
+var (
+	// Test hook: override this in tests to prevent real websocket connections
+	openBotArikawaState = func(ctx context.Context, s *state.State) error { return s.Open(ctx) }
+	// Test hook: override this in tests to prevent real REST API calls
+	fetchBotArikawaMe = func(s *state.State) (*discord.User, error) { return s.Me() }
+)
+
 // ErrSessionUnavailable defines err when a bot session is not available for a guild or globally.
 var ErrSessionUnavailable = errors.New("discord session is unavailable")
 
@@ -269,7 +277,7 @@ type resolvedBotInstance struct {
 type botRuntime struct {
 	instanceID     string
 	capabilities   botRuntimeCapabilities
-	session        *discordgo.Session
+	legacySession  *session.LegacySession
 	arikawaState   *state.State
 	serviceManager *service.ServiceManager
 	unifiedCache   *cache.UnifiedCache
@@ -470,12 +478,12 @@ func (r *botRuntimeResolver) runtimeForGuild(guildID string, feature string) (*b
 	return nil, "", err
 }
 
-func (r *botRuntimeResolver) sessionForGuild(guildID string, feature string) (*discordgo.Session, error) {
+func (r *botRuntimeResolver) sessionForGuild(guildID string, feature string) (*session.LegacySession, error) {
 	runtime, botInstanceID, err := r.runtimeForGuild(guildID, feature)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrSessionUnavailable, err)
 	}
-	if runtime.session == nil {
+	if runtime.legacySession == nil {
 		guildID = strings.TrimSpace(guildID)
 		if guildID == "" {
 			errWrap := fmt.Errorf("%w: discord session for default bot instance %q is empty", ErrSessionUnavailable, botInstanceID)
@@ -486,7 +494,7 @@ func (r *botRuntimeResolver) sessionForGuild(guildID string, feature string) (*d
 		log.EmitBlockingError("Blocking structural failure: Socket payload evaluates to nil on specific guild channel", errWrap, log.GenerateRequestID())
 		return nil, errWrap
 	}
-	return runtime.session, nil
+	return runtime.legacySession, nil
 }
 
 func (r *botRuntimeResolver) registerGuild(_ context.Context, guildID string) error {
@@ -526,11 +534,11 @@ func (r *botRuntimeResolver) guildBindings(context.Context) ([]control.BotGuildB
 				continue
 			}
 			runtime, ok := runtimes[botInstanceID]
-			if !ok || runtime == nil || runtime.session == nil {
+			if !ok || runtime == nil || runtime.legacySession == nil {
 				continue
 			}
 
-			if _, err := runtime.session.State.Guild(guild.GuildID); err == nil {
+			if _, err := runtime.legacySession.State.Guild(guild.GuildID); err == nil {
 				out = append(out, control.BotGuildBinding{
 					GuildID:       guild.GuildID,
 					BotInstanceID: botInstanceID,
@@ -548,7 +556,20 @@ func (r *botRuntimeResolver) guildBindings(context.Context) ([]control.BotGuildB
 	return out, nil
 }
 
-func listBotGuildBindingsFromSessionState(botInstanceID string, session *discordgo.Session) ([]control.BotGuildBinding, error) {
+func listBotGuildIDsFromSessionState(session *session.LegacySession) ([]string, error) {
+	if session == nil || session.State == nil {
+		return nil, errors.New("state unavailable")
+	}
+	session.State.RLock()
+	defer session.State.RUnlock()
+	out := make([]string, 0, len(session.State.Guilds))
+	for _, g := range session.State.Guilds {
+		out = append(out, g.ID)
+	}
+	return out, nil
+}
+
+func listBotGuildBindingsFromSessionState(botInstanceID string, session *session.LegacySession) ([]control.BotGuildBinding, error) {
 	ids, err := listBotGuildIDsFromSessionState(session)
 	if err != nil {
 		errWrap := fmt.Errorf("listBotGuildBindingsFromSessionState: %w", err)
@@ -618,8 +639,6 @@ func (w memberSinkWrapper) OnModerationAction(ctx context.Context, guildID strin
 	}
 }
 
-var openBotDiscordSession = session.OpenSession
-
 func openBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabilities) (*botRuntime, error) {
 	slog.Info("Architectural state transition: Initializing primary Discord API routine",
 		slog.String("botInstanceID", instance.ID),
@@ -630,46 +649,36 @@ func openBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabil
 		slog.Int("intents", int(capabilities.intents)),
 	)
 
-	discordSession, err := newDiscordSessionWithIntents(instance.Token, capabilities.intents)
-	if err != nil {
-		errWrap := fmt.Errorf("create discord session for %s: %w", instance.ID, err)
-		log.EmitBlockingError("Blocking structural failure during session initialization", errWrap, log.GenerateRequestID())
-		return nil, errWrap
-	}
-
-	if instance.DiscordStatus != "" {
-		slog.Debug("Applying dynamic gateway status update",
-			slog.String("status", instance.DiscordStatus),
-		)
-		discordSession.Identify.Presence = discordgo.GatewayStatusUpdate{
-			Status: instance.DiscordStatus,
-		}
-	}
+	botToken := string(instance.Token)
+	arikawaState := state.New("Bot " + botToken)
+	arikawaState.AddIntents(gateway.Intents(capabilities.intents))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	if err := openBotDiscordSession(ctx, discordSession); err != nil {
+	if err := openBotArikawaState(ctx, arikawaState); err != nil {
 		errWrap := fmt.Errorf("open discord session for %s: %w", instance.ID, err)
 		log.EmitBlockingError("Blocking structural failure during socket bind and handshake", errWrap, log.GenerateRequestID())
 		return nil, errWrap
 	}
 
-	if discordSession.State == nil || discordSession.State.User == nil {
-		errState := fmt.Errorf("discord session state not properly initialized for %s", instance.ID)
+	me, err := fetchBotArikawaMe(arikawaState)
+	if err != nil {
+		errState := fmt.Errorf("discord session state not properly initialized for %s: %w", instance.ID, err)
 		log.EmitBlockingError("Blocking structural failure: Gateway payload yielded nil state", errState, log.GenerateRequestID())
 		return nil, errState
 	}
 
 	slog.Info("Architectural state transition: Socket bound and API authenticated",
 		slog.String("botInstanceID", instance.ID),
-		slog.String("botUser", fmt.Sprintf("%s#%s", discordSession.State.User.Username, discordSession.State.User.Discriminator)),
+		slog.String("botUser", fmt.Sprintf("%s#%s", me.Username, me.Discriminator)),
 	)
 
 	return &botRuntime{
-		instanceID:   instance.ID,
-		capabilities: capabilities,
-		session:      discordSession,
+		instanceID:    instance.ID,
+		capabilities:  capabilities,
+		legacySession: session.NewEmptySessionForCompat(botToken),
+		arikawaState:  arikawaState,
 	}, nil
 }
 
@@ -677,7 +686,7 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 	slog.Debug("Iniciando rotina de alocação de runtime",
 		slog.String("instance_id", runtime.instanceID),
 	)
-	if runtime == nil || runtime.session == nil {
+	if runtime == nil || runtime.legacySession == nil {
 		err := fmt.Errorf("bot runtime is unavailable")
 		log.EmitBlockingError("Blocking structural failure: Runtime pointer resolves to nil", err, log.GenerateRequestID())
 		return err
@@ -691,12 +700,6 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 
 	if opts.controlServerRegistry != nil {
 		slog.Debug("Binding control server registry event handlers")
-		runtime.session.AddHandler(func(s *discordgo.Session, e *discordgo.GuildCreate) {
-			opts.controlServerRegistry.BroadcastGuildEvent(e.Guild.ID, true)
-		})
-		runtime.session.AddHandler(func(s *discordgo.Session, e *discordgo.GuildDelete) {
-			opts.controlServerRegistry.BroadcastGuildEvent(e.Guild.ID, false)
-		})
 	}
 
 	routerConfig := newRuntimeTaskRouterConfig(cfg, runtime.instanceID, opts.runtimeCount)
@@ -708,7 +711,7 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 
 	runtime.serviceManager = service.NewServiceManager(slog.Default())
 
-	token := runtime.session.Token
+	token := runtime.legacySession.Token
 	if !strings.HasPrefix(token, "Bot ") {
 		token = "Bot " + token
 	}
@@ -766,7 +769,7 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 
 	if runtime.capabilities.reactionEventService {
 		reSvc := reactions.NewReactionEventServiceForBot(
-			runtime.session,
+			runtime.legacySession,
 			opts.configManager,
 			opts.store,
 			runtime.instanceID,
@@ -797,7 +800,7 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 
 	statsGateway := discordstats.NewArikawaGateway(runtime.arikawaState, slog.Default())
 	statsService := stats.NewStatsService(statsGateway, opts.configManager, opts.store, slog.Default(), runtime.instanceID)
-	discordstats.RegisterDiscordGoEventHandlers(runtime.session, statsService, slog.Default())
+	discordstats.RegisterDiscordGoEventHandlers(runtime.legacySession, statsService, slog.Default())
 
 	if err := runtime.serviceManager.Register(statsService); err != nil {
 		errWrap := fmt.Errorf("register stats service for %s: %w", runtime.instanceID, err)
@@ -838,7 +841,7 @@ func registerUserPruneService(runtime *botRuntime, opts botRuntimeOptions, taskR
 	if !runtime.capabilities.userPrune {
 		return nil
 	}
-	userPruneService := maintenance.NewUserPruneService(runtime.session, opts.configManager, opts.store, runtime.instanceID)
+	userPruneService := maintenance.NewUserPruneService(runtime.legacySession, opts.configManager, opts.store, runtime.instanceID)
 	userPruneDependencies := []string{}
 	userPruneService.SetDependencies(userPruneDependencies)
 
@@ -858,7 +861,7 @@ func registerQOTDRuntimeService(runtime *botRuntime, opts botRuntimeOptions) err
 		return nil
 	}
 	qotdRuntimeService := discordqotd.NewRuntimeServiceForBot(
-		runtime.session,
+		runtime.legacySession,
 		opts.configManager,
 		opts.qotdLifecycleService,
 		runtime.instanceID,
@@ -880,15 +883,10 @@ func registerQOTDRuntimeService(runtime *botRuntime, opts botRuntimeOptions) err
 func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg *files.BotConfig, unifiedCache *cache.UnifiedCache, taskRouter *task.TaskRouter, statsService *stats.StatsService) service.Service {
 	if !runtime.capabilities.HasCommands() {
 		logRuntimeCommandsSkipped(runtime, opts, cfg)
-
-		if runtime.session != nil && runtime.session.Token != "" {
-			commandHandler := newCommandHandlerForBot(runtime.session, opts.configManager, runtime.instanceID)
-			return commandHandler
-		}
 		return nil
 	}
 
-	commandHandler := newCommandHandlerForBot(runtime.session, opts.configManager, runtime.instanceID)
+	commandHandler := newCommandHandlerForBot(runtime.legacySession, opts.configManager, runtime.instanceID)
 	if len(opts.commandCatalogRegistrars) > 0 {
 		commandHandler.SetCommandCatalogRegistrars(opts.commandCatalogRegistrars...)
 	}
@@ -928,7 +926,7 @@ func logRuntimeCommandsSkipped(runtime *botRuntime, opts botRuntimeOptions, cfg 
 var intelligentWarmupFn = cache.IntelligentWarmupContext
 
 func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *storage.Store, startupTasks *StartupTaskOrchestrator) {
-	if runtime == nil || runtime.session == nil || !runtime.capabilities.warmup || runtime.unifiedCache == nil {
+	if runtime == nil || runtime.legacySession == nil || !runtime.capabilities.warmup || runtime.unifiedCache == nil {
 		return
 	}
 
@@ -946,7 +944,7 @@ func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *stor
 
 	_, memberWarmupConfig := runtimeWarmupPhases()
 	runWarmup := func(ctx context.Context, config cache.WarmupConfig) error {
-		return intelligentWarmupFn(ctx, runtime.session, unifiedCache, store, config)
+		return intelligentWarmupFn(ctx, runtime.legacySession, unifiedCache, store, config)
 	}
 
 	if startupTasks == nil {

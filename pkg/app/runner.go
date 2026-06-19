@@ -26,21 +26,18 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
-	"github.com/small-frappuccino/discordgo"
 	"golang.org/x/sync/errgroup"
 )
 
 var (
-	newDiscordSession            = session.NewDiscordSession
-	newDiscordSessionWithIntents = session.NewDiscordSessionWithIntents
-	newCommandHandler            = commands.NewCommandHandler
-	newCommandHandlerForBot      = commands.NewCommandHandlerForBot
-	setupCommandHandler          = func(ch *commands.CommandHandler) error { return ch.SetupCommands() }
-	shutdownCommandHandler       = func(ch *commands.CommandHandler) error { return ch.Shutdown() }
-	closeStore                   = func(c interface{ Close() error }) error { return c.Close() }
-	closeDiscordSession          = func(c interface{ Close() error }) error { return c.Close() }
-	shutdownDelay                = time.Sleep
-	testShutdownCh               <-chan struct{}
+	newCommandHandler       = commands.NewCommandHandler
+	newCommandHandlerForBot = commands.NewCommandHandlerForBot
+	setupCommandHandler     = func(ch *commands.CommandHandler) error { return ch.SetupCommands() }
+	shutdownCommandHandler  = func(ch *commands.CommandHandler) error { return ch.Shutdown() }
+	closeStore              = func(c interface{ Close() error }) error { return c.Close() }
+	closeDiscordSession     = func(c interface{ Close() error }) error { return c.Close() }
+	shutdownDelay           = time.Sleep
+	testShutdownCh          <-chan struct{}
 )
 
 const (
@@ -278,7 +275,7 @@ func runWithOptions(appName string, opts RunOptions) error {
 		}
 
 		controlBearerToken := strings.TrimSpace(files.EnvString(controlBearerTokenEnv, ""))
-		scheduleStartupWebhookEmbedUpdates(startupTasks, configManager.Config(), func(guildID string) *discordgo.Session {
+		scheduleStartupWebhookEmbedUpdates(startupTasks, configManager.Config(), func(guildID string) *session.LegacySession {
 			sess, _ := runtimeResolver.sessionForGuild(guildID, "")
 			return sess
 		})
@@ -476,31 +473,6 @@ func shutdownStartupServices(startupTasks *StartupTaskOrchestrator, controlServe
 			slog.String("error", err.Error()),
 		)
 	}
-}
-
-func listBotGuildIDsFromSessionState(session *discordgo.Session) ([]string, error) {
-	if session == nil || session.State == nil {
-		return nil, fmt.Errorf("discord session state is unavailable")
-	}
-
-	seen := make(map[string]struct{}, len(session.State.Guilds))
-	ids := make([]string, 0, len(session.State.Guilds))
-	for _, guild := range session.State.Guilds {
-		if guild == nil {
-			continue
-		}
-		guildID := strings.TrimSpace(guild.ID)
-		if guildID == "" {
-			continue
-		}
-		if _, ok := seen[guildID]; ok {
-			continue
-		}
-		seen[guildID] = struct{}{}
-		ids = append(ids, guildID)
-	}
-
-	return ids, nil
 }
 
 func formatStartupMessage(appName, appVersion, coreVersion string) string {

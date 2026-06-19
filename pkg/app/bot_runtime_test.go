@@ -5,10 +5,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/gateway"
+	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
+	"github.com/small-frappuccino/discordcore/pkg/discord/session"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
-	"github.com/small-frappuccino/discordgo"
 )
 
 func TestResolveBotRuntimeCapabilities_GuildAggregation(t *testing.T) {
@@ -79,19 +82,31 @@ func TestResolveBotRuntimeCapabilities_GuildAggregation(t *testing.T) {
 	if !capabilities.qotdRuntime {
 		t.Fatal("expected qotd runtime capability")
 	}
-	if capabilities.intents&discordgo.IntentsGuildMessageReactions == 0 {
+	if int(capabilities.intents)&int(gateway.IntentGuildMessageReactions) == 0 {
 		t.Fatal("expected reaction intents")
 	}
 }
 
 func TestBotRuntime_InitializationRouting(t *testing.T) {
+	origFetchBotArikawaMe := fetchBotArikawaMe
+	t.Cleanup(func() {
+		fetchBotArikawaMe = origFetchBotArikawaMe
+	})
+	fetchBotArikawaMe = func(s *state.State) (*discord.User, error) {
+		return &discord.User{ID: 123, Username: "test"}, nil
+	}
+	origOpenBotArikawaState := openBotArikawaState
+	t.Cleanup(func() {
+		openBotArikawaState = origOpenBotArikawaState
+	})
+	openBotArikawaState = func(ctx context.Context, s *state.State) error { return nil }
 	origNewCommandHandlerForBot := newCommandHandlerForBot
 	origSetupCommandHandler := setupCommandHandler
 	t.Cleanup(func() {
 		newCommandHandlerForBot = origNewCommandHandlerForBot
 		setupCommandHandler = origSetupCommandHandler
 	})
-	newCommandHandlerForBot = func(session *discordgo.Session, configManager *files.ConfigManager, botInstanceID string) *commands.CommandHandler {
+	newCommandHandlerForBot = func(session *session.LegacySession, configManager *files.ConfigManager, botInstanceID string) *commands.CommandHandler {
 		return commands.NewCommandHandlerForBot(session, configManager, botInstanceID)
 	}
 	setupCommandHandler = func(ch *commands.CommandHandler) error { return nil }
@@ -178,21 +193,14 @@ func TestBotRuntime_InitializationRouting(t *testing.T) {
 					},
 				},
 			},
-			expectedServices: []string{
-				"command-handler",
-			},
-			unexpectedServices: []string{
-				"discord_automod_adapter",
-				"messages",
-				"member_events_main",
-			},
+			expectedServices:     []string{},
+			unexpectedServices:   []string{"command-handler", "discord_automod_adapter", "messages", "member_events_main"},
 			expectedCommandsSkip: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			session, _ := discordgo.New("Bot fake")
 			cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 			cfgMgr.ApplyConfig(tt.cfg)
 
@@ -201,9 +209,10 @@ func TestBotRuntime_InitializationRouting(t *testing.T) {
 			caps := capsMap["main"]
 
 			rt := &botRuntime{
-				instanceID:   "main",
-				capabilities: caps,
-				session:      session,
+				instanceID:    "main",
+				capabilities:  caps,
+				legacySession: session.NewEmptySessionForCompat("Bot fake"),
+				arikawaState:  state.New("Bot fake"),
 			}
 
 			err := initializeBotRuntime(context.Background(), rt, botRuntimeOptions{
@@ -250,16 +259,16 @@ func TestBotRuntime_InitializationRouting(t *testing.T) {
 
 type mockQotdLifecycleService struct{}
 
-func (m *mockQotdLifecycleService) InitializeGuilds(ctx context.Context, session *discordgo.Session, config *files.ConfigManager) error {
+func (m *mockQotdLifecycleService) InitializeGuilds(ctx context.Context, session *session.LegacySession, config *files.ConfigManager) error {
 	return nil
 }
 func (m *mockQotdLifecycleService) Start() {}
 func (m *mockQotdLifecycleService) Stop()  {}
-func (m *mockQotdLifecycleService) EnforcePoliciesNow(ctx context.Context, session *discordgo.Session, config *files.ConfigManager, guildID string) error {
+func (m *mockQotdLifecycleService) EnforcePoliciesNow(ctx context.Context, session *session.LegacySession, config *files.ConfigManager, guildID string) error {
 	return nil
 }
 func (m *mockQotdLifecycleService) GetRunningPolicyGoroutines() int { return 0 }
-func (m *mockQotdLifecycleService) StartThreadArchivePolicy(ctx context.Context, session *discordgo.Session, config *files.ConfigManager) {
+func (m *mockQotdLifecycleService) StartThreadArchivePolicy(ctx context.Context, session *session.LegacySession, config *files.ConfigManager) {
 }
 func (m *mockQotdLifecycleService) NextScheduledPublishTime(guildID string, now time.Time) (time.Time, bool) {
 	return time.Time{}, false

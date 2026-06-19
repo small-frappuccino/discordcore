@@ -4,11 +4,9 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"reflect"
 	"testing"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordgo"
 )
 
 func TestLoadControlDiscordOAuthConfigFromEnv(t *testing.T) {
@@ -151,36 +149,6 @@ func TestLoadControlTLSFilesFromEnv(t *testing.T) {
 		}
 		if certFile != "/tmp/cert.pem" || keyFile != "/tmp/key.pem" {
 			t.Fatalf("unexpected TLS config: cert=%q key=%q", certFile, keyFile)
-		}
-	})
-}
-
-func TestListBotGuildIDsFromSessionState(t *testing.T) {
-	t.Run("nil session fails", func(t *testing.T) {
-		if _, err := listBotGuildIDsFromSessionState(nil); err == nil {
-			t.Fatal("expected error for nil session")
-		}
-	})
-
-	t.Run("deduplicates and trims", func(t *testing.T) {
-		state := discordgo.NewState()
-		state.Ready.Guilds = []*discordgo.Guild{
-			{ID: "g1"},
-			{ID: " g1 "},
-			{ID: "g2"},
-			nil,
-			{ID: ""},
-		}
-		session := &discordgo.Session{State: state}
-
-		got, err := listBotGuildIDsFromSessionState(session)
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
-
-		want := []string{"g1", "g2"}
-		if !reflect.DeepEqual(got, want) {
-			t.Fatalf("unexpected guild ids: got=%v want=%v", got, want)
 		}
 	})
 }

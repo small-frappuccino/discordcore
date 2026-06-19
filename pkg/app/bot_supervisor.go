@@ -13,9 +13,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/service"
-	"github.com/small-frappuccino/discordgo"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -222,10 +223,13 @@ func (s *BotSupervisor) onConfigChanged(ctx context.Context, oldCfg, newCfg *fil
 			toStart[id] = token
 		} else if oldState.DiscordStatus != currentStatuses[id] {
 			oldState.DiscordStatus = currentStatuses[id]
-			if runtime, ok := s.resolver.getRuntimes()[id]; ok && runtime.session != nil {
-				if err := runtime.session.UpdateStatusComplex(discordgo.UpdateStatusData{
-					Status: currentStatuses[id],
-				}); err != nil {
+			if runtime, ok := s.resolver.getRuntimes()[id]; ok && runtime.arikawaState != nil {
+				updateCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				err := runtime.arikawaState.Gateway().Send(updateCtx, &gateway.UpdatePresenceCommand{
+					Status: discord.Status(currentStatuses[id]),
+				})
+				cancel()
+				if err != nil {
 					s.log().Warn("Failed to update discord status for instance",
 						slog.String("botInstanceID", id),
 						slog.String("mitigation", "operation ignored to protect main flow"),
@@ -519,7 +523,7 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token, status str
 			}
 		}
 
-		runtime, err = openBotRuntime(resolvedBotInstance{ID: instanceID, Token: token, DiscordStatus: status}, capabilities)
+		runtime, err = openBotRuntimeFn(resolvedBotInstance{ID: instanceID, Token: token, DiscordStatus: status}, capabilities)
 
 		if err == nil {
 			break
@@ -635,7 +639,14 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token, status str
 		},
 		Stop: func(ctx context.Context) error {
 			shutdownBotRuntime(runtime, ctx)
-			return closeDiscordSession(runtime.session)
+			if runtime.arikawaState != nil {
+				err := runtime.arikawaState.Close()
+				if err != nil && strings.Contains(err.Error(), "Session is closed") {
+					return nil
+				}
+				return err
+			}
+			return nil
 		},
 		Logger: slog.Default(),
 	})
