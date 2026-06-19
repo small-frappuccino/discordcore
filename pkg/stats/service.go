@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"iter"
 	"log/slog"
-	"math/rand"
 	"runtime/debug"
 	"slices"
 	"sort"
@@ -141,13 +140,6 @@ func (s *StatsService) Start(ctx context.Context) error {
 
 	return nil
 }
-
-func calculateJitter(base time.Duration) time.Duration {
-	jitterFraction := 0.1 + rand.Float64()*0.1
-	jitterAmount := time.Duration(float64(base) * jitterFraction)
-	return base + jitterAmount
-}
-
 func (s *StatsService) runCron(ctx context.Context) {
 	defer s.wg.Done()
 	defer func() {
@@ -159,13 +151,14 @@ func (s *StatsService) runCron(ctx context.Context) {
 	// initial run
 	_ = s.UpdateStatsChannels(ctx)
 
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
 	for {
-		timer := time.NewTimer(calculateJitter(5 * time.Minute))
 		select {
 		case <-ctx.Done():
-			timer.Stop()
 			return
-		case <-timer.C:
+		case <-ticker.C:
 			_ = s.UpdateStatsChannels(ctx)
 		}
 	}

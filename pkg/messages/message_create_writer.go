@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"math/rand"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -280,12 +279,6 @@ func (w *messageCreateWriter) Lookup(guildID, messageID string) *CachedMessage {
 	}
 }
 
-func calculateJitter(base time.Duration) time.Duration {
-	jitterFraction := 0.1 + rand.Float64()*0.1
-	jitterAmount := time.Duration(float64(base) * jitterFraction)
-	return base + jitterAmount
-}
-
 func (w *messageCreateWriter) run() {
 	defer func() {
 		if r := recover(); r != nil {
@@ -304,7 +297,7 @@ func (w *messageCreateWriter) run() {
 		batch = batch[:0]
 	}
 
-	timer := time.NewTimer(calculateJitter(w.flushInterval))
+	timer := time.NewTimer(w.flushInterval)
 	defer timer.Stop()
 
 	for {
@@ -319,11 +312,11 @@ func (w *messageCreateWriter) run() {
 					default:
 					}
 				}
-				timer.Reset(calculateJitter(w.flushInterval))
+				timer.Reset(w.flushInterval)
 			}
 		case <-timer.C:
 			flush()
-			timer.Reset(calculateJitter(w.flushInterval))
+			timer.Reset(w.flushInterval)
 		case <-w.stopCh:
 			for {
 				select {

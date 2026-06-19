@@ -4,7 +4,6 @@ import (
 	"context"
 	stdErrors "errors"
 	"fmt"
-	"math/rand"
 	"runtime/debug"
 	"slices"
 	"sync"
@@ -547,12 +546,6 @@ func (sm *ServiceManager) updateServiceState(info *ServiceInfo, state ServiceSta
 	info.LastStateTime = time.Now()
 }
 
-func calculateJitter(base time.Duration) time.Duration {
-	jitterFraction := 0.1 + rand.Float64()*0.1
-	jitterAmount := time.Duration(float64(base) * jitterFraction)
-	return base + jitterAmount
-}
-
 // healthMonitor runs periodic health checks on all services
 func (sm *ServiceManager) healthMonitor() {
 	defer func() {
@@ -561,16 +554,16 @@ func (sm *ServiceManager) healthMonitor() {
 		}
 	}()
 
+	ticker := time.NewTicker(sm.healthInterval)
+	defer ticker.Stop()
+
 	for {
-		timer := time.NewTimer(calculateJitter(sm.healthInterval))
 		select {
 		case <-sm.ctx.Done():
-			timer.Stop()
 			return
 		case <-sm.healthStop:
-			timer.Stop()
 			return
-		case <-timer.C:
+		case <-ticker.C:
 			sm.performHealthChecks()
 		}
 	}

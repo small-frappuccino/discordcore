@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -165,12 +164,6 @@ func (s *UserPruneService) IsRunning() bool {
 	return s.running
 }
 
-func calculateJitter(base time.Duration) time.Duration {
-	jitterFraction := 0.1 + rand.Float64()*0.1
-	jitterAmount := time.Duration(float64(base) * jitterFraction)
-	return base + jitterAmount
-}
-
 func (s *UserPruneService) loop() {
 	defer s.wg.Done()
 	defer func() {
@@ -192,13 +185,14 @@ func (s *UserPruneService) loop() {
 
 	s.runIfDue(ctx, time.Now().UTC())
 
+	ticker := time.NewTicker(pruneCheckInterval)
+	defer ticker.Stop()
+
 	for {
-		timer := time.NewTimer(calculateJitter(pruneCheckInterval))
 		select {
-		case <-timer.C:
+		case <-ticker.C:
 			s.runIfDue(ctx, time.Now().UTC())
 		case <-ctx.Done():
-			timer.Stop()
 			return
 		}
 	}

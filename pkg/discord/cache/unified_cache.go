@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"math/rand"
 	"runtime"
 	"runtime/debug"
 	"slices"
@@ -938,12 +937,6 @@ func (uc *UnifiedCache) PersistAndStop() error {
 	return nil
 }
 
-func calculateJitter(base time.Duration) time.Duration {
-	jitterFraction := 0.1 + rand.Float64()*0.1
-	jitterAmount := time.Duration(float64(base) * jitterFraction)
-	return base + jitterAmount
-}
-
 // SetPersistInterval configures automatic persistence interval (0 disables auto-persist)
 // SetPersistInterval starts a background ticker to periodically call Persist.
 //
@@ -981,15 +974,16 @@ func (uc *UnifiedCache) SetPersistInterval(interval time.Duration) chan struct{}
 			}
 		}()
 
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
 		for {
-			timer := time.NewTimer(calculateJitter(interval))
 			select {
-			case <-timer.C:
+			case <-ticker.C:
 				if err := uc.Persist(); err != nil {
 					// Log error but continue
 				}
 			case <-ctx.Done():
-				timer.Stop()
 				return
 			}
 		}

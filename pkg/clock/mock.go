@@ -42,3 +42,8 @@ func (m *MockClock) Advance(d time.Duration) {
 func (m *MockClock) NewTimer(d time.Duration) Timer {
 	return &RealTimer{t: time.NewTimer(d)}
 }
+
+// NewTicker creates a new Ticker.
+func (m *MockClock) NewTicker(d time.Duration) Ticker {
+	return &RealTicker{t: time.NewTicker(d)}
+}

@@ -24,6 +24,11 @@ func (c *HTTPClock) NewTimer(d time.Duration) Timer {
 	return &RealTimer{t: time.NewTimer(d)}
 }
 
+// NewTicker creates a new Ticker using the system time.
+func (c *HTTPClock) NewTicker(d time.Duration) Ticker {
+	return &RealTicker{t: time.NewTicker(d)}
+}
+
 // NewHTTPClock performs a single HEAD request to the target URL to capture
 // the server's HTTP Date header and calculate the delta between the OS clock
 // and the server clock. If the request fails or times out, it falls back to

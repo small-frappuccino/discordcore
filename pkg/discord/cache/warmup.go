@@ -203,15 +203,16 @@ func SchedulePeriodicCleanup(store *storage.Store, interval time.Duration) chan 
 			}
 		}()
 
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
 		for {
-			timer := time.NewTimer(calculateJitter(interval))
 			select {
-			case <-timer.C:
+			case <-ticker.C:
 				if err := store.CleanupAllObsoleteData(); err != nil {
 					log.ErrorLoggerRaw().Error(fmt.Sprintf("Periodic cleanup failed: %v", err))
 				}
 			case <-ctx.Done():
-				timer.Stop()
 				return
 			}
 		}

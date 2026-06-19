@@ -8,26 +8,29 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/task"
 )
 
-type mockTimer struct {
+type mockTicker struct {
 	c chan time.Time
 }
 
-func (m *mockTimer) C() <-chan time.Time        { return m.c }
-func (m *mockTimer) Stop() bool                 { return true }
-func (m *mockTimer) Reset(d time.Duration) bool { return true }
+func (m *mockTicker) C() <-chan time.Time   { return m.c }
+func (m *mockTicker) Stop()                 {}
+func (m *mockTicker) Reset(d time.Duration) {}
 
 type mockClock struct {
-	timer *mockTimer
+	ticker *mockTicker
 }
 
 func (m *mockClock) Now() time.Time { return time.Now() }
 func (m *mockClock) NewTimer(d time.Duration) clock.Timer {
-	return m.timer
+	return nil
+}
+func (m *mockClock) NewTicker(d time.Duration) clock.Ticker {
+	return m.ticker
 }
 
-func TestTaskRouter_MockTimerInjection(t *testing.T) {
-	mTimer := &mockTimer{c: make(chan time.Time)}
-	mClock := &mockClock{timer: mTimer}
+func TestTaskRouter_MockTickerInjection(t *testing.T) {
+	mTicker := &mockTicker{c: make(chan time.Time)}
+	mClock := &mockClock{ticker: mTicker}
 
 	cfg := task.RouterConfig{
 		Clock:           mClock,
@@ -40,10 +43,10 @@ func TestTaskRouter_MockTimerInjection(t *testing.T) {
 
 	// Send tick simulating time passage
 	select {
-	case mTimer.c <- time.Now():
-		// Success: background loop processed the mock timer tick
+	case mTicker.c <- time.Now():
+		// Success: background loop processed the mock ticker tick
 	case <-time.After(1 * time.Second):
-		t.Fatal("Failed to inject tick into mock timer; router blocked or ignoring clock interface")
+		t.Fatal("Failed to inject tick into mock ticker; router blocked or ignoring clock interface")
 	}
 
 	time.Sleep(50 * time.Millisecond)

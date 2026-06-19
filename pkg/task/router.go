@@ -1044,12 +1044,6 @@ func clampDuration(v, lo, hi time.Duration) time.Duration {
 	return max(min(v, hi), lo)
 }
 
-func calculateJitter(base time.Duration) time.Duration {
-	jitterFraction := 0.1 + rand.Float64()*0.1
-	jitterAmount := time.Duration(float64(base) * jitterFraction)
-	return base + jitterAmount
-}
-
 func (tr *TaskRouter) backgroundLoop() {
 	defer tr.wg.Done()
 	defer func() {
@@ -1069,13 +1063,13 @@ func (tr *TaskRouter) backgroundLoop() {
 		}
 	}()
 
+	ticker := tr.cfg.Clock.NewTicker(tr.cfg.CleanupInterval)
+	defer ticker.Stop()
 	for {
-		timer := tr.cfg.Clock.NewTimer(calculateJitter(tr.cfg.CleanupInterval))
 		select {
 		case <-ctx.Done():
-			timer.Stop()
 			return
-		case <-timer.C():
+		case <-ticker.C():
 			tr.cleanupOnce()
 			tr.runCronOnce()
 		}

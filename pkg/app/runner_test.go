@@ -10,11 +10,12 @@ import (
 	"testing"
 	"time"
 
+	"log/slog"
+
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/persistence"
 	"github.com/small-frappuccino/discordcore/pkg/testdb"
 	"github.com/small-frappuccino/discordgo"
-	"log/slog"
 )
 
 func TestRun_MissingDatabaseURL(t *testing.T) {

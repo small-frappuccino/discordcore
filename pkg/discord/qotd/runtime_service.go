@@ -3,7 +3,6 @@ package qotd
 import (
 	"context"
 	"errors"
-	"math/rand"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -216,12 +215,6 @@ func (s *RuntimeService) IsRunning() bool {
 	return s.running
 }
 
-func calculateJitter(base time.Duration) time.Duration {
-	jitterFraction := 0.1 + rand.Float64()*0.1
-	jitterAmount := time.Duration(float64(base) * jitterFraction)
-	return base + jitterAmount
-}
-
 func (s *RuntimeService) loop() {
 	defer s.wg.Done()
 	defer func() {
@@ -252,8 +245,8 @@ func (s *RuntimeService) loop() {
 		// slots (whose next moment is now tomorrow) are all reflected on the
 		// very next sleep. The cap (publishInterval) is the worst-case
 		// discovery latency for any of those changes.
-		publishTimer := time.NewTimer(calculateJitter(s.nextPublishDelay(s.clock())))
-		reconcileTimer := time.NewTimer(calculateJitter(s.reconcileEvery))
+		publishTimer := time.NewTimer(s.nextPublishDelay(s.clock()))
+		reconcileTimer := time.NewTimer(s.reconcileEvery)
 
 		select {
 		case <-publishTimer.C:

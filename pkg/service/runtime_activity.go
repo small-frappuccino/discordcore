@@ -146,15 +146,16 @@ func (ra *RuntimeActivity) StartHeartbeat(ctx context.Context, interval time.Dur
 			return
 		}
 
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
 		for {
-			timer := time.NewTimer(calculateJitter(interval))
 			select {
-			case <-timer.C:
+			case <-ticker.C:
 				if !ra.runCancellableHeartbeat(hbCtx, "Failed to persist heartbeat") {
 					return
 				}
 			case <-hbCtx.Done():
-				timer.Stop()
 				return
 			}
 		}
