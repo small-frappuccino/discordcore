@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 )
 
 // TokenHash returns a 16-character SHA-256 hash of the token for deduplication.
@@ -120,6 +121,13 @@ func (es *EncryptedString) UnmarshalJSON(data []byte) error {
 	}
 	dec, err := Decrypt(val)
 	if err != nil {
+		// If the fallback value doesn't contain a dot, it's not a valid Discord
+		// token and is likely an encrypted payload that failed to decrypt.
+		// Dropping it prevents 4004 Auth Failures from passing ciphertext to the gateway.
+		if !strings.Contains(val, ".") {
+			*es = ""
+			return nil
+		}
 		// Decryption failed. Fallback to raw string value.
 		*es = EncryptedString(val)
 		return nil

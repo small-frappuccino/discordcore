@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
+	"os"
 	"reflect"
 	"runtime/debug"
 	"strings"
@@ -177,6 +178,17 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 				status = "online"
 			}
 			currentStatuses[instanceID] = status
+		}
+	}
+
+	if currentTokens[""] == "" {
+		fallbackToken := os.Getenv("BOT_TOKEN")
+		if fallbackToken == "" {
+			fallbackToken = os.Getenv("DISCORD_TOKEN")
+		}
+		if fallbackToken != "" {
+			currentTokens[""] = strings.TrimSpace(fallbackToken)
+			currentStatuses[""] = "online"
 		}
 	}
 

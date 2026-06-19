@@ -65,13 +65,13 @@ func TestEncryptedStringJSON(t *testing.T) {
 
 func TestEncryptedStringUnmarshalFallback(t *testing.T) {
 	// If unmarshalling raw, unencrypted json, it should fallback to raw value.
-	rawJSON := `{"secret": "plain-text-legacy-key"}`
+	rawJSON := `{"secret": "plain-text-legacy.key"}`
 	var decoded testConfigContainer
 	if err := json.Unmarshal([]byte(rawJSON), &decoded); err != nil {
 		t.Fatalf("failed to unmarshal unencrypted: %v", err)
 	}
 
-	if string(decoded.Secret) != "plain-text-legacy-key" {
-		t.Errorf("unmarshalled plaintext fallback mismatch: got %q, want %q", decoded.Secret, "plain-text-legacy-key")
+	if string(decoded.Secret) != "plain-text-legacy.key" {
+		t.Errorf("unmarshalled plaintext fallback mismatch: got %q, want %q", decoded.Secret, "plain-text-legacy.key")
 	}
 }

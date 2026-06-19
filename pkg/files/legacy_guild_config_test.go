@@ -41,8 +41,8 @@ func TestGuildConfigLegacyMigration(t *testing.T) {
 		},
 		{
 			name:       "does not overwrite existing canonical tokens",
-			jsonInput:  `{"guild_id": "g6", "bot_instance_id": "generic", "bot_instance_tokens": {"generic": "existing-token"}}`,
-			wantTokens: []string{"generic"}, // we should check that "generic" has "existing-token"
+			jsonInput:  `{"guild_id": "g6", "bot_instance_id": "generic", "bot_instance_tokens": {"generic": "existing.token"}}`,
+			wantTokens: []string{"generic"}, // we should check that "generic" has "existing.token"
 		},
 	}
 
@@ -73,8 +73,8 @@ func TestGuildConfigLegacyMigration(t *testing.T) {
 					t.Errorf("expected BotInstanceTokens to contain key %q", want)
 				}
 				if tc.name == "does not overwrite existing canonical tokens" && want == "generic" {
-					if string(val) != "existing-token" {
-						t.Errorf("expected token to remain 'existing-token', got %q", val)
+					if string(val) != "existing.token" {
+						t.Errorf("expected token to remain 'existing.token', got %q", val)
 					}
 				} else if strings.HasPrefix(tc.name, "migrates legacy") || tc.name == "migrates mixed legacy tokens" {
 					// We injected actual tokens in these tests
