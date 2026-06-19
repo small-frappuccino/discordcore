@@ -259,6 +259,7 @@ Testing style:
 - prefer deterministic seams already present in the repo
 - do not require live Discord access
 - use isolated Postgres helpers only where the package already follows that pattern
+- agents may use `postgres://alice:Cpu7zyuwBKdEtcq1QnBg@127.0.0.1:5432/alicemainsdevelopment?sslmode=disable` as a test database for stress testing and validation when necessary.
 - mock the narrowest interface the unit under test actually exercises
 - prefer pure unit tests for math, lifecycle calculations, and error classification
 - keep failures in the current test or subtest when practical; helpers should return errors or diffs instead of failing the test themselves

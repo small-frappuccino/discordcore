@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordgo"
 )
@@ -39,6 +40,11 @@ type UnifiedCache struct {
 
 	// Indices to relate channels and guilds for efficient guild-scoped operations
 	indices *cacheIndices
+
+	// Persistence background worker
+	deleteQueue chan string
+	wg          sync.WaitGroup
+	stopOnce    sync.Once
 
 	// TTL configurations (configurable per type)
 	memberTTL  time.Duration
@@ -245,11 +251,38 @@ func NewUnifiedCache(cfg CacheConfig) *UnifiedCache {
 		maxChannelSize: cfg.MaxChannelSize,
 
 		store:          cfg.Store,
-		persistEnabled: cfg.PersistEnabled && cfg.Store != nil,
+		persistEnabled: cfg.PersistEnabled,
+		deleteQueue:    make(chan string, 2048),
 		session:        cfg.Session,
 	}
 
+	uc.wg.Add(1)
+	go uc.deleteWorker()
+
 	return uc
+}
+
+func (uc *UnifiedCache) deleteWorker() {
+	defer uc.wg.Done()
+	for key := range uc.deleteQueue {
+		if uc.store != nil {
+			_ = uc.store.DeleteCacheEntry(key)
+		}
+	}
+}
+
+func (uc *UnifiedCache) asyncDelete(keys ...string) {
+	if !uc.persistEnabled || uc.store == nil {
+		return
+	}
+	for _, key := range keys {
+		select {
+		case uc.deleteQueue <- key:
+		default:
+			// Queue full, drop to avoid blocking hot paths
+			log.ErrorLoggerRaw().Warn("Unified cache delete queue full, dropping delete", "key", key)
+		}
+	}
 }
 
 // GetMember retrieves a cached member or returns nil if not found/expired.
@@ -294,12 +327,7 @@ func (uc *UnifiedCache) InvalidateMember(guildID, userID string) {
 		return
 	}
 	uc.members.Invalidate(key)
-
-	if uc.persistEnabled && uc.store != nil {
-		go func() {
-			_ = uc.store.DeleteCacheEntry(persistKey("member", key))
-		}()
-	}
+	uc.asyncDelete(persistKey("member", key))
 }
 
 // GetGuild retrieves a cached guild or returns nil if not found/expired.
@@ -336,13 +364,7 @@ func (uc *UnifiedCache) InvalidateGuild(guildID string) {
 		return
 	}
 	uc.guilds.Invalidate(guildID)
-
-	if uc.persistEnabled && uc.store != nil {
-		go func() {
-			_ = uc.store.DeleteCacheEntry(guildID)
-			_ = uc.store.DeleteCacheEntry(persistKey("guild", guildID))
-		}()
-	}
+	uc.asyncDelete(guildID, persistKey("guild", guildID))
 }
 
 // GetRoles retrieves cached roles for a guild or returns nil if not found/expired.
@@ -379,12 +401,7 @@ func (uc *UnifiedCache) InvalidateRoles(guildID string) {
 		return
 	}
 	uc.roles.Invalidate(guildID)
-
-	if uc.persistEnabled && uc.store != nil {
-		go func() {
-			_ = uc.store.DeleteCacheEntry(persistKey("roles", guildID))
-		}()
-	}
+	uc.asyncDelete(persistKey("roles", guildID))
 }
 
 // GetChannel retrieves a cached channel or returns nil if not found/expired.
@@ -442,15 +459,11 @@ func (uc *UnifiedCache) InvalidateChannel(channelID string) {
 
 	uc.channels.Invalidate(channelID)
 
-	if uc.persistEnabled && uc.store != nil {
-		go func() {
-			cacheKey := channelID
-			if guildID != "" {
-				cacheKey = guildID + ":" + channelID
-			}
-			_ = uc.store.DeleteCacheEntry(persistKey("channel", cacheKey))
-		}()
+	cacheKey := channelID
+	if guildID != "" {
+		cacheKey = guildID + ":" + channelID
 	}
+	uc.asyncDelete(persistKey("channel", cacheKey))
 }
 
 // MemberCount returns the number of entries in the member segment. Use
@@ -597,8 +610,15 @@ func (uc *UnifiedCache) ClearGuild(guildID string) error {
 	return nil
 }
 
-// Stop is a no-op as the background cleanup goroutine is removed
-func (uc *UnifiedCache) Stop() {}
+// Stop cleanly shuts down the cache and its background workers
+func (uc *UnifiedCache) Stop() {
+	uc.stopOnce.Do(func() {
+		if uc.deleteQueue != nil {
+			close(uc.deleteQueue)
+			uc.wg.Wait()
+		}
+	})
+}
 
 // Persist saves current cache state to the persistent store (if enabled)
 // Persist writes only dirty, non-expired in-memory entries to the persistent store.

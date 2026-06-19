@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordgo"
 )
@@ -456,16 +458,20 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 		s.invalidateAccessibleGuildsCache()
 	}
 
+	var eg errgroup.Group
 	for _, token := range deletedTokens {
-		go func(t string) {
+		t := token // Capture for closure
+		eg.Go(func() error {
 			session, err := discordgo.New("Bot " + t)
 			if err == nil {
 				if err := session.GuildLeave(guildID); err != nil {
 					s.log().LogAttrs(context.Background(), slog.LevelWarn, "Failed to leave guild for removed bot profile", slog.String("guildID", guildID), slog.Any("err", err))
 				}
 			}
-		}(token)
+			return nil
+		})
 	}
+	_ = eg.Wait()
 
 	guild, ok := findGuildSettings(updated, guildID)
 	if !ok {

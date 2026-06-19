@@ -12,6 +12,7 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/persistence"
+	"github.com/small-frappuccino/discordcore/pkg/testdb"
 	"github.com/small-frappuccino/discordgo"
 	"log/slog"
 )
@@ -153,9 +154,23 @@ func TestFormatStartupMessage(t *testing.T) {
 
 // Mocks openRunnerConfigStore and setRunnerDatabaseBootstrapEnv which were present in runner_run_test.go
 func openRunnerConfigStore(t *testing.T) files.DatabaseRuntimeConfig {
+	baseDSN, err := testdb.BaseDatabaseURLFromEnv()
+	if err != nil {
+		if testdb.IsDatabaseURLNotConfigured(err) {
+			t.Skip("Skipping test: database URL not configured")
+		}
+		t.Fatalf("failed to get base DSN: %v", err)
+	}
+
+	_, dsn, cleanup, err := testdb.OpenIsolatedDatabaseWithDSN(context.Background(), baseDSN)
+	if err != nil {
+		t.Fatalf("failed to open isolated database: %v", err)
+	}
+	t.Cleanup(func() { _ = cleanup() })
+
 	return files.DatabaseRuntimeConfig{
 		Driver:      "postgres",
-		DatabaseURL: "postgres://postgres@127.0.0.1:5432/postgres?sslmode=disable",
+		DatabaseURL: dsn,
 	}
 }
 

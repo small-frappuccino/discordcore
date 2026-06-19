@@ -2,6 +2,7 @@ package members
 
 import (
 	"context"
+	"sync"
 
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
@@ -15,6 +16,14 @@ type GatewayListener struct {
 	state         *state.State
 	memberService *members.MemberEventService
 	cancels       []func()
+
+	updateQueue chan memberUpdatePayload
+	wg          sync.WaitGroup
+}
+
+type memberUpdatePayload struct {
+	e         *gateway.GuildMemberUpdateEvent
+	oldMember *discord.Member
 }
 
 // NewGatewayListener creates a new listener.
@@ -23,6 +32,7 @@ func NewGatewayListener(s *state.State, memberSvc *members.MemberEventService) *
 		state:         s,
 		memberService: memberSvc,
 		cancels:       make([]func(), 0, 3),
+		updateQueue:   make(chan memberUpdatePayload, 1024),
 	}
 }
 
@@ -42,10 +52,25 @@ func (l *GatewayListener) Start(ctx context.Context) error {
 				copied := *oldMember
 				oldMemberCopy = &copied
 			}
-			go l.memberService.IngestGuildMemberUpdate(context.Background(), e, oldMemberCopy)
+			select {
+			case l.updateQueue <- memberUpdatePayload{e: e, oldMember: oldMemberCopy}:
+			default:
+				// If queue is full, we drop the event to avoid blocking gateway
+			}
 		}),
 	)
+
+	l.wg.Add(1)
+	go l.worker()
+
 	return nil
+}
+
+func (l *GatewayListener) worker() {
+	defer l.wg.Done()
+	for payload := range l.updateQueue {
+		l.memberService.IngestGuildMemberUpdate(context.Background(), payload.e, payload.oldMember)
+	}
 }
 
 // Stop unregisters the handlers.
@@ -56,6 +81,12 @@ func (l *GatewayListener) Stop(ctx context.Context) error {
 		}
 	}
 	l.cancels = nil
+
+	if l.updateQueue != nil {
+		close(l.updateQueue)
+		l.wg.Wait()
+	}
+
 	return nil
 }
 
