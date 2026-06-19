@@ -900,7 +900,7 @@ func newTestDiscordSessionWithGuildRoles(guildID string, roles ...*discordgo.Rol
 	session := &discordgo.Session{
 		State: discordgo.NewState(),
 	}
-	_ = session.State.GuildAdd(&discordgo.Guild{
+	session.State.GuildAdd(&discordgo.Guild{
 		ID:    guildID,
 		Roles: roles,
 	})
@@ -911,7 +911,7 @@ func newTestDiscordSessionWithGuildMembers(guildID string, members ...*discordgo
 	session := &discordgo.Session{
 		State: discordgo.NewState(),
 	}
-	_ = session.State.GuildAdd(&discordgo.Guild{
+	session.State.GuildAdd(&discordgo.Guild{
 		ID:      guildID,
 		Members: members,
 	})
@@ -920,7 +920,7 @@ func newTestDiscordSessionWithGuildMembers(guildID string, members ...*discordgo
 			continue
 		}
 		member.GuildID = guildID
-		_ = session.State.MemberAdd(member)
+		session.State.MemberAdd(member)
 	}
 	return session
 }
@@ -929,7 +929,7 @@ func newTestDiscordSessionWithGuildChannels(guildID string, channels ...*discord
 	session := &discordgo.Session{
 		State: discordgo.NewState(),
 	}
-	_ = session.State.GuildAdd(&discordgo.Guild{
+	session.State.GuildAdd(&discordgo.Guild{
 		ID:       guildID,
 		Channels: channels,
 	})

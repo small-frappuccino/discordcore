@@ -67,17 +67,6 @@ func TestOptions(t *testing.T) {
 	if optBool != true {
 		t.Fatal("GetBooleanOption")
 	}
-	// Subcommand tests
-	optsSub := OptionList{
-		{
-			Name: "sub",
-			Type: discordgo.ApplicationCommandOptionSubCommand,
-			Options: []*discordgo.ApplicationCommandInteractionDataOption{
-				{Name: "subopt", Type: discordgo.ApplicationCommandOptionString, Value: "subval"},
-			},
-		},
-	}
 	// Context wraps options for subcommands, but OptionList doesn't natively recurse in String().
 	// We'll just test that we can extract standard options properly.
-	_ = optsSub
 }

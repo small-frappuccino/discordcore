@@ -13,7 +13,7 @@ func TestApplyMemberAdd(t *testing.T) {
 	// test store
 
 	cm := newTestConfigManager(t)
-	_, _ = cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
+	cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
 			{
 				GuildID: "guild-stats-main",
@@ -52,7 +52,7 @@ func TestApplyMemberAdd(t *testing.T) {
 
 func TestApplyMemberRemove(t *testing.T) {
 	cm := newTestConfigManager(t)
-	_, _ = cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
+	cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
 			{GuildID: "guild-stats-main", BotInstanceTokens: map[string]files.EncryptedString{"generic": "token"}, FeatureRouting: map[string]string{"stats": "generic"}, Features: files.FeatureToggles{}, Stats: files.StatsConfig{Channels: []files.StatsChannelConfig{{ChannelID: "c1"}}}},
 		}
@@ -71,7 +71,7 @@ func TestApplyMemberRemove(t *testing.T) {
 
 func TestApplyStatsMemberUpdate(t *testing.T) {
 	cm := newTestConfigManager(t)
-	_, _ = cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
+	cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
 			{GuildID: "guild-stats-main", BotInstanceTokens: map[string]files.EncryptedString{"generic": "token"}, FeatureRouting: map[string]string{"stats": "generic"}, Features: files.FeatureToggles{}, Stats: files.StatsConfig{Channels: []files.StatsChannelConfig{{ChannelID: "c1"}}}},
 		}

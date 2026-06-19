@@ -86,18 +86,18 @@ func OpenIsolatedDatabaseWithDSN(ctx context.Context, baseDSN string) (*pgxpool.
 
 	testDSN, err := withSearchPath(baseDSN, schemaName)
 	if err != nil {
-		_, _ = admin.Exec(ctx, fmt.Sprintf(`DROP SCHEMA IF EXISTS "%s" CASCADE`, schemaName))
+		admin.Exec(ctx, fmt.Sprintf(`DROP SCHEMA IF EXISTS "%s" CASCADE`, schemaName))
 		return nil, "", nil, fmt.Errorf("OpenIsolatedDatabaseWithDSN: %w", err)
 	}
 
 	testDB, err := pgxpool.New(ctx, testDSN)
 	if err != nil {
-		_, _ = admin.Exec(ctx, fmt.Sprintf(`DROP SCHEMA IF EXISTS "%s" CASCADE`, schemaName))
+		admin.Exec(ctx, fmt.Sprintf(`DROP SCHEMA IF EXISTS "%s" CASCADE`, schemaName))
 		return nil, "", nil, fmt.Errorf("open test database handle for schema %s: %w", schemaName, err)
 	}
 	if err := testDB.Ping(ctx); err != nil {
 		testDB.Close()
-		_, _ = admin.Exec(ctx, fmt.Sprintf(`DROP SCHEMA IF EXISTS "%s" CASCADE`, schemaName))
+		admin.Exec(ctx, fmt.Sprintf(`DROP SCHEMA IF EXISTS "%s" CASCADE`, schemaName))
 		return nil, "", nil, fmt.Errorf("ping test database handle for schema %s: %w", schemaName, err)
 	}
 
@@ -105,7 +105,7 @@ func OpenIsolatedDatabaseWithDSN(ctx context.Context, baseDSN string) (*pgxpool.
 	defer migrateCancel()
 	if err := persistence.NewPostgresMigrator(testDB).Up(migrateCtx); err != nil {
 		testDB.Close()
-		_, _ = admin.Exec(ctx, fmt.Sprintf(`DROP SCHEMA IF EXISTS "%s" CASCADE`, schemaName))
+		admin.Exec(ctx, fmt.Sprintf(`DROP SCHEMA IF EXISTS "%s" CASCADE`, schemaName))
 		return nil, "", nil, fmt.Errorf("apply postgres migrations for test schema %s: %w", schemaName, err)
 	}
 

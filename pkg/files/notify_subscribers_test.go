@@ -56,7 +56,7 @@ func TestNotifySubscribers_ConcurrencyLimitExceeded(t *testing.T) {
 	// Launch notifySubscribers in background so we can unblock the barrier
 	notifyDone := make(chan struct{})
 	go func() {
-		_ = cfgManager.notifySubscribers(context.Background(), cfg, cfg)
+		cfgManager.notifySubscribers(context.Background(), cfg, cfg)
 		close(notifyDone)
 	}()
 

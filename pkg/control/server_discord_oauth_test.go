@@ -328,13 +328,13 @@ func TestDiscordOAuthCallbackRedirectsToManageWhenRequested(t *testing.T) {
 		switch r.URL.Path {
 		case "/token":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
+			w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
 		case "/users/@me":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User","avatar":"abc123","discriminator":"0001"}`))
+			w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User","avatar":"abc123","discriminator":"0001"}`))
 		case "/users/@me/guilds":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","permissions":"8"}]`))
+			w.Write([]byte(`[{"id":"g1","name":"Guild One","permissions":"8"}]`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -389,13 +389,13 @@ func TestDiscordOAuthCallbackRedirectsToRootWhenRequested(t *testing.T) {
 		switch r.URL.Path {
 		case "/token":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
+			w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
 		case "/users/@me":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User","avatar":"abc123","discriminator":"0001"}`))
+			w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User","avatar":"abc123","discriminator":"0001"}`))
 		case "/users/@me/guilds":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","permissions":"8"}]`))
+			w.Write([]byte(`[{"id":"g1","name":"Guild One","permissions":"8"}]`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -464,14 +464,14 @@ func TestDiscordOAuthCallbackCreatesSessionAndHidesTokenPayload(t *testing.T) {
 				body:        string(raw),
 			}
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
+			w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
 		case "/users/@me":
 			userCapture <- strings.TrimSpace(r.Header.Get("Authorization"))
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User","avatar":"abc123","discriminator":"0001"}`))
+			w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User","avatar":"abc123","discriminator":"0001"}`))
 		case "/users/@me/guilds":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","permissions":"8"}]`))
+			w.Write([]byte(`[{"id":"g1","name":"Guild One","permissions":"8"}]`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -667,13 +667,13 @@ func TestGuildRoutesRequireCSRFForOAuthSessionMutations(t *testing.T) {
 		switch r.URL.Path {
 		case "/token":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
+			w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
 		case "/users/@me":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User"}`))
+			w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User"}`))
 		case "/users/@me/guilds":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","permissions":"8"}]`))
+			w.Write([]byte(`[{"id":"g1","name":"Guild One","permissions":"8"}]`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -788,13 +788,13 @@ func TestGlobalRoutesDenyOAuthSessionMutations(t *testing.T) {
 		switch r.URL.Path {
 		case "/token":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
+			w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
 		case "/users/@me":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User"}`))
+			w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User"}`))
 		case "/users/@me/guilds":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","permissions":"8"}]`))
+			w.Write([]byte(`[{"id":"g1","name":"Guild One","permissions":"8"}]`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -909,13 +909,13 @@ func TestGuildRoutesDenyOAuthSessionWithoutGuildAuthorization(t *testing.T) {
 		switch r.URL.Path {
 		case "/token":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
+			w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
 		case "/users/@me":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User"}`))
+			w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User"}`))
 		case "/users/@me/guilds":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":false,"permissions":"0"}]`))
+			w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":false,"permissions":"0"}]`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -974,13 +974,13 @@ func TestGuildRoutesAllowReadOnlyOAuthAccessForGetAndDenyWrites(t *testing.T) {
 		switch r.URL.Path {
 		case "/token":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
+			w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
 		case "/users/@me":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User"}`))
+			w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User"}`))
 		case "/users/@me/guilds":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":false,"permissions":"0"}]`))
+			w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":false,"permissions":"0"}]`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -1096,7 +1096,7 @@ func TestGuildAccessRoleUpdatesInvalidateAccessibleGuildCache(t *testing.T) {
 		case "/users/@me/guilds":
 			guildRequests.Add(1)
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":false,"permissions":"0"}]`))
+			w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":false,"permissions":"0"}]`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -1228,10 +1228,10 @@ func TestGuildWriteAuthorizationUsesAccessibleGuildCache(t *testing.T) {
 			guildRequests.Add(1)
 			w.Header().Set("Content-Type", "application/json")
 			if guildVisible.Load() {
-				_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","permissions":"8"}]`))
+				w.Write([]byte(`[{"id":"g1","name":"Guild One","permissions":"8"}]`))
 				return
 			}
-			_, _ = w.Write([]byte(`[]`))
+			w.Write([]byte(`[]`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -1356,10 +1356,10 @@ func TestDiscordOAuthGuildAccessFreshQueryRefreshesCachedGuilds(t *testing.T) {
 			guildRequests.Add(1)
 			w.Header().Set("Content-Type", "application/json")
 			if guildVisible.Load() {
-				_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","permissions":"8"}]`))
+				w.Write([]byte(`[{"id":"g1","name":"Guild One","permissions":"8"}]`))
 				return
 			}
-			_, _ = w.Write([]byte(`[]`))
+			w.Write([]byte(`[]`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -1498,7 +1498,7 @@ func TestDiscordOAuthGuildAccessEndpointSkipsErrorResponseOnRequestCancellation(
 		switch r.URL.Path {
 		case "/users/@me/guilds":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","permissions":"8"}]`))
+			w.Write([]byte(`[{"id":"g1","name":"Guild One","permissions":"8"}]`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -1557,10 +1557,10 @@ func TestDiscordOAuthGuildAccessEndpoints(t *testing.T) {
 		switch r.URL.Path {
 		case "/token":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
+			w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
 		case "/users/@me":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User"}`))
+			w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User"}`))
 		case "/users/@me/guilds":
 			limit := strings.TrimSpace(r.URL.Query().Get("limit"))
 			after := strings.TrimSpace(r.URL.Query().Get("after"))
@@ -1777,13 +1777,13 @@ func TestDiscordOAuthManageableGuildsEndpointDoesNotRequireBotGuildProvider(t *t
 		switch r.URL.Path {
 		case "/token":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
+			w.Write([]byte(`{"access_token":"access-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
 		case "/users/@me":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User"}`))
+			w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User"}`))
 		case "/users/@me/guilds":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","icon":"guild-icon","permissions":"8"}]`))
+			w.Write([]byte(`[{"id":"g1","name":"Guild One","icon":"guild-icon","permissions":"8"}]`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -1861,10 +1861,10 @@ func TestDiscordOAuthSessionPersistsAcrossServerRestart(t *testing.T) {
 		switch r.URL.Path {
 		case "/token":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"access_token":"access-token","refresh_token":"refresh-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
+			w.Write([]byte(`{"access_token":"access-token","refresh_token":"refresh-token","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
 		case "/users/@me":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User"}`))
+			w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User"}`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -1946,25 +1946,25 @@ func TestDiscordOAuthManageableGuildsRefreshesAccessTokenWithRotation(t *testing
 			switch form.Get("grant_type") {
 			case "authorization_code":
 				w.Header().Set("Content-Type", "application/json")
-				_, _ = w.Write([]byte(`{"access_token":"access-initial","refresh_token":"refresh-1","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
+				w.Write([]byte(`{"access_token":"access-initial","refresh_token":"refresh-1","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
 			case "refresh_token":
 				mu.Lock()
 				refreshTokenInputs = append(refreshTokenInputs, form.Get("refresh_token"))
 				mu.Unlock()
 				w.Header().Set("Content-Type", "application/json")
-				_, _ = w.Write([]byte(`{"access_token":"access-refreshed","refresh_token":"refresh-2","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
+				w.Write([]byte(`{"access_token":"access-refreshed","refresh_token":"refresh-2","token_type":"Bearer","scope":"identify guilds","expires_in":3600}`))
 			default:
 				http.Error(w, "unsupported grant type", http.StatusBadRequest)
 			}
 		case "/users/@me":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User"}`))
+			w.Write([]byte(`{"id":"u1","username":"testuser","global_name":"Test User"}`))
 		case "/users/@me/guilds":
 			mu.Lock()
 			guildAuthHeaders = append(guildAuthHeaders, strings.TrimSpace(r.Header.Get("Authorization")))
 			mu.Unlock()
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","permissions":"8"}]`))
+			w.Write([]byte(`[{"id":"g1","name":"Guild One","permissions":"8"}]`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -2085,7 +2085,7 @@ func TestDiscordOAuthCallbackRejectsInvalidState(t *testing.T) {
 	discordAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		exchangeCalls.Add(1)
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"access_token":"unexpected"}`))
+		w.Write([]byte(`{"access_token":"unexpected"}`))
 	}))
 	defer discordAPI.Close()
 

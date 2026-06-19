@@ -183,7 +183,7 @@ func newQOTDCommandTestSession(t *testing.T) (*discordgo.Session, *interactionRe
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if strings.Contains(req.URL.Path, "/callback") {
 			var resp discordgo.InteractionResponse
-			_ = json.NewDecoder(req.Body).Decode(&resp)
+			json.NewDecoder(req.Body).Decode(&resp)
 			rec.addResponse(resp)
 			w.WriteHeader(http.StatusOK)
 			return
@@ -192,14 +192,14 @@ func newQOTDCommandTestSession(t *testing.T) (*discordgo.Session, *interactionRe
 			var payload struct {
 				Content *string `json:"content"`
 			}
-			_ = json.NewDecoder(req.Body).Decode(&payload)
+			json.NewDecoder(req.Body).Decode(&payload)
 			if payload.Content != nil {
 				rec.addEdit(*payload.Content)
 			} else {
 				rec.addEdit("")
 			}
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"id":"message-1"}`))
+			w.Write([]byte(`{"id":"message-1"}`))
 			return
 		}
 		w.WriteHeader(http.StatusOK)

@@ -40,7 +40,7 @@ func TestCachedSessionGuildMemberUsesStateAndCaches(t *testing.T) {
 func TestCachedSessionChannelUsesStateFallbackOrder(t *testing.T) {
 	session := &discordgo.Session{State: discordgo.NewState()}
 	ch := &discordgo.Channel{ID: "chan", GuildID: "g"}
-	_ = session.State.ChannelAdd(ch)
+	session.State.ChannelAdd(ch)
 
 	uc := cache.NewUnifiedCache(cache.CacheConfig{MemberTTL: time.Minute, GuildTTL: time.Minute, RolesTTL: time.Minute, ChannelTTL: time.Minute})
 	// Prime cache to avoid hitting REST.

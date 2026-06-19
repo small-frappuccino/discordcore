@@ -176,9 +176,9 @@ func TestManager_CascadingFailure(t *testing.T) {
 	}
 	s3 := &mockService{name: "s3", dependencies: []string{"s2"}}
 
-	_ = sm.Register(s1)
-	_ = sm.Register(s2)
-	_ = sm.Register(s3)
+	sm.Register(s1)
+	sm.Register(s2)
+	sm.Register(s3)
 
 	err := sm.StartAll()
 	if err == nil {
@@ -246,7 +246,7 @@ loop:
 	time.Sleep(10 * time.Millisecond)
 
 	// Stop everything
-	_ = sm.StopAll(context.Background())
+	sm.StopAll(context.Background())
 
 	info, err := sm.GetServiceInfo("s1")
 	if err != nil {

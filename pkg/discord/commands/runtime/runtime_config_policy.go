@@ -117,7 +117,7 @@ func runtimeInteractionAuthToken(userID string) string {
 		return ""
 	}
 	hash := fnv.New32a()
-	_, _ = hash.Write([]byte(userID))
+	hash.Write([]byte(userID))
 	return strconv.FormatUint(uint64(hash.Sum32()), 36)
 }
 

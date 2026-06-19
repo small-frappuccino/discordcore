@@ -571,7 +571,7 @@ func (c *embedUnpostSubCommand) Handle(ctx *core.Context) error {
 	}
 
 	// Delete from Discord (best-effort)
-	_ = ctx.Session.ChannelMessageDelete(posting.ChannelID, posting.MessageID)
+	ctx.Session.ChannelMessageDelete(posting.ChannelID, posting.MessageID)
 
 	// Remove posting track from config
 	if err := c.configManager.RemoveCustomEmbedPosting(ctx.GuildID, embedKey, posting.MessageID); err != nil && !errors.Is(err, files.ErrCustomEmbedPostingNotFound) {

@@ -40,7 +40,7 @@ func TestCommandManager_GuildScopedSync(t *testing.T) {
 					}), nil
 				} else if req.Method == http.MethodPut {
 					var commands []discordgo.ApplicationCommand
-					_ = json.NewDecoder(req.Body).Decode(&commands)
+					json.NewDecoder(req.Body).Decode(&commands)
 					for i := range commands {
 						if commands[i].ID == "" {
 							commands[i].ID = "new-id-" + commands[i].Name
@@ -54,7 +54,7 @@ func TestCommandManager_GuildScopedSync(t *testing.T) {
 		}),
 	}
 	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
-	_ = config.AddGuildConfig(files.GuildConfig{
+	config.AddGuildConfig(files.GuildConfig{
 		GuildID:           "guild-1",
 		BotInstanceTokens: map[string]files.EncryptedString{"bot": "token"},
 	})
@@ -90,7 +90,7 @@ func TestCommandManager_GlobalSync(t *testing.T) {
 					return mockJSONResponse(http.StatusOK, []*discordgo.ApplicationCommand{}), nil
 				} else if req.Method == http.MethodPut {
 					var commands []discordgo.ApplicationCommand
-					_ = json.NewDecoder(req.Body).Decode(&commands)
+					json.NewDecoder(req.Body).Decode(&commands)
 					for i := range commands {
 						commands[i].ID = "new-id-" + commands[i].Name
 					}
@@ -133,7 +133,7 @@ func TestCommandManager_SyncErrors(t *testing.T) {
 						return mockJSONResponse(http.StatusInternalServerError, nil), nil
 					}
 					var commands []discordgo.ApplicationCommand
-					_ = json.NewDecoder(req.Body).Decode(&commands)
+					json.NewDecoder(req.Body).Decode(&commands)
 					for i := range commands {
 						if commands[i].ID == "" {
 							commands[i].ID = "new-id-" + commands[i].Name

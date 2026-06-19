@@ -76,7 +76,7 @@ func newModerationCommandTestSession(t *testing.T) (*discordgo.Session, *moderat
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if strings.Contains(req.URL.Path, "/callback") {
 			var resp discordgo.InteractionResponse
-			_ = json.NewDecoder(req.Body).Decode(&resp)
+			json.NewDecoder(req.Body).Decode(&resp)
 			rec.addResponse(resp)
 			w.WriteHeader(http.StatusOK)
 			return

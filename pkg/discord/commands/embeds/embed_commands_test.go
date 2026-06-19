@@ -66,7 +66,7 @@ type mockEmbedInteractionRecorder struct {
 
 func (r *mockEmbedInteractionRecorder) handleCallback(w http.ResponseWriter, req *http.Request) {
 	var resp discordgo.InteractionResponse
-	_ = json.NewDecoder(req.Body).Decode(&resp)
+	json.NewDecoder(req.Body).Decode(&resp)
 	r.responses = append(r.responses, resp)
 	w.WriteHeader(http.StatusOK)
 }
@@ -79,7 +79,7 @@ func TestEmbedCommandsIntegration(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"id":"ok"}`))
+		w.Write([]byte(`{"id":"ok"}`))
 	}))
 	t.Cleanup(server.Close)
 

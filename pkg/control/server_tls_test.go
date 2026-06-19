@@ -56,7 +56,7 @@ func TestControlServerStartWithTLS(t *testing.T) {
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		_ = srv.Stop(ctx)
+		srv.Stop(ctx)
 	})
 
 	client := &http.Client{

@@ -116,8 +116,8 @@ func TestPublishedConfigReadsReuseSnapshot(t *testing.T) {
 	}
 
 	allocs := testing.AllocsPerRun(1000, func() {
-		_ = mgr.Config()
-		_ = mgr.GuildConfig("g1")
+		mgr.Config()
+		mgr.GuildConfig("g1")
 	})
 	if allocs != 0 {
 		t.Fatalf("expected zero allocations for published config reads, got %f", allocs)
@@ -193,8 +193,8 @@ func TestGuildConfigIndexConcurrency(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < 200; j++ {
-				_ = mgr.GuildConfig("g1")
-				_ = mgr.GuildConfig("missing")
+				mgr.GuildConfig("g1")
+				mgr.GuildConfig("missing")
 			}
 		}()
 	}
@@ -204,7 +204,7 @@ func TestGuildConfigIndexConcurrency(t *testing.T) {
 		defer wg.Done()
 		for i := 0; i < writes; i++ {
 			id := fmt.Sprintf("g%02d", i+2)
-			_ = mgr.AddGuildConfig(GuildConfig{GuildID: id})
+			mgr.AddGuildConfig(GuildConfig{GuildID: id})
 		}
 	}()
 

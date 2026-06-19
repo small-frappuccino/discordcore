@@ -82,7 +82,7 @@ func (c *partnerAddSubCommand) Handle(ctx *core.Context) error {
 		return partnerDetailedCommandError(fmt.Sprintf("Failed to add partner: %v", err))
 	}
 
-	_ = c.partnerService.SyncConfig(ctx.GuildID, ctx.Session)
+	c.partnerService.SyncConfig(ctx.GuildID, ctx.Session)
 	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, "Partner added successfully.")
 }
 
@@ -152,7 +152,7 @@ func (c *partnerRemoveSubCommand) Handle(ctx *core.Context) error {
 		return partnerDetailedCommandError(fmt.Sprintf("Failed to remove partner: %v", err))
 	}
 
-	_ = c.partnerService.SyncConfig(ctx.GuildID, ctx.Session)
+	c.partnerService.SyncConfig(ctx.GuildID, ctx.Session)
 	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, "Partner removed successfully.")
 }
 
@@ -222,7 +222,7 @@ func (c *partnerLinkSubCommand) Handle(ctx *core.Context) error {
 		return partnerDetailedCommandError(fmt.Sprintf("Failed to update partner link: %v", err))
 	}
 
-	_ = c.partnerService.SyncConfig(ctx.GuildID, ctx.Session)
+	c.partnerService.SyncConfig(ctx.GuildID, ctx.Session)
 	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, "Partner link updated successfully.")
 }
 
@@ -315,7 +315,7 @@ func (c *partnerRenameSubCommand) Handle(ctx *core.Context) error {
 		return partnerDetailedCommandError(fmt.Sprintf("Failed to update partner: %v", err))
 	}
 
-	_ = c.partnerService.SyncConfig(ctx.GuildID, ctx.Session)
+	c.partnerService.SyncConfig(ctx.GuildID, ctx.Session)
 	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, "Partner renamed successfully.")
 }
 

@@ -75,26 +75,26 @@ func newMessageUpdateTestSession(t *testing.T) (*discordgo.Session, *patchRecord
 		case strings.Contains(req.URL.Path, "/webhooks/") && req.Method == http.MethodPatch:
 			rec.recordWebhook(req.URL.Path)
 			var payload map[string]any
-			_ = json.NewDecoder(req.Body).Decode(&payload)
+			json.NewDecoder(req.Body).Decode(&payload)
 			if _, ok := payload["embeds"]; !ok {
 				rec.addIssue("expected embeds in webhook patch payload: %#v", payload)
 			}
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"ok"}`))
+			w.Write([]byte(`{"id":"ok"}`))
 			return
 		case strings.Contains(req.URL.Path, "/channels/") && req.Method == http.MethodPatch:
 			rec.recordChannel(req.URL.Path)
 			var payload map[string]any
-			_ = json.NewDecoder(req.Body).Decode(&payload)
+			json.NewDecoder(req.Body).Decode(&payload)
 			if _, ok := payload["embeds"]; !ok {
 				rec.addIssue("expected embeds in channel patch payload: %#v", payload)
 			}
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"ok"}`))
+			w.Write([]byte(`{"id":"ok"}`))
 			return
 		default:
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"noop"}`))
+			w.Write([]byte(`{"id":"noop"}`))
 			return
 		}
 	}))

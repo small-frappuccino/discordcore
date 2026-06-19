@@ -44,7 +44,7 @@ func scheduleOrphanCleanupTask(router *task.TaskRouter, session *discordgo.Sessi
 			IdempotencyTTL: 5 * time.Minute,
 		},
 	}
-	_ = router.Dispatch(context.Background(), t)
+	router.Dispatch(context.Background(), t)
 }
 
 func guildScopedSyncTargets(cfg *files.BotConfig, session *discordgo.Session) map[string]struct{} {

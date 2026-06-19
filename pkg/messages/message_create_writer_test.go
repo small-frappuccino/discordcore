@@ -228,11 +228,11 @@ func TestMessageEventService_WriterDrainKeepsCreateEditDeleteVersionsContiguous(
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case r.Method == http.MethodPost && (r.URL.Path == fmt.Sprintf("/channels/%s/messages", editLogID) || r.URL.Path == fmt.Sprintf("/channels/%s/messages", deleteLogID)):
-			_ = json.NewEncoder(w).Encode(map[string]any{"id": "log-message"})
+			json.NewEncoder(w).Encode(map[string]any{"id": "log-message"})
 		case r.Method == http.MethodGet && r.URL.Path == fmt.Sprintf("/guilds/%s/audit-logs", guildID):
-			_ = json.NewEncoder(w).Encode(map[string]any{"audit_log_entries": []any{}})
+			json.NewEncoder(w).Encode(map[string]any{"audit_log_entries": []any{}})
 		default:
-			_, _ = w.Write([]byte(`{}`))
+			w.Write([]byte(`{}`))
 		}
 	})
 	session.Identify.Intents = discordgo.IntentsGuildMessages
@@ -429,12 +429,12 @@ func newMessageWriterTestSession(t *testing.T, guildID, logChannelID string) *di
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == fmt.Sprintf("/channels/%s/messages", logChannelID):
-			_ = json.NewEncoder(w).Encode(map[string]any{"id": "log-message"})
+			json.NewEncoder(w).Encode(map[string]any{"id": "log-message"})
 		case r.Method == http.MethodGet && r.URL.Path == fmt.Sprintf("/guilds/%s/audit-logs", guildID):
-			_ = json.NewEncoder(w).Encode(map[string]any{
+			json.NewEncoder(w).Encode(map[string]any{
 				"audit_log_entries": []any{}})
 		default:
-			_, _ = w.Write([]byte(`{}`))
+			w.Write([]byte(`{}`))
 		}
 	})
 }

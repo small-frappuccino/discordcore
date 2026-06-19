@@ -44,7 +44,7 @@ func LoadEnvWithLocalBinFallback(tokenEnvName string) (string, error) {
 	envPath := fallbackEnvPath
 	if info, statErr := os.Stat(envPath); statErr == nil && !info.IsDir() {
 		// godotenv.Load will NOT override variables that are already set.
-		_ = godotenv.Load(envPath)
+		godotenv.Load(envPath)
 	}
 
 	if v := os.Getenv(tokenEnvName); v != "" {

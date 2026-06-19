@@ -38,7 +38,7 @@ func TestReactionEventServiceRemovesBlockedReactionWithoutMetricsStore(t *testin
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == fmt.Sprintf("/channels/%s/messages/%s", channelID, messageID):
 			atomic.AddInt32(&messageLookups, 1)
-			_ = json.NewEncoder(w).Encode(map[string]any{
+			json.NewEncoder(w).Encode(map[string]any{
 				"id":         messageID,
 				"channel_id": channelID,
 				"author": map[string]any{
@@ -51,7 +51,7 @@ func TestReactionEventServiceRemovesBlockedReactionWithoutMetricsStore(t *testin
 			mu.Unlock()
 			w.WriteHeader(http.StatusNoContent)
 		default:
-			_, _ = w.Write([]byte(`{}`))
+			w.Write([]byte(`{}`))
 		}
 	})
 

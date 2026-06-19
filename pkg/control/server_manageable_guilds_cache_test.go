@@ -21,7 +21,7 @@ func TestResolveManageableGuildsCachesDiscordLookup(t *testing.T) {
 		case "/users/@me/guilds":
 			guildRequests.Add(1)
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","permissions":"8"}]`))
+			w.Write([]byte(`[{"id":"g1","name":"Guild One","permissions":"8"}]`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -87,7 +87,7 @@ func TestResolveManageableGuildsCacheExpires(t *testing.T) {
 		case "/users/@me/guilds":
 			guildRequests.Add(1)
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","permissions":"8"}]`))
+			w.Write([]byte(`[{"id":"g1","name":"Guild One","permissions":"8"}]`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -149,7 +149,7 @@ func TestResolveAccessibleGuildsRecomputesDiscordRoleAccessOnCacheHit(t *testing
 		case "/users/@me/guilds":
 			guildRequests.Add(1)
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":false,"permissions":"0"}]`))
+			w.Write([]byte(`[{"id":"g1","name":"Guild One","owner":false,"permissions":"0"}]`))
 		default:
 			http.NotFound(w, r)
 		}

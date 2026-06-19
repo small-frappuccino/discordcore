@@ -87,7 +87,7 @@ func (s *BotSupervisor) SetFatalCallback(cb func(error)) {
 
 func (s *BotSupervisor) Start() error {
 	s.log().Info("Initializing primary routines of BotSupervisor", slog.String("component", "BotSupervisor"))
-	_ = s.onConfigChanged(context.Background(), nil, nil) // trigger initial resolution
+	s.onConfigChanged(context.Background(), nil, nil) // trigger initial resolution
 	return nil
 }
 
@@ -251,7 +251,7 @@ func (s *BotSupervisor) onConfigChanged(ctx context.Context, oldCfg, newCfg *fil
 			s.bgWG.Add(1)
 			go func(id string, state *botInstanceState) {
 				defer s.bgWG.Done()
-				_ = s.executeStopAndRemove(context.Background(), id, state, nil)
+				s.executeStopAndRemove(context.Background(), id, state, nil)
 			}(id, state)
 		}
 	}
@@ -272,7 +272,7 @@ func (s *BotSupervisor) onConfigChanged(ctx context.Context, oldCfg, newCfg *fil
 				s.bgWG.Add(1)
 				go func(id string, state *botInstanceState) {
 					defer s.bgWG.Done()
-					_ = s.executeStopAndRemove(context.Background(), id, state, nil)
+					s.executeStopAndRemove(context.Background(), id, state, nil)
 				}(id, state)
 			}
 			oldState = state
@@ -394,7 +394,7 @@ func (s *BotSupervisor) onConfigChanged(ctx context.Context, oldCfg, newCfg *fil
 				return nil
 			})
 		}
-		_ = eg.Wait()
+		eg.Wait()
 	}()
 
 	return nil

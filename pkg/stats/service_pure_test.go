@@ -96,7 +96,7 @@ func (m *mockStateStore) HeartbeatForBot(ctx context.Context, botInstanceID stri
 
 func TestHandlesGuild(t *testing.T) {
 	cm := newTestConfigManager(t)
-	_, _ = cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
+	cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
 			{GuildID: "g1", BotInstanceTokens: map[string]files.EncryptedString{"generic": "token"}, FeatureRouting: map[string]string{"stats": "generic"}},
 			{GuildID: "g2", BotInstanceTokens: map[string]files.EncryptedString{"other": "token"}, FeatureRouting: map[string]string{"stats": "other"}},
@@ -124,13 +124,13 @@ func TestStatsServiceMethods(t *testing.T) {
 		t.Errorf("unexpected name")
 	}
 	// svc.Type() returns svc.ServiceType, which is an integer. Let's just call it.
-	_ = svc.Type()
-	_ = svc.Priority()
-	_ = svc.Dependencies()
-	_ = svc.Stats()
+	svc.Type()
+	svc.Priority()
+	svc.Dependencies()
+	svc.Stats()
 
 	ctx := context.Background()
-	_ = svc.HealthCheck(ctx)
+	svc.HealthCheck(ctx)
 }
 
 func TestShouldRunStatsUpdate(t *testing.T) {
@@ -314,7 +314,7 @@ func TestStatsIntervalHelpers(t *testing.T) {
 	if statsReconcileInterval() != 6*time.Hour {
 		t.Errorf("expected 6 hour reconcile interval")
 	}
-	_ = statsStoreFreshnessLimit() // Just execute for coverage
+	statsStoreFreshnessLimit() // Just execute for coverage
 	if statsSeedMetadataKey("g1") == "" {
 		t.Errorf("unexpected seed key")
 	}
@@ -335,7 +335,7 @@ func TestStatsStateAndStoreHelpers(t *testing.T) {
 	}
 
 	// streamGuildMembers should just return nil err since gw is nil
-	_ = svc.streamGuildMembers(ctx, "g1")
+	svc.streamGuildMembers(ctx, "g1")
 }
 
 func TestStatsGuildStateMemoryHelpers(t *testing.T) {
@@ -371,7 +371,7 @@ func TestStatsGuildStateMemoryHelpers(t *testing.T) {
 
 func TestStatsReconcileInterval(t *testing.T) {
 	cm := newTestConfigManager(t)
-	_, _ = cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
+	cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
 			{
 				GuildID:           "g1",
@@ -383,7 +383,7 @@ func TestStatsReconcileInterval(t *testing.T) {
 		return nil
 	})
 
-	_ = NewStatsService(nil, cm, newMockStateStore(), slog.Default(), "generic")
+	NewStatsService(nil, cm, newMockStateStore(), slog.Default(), "generic")
 
 	if statsReconcileInterval() != defaultStatsReconcileInterval {
 		t.Errorf("expected default")

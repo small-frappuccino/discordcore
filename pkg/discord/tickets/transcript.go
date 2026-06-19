@@ -81,7 +81,7 @@ func (s *TicketService) HandleTranscript(ctx *core.Context) error {
 	fileName := fmt.Sprintf("transcript-%s.json", channelID)
 
 	// Acknowledge the interaction first because the upload might take time
-	_ = core.NewResponseBuilder(ctx.Session).WithContext(ctx).Ephemeral().Success(ctx.Interaction, "Generating transcript...")
+	core.NewResponseBuilder(ctx.Session).WithContext(ctx).Ephemeral().Success(ctx.Interaction, "Generating transcript...")
 
 	_, err := ctx.Session.ChannelMessageSendComplex(auditChannelID, &discordgo.MessageSend{
 		Content: fmt.Sprintf("Transcript for ticket <#%s> (Channel ID: %s)", channelID, channelID),

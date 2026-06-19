@@ -63,7 +63,7 @@ func TestPermissionCheckerResolveMember_UsesCacheBeforeStateAndREST(t *testing.T
 			atomic.AddInt32(&memberCalls, 1)
 		}
 		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte(`{"message":"not found","code":0}`))
+		w.Write([]byte(`{"message":"not found","code":0}`))
 	})
 	session.State = discordgo.NewState()
 	if err := session.State.GuildAdd(&discordgo.Guild{ID: "g1"}); err != nil {
@@ -101,7 +101,7 @@ func TestPermissionCheckerResolveMember_UsesStateBeforeREST(t *testing.T) {
 			atomic.AddInt32(&memberCalls, 1)
 		}
 		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte(`{"message":"not found","code":0}`))
+		w.Write([]byte(`{"message":"not found","code":0}`))
 	})
 	session.State = discordgo.NewState()
 	if err := session.State.GuildAdd(&discordgo.Guild{ID: "g1"}); err != nil {
@@ -136,11 +136,11 @@ func TestPermissionCheckerResolveMember_ReturnsErrorOnRESTFailure(t *testing.T) 
 	session := newPermissionCheckerTestSession(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/guilds/g1/members/u1") {
 			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte(`{"message":"boom","code":0}`))
+			w.Write([]byte(`{"message":"boom","code":0}`))
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte(`{"message":"not found","code":0}`))
+		w.Write([]byte(`{"message":"not found","code":0}`))
 	})
 
 	cfg := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
@@ -158,7 +158,7 @@ func TestPermissionCheckerResolveMember_ReturnsErrorOnRESTFailure(t *testing.T) 
 func TestPermissionCheckerResolveMember_ReturnsNotFoundOnREST404(t *testing.T) {
 	session := newPermissionCheckerTestSession(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte(`{"message":"not found","code":0}`))
+		w.Write([]byte(`{"message":"not found","code":0}`))
 	})
 
 	cfg := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
@@ -180,7 +180,7 @@ func TestPermissionCheckerResolveRoles_UsesCacheBeforeStateAndREST(t *testing.T)
 			atomic.AddInt32(&roleCalls, 1)
 		}
 		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte(`{"message":"not found","code":0}`))
+		w.Write([]byte(`{"message":"not found","code":0}`))
 	})
 	session.State = discordgo.NewState()
 	if err := session.State.GuildAdd(&discordgo.Guild{
@@ -253,11 +253,11 @@ func TestPermissionCheckerResolveRoles_ReturnsErrorOnRESTFailure(t *testing.T) {
 	session := newPermissionCheckerTestSession(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/guilds/g1/roles") {
 			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte(`{"message":"boom","code":0}`))
+			w.Write([]byte(`{"message":"boom","code":0}`))
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte(`{"message":"not found","code":0}`))
+		w.Write([]byte(`{"message":"not found","code":0}`))
 	})
 
 	cfg := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
@@ -275,7 +275,7 @@ func TestPermissionCheckerResolveRoles_ReturnsErrorOnRESTFailure(t *testing.T) {
 func TestPermissionCheckerResolveRoles_ReturnsNotFoundOnREST404(t *testing.T) {
 	session := newPermissionCheckerTestSession(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte(`{"message":"not found","code":0}`))
+		w.Write([]byte(`{"message":"not found","code":0}`))
 	})
 
 	cfg := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)

@@ -368,7 +368,7 @@ func TestDashboardEndpointInteraction(t *testing.T) {
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		_ = srv.Stop(ctx)
+		srv.Stop(ctx)
 	})
 
 	req, err := http.NewRequest(http.MethodGet, "http://"+srv.listener.Addr().String()+dashboardRoutePrefix, nil)
@@ -405,7 +405,7 @@ func TestDashboardEndpointInteractionWithoutConfiguredAuth(t *testing.T) {
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		_ = srv.Stop(ctx)
+		srv.Stop(ctx)
 	})
 
 	client := &http.Client{

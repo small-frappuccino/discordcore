@@ -43,7 +43,7 @@ func newPermissionCheckerTestSession(t *testing.T, handler http.HandlerFunc) *di
 func TestPermissionCheckerHasPermissionAllowsAdministratorRoleWithoutAllowedRoles(t *testing.T) {
 	session := newPermissionCheckerTestSession(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{}`))
+		w.Write([]byte(`{}`))
 	})
 	session.State = discordgo.NewState()
 	if err := session.State.GuildAdd(&discordgo.Guild{
@@ -78,7 +78,7 @@ func TestPermissionCheckerHasPermissionAllowsAdministratorRoleWithoutAllowedRole
 func TestPermissionCheckerHasPermissionAllowsManageGuildWithoutAllowedRoles(t *testing.T) {
 	session := newPermissionCheckerTestSession(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{}`))
+		w.Write([]byte(`{}`))
 	})
 	session.State = discordgo.NewState()
 	if err := session.State.GuildAdd(&discordgo.Guild{

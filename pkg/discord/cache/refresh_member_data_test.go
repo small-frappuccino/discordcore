@@ -55,7 +55,7 @@ func setupMemberServer(t *testing.T, handler func(guildID, userID string) (membe
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(code)
 		if code >= 200 && code < 300 {
-			_ = json.NewEncoder(w).Encode(resp)
+			json.NewEncoder(w).Encode(resp)
 		}
 	}))
 

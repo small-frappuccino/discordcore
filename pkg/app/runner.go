@@ -65,7 +65,7 @@ func Run(appName string) error {
 func RunWithOptions(appName string, opts RunOptions) (err error) {
 	defer func() {
 		log.GlobalLogger.Sync()
-		_ = log.CloseGlobalLogger()
+		log.CloseGlobalLogger()
 	}()
 	defer func() {
 		if r := recover(); r != nil {
@@ -378,13 +378,13 @@ shutdown:
 		errWrap := fmt.Errorf("shutdown: %w", err)
 		log.EmitBlockingError("Structural teardown failure: Zombie sub-processes detected during stop iteration", errWrap, log.GenerateRequestID())
 		if runErr != nil {
-			_ = appServiceManager.Wait()
+			appServiceManager.Wait()
 			return stdErrors.Join(runErr, errWrap)
 		}
-		_ = appServiceManager.Wait()
+		appServiceManager.Wait()
 		return errWrap
 	}
-	_ = appServiceManager.Wait()
+	appServiceManager.Wait()
 	return runErr
 }
 

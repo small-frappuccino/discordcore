@@ -622,7 +622,7 @@ func TestServicePublishNowCreatesCurrentSlotManualPostAlongsidePreviousDayPost(t
 	if err != nil {
 		t.Fatalf("CreateQuestion(next) failed: %v", err)
 	}
-	_ = nextQuestion
+	nextQuestion
 
 	result, err := service.PublishNow(context.Background(), "g1")
 	if err != nil {

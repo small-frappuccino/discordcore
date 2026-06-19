@@ -82,19 +82,19 @@ func TestValidateMessageTarget(t *testing.T) {
 					w.Header().Set("Content-Type", "application/json")
 					if tt.messageStatus != http.StatusOK {
 						w.WriteHeader(tt.messageStatus)
-						_, _ = w.Write([]byte(`{"message":"message error"}`))
+						w.Write([]byte(`{"message":"message error"}`))
 						return
 					}
-					_, _ = w.Write([]byte(`{"id":"456","channel_id":"1","content":""}`))
+					w.Write([]byte(`{"id":"456","channel_id":"1","content":""}`))
 					return
 				case req.Method == http.MethodGet && strings.Contains(req.URL.Path, "/webhooks/"):
 					w.Header().Set("Content-Type", "application/json")
 					if tt.webhookStatus != http.StatusOK {
 						w.WriteHeader(tt.webhookStatus)
-						_, _ = w.Write([]byte(`{"message":"webhook error"}`))
+						w.Write([]byte(`{"message":"webhook error"}`))
 						return
 					}
-					_, _ = w.Write([]byte(`{"id":"123","type":1,"name":"test","token":"token-abc","channel_id":"1","guild_id":"1"}`))
+					w.Write([]byte(`{"id":"123","type":1,"name":"test","token":"token-abc","channel_id":"1","guild_id":"1"}`))
 					return
 				default:
 					w.WriteHeader(http.StatusOK)

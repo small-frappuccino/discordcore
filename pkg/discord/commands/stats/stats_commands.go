@@ -180,7 +180,7 @@ func (c *statsRootCommand) handleAdd(ctx *core.ArikawaContext, opts []discord.Co
 
 	if c.statsService != nil {
 		c.statsService.ForceGuildUpdate(ctx.GuildID.String())
-		_ = c.statsService.UpdateStatsChannels(context.WithoutCancel(context.Background()))
+		c.statsService.UpdateStatsChannels(context.WithoutCancel(context.Background()))
 	}
 
 	if c.logger != nil {
@@ -199,7 +199,7 @@ func (c *statsRootCommand) handleAdd(ctx *core.ArikawaContext, opts []discord.Co
 func (c *statsRootCommand) handleRemove(ctx *core.ArikawaContext, opts []discord.CommandInteractionOption) error {
 	cfg := ctx.GuildConfig
 	if len(cfg.Stats.Channels) == 0 {
-		_ = ctx.Respond(core.NewArikawaMissingConfigErrorData(ctx.GuildID.String(), "Stats Channels", "/stats"))
+		ctx.Respond(core.NewArikawaMissingConfigErrorData(ctx.GuildID.String(), "Stats Channels", "/stats"))
 		return core.ErrAlreadyAcknowledged
 	}
 
@@ -235,7 +235,7 @@ func (c *statsRootCommand) handleRemove(ctx *core.ArikawaContext, opts []discord
 	}
 
 	if c.statsService != nil {
-		_ = c.statsService.UpdateStatsChannels(context.WithoutCancel(context.Background()))
+		c.statsService.UpdateStatsChannels(context.WithoutCancel(context.Background()))
 	}
 
 	if c.logger != nil {

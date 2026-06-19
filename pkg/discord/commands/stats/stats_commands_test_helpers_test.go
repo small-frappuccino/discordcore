@@ -77,7 +77,7 @@ func (m *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if strings.Contains(req.URL.Path, "/interactions/") {
 		var payload api.InteractionResponse
 		if req.Body != nil {
-			_ = json.NewDecoder(req.Body).Decode(&payload)
+			json.NewDecoder(req.Body).Decode(&payload)
 		}
 		m.rec.addResponse(payload)
 	}

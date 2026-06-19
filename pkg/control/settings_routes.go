@@ -473,7 +473,7 @@ func (s *Server) handleGuildSettingsPut(w http.ResponseWriter, r *http.Request, 
 			return nil
 		})
 	}
-	_ = eg.Wait()
+	eg.Wait()
 
 	guild, ok := findGuildSettings(updated, guildID)
 	if !ok {

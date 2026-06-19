@@ -37,7 +37,7 @@ func TestBulkDeleteAgeRejectionFallsBackToSingleDeletes(t *testing.T) {
 			mu.Unlock()
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
-			_ = json.NewEncoder(w).Encode(map[string]any{
+			json.NewEncoder(w).Encode(map[string]any{
 				"code":    discordgo.ErrCodeMessageProvidedTooOldForBulkDelete,
 				"message": "You can only bulk delete messages that are under 14 days old.",
 			})
@@ -109,7 +109,7 @@ func TestBulkDeleteForbiddenFiresChunkErrorOnce(t *testing.T) {
 		case req.Method == http.MethodPost && strings.HasSuffix(req.URL.Path, "/bulk-delete"):
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)
-			_ = json.NewEncoder(w).Encode(map[string]any{
+			json.NewEncoder(w).Encode(map[string]any{
 				"code":    discordgo.ErrCodeMissingPermissions,
 				"message": "Missing Permissions",
 			})
@@ -180,7 +180,7 @@ func TestSingleDeleteMissingMessageCountsAsDeleted(t *testing.T) {
 		if id == "m2" {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusNotFound)
-			_ = json.NewEncoder(w).Encode(map[string]any{
+			json.NewEncoder(w).Encode(map[string]any{
 				"code":    discordgo.ErrCodeUnknownMessage,
 				"message": "Unknown Message",
 			})

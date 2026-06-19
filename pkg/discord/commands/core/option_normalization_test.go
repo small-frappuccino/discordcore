@@ -130,7 +130,7 @@ func TestCommandManagerSetupCommands_NormalizesOptionOrderBeforeSync(t *testing.
 
 		switch {
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/applications/app-id/commands"):
-			_ = json.NewEncoder(w).Encode([]map[string]any{})
+			json.NewEncoder(w).Encode([]map[string]any{})
 		case r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/applications/app-id/commands"):
 			var postedArray []discordgo.ApplicationCommand
 			if err := json.NewDecoder(r.Body).Decode(&postedArray); err != nil {
@@ -143,9 +143,9 @@ func TestCommandManagerSetupCommands_NormalizesOptionOrderBeforeSync(t *testing.
 				}
 				postedArray[0] = posted
 			}
-			_ = json.NewEncoder(w).Encode(&postedArray)
+			json.NewEncoder(w).Encode(&postedArray)
 		default:
-			_ = json.NewEncoder(w).Encode(map[string]any{})
+			json.NewEncoder(w).Encode(map[string]any{})
 		}
 	})
 

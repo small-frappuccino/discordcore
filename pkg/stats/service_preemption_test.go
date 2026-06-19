@@ -46,7 +46,7 @@ func TestStatsService_DatabasePreemption(t *testing.T) {
 
 	// Trigger a background update that uses the database
 	go func() {
-		_ = s.UpdateStatsChannels(ctx)
+		s.UpdateStatsChannels(ctx)
 	}()
 
 	// Wait briefly to ensure it hits the blocking store
@@ -58,7 +58,7 @@ func TestStatsService_DatabasePreemption(t *testing.T) {
 	// Service should stop gracefully without leaking or hanging indefinitely
 	done := make(chan struct{})
 	go func() {
-		_ = s.Stop(context.Background())
+		s.Stop(context.Background())
 		close(done)
 	}()
 

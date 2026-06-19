@@ -97,7 +97,7 @@ func TestTaskRouter_ConcurrentOverloadAndShutdown(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			_ = tr.Dispatch(context.Background(), Task{
+			tr.Dispatch(context.Background(), Task{
 				Type:    "overload_task",
 				Payload: idx,
 				Options: TaskOptions{GroupKey: "overload_group"},
@@ -141,7 +141,7 @@ func TestTaskRouter_RaceConditions(t *testing.T) {
 			// Randomize group to ensure high parallelism
 			group := string(rune('a' + (idx % 26)))
 
-			_ = tr.Dispatch(context.Background(), Task{
+			tr.Dispatch(context.Background(), Task{
 				Type:    "race_task",
 				Payload: idx,
 				Options: TaskOptions{GroupKey: group},

@@ -109,7 +109,7 @@ func (mes *MemberEventService) Start(ctx context.Context) error {
 
 	cleanupCtx, done, ok := mes.lifecycle.Begin()
 	if !ok {
-		_ = mes.lifecycle.Cancel()
+		mes.lifecycle.Cancel()
 		return fmt.Errorf("member event service cleanup worker failed to start")
 	}
 	go func() {

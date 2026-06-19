@@ -119,7 +119,7 @@ func (mgr *ConfigManager) ApplyConfig(cfg *BotConfig) int {
 	mgr.publishSnapshotLocked()
 	mgr.mu.Unlock()
 
-	_ = mgr.notifySubscribers(context.Background(), oldCfg, cfg)
+	mgr.notifySubscribers(context.Background(), oldCfg, cfg)
 
 	mgr.log().Info("Configuration state transition completed",
 		slog.Int("duplicates_removed", dupCount),

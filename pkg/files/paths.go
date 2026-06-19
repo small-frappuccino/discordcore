@@ -250,7 +250,7 @@ func EnsureCacheInitialized() error {
 	}
 
 	// Best-effort marker file so we can detect initialization later (ignore errors).
-	_ = os.WriteFile(filepath.Join(ApplicationCachesPath, "avatar", ".keep"), []byte{}, 0o644)
+	os.WriteFile(filepath.Join(ApplicationCachesPath, "avatar", ".keep"), []byte{}, 0o644)
 
 	return nil
 }

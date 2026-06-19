@@ -40,8 +40,8 @@ func TestDynamicManager(t *testing.T) {
 
 	sm := NewServiceManager(nil)
 	s1 := &mockService{name: "s1", startFunc: func(ctx context.Context) error { return nil }}
-	_ = sm.Register(s1)
-	_ = sm.StartAll()
+	sm.Register(s1)
+	sm.StartAll()
 
 	all := sm.GetAllServices()
 	if len(all) != 1 {
@@ -51,7 +51,7 @@ func TestDynamicManager(t *testing.T) {
 	if len(running) != 1 {
 		t.Errorf("expected 1 running service")
 	}
-	_ = sm.StopAll(context.Background())
+	sm.StopAll(context.Background())
 }
 
 func TestBaseServiceAccessors(t *testing.T) {
@@ -72,8 +72,8 @@ func TestBaseServiceAccessors(t *testing.T) {
 	if stats.RestartCount != 1 || stats.ErrorCount != 1 {
 		t.Errorf("expected 1 restart and 1 error")
 	}
-	_ = bs.Start(context.Background())
-	_ = bs.Stop(context.Background())
+	bs.Start(context.Background())
+	bs.Stop(context.Background())
 }
 
 func TestManagedService(t *testing.T) {
@@ -83,7 +83,7 @@ func TestManagedService(t *testing.T) {
 	ms.SetAutoRestart(true, 1, time.Millisecond)
 
 	// Simulate start so isRunning is true (to allow Stop to work)
-	_ = ms.Start(context.Background())
+	ms.Start(context.Background())
 
 	ms.HandleError(errors.New("simulated error"))
 

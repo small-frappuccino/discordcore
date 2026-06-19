@@ -175,7 +175,7 @@ func newTicketCommandTestSession(t *testing.T) (*discordgo.Session, *ticketInter
 
 		if strings.Contains(path, "/callback") || strings.HasSuffix(path, "/messages/@original") {
 			var resp discordgo.InteractionResponse
-			_ = json.NewDecoder(req.Body).Decode(&resp)
+			json.NewDecoder(req.Body).Decode(&resp)
 			rec.addResponse(resp)
 			w.WriteHeader(http.StatusOK)
 			return
@@ -199,7 +199,7 @@ func newTicketCommandTestSession(t *testing.T) (*discordgo.Session, *ticketInter
 		if strings.Contains(path, "/channels") && req.Method == http.MethodPost && !strings.Contains(path, "/messages") {
 			// Channel Create
 			var data discordgo.GuildChannelCreateData
-			_ = json.NewDecoder(req.Body).Decode(&data)
+			json.NewDecoder(req.Body).Decode(&data)
 			rec.addChannelCreate(data)
 
 			// Return a dummy channel
@@ -211,7 +211,7 @@ func newTicketCommandTestSession(t *testing.T) (*discordgo.Session, *ticketInter
 		if strings.Contains(path, "/channels") && req.Method == http.MethodPatch {
 			// Channel Edit
 			var data discordgo.ChannelEdit
-			_ = json.NewDecoder(req.Body).Decode(&data)
+			json.NewDecoder(req.Body).Decode(&data)
 			rec.addChannelEdit(data)
 			ch := discordgo.Channel{ID: "edited-channel-id", Name: data.Name}
 			json.NewEncoder(w).Encode(ch)
@@ -250,7 +250,7 @@ func newTicketCommandTestSession(t *testing.T) (*discordgo.Session, *ticketInter
 			}
 
 			var data discordgo.MessageSend
-			_ = json.NewDecoder(req.Body).Decode(&data)
+			json.NewDecoder(req.Body).Decode(&data)
 			rec.addMessageSend(&data)
 			json.NewEncoder(w).Encode(discordgo.Message{ID: "msg-1"})
 			return

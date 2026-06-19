@@ -274,7 +274,7 @@ func loadRuntimeConfig(cm *files.ConfigManager, scope string) (files.RuntimeConf
 	if cm == nil {
 		return files.RuntimeConfig{}, fmt.Errorf("config manager is nil")
 	}
-	_ = cm.LoadConfig() // best effort
+	cm.LoadConfig() // best effort
 	cfg := cm.Config()
 	if cfg == nil {
 		return files.RuntimeConfig{}, nil
@@ -294,7 +294,7 @@ func saveRuntimeConfig(cm *files.ConfigManager, rc files.RuntimeConfig, scope st
 	if cm == nil {
 		return fmt.Errorf("config manager is nil")
 	}
-	_ = cm.LoadConfig() // best effort
+	cm.LoadConfig() // best effort
 	if scope == "" || scope == "global" {
 		_, err := cm.UpdateRuntimeConfig(func(current *files.RuntimeConfig) error {
 			*current = rc

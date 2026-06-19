@@ -87,20 +87,20 @@ func TestCommandHandlerSetupAndShutdownLifecycle(t *testing.T) {
 		switch {
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/applications/app-id/commands"):
 			atomic.AddInt32(&commandListCalls, 1)
-			_ = json.NewEncoder(w).Encode([]map[string]any{})
+			json.NewEncoder(w).Encode([]map[string]any{})
 		case r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/applications/app-id/commands"):
 			atomic.AddInt32(&commandCreateCalls, 1)
 			var commands []discordgo.ApplicationCommand
-			_ = json.NewDecoder(r.Body).Decode(&commands)
+			json.NewDecoder(r.Body).Decode(&commands)
 			for i := range commands {
 				commands[i].ID = "generated"
 			}
-			_ = json.NewEncoder(w).Encode(&commands)
+			json.NewEncoder(w).Encode(&commands)
 		case r.Method == http.MethodDelete && strings.Contains(r.URL.Path, "/applications/app-id/commands/"):
 			w.WriteHeader(http.StatusNoContent)
 		default:
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{}`))
+			w.Write([]byte(`{}`))
 		}
 	})
 

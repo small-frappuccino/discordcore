@@ -267,7 +267,7 @@ func (uc *UnifiedCache) deleteWorker() {
 	defer uc.wg.Done()
 	for key := range uc.deleteQueue {
 		if uc.store != nil {
-			_ = uc.store.DeleteCacheEntry(key)
+			uc.store.DeleteCacheEntry(key)
 		}
 	}
 }

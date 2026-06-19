@@ -74,7 +74,7 @@ func newTestSession(t *testing.T) (*discordgo.Session, *responseRecorder) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/callback") {
 			var resp discordgo.InteractionResponse
-			_ = json.NewDecoder(r.Body).Decode(&resp)
+			json.NewDecoder(r.Body).Decode(&resp)
 			rec.add(resp)
 		}
 		w.WriteHeader(http.StatusOK)
@@ -234,7 +234,7 @@ func TestHandleSlashCommandRequiresGuild(t *testing.T) {
 func TestHandleSlashCommandPermissionDenied(t *testing.T) {
 	session, rec := newTestSession(t)
 	config := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
-	_ = config.AddGuildConfig(files.GuildConfig{GuildID: "guild", Roles: files.RolesConfig{Allowed: []string{"role"}}})
+	config.AddGuildConfig(files.GuildConfig{GuildID: "guild", Roles: files.RolesConfig{Allowed: []string{"role"}}})
 	router := NewCommandRouter(session, config)
 
 	router.RegisterCommand(testCommand{name: "secure", requiresPermissions: true, handler: func(*Context) error {
@@ -314,7 +314,7 @@ func TestGroupCommandDispatch(t *testing.T) {
 	}
 
 	session, _ := discordgo.New("Bot test-group")
-	_ = session.State.GuildAdd(&discordgo.Guild{ID: "guild"})
+	session.State.GuildAdd(&discordgo.Guild{ID: "guild"})
 	ctx := (&ContextBuilder{session: session, configManager: cfg, checker: checker}).BuildContext(interaction)
 	if err := group.Handle(ctx); err != nil {
 		t.Fatalf("group handle returned error: %v", err)

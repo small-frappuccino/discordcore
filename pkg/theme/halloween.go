@@ -18,7 +18,7 @@ package theme
 func init() {
 	// Register the built-in theme. Errors are ignored because failures here
 	// are purely developer errors (e.g. duplicate name) validated at compile/test time.
-	_ = Register(&Theme{
+	Register(&Theme{
 		Name: "halloween",
 
 		// Notification-focused overrides

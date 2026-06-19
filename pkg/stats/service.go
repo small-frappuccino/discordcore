@@ -149,7 +149,7 @@ func (s *StatsService) runCron(ctx context.Context) {
 	}()
 
 	// initial run
-	_ = s.UpdateStatsChannels(ctx)
+	s.UpdateStatsChannels(ctx)
 
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
@@ -159,7 +159,7 @@ func (s *StatsService) runCron(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			_ = s.UpdateStatsChannels(ctx)
+			s.UpdateStatsChannels(ctx)
 		}
 	}
 }
@@ -469,7 +469,7 @@ func (s *StatsService) reconcileStatsForGuild(ctx context.Context, gcfg files.Gu
 		if !ok {
 			continue
 		}
-		_ = state.applyAdd(userID, snapshot)
+		state.applyAdd(userID, snapshot)
 	}
 
 	state.initialized = true
@@ -538,7 +538,7 @@ func (s *StatsService) hydrateStatsForGuildFromStore(ctx context.Context, gcfg f
 		if !ok {
 			continue
 		}
-		_ = state.applyAdd(userID, snapshot)
+		state.applyAdd(userID, snapshot)
 	}
 
 	state.initialized = true
@@ -800,7 +800,7 @@ func (s *StatsService) updateStatsChannelName(ctx context.Context, guildID strin
 		return fmt.Errorf("channel edit: %w", err)
 	}
 
-	_ = s.store.SetMetadata(ctx, metaKey, time.Now().UTC())
+	s.store.SetMetadata(ctx, metaKey, time.Now().UTC())
 
 	s.recordStatsPublishedChannel(guildID, channelID, statsPublishedChannel{
 		count: count,

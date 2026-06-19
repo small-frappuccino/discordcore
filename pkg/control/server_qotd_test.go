@@ -312,7 +312,7 @@ func TestQOTDRoutesPublishNowCanSkipAutomaticSlotConsumption(t *testing.T) {
 	// Non-consuming manual posts are recorded at today's UTC date, not at the
 	// projected automatic slot (which CurrentPublishDateUTC would return).
 	publishDate := qotd.NormalizePublishDateUTC(time.Now().UTC())
-	_ = schedule
+	schedule
 	publishRec := performHandlerJSONRequest(t, handler, "POST", "/v1/guilds/g1/qotd/actions/publish-now", map[string]any{
 		"consume_automatic_slot": false,
 	})

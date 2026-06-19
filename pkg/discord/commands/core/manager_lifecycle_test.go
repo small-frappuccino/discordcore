@@ -51,12 +51,12 @@ func TestCommandManagerSetupAndShutdownHandlerLifecycle(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 
 		if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/applications/app-id/commands") {
-			_ = json.NewEncoder(w).Encode([]map[string]any{})
+			json.NewEncoder(w).Encode([]map[string]any{})
 			return
 		}
 
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{}`))
+		w.Write([]byte(`{}`))
 	})
 
 	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
@@ -94,11 +94,11 @@ func TestCommandManagerSetupCommandsRollbackOnFetchError(t *testing.T) {
 	session := newCommandManagerSession(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/applications/app-id/commands") {
 			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte(`{"message":"forced failure"}`))
+			w.Write([]byte(`{"message":"forced failure"}`))
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{}`))
+		w.Write([]byte(`{}`))
 	})
 
 	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
@@ -149,13 +149,13 @@ func TestCommandManagerSetupCommandsRollbackOnCreateError(t *testing.T) {
 
 		switch {
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/applications/app-id/commands"):
-			_ = json.NewEncoder(w).Encode([]map[string]any{})
+			json.NewEncoder(w).Encode([]map[string]any{})
 		case r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/applications/app-id/commands"):
 			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte(`{"message":"forced create failure"}`))
+			w.Write([]byte(`{"message":"forced create failure"}`))
 		default:
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{}`))
+			w.Write([]byte(`{}`))
 		}
 	})
 
@@ -183,7 +183,7 @@ func TestCommandManagerSetupCommandsUsesGlobalSyncWithoutDomainOverrides(t *test
 
 		switch {
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/applications/app-id/commands"):
-			_ = json.NewEncoder(w).Encode([]map[string]any{})
+			json.NewEncoder(w).Encode([]map[string]any{})
 		case r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/applications/app-id/commands"):
 			var posted []discordgo.ApplicationCommand
 			if err := json.NewDecoder(r.Body).Decode(&posted); err != nil {
@@ -194,10 +194,10 @@ func TestCommandManagerSetupCommandsUsesGlobalSyncWithoutDomainOverrides(t *test
 					posted[i].ID = "created-id"
 				}
 			}
-			_ = json.NewEncoder(w).Encode(&posted)
+			json.NewEncoder(w).Encode(&posted)
 		default:
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{}`))
+			w.Write([]byte(`{}`))
 		}
 	})
 
@@ -255,7 +255,7 @@ func TestCommandManagerSetupCommandsUsesGuildSyncWhenBotInstanceTokensExist(t *t
 
 				switch {
 				case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/applications/app-id/commands"):
-					_ = json.NewEncoder(w).Encode([]map[string]any{{
+					json.NewEncoder(w).Encode([]map[string]any{{
 						"id":          "legacy-global",
 						"name":        "legacy-global",
 						"description": "legacy global command",
@@ -264,11 +264,11 @@ func TestCommandManagerSetupCommandsUsesGuildSyncWhenBotInstanceTokensExist(t *t
 					var posted []discordgo.ApplicationCommand
 					if err := json.NewDecoder(r.Body).Decode(&posted); err == nil && len(posted) == 0 {
 						globalDeletes++
-						_ = json.NewEncoder(w).Encode(posted)
+						json.NewEncoder(w).Encode(posted)
 					}
 				case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/applications/app-id/guilds/g1/commands"):
 					guildFetches++
-					_ = json.NewEncoder(w).Encode([]map[string]any{})
+					json.NewEncoder(w).Encode([]map[string]any{})
 				case r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/applications/app-id/guilds/g1/commands"):
 					var posted []discordgo.ApplicationCommand
 					if err := json.NewDecoder(r.Body).Decode(&posted); err != nil {
@@ -280,10 +280,10 @@ func TestCommandManagerSetupCommandsUsesGuildSyncWhenBotInstanceTokensExist(t *t
 							posted[i].ID = posted[i].Name + "-id"
 						}
 					}
-					_ = json.NewEncoder(w).Encode(&posted)
+					json.NewEncoder(w).Encode(&posted)
 				default:
 					w.WriteHeader(http.StatusOK)
-					_, _ = w.Write([]byte(`{}`))
+					w.Write([]byte(`{}`))
 				}
 			})
 
@@ -359,7 +359,7 @@ func TestCommandManagerSetupCommandsSkipsConfiguredGuildsMissingFromSessionState
 
 		switch {
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/applications/app-id/commands"):
-			_ = json.NewEncoder(w).Encode([]map[string]any{{
+			json.NewEncoder(w).Encode([]map[string]any{{
 				"id":          "legacy-global",
 				"name":        "legacy-global",
 				"description": "legacy global command",
@@ -368,11 +368,11 @@ func TestCommandManagerSetupCommandsSkipsConfiguredGuildsMissingFromSessionState
 			var posted []discordgo.ApplicationCommand
 			if err := json.NewDecoder(r.Body).Decode(&posted); err == nil && len(posted) == 0 {
 				globalDeletes++
-				_ = json.NewEncoder(w).Encode(posted)
+				json.NewEncoder(w).Encode(posted)
 			}
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/applications/app-id/guilds/g1/commands"):
 			guildFetches = append(guildFetches, "g1")
-			_ = json.NewEncoder(w).Encode([]map[string]any{})
+			json.NewEncoder(w).Encode([]map[string]any{})
 		case r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/applications/app-id/guilds/g1/commands"):
 			var posted []discordgo.ApplicationCommand
 			if err := json.NewDecoder(r.Body).Decode(&posted); err != nil {
@@ -383,13 +383,13 @@ func TestCommandManagerSetupCommandsSkipsConfiguredGuildsMissingFromSessionState
 					posted[i].ID = posted[i].Name + "-id"
 				}
 			}
-			_ = json.NewEncoder(w).Encode(&posted)
+			json.NewEncoder(w).Encode(&posted)
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/applications/app-id/guilds/g2/commands"):
 			w.WriteHeader(http.StatusForbidden)
-			_, _ = w.Write([]byte(`{"message":"Missing Access","code":50001}`))
+			w.Write([]byte(`{"message":"Missing Access","code":50001}`))
 		default:
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{}`))
+			w.Write([]byte(`{}`))
 		}
 	})
 	session.State.Guilds = []*discordgo.Guild{{ID: "g1"}}

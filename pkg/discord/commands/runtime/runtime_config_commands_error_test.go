@@ -107,7 +107,7 @@ func newRuntimePanelTestSession(
 			if callbackStatus != http.StatusOK {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(callbackStatus)
-				_, _ = w.Write([]byte(`{"message":"forced callback failure"}`))
+				w.Write([]byte(`{"message":"forced callback failure"}`))
 				return
 			}
 			w.WriteHeader(http.StatusOK)
@@ -117,7 +117,7 @@ func newRuntimePanelTestSession(
 			body, _ := io.ReadAll(req.Body)
 			rec.addFollowupPost(string(body))
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"followup-message","content":""}`))
+			w.Write([]byte(`{"id":"followup-message","content":""}`))
 			return
 
 		case strings.Contains(req.URL.Path, "/webhooks/") && req.Method == http.MethodPatch:
@@ -127,10 +127,10 @@ func newRuntimePanelTestSession(
 			w.Header().Set("Content-Type", "application/json")
 			if webhookPatchStatus != http.StatusOK {
 				w.WriteHeader(webhookPatchStatus)
-				_, _ = w.Write([]byte(`{"message":"forced patch failure"}`))
+				w.Write([]byte(`{"message":"forced patch failure"}`))
 				return
 			}
-			_, _ = w.Write([]byte(`{"id":"edited-message","content":""}`))
+			w.Write([]byte(`{"id":"edited-message","content":""}`))
 			return
 		}
 

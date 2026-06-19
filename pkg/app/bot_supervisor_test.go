@@ -359,7 +359,7 @@ func TestSupervisorConfigChange(t *testing.T) {
 		},
 	}
 	cfgManager.ApplyConfig(&cfg2)
-	_ = supervisor.onConfigChanged(context.Background(), nil, &cfg2)
+	supervisor.onConfigChanged(context.Background(), nil, &cfg2)
 
 	for i := 0; i < 50; i++ {
 		supervisor.mu.Lock()
@@ -377,7 +377,7 @@ func TestSupervisorConfigChange(t *testing.T) {
 		Guilds:   []files.GuildConfig{},
 	}
 	cfgManager.ApplyConfig(&cfg3)
-	_ = supervisor.onConfigChanged(context.Background(), nil, &cfg3)
+	supervisor.onConfigChanged(context.Background(), nil, &cfg3)
 
 	for i := 0; i < 50; i++ {
 		supervisor.mu.Lock()

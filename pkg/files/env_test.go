@@ -20,7 +20,7 @@ func TestLoadEnvWithLocalBinFallbackUsesHomeFile(t *testing.T) {
 	orig := fallbackEnvPath
 	fallbackEnvPath = envPath
 	t.Cleanup(func() { fallbackEnvPath = orig })
-	_ = os.Unsetenv("TOKEN")
+	os.Unsetenv("TOKEN")
 
 	got, err := LoadEnvWithLocalBinFallback("TOKEN")
 	if err != nil {

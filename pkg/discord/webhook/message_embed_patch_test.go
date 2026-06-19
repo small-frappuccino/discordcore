@@ -139,7 +139,7 @@ func TestPatchMessageEmbed(t *testing.T) {
 			t.Fatalf("failed to decode request body: %v", err)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"id":"456"}`))
+		w.Write([]byte(`{"id":"456"}`))
 	}))
 	defer server.Close()
 

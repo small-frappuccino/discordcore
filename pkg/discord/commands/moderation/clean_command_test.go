@@ -606,14 +606,14 @@ func newCleanCommandHarness(t *testing.T, cfg cleanHarnessConfig) *cleanHarness 
 		switch {
 		case strings.Contains(req.URL.Path, "/callback"):
 			var resp discordgo.InteractionResponse
-			_ = json.NewDecoder(req.Body).Decode(&resp)
+			json.NewDecoder(req.Body).Decode(&resp)
 			h.mu.Lock()
 			h.callbackResp = append(h.callbackResp, resp)
 			h.mu.Unlock()
 			w.WriteHeader(http.StatusOK)
 		case req.Method == http.MethodPatch && (strings.Contains(req.URL.Path, "/messages/@original") || strings.Contains(req.URL.Path, "/messages/%40original")):
 			var edit discordgo.WebhookEdit
-			_ = json.NewDecoder(req.Body).Decode(&edit)
+			json.NewDecoder(req.Body).Decode(&edit)
 			content := ""
 			if edit.Content != nil {
 				content = *edit.Content
@@ -622,12 +622,12 @@ func newCleanCommandHarness(t *testing.T, cfg cleanHarnessConfig) *cleanHarness 
 			h.editedContent = append(h.editedContent, content)
 			h.mu.Unlock()
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"original"}`))
+			w.Write([]byte(`{"id":"original"}`))
 		case req.Method == http.MethodGet && strings.HasSuffix(strings.TrimRight(req.URL.Path, "/"), "/messages"):
 			if cfg.messagesFetchError != nil {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(cfg.messagesFetchError.statusCode)
-				_, _ = w.Write([]byte(cfg.messagesFetchError.body))
+				w.Write([]byte(cfg.messagesFetchError.body))
 				return
 			}
 			channelID := cleanChannelIDFromPath(req.URL.Path)
@@ -635,12 +635,12 @@ func newCleanCommandHarness(t *testing.T, cfg cleanHarnessConfig) *cleanHarness 
 			limit := cleanParseLimit(req.URL.Query().Get("limit"))
 			page := h.channelMessagesPage(channelID, before, limit)
 			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(page)
+			json.NewEncoder(w).Encode(page)
 		case req.Method == http.MethodPost && strings.HasSuffix(req.URL.Path, "/bulk-delete"):
 			var payload struct {
 				Messages []string `json:"messages"`
 			}
-			_ = json.NewDecoder(req.Body).Decode(&payload)
+			json.NewDecoder(req.Body).Decode(&payload)
 			h.recordBulkDelete(payload.Messages)
 			w.WriteHeader(http.StatusNoContent)
 		case req.Method == http.MethodDelete && strings.Contains(req.URL.Path, "/messages/"):
@@ -652,7 +652,7 @@ func newCleanCommandHarness(t *testing.T, cfg cleanHarnessConfig) *cleanHarness 
 			if cfg.auditLogPostError != nil && cfg.logChannelID != "" && channelID == cfg.logChannelID {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(cfg.auditLogPostError.statusCode)
-				_, _ = w.Write([]byte(cfg.auditLogPostError.body))
+				w.Write([]byte(cfg.auditLogPostError.body))
 				return
 			}
 			body, _ := io.ReadAll(req.Body)
@@ -660,12 +660,12 @@ func newCleanCommandHarness(t *testing.T, cfg cleanHarnessConfig) *cleanHarness 
 				Content string                    `json:"content"`
 				Embeds  []*discordgo.MessageEmbed `json:"embeds"`
 			}
-			_ = json.Unmarshal(body, &payload)
+			json.Unmarshal(body, &payload)
 			h.mu.Lock()
 			h.postedMessages = append(h.postedMessages, cleanRecordedPost{channelID: channelID, content: payload.Content, embeds: payload.Embeds})
 			h.mu.Unlock()
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"id":"posted"}`))
+			w.Write([]byte(`{"id":"posted"}`))
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -980,7 +980,7 @@ func cleanParseLimit(value string) int {
 		return 1
 	}
 	var limit int
-	_, _ = fmt.Sscanf(value, "%d", &limit)
+	fmt.Sscanf(value, "%d", &limit)
 	if limit <= 0 {
 		return cleanFetchPageSize
 	}

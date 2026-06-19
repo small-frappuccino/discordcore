@@ -981,7 +981,7 @@ func (c *questionsListCommand) hideQuestionsListControls(session *discordgo.Sess
 	delete(c.controlTimers, messageID)
 	c.controlsMu.Unlock()
 
-	_ = c.currentQuestionsListMessageEditor()(session, channelID, messageID, []discordgo.MessageComponent{})
+	c.currentQuestionsListMessageEditor()(session, channelID, messageID, []discordgo.MessageComponent{})
 }
 
 func editQuestionsListMessageComponents(session *discordgo.Session, channelID, messageID string, components []discordgo.MessageComponent) error {

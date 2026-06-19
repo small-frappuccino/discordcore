@@ -30,14 +30,14 @@ func TestHandleDiscordGoGuildMemberAdd(t *testing.T) {
 	defer cleanup()
 
 	cm := newTestConfigManager(t)
-	_, _ = cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
+	cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{{GuildID: "g1", BotInstanceTokens: map[string]files.EncryptedString{"test": "token"}, FeatureRouting: map[string]string{"stats": "test"}, Features: files.FeatureToggles{}, Stats: files.StatsConfig{Channels: []files.StatsChannelConfig{{ChannelID: "c1"}}}}}
 		return nil
 	})
 
 	svc := domain.NewStatsService(nil, cm, store, slog.Default(), "test")
 	if store != nil {
-		_, _ = db.Exec(context.Background(), "INSERT INTO guilds (id) VALUES ('g1') ON CONFLICT DO NOTHING")
+		db.Exec(context.Background(), "INSERT INTO guilds (id) VALUES ('g1') ON CONFLICT DO NOTHING")
 	}
 
 	m := &discordgo.GuildMemberAdd{
@@ -65,14 +65,14 @@ func TestHandleDiscordGoGuildMemberRemove(t *testing.T) {
 	}
 	defer cleanup()
 	cm := newTestConfigManager(t)
-	_, _ = cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
+	cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{{GuildID: "g1", BotInstanceTokens: map[string]files.EncryptedString{"test": "token"}, FeatureRouting: map[string]string{"stats": "test"}, Features: files.FeatureToggles{}, Stats: files.StatsConfig{Channels: []files.StatsChannelConfig{{ChannelID: "c1"}}}}}
 		return nil
 	})
 
 	svc := domain.NewStatsService(nil, cm, store, slog.Default(), "test")
 	if store != nil {
-		_, _ = db.Exec(context.Background(), "INSERT INTO guilds (id) VALUES ('g1') ON CONFLICT DO NOTHING")
+		db.Exec(context.Background(), "INSERT INTO guilds (id) VALUES ('g1') ON CONFLICT DO NOTHING")
 	}
 
 	m := &discordgo.GuildMemberRemove{
@@ -97,14 +97,14 @@ func TestHandleDiscordGoGuildMemberUpdate(t *testing.T) {
 	}
 	defer cleanup()
 	cm := newTestConfigManager(t)
-	_, _ = cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
+	cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{{GuildID: "g1", BotInstanceTokens: map[string]files.EncryptedString{"test": "token"}, FeatureRouting: map[string]string{"stats": "test"}, Features: files.FeatureToggles{}, Stats: files.StatsConfig{Channels: []files.StatsChannelConfig{{ChannelID: "c1"}}}}}
 		return nil
 	})
 
 	svc := domain.NewStatsService(nil, cm, store, slog.Default(), "test")
 	if store != nil {
-		_, _ = db.Exec(context.Background(), "INSERT INTO guilds (id) VALUES ('g1') ON CONFLICT DO NOTHING")
+		db.Exec(context.Background(), "INSERT INTO guilds (id) VALUES ('g1') ON CONFLICT DO NOTHING")
 	}
 
 	m := &discordgo.GuildMemberUpdate{

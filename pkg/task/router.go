@@ -1151,5 +1151,4 @@ func (tr *TaskRouter) maybeReleaseIdempotency(t Task, eff TaskOptions) {
 	// Keep idempotency entry until TTL expires to dedupe follow-up duplicates.
 	// Nothing to do here; cleanupOnce will remove expired entries.
 	// This function exists to provide a single point to change behavior if needed later.
-	_ = eff
 }

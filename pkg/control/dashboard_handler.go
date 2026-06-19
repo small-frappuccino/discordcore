@@ -78,8 +78,7 @@ func newDashboardHandler(assets fs.FS) (http.Handler, error) {
 		// Eagerly pre-fault critical assets into the OS page cache to eliminate cold-start latency.
 		for p := range knownFiles {
 			if p == "index.html" || strings.HasSuffix(p, ".js") || strings.HasSuffix(p, ".css") || strings.HasSuffix(p, ".br") || strings.HasSuffix(p, ".gz") {
-				if content, err := fs.ReadFile(assets, p); err == nil {
-					_ = content
+				if _, err := fs.ReadFile(assets, p); err == nil {
 				}
 			}
 		}
