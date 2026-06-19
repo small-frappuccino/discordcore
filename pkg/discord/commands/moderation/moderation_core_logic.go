@@ -722,7 +722,7 @@ func postModerationEventEmbed(ctx *core.Context, payload moderationLogPayload, e
 	if ctx.Session.State != nil && ctx.Session.State.User != nil {
 		botID = ctx.Session.State.User.ID
 	}
-	emit := logging.ShouldEmitLogEvent(ctx.Session, ctx.Config, eventType, ctx.GuildID)
+	emit := logging.CheckFeatureEnabled(ctx.Config, eventType, ctx.GuildID)
 	if !emit.Enabled {
 		return moderationEventEmit{}
 	}
@@ -849,7 +849,7 @@ func sendModerationCaseActionLog(ctx *core.Context, payload moderationLogPayload
 	if ctx.Session.State != nil && ctx.Session.State.User != nil {
 		botID = ctx.Session.State.User.ID
 	}
-	emit := logging.ShouldEmitLogEvent(ctx.Session, ctx.Config, logging.LogEventModerationCase, ctx.GuildID)
+	emit := logging.CheckFeatureEnabled(ctx.Config, logging.LogEventModerationCase, ctx.GuildID)
 	if !emit.Enabled {
 		return
 	}

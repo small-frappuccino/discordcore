@@ -220,11 +220,26 @@ func buildLogFeatureReadiness(
 		return "blocked", []featureBlocker{{Code: "config_unavailable", Message: "Config manager is unavailable."}}
 	}
 
-	decision := logging.ShouldEmitLogEvent(session, configManager, eventType, guildID)
-	if decision.Enabled {
-		return "ready", nil
+	decision := logging.CheckFeatureEnabled(configManager, eventType, guildID)
+	if !decision.Enabled {
+		return logDecisionToReadiness(decision)
 	}
-	return logDecisionToReadiness(decision)
+
+	if decision.Capability.RequiresChannel && decision.ChannelID == "" {
+		decision.Reason = logging.EmitReasonNoChannelConfigured
+		return logDecisionToReadiness(decision)
+	}
+
+	if decision.Capability.RequiredIntentsMask != 0 && session != nil {
+		currentMask := int(session.Identify.Intents)
+		missing := int(decision.Capability.RequiredIntentsMask) &^ currentMask
+		if missing != 0 {
+			decision.Reason = logging.EmitReasonMissingIntent
+			return logDecisionToReadiness(decision)
+		}
+	}
+
+	return "ready", nil
 }
 
 func buildGlobalLogFeatureReadiness(
@@ -239,7 +254,7 @@ func buildGlobalLogFeatureReadiness(
 	capability, ok := logging.LogEventCapabilities()[eventType]
 	if ok && capability.RequiredIntentsMask != 0 && session != nil {
 		currentMask := int(session.Identify.Intents)
-		missing := capability.RequiredIntentsMask &^ currentMask
+		missing := int(capability.RequiredIntentsMask) &^ currentMask
 		if missing != 0 {
 			return "blocked", []featureBlocker{{
 				Code:    "missing_intent",

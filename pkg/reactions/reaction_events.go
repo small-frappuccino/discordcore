@@ -195,7 +195,7 @@ func (rs *ReactionEventService) handleReactionAdd(s *discordgo.Session, e *disco
 		return
 	}
 
-	emit := logging.ShouldEmitLogEvent(rs.session, rs.configManager, logging.LogEventReactionMetric, guildID)
+	emit := logging.CheckFeatureEnabled(rs.configManager, logging.LogEventReactionMetric, guildID)
 	if !emit.Enabled {
 		rs.logger.Debug("ReactionAdd: metrics suppressed by policy", "guildID", guildID, "channelID", e.ChannelID, "userID", e.UserID, "reason", emit.Reason)
 		return

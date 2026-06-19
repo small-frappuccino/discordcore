@@ -221,7 +221,7 @@ func (mes *MemberEventService) IngestGuildMemberAdd(ctx context.Context, m *gate
 	}
 
 	// Logging is now delegated to Sink
-	emit := logging.ShouldEmitLogEvent(nil, mes.configManager, logging.LogEventMemberJoin, m.GuildID.String())
+	emit := logging.CheckFeatureEnabled(mes.configManager, logging.LogEventMemberJoin, m.GuildID.String())
 	if !emit.Enabled {
 		if emit.Reason == logging.EmitReasonNoChannelConfigured {
 			mes.logger.Info("User entry/leave channel not configured for guild, member join notification not sent", "guildID", m.GuildID, "userID", m.User.ID)

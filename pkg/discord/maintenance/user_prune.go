@@ -397,7 +397,7 @@ func (s *UserPruneService) sendRunEmbed(guildID, botID string, estimated, pruned
 	if botID == "" {
 		botID = s.currentBotID()
 	}
-	emit := logging.ShouldEmitLogEvent(s.session, s.configManager, logging.LogEventModerationCase, guildID)
+	emit := logging.CheckFeatureEnabled(s.configManager, logging.LogEventModerationCase, guildID)
 	if !emit.Enabled || strings.TrimSpace(emit.ChannelID) == "" {
 		return
 	}

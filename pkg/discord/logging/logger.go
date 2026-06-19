@@ -10,11 +10,11 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
+	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordcore/pkg/embeds"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/logging"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
-	"github.com/small-frappuccino/discordgo"
 )
 
 // Logger implements the various EventSinks to handle logging natively via Arikawa,
@@ -22,24 +22,45 @@ import (
 type Logger struct {
 	client  *api.Client
 	config  *files.ConfigManager
-	session *discordgo.Session
+	state   *state.State
+	intents gateway.Intents
 	logger  *slog.Logger
 }
 
 // NewLogger creates a new event logger instance.
-func NewLogger(client *api.Client, config *files.ConfigManager, session *discordgo.Session, logger *slog.Logger) *Logger {
+func NewLogger(client *api.Client, config *files.ConfigManager, st *state.State, intents gateway.Intents, logger *slog.Logger) *Logger {
 	return &Logger{
 		client:  client,
 		config:  config,
-		session: session,
+		state:   st,
+		intents: intents,
 		logger:  logger,
 	}
 }
 
 // checkPolicy evaluates whether the event should be logged.
 func (l *Logger) checkPolicy(eventType logging.LogEventType, guildID string) (logging.EmitDecision, bool) {
-	decision := logging.ShouldEmitLogEvent(l.session, l.config, eventType, guildID)
-	return decision, decision.Enabled
+	decision := logging.CheckFeatureEnabled(l.config, eventType, guildID)
+	if !decision.Enabled {
+		l.logger.Debug("Log event suppressed by configuration policy", slog.String("event_type", string(eventType)), slog.String("guild_id", guildID), slog.String("reason", string(decision.Reason)))
+		return decision, false
+	}
+
+	reason, mask, ok := logging.ValidateLogCapability(l.state, l.intents, decision, guildID, l.config)
+	if !ok {
+		if reason == logging.EmitReasonMissingIntent || reason == logging.EmitReasonChannelInvalid {
+			l.logger.Warn("Dropped logging event due to capability restrictions",
+				slog.String("event_type", string(eventType)),
+				slog.String("guild_id", guildID),
+				slog.String("reason", string(reason)),
+				slog.Int("missing_mask", int(mask)),
+			)
+		} else {
+			l.logger.Debug("Log event suppressed by capability policy", slog.String("event_type", string(eventType)), slog.String("guild_id", guildID), slog.String("reason", string(reason)))
+		}
+		return decision, false
+	}
+	return decision, true
 }
 
 // sendEmbed safely sends a logging embed using Arikawa API.
@@ -65,6 +86,7 @@ func (l *Logger) OnMemberJoin(ctx context.Context, guildID string, member discor
 
 	channelID, err := discord.ParseSnowflake(decision.ChannelID)
 	if err != nil {
+		l.logger.Error("Failed to parse Snowflake ID for MemberJoin log channel", "guild_id", guildID, "channel_id", decision.ChannelID, "error", err)
 		return
 	}
 

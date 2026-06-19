@@ -356,7 +356,7 @@ func (mes *MessageEventService) IngestMessageCreate(ctx context.Context, m *gate
 		return
 	}
 
-	emit := logging.ShouldEmitLogEvent(nil, mes.configManager, logging.LogEventMessageProcess, guildID.String())
+	emit := logging.CheckFeatureEnabled(mes.configManager, logging.LogEventMessageProcess, guildID.String())
 	if !emit.Enabled {
 		mes.logger.Debug("MessageCreate: message processing suppressed by policy", "guildID", guildID, "reason", emit.Reason)
 		return
@@ -598,7 +598,7 @@ func (mes *MessageEventService) processMessageUpdate(ctx context.Context, m *gat
 	}
 
 	// Logging delegated to sink
-	emit := logging.ShouldEmitLogEvent(nil, mes.configManager, logging.LogEventMessageEdit, cached.GuildID)
+	emit := logging.CheckFeatureEnabled(mes.configManager, logging.LogEventMessageEdit, cached.GuildID)
 	if !emit.Enabled {
 		if emit.Reason == logging.EmitReasonNoChannelConfigured {
 			mes.logger.Info("Message log channel not configured for guild; edit notification not sent", "guildID", cached.GuildID, "messageID", m.ID)
@@ -695,7 +695,7 @@ func (mes *MessageEventService) processMessageDelete(ctx context.Context, m *gat
 		return nil
 	}
 
-	emit := logging.ShouldEmitLogEvent(nil, mes.configManager, logging.LogEventMessageDelete, cached.GuildID)
+	emit := logging.CheckFeatureEnabled(mes.configManager, logging.LogEventMessageDelete, cached.GuildID)
 	if !emit.Enabled {
 		if emit.Reason == logging.EmitReasonNoChannelConfigured {
 			mes.logger.Info("Message log channel not configured for guild; delete notification not sent", "guildID", cached.GuildID, "messageID", m.ID)
@@ -752,12 +752,12 @@ func (mes *MessageEventService) shouldRetryMessageDeleteCacheMiss(guildID string
 		return false
 	}
 
-	processDecision := logging.ShouldEmitLogEvent(nil, mes.configManager, logging.LogEventMessageProcess, guildID)
+	processDecision := logging.CheckFeatureEnabled(mes.configManager, logging.LogEventMessageProcess, guildID)
 	if !processDecision.Enabled {
 		return false
 	}
 
-	deleteDecision := logging.ShouldEmitLogEvent(nil, mes.configManager, logging.LogEventMessageDelete, guildID)
+	deleteDecision := logging.CheckFeatureEnabled(mes.configManager, logging.LogEventMessageDelete, guildID)
 	if !deleteDecision.Enabled {
 		return false
 	}

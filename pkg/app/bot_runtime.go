@@ -722,7 +722,7 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 	if runtime.capabilities.messageEventService {
 		var eventLogger *logging.Logger
 		if runtime.arikawaState != nil && runtime.arikawaState.Session != nil {
-			eventLogger = logging.NewLogger(runtime.arikawaState.Session.Client, opts.configManager, runtime.session, slog.Default())
+			eventLogger = logging.NewLogger(runtime.arikawaState.Session.Client, opts.configManager, runtime.arikawaState, gateway.Intents(runtime.capabilities.intents), slog.Default())
 		}
 
 		mes := messages.NewMessageEventServiceForBot(messages.EventServiceDeps{
@@ -745,7 +745,7 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 	if runtime.capabilities.memberEventService {
 		var eventLogger *logging.Logger
 		if runtime.arikawaState != nil && runtime.arikawaState.Session != nil {
-			eventLogger = logging.NewLogger(runtime.arikawaState.Session.Client, opts.configManager, runtime.session, slog.Default())
+			eventLogger = logging.NewLogger(runtime.arikawaState.Session.Client, opts.configManager, runtime.arikawaState, gateway.Intents(runtime.capabilities.intents), slog.Default())
 		}
 
 		memSvc := members.NewMemberEventServiceForBot(members.EventServiceDeps{
@@ -832,7 +832,7 @@ func buildAutomodService(runtime *botRuntime, opts botRuntimeOptions, routerConf
 
 	var eventLogger *logging.Logger
 	if runtime.arikawaState != nil && runtime.arikawaState.Session != nil {
-		eventLogger = logging.NewLogger(runtime.arikawaState.Session.Client, opts.configManager, runtime.session, slog.Default())
+		eventLogger = logging.NewLogger(runtime.arikawaState.Session.Client, opts.configManager, runtime.arikawaState, gateway.Intents(runtime.capabilities.intents), slog.Default())
 	}
 
 	automodService := discord_automod.NewArikawaAdapter(runtime.arikawaState, eventLogger, opts.logger)

@@ -299,8 +299,8 @@ func buildLogFeatureDetails(
 
 	out := &featureDetails{
 		RequiresChannel:         capability.RequiresChannel,
-		RequiredIntentsMask:     capability.RequiredIntentsMask,
-		RequiredPermissionsMask: capability.RequiredPermsMask,
+		RequiredIntentsMask:     int(capability.RequiredIntentsMask),
+		RequiredPermissionsMask: int64(capability.RequiredPermsMask),
 		ValidateChannelPerms:    capability.ValidateChannelPerms,
 		ExclusiveModeration:     capability.RequireExclusiveModeration,
 	}
