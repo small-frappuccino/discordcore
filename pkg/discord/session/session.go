@@ -77,8 +77,9 @@ func NewDiscordSessionWithIntents(token string, intents discordgo.Intent) (*disc
 	log.DiscordLogger().Info("Creating Discord session (token redacted)")
 
 	tokenStr := strings.TrimSpace(token)
-	if strings.HasPrefix(tokenStr, "Bot ") {
-		tokenStr = strings.TrimPrefix(tokenStr, "Bot ")
+	tokenStr = strings.Trim(tokenStr, `"'`)
+	for strings.HasPrefix(strings.ToLower(tokenStr), "bot ") {
+		tokenStr = strings.TrimSpace(tokenStr[4:])
 	}
 
 	s, err := newSession("Bot " + tokenStr)

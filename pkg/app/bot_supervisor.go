@@ -181,13 +181,15 @@ func (s *BotSupervisor) onConfigChanged(oldCfg, newCfg *files.BotConfig) {
 		}
 	}
 
-	if currentTokens[""] == "" {
-		fallbackToken := os.Getenv("BOT_TOKEN")
-		if fallbackToken == "" {
-			fallbackToken = os.Getenv("DISCORD_TOKEN")
-		}
-		if fallbackToken != "" {
-			currentTokens[""] = strings.TrimSpace(fallbackToken)
+	fallbackToken := os.Getenv("BOT_TOKEN")
+	if fallbackToken == "" {
+		fallbackToken = os.Getenv("DISCORD_TOKEN")
+	}
+	fallbackToken = strings.TrimSpace(fallbackToken)
+
+	if fallbackToken != "" {
+		if currentTokens[""] == "" {
+			currentTokens[""] = fallbackToken
 			currentStatuses[""] = "online"
 		}
 	}
