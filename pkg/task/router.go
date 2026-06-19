@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"maps"
 	"math/rand"
+	"runtime/debug"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -664,101 +665,115 @@ func (tr *TaskRouter) releaseExecSlot() {
 
 func (tr *TaskRouter) groupLoop(gw *groupWorker) {
 	defer tr.wg.Done()
-
-	for enq := range gw.ch {
-		gw.beginWork(tr.nowNs())
-
-		// Resolve handler and effective options each run (options may be zero).
-		tr.mu.RLock()
-		handler := tr.handlers[enq.task.Type]
-		eff := tr.effectiveOptions(enq.task.Options)
-		tr.mu.RUnlock()
-
-		// Safety: ensure handler still registered
-		if handler == nil {
-			gw.endWork(tr.nowNs())
-			log.ApplicationLogger().Warn("Task dropped (handler not registered)", "type", enq.task.Type, "group", gw.key)
-			tr.maybeReleaseIdempotency(enq.task, eff)
-			continue
+	defer func() {
+		if r := recover(); r != nil {
+			log.ApplicationLogger().Error("Worker runtime panic pre-empted", "panic", r, "stack", string(debug.Stack()))
 		}
+	}()
 
-		// Execute with global concurrency control. The handler receives the
-		// router lifecycle context so Close can cancel in-flight work.
-		tr.acquireExecSlot()
-		startExec := tr.cfg.Clock.Now()
-		err := func() error {
-			defer tr.releaseExecSlot()
-			ctx := tr.ctx
-			if ctx == nil {
-				ctx = context.Background()
+	for {
+		select {
+		case <-tr.ctx.Done():
+			log.ApplicationLogger().Warn("Context cancelled: abandoning unread queue", "group", gw.key)
+			return
+		case enq, ok := <-gw.ch:
+			if !ok {
+				return
 			}
-			return handler(ctx, enq.task.Payload)
-		}()
-		execDuration := tr.cfg.Clock.Now().Sub(startExec)
+			gw.beginWork(tr.nowNs())
 
-		summary := observability.GetOrCreateLabeledSummary(&tr.latencyMu, &tr.latenciesByType, enq.task.Type)
-		summary.Observe(execDuration)
+			// Resolve handler and effective options each run (options may be zero).
+			tr.mu.RLock()
+			handler := tr.handlers[enq.task.Type]
+			eff := tr.effectiveOptions(enq.task.Options)
+			tr.mu.RUnlock()
 
-		if execDuration > 5*time.Second {
-			log.ApplicationLogger().Warn("slow background task execution",
-				"type", enq.task.Type,
-				"duration", execDuration.String(),
-				"duration_ms", execDuration.Milliseconds(),
-			)
-		}
-		gw.endWork(tr.nowNs())
-
-		if err != nil {
-			silent := errors.Is(err, ErrRetrySilent)
-			// Retry if allowed
-			if enq.attempt < eff.MaxAttempts {
-				delay := tr.computeBackoff(eff.InitialBackoff, eff.MaxBackoff, enq.attempt)
-				attempt := enq.attempt + 1
-
-				if silent {
-					log.ApplicationLogger().Debug("Task failed, scheduling retry",
-						"type", enq.task.Type,
-						"group", gw.key,
-						"attempt", attempt,
-						"max_attempts", eff.MaxAttempts,
-						"backoff", delay.String(),
-						"err", err,
-					)
-				} else {
-					log.ApplicationLogger().Warn("Task failed, scheduling retry",
-						"type", enq.task.Type,
-						"group", gw.key,
-						"attempt", attempt,
-						"max_attempts", eff.MaxAttempts,
-						"backoff", delay.String(),
-						"err", err,
-					)
-				}
-
-				enq.attempt = attempt
-				tr.scheduleRetry(gw.key, enq, delay)
+			// Safety: ensure handler still registered
+			if handler == nil {
+				gw.endWork(tr.nowNs())
+				log.ApplicationLogger().Warn("Task dropped (handler not registered)", "type", enq.task.Type, "group", gw.key)
+				tr.maybeReleaseIdempotency(enq.task, eff)
 				continue
 			}
 
-			if silent {
-				log.ApplicationLogger().Info("Task dropped after retry window",
+			// Execute with global concurrency control. The handler receives the
+			// router lifecycle context so Close can cancel in-flight work.
+			tr.acquireExecSlot()
+			startExec := tr.cfg.Clock.Now()
+			err := func() error {
+				defer tr.releaseExecSlot()
+				ctx := tr.ctx
+				if ctx == nil {
+					ctx = context.Background()
+				}
+				return handler(ctx, enq.task.Payload)
+			}()
+			execDuration := tr.cfg.Clock.Now().Sub(startExec)
+
+			summary := observability.GetOrCreateLabeledSummary(&tr.latencyMu, &tr.latenciesByType, enq.task.Type)
+			summary.Observe(execDuration)
+
+			if execDuration > 5*time.Second {
+				log.ApplicationLogger().Warn("slow background task execution",
 					"type", enq.task.Type,
-					"group", gw.key,
-					"attempts", enq.attempt,
-					"err", err,
-				)
-			} else {
-				log.ErrorLoggerRaw().Error("Task failed; max attempts reached",
-					"type", enq.task.Type,
-					"group", gw.key,
-					"attempts", enq.attempt,
-					"err", err,
+					"duration", execDuration.String(),
+					"duration_ms", execDuration.Milliseconds(),
 				)
 			}
-		}
+			gw.endWork(tr.nowNs())
 
-		// Success or final failure: allow idempotency key to naturally expire.
-		tr.maybeReleaseIdempotency(enq.task, eff)
+			if err != nil {
+				silent := errors.Is(err, ErrRetrySilent)
+				// Retry if allowed
+				if enq.attempt < eff.MaxAttempts {
+					delay := tr.computeBackoff(eff.InitialBackoff, eff.MaxBackoff, enq.attempt)
+					attempt := enq.attempt + 1
+
+					if silent {
+						log.ApplicationLogger().Debug("Task failed, scheduling retry",
+							"type", enq.task.Type,
+							"group", gw.key,
+							"attempt", attempt,
+							"max_attempts", eff.MaxAttempts,
+							"backoff", delay.String(),
+							"err", err,
+						)
+					} else {
+						log.ApplicationLogger().Warn("Task failed, scheduling retry",
+							"type", enq.task.Type,
+							"group", gw.key,
+							"attempt", attempt,
+							"max_attempts", eff.MaxAttempts,
+							"backoff", delay.String(),
+							"err", err,
+						)
+					}
+
+					enq.attempt = attempt
+					tr.scheduleRetry(gw.key, enq, delay)
+					continue
+				}
+
+				if silent {
+					log.ApplicationLogger().Info("Task dropped after retry window",
+						"type", enq.task.Type,
+						"group", gw.key,
+						"attempts", enq.attempt,
+						"err", err,
+					)
+				} else {
+					log.ErrorLoggerRaw().Error("Task failed; max attempts reached",
+						"type", enq.task.Type,
+						"group", gw.key,
+						"attempts", enq.attempt,
+						"err", err,
+					)
+				}
+			}
+
+			// Success or final failure: allow idempotency key to naturally expire.
+			tr.maybeReleaseIdempotency(enq.task, eff)
+		}
 	}
 }
 
