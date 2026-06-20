@@ -5,6 +5,8 @@ package tickets
 import (
 	"context"
 	"fmt"
+	"io"
+	"log/slog"
 	"sync"
 	"testing"
 	"time"
@@ -102,7 +104,8 @@ func TestNextID_ACID(t *testing.T) {
 		t.Fatalf("failed to init store: %v", err)
 	}
 
-	mgr := NewManager(store)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	mgr := NewManager(store, logger)
 	guildID := "concurrent-test-guild"
 
 	const workers = 20

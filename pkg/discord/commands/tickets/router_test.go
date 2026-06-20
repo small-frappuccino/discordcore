@@ -81,7 +81,7 @@ func TestRouter_DeferBeforeIO(t *testing.T) {
 
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	svc := discordtickets.NewService(st)
+	svc := discordtickets.NewService(st, logger)
 	r := NewTicketRouter(st, svc, nil, cm, logger)
 
 	event := &gateway.InteractionCreateEvent{

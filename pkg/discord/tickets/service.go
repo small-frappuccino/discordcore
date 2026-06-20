@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
@@ -16,12 +17,13 @@ import (
 
 // Service encapsulates the Arikawa-specific operations for tickets.
 type Service struct {
-	state *state.State
+	state  *state.State
+	logger *slog.Logger
 }
 
 // NewService constructs the Discord ticket service.
-func NewService(state *state.State) *Service {
-	return &Service{state: state}
+func NewService(state *state.State, logger *slog.Logger) *Service {
+	return &Service{state: state, logger: logger}
 }
 
 // CreateTicketChannel spawns the ticket channel and applies initial permissions.
@@ -55,6 +57,13 @@ func (s *Service) CreateTicketChannel(ctx context.Context, guildID discord.Guild
 
 	ch, err := s.state.Client.CreateChannel(guildID, data)
 	if err != nil {
+		// Error: Blocking structural failure restricted to the scope of the transaction.
+		s.logger.Error("failed to create ticket channel",
+			slog.String("guildID", guildID.String()),
+			slog.String("channelName", channelName),
+			slog.String("synthetic_fault_code", "500"),
+			slog.String("error", err.Error()),
+		)
 		return nil, fmt.Errorf("create channel: %w", err)
 	}
 
@@ -153,9 +162,20 @@ func (s *Service) GenerateAndUploadTranscript(ctx context.Context, channelID, au
 	encodeErr := eg.Wait()
 
 	if uploadErr != nil {
+		s.logger.Error("failed to upload ticket transcript",
+			slog.String("channelID", channelID.String()),
+			slog.String("auditChannelID", auditChannelID.String()),
+			slog.String("synthetic_fault_code", "500"),
+			slog.String("error", uploadErr.Error()),
+		)
 		return fmt.Errorf("upload transcript: %w", uploadErr)
 	}
 	if encodeErr != nil {
+		s.logger.Error("failed to encode ticket transcript",
+			slog.String("channelID", channelID.String()),
+			slog.String("synthetic_fault_code", "500"),
+			slog.String("error", encodeErr.Error()),
+		)
 		return fmt.Errorf("encode transcript: %w", encodeErr)
 	}
 
@@ -176,6 +196,12 @@ func (s *Service) CloseTicket(ctx context.Context, ch *discord.Channel) error {
 				Deny:  newDeny,
 			})
 			if err != nil {
+				s.logger.Error("failed to edit channel permissions during ticket close",
+					slog.String("channelID", ch.ID.String()),
+					slog.String("overwriteID", ow.ID.String()),
+					slog.String("synthetic_fault_code", "500"),
+					slog.String("error", err.Error()),
+				)
 				return fmt.Errorf("update permissions: %w", err)
 			}
 		}
@@ -185,6 +211,12 @@ func (s *Service) CloseTicket(ctx context.Context, ch *discord.Channel) error {
 		Name: newName,
 	})
 	if err != nil {
+		s.logger.Error("failed to rename channel during ticket close",
+			slog.String("channelID", ch.ID.String()),
+			slog.String("newName", newName),
+			slog.String("synthetic_fault_code", "500"),
+			slog.String("error", err.Error()),
+		)
 		return fmt.Errorf("rename channel: %w", err)
 	}
 
@@ -205,6 +237,12 @@ func (s *Service) ReopenTicket(ctx context.Context, ch *discord.Channel) error {
 				Deny:  newDeny,
 			})
 			if err != nil {
+				s.logger.Error("failed to edit channel permissions during ticket reopen",
+					slog.String("channelID", ch.ID.String()),
+					slog.String("overwriteID", ow.ID.String()),
+					slog.String("synthetic_fault_code", "500"),
+					slog.String("error", err.Error()),
+				)
 				return fmt.Errorf("update permissions: %w", err)
 			}
 		}
@@ -214,6 +252,12 @@ func (s *Service) ReopenTicket(ctx context.Context, ch *discord.Channel) error {
 		Name: newName,
 	})
 	if err != nil {
+		s.logger.Error("failed to rename channel during ticket reopen",
+			slog.String("channelID", ch.ID.String()),
+			slog.String("newName", newName),
+			slog.String("synthetic_fault_code", "500"),
+			slog.String("error", err.Error()),
+		)
 		return fmt.Errorf("rename channel: %w", err)
 	}
 
@@ -222,5 +266,13 @@ func (s *Service) ReopenTicket(ctx context.Context, ch *discord.Channel) error {
 
 // DeleteTicket completely removes the channel.
 func (s *Service) DeleteTicket(ctx context.Context, channelID discord.ChannelID) error {
-	return s.state.Client.DeleteChannel(channelID, api.AuditLogReason(""))
+	err := s.state.Client.DeleteChannel(channelID, api.AuditLogReason(""))
+	if err != nil {
+		s.logger.Error("failed to delete ticket channel",
+			slog.String("channelID", channelID.String()),
+			slog.String("synthetic_fault_code", "500"),
+			slog.String("error", err.Error()),
+		)
+	}
+	return err
 }

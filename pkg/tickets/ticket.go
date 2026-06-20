@@ -3,6 +3,7 @@ package tickets
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
@@ -74,15 +75,35 @@ func ComputeReopenMemberDeny(current discord.Permissions) discord.Permissions {
 
 // Manager orchestrates domain logic for tickets avoiding direct Discord integrations.
 type Manager struct {
-	store *storage.Store
+	store  *storage.Store
+	logger *slog.Logger
 }
 
 // NewManager constructs a ticket manager.
-func NewManager(store *storage.Store) *Manager {
-	return &Manager{store: store}
+func NewManager(store *storage.Store, logger *slog.Logger) *Manager {
+	return &Manager{
+		store:  store,
+		logger: logger,
+	}
 }
 
 // NextID retrieves the next sequential ticket identifier for a given guild in a thread-safe manner.
 func (m *Manager) NextID(ctx context.Context, guildID string) (int64, error) {
-	return m.store.NextTicketID(ctx, guildID)
+	// Debug: Granular tracking of transactional ID retrieval.
+	m.logger.Debug("requesting next sequential ticket ID from storage",
+		slog.String("guildID", guildID),
+	)
+
+	id, err := m.store.NextTicketID(ctx, guildID)
+	if err != nil {
+		// Error: Blocking structural failure restricted to the scope of the transaction.
+		m.logger.Error("failed to retrieve next sequential ticket ID",
+			slog.String("guildID", guildID),
+			slog.String("synthetic_fault_code", "500"),
+			slog.String("error", err.Error()),
+		)
+		return 0, err
+	}
+
+	return id, nil
 }

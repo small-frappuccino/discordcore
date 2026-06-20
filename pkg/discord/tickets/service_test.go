@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -103,7 +104,8 @@ func TestService_GenerateAndUploadTranscript_Success(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	s := NewService(newMockClient(t, mockServer.URL))
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewService(newMockClient(t, mockServer.URL), logger)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -147,7 +149,8 @@ func TestService_GenerateAndUploadTranscript_Deadlock(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	s := NewService(newMockClient(t, mockServer.URL))
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	s := NewService(newMockClient(t, mockServer.URL), logger)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 

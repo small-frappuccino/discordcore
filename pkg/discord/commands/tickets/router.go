@@ -63,7 +63,14 @@ func (r *TicketRouter) HandleInteraction(e *gateway.InteractionCreateEvent) {
 			},
 		})
 		if err != nil {
-			r.logger.Error("failed to defer interaction", "error", err)
+			// Error: Blocking structural failure restricted to the scope of the transaction.
+			r.logger.Error("failed to defer interaction",
+				slog.String("guildID", e.GuildID.String()),
+				slog.String("channelID", e.ChannelID.String()),
+				slog.String("customID", customID),
+				slog.String("synthetic_fault_code", "500"),
+				slog.String("error", err.Error()),
+			)
 			return
 		}
 
@@ -90,7 +97,14 @@ func (r *TicketRouter) dispatch(e *gateway.InteractionCreateEvent, customID stri
 	}
 
 	if err != nil {
-		r.logger.Error("ticket interaction failed", "error", err)
+		r.logger.Error("ticket interaction failed",
+			slog.String("guildID", e.GuildID.String()),
+			slog.String("channelID", e.ChannelID.String()),
+			slog.String("userID", e.SenderID().String()),
+			slog.String("customID", customID),
+			slog.String("synthetic_fault_code", "500"),
+			slog.String("error", err.Error()),
+		)
 		r.state.EditInteractionResponse(e.AppID, e.Token, api.EditInteractionResponseData{
 			Content: option.NewNullableString(fmt.Sprintf("Error: %v", err)),
 		})
