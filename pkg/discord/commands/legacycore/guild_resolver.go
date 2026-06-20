@@ -244,11 +244,13 @@ func toArikawaMember(m *discordgo.Member) *arikawadiscord.Member {
 		roles[i] = arikawadiscord.RoleID(rid)
 	}
 	var uid arikawadiscord.Snowflake
+	var username string
 	if m.User != nil {
 		uid, _ = arikawadiscord.ParseSnowflake(m.User.ID)
+		username = m.User.Username
 	}
 	return &arikawadiscord.Member{
-		User:    arikawadiscord.User{ID: arikawadiscord.UserID(uid)},
+		User:    arikawadiscord.User{ID: arikawadiscord.UserID(uid), Username: username},
 		RoleIDs: roles,
 	}
 }
@@ -262,7 +264,7 @@ func toDiscordgoMember(m *arikawadiscord.Member) *discordgo.Member {
 		roles[i] = r.String()
 	}
 	return &discordgo.Member{
-		User:  &discordgo.User{ID: m.User.ID.String()},
+		User:  &discordgo.User{ID: m.User.ID.String(), Username: m.User.Username},
 		Roles: roles,
 	}
 }
@@ -276,6 +278,7 @@ func toArikawaRoles(roles []*discordgo.Role) *[]arikawadiscord.Role {
 		rid, _ := arikawadiscord.ParseSnowflake(r.ID)
 		res[i] = arikawadiscord.Role{
 			ID:          arikawadiscord.RoleID(rid),
+			Name:        r.Name,
 			Permissions: arikawadiscord.Permissions(r.Permissions),
 		}
 	}
@@ -290,6 +293,7 @@ func toDiscordgoRoles(roles *[]arikawadiscord.Role) []*discordgo.Role {
 	for i, r := range *roles {
 		res[i] = &discordgo.Role{
 			ID:          r.ID.String(),
+			Name:        r.Name,
 			Permissions: int64(r.Permissions),
 		}
 	}

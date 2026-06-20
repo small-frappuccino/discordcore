@@ -1,8 +1,9 @@
 package partners
 
 import (
+	"github.com/diamondburned/arikawa/v3/api"
+	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordgo"
 )
 
 // PartnerService manages the rendering and synchronization of partner boards.
@@ -23,13 +24,13 @@ func NewPartnerService(configManager *files.ConfigManager) *PartnerService {
 
 // Sync updates all active postings of a partner board to match the provided layout.
 func (s *PartnerService) Sync(
-	session *discordgo.Session,
+	client *api.Client,
 	guildID string,
 	postings []files.CustomEmbedPostingConfig,
-	embeds []*discordgo.MessageEmbed,
+	embeds []discord.Embed,
 ) partnerSyncResult {
 	return s.syncer.Sync(
-		session,
+		client,
 		guildID,
 		postings,
 		embeds,
@@ -37,7 +38,7 @@ func (s *PartnerService) Sync(
 }
 
 // Render returns the Discord embed payloads for a partner board.
-func (s *PartnerService) Render(template PartnerBoardTemplate, partners []PartnerRecord) ([]*discordgo.MessageEmbed, error) {
+func (s *PartnerService) Render(template PartnerBoardTemplate, partners []PartnerRecord) ([]discord.Embed, error) {
 	return s.renderer.Render(template, partners)
 }
 
@@ -47,6 +48,6 @@ func (s *PartnerService) FormatSyncSummary(result partnerSyncResult, action stri
 }
 
 // SyncConfig performs a full render and sync for the guild's current config.
-func (s *PartnerService) SyncConfig(guildID string, session *discordgo.Session) error {
-	return s.syncer.SyncConfig(guildID, session)
+func (s *PartnerService) SyncConfig(guildID string, client *api.Client) error {
+	return s.syncer.SyncConfig(guildID, client)
 }

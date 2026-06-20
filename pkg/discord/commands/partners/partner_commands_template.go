@@ -1,4 +1,4 @@
-package partner
+package partners
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord"
+	localdiscord "github.com/small-frappuccino/discordcore/pkg/discord"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordgo"
@@ -68,7 +68,7 @@ func (c *partnerImportTemplateSubCommand) Handle(ctx *legacycore.Context) error 
 		}
 	}
 
-	data, err := discord.FetchPastebinContent(context.Background(), pasteURL)
+	data, err := localdiscord.FetchPastebinContent(context.Background(), pasteURL)
 	if err != nil {
 		return builder.WithContext(ctx).Error(ctx.Interaction, fmt.Sprintf("Failed to fetch from pastebin: %v", err))
 	}
@@ -147,7 +147,7 @@ func (c *partnerExportTemplateSubCommand) Handle(ctx *legacycore.Context) error 
 		ownerID = g.OwnerID
 	}
 
-	url, err := discord.UploadExportedContent(context.Background(), ctx.Interaction.Member, ownerID, c.configManager, data)
+	url, err := localdiscord.UploadExportedContent(context.Background(), ctx.Interaction.Member, ownerID, c.configManager, data)
 	if err != nil {
 		return builder.WithContext(ctx).Error(ctx.Interaction, fmt.Sprintf("Failed to upload: %v", err))
 	}

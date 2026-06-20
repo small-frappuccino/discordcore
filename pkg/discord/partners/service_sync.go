@@ -6,8 +6,11 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/diamondburned/arikawa/v3/api"
+	"github.com/diamondburned/arikawa/v3/api/webhook"
+	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/utils/httputil"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordgo"
 )
 
 const (
@@ -33,8 +36,8 @@ func (r partnerSyncResult) HasIssues() bool {
 
 type partnerPostingSyncer struct {
 	configManager      *files.ConfigManager
-	editMessage        func(s *discordgo.Session, edit *discordgo.MessageEdit) error
-	editWebhookMessage func(s *discordgo.Session, edit *discordgo.MessageEdit, webhookID, webhookToken string) error
+	editMessage        func(c *api.Client, channelID discord.ChannelID, messageID discord.MessageID, edit api.EditMessageData) error
+	editWebhookMessage func(c *api.Client, webhookID discord.WebhookID, webhookToken string, messageID discord.MessageID, edit api.EditMessageData) error
 	dropPostings       func(cm *files.ConfigManager, guildID string, messageIDs []string) error
 }
 
@@ -47,12 +50,11 @@ func newPartnerPostingSyncer(cm *files.ConfigManager) *partnerPostingSyncer {
 	}
 }
 
-// Sync syncs.
 func (s *partnerPostingSyncer) Sync(
-	session *discordgo.Session,
+	client *api.Client,
 	guildID string,
 	postings []files.CustomEmbedPostingConfig,
-	embeds []*discordgo.MessageEmbed,
+	embeds []discord.Embed,
 ) partnerSyncResult {
 	var result partnerSyncResult
 	if len(postings) == 0 {
@@ -60,20 +62,22 @@ func (s *partnerPostingSyncer) Sync(
 	}
 
 	if embeds == nil {
-		embeds = []*discordgo.MessageEmbed{}
+		embeds = []discord.Embed{}
 	}
 
 	for _, posting := range postings {
-		edit := &discordgo.MessageEdit{
-			ID:      strings.TrimSpace(posting.MessageID),
-			Channel: strings.TrimSpace(posting.ChannelID),
-			Embeds:  &embeds,
+		chID, _ := discord.ParseSnowflake(posting.ChannelID)
+		msgID, _ := discord.ParseSnowflake(posting.MessageID)
+
+		edit := api.EditMessageData{
+			Embeds: &embeds,
 		}
 		var err error
 		if posting.WebhookID != "" && posting.WebhookToken != "" {
-			err = s.editWebhookMessage(session, edit, posting.WebhookID, posting.WebhookToken)
+			wID, _ := discord.ParseSnowflake(posting.WebhookID)
+			err = s.editWebhookMessage(client, discord.WebhookID(wID), posting.WebhookToken, discord.MessageID(msgID), edit)
 		} else {
-			err = s.editMessage(session, edit)
+			err = s.editMessage(client, discord.ChannelID(chID), discord.MessageID(msgID), edit)
 		}
 		if err == nil {
 			result.Edited++
@@ -104,8 +108,7 @@ func (s *partnerPostingSyncer) Sync(
 	return result
 }
 
-// SyncConfig syncs config.
-func (s *partnerPostingSyncer) SyncConfig(guildID string, session *discordgo.Session) error {
+func (s *partnerPostingSyncer) SyncConfig(guildID string, client *api.Client) error {
 	cfg := s.configManager.GuildConfig(guildID)
 	if cfg == nil {
 		return errors.New("guild config not found")
@@ -143,7 +146,7 @@ func (s *partnerPostingSyncer) SyncConfig(guildID string, session *discordgo.Ses
 		return fmt.Errorf("partnerPostingSyncer.SyncConfig: %w", err)
 	}
 
-	s.Sync(session, guildID, boardCfg.Postings, embeds)
+	s.Sync(client, guildID, boardCfg.Postings, embeds)
 	return nil
 }
 
@@ -173,30 +176,27 @@ func formatPartnerSyncSummary(result partnerSyncResult, action string) string {
 }
 
 func isPartnerPostingMissingError(err error) bool {
-	var rest *discordgo.RESTError
-	if !errors.As(err, &rest) || rest.Message == nil {
-		return false
-	}
-	switch rest.Message.Code {
-	case discordErrUnknownChannel, discordErrUnknownMessage:
-		return true
+	var httpErr *httputil.HTTPError
+	if errors.As(err, &httpErr) {
+		return httpErr.Code == discordErrUnknownChannel || httpErr.Code == discordErrUnknownMessage
 	}
 	return false
 }
 
-func defaultPartnerEditMessage(s *discordgo.Session, edit *discordgo.MessageEdit) error {
-	if s == nil {
-		return errors.New("discord session is nil")
+func defaultPartnerEditMessage(c *api.Client, channelID discord.ChannelID, messageID discord.MessageID, edit api.EditMessageData) error {
+	if c == nil {
+		return errors.New("discord client is nil")
 	}
-	_, err := s.ChannelMessageEditComplex(edit)
+	_, err := c.EditMessageComplex(channelID, messageID, edit)
 	return err
 }
 
-func defaultPartnerEditWebhookMessage(s *discordgo.Session, edit *discordgo.MessageEdit, webhookID, webhookToken string) error {
-	if s == nil {
-		return errors.New("discord session is nil")
+func defaultPartnerEditWebhookMessage(c *api.Client, webhookID discord.WebhookID, webhookToken string, messageID discord.MessageID, edit api.EditMessageData) error {
+	if c == nil {
+		return errors.New("discord client is nil")
 	}
-	_, err := s.WebhookMessageEdit(webhookID, webhookToken, edit.ID, &discordgo.WebhookEdit{
+	whClient := webhook.New(webhookID, webhookToken)
+	_, err := whClient.EditMessage(messageID, webhook.EditMessageData{
 		Embeds: edit.Embeds,
 	})
 	return err

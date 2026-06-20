@@ -6,8 +6,8 @@ import (
 	"log/slog"
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
+	rolesvc "github.com/small-frappuccino/discordcore/pkg/discord/roles"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	rolesvc "github.com/small-frappuccino/discordcore/pkg/roles"
 	"github.com/small-frappuccino/discordgo"
 )
 

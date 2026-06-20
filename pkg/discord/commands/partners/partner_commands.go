@@ -1,11 +1,11 @@
-package partner
+package partners
 
 import (
 	"strings"
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
+	partnersvc "github.com/small-frappuccino/discordcore/pkg/discord/partners"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	partnersvc "github.com/small-frappuccino/discordcore/pkg/partners"
 )
 
 const (

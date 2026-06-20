@@ -1,4 +1,4 @@
-package partner
+package partners
 
 import (
 	"context"
@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
+	partnersvc "github.com/small-frappuccino/discordcore/pkg/discord/partners"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	partnersvc "github.com/small-frappuccino/discordcore/pkg/partners"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
 	"github.com/small-frappuccino/discordgo"
 )
@@ -82,7 +83,7 @@ func (c *partnerAddSubCommand) Handle(ctx *legacycore.Context) error {
 		return partnerDetailedCommandError(fmt.Sprintf("Failed to add partner: %v", err))
 	}
 
-	c.partnerService.SyncConfig(ctx.GuildID, ctx.Session)
+	c.partnerService.SyncConfig(ctx.GuildID, api.NewClient(ctx.Session.Token))
 	return legacycore.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, "Partner added successfully.")
 }
 
@@ -152,7 +153,7 @@ func (c *partnerRemoveSubCommand) Handle(ctx *legacycore.Context) error {
 		return partnerDetailedCommandError(fmt.Sprintf("Failed to remove partner: %v", err))
 	}
 
-	c.partnerService.SyncConfig(ctx.GuildID, ctx.Session)
+	c.partnerService.SyncConfig(ctx.GuildID, api.NewClient(ctx.Session.Token))
 	return legacycore.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, "Partner removed successfully.")
 }
 
@@ -222,7 +223,7 @@ func (c *partnerLinkSubCommand) Handle(ctx *legacycore.Context) error {
 		return partnerDetailedCommandError(fmt.Sprintf("Failed to update partner link: %v", err))
 	}
 
-	c.partnerService.SyncConfig(ctx.GuildID, ctx.Session)
+	c.partnerService.SyncConfig(ctx.GuildID, api.NewClient(ctx.Session.Token))
 	return legacycore.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, "Partner link updated successfully.")
 }
 
@@ -315,7 +316,7 @@ func (c *partnerRenameSubCommand) Handle(ctx *legacycore.Context) error {
 		return partnerDetailedCommandError(fmt.Sprintf("Failed to update partner: %v", err))
 	}
 
-	c.partnerService.SyncConfig(ctx.GuildID, ctx.Session)
+	c.partnerService.SyncConfig(ctx.GuildID, api.NewClient(ctx.Session.Token))
 	return legacycore.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, "Partner renamed successfully.")
 }
 
@@ -400,7 +401,7 @@ func (c *partnerRefreshSubCommand) Handle(ctx *legacycore.Context) error {
 	}
 	ctx.Acknowledged = true
 
-	if err := c.partnerService.SyncConfig(ctx.GuildID, ctx.Session); err != nil {
+	if err := c.partnerService.SyncConfig(ctx.GuildID, api.NewClient(ctx.Session.Token)); err != nil {
 		return builder.WithContext(ctx).Error(ctx.Interaction, fmt.Sprintf("Failed to sync partner board: %v", err))
 	}
 	return builder.WithContext(ctx).Success(ctx.Interaction, "Partner board refreshed successfully.")

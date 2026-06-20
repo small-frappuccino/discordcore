@@ -9,8 +9,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
-	"github.com/small-frappuccino/discordgo"
 )
 
 const (
@@ -84,7 +84,7 @@ func newBoardRendererWithLimits(maxDescriptionChars, maxEmbeds int) *BoardRender
 }
 
 // Render transforms template + partner list into one or more embeds.
-func (r *BoardRenderer) Render(template PartnerBoardTemplate, partners []PartnerRecord) ([]*discordgo.MessageEmbed, error) {
+func (r *BoardRenderer) Render(template PartnerBoardTemplate, partners []PartnerRecord) ([]discord.Embed, error) {
 	limits := normalizeRendererLimits(r)
 	tpl := normalizeTemplate(template)
 
@@ -107,20 +107,20 @@ func (r *BoardRenderer) Render(template PartnerBoardTemplate, partners []Partner
 		)
 	}
 
-	embeds := make([]*discordgo.MessageEmbed, 0, len(descriptions))
+	embeds := make([]discord.Embed, 0, len(descriptions))
 	for i, description := range descriptions {
 		title := tpl.Title
 		if i > 0 {
 			title = tpl.ContinuationTitle
 		}
 
-		embed := &discordgo.MessageEmbed{
+		embed := discord.Embed{
 			Title:       title,
 			Description: description,
-			Color:       tpl.Color,
+			Color:       discord.Color(tpl.Color),
 		}
 		if footer := buildFooter(tpl.FooterTemplate, len(normalizedPartners), totalFandoms, i+1, len(descriptions)); footer != "" {
-			embed.Footer = &discordgo.MessageEmbedFooter{
+			embed.Footer = &discord.EmbedFooter{
 				Text: footer,
 			}
 		}

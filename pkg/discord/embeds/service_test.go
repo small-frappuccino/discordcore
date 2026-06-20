@@ -3,8 +3,10 @@ package embeds
 import (
 	"testing"
 
+	"github.com/diamondburned/arikawa/v3/api"
+	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/utils/httputil"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordgo"
 )
 
 func TestRenderCustomEmbed(t *testing.T) {
@@ -26,7 +28,8 @@ func TestRenderCustomEmbed(t *testing.T) {
 		},
 	}
 
-	embed := renderCustomEmbed(ce)
+	svc := NewEmbedService(nil)
+	embed := svc.Render(ce)
 
 	if embed.Title != ce.Title {
 		t.Fatalf("embed.Title = %q, want %q", embed.Title, ce.Title)
@@ -34,13 +37,13 @@ func TestRenderCustomEmbed(t *testing.T) {
 	if embed.Description != ce.Description {
 		t.Fatalf("embed.Description = %q, want %q", embed.Description, ce.Description)
 	}
-	if embed.Color != ce.Color {
+	if embed.Color != discord.Color(ce.Color) {
 		t.Fatalf("embed.Color = %d, want %d", embed.Color, ce.Color)
 	}
-	if embed.Author == nil || embed.Author.Name != ce.AuthorName || embed.Author.IconURL != ce.AuthorIconURL {
+	if embed.Author == nil || embed.Author.Name != ce.AuthorName || embed.Author.Icon != ce.AuthorIconURL {
 		t.Fatalf("embed.Author mismatch")
 	}
-	if embed.Footer == nil || embed.Footer.Text != ce.FooterText || embed.Footer.IconURL != ce.FooterIconURL {
+	if embed.Footer == nil || embed.Footer.Text != ce.FooterText || embed.Footer.Icon != ce.FooterIconURL {
 		t.Fatalf("embed.Footer mismatch")
 	}
 	if embed.Image == nil || embed.Image.URL != ce.ImageURL {
@@ -61,7 +64,7 @@ func TestCustomEmbedPostingSyncer(t *testing.T) {
 	t.Parallel()
 
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
-	guildID := "guild-sync"
+	guildID := "123456789012345678"
 	key := "embed-key"
 
 	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: guildID}); err != nil {
@@ -72,8 +75,8 @@ func TestCustomEmbedPostingSyncer(t *testing.T) {
 		Title:       "Title",
 		Description: "Desc",
 		Postings: []files.CustomEmbedPostingConfig{
-			{ChannelID: "ch1", MessageID: "msg1"},
-			{ChannelID: "ch2", MessageID: "msg2"},
+			{ChannelID: "111111111111111111", MessageID: "222222222222222222"},
+			{ChannelID: "333333333333333333", MessageID: "444444444444444444"},
 		},
 	}
 	if err := cm.SetCustomEmbedProperties(guildID, key, ce); err != nil {
@@ -85,19 +88,14 @@ func TestCustomEmbedPostingSyncer(t *testing.T) {
 		}
 	}
 
-	var editedPaths []string
-	syncer := &customEmbedPostingSyncer{
+	var editedPaths []discord.MessageID
+	svc := &EmbedService{
 		configManager: cm,
-		editMessage: func(s *discordgo.Session, edit *discordgo.MessageEdit) error {
-			if edit.ID == "msg2" {
-				// simulate deleted message on second posting
-				return &discordgo.RESTError{
-					Message: &discordgo.APIErrorMessage{
-						Code: 10008, // Unknown Message
-					},
-				}
+		editMessage: func(client *api.Client, channelID discord.ChannelID, messageID discord.MessageID, data api.EditMessageData) error {
+			if messageID == discord.MessageID(444444444444444444) {
+				return &httputil.HTTPError{Code: discordErrUnknownMessage}
 			}
-			editedPaths = append(editedPaths, edit.ID)
+			editedPaths = append(editedPaths, messageID)
 			return nil
 		},
 		dropPostings: func(c *files.ConfigManager, gid, k string, mid []string) error {
@@ -105,13 +103,14 @@ func TestCustomEmbedPostingSyncer(t *testing.T) {
 		},
 	}
 
-	session := &discordgo.Session{}
-	result := syncer.Sync(session, guildID, key, ce.Postings, renderCustomEmbed(ce))
+	client := &api.Client{}
+	embed := svc.Render(ce)
+	result := svc.Sync(client, guildID, key, ce.Postings, &embed)
 
 	if result.Edited != 1 {
 		t.Fatalf("expected 1 edit, got %d", result.Edited)
 	}
-	if len(result.Dropped) != 1 || result.Dropped[0].MessageID != "msg2" {
+	if len(result.Dropped) != 1 || result.Dropped[0].MessageID != "444444444444444444" {
 		t.Fatalf("expected msg2 to be dropped")
 	}
 
@@ -120,7 +119,7 @@ func TestCustomEmbedPostingSyncer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load custom embed: %v", err)
 	}
-	if len(updated.Postings) != 1 || updated.Postings[0].MessageID != "msg1" {
+	if len(updated.Postings) != 1 || updated.Postings[0].MessageID != "222222222222222222" {
 		t.Fatalf("expected only msg1 to remain in custom embed postings, got %+v", updated.Postings)
 	}
 }

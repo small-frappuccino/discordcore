@@ -1,4 +1,4 @@
-package partner
+package partners
 
 import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"

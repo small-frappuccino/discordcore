@@ -78,7 +78,7 @@ func TestPermissionCheckerResolveMember_UsesCacheBeforeStateAndREST(t *testing.T
 	checker, unifiedCache := newPermissionCheckerWithCache(t, session)
 	unifiedCache.SetMember("g1", "u1", toArikawaMember(&discordgo.Member{
 		GuildID: "g1",
-		User:    &discordgo.User{ID: "u1", Username: "cache-user"},
+		User:    &discordgo.User{ID: "111111", Username: "cache-user"},
 	}))
 
 	member, ok, err := checker.ResolveMember("g1", "u1")
@@ -96,7 +96,7 @@ func TestPermissionCheckerResolveMember_UsesCacheBeforeStateAndREST(t *testing.T
 func TestPermissionCheckerResolveMember_UsesStateBeforeREST(t *testing.T) {
 	var memberCalls int32
 	session := newPermissionCheckerTestSession(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/guilds/g1/members/u1") {
+		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/guilds/g1/members/111111") {
 			atomic.AddInt32(&memberCalls, 1)
 		}
 		w.WriteHeader(http.StatusNotFound)
@@ -108,14 +108,14 @@ func TestPermissionCheckerResolveMember_UsesStateBeforeREST(t *testing.T) {
 	}
 	if err := session.State.MemberAdd(&discordgo.Member{
 		GuildID: "g1",
-		User:    &discordgo.User{ID: "u1", Username: "state-user"},
+		User:    &discordgo.User{ID: "111111", Username: "state-user"},
 	}); err != nil {
 		t.Fatalf("member add: %v", err)
 	}
 
 	checker, unifiedCache := newPermissionCheckerWithCache(t, session)
 
-	member, ok, err := checker.ResolveMember("g1", "u1")
+	member, ok, err := checker.ResolveMember("g1", "111111")
 	if err != nil {
 		t.Fatalf("resolve member: %v", err)
 	}
@@ -126,14 +126,14 @@ func TestPermissionCheckerResolveMember_UsesStateBeforeREST(t *testing.T) {
 		t.Fatalf("expected no REST call on state hit, got %d", got)
 	}
 
-	if cached, cachedOK := unifiedCache.GetMember("g1", "u1"); !cachedOK || cached == nil || cached.User.ID == 0 {
+	if cached, cachedOK := unifiedCache.GetMember("g1", "111111"); !cachedOK || cached == nil || cached.User.ID == 0 {
 		t.Fatalf("expected member cached after state hit")
 	}
 }
 
 func TestPermissionCheckerResolveMember_ReturnsErrorOnRESTFailure(t *testing.T) {
 	session := newPermissionCheckerTestSession(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/guilds/g1/members/u1") {
+		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/guilds/g1/members/111111") {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(`{"message":"boom","code":0}`))
 			return
@@ -145,7 +145,7 @@ func TestPermissionCheckerResolveMember_ReturnsErrorOnRESTFailure(t *testing.T) 
 	cfg := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	checker := NewPermissionChecker(session, cfg)
 
-	member, ok, err := checker.ResolveMember("g1", "u1")
+	member, ok, err := checker.ResolveMember("g1", "111111")
 	if err == nil {
 		t.Fatalf("expected REST failure error")
 	}
@@ -163,7 +163,7 @@ func TestPermissionCheckerResolveMember_ReturnsNotFoundOnREST404(t *testing.T) {
 	cfg := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	checker := NewPermissionChecker(session, cfg)
 
-	member, ok, err := checker.ResolveMember("g1", "u1")
+	member, ok, err := checker.ResolveMember("g1", "111111")
 	if err != nil {
 		t.Fatalf("expected nil error on REST 404, got %v", err)
 	}
@@ -184,19 +184,19 @@ func TestPermissionCheckerResolveRoles_UsesCacheBeforeStateAndREST(t *testing.T)
 	session.State = discordgo.NewState()
 	if err := session.State.GuildAdd(&discordgo.Guild{
 		ID:    "g1",
-		Roles: []*discordgo.Role{{ID: "r-state", Name: "State Role"}},
+		Roles: []*discordgo.Role{{ID: "1234", Name: "State Role"}},
 	}); err != nil {
 		t.Fatalf("guild add: %v", err)
 	}
 
 	checker, unifiedCache := newPermissionCheckerWithCache(t, session)
-	unifiedCache.SetRoles("g1", toArikawaRoles([]*discordgo.Role{{ID: "r-cache", Name: "Cache Role"}}))
+	unifiedCache.SetRoles("g1", toArikawaRoles([]*discordgo.Role{{ID: "5678", Name: "Cache Role"}}))
 
 	roles, err := checker.ResolveRoles("g1")
 	if err != nil {
 		t.Fatalf("resolve roles: %v", err)
 	}
-	if len(roles) != 1 || roles[0] == nil || roles[0].ID != "r-cache" {
+	if len(roles) != 1 || roles[0] == nil || roles[0].ID != "5678" {
 		t.Fatalf("expected cache roles, got %+v", roles)
 	}
 	if got := atomic.LoadInt32(&roleCalls); got != 0 {
@@ -210,7 +210,7 @@ func TestPermissionCheckerResolveRoles_UsesStateAndCache(t *testing.T) {
 		ID:      "g1",
 		OwnerID: "owner-1",
 		Roles: []*discordgo.Role{
-			{ID: "r1", Name: "Role 1", Position: 1},
+			{ID: "9999", Name: "Role 1", Position: 1},
 		},
 	}
 	if err := session.State.GuildAdd(guild); err != nil {
@@ -227,7 +227,7 @@ func TestPermissionCheckerResolveRoles_UsesStateAndCache(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve roles from state: %v", err)
 	}
-	if len(roles) != 1 || roles[0] == nil || roles[0].ID != "r1" {
+	if len(roles) != 1 || roles[0] == nil || roles[0].ID != "9999" {
 		t.Fatalf("unexpected roles from state: %+v", roles)
 	}
 
@@ -242,7 +242,7 @@ func TestPermissionCheckerResolveRoles_UsesStateAndCache(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve roles from cache: %v", err)
 	}
-	if len(roles) != 1 || roles[0] == nil || roles[0].ID != "r1" {
+	if len(roles) != 1 || roles[0] == nil || roles[0].ID != "9999" {
 		t.Fatalf("unexpected roles from cache: %+v", roles)
 	}
 }

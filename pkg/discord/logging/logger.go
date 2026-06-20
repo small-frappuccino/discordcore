@@ -11,7 +11,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/state"
-	"github.com/small-frappuccino/discordcore/pkg/embeds"
+	"github.com/small-frappuccino/discordcore/pkg/discord/embeds"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/logging"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
@@ -113,7 +113,7 @@ func (l *Logger) OnMemberJoin(ctx context.Context, guildID string, member discor
 			},
 		},
 	}
-	embed := embeds.RenderArikawa(ce)
+	embed := embeds.Render(ce)
 	embed.Timestamp = discord.NowTimestamp()
 	l.sendEmbed(ctx, discord.ChannelID(channelID), embed, logging.LogEventMemberJoin)
 }
@@ -143,7 +143,7 @@ func (l *Logger) OnMemberLeave(ctx context.Context, guildID string, user discord
 			},
 		},
 	}
-	embed := embeds.RenderArikawa(ce)
+	embed := embeds.Render(ce)
 	embed.Timestamp = discord.NowTimestamp()
 	l.sendEmbed(ctx, discord.ChannelID(channelID), embed, logging.LogEventMemberLeave)
 }
@@ -198,7 +198,7 @@ func (l *Logger) OnRoleUpdate(ctx context.Context, guildID string, user discord.
 	}
 
 	ce.Fields = fields
-	embed := embeds.RenderArikawa(ce)
+	embed := embeds.Render(ce)
 	embed.Timestamp = discord.NowTimestamp()
 	l.sendEmbed(ctx, discord.ChannelID(channelID), embed, logging.LogEventRoleChange)
 }
@@ -238,7 +238,7 @@ func (l *Logger) OnMessageEdit(ctx context.Context, guildID string, channelID di
 		FooterText: fmt.Sprintf("Message ID: %s", newMessage.ID.String()),
 	}
 
-	embed := embeds.RenderArikawa(ce)
+	embed := embeds.Render(ce)
 	embed.Timestamp = discord.NowTimestamp()
 	l.sendEmbed(ctx, discord.ChannelID(logChannelID), embed, logging.LogEventMessageEdit)
 }
@@ -301,7 +301,7 @@ func (l *Logger) OnMessageDelete(ctx context.Context, m *gateway.MessageDeleteEv
 		ce.Description += fmt.Sprintf("\n**Deleted By:** <@%s>", executor.ID.String())
 	}
 
-	embed := embeds.RenderArikawa(ce)
+	embed := embeds.Render(ce)
 	embed.Timestamp = discord.NowTimestamp()
 
 	l.sendEmbed(ctx, discord.ChannelID(logChannelID), embed, logging.LogEventMessageDelete)
@@ -340,7 +340,7 @@ func (l *Logger) OnModerationAction(ctx context.Context, guildID string, actionT
 			reason),
 		FooterText: fmt.Sprintf("Target ID: %s", targetUser.ID.String()),
 	}
-	embed := embeds.RenderArikawa(ce)
+	embed := embeds.Render(ce)
 	embed.Timestamp = discord.NowTimestamp()
 	l.sendEmbed(ctx, discord.ChannelID(logChannelID), embed, logging.LogEventModerationCase)
 }
@@ -379,7 +379,7 @@ func (l *Logger) OnAvatarUpdate(ctx context.Context, guildID string, user discor
 		})
 	}
 
-	embed := embeds.RenderArikawa(ce)
+	embed := embeds.Render(ce)
 	embed.Timestamp = discord.NowTimestamp()
 
 	l.sendEmbed(ctx, discord.ChannelID(logChannelID), embed, logging.LogEventAvatarChange)

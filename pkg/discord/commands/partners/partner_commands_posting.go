@@ -1,4 +1,4 @@
-package partner
+package partners
 
 import (
 	"context"
@@ -6,9 +6,12 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/diamondburned/arikawa/v3/api"
+	"github.com/diamondburned/arikawa/v3/api/webhook"
+	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
+	partnersvc "github.com/small-frappuccino/discordcore/pkg/discord/partners"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	partnersvc "github.com/small-frappuccino/discordcore/pkg/partners"
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -106,31 +109,35 @@ func (c *partnerPostSubCommand) Handle(ctx *legacycore.Context) error {
 		if !ok {
 			return partnerDetailedCommandError("Invalid webhook URL.")
 		}
-		message, err := ctx.Session.WebhookExecute(wID, wToken, true, &discordgo.WebhookParams{
+		widSnowflake, _ := discord.ParseSnowflake(wID)
+		whClient := webhook.New(discord.WebhookID(widSnowflake), wToken)
+		message, err := whClient.ExecuteAndWait(webhook.ExecuteData{
 			Embeds: embeds,
 		})
 		if err != nil {
 			return partnerDetailedCommandError(fmt.Sprintf("Failed to post the embed via webhook: %v", err))
 		}
-		if message != nil && message.ID != "" {
+		if message != nil && message.ID.IsValid() {
 			posting = files.CustomEmbedPostingConfig{
-				ChannelID:    message.ChannelID,
-				MessageID:    message.ID,
+				ChannelID:    message.ChannelID.String(),
+				MessageID:    message.ID.String(),
 				WebhookID:    wID,
 				WebhookToken: wToken,
 			}
 		}
 	} else {
-		message, err := ctx.Session.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
+		chID, _ := discord.ParseSnowflake(channelID)
+		client := api.NewClient(ctx.Session.Token)
+		message, err := client.SendMessageComplex(discord.ChannelID(chID), api.SendMessageData{
 			Embeds: embeds,
 		})
 		if err != nil {
 			return partnerDetailedCommandError(fmt.Sprintf("Failed to post the embed: %v", err))
 		}
-		if message != nil && message.ID != "" {
+		if message != nil && message.ID.IsValid() {
 			posting = files.CustomEmbedPostingConfig{
 				ChannelID: channelID,
-				MessageID: message.ID,
+				MessageID: message.ID.String(),
 			}
 		}
 	}
@@ -229,11 +236,17 @@ func (c *partnerUnpostSubCommand) Handle(ctx *legacycore.Context) error {
 
 	deleteErr := ""
 	if targetPosting.WebhookID != "" && targetPosting.WebhookToken != "" {
-		if err := ctx.Session.WebhookMessageDelete(targetPosting.WebhookID, targetPosting.WebhookToken, targetPosting.MessageID); err != nil {
+		wID, _ := discord.ParseSnowflake(targetPosting.WebhookID)
+		mID, _ := discord.ParseSnowflake(targetPosting.MessageID)
+		whClient := webhook.New(discord.WebhookID(wID), targetPosting.WebhookToken)
+		if err := whClient.DeleteMessage(discord.MessageID(mID)); err != nil {
 			deleteErr = fmt.Sprintf("\nNote: Discord deletion via webhook failed (%v). You may need to delete it manually.", err)
 		}
 	} else if targetPosting.ChannelID != "" {
-		if err := ctx.Session.ChannelMessageDelete(targetPosting.ChannelID, targetPosting.MessageID); err != nil {
+		cID, _ := discord.ParseSnowflake(targetPosting.ChannelID)
+		mID, _ := discord.ParseSnowflake(targetPosting.MessageID)
+		client := api.NewClient(ctx.Session.Token)
+		if err := client.DeleteMessage(discord.ChannelID(cID), discord.MessageID(mID), "partner unpost"); err != nil {
 			deleteErr = fmt.Sprintf("\nNote: Discord deletion failed (%v). You may need to delete it manually.", err)
 		}
 	}

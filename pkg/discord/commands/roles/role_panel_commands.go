@@ -18,11 +18,13 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord"
+	"github.com/diamondburned/arikawa/v3/api"
+	"github.com/diamondburned/arikawa/v3/discord"
+	localdiscord "github.com/small-frappuccino/discordcore/pkg/discord"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
+	rolesvc "github.com/small-frappuccino/discordcore/pkg/discord/roles"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
-	rolesvc "github.com/small-frappuccino/discordcore/pkg/roles"
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -72,6 +74,69 @@ const (
 	rolePanelSubFieldRemove = "remove"
 	rolePanelSubFieldList   = "list"
 )
+
+func convertPanelToDiscordgo(panel files.RolePanelConfig) (*discordgo.MessageEmbed, []discordgo.MessageComponent) {
+	embed := &discordgo.MessageEmbed{}
+	if title := strings.TrimSpace(panel.Title); title != "" {
+		embed.Title = title
+	}
+	if desc := strings.TrimSpace(panel.Description); desc != "" {
+		embed.Description = desc
+	}
+	if panel.Color > 0 {
+		embed.Color = panel.Color
+	}
+	authorName := strings.TrimSpace(panel.AuthorName)
+	authorIcon := strings.TrimSpace(panel.AuthorIconURL)
+	if authorName != "" || authorIcon != "" {
+		embed.Author = &discordgo.MessageEmbedAuthor{Name: authorName, IconURL: authorIcon}
+	}
+	footerText := strings.TrimSpace(panel.FooterText)
+	footerIcon := strings.TrimSpace(panel.FooterIconURL)
+	if footerText != "" || footerIcon != "" {
+		embed.Footer = &discordgo.MessageEmbedFooter{Text: footerText, IconURL: footerIcon}
+	}
+	if imageURL := strings.TrimSpace(panel.ImageURL); imageURL != "" {
+		embed.Image = &discordgo.MessageEmbedImage{URL: imageURL}
+	}
+	if thumbnailURL := strings.TrimSpace(panel.ThumbnailURL); thumbnailURL != "" {
+		embed.Thumbnail = &discordgo.MessageEmbedThumbnail{URL: thumbnailURL}
+	}
+	if len(panel.Fields) > 0 {
+		embed.Fields = make([]*discordgo.MessageEmbedField, 0, len(panel.Fields))
+		for _, f := range panel.Fields {
+			embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: f.Name, Value: f.Value, Inline: f.Inline})
+		}
+	}
+
+	var components []discordgo.MessageComponent
+	if len(panel.Buttons) > 0 {
+		var current discordgo.ActionsRow
+		for _, b := range panel.Buttons {
+			if len(current.Components) == 5 {
+				components = append(components, current)
+				current = discordgo.ActionsRow{}
+			}
+			button := discordgo.Button{
+				Style:    discordgo.SecondaryButton,
+				Label:    strings.TrimSpace(b.Label),
+				CustomID: rolesvc.RolePanelButtonCustomID(b.RoleID),
+			}
+			if b.HasEmoji() {
+				button.Emoji = &discordgo.ComponentEmoji{
+					Name:     strings.TrimSpace(b.EmojiName),
+					ID:       strings.TrimSpace(b.EmojiID),
+					Animated: b.EmojiAnimated,
+				}
+			}
+			current.Components = append(current.Components, button)
+		}
+		if len(current.Components) > 0 {
+			components = append(components, current)
+		}
+	}
+	return embed, components
+}
 
 // RolePanelCommands wires the /roles command tree into the router.
 type RolePanelCommands struct {
@@ -204,8 +269,7 @@ func (c *rolePanelPostSubCommand) Handle(ctx *legacycore.Context) error {
 		return rolePanelDetailedCommandError(fmt.Sprintf("Panel `%s` has no buttons configured yet. Add at least one with /roles button add.", panel.Key))
 	}
 
-	embed := c.rolePanelService.RenderEmbed(&panel)
-	components := c.rolePanelService.RenderComponents(&panel)
+	embed, components := convertPanelToDiscordgo(panel)
 
 	var messageID, channelID, webhookID, webhookToken string
 	extractor := legacycore.OptionList(legacycore.GetSubCommandOptions(ctx.Interaction))
@@ -274,16 +338,18 @@ func (c *rolePanelPostSubCommand) Handle(ctx *legacycore.Context) error {
 			webhookToken = executionWebhookToken
 		}
 	} else {
-		msg, err := ctx.Session.ChannelMessageSendComplex(ctx.Interaction.ChannelID, &discordgo.MessageSend{
-			Embeds:     []*discordgo.MessageEmbed{embed},
-			Components: components,
-		})
+		client := api.NewClient(ctx.Session.Token)
+		chID, errCh := discord.ParseSnowflake(ctx.Interaction.ChannelID)
+		if errCh != nil {
+			return rolePanelDetailedCommandError("Invalid channel ID.")
+		}
+		msg, err := c.rolePanelService.Post(client, discord.ChannelID(chID), panel)
 		if err != nil {
 			return rolePanelDetailedCommandError(fmt.Sprintf("Failed to post the panel: %v", err))
 		}
-		if msg != nil {
-			messageID = msg.ID
-			channelID = msg.ChannelID
+		if msg != nil && msg.ID.IsValid() {
+			messageID = msg.ID.String()
+			channelID = msg.ChannelID.String()
 		}
 	}
 
@@ -356,8 +422,7 @@ func (c *rolePanelPreviewSubCommand) Handle(ctx *legacycore.Context) error {
 		return fmt.Errorf("rolePanelPreviewSubCommand.Handle: %w", err)
 	}
 
-	embed := c.rolePanelService.RenderEmbed(&panel)
-	components := c.rolePanelService.RenderComponents(&panel)
+	embed, components := convertPanelToDiscordgo(panel)
 
 	rm := rolePanelPreviewResponseBuilder(ctx.Session).WithComponents(components...).Build()
 	return rm.Custom(ctx.Interaction, "", []*discordgo.MessageEmbed{embed})
@@ -522,7 +587,7 @@ func (c *rolePanelDeleteSubCommand) Handle(ctx *legacycore.Context) error {
 
 	syncNote := ""
 	if len(panel.Postings) > 0 {
-		syncResult := c.rolePanelService.Sync(ctx.Session, ctx.GuildID, key, panel.Postings, &panel)
+		syncResult := c.rolePanelService.Sync(api.NewClient(ctx.Session.Token), ctx.GuildID, key, panel.Postings, &panel)
 		if summary := c.rolePanelService.FormatSyncSummary(syncResult, "Stripped buttons from"); summary != "" {
 			syncNote = "\n" + summary
 		}
@@ -1088,7 +1153,7 @@ func (c *rolePanelRefreshSubCommand) Handle(ctx *legacycore.Context) error {
 	}
 
 	result := c.rolePanelService.Sync(
-		ctx.Session,
+		api.NewClient(ctx.Session.Token),
 		ctx.GuildID,
 		panel.Key,
 		panel.Postings,
@@ -1170,7 +1235,7 @@ func (c *rolePanelUnpostSubCommand) Handle(ctx *legacycore.Context) error {
 	emptyPanel.Buttons = nil // Strip buttons
 
 	result := c.rolePanelService.Sync(
-		ctx.Session,
+		api.NewClient(ctx.Session.Token),
 		ctx.GuildID,
 		panelKey,
 		[]files.RolePanelPostingConfig{posting},
@@ -1272,7 +1337,7 @@ func refreshRolePanelPostingsBestEffort(cm *files.ConfigManager, svc *rolesvc.Ro
 		return ""
 	}
 	result := svc.Sync(
-		ctx.Session,
+		api.NewClient(ctx.Session.Token),
 		ctx.GuildID,
 		panel.Key,
 		panel.Postings,
@@ -1461,7 +1526,7 @@ func (c *rolePanelImportSubCommand) Handle(ctx *legacycore.Context) error {
 		}
 	}
 
-	data, err := discord.FetchPastebinContent(context.Background(), pasteURL)
+	data, err := localdiscord.FetchPastebinContent(context.Background(), pasteURL)
 	if err != nil {
 		return rolePanelDetailedCommandError(fmt.Sprintf("Failed to fetch from pastebin: %v", err))
 	}
@@ -1547,7 +1612,7 @@ func (c *rolePanelExportSubCommand) Handle(ctx *legacycore.Context) error {
 		ownerID = g.OwnerID
 	}
 
-	url, err := discord.UploadExportedContent(context.Background(), ctx.Interaction.Member, ownerID, c.configManager, data)
+	url, err := localdiscord.UploadExportedContent(context.Background(), ctx.Interaction.Member, ownerID, c.configManager, data)
 	if err != nil {
 		return rolePanelDetailedCommandError(fmt.Sprintf("Failed to upload: %v", err))
 	}

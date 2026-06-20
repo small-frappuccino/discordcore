@@ -7,7 +7,7 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/small-frappuccino/discordcore/pkg/automod"
-	"github.com/small-frappuccino/discordcore/pkg/embeds"
+	"github.com/small-frappuccino/discordcore/pkg/discord/embeds"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/logging"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
@@ -55,7 +55,7 @@ func (l *Logger) OnAutomodBlock(ctx context.Context, guildID discord.GuildID, en
 		})
 	}
 
-	embed := embeds.RenderArikawa(ce)
+	embed := embeds.Render(ce)
 	embed.Timestamp = discord.NewTimestamp(time.Now())
 
 	l.sendEmbed(ctx, discord.ChannelID(channelID), embed, logging.LogEventAutomodAction)

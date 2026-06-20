@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord"
+	"github.com/diamondburned/arikawa/v3/api"
+	"github.com/diamondburned/arikawa/v3/discord"
+	localdiscord "github.com/small-frappuccino/discordcore/pkg/discord"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
-	embedsvc "github.com/small-frappuccino/discordcore/pkg/embeds"
+	embedsvc "github.com/small-frappuccino/discordcore/pkg/discord/embeds"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordgo"
 )
@@ -82,7 +84,7 @@ func (ec *EmbedCommands) RegisterCommands(router *legacycore.CommandRouter) {
 	embedGroup.AddSubCommand(newEmbedDeleteSubCommand(ec.configManager))
 	embedGroup.AddSubCommand(newEmbedListSubCommand(ec.configManager))
 	embedGroup.AddSubCommand(newEmbedRefreshSubCommand(ec.configManager, ec.embedService))
-	embedGroup.AddSubCommand(newEmbedUnpostSubCommand(ec.configManager))
+	embedGroup.AddSubCommand(newEmbedUnpostSubCommand(ec.configManager, ec.embedService))
 	embedGroup.AddSubCommand(newEmbedImportSubCommand(ec.configManager))
 	embedGroup.AddSubCommand(newEmbedExportSubCommand(ec.configManager))
 
@@ -166,19 +168,22 @@ func (c *embedPostSubCommand) Handle(ctx *legacycore.Context) error {
 		}
 	}
 
-	embed := c.embedService.Render(ce)
-	message, err := ctx.Session.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
-		Embeds: []*discordgo.MessageEmbed{embed},
-	})
+	client := api.NewClient(ctx.Session.Token)
+	chID, errCh := discord.ParseSnowflake(channelID)
+	if errCh != nil {
+		return customEmbedDetailedCommandError("Invalid channel ID.")
+	}
+
+	message, err := c.embedService.Post(client, discord.ChannelID(chID), ce)
 	if err != nil {
 		return customEmbedDetailedCommandError(fmt.Sprintf("Failed to post the embed: %v", err))
 	}
 
 	postingNote := ""
-	if message != nil && message.ID != "" {
+	if message != nil && message.ID.IsValid() {
 		posting := files.CustomEmbedPostingConfig{
 			ChannelID: channelID,
-			MessageID: message.ID,
+			MessageID: message.ID.String(),
 		}
 		if err := c.configManager.AddCustomEmbedPosting(ctx.GuildID, ce.Key, posting); err != nil {
 			postingNote = fmt.Sprintf("\nWarning: the posting could not be tracked for later updates: %v", err)
@@ -239,7 +244,10 @@ func (c *embedPreviewSubCommand) Handle(ctx *legacycore.Context) error {
 	}
 
 	embed := c.embedService.Render(ce)
-	return customEmbedResponseBuilder(ctx.Session).Build().Custom(ctx.Interaction, "", []*discordgo.MessageEmbed{embed})
+	b, _ := json.Marshal(embed)
+	var dgEmbed discordgo.MessageEmbed
+	json.Unmarshal(b, &dgEmbed)
+	return customEmbedResponseBuilder(ctx.Session).Build().Custom(ctx.Interaction, "", []*discordgo.MessageEmbed{&dgEmbed})
 }
 
 type embedSetSubCommand struct {
@@ -500,12 +508,13 @@ func (c *embedRefreshSubCommand) Handle(ctx *legacycore.Context) error {
 	}
 	ctx.Acknowledged = true
 
+	embed := c.embedService.Render(ce)
 	result := c.embedService.Sync(
-		ctx.Session,
+		api.NewClient(ctx.Session.Token),
 		ctx.GuildID,
 		ce.Key,
 		ce.Postings,
-		c.embedService.Render(ce),
+		&embed,
 	)
 	summary := c.embedService.FormatSyncSummary(result, "Refreshed")
 	if summary == "" {
@@ -516,10 +525,11 @@ func (c *embedRefreshSubCommand) Handle(ctx *legacycore.Context) error {
 
 type embedUnpostSubCommand struct {
 	configManager *files.ConfigManager
+	embedService  *embedsvc.EmbedService
 }
 
-func newEmbedUnpostSubCommand(cm *files.ConfigManager) *embedUnpostSubCommand {
-	return &embedUnpostSubCommand{configManager: cm}
+func newEmbedUnpostSubCommand(cm *files.ConfigManager, svc *embedsvc.EmbedService) *embedUnpostSubCommand {
+	return &embedUnpostSubCommand{configManager: cm, embedService: svc}
 }
 
 // Name names.
@@ -571,7 +581,10 @@ func (c *embedUnpostSubCommand) Handle(ctx *legacycore.Context) error {
 	}
 
 	// Delete from Discord (best-effort)
-	ctx.Session.ChannelMessageDelete(posting.ChannelID, posting.MessageID)
+	client := api.NewClient(ctx.Session.Token)
+	chID, _ := discord.ParseSnowflake(posting.ChannelID)
+	msgID, _ := discord.ParseSnowflake(posting.MessageID)
+	c.embedService.DeletePosting(client, discord.ChannelID(chID), discord.MessageID(msgID))
 
 	// Remove posting track from config
 	if err := c.configManager.RemoveCustomEmbedPosting(ctx.GuildID, embedKey, posting.MessageID); err != nil && !errors.Is(err, files.ErrCustomEmbedPostingNotFound) {
@@ -803,12 +816,13 @@ func refreshCustomEmbedPostingsBestEffort(cm *files.ConfigManager, svc *embedsvc
 	if len(ce.Postings) == 0 {
 		return ""
 	}
+	embed := svc.Render(ce)
 	result := svc.Sync(
-		ctx.Session,
+		api.NewClient(ctx.Session.Token),
 		ctx.GuildID,
 		ce.Key,
 		ce.Postings,
-		svc.Render(ce),
+		&embed,
 	)
 	if !result.HasIssues() && result.Edited == 0 {
 		return ""
@@ -966,7 +980,7 @@ func (c *embedImportSubCommand) Handle(ctx *legacycore.Context) error {
 	}
 	ctx.Acknowledged = true
 
-	data, err := discord.FetchPastebinContent(context.Background(), pasteURL)
+	data, err := localdiscord.FetchPastebinContent(context.Background(), pasteURL)
 	if err != nil {
 		return builder.WithContext(ctx).Error(ctx.Interaction, fmt.Sprintf("Failed to fetch from pastebin: %v", err))
 	}
@@ -1060,7 +1074,7 @@ func (c *embedExportSubCommand) Handle(ctx *legacycore.Context) error {
 		ownerID = g.OwnerID
 	}
 
-	url, err := discord.UploadExportedContent(context.Background(), ctx.Interaction.Member, ownerID, c.configManager, data)
+	url, err := localdiscord.UploadExportedContent(context.Background(), ctx.Interaction.Member, ownerID, c.configManager, data)
 	if err != nil {
 		return builder.WithContext(ctx).Error(ctx.Interaction, fmt.Sprintf("Failed to upload: %v", err))
 	}

@@ -7,7 +7,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/logging"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
-	partnercmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/partner"
+	partnercmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/partners"
 	qotdcmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/qotd"
 	rolescmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/roles"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/runtime"
