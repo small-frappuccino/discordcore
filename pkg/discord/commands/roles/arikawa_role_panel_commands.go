@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"runtime/debug"
 	"strings"
 
 	"github.com/diamondburned/arikawa/v3/api"
@@ -113,9 +114,19 @@ func loadRolePanel(cm *files.ConfigManager, guildID discord.GuildID, key string)
 
 func respondEphemeralError(ctx *legacycore.ArikawaContext, message string) error {
 	return ctx.Respond(api.InteractionResponseData{
-		Content: option.NewNullableString(message),
+		Content: option.NewNullableString("❌ " + message),
 		Flags:   discord.EphemeralMessage,
 	})
+}
+
+func respondStructuralError(ctx *legacycore.ArikawaContext, action string, err error) error {
+	slog.Error("Blocking structural failure restricted to operational scope",
+		slog.String("req_id", ctx.GuildID.String()),
+		slog.String("stack_trace", string(debug.Stack())),
+		slog.Int("fail_id", 500),
+		slog.String("error", fmt.Sprintf("%s: %v", action, err)),
+	)
+	return respondEphemeralError(ctx, fmt.Sprintf("%s: %v", action, err))
 }
 
 func respondEphemeralSuccess(ctx *legacycore.ArikawaContext, message string) error {
@@ -295,6 +306,11 @@ func (c *rolePanelPostSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
 			WebhookToken: webhookToken,
 		}
 		if err := c.configManager.AddRolePanelPosting(ctx.GuildID.String(), panel.Key, posting); err != nil {
+			slog.Warn("Mitigated service degradation: failed to track custom role panel posting",
+				slog.String("req_id", ctx.GuildID.String()),
+				slog.String("panel_key", panel.Key),
+				slog.String("error", err.Error()),
+			)
 			postingNote = fmt.Sprintf("\nWarning: the posting could not be tracked for later cleanup: %v", err)
 		}
 	}
@@ -414,7 +430,7 @@ func (c *rolePanelSetSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
 	}
 
 	if err := c.configManager.SetRolePanelEmbed(ctx.GuildID.String(), key, embed); err != nil {
-		return respondEphemeralError(ctx, fmt.Sprintf("Failed to update panel `%s`: %v", key, err))
+		return respondStructuralError(ctx, "Failed to update panel", err)
 	}
 
 	syncNote := refreshRolePanelPostingsBestEffort(c.configManager, c.rolePanelService, ctx, key)
@@ -462,7 +478,7 @@ func (c *rolePanelDeleteSubCommand) Handle(ctx *legacycore.ArikawaContext) error
 	}
 
 	if err := c.configManager.DeleteRolePanel(ctx.GuildID.String(), key); err != nil {
-		return respondEphemeralError(ctx, fmt.Sprintf("Failed to delete panel `%s`: %v", key, err))
+		return respondStructuralError(ctx, "Failed to delete panel", err)
 	}
 
 	return respondEphemeralSuccess(ctx, fmt.Sprintf("Panel `%s` was deleted.%s", key, syncNote))
@@ -661,7 +677,7 @@ func (c *rolePanelButtonAddSubCommand) Handle(ctx *legacycore.ArikawaContext) er
 		EmojiAnimated: emojiAnimated,
 	}
 	if err := c.configManager.UpsertRolePanelButton(ctx.GuildID.String(), key, button); err != nil {
-		return respondEphemeralError(ctx, fmt.Sprintf("Failed to save button: %v", err))
+		return respondStructuralError(ctx, "Failed to save button", err)
 	}
 	syncNote := refreshRolePanelPostingsBestEffort(c.configManager, c.rolePanelService, ctx, key)
 	return respondEphemeralSuccess(ctx, fmt.Sprintf("Button for <@&%s> was saved on panel `%s`.%s", roleID, key, syncNote))
@@ -699,7 +715,7 @@ func (c *rolePanelButtonRemoveSubCommand) Handle(ctx *legacycore.ArikawaContext)
 	}
 
 	if err := c.configManager.DeleteRolePanelButton(ctx.GuildID.String(), key, roleID); err != nil {
-		return respondEphemeralError(ctx, fmt.Sprintf("Failed to delete button: %v", err))
+		return respondStructuralError(ctx, "Failed to delete button", err)
 	}
 	syncNote := refreshRolePanelPostingsBestEffort(c.configManager, c.rolePanelService, ctx, key)
 	return respondEphemeralSuccess(ctx, fmt.Sprintf("Button for <@&%s> was removed from panel `%s`.%s", roleID, key, syncNote))

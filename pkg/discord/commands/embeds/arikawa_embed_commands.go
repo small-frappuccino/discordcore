@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"runtime/debug"
 	"strings"
 
 	"github.com/diamondburned/arikawa/v3/api"
@@ -139,9 +140,19 @@ func loadCustomEmbed(cm *files.ConfigManager, guildID discord.GuildID, key strin
 
 func respondEphemeralError(ctx *legacycore.ArikawaContext, message string) error {
 	return ctx.Respond(api.InteractionResponseData{
-		Content: option.NewNullableString(message),
+		Content: option.NewNullableString("❌ " + message),
 		Flags:   discord.EphemeralMessage,
 	})
+}
+
+func respondStructuralError(ctx *legacycore.ArikawaContext, action string, err error) error {
+	slog.Error("Blocking structural failure restricted to operational scope",
+		slog.String("req_id", ctx.GuildID.String()),
+		slog.String("stack_trace", string(debug.Stack())),
+		slog.Int("fail_id", 500),
+		slog.String("error", fmt.Sprintf("%s: %v", action, err)),
+	)
+	return respondEphemeralError(ctx, fmt.Sprintf("%s: %v", action, err))
 }
 
 func respondEphemeralSuccess(ctx *legacycore.ArikawaContext, message string) error {
@@ -235,6 +246,11 @@ func (c *embedPostSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
 			MessageID: message.ID.String(),
 		}
 		if err := c.configManager.AddCustomEmbedPosting(ctx.GuildID.String(), ce.Key, posting); err != nil {
+			slog.Warn("Mitigated service degradation: failed to track custom embed posting",
+				slog.String("req_id", ctx.GuildID.String()),
+				slog.String("embed_key", ce.Key),
+				slog.String("error", err.Error()),
+			)
 			postingNote = fmt.Sprintf("\nWarning: the posting could not be tracked for later updates: %v", err)
 		}
 	}
@@ -354,7 +370,7 @@ func (c *embedSetSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
 	}
 
 	if err := c.configManager.SetCustomEmbedProperties(ctx.GuildID.String(), key, embed); err != nil {
-		return respondEphemeralError(ctx, fmt.Sprintf("Failed to update embed `%s`: %v", key, err))
+		return respondStructuralError(ctx, "Failed to save changes", err)
 	}
 
 	syncNote := refreshCustomEmbedPostingsBestEffort(c.configManager, c.embedService, ctx, key)
@@ -388,7 +404,7 @@ func (c *embedDeleteSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
 		if errors.Is(err, files.ErrCustomEmbedNotFound) {
 			return respondEphemeralError(ctx, fmt.Sprintf("Embed `%s` does not exist.", key))
 		}
-		return respondEphemeralError(ctx, fmt.Sprintf("Failed to delete embed `%s`: %v", key, err))
+		return respondStructuralError(ctx, "Failed to delete embed", err)
 	}
 
 	return respondEphemeralSuccess(ctx, fmt.Sprintf("Embed `%s` was deleted.", key))
@@ -516,7 +532,11 @@ func (c *embedUnpostSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
 
 	// Remove posting track from config
 	if err := c.configManager.RemoveCustomEmbedPosting(ctx.GuildID.String(), embedKey, posting.MessageID); err != nil && !errors.Is(err, files.ErrCustomEmbedPostingNotFound) {
-		return respondEphemeralError(ctx, fmt.Sprintf("Failed to drop posting from config: %v", err))
+		slog.Warn("Mitigated service degradation: failed to strictly untrack old posting",
+			slog.String("req_id", ctx.GuildID.String()),
+			slog.String("error", err.Error()),
+		)
+		// We still consider the command a success because the post was deleted
 	}
 
 	return respondEphemeralSuccess(ctx, fmt.Sprintf("Stopped tracking posting `%s` for embed `%s` and deleted message.", messageID, embedKey))
@@ -560,7 +580,7 @@ func (c *embedFieldAddSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
 		Inline: inline,
 	}
 	if err := c.configManager.AddCustomEmbedField(ctx.GuildID.String(), key, field); err != nil {
-		return respondEphemeralError(ctx, fmt.Sprintf("Failed to add field: %v", err))
+		return respondStructuralError(ctx, "Failed to add field", err)
 	}
 	syncNote := refreshCustomEmbedPostingsBestEffort(c.configManager, c.embedService, ctx, key)
 	return respondEphemeralSuccess(ctx, fmt.Sprintf("Field `%s` was added to embed `%s`.%s", name, key, syncNote))
@@ -599,10 +619,7 @@ func (c *embedFieldRemoveSubCommand) Handle(ctx *legacycore.ArikawaContext) erro
 	index := int(opts.Int(embedOptionFieldIndex)) - 1
 
 	if err := c.configManager.RemoveCustomEmbedField(ctx.GuildID.String(), key, index); err != nil {
-		if errors.Is(err, files.ErrCustomEmbedNotFound) {
-			return respondEphemeralError(ctx, fmt.Sprintf("Embed `%s` does not exist.", key))
-		}
-		return respondEphemeralError(ctx, fmt.Sprintf("Failed to remove field: %v", err))
+		return respondStructuralError(ctx, "Failed to remove field", err)
 	}
 	syncNote := refreshCustomEmbedPostingsBestEffort(c.configManager, c.embedService, ctx, key)
 	return respondEphemeralSuccess(ctx, fmt.Sprintf("Field %d was removed from embed `%s`.%s", index+1, key, syncNote))
@@ -687,10 +704,10 @@ func (c *embedImportSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
 
 	newEmbed := files.ToCustomEmbedConfig(discohookEmbed, key)
 	if err := c.configManager.SetCustomEmbedProperties(ctx.GuildID.String(), key, newEmbed); err != nil {
-		return respondEphemeralError(ctx, fmt.Sprintf("Failed to save imported embed properties: %v", err))
+		return respondStructuralError(ctx, "Failed to save imported embed properties", err)
 	}
 	if err := c.configManager.SetCustomEmbedFields(ctx.GuildID.String(), key, newEmbed.Fields); err != nil {
-		return respondEphemeralError(ctx, fmt.Sprintf("Failed to save imported embed fields: %v", err))
+		return respondStructuralError(ctx, "Failed to save imported embed fields", err)
 	}
 
 	return respondEphemeralSuccess(ctx, fmt.Sprintf("Successfully imported JSON into embed `%s`.", key))

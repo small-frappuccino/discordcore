@@ -101,6 +101,16 @@ func partnerDetailedCommandError(ctx *legacycore.ArikawaContext, message string)
 	})
 }
 
+func partnerStructuralError(ctx *legacycore.ArikawaContext, action string, err error) error {
+	slog.Error("Blocking structural failure restricted to operational scope",
+		slog.String("req_id", ctx.GuildID.String()),
+		slog.String("stack_trace", string(debug.Stack())),
+		slog.Int("fail_id", 500),
+		slog.String("error", fmt.Sprintf("%s: %v", action, err)),
+	)
+	return partnerDetailedCommandError(ctx, fmt.Sprintf("%s: %v", action, err))
+}
+
 func partnerSuccess(ctx *legacycore.ArikawaContext, message string) error {
 	return ctx.Respond(api.InteractionResponseData{
 		Content: option.NewNullableString("✅ " + message),
@@ -165,13 +175,7 @@ func (c *partnerAddSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
 		}
 		return errors.New("guild not found in config")
 	}); err != nil {
-		slog.Error("Blocking structural failure restricted to operational scope",
-			slog.String("req_id", ctx.GuildID.String()),
-			slog.String("stack_trace", string(debug.Stack())),
-			slog.Int("fail_id", 500),
-			slog.String("error", fmt.Sprintf("failed to add partner %s: %v", name, err)),
-		)
-		return partnerDetailedCommandError(ctx, fmt.Sprintf("Failed to add partner: %v", err))
+		return partnerStructuralError(ctx, "Failed to add partner", err)
 	}
 
 	c.partnerService.SyncConfig(ctx.GuildID.String(), ctx.Client)
@@ -281,13 +285,7 @@ func (c *partnerRemoveSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
 		}
 		return errors.New("guild not found in config")
 	}); err != nil {
-		slog.Error("Blocking structural failure restricted to operational scope",
-			slog.String("req_id", ctx.GuildID.String()),
-			slog.String("stack_trace", string(debug.Stack())),
-			slog.Int("fail_id", 500),
-			slog.String("error", fmt.Sprintf("failed to remove partner %s: %v", name, err)),
-		)
-		return partnerDetailedCommandError(ctx, fmt.Sprintf("Failed to remove partner: %v", err))
+		return partnerStructuralError(ctx, "Failed to remove partner", err)
 	}
 
 	c.partnerService.SyncConfig(ctx.GuildID.String(), ctx.Client)
@@ -348,13 +346,7 @@ func (c *partnerLinkSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
 		}
 		return errors.New("guild not found in config")
 	}); err != nil {
-		slog.Error("Blocking structural failure restricted to operational scope",
-			slog.String("req_id", ctx.GuildID.String()),
-			slog.String("stack_trace", string(debug.Stack())),
-			slog.Int("fail_id", 500),
-			slog.String("error", fmt.Sprintf("failed to update partner link %s: %v", name, err)),
-		)
-		return partnerDetailedCommandError(ctx, fmt.Sprintf("Failed to update partner link: %v", err))
+		return partnerStructuralError(ctx, "Failed to update partner link", err)
 	}
 
 	c.partnerService.SyncConfig(ctx.GuildID.String(), ctx.Client)
@@ -455,13 +447,7 @@ func (c *partnerRenameSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
 		}
 		return errors.New("guild not found in config")
 	}); err != nil {
-		slog.Error("Blocking structural failure restricted to operational scope",
-			slog.String("req_id", ctx.GuildID.String()),
-			slog.String("stack_trace", string(debug.Stack())),
-			slog.Int("fail_id", 500),
-			slog.String("error", fmt.Sprintf("failed to rename partner %s: %v", currentName, err)),
-		)
-		return partnerDetailedCommandError(ctx, fmt.Sprintf("Failed to update partner: %v", err))
+		return partnerStructuralError(ctx, "Failed to rename partner", err)
 	}
 
 	c.partnerService.SyncConfig(ctx.GuildID.String(), ctx.Client)
@@ -568,7 +554,7 @@ func (c *partnerPostSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
 			}
 			return errors.New("guild not found in config")
 		}); err != nil {
-			return partnerDetailedCommandError(ctx, fmt.Sprintf("Failed to save webhook: %v", err))
+			return partnerStructuralError(ctx, "Failed to save webhook", err)
 		}
 		c.partnerService.SyncConfig(ctx.GuildID.String(), ctx.Client)
 		return partnerSuccess(ctx, "Webhook added successfully.")
@@ -597,7 +583,7 @@ func (c *partnerPostSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
 		}
 		return errors.New("guild not found in config")
 	}); err != nil {
-		return partnerDetailedCommandError(ctx, fmt.Sprintf("Failed to save posting channel: %v", err))
+		return partnerStructuralError(ctx, "Failed to save posting channel", err)
 	}
 	c.partnerService.SyncConfig(ctx.GuildID.String(), ctx.Client)
 	return partnerSuccess(ctx, "Channel registered for postings successfully.")
@@ -666,7 +652,10 @@ func (c *partnerUnpostSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
 		}
 		return errors.New("guild not found in config")
 	}); err != nil {
-		return partnerDetailedCommandError(ctx, fmt.Sprintf("Failed to remove posting: %v", err))
+		slog.Warn("Mitigated service degradation: failed to strictly drop posting from config",
+			slog.String("req_id", ctx.GuildID.String()),
+			slog.String("error", err.Error()),
+		)
 	}
 
 	if found != nil && found.ChannelID != "" && found.MessageID != "" {
@@ -759,7 +748,7 @@ func (c *partnerImportTemplateSubCommand) Handle(ctx *legacycore.ArikawaContext)
 		}
 		return errors.New("guild not found in config")
 	}); err != nil {
-		return partnerDetailedCommandError(ctx, fmt.Sprintf("Failed to save template: %v", err))
+		return partnerStructuralError(ctx, "Failed to save template", err)
 	}
 
 	return partnerSuccess(ctx, "Template successfully imported.")
