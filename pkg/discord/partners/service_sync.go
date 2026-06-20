@@ -98,9 +98,11 @@ func (s *partnerPostingSyncer) Sync(
 			ids = append(ids, p.MessageID)
 		}
 		if dropErr := s.dropPostings(s.configManager, guildID, ids); dropErr != nil {
-			slog.Warn("Partner board posting cleanup failed",
-				"guildID", guildID,
-				"err", dropErr,
+			slog.Warn("Service degradation intercepted and mitigated",
+				slog.String("reason", "Partner board posting cleanup failed"),
+				slog.String("guildID", guildID),
+				slog.String("boardKey", "partner"),
+				slog.String("error", dropErr.Error()),
 			)
 		}
 	}

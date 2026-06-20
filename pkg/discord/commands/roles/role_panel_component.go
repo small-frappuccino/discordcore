@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"runtime/debug"
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	rolesvc "github.com/small-frappuccino/discordcore/pkg/discord/roles"
@@ -66,10 +67,11 @@ func (h *rolePanelComponentHandler) HandleComponent(ctx *legacycore.Context) err
 		if errors.Is(err, files.ErrRolePanelButtonNotFound) {
 			return rolePanelToggleEphemeralError(ctx, "This button is no longer linked to a configured role. Ask a moderator to repost the panel.")
 		}
-		slog.Error("Role panel button lookup failed",
-			"guildID", guildID,
-			"roleID", roleID,
-			"err", err,
+		slog.Error("Blocking structural failure restricted to operational scope",
+			slog.String("req_id", guildID),
+			slog.String("stack_trace", string(debug.Stack())),
+			slog.Int("fail_id", 500),
+			slog.String("error", fmt.Sprintf("button lookup failed for role %s: %v", roleID, err)),
 		)
 		return rolePanelToggleEphemeralError(ctx, "Could not load the role assignment configuration. Try again in a moment.")
 	}
@@ -81,22 +83,22 @@ func (h *rolePanelComponentHandler) HandleComponent(ctx *legacycore.Context) err
 
 	hasRole, err := h.memberLookup(ctx.Session, ctx.Interaction, roleID)
 	if err != nil {
-		slog.Error("Role panel member lookup failed",
-			"guildID", guildID,
-			"userID", userID,
-			"roleID", roleID,
-			"err", err,
+		slog.Error("Blocking structural failure restricted to operational scope",
+			slog.String("req_id", guildID),
+			slog.String("stack_trace", string(debug.Stack())),
+			slog.Int("fail_id", 500),
+			slog.String("error", fmt.Sprintf("member lookup failed for user %s: %v", userID, err)),
 		)
 		return rolePanelToggleEphemeralError(ctx, "Could not read your current roles. Try again in a moment.")
 	}
 
 	if hasRole {
 		if err := h.removeRole(ctx.Session, guildID, userID, roleID); err != nil {
-			slog.Error("Role panel role removal failed",
-				"guildID", guildID,
-				"userID", userID,
-				"roleID", roleID,
-				"err", err,
+			slog.Error("Blocking structural failure restricted to operational scope",
+				slog.String("req_id", guildID),
+				slog.String("stack_trace", string(debug.Stack())),
+				slog.Int("fail_id", 500),
+				slog.String("error", fmt.Sprintf("role removal failed for user %s: %v", userID, err)),
 			)
 			return rolePanelToggleEphemeralError(ctx, fmt.Sprintf("Could not remove <@&%s>. Discord said: %v", roleID, err))
 		}
@@ -104,11 +106,11 @@ func (h *rolePanelComponentHandler) HandleComponent(ctx *legacycore.Context) err
 	}
 
 	if err := h.addRole(ctx.Session, guildID, userID, roleID); err != nil {
-		slog.Error("Role panel role addition failed",
-			"guildID", guildID,
-			"userID", userID,
-			"roleID", roleID,
-			"err", err,
+		slog.Error("Blocking structural failure restricted to operational scope",
+			slog.String("req_id", guildID),
+			slog.String("stack_trace", string(debug.Stack())),
+			slog.Int("fail_id", 500),
+			slog.String("error", fmt.Sprintf("role addition failed for user %s: %v", userID, err)),
 		)
 		return rolePanelToggleEphemeralError(ctx, fmt.Sprintf("Could not assign <@&%s>. Discord said: %v", roleID, err))
 	}
@@ -138,7 +140,16 @@ func rolePanelToggleEphemeralError(ctx *legacycore.Context, message string) erro
 	}
 	rm := rolePanelToggleResponseBuilder(ctx).WithContext(ctx).Build()
 	if err := rm.Custom(ctx.Interaction, message, nil); err != nil {
-		slog.Error("Role panel toggle response failed", "err", err)
+		reqID := "unknown"
+		if ctx.GuildID != "" {
+			reqID = ctx.GuildID
+		}
+		slog.Error("Blocking structural failure restricted to operational scope",
+			slog.String("req_id", reqID),
+			slog.String("stack_trace", string(debug.Stack())),
+			slog.Int("fail_id", 500),
+			slog.String("error", fmt.Sprintf("role panel toggle response failed: %v", err)),
+		)
 		return fmt.Errorf("rolePanelToggleEphemeralError: %w", err)
 	}
 	return nil

@@ -113,10 +113,11 @@ func (s *EmbedService) Sync(
 			ids = append(ids, p.MessageID)
 		}
 		if dropErr := s.dropPostings(s.configManager, guildID, key, ids); dropErr != nil {
-			slog.Warn("Custom embed batch posting cleanup failed",
-				"guildID", guildID,
-				"key", key,
-				"err", dropErr,
+			slog.Warn("Service degradation intercepted and mitigated",
+				slog.String("reason", "Custom embed batch posting cleanup failed"),
+				slog.String("guildID", guildID),
+				slog.String("key", key),
+				slog.String("error", dropErr.Error()),
 			)
 		}
 	}

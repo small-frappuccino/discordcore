@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/diamondburned/arikawa/v3/api"
@@ -70,6 +71,10 @@ func (ec *EmbedCommands) RegisterCommands(router *legacycore.CommandRouter) {
 	if router == nil || ec == nil || ec.configManager == nil {
 		return
 	}
+
+	slog.Info("Architectural state transition: Primary routines initialization",
+		slog.String("component", "EmbedCommands"),
+	)
 
 	checker := legacycore.NewPermissionChecker(router.GetSession(), router.GetConfigManager())
 

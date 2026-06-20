@@ -24,7 +24,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	rolesvc "github.com/small-frappuccino/discordcore/pkg/discord/roles"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -160,6 +159,10 @@ func (rc *RolePanelCommands) RegisterCommands(router *legacycore.CommandRouter) 
 	if router == nil || rc == nil || rc.configManager == nil {
 		return
 	}
+
+	slog.Info("Architectural state transition: Primary routines initialization",
+		slog.String("component", "RolePanelCommands"),
+	)
 
 	checker := legacycore.NewPermissionChecker(router.GetSession(), router.GetConfigManager())
 
@@ -1440,7 +1443,8 @@ func ensureRolePanelEnabled(ctx *legacycore.Context) error {
 	}
 
 	enabled, _ := cfg.ResolveFeatures(ctx.GuildID).Lookup(rolePanelFeatureID)
-	log.DiscordLogger().Debug("Transient state inspection: Evaluated feature enablement for Role Panels",
+	slog.Debug("Granular transient state inspection",
+		slog.String("action", "Evaluated feature enablement for Role Panels"),
 		slog.Bool("toggle_enabled", enabled),
 	)
 

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"runtime/debug"
 	"strings"
 
 	"github.com/diamondburned/arikawa/v3/api"
@@ -80,6 +82,12 @@ func (c *partnerAddSubCommand) Handle(ctx *legacycore.Context) error {
 		}
 		return errors.New("guild not found in config")
 	}); err != nil {
+		slog.Error("Blocking structural failure restricted to operational scope",
+			slog.String("req_id", ctx.GuildID),
+			slog.String("stack_trace", string(debug.Stack())),
+			slog.Int("fail_id", 500),
+			slog.String("error", fmt.Sprintf("failed to add partner %s: %v", name, err)),
+		)
 		return partnerDetailedCommandError(fmt.Sprintf("Failed to add partner: %v", err))
 	}
 
@@ -150,6 +158,12 @@ func (c *partnerRemoveSubCommand) Handle(ctx *legacycore.Context) error {
 		}
 		return errors.New("guild not found in config")
 	}); err != nil {
+		slog.Error("Blocking structural failure restricted to operational scope",
+			slog.String("req_id", ctx.GuildID),
+			slog.String("stack_trace", string(debug.Stack())),
+			slog.Int("fail_id", 500),
+			slog.String("error", fmt.Sprintf("failed to remove partner %s: %v", name, err)),
+		)
 		return partnerDetailedCommandError(fmt.Sprintf("Failed to remove partner: %v", err))
 	}
 
@@ -220,6 +234,12 @@ func (c *partnerLinkSubCommand) Handle(ctx *legacycore.Context) error {
 		}
 		return errors.New("guild not found in config")
 	}); err != nil {
+		slog.Error("Blocking structural failure restricted to operational scope",
+			slog.String("req_id", ctx.GuildID),
+			slog.String("stack_trace", string(debug.Stack())),
+			slog.Int("fail_id", 500),
+			slog.String("error", fmt.Sprintf("failed to update partner link %s: %v", name, err)),
+		)
 		return partnerDetailedCommandError(fmt.Sprintf("Failed to update partner link: %v", err))
 	}
 
@@ -313,6 +333,12 @@ func (c *partnerRenameSubCommand) Handle(ctx *legacycore.Context) error {
 		}
 		return errors.New("guild not found in config")
 	}); err != nil {
+		slog.Error("Blocking structural failure restricted to operational scope",
+			slog.String("req_id", ctx.GuildID),
+			slog.String("stack_trace", string(debug.Stack())),
+			slog.Int("fail_id", 500),
+			slog.String("error", fmt.Sprintf("failed to rename partner %s: %v", currentName, err)),
+		)
 		return partnerDetailedCommandError(fmt.Sprintf("Failed to update partner: %v", err))
 	}
 

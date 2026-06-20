@@ -1,6 +1,7 @@
 package partners
 
 import (
+	"log/slog"
 	"strings"
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
@@ -38,6 +39,10 @@ func (pc *PartnerCommands) RegisterCommands(router *legacycore.CommandRouter) {
 	if router == nil || pc == nil || pc.configManager == nil {
 		return
 	}
+
+	slog.Info("Architectural state transition: Primary routines initialization",
+		slog.String("component", "PartnerCommands"),
+	)
 
 	checker := legacycore.NewPermissionChecker(router.GetSession(), router.GetConfigManager())
 	group := legacycore.NewGroupCommand(
