@@ -62,10 +62,13 @@ func (s *Segment[T]) Get(key string) (*T, bool) {
 
 	val := ref.ptr.Value()
 	if val == nil {
-		// Stale read: GC collected it but AddCleanup hasn't removed it yet
+		slog.Warn("Mitigated service degradation: Stale read detected, weak pointer collected before explicit invalidation",
+			slog.String("key", key),
+		)
 		s.Invalidate(key)
 		return nil, false
 	}
+	slog.Debug("Granular transient state inspection: Cache hit", slog.String("key", key))
 
 	return val, true
 }
@@ -128,6 +131,10 @@ type UnifiedCache struct {
 }
 
 func NewUnifiedCache(cfg CacheConfig) *UnifiedCache {
+	slog.Info("Architectural state transition: Initializing UnifiedCache",
+		slog.Duration("member_ttl", cfg.MemberTTL),
+		slog.Duration("guild_ttl", cfg.GuildTTL),
+	)
 	return &UnifiedCache{
 		members:  NewSegment[discord.Member](cfg.MemberTTL),
 		guilds:   NewSegment[discord.Guild](cfg.GuildTTL),
@@ -199,9 +206,10 @@ func (uc *UnifiedCache) Warmup(ctx context.Context) error {
 
 		var g discord.Guild
 		if err := json.Unmarshal([]byte(entry.Data), &g); err != nil {
-			slog.Error("Blocking structural failure: Aborted warmup for corrupted guild snapshot",
+			slog.Warn("Mitigated service degradation: Aborted warmup for corrupted guild snapshot",
 				slog.String("request_id", "warmup"),
 				slog.String("key", entry.Key),
+				slog.String("error", err.Error()),
 			)
 			continue
 		}
@@ -229,6 +237,7 @@ func (uc *UnifiedCache) WasWarmedUpRecently(d time.Duration) bool {
 }
 
 func SchedulePeriodicCleanup(store *storage.Store, interval time.Duration) chan struct{} {
+	slog.Info("Architectural state transition: Initializing persistent cache garbage collector")
 	stop := make(chan struct{})
 	go func() {
 		ticker := time.NewTicker(interval)

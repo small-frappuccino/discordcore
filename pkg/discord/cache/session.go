@@ -17,6 +17,7 @@ type CachedSession struct {
 }
 
 func NewCachedSession(client *api.Client, cache *UnifiedCache) *CachedSession {
+	slog.Info("Architectural state transition: Initializing CachedSession wrapper")
 	return &CachedSession{
 		client: client,
 		cache:  cache,
@@ -28,13 +29,29 @@ func (cs *CachedSession) GuildMember(guildID, userID string) (*discord.Member, e
 		return member, nil
 	}
 
-	v, err, _ := cs.sf.Do(fmt.Sprintf("member:%s:%s", guildID, userID), func() (any, error) {
+	v, err, shared := cs.sf.Do(fmt.Sprintf("member:%s:%s", guildID, userID), func() (any, error) {
+		slog.Debug("Granular transient state inspection: Cache miss, executing singleflight fetch",
+			slog.String("guildID", guildID),
+			slog.String("userID", userID),
+		)
 		gid, _ := discord.ParseSnowflake(guildID)
 		uid, _ := discord.ParseSnowflake(userID)
 		return cs.client.Member(discord.GuildID(gid), discord.UserID(uid))
 	})
 	if err != nil {
+		slog.Error("Blocking structural failure: Singleflight REST fetch failed for member",
+			slog.String("request_id", fmt.Sprintf("fetch_member_%s_%s", guildID, userID)),
+			slog.String("error", err.Error()),
+			slog.Int("status_code", 500),
+		)
 		return nil, fmt.Errorf("CachedSession.GuildMember: %w", err)
+	}
+
+	if shared {
+		slog.Debug("Granular transient state inspection: Singleflight shared identical fetch",
+			slog.String("guildID", guildID),
+			slog.String("userID", userID),
+		)
 	}
 
 	member := v.(*discord.Member)
@@ -47,12 +64,26 @@ func (cs *CachedSession) Guild(guildID string) (*discord.Guild, error) {
 		return guild, nil
 	}
 
-	v, err, _ := cs.sf.Do(fmt.Sprintf("guild:%s", guildID), func() (any, error) {
+	v, err, shared := cs.sf.Do(fmt.Sprintf("guild:%s", guildID), func() (any, error) {
+		slog.Debug("Granular transient state inspection: Cache miss, executing singleflight fetch",
+			slog.String("guildID", guildID),
+		)
 		gid, _ := discord.ParseSnowflake(guildID)
 		return cs.client.Guild(discord.GuildID(gid))
 	})
 	if err != nil {
+		slog.Error("Blocking structural failure: Singleflight REST fetch failed for guild",
+			slog.String("request_id", fmt.Sprintf("fetch_guild_%s", guildID)),
+			slog.String("error", err.Error()),
+			slog.Int("status_code", 500),
+		)
 		return nil, fmt.Errorf("CachedSession.Guild: %w", err)
+	}
+
+	if shared {
+		slog.Debug("Granular transient state inspection: Singleflight shared identical fetch",
+			slog.String("guildID", guildID),
+		)
 	}
 
 	guild := v.(*discord.Guild)
