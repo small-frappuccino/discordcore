@@ -233,7 +233,7 @@ func (uc *UnifiedCache) Warmup(ctx context.Context) error {
 		return nil
 	}
 
-	for entry, err := range uc.store.GetCacheEntriesByType("guild") {
+	for entry, err := range uc.store.GetCacheEntriesByType(ctx, "guild") {
 		if err != nil {
 			return fmt.Errorf("warmup read: %w", err)
 		}
@@ -286,7 +286,7 @@ func SchedulePeriodicCleanup(store *storage.Store, interval time.Duration) chan 
 			select {
 			case <-ticker.C:
 				if store != nil {
-					_ = store.CleanupExpiredCacheEntries()
+					_ = store.CleanupExpiredCacheEntries(context.Background())
 				}
 			case <-stop:
 				return

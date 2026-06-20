@@ -377,7 +377,7 @@ func (w *messageCreateWriter) flushBatch(batch []messageWriteRequest) {
 			versions = append(versions, *req.version)
 		}
 		if req.metric.Count != 0 {
-			metricKey := strings.Join([]string{req.metric.GuildID, req.metric.ChannelID, req.metric.UserID, req.metric.Day}, ":")
+			metricKey := strings.Join([]string{req.metric.GuildID, req.metric.ChannelID, req.metric.UserID, req.metric.Day.Format("2006-01-02")}, ":")
 			delta := deltasByKey[metricKey]
 			if delta.GuildID == "" {
 				delta = req.metric
@@ -456,7 +456,7 @@ func (w *messageCreateWriter) flushMessagesSequentially(records []storage.Messag
 
 func (w *messageCreateWriter) flushDeletesSequentially(keys []storage.MessageDeleteKey, tokens []pendingMessageToken) {
 	for i, key := range keys {
-		if err := w.store.DeleteMessage(key.GuildID, key.MessageID); err != nil {
+		if err := w.store.DeleteMessage(context.Background(), key.GuildID, key.MessageID); err != nil {
 			w.logger.Warn("MessageCreate writer: sequential message delete failed", "operation", "message_create_writer.flush_deletes_fallback", "guildID", key.GuildID, "messageID", key.MessageID, "error", err)
 			continue
 		}
@@ -469,7 +469,7 @@ func (w *messageCreateWriter) flushDeletesSequentially(keys []storage.MessageDel
 
 func (w *messageCreateWriter) flushVersionsSequentially(versions []storage.MessageVersion, operation string) {
 	for _, version := range versions {
-		if err := w.store.InsertMessageVersion(version); err != nil {
+		if err := w.store.InsertMessageVersion(context.Background(), version); err != nil {
 			w.logger.Warn("MessageCreate writer: sequential history insert failed", "operation", operation, "guildID", version.GuildID, "channelID", version.ChannelID, "messageID", version.MessageID, "userID", version.AuthorID, "eventType", version.EventType, "error", err)
 			continue
 		}

@@ -4,8 +4,8 @@ package persistence_test
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"testing"
 
 	"github.com/small-frappuccino/discordcore/pkg/persistence"
@@ -42,7 +42,7 @@ func TestPostgresMigratorUpRepairsLegacyQOTDSchemaDrift(t *testing.T) {
 		t.Fatal("expected migrated test schema before applying legacy drift")
 	}
 
-	if _, err := db.ExecContext(context.Background(), `
+	if _, err := db.Exec(context.Background(), `
 ALTER TABLE qotd_official_posts RENAME COLUMN channel_id TO forum_channel_id;
 ALTER TABLE qotd_official_posts ADD COLUMN response_channel_id_snapshot TEXT NOT NULL DEFAULT '';
 ALTER TABLE qotd_official_posts ADD COLUMN is_pinned BOOLEAN NOT NULL DEFAULT FALSE;
@@ -71,7 +71,7 @@ CREATE INDEX idx_qotd_reply_threads_provisioning_recovery ON qotd_reply_threads(
 	}
 
 	var questionID int64
-	if err := db.QueryRowContext(context.Background(), `
+	if err := db.QueryRow(context.Background(), `
 INSERT INTO qotd_questions (
 	guild_id,
 	deck_id,
@@ -89,7 +89,7 @@ RETURNING id
 	// and this fixture represents a row that has already been migrated past
 	// 19 but still carries other legacy drift the repair must clean up.
 	var officialPostID int64
-	if err := db.QueryRowContext(context.Background(), `
+	if err := db.QueryRow(context.Background(), `
 INSERT INTO qotd_official_posts (
 	guild_id,
 	question_id,
@@ -132,7 +132,7 @@ RETURNING id
 		t.Fatalf("insert official post: %v", err)
 	}
 
-	if _, err := db.ExecContext(context.Background(), `
+	if _, err := db.Exec(context.Background(), `
 INSERT INTO qotd_reply_threads (
 	guild_id,
 	official_post_id,
@@ -169,7 +169,7 @@ INSERT INTO qotd_reply_threads (
 	}
 
 	var answerChannelID string
-	if err := db.QueryRowContext(context.Background(), `
+	if err := db.QueryRow(context.Background(), `
 SELECT answer_channel_id
 FROM qotd_official_posts
 WHERE id = $1
@@ -181,7 +181,7 @@ WHERE id = $1
 	}
 
 	var migratedMessages int
-	if err := db.QueryRowContext(context.Background(), `
+	if err := db.QueryRow(context.Background(), `
 SELECT COUNT(*)
 FROM qotd_answer_messages
 WHERE official_post_id = $1
@@ -232,7 +232,7 @@ func TestPostgresMigratorUpRepairsLegacyQOTDSurfaceChannelColumn(t *testing.T) {
 		t.Fatalf("apply baseline schema: %v", err)
 	}
 
-	if _, err := db.ExecContext(context.Background(), `
+	if _, err := db.Exec(context.Background(), `
 INSERT INTO qotd_forum_surfaces (
 	guild_id,
 	deck_id,
@@ -248,7 +248,7 @@ INSERT INTO qotd_forum_surfaces (
 		t.Fatalf("insert qotd surface: %v", err)
 	}
 
-	if _, err := db.ExecContext(context.Background(), `
+	if _, err := db.Exec(context.Background(), `
 ALTER TABLE qotd_forum_surfaces
 RENAME COLUMN channel_id TO forum_channel_id
 `); err != nil {
@@ -260,7 +260,7 @@ RENAME COLUMN channel_id TO forum_channel_id
 	}
 
 	var repairedChannelID string
-	if err := db.QueryRowContext(context.Background(), `
+	if err := db.QueryRow(context.Background(), `
 SELECT channel_id
 FROM qotd_forum_surfaces
 WHERE guild_id = 'g1' AND deck_id = 'default'
@@ -276,9 +276,9 @@ WHERE guild_id = 'g1' AND deck_id = 'default'
 	}
 }
 
-func tableAbsent(db *sql.DB, tableName string) error {
+func tableAbsent(db *pgxpool.Pool, tableName string) error {
 	var exists bool
-	if err := db.QueryRowContext(context.Background(), `
+	if err := db.QueryRow(context.Background(), `
 SELECT EXISTS(
 	SELECT 1
 	FROM information_schema.tables
@@ -293,9 +293,9 @@ SELECT EXISTS(
 	return nil
 }
 
-func columnAbsent(db *sql.DB, tableName, columnName string) error {
+func columnAbsent(db *pgxpool.Pool, tableName, columnName string) error {
 	var exists bool
-	if err := db.QueryRowContext(context.Background(), `
+	if err := db.QueryRow(context.Background(), `
 SELECT EXISTS(
 	SELECT 1
 	FROM information_schema.columns

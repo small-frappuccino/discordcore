@@ -786,7 +786,7 @@ func (mes *MessageEventService) lookupCachedMessage(ctx context.Context, guildID
 		}
 	}
 	tryFetch := func() *CachedMessage {
-		if rec, err := mes.store.GetMessage(guildID, messageID); err == nil && rec != nil {
+		if rec, err := mes.store.GetMessage(ctx, guildID, messageID); err == nil && rec != nil {
 			return &CachedMessage{
 				ID:      rec.MessageID,
 				Content: rec.Content,
@@ -861,7 +861,7 @@ func (mes *MessageEventService) persistMessageCreate(guildID string, m *gateway.
 		GuildID:   guildID,
 		ChannelID: m.ChannelID.String(),
 		UserID:    m.Author.ID.String(),
-		Day:       now.Format("2006-01-02"),
+		Day:       now,
 		Count:     1,
 	}
 
@@ -877,11 +877,11 @@ func (mes *MessageEventService) persistMessageCreate(guildID string, m *gateway.
 		mes.logger.Warn("MessageCreate: failed to persist message cache entry", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID, "error", err)
 	}
 	if version != nil {
-		if err := mes.store.InsertMessageVersion(*version); err != nil {
+		if err := mes.store.InsertMessageVersion(context.Background(), *version); err != nil {
 			mes.logger.Warn("MessageCreate: failed to persist message version", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID, "error", err)
 		}
 	}
-	if err := mes.store.IncrementDailyMessageCount(guildID, m.ChannelID.String(), m.Author.ID.String(), now); err != nil {
+	if err := mes.store.IncrementDailyMessageCountsContext(context.Background(), []storage.DailyMessageCountDelta{{GuildID: guildID, ChannelID: m.ChannelID.String(), UserID: m.Author.ID.String(), Day: now, Count: 1}}); err != nil {
 		mes.logger.Warn("MessageCreate: failed to increment daily message metric", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID, "error", err)
 	}
 }
@@ -930,7 +930,7 @@ func (mes *MessageEventService) persistMessageUpdate(updated *CachedMessage, con
 		mes.logger.Warn("MessageUpdate: failed to persist updated message cache entry", "guildID", updated.GuildID, "channelID", updated.ChannelID, "messageID", updated.ID, "userID", updated.Author.ID, "error", err)
 	}
 	if version != nil {
-		if err := mes.store.InsertMessageVersion(*version); err != nil {
+		if err := mes.store.InsertMessageVersion(context.Background(), *version); err != nil {
 			mes.logger.Warn("MessageUpdate: failed to persist message edit version", "guildID", updated.GuildID, "channelID", updated.ChannelID, "messageID", updated.ID, "userID", updated.Author.ID, "error", err)
 		}
 	}
@@ -971,12 +971,12 @@ func (mes *MessageEventService) persistMessageDelete(cached *CachedMessage, dele
 	}
 
 	if version != nil {
-		if err := mes.store.InsertMessageVersion(*version); err != nil {
+		if err := mes.store.InsertMessageVersion(context.Background(), *version); err != nil {
 			mes.logger.Warn("MessageDelete: failed to persist message delete version", "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", cached.ID, "userID", cached.Author.ID, "error", err)
 		}
 	}
 	if deleteFromStore {
-		if err := mes.store.DeleteMessage(cached.GuildID, cached.ID); err != nil {
+		if err := mes.store.DeleteMessage(context.Background(), cached.GuildID, cached.ID); err != nil {
 			mes.logger.Warn("MessageDelete: failed to delete message cache entry", "operation", operation, "guildID", cached.GuildID, "channelID", cached.ChannelID, "messageID", cached.ID, "error", err)
 		}
 	}

@@ -5,6 +5,8 @@ package storage
 import (
 	"context"
 	"fmt"
+	"github.com/small-frappuccino/discordcore/pkg/testdb"
+	"iter"
 	"slices"
 	"testing"
 	"time"
@@ -168,7 +170,8 @@ func TestDeleteQOTDQuestionReindexesDisplayIDs(t *testing.T) {
 		t.Fatalf("DeleteQOTDQuestion() failed: %v", err)
 	}
 
-	remaining, err := store.ListQOTDQuestions(ctx, "g1", "default")
+	remainingSeq, err := store.ListQOTDQuestions(ctx, "g1", "default")
+	remaining := collectQuestions(t, remainingSeq)
 	if err != nil {
 		t.Fatalf("ListQOTDQuestions() failed: %v", err)
 	}
@@ -623,7 +626,8 @@ func TestReorderQOTDQuestionsAllowsQueuePositionSwap(t *testing.T) {
 		t.Fatalf("ReorderQOTDQuestions() failed: %v", err)
 	}
 
-	questions, err := store.ListQOTDQuestions(ctx, "g1", "default")
+	questionsSeq, err := store.ListQOTDQuestions(ctx, "g1", "default")
+	questions := collectQuestions(t, questionsSeq)
 	if err != nil {
 		t.Fatalf("ListQOTDQuestions() failed: %v", err)
 	}
@@ -1150,7 +1154,8 @@ func TestDeleteQOTDQuestionsByDecksPreservesOfficialPostHistory(t *testing.T) {
 		t.Fatalf("expected question to be deleted, got %+v", deletedQuestion)
 	}
 
-	questions, err := store.ListQOTDQuestions(ctx, "g1", "deck-a")
+	questionsSeq, err := store.ListQOTDQuestions(ctx, "g1", "deck-a")
+	questions := collectQuestions(t, questionsSeq)
 	if err != nil {
 		t.Fatalf("ListQOTDQuestions() failed: %v", err)
 	}
@@ -1410,4 +1415,29 @@ func TestDeleteQOTDOfficialPostByIDRemovesOnlyTargetRecord(t *testing.T) {
 	if preserved == nil || preserved.QuestionID != questionB.ID {
 		t.Fatalf("expected non-target official post to remain, got %+v", preserved)
 	}
+}
+
+func newTempStore(t *testing.T) *Store {
+	ctx := context.Background()
+	baseDSN, err := testdb.BaseDatabaseURLFromEnv()
+	if err != nil {
+		t.Skip("skipping integration test, testdb not configured")
+	}
+	pool, cleanup, err := testdb.OpenIsolatedDatabase(ctx, baseDSN)
+	if err != nil {
+		t.Fatalf("failed to open isolated database: %v", err)
+	}
+	t.Cleanup(func() { _ = cleanup() })
+	store, _ := NewStore(pool, nil)
+	return store
+}
+func collectQuestions(t *testing.T, seq iter.Seq2[QOTDQuestionRecord, error]) []QOTDQuestionRecord {
+	var res []QOTDQuestionRecord
+	for q, err := range seq {
+		if err != nil {
+			t.Fatalf("iteration error: %v", err)
+		}
+		res = append(res, q)
+	}
+	return res
 }

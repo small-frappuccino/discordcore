@@ -553,7 +553,7 @@ func TestServiceUpdateSettingsDeletesRemovedDeckQuestions(t *testing.T) {
 }
 
 func TestServicePublishNowCreatesCurrentSlotManualPostAlongsidePreviousDayPost(t *testing.T) {
-	service, store, fake := newIntegrationTestQOTDService(t)
+	service, store, _ := newIntegrationTestQOTDService(t)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}
@@ -622,7 +622,6 @@ func TestServicePublishNowCreatesCurrentSlotManualPostAlongsidePreviousDayPost(t
 	if err != nil {
 		t.Fatalf("CreateQuestion(next) failed: %v", err)
 	}
-	nextQuestion
 
 	result, err := service.PublishNow(context.Background(), "g1")
 	if err != nil {
@@ -705,7 +704,7 @@ func TestServicePublishNowCreatesCurrentSlotManualPostAlongsidePreviousDayPost(t
 }
 
 func TestServicePublishNowRejectsAdditionalManualPublishesForCurrentSlot(t *testing.T) {
-	service, store, fake := newIntegrationTestQOTDService(t)
+	service, store, _ := newIntegrationTestQOTDService(t)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}
@@ -770,7 +769,7 @@ func TestServicePublishNowRejectsAdditionalManualPublishesForCurrentSlot(t *test
 }
 
 func TestServicePublishNowLateFailureDoesNotSuppressSameDayAutomaticPublish(t *testing.T) {
-	service, store, fake := newIntegrationTestQOTDService(t)
+	service, store, _ := newIntegrationTestQOTDService(t)
 	afterBoundary := time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	service.now = func() time.Time { return afterBoundary }
 
@@ -831,7 +830,7 @@ func TestServicePublishNowLateFailureDoesNotSuppressSameDayAutomaticPublish(t *t
 //     without the recovery and the separate scheduled publish racing each
 //     other on the same date.
 func TestServicePublishNowMidPublishFailureDoesNotOrphanSuppressionAlongsideRecovery(t *testing.T) {
-	service, store, fake := newIntegrationTestQOTDService(t)
+	service, store, _ := newIntegrationTestQOTDService(t)
 	afterBoundary := time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	service.now = func() time.Time { return afterBoundary }
 
@@ -951,7 +950,7 @@ func TestServicePublishNowMidPublishFailureDoesNotOrphanSuppressionAlongsideReco
 }
 
 func TestServicePublishScheduledIfDueSkipsWhenManualPostOccupiesCurrentSlot(t *testing.T) {
-	service, store, fake := newIntegrationTestQOTDService(t)
+	service, store, _ := newIntegrationTestQOTDService(t)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}
@@ -1043,7 +1042,7 @@ func TestServicePublishScheduledIfDueSkipsWhenManualPostOccupiesCurrentSlot(t *t
 }
 
 func TestServicePublishNowCanSkipAutomaticSlotConsumption(t *testing.T) {
-	service, store, fake := newIntegrationTestQOTDService(t)
+	service, store, _ := newIntegrationTestQOTDService(t)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 11, 0, 0, 0, time.UTC)
 	}
@@ -1136,7 +1135,7 @@ func TestServicePublishNowCanSkipAutomaticSlotConsumption(t *testing.T) {
 }
 
 func TestServicePublishScheduledIfDueRunsOncePerDayAcrossManualPublishScenarios(t *testing.T) {
-	service, store, fake := newIntegrationTestQOTDService(t)
+	service, store, _ := newIntegrationTestQOTDService(t)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 12, 0, 0, 0, time.UTC)
 	}
@@ -1331,7 +1330,7 @@ func TestServicePublishScheduledIfDueRunsOncePerDayAcrossManualPublishScenarios(
 // silently. ReconcileGuild must restore it to "ready" so the next publish
 // picks it up.
 func TestServiceReconcileGuildReclaimsOrphanReservationsAcrossCrash(t *testing.T) {
-	service, store, fake := newIntegrationTestQOTDService(t)
+	service, store, _ := newIntegrationTestQOTDService(t)
 	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID)); err != nil {
 		t.Fatalf("UpdateSettings() failed: %v", err)
 	}
@@ -1343,7 +1342,7 @@ func TestServiceReconcileGuildReclaimsOrphanReservationsAcrossCrash(t *testing.T
 	if err != nil {
 		t.Fatalf("CreateQuestion(orphan) failed: %v", err)
 	}
-	if _, err := service.CreateQuestion(context.Background(), "g1", "user-2", QuestionMutation{
+	if nextQuestion, err := service.CreateQuestion(context.Background(), "g1", "user-2", QuestionMutation{
 		Body:   "Healthy fallback",
 		Status: QuestionStatusReady,
 	}); err != nil {
@@ -1393,7 +1392,7 @@ func TestServiceReconcileGuildReclaimsOrphanReservationsAcrossCrash(t *testing.T
 // anchors the runtime publish path to today's date, so any tick after today's
 // schedule (and before tomorrow's) still publishes today's slot.
 func TestServicePublishScheduledIfDuePublishesWhenTickArrivesAfterBoundary(t *testing.T) {
-	service, store, fake := newIntegrationTestQOTDService(t)
+	service, store, _ := newIntegrationTestQOTDService(t)
 	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID)); err != nil {
 		t.Fatalf("UpdateSettings() failed: %v", err)
 	}
@@ -1435,7 +1434,7 @@ func TestServicePublishScheduledIfDuePublishesWhenTickArrivesAfterBoundary(t *te
 // would treat today's slot as already passed and wait until tomorrow's
 // schedule. Post-fix it backfills today's missing publish on the next tick.
 func TestServicePublishScheduledIfDueBackfillsAfterBootPostBoundary(t *testing.T) {
-	service, store, fake := newIntegrationTestQOTDService(t)
+	service, store, _ := newIntegrationTestQOTDService(t)
 	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID)); err != nil {
 		t.Fatalf("UpdateSettings() failed: %v", err)
 	}
@@ -1608,7 +1607,7 @@ func TestServiceGetAutomaticQueueStateSkipsPublishedCurrentSlotAfterBoundary(t *
 }
 
 func TestServicePublishNowUsesCurrentScheduledSlotBeforeBoundary(t *testing.T) {
-	service, store, fake := newIntegrationTestQOTDService(t)
+	service, store, _ := newIntegrationTestQOTDService(t)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 12, 42, 0, 0, time.UTC)
 	}
@@ -1977,7 +1976,7 @@ func TestServiceGetAutomaticQueueStateUsesUpcomingScheduledSlotBeforeBoundary(t 
 }
 
 func TestServicePublishScheduledIfDueCreatesScheduledPost(t *testing.T) {
-	service, store, fake := newIntegrationTestQOTDService(t)
+	service, store, _ := newIntegrationTestQOTDService(t)
 	beforeBoundary := time.Date(2026, 4, 3, 12, 0, 0, 0, time.UTC)
 	boundary := time.Date(2026, 4, 3, 12, 43, 0, 0, time.UTC)
 	service.now = func() time.Time { return beforeBoundary }
@@ -1993,7 +1992,7 @@ func TestServicePublishScheduledIfDueCreatesScheduledPost(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateQuestion() failed: %v", err)
 	}
-	if _, err := service.CreateQuestion(context.Background(), "g1", "user-2", QuestionMutation{
+	if nextQuestion, err := service.CreateQuestion(context.Background(), "g1", "user-2", QuestionMutation{
 		Body:   "Reserve for later",
 		Status: QuestionStatusDraft,
 	}); err != nil {
@@ -2043,7 +2042,7 @@ func TestServicePublishScheduledIfDueCreatesScheduledPost(t *testing.T) {
 }
 
 func TestServiceEnableAfterCurrentSlotDueSuppressesImmediatePublish(t *testing.T) {
-	service, store, fake := newIntegrationTestQOTDService(t)
+	service, store, _ := newIntegrationTestQOTDService(t)
 	afterBoundary := time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	service.now = func() time.Time { return afterBoundary }
 
@@ -2174,7 +2173,7 @@ func TestServiceReconcileGuildClearsExpiredSuppressionForSuppressionOnlyConfig(t
 }
 
 func TestServicePublishScheduledIfDueResumesFailedProvisioning(t *testing.T) {
-	service, store, fake := newIntegrationTestQOTDService(t)
+	service, store, _ := newIntegrationTestQOTDService(t)
 	beforeBoundary := time.Date(2026, 4, 3, 12, 0, 0, 0, time.UTC)
 	boundary := time.Date(2026, 4, 3, 12, 43, 0, 0, time.UTC)
 	service.now = func() time.Time { return beforeBoundary }
@@ -2280,7 +2279,7 @@ func TestServicePublishScheduledIfDueResumesFailedProvisioning(t *testing.T) {
 }
 
 func TestServiceReconcileGuildRecoversPendingOfficialPostProvisioning(t *testing.T) {
-	service, store, fake := newIntegrationTestQOTDService(t)
+	service, store, _ := newIntegrationTestQOTDService(t)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}
@@ -2365,7 +2364,7 @@ func TestServiceReconcileGuildRecoversPendingOfficialPostProvisioning(t *testing
 }
 
 func TestServiceResumeProvisioningSkipsDiscordWhenPostDeletedConcurrently(t *testing.T) {
-	service, store, fake := newIntegrationTestQOTDService(t)
+	service, store, _ := newIntegrationTestQOTDService(t)
 	now := time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	service.now = func() time.Time { return now }
 
@@ -2421,7 +2420,7 @@ func TestServiceResumeProvisioningSkipsDiscordWhenPostDeletedConcurrently(t *tes
 }
 
 func TestServiceReconcileGuildArchivesExpiredPostsAndAnswerRecords(t *testing.T) {
-	service, store, fake := newIntegrationTestQOTDService(t)
+	service, store, _ := newIntegrationTestQOTDService(t)
 	service.now = func() time.Time {
 		return time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 	}
@@ -2524,7 +2523,7 @@ func TestServiceReconcileGuildArchivesExpiredPostsAndAnswerRecords(t *testing.T)
 // would produce a duplicate post on resume; the nonce lets Discord
 // deduplicate server-side.
 func TestServicePublishScheduledIfDueGeneratesIdempotencyNonce(t *testing.T) {
-	service, store, fake := newIntegrationTestQOTDService(t)
+	service, store, _ := newIntegrationTestQOTDService(t)
 	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID)); err != nil {
 		t.Fatalf("UpdateSettings() failed: %v", err)
 	}
@@ -2571,7 +2570,7 @@ func TestServicePublishScheduledIfDueGeneratesIdempotencyNonce(t *testing.T) {
 // Discord so server-side dedup returns the original message instead of
 // creating a duplicate.
 func TestServicePublishScheduledIfDueResumeReusesPersistedNonce(t *testing.T) {
-	service, store, fake := newIntegrationTestQOTDService(t)
+	service, store, _ := newIntegrationTestQOTDService(t)
 	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID)); err != nil {
 		t.Fatalf("UpdateSettings() failed: %v", err)
 	}
@@ -2626,7 +2625,7 @@ func TestServicePublishScheduledIfDueResumeReusesPersistedNonce(t *testing.T) {
 // then verify that subsequent ReconcileGuild and PublishScheduledIfDue calls
 // do NOT call Discord again.
 func TestServicePublishScheduledIfDueAbandonsOnUnrecoverableDiscordError(t *testing.T) {
-	service, store, fake := newIntegrationTestQOTDService(t)
+	service, store, _ := newIntegrationTestQOTDService(t)
 	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID)); err != nil {
 		t.Fatalf("UpdateSettings() failed: %v", err)
 	}
@@ -2696,7 +2695,7 @@ func TestServicePublishScheduledIfDueAbandonsOnUnrecoverableDiscordError(t *test
 // inverse: a transient (5xx) error keeps the record retryable so the next
 // reconcile cycle picks it up and publishes successfully.
 func TestServicePublishScheduledIfDueRetriesTransientFailures(t *testing.T) {
-	service, store, fake := newIntegrationTestQOTDService(t)
+	service, store, _ := newIntegrationTestQOTDService(t)
 	if _, err := service.UpdateSettings("g1", scheduledQOTDConfig(true, integrationQuestionChannelID)); err != nil {
 		t.Fatalf("UpdateSettings() failed: %v", err)
 	}

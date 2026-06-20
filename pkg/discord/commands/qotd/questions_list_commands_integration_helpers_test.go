@@ -20,14 +20,13 @@ import (
 const integrationDeckChannelID = "123456789012345678"
 
 type fakePublisher struct {
-	publishedParams []discordqotd.PublishOfficialPostParams
-	threadStates    map[string]discordqotd.ThreadState
+	publishedParams []applicationqotd.PublishOfficialPostParams
 }
 
-func (p *fakePublisher) PublishOfficialPost(_ context.Context, _ *discordgo.Session, params discordqotd.PublishOfficialPostParams) (*discordqotd.PublishedOfficialPost, error) {
+func (p *fakePublisher) PublishOfficialPost(_ context.Context, params applicationqotd.PublishOfficialPostParams) (*applicationqotd.PublishedOfficialPost, error) {
 	p.publishedParams = append(p.publishedParams, params)
 	publishedAt := time.Now().UTC()
-	return &discordqotd.PublishedOfficialPost{
+	return &applicationqotd.PublishedOfficialPost{
 		QuestionListThreadID:       "questions-list-thread",
 		QuestionListEntryMessageID: fmt.Sprintf("list-entry-%d", params.OfficialPostID),
 		ThreadID:                   fmt.Sprintf("thread-%d", params.OfficialPostID),
@@ -36,14 +35,6 @@ func (p *fakePublisher) PublishOfficialPost(_ context.Context, _ *discordgo.Sess
 		PublishedAt:                publishedAt,
 		PostURL:                    discordqotd.BuildMessageJumpURL(params.GuildID, params.ChannelID, fmt.Sprintf("message-%d", params.OfficialPostID)),
 	}, nil
-}
-
-func (p *fakePublisher) SetThreadState(_ context.Context, _ *discordgo.Session, threadID string, state discordqotd.ThreadState) error {
-	if p.threadStates == nil {
-		p.threadStates = make(map[string]discordqotd.ThreadState)
-	}
-	p.threadStates[threadID] = state
-	return nil
 }
 
 func newIntegrationQOTDCommandTestRouter(
@@ -155,4 +146,7 @@ func mustCreateQuestion(
 	}); err != nil {
 		t.Fatalf("create question: %v", err)
 	}
+}
+func (p *fakePublisher) DeleteOfficialPost(_ context.Context, params applicationqotd.DeleteOfficialPostParams) error {
+	return nil
 }

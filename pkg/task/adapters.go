@@ -339,7 +339,7 @@ func (a *NotificationAdapters) handleProcessAvatarChange(ctx context.Context, pa
 
 	// Fallback to minimal persistence if no processor is available (should not happen in production)
 	if a.Store != nil {
-		_, _, err := a.Store.UpsertAvatar(p.GuildID, p.UserID, p.NewAvatar, time.Now())
+		err := a.Store.UpsertGuildMemberSnapshotsContext(context.Background(), p.GuildID, []storage.GuildMemberSnapshot{{UserID: p.UserID, HasAvatar: true, AvatarHash: p.NewAvatar}}, time.Now())
 		return err
 	}
 
