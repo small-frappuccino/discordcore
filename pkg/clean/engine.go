@@ -6,12 +6,17 @@ import (
 	"time"
 )
 
+// Hard limits mitigating abuse and bounding memory.
 const (
-	CleanMaxDeleteCount   = 100
-	CleanSearchWindow     = 1000
+	// CleanMaxDeleteCount enforces the absolute ceiling of items a single /clean execution can remove.
+	CleanMaxDeleteCount = 100
+	// CleanSearchWindow bounds the paginated search iteration, preventing runaway database scans.
+	CleanSearchWindow = 1000
+	// CleanBulkDeleteMaxAge identifies Discord's 14-day hard boundary minus an operational 1-hour buffer.
 	CleanBulkDeleteMaxAge = (14 * 24 * time.Hour) - time.Hour
 )
 
+// Message represents a normalized Discord message decoupled from any specific API implementation.
 type Message struct {
 	ID        string
 	AuthorID  string
@@ -20,6 +25,7 @@ type Message struct {
 	Pinned    bool
 }
 
+// Filter models the bounding parameters extracted directly from the user's slash command payload.
 type Filter struct {
 	Count    int
 	UserID   string
@@ -28,6 +34,7 @@ type Filter struct {
 	ToID     string
 }
 
+// CompareSnowflakeIDs performs a deterministic chronological ordering validation on numeric snowflake identifiers.
 func CompareSnowflakeIDs(left, right string) int {
 	left = strings.TrimSpace(left)
 	right = strings.TrimSpace(right)
@@ -58,11 +65,13 @@ func CompareSnowflakeIDs(left, right string) int {
 	return 1
 }
 
+// CategorizedMessages segments message targets into Bulk and Single execution queues.
 type CategorizedMessages struct {
 	BulkIDs   []string
 	SingleIDs []string
 }
 
+// CategorizeMessages isolates elements into Bulk or Single execution bins evaluated against the injected time.Time.
 func CategorizeMessages(messages []Message, now func() time.Time) CategorizedMessages {
 	currentTime := now().UTC()
 	var bulk []string
@@ -90,12 +99,14 @@ func CategorizeMessages(messages []Message, now func() time.Time) CategorizedMes
 	}
 }
 
+// FilterResult records the progression state of the linear filtering scan.
 type FilterResult struct {
 	Matched       []Message
 	SkippedPinned int
 	Scanned       int
 }
 
+// ApplyFilter systematically screens a slice of sequential messages against bounded rules.
 func ApplyFilter(messages []Message, filter Filter, alreadyMatched int) FilterResult {
 	var result FilterResult
 

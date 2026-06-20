@@ -15,6 +15,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/clean"
 )
 
+// Metrics defines the observability surface for Discord-facing cleanup operations.
 type Metrics interface {
 	RecordCleanAttempt()
 	RecordCleanSuccess(durationMs int64, deleted int)
@@ -23,6 +24,7 @@ type Metrics interface {
 	RecordCleanAuditLogFailure()
 }
 
+// NopMetrics implements Metrics as no-ops to allow safe concurrent drops when unconfigured.
 type NopMetrics struct{}
 
 func (NopMetrics) RecordCleanAttempt()                               {}
@@ -31,6 +33,7 @@ func (NopMetrics) RecordCleanFailure(cause string, durationMs int64) {}
 func (NopMetrics) RecordCleanDeleteFailure(class string)             {}
 func (NopMetrics) RecordCleanAuditLogFailure()                       {}
 
+// Client specifies the Arikawa interface bounds required to fetch and eliminate messages.
 type Client interface {
 	Messages(channelID discord.ChannelID, limit uint) ([]discord.Message, error)
 	MessagesBefore(channelID discord.ChannelID, before discord.MessageID, limit uint) ([]discord.Message, error)
@@ -39,6 +42,7 @@ type Client interface {
 	SendMessageComplex(channelID discord.ChannelID, data api.SendMessageData) (*discord.Message, error)
 }
 
+// Service orchestrates the discord-facing lifecycle of a clean command operation, handling API pagination, batch fallback degradation, and telemetry.
 type Service struct {
 	client  Client
 	metrics Metrics
@@ -46,6 +50,7 @@ type Service struct {
 	now     func() time.Time
 }
 
+// NewService initializes a Clean service bounded by the provided client and metrics adapters.
 func NewService(client Client, metrics Metrics, logger *slog.Logger) *Service {
 	if metrics == nil {
 		metrics = NopMetrics{}
@@ -61,6 +66,7 @@ func NewService(client Client, metrics Metrics, logger *slog.Logger) *Service {
 	}
 }
 
+// ExecuteClean computes and enacts the deletion payload. It guarantees that a failure during the deletion phase does not panic or infinitely block.
 func (s *Service) ExecuteClean(ctx context.Context, channelID discord.ChannelID, filter clean.Filter, auditChannelID discord.ChannelID, requestedBy string) (int, error) {
 	s.metrics.RecordCleanAttempt()
 	start := s.now()
@@ -91,6 +97,8 @@ func (s *Service) ExecuteClean(ctx context.Context, channelID discord.ChannelID,
 		if err != nil {
 			var httpErr *httputil.HTTPError
 			if errors.As(err, &httpErr) && httpErr.Code == 50034 {
+				// Operational annotation: Code 50034 indicates some targets exceed the 14-day bulk delete threshold.
+				// We intentionally swallow the error and gracefully cascade the failing payload directly into the single-deletion pipeline.
 				s.logger.Warn("Bulk delete failed with 50034, falling back to sequential", "channel_id", channelID)
 				categorized.SingleIDs = append(categorized.SingleIDs, categorized.BulkIDs...)
 			} else {
@@ -106,6 +114,8 @@ func (s *Service) ExecuteClean(ctx context.Context, channelID discord.ChannelID,
 
 	if len(categorized.SingleIDs) > 0 {
 		var wg sync.WaitGroup
+		// Operational annotation: Restrict outbound single-delete requests to 10 concurrent routines.
+		// This minimizes instantaneous thread starvation and avoids aggressive rate-limiting spikes.
 		semaphore := make(chan struct{}, 10)
 
 		for _, idStr := range categorized.SingleIDs {
@@ -133,6 +143,8 @@ func (s *Service) ExecuteClean(ctx context.Context, channelID discord.ChannelID,
 	s.metrics.RecordCleanSuccess(durationMs, finalDeleted)
 
 	if auditChannelID.IsValid() && finalDeleted > 0 {
+		// Operational annotation: Audit logging is intentionally asynchronous. A failure here is non-fatal
+		// and must not impact the primary execution loop's success report.
 		go s.dispatchAuditLog(auditChannelID, channelID, finalDeleted, filter, requestedBy)
 	}
 

@@ -13,15 +13,18 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
+// CleanExecutor defines the execution bounds for a concrete deletion service.
 type CleanExecutor interface {
 	ExecuteClean(ctx context.Context, channelID discord.ChannelID, filter coreclean.Filter, auditChannelID discord.ChannelID, requestedBy string) (int, error)
 }
 
+// CleanCommand bridges the Discord Slash Command interaction to the bounded clean executor.
 type CleanCommand struct {
 	configManager *files.ConfigManager
 	cleanExecutor CleanExecutor
 }
 
+// NewCleanCommand initializes a router-compatible clean interaction handler.
 func NewCleanCommand(cfg *files.ConfigManager, executor CleanExecutor) *CleanCommand {
 	return &CleanCommand{
 		configManager: cfg,
@@ -29,10 +32,13 @@ func NewCleanCommand(cfg *files.ConfigManager, executor CleanExecutor) *CleanCom
 	}
 }
 
+// Name provides the exact command identifier as registered with the Discord API.
 func (c *CleanCommand) Name() string { return "clean" }
 
+// Description provides the user-facing command description for the Discord UI.
 func (c *CleanCommand) Description() string { return "Delete recent messages in this channel" }
 
+// Options structures the argument signature demanded by Discord for this slash command.
 func (c *CleanCommand) Options() []discord.CommandOption {
 	return []discord.CommandOption{
 		&discord.IntegerOption{
@@ -65,27 +71,34 @@ func (c *CleanCommand) Options() []discord.CommandOption {
 	}
 }
 
+// RequiresGuild prevents this command from executing in Direct Messages.
 func (c *CleanCommand) RequiresGuild() bool { return true }
 
+// RequiresPermissions enforces that the bot itself possesses adequate context permissions.
 func (c *CleanCommand) RequiresPermissions() bool { return true }
 
+// DefaultMemberPermissions scopes execution to users bearing moderation capabilities.
 func (c *CleanCommand) DefaultMemberPermissions() discord.Permissions {
 	return discord.PermissionManageMessages
 }
 
+// EphemeralError satisfies the standard error interface while retaining sufficient metadata to render private UI feedback to the calling user without exposing stack traces.
 type EphemeralError struct {
 	UserMessage string
 	InternalErr error
 }
 
+// Error outputs the composite diagnostic error strictly for backend telemetry.
 func (e *EphemeralError) Error() string {
 	return fmt.Sprintf("%s: %v", e.UserMessage, e.InternalErr)
 }
 
+// Unwrap enables standard library functions like errors.Is and errors.As to probe the underlying network or infrastructure failure.
 func (e *EphemeralError) Unwrap() error {
 	return e.InternalErr
 }
 
+// InteractionResponse constructs the UI payload dynamically applying the bitwise MessageFlagEphemeral.
 func (e *EphemeralError) InteractionResponse() api.InteractionResponse {
 	return api.InteractionResponse{
 		Type: api.MessageInteractionWithSource,
@@ -96,6 +109,7 @@ func (e *EphemeralError) InteractionResponse() api.InteractionResponse {
 	}
 }
 
+// Handle parses the interaction event, asserts operational preconditions, maps the user payload into a domain Filter, and hands off to the Service executor.
 func (c *CleanCommand) Handle(ctx *legacycore.ArikawaContext) error {
 	if !ctx.GuildID.IsValid() {
 		return &EphemeralError{UserMessage: "This command must be used in a server.", InternalErr: fmt.Errorf("missing guild_id")}

@@ -90,14 +90,18 @@ General expectations:
 
 ## Code Commentary
 
+Go treats comments as active, first-class toolchain directives rather than passive metadata. Annotations must directly instruct the compiler via `go tool` directives, generate semantic HTML documentation via `godoc`, or isolate non-obvious business logic decisions. Redundant mechanical descriptions are treated as structural failures.
+
 Doc-comment baseline for Go:
 
-- exported types, functions, methods, package-level vars, constants, and the package itself carry a doc comment in stdlib style: start with the identifier name, complete sentences, adjacent to the declaration with no blank line between
-- the first sentence is the summary `go doc` and pkg.go.dev consumers see; describe behavior, not just the signature
-- document non-obvious contracts explicitly: concurrency guarantees (the default assumption is single-goroutine; state when a type or method deviates), returned-error semantics including sentinels and `errors.Is` branches, ownership of returned values, and lifecycle ordering (`Close`/`Stop`, idempotency)
-- `Deprecated:` is a structured marker; use it on legacy fields and aliases (see `pkg/files/types.go`) rather than free-form "old"/"legacy" prose
-- doc comments on exported APIs legitimately describe WHAT — the audience reads them through `go doc`, not the source; inline `//` comments inside function bodies stay WHY-only
-- multi-paragraph contract docs with section headers (`# Contract`, `# Parameters`, `# Why not X`) are the local idiom for load-bearing seams; see `pkg/qotd/official_post_state_transition.go` and `pkg/qotd/observability.go`
+- **API Documentation**: Target exported symbols with complete sentences ending in a period. Begin the comment exactly with the symbol's name to ensure correct `godoc` indexing. Place `//` line comments directly preceding and adjacent to the declaration with no blank line between; detachment causes silent parser failures.
+- **Summary Extraction**: Formulate the first sentence of any package-level or symbol-level comment as a standalone summary. `godoc` extracts this initial sentence for high-level directory indices. Describe behavior, not just the signature.
+- **Compiler Directives**: Use strict `//go:` prefixes for file-level compilation constraints and memory optimizations. Modern parsers mandate `//go:build` coupled with boolean expressions; utilizing the legacy `// +build` syntax risks compilation divergence and is prohibited. Deploy `//go:noescape` and `//go:linkname` directives to manipulate compiler heap-escape analysis and linker visibility during low-level performance optimization.
+- **C Interoperability**: Place `#cgo` directives strictly in the preamble before `import "C"` to dictate C compiler and linker flags directly within the Go file.
+- **Inline Annotations**: Provide contextual explanations of performance optimizations, security nuances, or ignored errors. This prevents subsequent maintainers from inadvertently removing load-bearing mitigations. Do not duplicate the mechanical function of the code; state duplication reliably drifts into falsehoods as the AST mutates.
+- **Block Comments**: Reserve block comments `/* ... */` exclusively for large package-level documentation strings within a dedicated `doc.go` file or for column-specific syntax alignment. Utilize `//` for all other operational context.
+- **Formatting**: Execute `gofmt` consistently to mechanically standardize comment indentation and alignment against adjacent code blocks.
+- **Contract Explicitly**: Document non-obvious contracts: concurrency guarantees, returned-error semantics (`errors.Is` branches), ownership of returned values, and lifecycle ordering. Use `Deprecated:` as a structured marker. Multi-paragraph contract docs with section headers (`# Contract`, `# Parameters`) are the local idiom for load-bearing seams.
 
 TypeScript and UI: types in `ui/src/api/control.ts` and component prop interfaces are the contract; add JSDoc only when behavior cannot be expressed in the type (units, side effects, lifecycle ordering).
 
