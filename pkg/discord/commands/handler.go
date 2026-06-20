@@ -33,7 +33,7 @@ type CommandHandler struct {
 	qotdService         qotdcmd.QuestionCatalogService
 	statsService        *stats.StatsService
 	moderationMetrics   moderation.Metrics
-	ticketService       *tickets.TicketService
+	ticketService       *tickets.Service
 	embedService        *embeds.EmbedService
 	rolePanelService    *roles.RolePanelService
 	partnerService      *partners.PartnerService
@@ -252,7 +252,7 @@ func (ch *CommandHandler) SetModerationMetrics(metrics moderation.Metrics) {
 }
 
 // SetTicketService injects the ticket management service.
-func (ch *CommandHandler) SetTicketService(service *tickets.TicketService) {
+func (ch *CommandHandler) SetTicketService(service *tickets.Service) {
 	if ch == nil {
 		return
 	}

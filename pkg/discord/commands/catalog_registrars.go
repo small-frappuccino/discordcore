@@ -17,7 +17,7 @@ import (
 	rolescmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/roles"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/runtime"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/stats"
-	tickets_cmds "github.com/small-frappuccino/discordcore/pkg/discord/commands/tickets"
+
 	discordmod "github.com/small-frappuccino/discordcore/pkg/discord/moderation"
 )
 
@@ -169,10 +169,8 @@ func EmbedsCommandCatalogRegistrar() CommandCatalogRegistrar {
 // TicketsCommandCatalogRegistrar registers the tickets interaction routing surface.
 func TicketsCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
-		Register: func(ch *CommandHandler, router *legacycore.CommandRouter) {
-			if ch.ticketService != nil {
-				tickets_cmds.RegisterComponents(router, ch.ticketService)
-			}
+		RegisterArikawa: func(ch *CommandHandler, router *legacycore.ArikawaCommandRouter) {
+			// tickets natively registered via state handler in pkg/discord/commands/tickets/router.go
 		},
 	}
 }
