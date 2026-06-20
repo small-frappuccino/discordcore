@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"slices"
 
+	arikawadiscord "github.com/diamondburned/arikawa/v3/discord"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
@@ -160,14 +161,14 @@ func (pc *PermissionChecker) ResolveMember(guildID, userID string) (*discordgo.M
 
 	if pc.cache != nil {
 		if member, ok := pc.cache.GetMember(guildID, userID); ok && member != nil {
-			return member, true, nil
+			return toDiscordgoMember(member), true, nil
 		}
 	}
 
 	if pc.session != nil && pc.session.State != nil {
 		if member, _ := pc.session.State.Member(guildID, userID); member != nil {
 			if pc.cache != nil {
-				pc.cache.SetMember(guildID, userID, member)
+				pc.cache.SetMember(guildID, userID, toArikawaMember(member))
 			}
 			return member, true, nil
 		}
@@ -189,7 +190,7 @@ func (pc *PermissionChecker) ResolveMember(guildID, userID string) (*discordgo.M
 	}
 
 	if pc.cache != nil {
-		pc.cache.SetMember(guildID, userID, member)
+		pc.cache.SetMember(guildID, userID, toArikawaMember(member))
 	}
 	return member, true, nil
 }
@@ -201,16 +202,16 @@ func (pc *PermissionChecker) ResolveRoles(guildID string) ([]*discordgo.Role, er
 	}
 
 	if pc.cache != nil {
-		if roles, ok := pc.cache.GetRoles(guildID); ok && len(roles) > 0 {
-			return roles, nil
+		if roles, ok := pc.cache.GetRoles(guildID); ok && roles != nil && len(*roles) > 0 {
+			return toDiscordgoRoles(roles), nil
 		}
 	}
 
 	if pc.session != nil && pc.session.State != nil {
 		if g, _ := pc.session.State.Guild(guildID); g != nil && len(g.Roles) > 0 {
 			if pc.cache != nil {
-				pc.cache.SetRoles(guildID, g.Roles)
-				pc.cache.SetGuild(guildID, g)
+				pc.cache.SetRoles(guildID, toArikawaRoles(g.Roles))
+				pc.cache.SetGuild(guildID, toArikawaGuild(g))
 			}
 			return g.Roles, nil
 		}
@@ -228,9 +229,81 @@ func (pc *PermissionChecker) ResolveRoles(guildID string) ([]*discordgo.Role, er
 		return nil, fmt.Errorf("resolve roles via rest for guild %s: %w", guildID, err)
 	}
 	if pc.cache != nil && len(roles) > 0 {
-		pc.cache.SetRoles(guildID, roles)
+		pc.cache.SetRoles(guildID, toArikawaRoles(roles))
 	}
 	return roles, nil
+}
+
+func toArikawaMember(m *discordgo.Member) *arikawadiscord.Member {
+	if m == nil {
+		return nil
+	}
+	roles := make([]arikawadiscord.RoleID, len(m.Roles))
+	for i, r := range m.Roles {
+		rid, _ := arikawadiscord.ParseSnowflake(r)
+		roles[i] = arikawadiscord.RoleID(rid)
+	}
+	var uid arikawadiscord.Snowflake
+	if m.User != nil {
+		uid, _ = arikawadiscord.ParseSnowflake(m.User.ID)
+	}
+	return &arikawadiscord.Member{
+		User:    arikawadiscord.User{ID: arikawadiscord.UserID(uid)},
+		RoleIDs: roles,
+	}
+}
+
+func toDiscordgoMember(m *arikawadiscord.Member) *discordgo.Member {
+	if m == nil {
+		return nil
+	}
+	roles := make([]string, len(m.RoleIDs))
+	for i, r := range m.RoleIDs {
+		roles[i] = r.String()
+	}
+	return &discordgo.Member{
+		User:  &discordgo.User{ID: m.User.ID.String()},
+		Roles: roles,
+	}
+}
+
+func toArikawaRoles(roles []*discordgo.Role) *[]arikawadiscord.Role {
+	if roles == nil {
+		return nil
+	}
+	res := make([]arikawadiscord.Role, len(roles))
+	for i, r := range roles {
+		rid, _ := arikawadiscord.ParseSnowflake(r.ID)
+		res[i] = arikawadiscord.Role{
+			ID:          arikawadiscord.RoleID(rid),
+			Permissions: arikawadiscord.Permissions(r.Permissions),
+		}
+	}
+	return &res
+}
+
+func toDiscordgoRoles(roles *[]arikawadiscord.Role) []*discordgo.Role {
+	if roles == nil {
+		return nil
+	}
+	res := make([]*discordgo.Role, len(*roles))
+	for i, r := range *roles {
+		res[i] = &discordgo.Role{
+			ID:          r.ID.String(),
+			Permissions: int64(r.Permissions),
+		}
+	}
+	return res
+}
+
+func toArikawaGuild(g *discordgo.Guild) *arikawadiscord.Guild {
+	if g == nil {
+		return nil
+	}
+	gid, _ := arikawadiscord.ParseSnowflake(g.ID)
+	return &arikawadiscord.Guild{
+		ID: arikawadiscord.GuildID(gid),
+	}
 }
 
 func isNotFoundRESTError(err error) bool {

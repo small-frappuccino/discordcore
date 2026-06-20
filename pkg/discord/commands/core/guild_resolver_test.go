@@ -19,8 +19,7 @@ func newPermissionCheckerWithCache(t *testing.T, session *discordgo.Session) (*P
 
 	cfg := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	checker := NewPermissionChecker(session, cfg)
-	unifiedCache := cache.NewUnifiedCache(cache.DefaultCacheConfig())
-	t.Cleanup(unifiedCache.Stop)
+	unifiedCache := cache.NewUnifiedCache(cache.CacheConfig{})
 	checker.SetCache(unifiedCache)
 	return checker, unifiedCache
 }
@@ -77,10 +76,10 @@ func TestPermissionCheckerResolveMember_UsesCacheBeforeStateAndREST(t *testing.T
 	}
 
 	checker, unifiedCache := newPermissionCheckerWithCache(t, session)
-	unifiedCache.SetMember("g1", "u1", &discordgo.Member{
+	unifiedCache.SetMember("g1", "u1", toArikawaMember(&discordgo.Member{
 		GuildID: "g1",
 		User:    &discordgo.User{ID: "u1", Username: "cache-user"},
-	})
+	}))
 
 	member, ok, err := checker.ResolveMember("g1", "u1")
 	if err != nil {
@@ -127,7 +126,7 @@ func TestPermissionCheckerResolveMember_UsesStateBeforeREST(t *testing.T) {
 		t.Fatalf("expected no REST call on state hit, got %d", got)
 	}
 
-	if cached, cachedOK := unifiedCache.GetMember("g1", "u1"); !cachedOK || cached == nil || cached.User == nil || cached.User.Username != "state-user" {
+	if cached, cachedOK := unifiedCache.GetMember("g1", "u1"); !cachedOK || cached == nil || cached.User.ID == 0 {
 		t.Fatalf("expected member cached after state hit")
 	}
 }
@@ -191,7 +190,7 @@ func TestPermissionCheckerResolveRoles_UsesCacheBeforeStateAndREST(t *testing.T)
 	}
 
 	checker, unifiedCache := newPermissionCheckerWithCache(t, session)
-	unifiedCache.SetRoles("g1", []*discordgo.Role{{ID: "r-cache", Name: "Cache Role"}})
+	unifiedCache.SetRoles("g1", toArikawaRoles([]*discordgo.Role{{ID: "r-cache", Name: "Cache Role"}}))
 
 	roles, err := checker.ResolveRoles("g1")
 	if err != nil {
@@ -221,8 +220,7 @@ func TestPermissionCheckerResolveRoles_UsesStateAndCache(t *testing.T) {
 	cfg := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	checker := NewPermissionChecker(session, cfg)
 
-	unifiedCache := cache.NewUnifiedCache(cache.DefaultCacheConfig())
-	t.Cleanup(unifiedCache.Stop)
+	unifiedCache := cache.NewUnifiedCache(cache.CacheConfig{})
 	checker.SetCache(unifiedCache)
 
 	roles, err := checker.ResolveRoles("g1")
@@ -233,7 +231,7 @@ func TestPermissionCheckerResolveRoles_UsesStateAndCache(t *testing.T) {
 		t.Fatalf("unexpected roles from state: %+v", roles)
 	}
 
-	if cached, ok := unifiedCache.GetRoles("g1"); !ok || len(cached) != 1 || cached[0] == nil || cached[0].ID != "r1" {
+	if cached, ok := unifiedCache.GetRoles("g1"); !ok || cached == nil || len(*cached) != 1 || (*cached)[0].ID == 0 {
 		t.Fatalf("expected roles cached after state hit")
 	}
 

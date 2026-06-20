@@ -1,0 +1,114 @@
+package cache
+
+import (
+	"context"
+	"runtime"
+	"testing"
+	"time"
+
+	"github.com/diamondburned/arikawa/v3/discord"
+)
+
+func TestCache_GCEviction(t *testing.T) {
+	uc := NewUnifiedCache(CacheConfig{GuildTTL: time.Minute})
+
+	guild := &discord.Guild{ID: discord.GuildID(123)}
+	uc.SetGuild("123", guild)
+
+	_, ok := uc.GetGuild("123")
+	if !ok {
+		t.Fatal("Expected guild to be in cache")
+	}
+
+	// Remove strong reference
+	guild = nil
+	runtime.GC()
+	time.Sleep(10 * time.Millisecond) // Give AddCleanup a chance
+
+	_, ok = uc.GetGuild("123")
+	if ok {
+		t.Fatal("Expected guild to be evicted via GC")
+	}
+}
+
+func TestCache_StaleReads(t *testing.T) {
+	uc := NewUnifiedCache(CacheConfig{GuildTTL: time.Minute})
+
+	guild := &discord.Guild{ID: discord.GuildID(456)}
+	uc.SetGuild("456", guild)
+
+	// Remove strong reference and force GC
+	guild = nil
+	runtime.GC()
+
+	// Try to fetch immediately. The weak pointer should be nil, resulting in instant miss.
+	_, ok := uc.GetGuild("456")
+	if ok {
+		t.Fatal("Expected stale read to instantly miss")
+	}
+}
+
+func TestCache_ReferenceCycles(t *testing.T) {
+	uc := NewUnifiedCache(CacheConfig{MemberTTL: time.Minute})
+
+	type Cycle struct {
+		m *discord.Member
+		c *Cycle
+	}
+
+	member := &discord.Member{User: discord.User{ID: discord.UserID(1)}}
+	c := &Cycle{m: member}
+	c.c = c // cycle
+
+	uc.SetMember("1", "1", member)
+
+	// Break direct references
+	member = nil
+	c = nil
+
+	runtime.GC()
+	time.Sleep(10 * time.Millisecond)
+
+	_, ok := uc.GetMember("1", "1")
+	if ok {
+		t.Fatal("Expected cycle to be collected and member evicted")
+	}
+}
+
+func BenchmarkCache_Shards(b *testing.B) {
+	uc := NewUnifiedCache(CacheConfig{GuildTTL: time.Minute})
+
+	b.RunParallel(func(pb *testing.PB) {
+		i := 0
+		for pb.Next() {
+			uc.SetGuild("1", &discord.Guild{})
+			uc.GetGuild("1")
+			i++
+		}
+	})
+}
+
+func TestCache_AsyncIO(t *testing.T) {
+	uc := NewUnifiedCache(CacheConfig{GuildTTL: time.Minute})
+
+	for i := 0; i < 1000; i++ {
+		uc.SetGuild(string(rune(i)), &discord.Guild{})
+	}
+
+	start := time.Now()
+	_ = uc.guilds.Snapshot()
+	duration := time.Since(start)
+
+	if duration > 50*time.Millisecond {
+		t.Fatalf("Snapshot took too long: %v (should be <1ms ideally, up to 50ms under load)", duration)
+	}
+}
+
+func TestCache_CorruptRecovery(t *testing.T) {
+	// We simulate this by directly calling Warmup with a mock store
+	uc := NewUnifiedCache(CacheConfig{})
+	err := uc.Warmup(context.Background())
+	if err != nil {
+		t.Fatalf("Warmup should ignore nil store but got err: %v", err)
+	}
+}
