@@ -255,7 +255,7 @@ func scheduleStartupWebhookEmbedUpdates(
 				continue
 			}
 
-			if err := webhook.PatchMessageEmbed(sess, webhook.MessageEmbedPatch{
+			if err := webhook.PatchMessageEmbed(ctx, &webhook.ArikawaAPI{}, webhook.MessageEmbedPatch{
 				MessageID:  item.update.MessageID,
 				WebhookURL: item.update.WebhookURL,
 				Embed:      item.update.Embed,
