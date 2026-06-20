@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordcore/pkg/control"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
@@ -363,8 +364,8 @@ func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskO
 		return nil
 	}, opts.store)
 
-	controlServer.SetDiscordSessionResolver(func(guildID string) (*session.LegacySession, error) {
-		return opts.runtimeResolver.sessionForGuild(guildID, "dashboard")
+	controlServer.SetArikawaStateResolver(func(guildID string) (*state.State, error) {
+		return opts.runtimeResolver.arikawaStateForGuild(guildID, "dashboard")
 	})
 	controlServer.SetBotGuildBindingsProvider(func(ctx context.Context) ([]control.BotGuildBinding, error) {
 		return opts.runtimeResolver.guildBindings(ctx)

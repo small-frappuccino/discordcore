@@ -478,6 +478,14 @@ func (r *botRuntimeResolver) runtimeForGuild(guildID string, feature string) (*b
 	return nil, "", err
 }
 
+func (r *botRuntimeResolver) arikawaStateForGuild(guildID string, feature string) (*state.State, error) {
+	runtime, _, err := r.runtimeForGuild(guildID, feature)
+	if err != nil {
+		return nil, err
+	}
+	return runtime.arikawaState, nil
+}
+
 func (r *botRuntimeResolver) sessionForGuild(guildID string, feature string) (*session.LegacySession, error) {
 	runtime, botInstanceID, err := r.runtimeForGuild(guildID, feature)
 	if err != nil {
