@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordgo"
 )
@@ -432,7 +432,7 @@ func TestCleanCommandExecuteCleanUsesInjectedClock(t *testing.T) {
 	cmd := newCleanCommand(nil)
 	cmd.now = func() time.Time { return injectedNow }
 
-	ctx := &core.Context{
+	ctx := &legacycore.Context{
 		Session: h.session,
 		GuildID: h.guildID,
 	}
@@ -569,7 +569,7 @@ type cleanRecordedPost struct {
 type cleanHarness struct {
 	t         *testing.T
 	session   *discordgo.Session
-	router    *core.CommandRouter
+	router    *legacycore.CommandRouter
 	config    *files.ConfigManager
 	guildID   string
 	channelID string
@@ -731,7 +731,7 @@ func newCleanCommandHarness(t *testing.T, cfg cleanHarnessConfig) *cleanHarness 
 		t.Fatalf("AddGuildConfig: %v", err)
 	}
 
-	router := core.NewCommandRouter(session, cm)
+	router := legacycore.NewCommandRouter(session, cm)
 	RegisterModerationCommandsWithMetrics(router, cfg.metrics)
 
 	h.session = session

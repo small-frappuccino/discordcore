@@ -1,7 +1,7 @@
 package partner
 
 import (
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -28,8 +28,8 @@ func partnerVisibilityIsEphemeral(class partnerVisibilityClass) bool {
 	}
 }
 
-func partnerResponseBuilder(session *discordgo.Session, class partnerVisibilityClass) *core.ResponseBuilder {
-	builder := core.NewResponseBuilder(session)
+func partnerResponseBuilder(session *discordgo.Session, class partnerVisibilityClass) *legacycore.ResponseBuilder {
+	builder := legacycore.NewResponseBuilder(session)
 	if partnerVisibilityIsEphemeral(class) {
 		builder = builder.Ephemeral()
 	}
@@ -37,25 +37,25 @@ func partnerResponseBuilder(session *discordgo.Session, class partnerVisibilityC
 }
 
 func partnerCommandError(class partnerVisibilityClass, message string) error {
-	return &core.CommandError{Message: message, Ephemeral: partnerVisibilityIsEphemeral(class)}
+	return &legacycore.CommandError{Message: message, Ephemeral: partnerVisibilityIsEphemeral(class)}
 }
 
 func partnerDetailedCommandError(message string) error {
 	return partnerCommandError(partnerVisibilityDetailedError, message)
 }
 
-func partnerEntryMutationResponseBuilder(session *discordgo.Session) *core.ResponseBuilder {
+func partnerEntryMutationResponseBuilder(session *discordgo.Session) *legacycore.ResponseBuilder {
 	return partnerResponseBuilder(session, partnerVisibilityEntryMutation)
 }
 
-func partnerEntryReadResponseBuilder(session *discordgo.Session) *core.ResponseBuilder {
+func partnerEntryReadResponseBuilder(session *discordgo.Session) *legacycore.ResponseBuilder {
 	return partnerResponseBuilder(session, partnerVisibilityEntryRead)
 }
 
-func partnerBoardStateResponseBuilder(session *discordgo.Session) *core.ResponseBuilder {
+func partnerBoardStateResponseBuilder(session *discordgo.Session) *legacycore.ResponseBuilder {
 	return partnerResponseBuilder(session, partnerVisibilityBoardState)
 }
 
-func partnerAdministrativeActionResponseBuilder(session *discordgo.Session) *core.ResponseBuilder {
+func partnerAdministrativeActionResponseBuilder(session *discordgo.Session) *legacycore.ResponseBuilder {
 	return partnerResponseBuilder(session, partnerVisibilityAdministrativeAction)
 }

@@ -12,7 +12,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordgo"
 )
@@ -341,7 +341,7 @@ func TestRuntimeSubCommand_AdminPanelUsesEphemeralPolicy(t *testing.T) {
 		t.Fatalf("failed to load config manager: %v", err)
 	}
 
-	ctx := &core.Context{
+	ctx := &legacycore.Context{
 		Session:     session,
 		Interaction: newRuntimeSlashInteraction("guild-1", "user-1"),
 		Config:      cm,
@@ -370,7 +370,7 @@ func TestRegisterCommands_RoutesRuntimeComponentThroughCoreRouter(t *testing.T) 
 		t.Fatalf("failed to load config manager: %v", err)
 	}
 
-	router := core.NewCommandRouter(session, cm)
+	router := legacycore.NewCommandRouter(session, cm)
 	NewRuntimeConfigCommands(cm).RegisterCommands(router)
 
 	interaction := newRuntimeComponentInteraction(cidButtonMain + stateSep + panelState{
@@ -396,7 +396,7 @@ func TestRegisterCommands_RuntimeComponentRejectsDifferentUser(t *testing.T) {
 		t.Fatalf("failed to load config manager: %v", err)
 	}
 
-	router := core.NewCommandRouter(session, cm)
+	router := legacycore.NewCommandRouter(session, cm)
 	NewRuntimeConfigCommands(cm).RegisterCommands(router)
 
 	interaction := newRuntimeComponentInteractionForUsers(
@@ -436,7 +436,7 @@ func TestRegisterCommands_RoutesRuntimeModalThroughCoreRouter(t *testing.T) {
 		t.Fatalf("failed to load config manager: %v", err)
 	}
 
-	router := core.NewCommandRouter(session, cm)
+	router := legacycore.NewCommandRouter(session, cm)
 	NewRuntimeConfigCommands(cm).RegisterCommands(router)
 
 	st := panelState{
@@ -470,7 +470,7 @@ func TestRegisterCommands_RuntimeModalRejectsDifferentUser(t *testing.T) {
 		t.Fatalf("failed to load config manager: %v", err)
 	}
 
-	router := core.NewCommandRouter(session, cm)
+	router := legacycore.NewCommandRouter(session, cm)
 	NewRuntimeConfigCommands(cm).RegisterCommands(router)
 
 	st := panelState{

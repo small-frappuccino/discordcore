@@ -3,7 +3,7 @@ package partner
 import (
 	"strings"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	partnersvc "github.com/small-frappuccino/discordcore/pkg/partners"
 )
@@ -34,13 +34,13 @@ func NewPartnerCommands(configManager *files.ConfigManager, svc *partnersvc.Part
 }
 
 // RegisterCommands registers commands.
-func (pc *PartnerCommands) RegisterCommands(router *core.CommandRouter) {
+func (pc *PartnerCommands) RegisterCommands(router *legacycore.CommandRouter) {
 	if router == nil || pc == nil || pc.configManager == nil {
 		return
 	}
 
-	checker := core.NewPermissionChecker(router.GetSession(), router.GetConfigManager())
-	group := core.NewGroupCommand(
+	checker := legacycore.NewPermissionChecker(router.GetSession(), router.GetConfigManager())
+	group := legacycore.NewGroupCommand(
 		"partner",
 		"Manage partner board records",
 		checker,

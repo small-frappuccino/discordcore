@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	embedspkg "github.com/small-frappuccino/discordcore/pkg/embeds"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordgo"
@@ -118,7 +118,7 @@ func TestEmbedCommandsIntegration(t *testing.T) {
 		t.Fatalf("add member to state: %v", err)
 	}
 
-	router := core.NewCommandRouter(session, cm)
+	router := legacycore.NewCommandRouter(session, cm)
 	embedService := embedspkg.NewEmbedService(cm)
 	embedCommands := NewEmbedCommands(cm, embedService)
 	embedCommands.RegisterCommands(router)

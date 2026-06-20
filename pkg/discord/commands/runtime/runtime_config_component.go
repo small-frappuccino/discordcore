@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordgo"
 )
@@ -84,8 +84,8 @@ func (c runtimeComponentContext) edit(embed *discordgo.MessageEmbed, components 
 
 // handleInvalidComponentState replies when a component custom ID cannot be parsed into
 // an action. The action is unknown here, so the route ID stamps the log stage.
-func handleInvalidComponentState(s *discordgo.Session, i *discordgo.InteractionCreate, ackPolicy core.InteractionAckPolicy, routeID string) {
-	if ackPolicy.Mode == core.InteractionAckModeNone {
+func handleInvalidComponentState(s *discordgo.Session, i *discordgo.InteractionCreate, ackPolicy legacycore.InteractionAckPolicy, routeID string) {
+	if ackPolicy.Mode == legacycore.InteractionAckModeNone {
 		respondInteractionWithLog(s, i, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
@@ -98,9 +98,9 @@ func handleInvalidComponentState(s *discordgo.Session, i *discordgo.InteractionC
 	editInteractionMessageWithLog(s, i, errorEmbed("Invalid interaction state"), nil, routeID+".invalid_state.render_error")
 }
 
-func (c runtimeComponentContext) respondConfigLoadError(ackPolicy core.InteractionAckPolicy, err error) {
+func (c runtimeComponentContext) respondConfigLoadError(ackPolicy legacycore.InteractionAckPolicy, err error) {
 	msg := fmt.Sprintf("The runtime configuration couldn't be loaded, so this reply stays private: %v", err)
-	if ackPolicy.Mode == core.InteractionAckModeNone {
+	if ackPolicy.Mode == legacycore.InteractionAckModeNone {
 		c.respond(&discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{

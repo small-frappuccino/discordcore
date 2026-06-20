@@ -19,7 +19,7 @@ import (
 	"strings"
 
 	"github.com/small-frappuccino/discordcore/pkg/discord"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	rolesvc "github.com/small-frappuccino/discordcore/pkg/roles"
@@ -91,14 +91,14 @@ func NewRolePanelCommands(configManager *files.ConfigManager, svc *rolesvc.RoleP
 // shared by every panel button on the supplied router. The component
 // route uses an ephemeral defer ack so the click responds with a small
 // confirmation visible only to the clicker.
-func (rc *RolePanelCommands) RegisterCommands(router *core.CommandRouter) {
+func (rc *RolePanelCommands) RegisterCommands(router *legacycore.CommandRouter) {
 	if router == nil || rc == nil || rc.configManager == nil {
 		return
 	}
 
-	checker := core.NewPermissionChecker(router.GetSession(), router.GetConfigManager())
+	checker := legacycore.NewPermissionChecker(router.GetSession(), router.GetConfigManager())
 
-	rolesGroup := core.NewGroupCommand(
+	rolesGroup := legacycore.NewGroupCommand(
 		rolePanelCommandName,
 		"Manage self-service role panels for this server",
 		checker,
@@ -114,7 +114,7 @@ func (rc *RolePanelCommands) RegisterCommands(router *core.CommandRouter) {
 	rolesGroup.AddSubCommand(newRolePanelImportSubCommand(rc.configManager, rc.rolePanelService))
 	rolesGroup.AddSubCommand(newRolePanelExportSubCommand(rc.configManager))
 
-	buttonGroup := core.NewGroupCommand(
+	buttonGroup := legacycore.NewGroupCommand(
 		rolePanelButtonGroupName,
 		"Manage the buttons on one role panel",
 		checker,
@@ -124,7 +124,7 @@ func (rc *RolePanelCommands) RegisterCommands(router *core.CommandRouter) {
 	buttonGroup.AddSubCommand(newRolePanelButtonListSubCommand(rc.configManager))
 	rolesGroup.AddSubCommand(buttonGroup)
 
-	fieldGroup := core.NewGroupCommand(
+	fieldGroup := legacycore.NewGroupCommand(
 		rolePanelFieldGroupName,
 		"Manage the fields on one role panel embed",
 		checker,
@@ -136,11 +136,11 @@ func (rc *RolePanelCommands) RegisterCommands(router *core.CommandRouter) {
 
 	router.RegisterSlashCommand(rolesGroup)
 
-	router.RegisterInteractionRoutes(core.InteractionRouteBinding{
+	router.RegisterInteractionRoutes(legacycore.InteractionRouteBinding{
 		Path:      rolesvc.RolePanelComponentRouteID,
 		Component: newRolePanelComponentHandler(rc.configManager),
-		AckPolicy: core.InteractionAckPolicy{
-			Mode:      core.InteractionAckModeNone,
+		AckPolicy: legacycore.InteractionAckPolicy{
+			Mode:      legacycore.InteractionAckModeNone,
 			Ephemeral: true,
 		},
 	})
@@ -180,7 +180,7 @@ func (c *rolePanelPostSubCommand) RequiresGuild() bool { return true }
 func (c *rolePanelPostSubCommand) RequiresPermissions() bool { return true }
 
 // HandleAutocomplete handles autocomplete.
-func (c *rolePanelPostSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+func (c *rolePanelPostSubCommand) HandleAutocomplete(ctx *legacycore.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == rolePanelOptionKey {
 		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
 	}
@@ -188,7 +188,7 @@ func (c *rolePanelPostSubCommand) HandleAutocomplete(ctx *core.Context, focusedO
 }
 
 // Handle handles.
-func (c *rolePanelPostSubCommand) Handle(ctx *core.Context) error {
+func (c *rolePanelPostSubCommand) Handle(ctx *legacycore.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return fmt.Errorf("rolePanelPostSubCommand.Handle: %w", err)
 	}
@@ -208,7 +208,7 @@ func (c *rolePanelPostSubCommand) Handle(ctx *core.Context) error {
 	components := c.rolePanelService.RenderComponents(&panel)
 
 	var messageID, channelID, webhookID, webhookToken string
-	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := legacycore.OptionList(legacycore.GetSubCommandOptions(ctx.Interaction))
 
 	if extractor.HasOption(rolePanelOptionWebhookURL) {
 		webhookURL := extractor.String(rolePanelOptionWebhookURL)
@@ -335,7 +335,7 @@ func (c *rolePanelPreviewSubCommand) RequiresGuild() bool { return true }
 func (c *rolePanelPreviewSubCommand) RequiresPermissions() bool { return true }
 
 // HandleAutocomplete handles autocomplete.
-func (c *rolePanelPreviewSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+func (c *rolePanelPreviewSubCommand) HandleAutocomplete(ctx *legacycore.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == rolePanelOptionKey {
 		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
 	}
@@ -343,7 +343,7 @@ func (c *rolePanelPreviewSubCommand) HandleAutocomplete(ctx *core.Context, focus
 }
 
 // Handle handles.
-func (c *rolePanelPreviewSubCommand) Handle(ctx *core.Context) error {
+func (c *rolePanelPreviewSubCommand) Handle(ctx *legacycore.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return fmt.Errorf("rolePanelPreviewSubCommand.Handle: %w", err)
 	}
@@ -403,7 +403,7 @@ func (c *rolePanelSetSubCommand) RequiresGuild() bool { return true }
 func (c *rolePanelSetSubCommand) RequiresPermissions() bool { return true }
 
 // HandleAutocomplete handles autocomplete.
-func (c *rolePanelSetSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+func (c *rolePanelSetSubCommand) HandleAutocomplete(ctx *legacycore.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == rolePanelOptionKey {
 		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
 	}
@@ -411,7 +411,7 @@ func (c *rolePanelSetSubCommand) HandleAutocomplete(ctx *core.Context, focusedOp
 }
 
 // Handle handles.
-func (c *rolePanelSetSubCommand) Handle(ctx *core.Context) error {
+func (c *rolePanelSetSubCommand) Handle(ctx *legacycore.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return fmt.Errorf("rolePanelSetSubCommand.Handle: %w", err)
 	}
@@ -419,7 +419,7 @@ func (c *rolePanelSetSubCommand) Handle(ctx *core.Context) error {
 	if err != nil {
 		return fmt.Errorf("rolePanelSetSubCommand.Handle: %w", err)
 	}
-	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := legacycore.OptionList(legacycore.GetSubCommandOptions(ctx.Interaction))
 
 	current, fetchErr := c.configManager.RolePanel(ctx.GuildID, key)
 	if fetchErr != nil && !errors.Is(fetchErr, files.ErrRolePanelNotFound) {
@@ -495,7 +495,7 @@ func (c *rolePanelDeleteSubCommand) RequiresGuild() bool { return true }
 func (c *rolePanelDeleteSubCommand) RequiresPermissions() bool { return true }
 
 // HandleAutocomplete handles autocomplete.
-func (c *rolePanelDeleteSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+func (c *rolePanelDeleteSubCommand) HandleAutocomplete(ctx *legacycore.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == rolePanelOptionKey {
 		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
 	}
@@ -503,7 +503,7 @@ func (c *rolePanelDeleteSubCommand) HandleAutocomplete(ctx *core.Context, focuse
 }
 
 // Handle handles.
-func (c *rolePanelDeleteSubCommand) Handle(ctx *core.Context) error {
+func (c *rolePanelDeleteSubCommand) Handle(ctx *legacycore.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return fmt.Errorf("rolePanelDeleteSubCommand.Handle: %w", err)
 	}
@@ -567,7 +567,7 @@ func (c *rolePanelListSubCommand) RequiresGuild() bool { return true }
 func (c *rolePanelListSubCommand) RequiresPermissions() bool { return true }
 
 // Handle handles.
-func (c *rolePanelListSubCommand) Handle(ctx *core.Context) error {
+func (c *rolePanelListSubCommand) Handle(ctx *legacycore.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return fmt.Errorf("rolePanelListSubCommand.Handle: %w", err)
 	}
@@ -626,7 +626,7 @@ func (c *rolePanelButtonAddSubCommand) RequiresGuild() bool { return true }
 func (c *rolePanelButtonAddSubCommand) RequiresPermissions() bool { return true }
 
 // HandleAutocomplete handles autocomplete.
-func (c *rolePanelButtonAddSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+func (c *rolePanelButtonAddSubCommand) HandleAutocomplete(ctx *legacycore.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == rolePanelOptionKey {
 		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
 	}
@@ -634,7 +634,7 @@ func (c *rolePanelButtonAddSubCommand) HandleAutocomplete(ctx *core.Context, foc
 }
 
 // Handle handles.
-func (c *rolePanelButtonAddSubCommand) Handle(ctx *core.Context) error {
+func (c *rolePanelButtonAddSubCommand) Handle(ctx *legacycore.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return fmt.Errorf("rolePanelButtonAddSubCommand.Handle: %w", err)
 	}
@@ -642,8 +642,8 @@ func (c *rolePanelButtonAddSubCommand) Handle(ctx *core.Context) error {
 	if err != nil {
 		return fmt.Errorf("rolePanelButtonAddSubCommand.Handle: %w", err)
 	}
-	opts := core.GetSubCommandOptions(ctx.Interaction)
-	extractor := core.OptionList(opts)
+	opts := legacycore.GetSubCommandOptions(ctx.Interaction)
+	extractor := legacycore.OptionList(opts)
 
 	roleID := strings.TrimSpace(roleOptionID(opts, rolePanelOptionRole))
 	if roleID == "" {
@@ -708,7 +708,7 @@ func (c *rolePanelButtonRemoveSubCommand) RequiresGuild() bool { return true }
 func (c *rolePanelButtonRemoveSubCommand) RequiresPermissions() bool { return true }
 
 // HandleAutocomplete handles autocomplete.
-func (c *rolePanelButtonRemoveSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+func (c *rolePanelButtonRemoveSubCommand) HandleAutocomplete(ctx *legacycore.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == rolePanelOptionKey {
 		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
 	}
@@ -716,7 +716,7 @@ func (c *rolePanelButtonRemoveSubCommand) HandleAutocomplete(ctx *core.Context, 
 }
 
 // Handle handles.
-func (c *rolePanelButtonRemoveSubCommand) Handle(ctx *core.Context) error {
+func (c *rolePanelButtonRemoveSubCommand) Handle(ctx *legacycore.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return fmt.Errorf("rolePanelButtonRemoveSubCommand.Handle: %w", err)
 	}
@@ -724,7 +724,7 @@ func (c *rolePanelButtonRemoveSubCommand) Handle(ctx *core.Context) error {
 	if err != nil {
 		return fmt.Errorf("rolePanelButtonRemoveSubCommand.Handle: %w", err)
 	}
-	roleID := strings.TrimSpace(roleOptionID(core.GetSubCommandOptions(ctx.Interaction), rolePanelOptionRole))
+	roleID := strings.TrimSpace(roleOptionID(legacycore.GetSubCommandOptions(ctx.Interaction), rolePanelOptionRole))
 	if roleID == "" {
 		return rolePanelDetailedCommandError("A role is required to identify the button.")
 	}
@@ -773,7 +773,7 @@ func (c *rolePanelButtonListSubCommand) RequiresGuild() bool { return true }
 func (c *rolePanelButtonListSubCommand) RequiresPermissions() bool { return true }
 
 // HandleAutocomplete handles autocomplete.
-func (c *rolePanelButtonListSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+func (c *rolePanelButtonListSubCommand) HandleAutocomplete(ctx *legacycore.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == rolePanelOptionKey {
 		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
 	}
@@ -781,7 +781,7 @@ func (c *rolePanelButtonListSubCommand) HandleAutocomplete(ctx *core.Context, fo
 }
 
 // Handle handles.
-func (c *rolePanelButtonListSubCommand) Handle(ctx *core.Context) error {
+func (c *rolePanelButtonListSubCommand) Handle(ctx *legacycore.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return fmt.Errorf("rolePanelButtonListSubCommand.Handle: %w", err)
 	}
@@ -846,7 +846,7 @@ func (c *rolePanelFieldAddSubCommand) RequiresGuild() bool { return true }
 func (c *rolePanelFieldAddSubCommand) RequiresPermissions() bool { return true }
 
 // HandleAutocomplete handles autocomplete.
-func (c *rolePanelFieldAddSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+func (c *rolePanelFieldAddSubCommand) HandleAutocomplete(ctx *legacycore.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == rolePanelOptionKey {
 		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
 	}
@@ -854,7 +854,7 @@ func (c *rolePanelFieldAddSubCommand) HandleAutocomplete(ctx *core.Context, focu
 }
 
 // Handle handles.
-func (c *rolePanelFieldAddSubCommand) Handle(ctx *core.Context) error {
+func (c *rolePanelFieldAddSubCommand) Handle(ctx *legacycore.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return fmt.Errorf("rolePanelFieldAddSubCommand.Handle: %w", err)
 	}
@@ -862,7 +862,7 @@ func (c *rolePanelFieldAddSubCommand) Handle(ctx *core.Context) error {
 	if err != nil {
 		return fmt.Errorf("rolePanelFieldAddSubCommand.Handle: %w", err)
 	}
-	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := legacycore.OptionList(legacycore.GetSubCommandOptions(ctx.Interaction))
 
 	name, err := extractor.StringRequired(rolePanelOptionFieldName)
 	if err != nil {
@@ -924,7 +924,7 @@ func (c *rolePanelFieldRemoveSubCommand) RequiresGuild() bool { return true }
 func (c *rolePanelFieldRemoveSubCommand) RequiresPermissions() bool { return true }
 
 // HandleAutocomplete handles autocomplete.
-func (c *rolePanelFieldRemoveSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+func (c *rolePanelFieldRemoveSubCommand) HandleAutocomplete(ctx *legacycore.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == rolePanelOptionKey {
 		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
 	}
@@ -932,7 +932,7 @@ func (c *rolePanelFieldRemoveSubCommand) HandleAutocomplete(ctx *core.Context, f
 }
 
 // Handle handles.
-func (c *rolePanelFieldRemoveSubCommand) Handle(ctx *core.Context) error {
+func (c *rolePanelFieldRemoveSubCommand) Handle(ctx *legacycore.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return fmt.Errorf("rolePanelFieldRemoveSubCommand.Handle: %w", err)
 	}
@@ -940,7 +940,7 @@ func (c *rolePanelFieldRemoveSubCommand) Handle(ctx *core.Context) error {
 	if err != nil {
 		return fmt.Errorf("rolePanelFieldRemoveSubCommand.Handle: %w", err)
 	}
-	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := legacycore.OptionList(legacycore.GetSubCommandOptions(ctx.Interaction))
 	if !extractor.HasOption(rolePanelOptionFieldIndex) {
 		return rolePanelDetailedCommandError("A field index is required.")
 	}
@@ -990,7 +990,7 @@ func (c *rolePanelFieldListSubCommand) RequiresGuild() bool { return true }
 func (c *rolePanelFieldListSubCommand) RequiresPermissions() bool { return true }
 
 // HandleAutocomplete handles autocomplete.
-func (c *rolePanelFieldListSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+func (c *rolePanelFieldListSubCommand) HandleAutocomplete(ctx *legacycore.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == rolePanelOptionKey {
 		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
 	}
@@ -998,7 +998,7 @@ func (c *rolePanelFieldListSubCommand) HandleAutocomplete(ctx *core.Context, foc
 }
 
 // Handle handles.
-func (c *rolePanelFieldListSubCommand) Handle(ctx *core.Context) error {
+func (c *rolePanelFieldListSubCommand) Handle(ctx *legacycore.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return fmt.Errorf("rolePanelFieldListSubCommand.Handle: %w", err)
 	}
@@ -1060,7 +1060,7 @@ func (c *rolePanelRefreshSubCommand) RequiresGuild() bool { return true }
 func (c *rolePanelRefreshSubCommand) RequiresPermissions() bool { return true }
 
 // HandleAutocomplete handles autocomplete.
-func (c *rolePanelRefreshSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+func (c *rolePanelRefreshSubCommand) HandleAutocomplete(ctx *legacycore.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == rolePanelOptionKey {
 		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
 	}
@@ -1068,7 +1068,7 @@ func (c *rolePanelRefreshSubCommand) HandleAutocomplete(ctx *core.Context, focus
 }
 
 // Handle handles.
-func (c *rolePanelRefreshSubCommand) Handle(ctx *core.Context) error {
+func (c *rolePanelRefreshSubCommand) Handle(ctx *legacycore.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return fmt.Errorf("rolePanelRefreshSubCommand.Handle: %w", err)
 	}
@@ -1135,7 +1135,7 @@ func (c *rolePanelUnpostSubCommand) RequiresGuild() bool { return true }
 func (c *rolePanelUnpostSubCommand) RequiresPermissions() bool { return true }
 
 // HandleAutocomplete handles autocomplete.
-func (c *rolePanelUnpostSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+func (c *rolePanelUnpostSubCommand) HandleAutocomplete(ctx *legacycore.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == rolePanelOptionKey {
 		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
 	}
@@ -1143,11 +1143,11 @@ func (c *rolePanelUnpostSubCommand) HandleAutocomplete(ctx *core.Context, focuse
 }
 
 // Handle handles.
-func (c *rolePanelUnpostSubCommand) Handle(ctx *core.Context) error {
+func (c *rolePanelUnpostSubCommand) Handle(ctx *legacycore.Context) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return fmt.Errorf("rolePanelUnpostSubCommand.Handle: %w", err)
 	}
-	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := legacycore.OptionList(legacycore.GetSubCommandOptions(ctx.Interaction))
 	messageID, err := extractor.StringRequired(rolePanelOptionMessageID)
 	if err != nil {
 		return rolePanelDetailedCommandError("A message ID is required.")
@@ -1225,7 +1225,7 @@ func (c *rolePanelToggleSubCommand) RequiresGuild() bool { return true }
 func (c *rolePanelToggleSubCommand) RequiresPermissions() bool { return true }
 
 // Handle handles.
-func (c *rolePanelToggleSubCommand) Handle(ctx *core.Context) error {
+func (c *rolePanelToggleSubCommand) Handle(ctx *legacycore.Context) error {
 	var newValue bool
 	_, err := c.configManager.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		for i := range cfg.Guilds {
@@ -1247,7 +1247,7 @@ func (c *rolePanelToggleSubCommand) Handle(ctx *core.Context) error {
 		state = "disabled"
 	}
 
-	return core.NewResponseBuilder(ctx.Session).Success(
+	return legacycore.NewResponseBuilder(ctx.Session).Success(
 		ctx.Interaction,
 		fmt.Sprintf("Interactive ephemeral messages have been %s for this server.", state),
 	)
@@ -1260,7 +1260,7 @@ func (c *rolePanelToggleSubCommand) Handle(ctx *core.Context) error {
 // (starting with a newline) when there is something to report;
 // returns an empty string when the panel has no postings or the
 // refresh was a quiet success.
-func refreshRolePanelPostingsBestEffort(cm *files.ConfigManager, svc *rolesvc.RolePanelService, ctx *core.Context, key string) string {
+func refreshRolePanelPostingsBestEffort(cm *files.ConfigManager, svc *rolesvc.RolePanelService, ctx *legacycore.Context, key string) string {
 	if cm == nil || svc == nil || ctx == nil {
 		return ""
 	}
@@ -1298,7 +1298,7 @@ func rolePanelKeyOption(required bool) *discordgo.ApplicationCommandOption {
 	}
 }
 
-func handleRolePanelKeyAutocomplete(cm *files.ConfigManager, ctx *core.Context) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+func handleRolePanelKeyAutocomplete(cm *files.ConfigManager, ctx *legacycore.Context) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if ctx.GuildID == "" {
 		return nil, nil
 	}
@@ -1307,8 +1307,8 @@ func handleRolePanelKeyAutocomplete(cm *files.ConfigManager, ctx *core.Context) 
 		return nil, nil
 	}
 
-	opts := core.GetSubCommandOptions(ctx.Interaction)
-	focused, found := core.HasFocusedOption(opts)
+	opts := legacycore.GetSubCommandOptions(ctx.Interaction)
+	focused, found := legacycore.HasFocusedOption(opts)
 	if !found {
 		return nil, nil
 	}
@@ -1331,7 +1331,7 @@ func handleRolePanelKeyAutocomplete(cm *files.ConfigManager, ctx *core.Context) 
 }
 
 func rolePanelKeyFromOptions(i *discordgo.InteractionCreate) (string, error) {
-	extractor := core.OptionList(core.GetSubCommandOptions(i))
+	extractor := legacycore.OptionList(legacycore.GetSubCommandOptions(i))
 	raw, err := extractor.StringRequired(rolePanelOptionKey)
 	if err != nil {
 		return "", rolePanelDetailedCommandError("A panel key is required.")
@@ -1365,7 +1365,7 @@ func roleOptionID(options []*discordgo.ApplicationCommandInteractionDataOption, 
 	return ""
 }
 
-func ensureRolePanelEnabled(ctx *core.Context) error {
+func ensureRolePanelEnabled(ctx *legacycore.Context) error {
 	if ctx == nil || ctx.Config == nil {
 		return rolePanelDetailedCommandError("Configuration is not available right now.")
 	}
@@ -1380,7 +1380,7 @@ func ensureRolePanelEnabled(ctx *core.Context) error {
 	)
 
 	if !enabled {
-		return core.NewMissingConfigError(ctx.GuildID, "Role Panels", "/roles")
+		return legacycore.NewMissingConfigError(ctx.GuildID, "Role Panels", "/roles")
 	}
 	return nil
 }
@@ -1436,7 +1436,7 @@ func (c *rolePanelImportSubCommand) RequiresGuild() bool { return true }
 func (c *rolePanelImportSubCommand) RequiresPermissions() bool { return true }
 
 // HandleAutocomplete handles autocomplete.
-func (c *rolePanelImportSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+func (c *rolePanelImportSubCommand) HandleAutocomplete(ctx *legacycore.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == rolePanelOptionKey {
 		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
 	}
@@ -1444,7 +1444,7 @@ func (c *rolePanelImportSubCommand) HandleAutocomplete(ctx *core.Context, focuse
 }
 
 // Handle handles.
-func (c *rolePanelImportSubCommand) Handle(ctx *core.Context) error {
+func (c *rolePanelImportSubCommand) Handle(ctx *legacycore.Context) error {
 	builder := rolePanelConfigurationResponseBuilder(ctx.Session)
 	guildID := ctx.GuildID
 
@@ -1454,7 +1454,7 @@ func (c *rolePanelImportSubCommand) Handle(ctx *core.Context) error {
 	}
 
 	var pasteURL string
-	opts := core.GetSubCommandOptions(ctx.Interaction)
+	opts := legacycore.GetSubCommandOptions(ctx.Interaction)
 	for _, opt := range opts {
 		if opt.Name == rolePanelOptionURL {
 			pasteURL = strings.TrimSpace(fmt.Sprint(opt.Value))
@@ -1514,7 +1514,7 @@ func (c *rolePanelExportSubCommand) RequiresGuild() bool { return true }
 func (c *rolePanelExportSubCommand) RequiresPermissions() bool { return true }
 
 // HandleAutocomplete handles autocomplete.
-func (c *rolePanelExportSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+func (c *rolePanelExportSubCommand) HandleAutocomplete(ctx *legacycore.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == rolePanelOptionKey {
 		return handleRolePanelKeyAutocomplete(c.configManager, ctx)
 	}
@@ -1522,7 +1522,7 @@ func (c *rolePanelExportSubCommand) HandleAutocomplete(ctx *core.Context, focuse
 }
 
 // Handle handles.
-func (c *rolePanelExportSubCommand) Handle(ctx *core.Context) error {
+func (c *rolePanelExportSubCommand) Handle(ctx *legacycore.Context) error {
 	builder := rolePanelConfigurationResponseBuilder(ctx.Session)
 	guildID := ctx.GuildID
 

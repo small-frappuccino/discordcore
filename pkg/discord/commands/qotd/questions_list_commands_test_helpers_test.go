@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	applicationqotd "github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
@@ -231,7 +231,7 @@ func newQOTDCommandTestRouterWithService(
 	guildID string,
 	ownerID string,
 	service QuestionCatalogService,
-) (*core.CommandRouter, *files.ConfigManager) {
+) (*legacycore.CommandRouter, *files.ConfigManager) {
 	t.Helper()
 
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
@@ -255,7 +255,7 @@ func newQOTDCommandTestRouterWithService(
 		t.Fatalf("failed to add member to state: %v", err)
 	}
 
-	router := core.NewCommandRouter(session, cm)
+	router := legacycore.NewCommandRouter(session, cm)
 	NewCommands(service).RegisterCommands(router)
 	return router, cm
 }

@@ -3,7 +3,7 @@ package moderation
 import (
 	"fmt"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordgo"
 )
@@ -46,20 +46,20 @@ func (c *massBanCommand) RequiresPermissions() bool { return true }
 func (c *massBanCommand) DefaultMemberPermissions() int64 { return discordgo.PermissionBanMembers }
 
 // Handle handles.
-func (c *massBanCommand) Handle(ctx *core.Context) error {
+func (c *massBanCommand) Handle(ctx *legacycore.Context) error {
 	if enabled, _ := ctx.Config.Config().ResolveFeatures(ctx.GuildID).Lookup("moderation.massban"); !enabled {
-		return core.NewMissingConfigError(ctx.GuildID, "Moderation Mass Ban", "/moderation")
+		return legacycore.NewMissingConfigError(ctx.GuildID, "Moderation Mass Ban", "/moderation")
 	}
-	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := legacycore.OptionList(legacycore.GetSubCommandOptions(ctx.Interaction))
 
 	membersInput, err := extractor.StringRequired("members")
 	if err != nil {
-		return &core.CommandError{Message: err.Error(), Ephemeral: true}
+		return &legacycore.CommandError{Message: err.Error(), Ephemeral: true}
 	}
 
 	memberIDs, invalidTokens := parseMemberIDs(membersInput)
 	if len(memberIDs) == 0 {
-		return &core.CommandError{Message: "No valid member IDs provided", Ephemeral: true}
+		return &legacycore.CommandError{Message: "No valid member IDs provided", Ephemeral: true}
 	}
 	if len(invalidTokens) > 0 {
 		log.ApplicationLogger().Info("Massban ignored invalid member tokens", "guildID", ctx.GuildID, "invalid_count", len(invalidTokens))
@@ -116,5 +116,5 @@ func (c *massBanCommand) Handle(ctx *core.Context) error {
 			"failed", len(failed),
 		)
 	}
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, buildMassBanCommandMessage(bannedCount))
+	return legacycore.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, buildMassBanCommandMessage(bannedCount))
 }

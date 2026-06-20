@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/small-frappuccino/discordcore/pkg/discord"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordgo"
 )
@@ -47,13 +47,13 @@ func (c *partnerImportTemplateSubCommand) RequiresGuild() bool { return true }
 func (c *partnerImportTemplateSubCommand) RequiresPermissions() bool { return true }
 
 // HandleAutocomplete handles autocomplete.
-func (c *partnerImportTemplateSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+func (c *partnerImportTemplateSubCommand) HandleAutocomplete(ctx *legacycore.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	return nil, nil
 }
 
 // Handle handles.
-func (c *partnerImportTemplateSubCommand) Handle(ctx *core.Context) error {
-	builder := core.NewResponseBuilder(ctx.Session).Ephemeral()
+func (c *partnerImportTemplateSubCommand) Handle(ctx *legacycore.Context) error {
+	builder := legacycore.NewResponseBuilder(ctx.Session).Ephemeral()
 	if err := builder.Build().DeferResponse(ctx.Interaction, true); err != nil {
 		return fmt.Errorf("partnerImportTemplateSubCommand.Handle: %w", err)
 	}
@@ -61,7 +61,7 @@ func (c *partnerImportTemplateSubCommand) Handle(ctx *core.Context) error {
 	guildID := ctx.GuildID
 
 	var pasteURL string
-	opts := core.GetSubCommandOptions(ctx.Interaction)
+	opts := legacycore.GetSubCommandOptions(ctx.Interaction)
 	for _, opt := range opts {
 		if opt.Name == optionURL {
 			pasteURL = strings.TrimSpace(fmt.Sprint(opt.Value))
@@ -118,13 +118,13 @@ func (c *partnerExportTemplateSubCommand) RequiresGuild() bool { return true }
 func (c *partnerExportTemplateSubCommand) RequiresPermissions() bool { return true }
 
 // HandleAutocomplete handles autocomplete.
-func (c *partnerExportTemplateSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+func (c *partnerExportTemplateSubCommand) HandleAutocomplete(ctx *legacycore.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	return nil, nil
 }
 
 // Handle handles.
-func (c *partnerExportTemplateSubCommand) Handle(ctx *core.Context) error {
-	builder := core.NewResponseBuilder(ctx.Session).Ephemeral()
+func (c *partnerExportTemplateSubCommand) Handle(ctx *legacycore.Context) error {
+	builder := legacycore.NewResponseBuilder(ctx.Session).Ephemeral()
 	if err := builder.Build().DeferResponse(ctx.Interaction, true); err != nil {
 		return fmt.Errorf("partnerExportTemplateSubCommand.Handle: %w", err)
 	}

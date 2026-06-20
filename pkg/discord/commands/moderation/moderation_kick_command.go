@@ -3,7 +3,7 @@ package moderation
 import (
 	"fmt"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -45,20 +45,20 @@ func (c *kickCommand) RequiresPermissions() bool { return true }
 func (c *kickCommand) DefaultMemberPermissions() int64 { return discordgo.PermissionKickMembers }
 
 // Handle handles.
-func (c *kickCommand) Handle(ctx *core.Context) error {
+func (c *kickCommand) Handle(ctx *legacycore.Context) error {
 	if enabled, _ := ctx.Config.Config().ResolveFeatures(ctx.GuildID).Lookup("moderation.kick"); !enabled {
-		return core.NewMissingConfigError(ctx.GuildID, "Moderation Kick", "/moderation")
+		return legacycore.NewMissingConfigError(ctx.GuildID, "Moderation Kick", "/moderation")
 	}
-	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := legacycore.OptionList(legacycore.GetSubCommandOptions(ctx.Interaction))
 
 	rawUserID, err := extractor.StringRequired("user")
 	if err != nil {
-		return &core.CommandError{Message: err.Error(), Ephemeral: true}
+		return &legacycore.CommandError{Message: err.Error(), Ephemeral: true}
 	}
 
 	userID, ok := normalizeUserID(rawUserID)
 	if !ok {
-		return &core.CommandError{Message: "Invalid user ID or mention.", Ephemeral: true}
+		return &legacycore.CommandError{Message: "Invalid user ID or mention.", Ephemeral: true}
 	}
 
 	reason, truncated := sanitizeReason(extractor.String("reason"))
@@ -69,12 +69,12 @@ func (c *kickCommand) Handle(ctx *core.Context) error {
 	}
 
 	if ok, reasonText := canKickTarget(ctx, kickCtx, userID); !ok {
-		return &core.CommandError{Message: fmt.Sprintf("Cannot kick `%s`: %s.", userID, reasonText), Ephemeral: true}
+		return &legacycore.CommandError{Message: fmt.Sprintf("Cannot kick `%s`: %s.", userID, reasonText), Ephemeral: true}
 	}
 
 	targetUsername := resolveUserDisplayName(ctx, userID)
 	if err := ctx.Session.GuildMemberDeleteWithReason(ctx.GuildID, userID, reason); err != nil {
-		return &core.CommandError{Message: fmt.Sprintf("Failed to kick user %s: %v", userID, err), Ephemeral: true}
+		return &legacycore.CommandError{Message: fmt.Sprintf("Failed to kick user %s: %v", userID, err), Ephemeral: true}
 	}
 
 	details := "Status: Success"
@@ -90,5 +90,5 @@ func (c *kickCommand) Handle(ctx *core.Context) error {
 		Extra:       details,
 	})
 
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, buildKickCommandMessage(targetUsername, reason, truncated))
+	return legacycore.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, buildKickCommandMessage(targetUsername, reason, truncated))
 }

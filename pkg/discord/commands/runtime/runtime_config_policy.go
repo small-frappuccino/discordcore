@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -42,7 +42,7 @@ func runtimeVisibilityIsEphemeral(class runtimeVisibilityClass) bool {
 	}
 }
 
-func authorizeRuntimeComponentInteraction(ctx *core.Context, ackPolicy core.InteractionAckPolicy) (bool, error) {
+func authorizeRuntimeComponentInteraction(ctx *legacycore.Context, ackPolicy legacycore.InteractionAckPolicy) (bool, error) {
 	ownerUserID, ok := runtimeOriginalPanelUserID(ctx.Interaction)
 	if !ok {
 		return true, denyRuntimeInteraction(ctx, ackPolicy, runtimeConfigInteractionExpiredText)
@@ -53,7 +53,7 @@ func authorizeRuntimeComponentInteraction(ctx *core.Context, ackPolicy core.Inte
 	return false, nil
 }
 
-func authorizeRuntimeModalInteraction(ctx *core.Context, ackPolicy core.InteractionAckPolicy) (bool, error) {
+func authorizeRuntimeModalInteraction(ctx *legacycore.Context, ackPolicy legacycore.InteractionAckPolicy) (bool, error) {
 	_, authToken, ok := decodeRuntimeModalState(ctx.RouteKey.CustomID)
 	if !ok {
 		return true, denyRuntimeInteraction(ctx, ackPolicy, runtimeConfigInteractionExpiredText)
@@ -161,12 +161,12 @@ func runtimeGroupForKey(key runtimeKey) string {
 	return "ALL"
 }
 
-func denyRuntimeInteraction(ctx *core.Context, ackPolicy core.InteractionAckPolicy, message string) error {
+func denyRuntimeInteraction(ctx *legacycore.Context, ackPolicy legacycore.InteractionAckPolicy, message string) error {
 	if ctx == nil || ctx.Session == nil || ctx.Interaction == nil {
 		return nil
 	}
-	if ackPolicy.Mode != core.InteractionAckModeNone {
-		return core.NewResponseManager(ctx.Session).FollowUp(ctx.Interaction, message, true)
+	if ackPolicy.Mode != legacycore.InteractionAckModeNone {
+		return legacycore.NewResponseManager(ctx.Session).FollowUp(ctx.Interaction, message, true)
 	}
-	return core.NewResponseBuilder(ctx.Session).Ephemeral().Error(ctx.Interaction, message)
+	return legacycore.NewResponseBuilder(ctx.Session).Ephemeral().Error(ctx.Interaction, message)
 }

@@ -3,7 +3,7 @@ package moderation
 import (
 	"fmt"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -45,20 +45,20 @@ func (c *banCommand) RequiresPermissions() bool { return true }
 func (c *banCommand) DefaultMemberPermissions() int64 { return discordgo.PermissionBanMembers }
 
 // Handle handles.
-func (c *banCommand) Handle(ctx *core.Context) error {
+func (c *banCommand) Handle(ctx *legacycore.Context) error {
 	if enabled, _ := ctx.Config.Config().ResolveFeatures(ctx.GuildID).Lookup("moderation.ban"); !enabled {
-		return core.NewMissingConfigError(ctx.GuildID, "Moderation Ban", "/moderation")
+		return legacycore.NewMissingConfigError(ctx.GuildID, "Moderation Ban", "/moderation")
 	}
-	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := legacycore.OptionList(legacycore.GetSubCommandOptions(ctx.Interaction))
 
 	rawUserID, err := extractor.StringRequired("user")
 	if err != nil {
-		return &core.CommandError{Message: err.Error(), Ephemeral: true}
+		return &legacycore.CommandError{Message: err.Error(), Ephemeral: true}
 	}
 
 	userID, ok := normalizeUserID(rawUserID)
 	if !ok {
-		return &core.CommandError{Message: "Invalid user ID or mention.", Ephemeral: true}
+		return &legacycore.CommandError{Message: "Invalid user ID or mention.", Ephemeral: true}
 	}
 
 	reason, truncated := sanitizeReason(extractor.String("reason"))
@@ -69,13 +69,13 @@ func (c *banCommand) Handle(ctx *core.Context) error {
 	}
 
 	if ok, reasonText := canBanTarget(ctx, banCtx, userID); !ok {
-		return &core.CommandError{Message: fmt.Sprintf("Cannot ban `%s`: %s.", userID, reasonText), Ephemeral: true}
+		return &legacycore.CommandError{Message: fmt.Sprintf("Cannot ban `%s`: %s.", userID, reasonText), Ephemeral: true}
 	}
 
 	targetUsername := resolveUserDisplayName(ctx, userID)
 
 	if err := ctx.Session.GuildBanCreateWithReason(ctx.GuildID, userID, reason, 0); err != nil {
-		return &core.CommandError{Message: fmt.Sprintf("Failed to ban user %s: %v", userID, err), Ephemeral: true}
+		return &legacycore.CommandError{Message: fmt.Sprintf("Failed to ban user %s: %v", userID, err), Ephemeral: true}
 	}
 
 	details := "Status: Success"
@@ -90,5 +90,5 @@ func (c *banCommand) Handle(ctx *core.Context) error {
 		RequestedBy: ctx.UserID,
 		Extra:       details,
 	})
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, buildBanCommandMessage(targetUsername, reason, truncated))
+	return legacycore.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, buildBanCommandMessage(targetUsername, reason, truncated))
 }

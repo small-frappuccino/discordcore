@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordgo"
 )
@@ -18,7 +18,7 @@ func TestHandleCategorySelect_Success(t *testing.T) {
 
 	interaction := newTicketInteraction(guildID, "user-1", "channel-1", "ticket_category_select", []string{"Contact Staff"})
 
-	ctx := &core.Context{
+	ctx := &legacycore.Context{
 		Session:     h.session,
 		Interaction: interaction,
 		Config:      h.cm,
@@ -80,7 +80,7 @@ func TestHandleClose_Success(t *testing.T) {
 
 	interaction := newTicketInteraction(guildID, "user-1", "ticket-123-id", "ticket_close", nil)
 
-	ctx := &core.Context{
+	ctx := &legacycore.Context{
 		Session:     h.session,
 		Interaction: interaction,
 		Config:      h.cm,
@@ -119,7 +119,7 @@ func TestHandleReopen_Success(t *testing.T) {
 
 	interaction := newTicketInteraction(guildID, "user-1", "closed-123-id", "ticket_reopen", nil)
 
-	ctx := &core.Context{
+	ctx := &legacycore.Context{
 		Session:     h.session,
 		Interaction: interaction,
 		Config:      h.cm,
@@ -158,7 +158,7 @@ func TestHandleCategorySelect_LimitReached(t *testing.T) {
 	h.rec.mu.Unlock()
 
 	interaction := newTicketInteraction(guildID, "user-1", "channel-1", "ticket_category_select", []string{"Contact Staff"})
-	ctx := &core.Context{
+	ctx := &legacycore.Context{
 		Session:     h.session,
 		Interaction: interaction,
 		Config:      h.cm,
@@ -188,7 +188,7 @@ func TestHandleCategorySelect_ConfigDisabled(t *testing.T) {
 	h.cm.AddGuildConfig(*cfg)
 
 	interaction := newTicketInteraction(guildID, "user-1", "channel-1", "ticket_category_select", []string{"Contact Staff"})
-	ctx := &core.Context{
+	ctx := &legacycore.Context{
 		Session:     h.session,
 		Interaction: interaction,
 		Config:      h.cm,
@@ -213,7 +213,7 @@ func TestHandleCategorySelect_InvalidCategory(t *testing.T) {
 	h := newTicketCommandTestHarness(t, guildID, ownerID)
 
 	interaction := newTicketInteraction(guildID, "user-1", "channel-1", "ticket_category_select", []string{"Invalid Category"})
-	ctx := &core.Context{
+	ctx := &legacycore.Context{
 		Session:     h.session,
 		Interaction: interaction,
 		Config:      h.cm,
@@ -238,7 +238,7 @@ func TestHandleClose_NotOpenTicket(t *testing.T) {
 	h := newTicketCommandTestHarness(t, guildID, ownerID)
 
 	interaction := newTicketInteraction(guildID, "user-1", "closed-123-id", "ticket_close", nil)
-	ctx := &core.Context{
+	ctx := &legacycore.Context{
 		Session:     h.session,
 		Interaction: interaction,
 		Config:      h.cm,
@@ -263,7 +263,7 @@ func TestHandleReopen_NotClosedTicket(t *testing.T) {
 	h := newTicketCommandTestHarness(t, guildID, ownerID)
 
 	interaction := newTicketInteraction(guildID, "user-1", "ticket-123-id", "ticket_reopen", nil)
-	ctx := &core.Context{
+	ctx := &legacycore.Context{
 		Session:     h.session,
 		Interaction: interaction,
 		Config:      h.cm,
@@ -288,7 +288,7 @@ func TestHandleDelete_Success(t *testing.T) {
 	h := newTicketCommandTestHarness(t, guildID, ownerID)
 
 	interaction := newTicketInteraction(guildID, "user-1", "closed-123-id", "ticket_delete", nil)
-	ctx := &core.Context{
+	ctx := &legacycore.Context{
 		Session:     h.session,
 		Interaction: interaction,
 		Config:      h.cm,

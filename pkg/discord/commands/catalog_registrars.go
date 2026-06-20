@@ -3,8 +3,8 @@ package commands
 import (
 	"log/slog"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
 	embedscmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/embeds"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/logging"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	partnercmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/partner"
@@ -25,7 +25,7 @@ type CommandCatalogCapabilities struct {
 // a command router.
 type CommandCatalogRegistrar struct {
 	RequiredCapabilities CommandCatalogCapabilities
-	Register             func(*CommandHandler, *core.CommandRouter)
+	Register             func(*CommandHandler, *legacycore.CommandRouter)
 }
 
 // DefaultCommandCatalogRegistrars preserves the legacy all-catalog behavior for
@@ -47,7 +47,7 @@ func DefaultCommandCatalogRegistrars() []CommandCatalogRegistrar {
 // RuntimeCommandCatalogRegistrar registers the runtime config slash command surface.
 func RuntimeCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
-		Register: func(ch *CommandHandler, router *core.CommandRouter) {
+		Register: func(ch *CommandHandler, router *legacycore.CommandRouter) {
 			runtime.NewRuntimeConfigCommands(ch.configManager).RegisterCommands(router)
 		},
 	}
@@ -56,7 +56,7 @@ func RuntimeCommandCatalogRegistrar() CommandCatalogRegistrar {
 // PartnerCommandCatalogRegistrar registers the partner slash command surface.
 func PartnerCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
-		Register: func(ch *CommandHandler, router *core.CommandRouter) {
+		Register: func(ch *CommandHandler, router *legacycore.CommandRouter) {
 			partnercmd.NewPartnerCommands(ch.configManager, ch.partnerService).RegisterCommands(router)
 		},
 	}
@@ -65,7 +65,7 @@ func PartnerCommandCatalogRegistrar() CommandCatalogRegistrar {
 // ModerationCommandCatalogRegistrar registers the moderation slash command surface.
 func ModerationCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
-		Register: func(ch *CommandHandler, router *core.CommandRouter) {
+		Register: func(ch *CommandHandler, router *legacycore.CommandRouter) {
 			moderation.RegisterModerationCommandsWithMetrics(router, ch.moderationMetrics)
 		},
 	}
@@ -74,7 +74,7 @@ func ModerationCommandCatalogRegistrar() CommandCatalogRegistrar {
 // RolesCommandCatalogRegistrar registers the roles slash command surface.
 func RolesCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
-		Register: func(ch *CommandHandler, router *core.CommandRouter) {
+		Register: func(ch *CommandHandler, router *legacycore.CommandRouter) {
 			rolescmd.NewRolePanelCommands(ch.configManager, ch.rolePanelService).RegisterCommands(router)
 		},
 	}
@@ -83,7 +83,7 @@ func RolesCommandCatalogRegistrar() CommandCatalogRegistrar {
 // EmbedsCommandCatalogRegistrar registers the embeds slash command surface.
 func EmbedsCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
-		Register: func(ch *CommandHandler, router *core.CommandRouter) {
+		Register: func(ch *CommandHandler, router *legacycore.CommandRouter) {
 			embedscmd.NewEmbedCommands(ch.configManager, ch.embedService).RegisterCommands(router)
 		},
 	}
@@ -92,7 +92,7 @@ func EmbedsCommandCatalogRegistrar() CommandCatalogRegistrar {
 // TicketsCommandCatalogRegistrar registers the tickets interaction routing surface.
 func TicketsCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
-		Register: func(ch *CommandHandler, router *core.CommandRouter) {
+		Register: func(ch *CommandHandler, router *legacycore.CommandRouter) {
 			if ch.ticketService != nil {
 				tickets_cmds.RegisterComponents(router, ch.ticketService)
 			}
@@ -103,7 +103,7 @@ func TicketsCommandCatalogRegistrar() CommandCatalogRegistrar {
 // QOTDCommandCatalogRegistrar registers the QOTD domain slash command surfaces.
 func QOTDCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
-		Register: func(ch *CommandHandler, router *core.CommandRouter) {
+		Register: func(ch *CommandHandler, router *legacycore.CommandRouter) {
 			qotdcmd.NewCommands(ch.qotdService).RegisterCommands(router)
 		},
 	}
@@ -115,7 +115,7 @@ func StatsCommandCatalogRegistrar() CommandCatalogRegistrar {
 		RequiredCapabilities: CommandCatalogCapabilities{
 			Stats: true,
 		},
-		Register: func(ch *CommandHandler, router *core.CommandRouter) {
+		Register: func(ch *CommandHandler, router *legacycore.CommandRouter) {
 			stats.NewStatsCommands(ch.configManager, ch.statsService, slog.Default()).RegisterCommands(ch.GetCommandManager().GetArikawaRouter())
 		},
 	}
@@ -124,7 +124,7 @@ func StatsCommandCatalogRegistrar() CommandCatalogRegistrar {
 // LoggingCommandCatalogRegistrar registers the logging slash command surface.
 func LoggingCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
-		Register: func(ch *CommandHandler, router *core.CommandRouter) {
+		Register: func(ch *CommandHandler, router *legacycore.CommandRouter) {
 			logging.NewLoggingCommands(ch.configManager).RegisterCommands(ch.GetCommandManager().GetArikawaRouter())
 		},
 	}

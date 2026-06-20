@@ -10,7 +10,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
@@ -37,7 +37,7 @@ func NewStatsCommands(configManager *files.ConfigManager, statsService StatsServ
 }
 
 // RegisterCommands registers the commands.
-func (c *StatsCommands) RegisterCommands(router *core.ArikawaCommandRouter) {
+func (c *StatsCommands) RegisterCommands(router *legacycore.ArikawaCommandRouter) {
 	if router == nil || c.configManager == nil {
 		return
 	}
@@ -121,7 +121,7 @@ func (c *statsRootCommand) Options() []discord.CommandOption {
 	}
 }
 
-func (c *statsRootCommand) Handle(ctx *core.ArikawaContext) error {
+func (c *statsRootCommand) Handle(ctx *legacycore.ArikawaContext) error {
 	data, ok := ctx.Interaction.Data.(*discord.CommandInteraction)
 	if !ok || len(data.Options) == 0 {
 		return nil
@@ -140,8 +140,8 @@ func (c *statsRootCommand) Handle(ctx *core.ArikawaContext) error {
 	return nil
 }
 
-func (c *statsRootCommand) handleAdd(ctx *core.ArikawaContext, opts []discord.CommandInteractionOption) error {
-	parsedOpts := core.ArikawaOptionList(opts)
+func (c *statsRootCommand) handleAdd(ctx *legacycore.ArikawaContext, opts []discord.CommandInteractionOption) error {
+	parsedOpts := legacycore.ArikawaOptionList(opts)
 	channelID := parsedOpts.ChannelID("channel")
 	if channelID == "" {
 		return fmt.Errorf("channel is required")
@@ -196,14 +196,14 @@ func (c *statsRootCommand) handleAdd(ctx *core.ArikawaContext, opts []discord.Co
 	})
 }
 
-func (c *statsRootCommand) handleRemove(ctx *core.ArikawaContext, opts []discord.CommandInteractionOption) error {
+func (c *statsRootCommand) handleRemove(ctx *legacycore.ArikawaContext, opts []discord.CommandInteractionOption) error {
 	cfg := ctx.GuildConfig
 	if len(cfg.Stats.Channels) == 0 {
-		ctx.Respond(core.NewArikawaMissingConfigErrorData(ctx.GuildID.String(), "Stats Channels", "/stats"))
-		return core.ErrAlreadyAcknowledged
+		ctx.Respond(legacycore.NewArikawaMissingConfigErrorData(ctx.GuildID.String(), "Stats Channels", "/stats"))
+		return legacycore.ErrAlreadyAcknowledged
 	}
 
-	parsedOpts := core.ArikawaOptionList(opts)
+	parsedOpts := legacycore.ArikawaOptionList(opts)
 	channelID := parsedOpts.ChannelID("channel")
 
 	if channelID == "" {
@@ -250,10 +250,10 @@ func (c *statsRootCommand) handleRemove(ctx *core.ArikawaContext, opts []discord
 	})
 }
 
-func (c *statsRootCommand) handleList(ctx *core.ArikawaContext) error {
+func (c *statsRootCommand) handleList(ctx *legacycore.ArikawaContext) error {
 	cfg := ctx.GuildConfig
 	if len(cfg.Stats.Channels) == 0 {
-		return ctx.Respond(core.NewArikawaMissingConfigErrorData(ctx.GuildID.String(), "Stats Channels", "/stats"))
+		return ctx.Respond(legacycore.NewArikawaMissingConfigErrorData(ctx.GuildID.String(), "Stats Channels", "/stats"))
 	}
 
 	var buf strings.Builder

@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	applicationqotd "github.com/small-frappuccino/discordcore/pkg/qotd"
@@ -84,12 +84,12 @@ func NewCommands(service QuestionCatalogService) *Commands {
 }
 
 // RegisterCommands registers commands.
-func (c *Commands) RegisterCommands(router *core.CommandRouter) {
+func (c *Commands) RegisterCommands(router *legacycore.CommandRouter) {
 	if router == nil || c == nil || c.service == nil {
 		return
 	}
 
-	checker := core.NewPermissionChecker(router.GetSession(), router.GetConfigManager())
+	checker := legacycore.NewPermissionChecker(router.GetSession(), router.GetConfigManager())
 	// The composed c.service satisfies both narrow roles; each command
 	// receives only the role it uses so the test surface stays minimal.
 	catalog := QuestionCatalog(c.service)
@@ -102,7 +102,7 @@ func (c *Commands) RegisterCommands(router *core.CommandRouter) {
 	skipCommand := &qotdSkipCommand{publishCoordinator: publisher}
 	recoverCommand := &questionsRecoverCommand{service: catalog}
 	removeCommand := &questionsRemoveCommand{service: catalog}
-	questionsGroup := core.NewGroupCommand(questionsGroupName, "Browse QOTD deck questions", checker)
+	questionsGroup := legacycore.NewGroupCommand(questionsGroupName, "Browse QOTD deck questions", checker)
 	questionsGroup.AddSubCommand(addCommand)
 	questionsGroup.AddSubCommand(listCommand)
 	questionsGroup.AddSubCommand(queueCommand)
@@ -110,28 +110,28 @@ func (c *Commands) RegisterCommands(router *core.CommandRouter) {
 	questionsGroup.AddSubCommand(recoverCommand)
 	questionsGroup.AddSubCommand(removeCommand)
 
-	var group *core.GroupCommand
+	var group *legacycore.GroupCommand
 	if existing, ok := router.GetRegistry().GetCommand(groupName); ok {
-		if existingGroup, ok := existing.(*core.GroupCommand); ok {
+		if existingGroup, ok := existing.(*legacycore.GroupCommand); ok {
 			group = existingGroup
 		}
 	}
 	if group == nil {
-		group = core.NewGroupCommand(groupName, "Manage QOTD decks and questions", checker)
+		group = legacycore.NewGroupCommand(groupName, "Manage QOTD decks and questions", checker)
 	}
 	group.AddSubCommand(publishCommand)
 	group.AddSubCommand(skipCommand)
 	group.AddSubCommand(questionsGroup)
 	router.RegisterSlashCommand(group)
 
-	handler := core.ComponentHandlerFunc(func(ctx *core.Context) error {
+	handler := legacycore.ComponentHandlerFunc(func(ctx *legacycore.Context) error {
 		return listCommand.HandleComponent(ctx)
 	})
 	router.RegisterInteractionRoutes(
-		core.InteractionRouteBinding{Path: questionsListRouteFirst, Component: handler},
-		core.InteractionRouteBinding{Path: questionsListRoutePrev, Component: handler},
-		core.InteractionRouteBinding{Path: questionsListRouteNext, Component: handler},
-		core.InteractionRouteBinding{Path: questionsListRouteLast, Component: handler},
+		legacycore.InteractionRouteBinding{Path: questionsListRouteFirst, Component: handler},
+		legacycore.InteractionRouteBinding{Path: questionsListRoutePrev, Component: handler},
+		legacycore.InteractionRouteBinding{Path: questionsListRouteNext, Component: handler},
+		legacycore.InteractionRouteBinding{Path: questionsListRouteLast, Component: handler},
 	)
 }
 
@@ -281,12 +281,12 @@ func (c *questionsAddCommand) RequiresGuild() bool { return true }
 func (c *questionsAddCommand) RequiresPermissions() bool { return true }
 
 // Handle handles.
-func (c *questionsAddCommand) Handle(ctx *core.Context) error {
+func (c *questionsAddCommand) Handle(ctx *legacycore.Context) error {
 	if err := requireQuestionsGuild(ctx); err != nil {
 		return fmt.Errorf("questionsAddCommand.Handle: %w", err)
 	}
 
-	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := legacycore.OptionList(legacycore.GetSubCommandOptions(ctx.Interaction))
 	body, err := extractor.StringRequired(questionsBodyOptionName)
 	if err != nil {
 		return fmt.Errorf("questionsAddCommand.Handle: %w", err)
@@ -304,7 +304,7 @@ func (c *questionsAddCommand) Handle(ctx *core.Context) error {
 		return translateQuestionsMutationError(err)
 	}
 
-	return core.NewResponseBuilder(ctx.Session).
+	return legacycore.NewResponseBuilder(ctx.Session).
 		Success(ctx.Interaction, fmt.Sprintf("Added QOTD question ID %d to deck `%s`.", visibleQuestionID(*created), deck.Name))
 }
 
@@ -405,12 +405,12 @@ func (c *questionsRecoverCommand) RequiresGuild() bool { return true }
 func (c *questionsRecoverCommand) RequiresPermissions() bool { return true }
 
 // Handle handles.
-func (c *questionsQueueCommand) Handle(ctx *core.Context) error {
+func (c *questionsQueueCommand) Handle(ctx *legacycore.Context) error {
 	if err := requireQuestionsGuild(ctx); err != nil {
 		return fmt.Errorf("questionsQueueCommand.Handle: %w", err)
 	}
 
-	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := legacycore.OptionList(legacycore.GetSubCommandOptions(ctx.Interaction))
 	deck, err := loadCommandDeck(ctx, c.catalog, extractor.String(questionsDeckOptionName))
 	if err != nil {
 		return fmt.Errorf("questionsQueueCommand.Handle: %w", err)
@@ -420,7 +420,7 @@ func (c *questionsQueueCommand) Handle(ctx *core.Context) error {
 		return translateQuestionsMutationError(err)
 	}
 
-	return core.NewResponseBuilder(ctx.Session).
+	return legacycore.NewResponseBuilder(ctx.Session).
 		Info(ctx.Interaction, formatAutomaticQueueState(state))
 }
 
@@ -452,12 +452,12 @@ func (c *qotdPublishCommand) RequiresPermissions() bool { return true }
 // 15-minute follow-up window. Without this, the synchronous Discord/DB calls
 // inside PublishNowWithParams routinely exceed the 3-second interaction
 // timeout, producing 10062 ("Unknown interaction") on success.
-func (c *qotdPublishCommand) InteractionAckPolicy() core.InteractionAckPolicy {
-	return core.InteractionAckPolicy{Mode: core.InteractionAckModeDefer}
+func (c *qotdPublishCommand) InteractionAckPolicy() legacycore.InteractionAckPolicy {
+	return legacycore.InteractionAckPolicy{Mode: legacycore.InteractionAckModeDefer}
 }
 
 // Handle handles.
-func (c *qotdPublishCommand) Handle(ctx *core.Context) error {
+func (c *qotdPublishCommand) Handle(ctx *legacycore.Context) error {
 	if err := requireQuestionsGuild(ctx); err != nil {
 		return fmt.Errorf("qotdPublishCommand.Handle: %w", err)
 	}
@@ -467,18 +467,18 @@ func (c *qotdPublishCommand) Handle(ctx *core.Context) error {
 		return fmt.Errorf("qotdPublishCommand.Handle: %w", err)
 	}
 	if !deck.Enabled {
-		return &core.CommandError{Message: "Enable QOTD publishing for the active deck before publishing manually.", Ephemeral: false}
+		return &legacycore.CommandError{Message: "Enable QOTD publishing for the active deck before publishing manually.", Ephemeral: false}
 	}
 	if strings.TrimSpace(deck.ChannelID) == "" {
-		return &core.CommandError{Message: "Set a QOTD channel for the active deck before publishing manually.", Ephemeral: false}
+		return &legacycore.CommandError{Message: "Set a QOTD channel for the active deck before publishing manually.", Ephemeral: false}
 	}
 	consumeAutomaticSlot := true
-	options := core.GetSubCommandOptions(ctx.Interaction)
+	options := legacycore.GetSubCommandOptions(ctx.Interaction)
 	for _, option := range options {
 		if option == nil || option.Name != publishConsumeAutomaticSlotOptionName {
 			continue
 		}
-		consumeAutomaticSlot = core.OptionList(options).Bool(publishConsumeAutomaticSlotOptionName)
+		consumeAutomaticSlot = legacycore.OptionList(options).Bool(publishConsumeAutomaticSlotOptionName)
 		break
 	}
 
@@ -496,7 +496,7 @@ func (c *qotdPublishCommand) Handle(ctx *core.Context) error {
 	if postURL := strings.TrimSpace(result.PostURL); postURL != "" {
 		message = fmt.Sprintf("%s %s", message, postURL)
 	}
-	return core.NewResponseBuilder(ctx.Session).
+	return legacycore.NewResponseBuilder(ctx.Session).
 		WithContext(ctx).
 		Success(ctx.Interaction, message)
 }
@@ -522,27 +522,27 @@ func (c *qotdSkipCommand) RequiresPermissions() bool { return true }
 
 // InteractionAckPolicy defers the slash response so the replacement flow has the
 // 15-minute follow-up window, identical to manual publishing.
-func (c *qotdSkipCommand) InteractionAckPolicy() core.InteractionAckPolicy {
-	return core.InteractionAckPolicy{Mode: core.InteractionAckModeDefer}
+func (c *qotdSkipCommand) InteractionAckPolicy() legacycore.InteractionAckPolicy {
+	return legacycore.InteractionAckPolicy{Mode: legacycore.InteractionAckModeDefer}
 }
 
 // Handle handles.
-func (c *qotdSkipCommand) Handle(ctx *core.Context) error {
+func (c *qotdSkipCommand) Handle(ctx *legacycore.Context) error {
 	if err := requireQuestionsGuild(ctx); err != nil {
 		return fmt.Errorf("qotdSkipCommand.Handle: %w", err)
 	}
 
 	if ctx.Interaction.Member == nil || (ctx.Interaction.Member.Permissions&discordgo.PermissionManageMessages) == 0 {
-		return &core.CommandError{Message: "You need the Manage Messages permission to skip QOTD questions.", Ephemeral: false}
+		return &legacycore.CommandError{Message: "You need the Manage Messages permission to skip QOTD questions.", Ephemeral: false}
 	}
 
 	result, err := c.publishCoordinator.ReplaceCurrentPublish(context.Background(), ctx.GuildID)
 	if err != nil {
 		if errors.Is(err, applicationqotd.ErrNoCurrentPublish) {
-			return &core.CommandError{Message: "There is no active QOTD question to skip.", Ephemeral: false}
+			return &legacycore.CommandError{Message: "There is no active QOTD question to skip.", Ephemeral: false}
 		}
 		if errors.Is(err, applicationqotd.ErrNoQuestionsAvailable) {
-			return &core.CommandError{Message: "There are no remaining questions in the active deck to publish instead.", Ephemeral: false}
+			return &legacycore.CommandError{Message: "There are no remaining questions in the active deck to publish instead.", Ephemeral: false}
 		}
 		return translatePublishNowError(err)
 	}
@@ -551,21 +551,21 @@ func (c *qotdSkipCommand) Handle(ctx *core.Context) error {
 	if postURL := strings.TrimSpace(result.PostURL); postURL != "" {
 		message = fmt.Sprintf("%s %s", message, postURL)
 	}
-	return core.NewResponseBuilder(ctx.Session).
+	return legacycore.NewResponseBuilder(ctx.Session).
 		WithContext(ctx).
 		Success(ctx.Interaction, message)
 }
 
 // Handle handles.
-func (c *questionsRemoveCommand) Handle(ctx *core.Context) error {
+func (c *questionsRemoveCommand) Handle(ctx *legacycore.Context) error {
 	if err := requireQuestionsGuild(ctx); err != nil {
 		return fmt.Errorf("questionsRemoveCommand.Handle: %w", err)
 	}
 
-	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := legacycore.OptionList(legacycore.GetSubCommandOptions(ctx.Interaction))
 	displayID := extractor.Int(questionsIDOptionName)
 	if displayID <= 0 {
-		return &core.CommandError{Message: "Question ID must be greater than zero.", Ephemeral: false}
+		return &legacycore.CommandError{Message: "Question ID must be greater than zero.", Ephemeral: false}
 	}
 	deck, err := loadCommandDeck(ctx, c.service, extractor.String(questionsDeckOptionName))
 	if err != nil {
@@ -584,20 +584,20 @@ func (c *questionsRemoveCommand) Handle(ctx *core.Context) error {
 		return translateQuestionsDeleteError(displayID, err)
 	}
 
-	return core.NewResponseBuilder(ctx.Session).
+	return legacycore.NewResponseBuilder(ctx.Session).
 		Success(ctx.Interaction, fmt.Sprintf("Removed QOTD question ID %d from deck `%s`.", displayID, deck.Name))
 }
 
 // Handle handles.
-func (c *questionsRecoverCommand) Handle(ctx *core.Context) error {
+func (c *questionsRecoverCommand) Handle(ctx *legacycore.Context) error {
 	if err := requireQuestionsGuild(ctx); err != nil {
 		return fmt.Errorf("questionsRecoverCommand.Handle: %w", err)
 	}
 
-	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := legacycore.OptionList(legacycore.GetSubCommandOptions(ctx.Interaction))
 	displayID := extractor.Int(questionsIDOptionName)
 	if displayID <= 0 {
-		return &core.CommandError{Message: "Question ID must be greater than zero.", Ephemeral: false}
+		return &legacycore.CommandError{Message: "Question ID must be greater than zero.", Ephemeral: false}
 	}
 	deck, err := loadCommandDeck(ctx, c.service, extractor.String(questionsDeckOptionName))
 	if err != nil {
@@ -620,24 +620,24 @@ func (c *questionsRecoverCommand) Handle(ctx *core.Context) error {
 		return translateQuestionsRecoverError(displayID, applicationqotd.ErrQuestionNotFound)
 	}
 	if visibleQuestionID(*updated) == displayID {
-		return core.NewResponseBuilder(ctx.Session).
+		return legacycore.NewResponseBuilder(ctx.Session).
 			Success(ctx.Interaction, fmt.Sprintf("Recovered QOTD question ID %d from used to ready in deck `%s`.", displayID, deck.Name))
 	}
 
-	return core.NewResponseBuilder(ctx.Session).
+	return legacycore.NewResponseBuilder(ctx.Session).
 		Success(ctx.Interaction, fmt.Sprintf("Recovered QOTD question ID %d from used to ready in deck `%s` and it is now listed as ID %d.", displayID, deck.Name, visibleQuestionID(*updated)))
 }
 
 // Handle handles.
-func (c *questionsMarkPublishedCommand) Handle(ctx *core.Context) error {
+func (c *questionsMarkPublishedCommand) Handle(ctx *legacycore.Context) error {
 	if err := requireQuestionsGuild(ctx); err != nil {
 		return fmt.Errorf("questionsMarkPublishedCommand.Handle: %w", err)
 	}
 
-	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := legacycore.OptionList(legacycore.GetSubCommandOptions(ctx.Interaction))
 	displayID := extractor.Int(questionsIDOptionName)
 	if displayID <= 0 {
-		return &core.CommandError{Message: "Question ID must be greater than zero.", Ephemeral: false}
+		return &legacycore.CommandError{Message: "Question ID must be greater than zero.", Ephemeral: false}
 	}
 	deck, err := loadCommandDeck(ctx, c.service, extractor.String(questionsDeckOptionName))
 	if err != nil {
@@ -660,17 +660,17 @@ func (c *questionsMarkPublishedCommand) Handle(ctx *core.Context) error {
 		return translateQuestionsMarkPublishedError(displayID, applicationqotd.ErrQuestionNotFound)
 	}
 
-	return core.NewResponseBuilder(ctx.Session).
+	return legacycore.NewResponseBuilder(ctx.Session).
 		Success(ctx.Interaction, fmt.Sprintf("Marked QOTD question ID %d as already published in deck `%s` without changing the day state.", displayID, deck.Name))
 }
 
 // Handle handles.
-func (c *questionsListCommand) Handle(ctx *core.Context) error {
+func (c *questionsListCommand) Handle(ctx *legacycore.Context) error {
 	if err := requireQuestionsGuild(ctx); err != nil {
 		return fmt.Errorf("questionsListCommand.Handle: %w", err)
 	}
 
-	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := legacycore.OptionList(legacycore.GetSubCommandOptions(ctx.Interaction))
 	requestedDeck := extractor.String(questionsDeckOptionName)
 	view, err := c.loadView(ctx, requestedDeck)
 	if err != nil {
@@ -690,21 +690,21 @@ func (c *questionsListCommand) Handle(ctx *core.Context) error {
 }
 
 // HandleComponent handles component.
-func (c *questionsListCommand) HandleComponent(ctx *core.Context) error {
+func (c *questionsListCommand) HandleComponent(ctx *legacycore.Context) error {
 	if ctx == nil || ctx.Interaction == nil {
 		return nil
 	}
 	action, state, err := parseQuestionsListState(ctx.RouteKey.CustomID)
 	if err != nil {
-		return core.NewResponseBuilder(ctx.Session).Ephemeral().Error(ctx.Interaction, "Invalid questions list action.")
+		return legacycore.NewResponseBuilder(ctx.Session).Ephemeral().Error(ctx.Interaction, "Invalid questions list action.")
 	}
 	if strings.TrimSpace(ctx.UserID) != state.UserID {
-		return core.NewResponseBuilder(ctx.Session).Ephemeral().Error(ctx.Interaction, questionsListDeniedText)
+		return legacycore.NewResponseBuilder(ctx.Session).Ephemeral().Error(ctx.Interaction, questionsListDeniedText)
 	}
 
 	view, err := c.loadView(ctx, state.DeckID)
 	if err != nil {
-		return core.NewResponseBuilder(ctx.Session).Ephemeral().Error(ctx.Interaction, err.Error())
+		return legacycore.NewResponseBuilder(ctx.Session).Ephemeral().Error(ctx.Interaction, err.Error())
 	}
 
 	totalPages := discordqotdBuildPageCount(len(view.questions))
@@ -721,7 +721,7 @@ type questionsListView struct {
 	questions []storage.QOTDQuestionRecord
 }
 
-func (c *questionsListCommand) loadView(ctx *core.Context, requestedDeck string) (questionsListView, error) {
+func (c *questionsListCommand) loadView(ctx *legacycore.Context, requestedDeck string) (questionsListView, error) {
 	deck, err := loadCommandDeck(ctx, c.service, requestedDeck)
 	if err != nil {
 		return questionsListView{}, fmt.Errorf("questionsListCommand.loadView: %w", err)
@@ -733,12 +733,12 @@ func (c *questionsListCommand) loadView(ctx *core.Context, requestedDeck string)
 	return questionsListView{deck: deck, questions: questions}, nil
 }
 
-func requireQuestionsGuild(ctx *core.Context) error {
+func requireQuestionsGuild(ctx *legacycore.Context) error {
 	if ctx == nil || ctx.Interaction == nil {
 		return nil
 	}
 	if strings.TrimSpace(ctx.GuildID) == "" {
-		return &core.CommandError{Message: questionsListMissingGuild, Ephemeral: false}
+		return &legacycore.CommandError{Message: questionsListMissingGuild, Ephemeral: false}
 	}
 	return nil
 }
@@ -746,7 +746,7 @@ func requireQuestionsGuild(ctx *core.Context) error {
 // loadCommandDeck only needs Settings(), so it takes the narrow catalog
 // role. Both PublishCoordinator-only and QuestionCatalog-only command
 // structs can pass their dependency in without widening to the union.
-func loadCommandDeck(ctx *core.Context, catalog QuestionCatalog, requestedDeck string) (files.QOTDDeckConfig, error) {
+func loadCommandDeck(ctx *legacycore.Context, catalog QuestionCatalog, requestedDeck string) (files.QOTDDeckConfig, error) {
 	settings, err := catalog.Settings(ctx.GuildID)
 	if err != nil {
 		return files.QOTDDeckConfig{}, fmt.Errorf("loadCommandDeck: %w", err)
@@ -761,7 +761,7 @@ func resolveDeck(settings files.QOTDConfig, requestedDeck string) (files.QOTDDec
 		if deck, ok := settings.ActiveDeck(); ok {
 			return deck, nil
 		}
-		return files.QOTDDeckConfig{}, &core.CommandError{Message: questionsListUnknownDeck, Ephemeral: false}
+		return files.QOTDDeckConfig{}, &legacycore.CommandError{Message: questionsListUnknownDeck, Ephemeral: false}
 	}
 
 	if deck, ok := settings.DeckByID(requestedDeck); ok {
@@ -772,11 +772,11 @@ func resolveDeck(settings files.QOTDConfig, requestedDeck string) (files.QOTDDec
 			return deck, nil
 		}
 	}
-	return files.QOTDDeckConfig{}, &core.CommandError{Message: fmt.Sprintf("%s: %s", questionsListUnknownDeck, requestedDeck), Ephemeral: false}
+	return files.QOTDDeckConfig{}, &legacycore.CommandError{Message: fmt.Sprintf("%s: %s", questionsListUnknownDeck, requestedDeck), Ephemeral: false}
 }
 
 func respondQuestionsList(
-	ctx *core.Context,
+	ctx *legacycore.Context,
 	view questionsListView,
 	state questionsListState,
 	ephemeral bool,
@@ -809,14 +809,14 @@ func buildQuestionsListComponents(state questionsListState, totalPages int) []di
 }
 
 func sendQuestionsListResponse(
-	ctx *core.Context,
+	ctx *legacycore.Context,
 	embed *discordgo.MessageEmbed,
 	components []discordgo.MessageComponent,
 	ephemeral bool,
 	initial bool,
 ) error {
 	if initial {
-		builder := core.NewResponseBuilder(ctx.Session).WithComponents(components...)
+		builder := legacycore.NewResponseBuilder(ctx.Session).WithComponents(components...)
 		if ephemeral {
 			builder = builder.Ephemeral()
 		}
@@ -918,7 +918,7 @@ func (c *questionsListCommand) currentQuestionsListMessageEditor() questionsList
 	return editQuestionsListMessageComponents
 }
 
-func (c *questionsListCommand) armQuestionsListIdleTimeoutForOriginalResponse(ctx *core.Context) {
+func (c *questionsListCommand) armQuestionsListIdleTimeoutForOriginalResponse(ctx *legacycore.Context) {
 	if c == nil || ctx == nil || ctx.Session == nil || ctx.Interaction == nil || ctx.Interaction.Interaction == nil {
 		return
 	}
@@ -929,7 +929,7 @@ func (c *questionsListCommand) armQuestionsListIdleTimeoutForOriginalResponse(ct
 	c.armQuestionsListIdleTimeout(ctx.Session, message.ChannelID, message.ID)
 }
 
-func (c *questionsListCommand) armQuestionsListIdleTimeoutForMessage(ctx *core.Context) {
+func (c *questionsListCommand) armQuestionsListIdleTimeoutForMessage(ctx *legacycore.Context) {
 	if c == nil || ctx == nil || ctx.Session == nil || ctx.Interaction == nil || ctx.Interaction.Message == nil {
 		return
 	}
@@ -1113,7 +1113,7 @@ func translateQuestionsMutationError(err error) error {
 		if message == "" {
 			message = "Invalid QOTD question input"
 		}
-		return &core.CommandError{Message: message, Ephemeral: false}
+		return &legacycore.CommandError{Message: message, Ephemeral: false}
 	}
 	return err
 }
@@ -1123,10 +1123,10 @@ func translateQuestionsDeleteError(questionID int64, err error) error {
 		return nil
 	}
 	if errors.Is(err, applicationqotd.ErrQuestionNotFound) {
-		return &core.CommandError{Message: fmt.Sprintf("QOTD question ID %d was not found.", questionID), Ephemeral: false}
+		return &legacycore.CommandError{Message: fmt.Sprintf("QOTD question ID %d was not found.", questionID), Ephemeral: false}
 	}
 	if errors.Is(err, applicationqotd.ErrImmutableQuestion) {
-		return &core.CommandError{Message: fmt.Sprintf("QOTD question ID %d is already scheduled or used and cannot be removed.", questionID), Ephemeral: false}
+		return &legacycore.CommandError{Message: fmt.Sprintf("QOTD question ID %d is already scheduled or used and cannot be removed.", questionID), Ephemeral: false}
 	}
 	return translateQuestionsMutationError(err)
 }
@@ -1136,10 +1136,10 @@ func translateQuestionsRecoverError(questionID int64, err error) error {
 		return nil
 	}
 	if errors.Is(err, applicationqotd.ErrQuestionNotFound) {
-		return &core.CommandError{Message: fmt.Sprintf("QOTD question ID %d was not found.", questionID), Ephemeral: false}
+		return &legacycore.CommandError{Message: fmt.Sprintf("QOTD question ID %d was not found.", questionID), Ephemeral: false}
 	}
 	if errors.Is(err, applicationqotd.ErrQuestionNotUsed) {
-		return &core.CommandError{Message: fmt.Sprintf("QOTD question ID %d is not used and cannot be recovered.", questionID), Ephemeral: false}
+		return &legacycore.CommandError{Message: fmt.Sprintf("QOTD question ID %d is not used and cannot be recovered.", questionID), Ephemeral: false}
 	}
 	return translateQuestionsMutationError(err)
 }
@@ -1149,13 +1149,13 @@ func translateQuestionsMarkPublishedError(questionID int64, err error) error {
 		return nil
 	}
 	if errors.Is(err, applicationqotd.ErrQuestionNotFound) {
-		return &core.CommandError{Message: fmt.Sprintf("QOTD question ID %d was not found.", questionID), Ephemeral: false}
+		return &legacycore.CommandError{Message: fmt.Sprintf("QOTD question ID %d was not found.", questionID), Ephemeral: false}
 	}
 	if errors.Is(err, applicationqotd.ErrImmutableQuestion) {
-		return &core.CommandError{Message: fmt.Sprintf("QOTD question ID %d is already scheduled or published and cannot be marked manually.", questionID), Ephemeral: false}
+		return &legacycore.CommandError{Message: fmt.Sprintf("QOTD question ID %d is already scheduled or published and cannot be marked manually.", questionID), Ephemeral: false}
 	}
 	if errors.Is(err, applicationqotd.ErrQuestionNotReady) {
-		return &core.CommandError{Message: fmt.Sprintf("QOTD question ID %d must be ready before it can be marked as published.", questionID), Ephemeral: false}
+		return &legacycore.CommandError{Message: fmt.Sprintf("QOTD question ID %d must be ready before it can be marked as published.", questionID), Ephemeral: false}
 	}
 	return translateQuestionsMutationError(err)
 }
@@ -1165,29 +1165,29 @@ func translatePublishNowError(err error) error {
 		return nil
 	}
 	if errors.Is(err, applicationqotd.ErrAlreadyPublished) {
-		return &core.CommandError{Message: "A QOTD question has already been published for the current slot.", Ephemeral: false}
+		return &legacycore.CommandError{Message: "A QOTD question has already been published for the current slot.", Ephemeral: false}
 	}
 	if errors.Is(err, applicationqotd.ErrPublishInProgress) {
-		return &core.CommandError{Message: "A QOTD publish is already in progress for the current slot.", Ephemeral: false}
+		return &legacycore.CommandError{Message: "A QOTD publish is already in progress for the current slot.", Ephemeral: false}
 	}
 	if errors.Is(err, applicationqotd.ErrNoQuestionsAvailable) {
-		return &core.CommandError{Message: "No ready QOTD questions are available in the active deck.", Ephemeral: false}
+		return &legacycore.CommandError{Message: "No ready QOTD questions are available in the active deck.", Ephemeral: false}
 	}
 	if errors.Is(err, applicationqotd.ErrQOTDDisabled) {
-		return &core.CommandError{Message: "Enable QOTD publishing and set a channel before publishing manually.", Ephemeral: false}
+		return &legacycore.CommandError{Message: "Enable QOTD publishing and set a channel before publishing manually.", Ephemeral: false}
 	}
 	if errors.Is(err, applicationqotd.ErrDiscordUnavailable) {
-		return &core.CommandError{Message: "Discord session unavailable for manual publish.", Ephemeral: false}
+		return &legacycore.CommandError{Message: "Discord session unavailable for manual publish.", Ephemeral: false}
 	}
 	return err
 }
 
-var _ core.Command = (*questionsAddCommand)(nil)
-var _ core.Command = (*questionsListCommand)(nil)
-var _ core.Command = (*questionsQueueCommand)(nil)
-var _ core.Command = (*questionsMarkPublishedCommand)(nil)
-var _ core.Command = (*questionsRecoverCommand)(nil)
-var _ core.Command = (*questionsRemoveCommand)(nil)
-var _ core.Command = (*qotdPublishCommand)(nil)
+var _ legacycore.Command = (*questionsAddCommand)(nil)
+var _ legacycore.Command = (*questionsListCommand)(nil)
+var _ legacycore.Command = (*questionsQueueCommand)(nil)
+var _ legacycore.Command = (*questionsMarkPublishedCommand)(nil)
+var _ legacycore.Command = (*questionsRecoverCommand)(nil)
+var _ legacycore.Command = (*questionsRemoveCommand)(nil)
+var _ legacycore.Command = (*qotdPublishCommand)(nil)
 
 var _ QuestionCatalogService = (*applicationqotd.Service)(nil)

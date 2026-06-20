@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordgo"
 )
@@ -42,7 +42,7 @@ func TestRegisterCommands_RuntimeComponentRejectsExpiredPanel(t *testing.T) {
 		t.Fatalf("failed to load config manager: %v", err)
 	}
 
-	router := core.NewCommandRouter(session, cm)
+	router := legacycore.NewCommandRouter(session, cm)
 	NewRuntimeConfigCommands(cm).RegisterCommands(router)
 
 	interaction := newRuntimeComponentInteraction(cidButtonMain + stateSep + panelState{
@@ -80,7 +80,7 @@ func TestRegisterCommands_RuntimeModalRejectsExpiredState(t *testing.T) {
 		t.Fatalf("failed to load config manager: %v", err)
 	}
 
-	router := core.NewCommandRouter(session, cm)
+	router := legacycore.NewCommandRouter(session, cm)
 	NewRuntimeConfigCommands(cm).RegisterCommands(router)
 
 	st := panelState{

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordgo"
@@ -44,7 +44,7 @@ func TestRegisterModerationCommandsRegistersTopLevel(t *testing.T) {
 	t.Parallel()
 
 	session := &discordgo.Session{State: discordgo.NewState()}
-	router := core.NewCommandRouter(session, files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil))
+	router := legacycore.NewCommandRouter(session, files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil))
 
 	RegisterModerationCommands(router)
 
@@ -62,7 +62,7 @@ func TestRegisterModerationCommandsRegistersTopLevel(t *testing.T) {
 
 // TestModerationCommandsDeclareDefaultMemberPermissions makes the Discord-level
 // permission floor a registration invariant: every registered moderation
-// command must implement core.DefaultMemberPermissionsProvider with a
+// command must implement legacycore.DefaultMemberPermissionsProvider with a
 // non-zero value, so adding a new moderation command without declaring a
 // floor is a test failure rather than a silent regression to "any member
 // can invoke and the bot rejects later."
@@ -70,14 +70,14 @@ func TestModerationCommandsDeclareDefaultMemberPermissions(t *testing.T) {
 	t.Parallel()
 
 	session := &discordgo.Session{State: discordgo.NewState()}
-	router := core.NewCommandRouter(session, files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil))
+	router := legacycore.NewCommandRouter(session, files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil))
 
 	RegisterModerationCommands(router)
 
 	for name, cmd := range router.GetRegistry().GetAllCommands() {
-		provider, ok := cmd.(core.DefaultMemberPermissionsProvider)
+		provider, ok := cmd.(legacycore.DefaultMemberPermissionsProvider)
 		if !ok {
-			t.Errorf("moderation command %q must implement core.DefaultMemberPermissionsProvider", name)
+			t.Errorf("moderation command %q must implement legacycore.DefaultMemberPermissionsProvider", name)
 			continue
 		}
 		if perms := provider.DefaultMemberPermissions(); perms == 0 {
@@ -102,16 +102,16 @@ func TestBanCommandHandleRejectsWhenFeatureDisabled(t *testing.T) {
 		t.Fatalf("AddGuildConfig: %v", err)
 	}
 
-	err := newBanCommand().Handle(&core.Context{
+	err := newBanCommand().Handle(&legacycore.Context{
 		Config:  cm,
 		GuildID: guildID,
 	})
 	if err == nil {
 		t.Fatal("expected ban command to be rejected")
 	}
-	cmdErr, ok := err.(*core.CommandError)
+	cmdErr, ok := err.(*legacycore.CommandError)
 	if !ok {
-		t.Fatalf("expected *core.CommandError, got %T", err)
+		t.Fatalf("expected *legacycore.CommandError, got %T", err)
 	}
 	if cmdErr.Message != "The **Moderation Ban** feature has not been fully configured on the dashboard. Please configure it to use this command." {
 		t.Fatalf("unexpected error message: %q", cmdErr.Message)
@@ -139,7 +139,7 @@ func TestSendModerationLogNoChannel(t *testing.T) {
 	session := &discordgo.Session{State: discordgo.NewState()}
 	session.State.User = &discordgo.User{ID: botID}
 
-	ctx := &core.Context{
+	ctx := &legacycore.Context{
 		Session: session,
 		Config:  cm,
 		GuildID: guildID,
@@ -257,7 +257,7 @@ func TestResolveConfiguredMuteRole(t *testing.T) {
 		t.Fatalf("AddGuildConfig: %v", err)
 	}
 
-	ctx := &core.Context{
+	ctx := &legacycore.Context{
 		Config:  cm,
 		GuildID: guildID,
 		UserID:  "moderator",

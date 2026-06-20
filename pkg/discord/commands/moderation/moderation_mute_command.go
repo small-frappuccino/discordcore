@@ -3,7 +3,7 @@ package moderation
 import (
 	"fmt"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -45,17 +45,17 @@ func (c *muteCommand) RequiresPermissions() bool { return true }
 func (c *muteCommand) DefaultMemberPermissions() int64 { return discordgo.PermissionManageRoles }
 
 // Handle handles.
-func (c *muteCommand) Handle(ctx *core.Context) error {
-	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
+func (c *muteCommand) Handle(ctx *legacycore.Context) error {
+	extractor := legacycore.OptionList(legacycore.GetSubCommandOptions(ctx.Interaction))
 
 	rawUserID, err := extractor.StringRequired("user")
 	if err != nil {
-		return &core.CommandError{Message: err.Error(), Ephemeral: true}
+		return &legacycore.CommandError{Message: err.Error(), Ephemeral: true}
 	}
 
 	userID, ok := normalizeUserID(rawUserID)
 	if !ok {
-		return &core.CommandError{Message: "Invalid user ID or mention.", Ephemeral: true}
+		return &legacycore.CommandError{Message: "Invalid user ID or mention.", Ephemeral: true}
 	}
 
 	reason, truncated := sanitizeReason(extractor.String("reason"))
@@ -71,20 +71,20 @@ func (c *muteCommand) Handle(ctx *core.Context) error {
 	}
 
 	if ok, reasonText := canMuteTarget(ctx, muteCtx, userID); !ok {
-		return &core.CommandError{Message: fmt.Sprintf("Cannot mute `%s`: %s.", userID, reasonText), Ephemeral: true}
+		return &legacycore.CommandError{Message: fmt.Sprintf("Cannot mute `%s`: %s.", userID, reasonText), Ephemeral: true}
 	}
 
 	targetMember, ok, reasonText := resolveRoleTargetMember(ctx, userID)
 	if !ok {
-		return &core.CommandError{Message: fmt.Sprintf("Cannot mute `%s`: %s.", userID, reasonText), Ephemeral: true}
+		return &legacycore.CommandError{Message: fmt.Sprintf("Cannot mute `%s`: %s.", userID, reasonText), Ephemeral: true}
 	}
 	if memberHasRole(targetMember, roleID) {
-		return &core.CommandError{Message: fmt.Sprintf("Cannot mute `%s`: target already has the configured mute role.", userID), Ephemeral: true}
+		return &legacycore.CommandError{Message: fmt.Sprintf("Cannot mute `%s`: target already has the configured mute role.", userID), Ephemeral: true}
 	}
 
 	targetUsername := resolveUserDisplayName(ctx, userID)
 	if err := ctx.Session.GuildMemberRoleAdd(ctx.GuildID, userID, roleID); err != nil {
-		return &core.CommandError{Message: fmt.Sprintf("Failed to mute user %s: %v", userID, err), Ephemeral: true}
+		return &legacycore.CommandError{Message: fmt.Sprintf("Failed to mute user %s: %v", userID, err), Ephemeral: true}
 	}
 
 	details := fmt.Sprintf("Role applied: %s (`%s`)", formatRoleDisplayName(muteRole), roleID)
@@ -100,5 +100,5 @@ func (c *muteCommand) Handle(ctx *core.Context) error {
 		Extra:       details,
 	})
 
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, buildMuteCommandMessage(targetUsername, muteRole, reason, truncated))
+	return legacycore.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, buildMuteCommandMessage(targetUsername, muteRole, reason, truncated))
 }

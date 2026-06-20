@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/logging"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
@@ -166,7 +166,7 @@ func formatTimeoutDuration(minutes int64) string {
 	}
 }
 
-func permissionCheckerForContext(ctx *core.Context) *core.PermissionChecker {
+func permissionCheckerForContext(ctx *legacycore.Context) *legacycore.PermissionChecker {
 	if ctx == nil {
 		return nil
 	}
@@ -175,14 +175,14 @@ func permissionCheckerForContext(ctx *core.Context) *core.PermissionChecker {
 			return checker
 		}
 
-		checker := core.NewPermissionChecker(ctx.Session, ctx.Config)
+		checker := legacycore.NewPermissionChecker(ctx.Session, ctx.Config)
 		if store := router.GetStore(); store != nil {
 			checker.SetStore(store)
 		}
 		return checker
 	}
 
-	return core.NewPermissionChecker(ctx.Session, ctx.Config)
+	return legacycore.NewPermissionChecker(ctx.Session, ctx.Config)
 }
 
 type banContext struct {
@@ -234,7 +234,7 @@ func isLikelySnowflake(value string) bool {
 	return true
 }
 
-func prepareBanContext(ctx *core.Context) (*banContext, error) {
+func prepareBanContext(ctx *legacycore.Context) (*banContext, error) {
 	return prepareModerationContext(
 		ctx,
 		discordgo.PermissionBanMembers,
@@ -243,7 +243,7 @@ func prepareBanContext(ctx *core.Context) (*banContext, error) {
 	)
 }
 
-func prepareKickContext(ctx *core.Context) (*banContext, error) {
+func prepareKickContext(ctx *legacycore.Context) (*banContext, error) {
 	return prepareModerationContext(
 		ctx,
 		discordgo.PermissionKickMembers,
@@ -252,7 +252,7 @@ func prepareKickContext(ctx *core.Context) (*banContext, error) {
 	)
 }
 
-func prepareTimeoutContext(ctx *core.Context) (*banContext, error) {
+func prepareTimeoutContext(ctx *legacycore.Context) (*banContext, error) {
 	return prepareModerationContext(
 		ctx,
 		discordgo.PermissionModerateMembers,
@@ -261,7 +261,7 @@ func prepareTimeoutContext(ctx *core.Context) (*banContext, error) {
 	)
 }
 
-func prepareMuteContext(ctx *core.Context) (*banContext, error) {
+func prepareMuteContext(ctx *legacycore.Context) (*banContext, error) {
 	return prepareModerationContext(
 		ctx,
 		discordgo.PermissionManageRoles,
@@ -270,7 +270,7 @@ func prepareMuteContext(ctx *core.Context) (*banContext, error) {
 	)
 }
 
-func prepareWarnContext(ctx *core.Context) (*banContext, error) {
+func prepareWarnContext(ctx *legacycore.Context) (*banContext, error) {
 	return prepareModerationContext(
 		ctx,
 		discordgo.PermissionModerateMembers,
@@ -279,14 +279,14 @@ func prepareWarnContext(ctx *core.Context) (*banContext, error) {
 	)
 }
 
-func prepareModerationContext(ctx *core.Context, requiredPermission int64, actorPermissionError, botPermissionError string) (*banContext, error) {
+func prepareModerationContext(ctx *legacycore.Context, requiredPermission int64, actorPermissionError, botPermissionError string) (*banContext, error) {
 	if ctx == nil || ctx.Session == nil {
-		return nil, &core.CommandError{Message: "Session not ready. Try again shortly.", Ephemeral: true}
+		return nil, &legacycore.CommandError{Message: "Session not ready. Try again shortly.", Ephemeral: true}
 	}
 
 	checker := permissionCheckerForContext(ctx)
 	if checker == nil {
-		return nil, &core.CommandError{Message: "Permission resolver not available.", Ephemeral: true}
+		return nil, &legacycore.CommandError{Message: "Permission resolver not available.", Ephemeral: true}
 	}
 
 	roles, err := checker.ResolveRoles(ctx.GuildID)
@@ -298,7 +298,7 @@ func prepareModerationContext(ctx *core.Context, requiredPermission int64, actor
 			"userID", ctx.UserID,
 			"err", err,
 		)
-		return nil, &core.CommandError{Message: "Failed to resolve server roles.", Ephemeral: true}
+		return nil, &legacycore.CommandError{Message: "Failed to resolve server roles.", Ephemeral: true}
 	}
 	rolesByID := buildRoleIndex(roles)
 
@@ -307,7 +307,7 @@ func prepareModerationContext(ctx *core.Context, requiredPermission int64, actor
 		botID = ctx.Session.State.User.ID
 	}
 	if botID == "" {
-		return nil, &core.CommandError{Message: "Bot identity not available.", Ephemeral: true}
+		return nil, &legacycore.CommandError{Message: "Bot identity not available.", Ephemeral: true}
 	}
 
 	var actorMember *discordgo.Member
@@ -325,10 +325,10 @@ func prepareModerationContext(ctx *core.Context, requiredPermission int64, actor
 				"userID", ctx.UserID,
 				"err", err,
 			)
-			return nil, &core.CommandError{Message: "Unable to resolve your member record.", Ephemeral: true}
+			return nil, &legacycore.CommandError{Message: "Unable to resolve your member record.", Ephemeral: true}
 		}
 		if !ok || actorMember == nil {
-			return nil, &core.CommandError{Message: "Unable to resolve your member record.", Ephemeral: true}
+			return nil, &legacycore.CommandError{Message: "Unable to resolve your member record.", Ephemeral: true}
 		}
 	}
 
@@ -341,17 +341,17 @@ func prepareModerationContext(ctx *core.Context, requiredPermission int64, actor
 			"botID", botID,
 			"err", err,
 		)
-		return nil, &core.CommandError{Message: "Unable to resolve the bot member record.", Ephemeral: true}
+		return nil, &legacycore.CommandError{Message: "Unable to resolve the bot member record.", Ephemeral: true}
 	}
 	if !ok || botMember == nil {
-		return nil, &core.CommandError{Message: "Unable to resolve the bot member record.", Ephemeral: true}
+		return nil, &legacycore.CommandError{Message: "Unable to resolve the bot member record.", Ephemeral: true}
 	}
 
 	if !memberHasPermission(actorMember, rolesByID, ctx.GuildID, requiredPermission) {
-		return nil, &core.CommandError{Message: actorPermissionError, Ephemeral: true}
+		return nil, &legacycore.CommandError{Message: actorPermissionError, Ephemeral: true}
 	}
 	if !memberHasPermission(botMember, rolesByID, ctx.GuildID, requiredPermission) {
-		return nil, &core.CommandError{Message: botPermissionError, Ephemeral: true}
+		return nil, &legacycore.CommandError{Message: botPermissionError, Ephemeral: true}
 	}
 
 	return &banContext{
@@ -364,27 +364,27 @@ func prepareModerationContext(ctx *core.Context, requiredPermission int64, actor
 	}, nil
 }
 
-func canBanTarget(ctx *core.Context, banCtx *banContext, targetID string) (bool, string) {
+func canBanTarget(ctx *legacycore.Context, banCtx *banContext, targetID string) (bool, string) {
 	return canModerateTarget(ctx, banCtx, targetID, "ban", false)
 }
 
-func canKickTarget(ctx *core.Context, actionCtx *banContext, targetID string) (bool, string) {
+func canKickTarget(ctx *legacycore.Context, actionCtx *banContext, targetID string) (bool, string) {
 	return canModerateTarget(ctx, actionCtx, targetID, "kick", true)
 }
 
-func canTimeoutTarget(ctx *core.Context, actionCtx *banContext, targetID string) (bool, string) {
+func canTimeoutTarget(ctx *legacycore.Context, actionCtx *banContext, targetID string) (bool, string) {
 	return canModerateTarget(ctx, actionCtx, targetID, "timeout", true)
 }
 
-func canMuteTarget(ctx *core.Context, actionCtx *banContext, targetID string) (bool, string) {
+func canMuteTarget(ctx *legacycore.Context, actionCtx *banContext, targetID string) (bool, string) {
 	return canModerateTarget(ctx, actionCtx, targetID, "mute", true)
 }
 
-func canWarnTarget(ctx *core.Context, actionCtx *banContext, targetID string) (bool, string) {
+func canWarnTarget(ctx *legacycore.Context, actionCtx *banContext, targetID string) (bool, string) {
 	return canModerateTarget(ctx, actionCtx, targetID, "warn", true)
 }
 
-func canModerateTarget(ctx *core.Context, actionCtx *banContext, targetID, actionVerb string, requireMember bool) (bool, string) {
+func canModerateTarget(ctx *legacycore.Context, actionCtx *banContext, targetID, actionVerb string, requireMember bool) (bool, string) {
 	if targetID == ctx.UserID {
 		return false, "cannot " + actionVerb + " yourself"
 	}
@@ -432,16 +432,16 @@ func canModerateTarget(ctx *core.Context, actionCtx *banContext, targetID, actio
 	return true, ""
 }
 
-func resolveConfiguredMuteRole(ctx *core.Context, actionCtx *banContext) (*discordgo.Role, string, error) {
+func resolveConfiguredMuteRole(ctx *legacycore.Context, actionCtx *banContext) (*discordgo.Role, string, error) {
 	if ctx == nil || ctx.Config == nil {
-		return nil, "", &core.CommandError{Message: "Configuration is not available right now.", Ephemeral: true}
+		return nil, "", &legacycore.CommandError{Message: "Configuration is not available right now.", Ephemeral: true}
 	}
 	cfg := ctx.Config.Config()
 	if cfg == nil {
-		return nil, "", &core.CommandError{Message: "Configuration is not available right now.", Ephemeral: true}
+		return nil, "", &legacycore.CommandError{Message: "Configuration is not available right now.", Ephemeral: true}
 	}
 	if !cfg.ResolveFeatures(ctx.GuildID).MuteRole {
-		return nil, "", &core.CommandError{Message: "Mute role moderation is disabled for this server.", Ephemeral: true}
+		return nil, "", &legacycore.CommandError{Message: "Mute role moderation is disabled for this server.", Ephemeral: true}
 	}
 
 	roleID := ""
@@ -457,29 +457,29 @@ func resolveConfiguredMuteRole(ctx *core.Context, actionCtx *banContext) (*disco
 		}
 	}
 	if roleID == "" {
-		return nil, "", core.NewMissingConfigError(ctx.GuildID, "Mute Role", "/roles")
+		return nil, "", legacycore.NewMissingConfigError(ctx.GuildID, "Mute Role", "/roles")
 	}
 	if actionCtx == nil {
-		return nil, roleID, &core.CommandError{Message: "Mute role context is not available right now.", Ephemeral: true}
+		return nil, roleID, &legacycore.CommandError{Message: "Mute role context is not available right now.", Ephemeral: true}
 	}
 
 	role, ok := actionCtx.rolesByID[roleID]
 	if !ok || role == nil {
-		return nil, roleID, &core.CommandError{Message: "Configured mute role is no longer available in this server.", Ephemeral: true}
+		return nil, roleID, &legacycore.CommandError{Message: "Configured mute role is no longer available in this server.", Ephemeral: true}
 	}
 	if role.Managed {
-		return nil, roleID, &core.CommandError{Message: "Configured mute role is managed by an integration and cannot be assigned manually.", Ephemeral: true}
+		return nil, roleID, &legacycore.CommandError{Message: "Configured mute role is managed by an integration and cannot be assigned manually.", Ephemeral: true}
 	}
 	if actionCtx.actorRolePos <= role.Position {
-		return nil, roleID, &core.CommandError{Message: "Your highest role must stay above the configured mute role.", Ephemeral: true}
+		return nil, roleID, &legacycore.CommandError{Message: "Your highest role must stay above the configured mute role.", Ephemeral: true}
 	}
 	if actionCtx.botRolePos <= role.Position {
-		return nil, roleID, &core.CommandError{Message: "My highest role must stay above the configured mute role.", Ephemeral: true}
+		return nil, roleID, &legacycore.CommandError{Message: "My highest role must stay above the configured mute role.", Ephemeral: true}
 	}
 	return role, roleID, nil
 }
 
-func resolveRoleTargetMember(ctx *core.Context, targetID string) (*discordgo.Member, bool, string) {
+func resolveRoleTargetMember(ctx *legacycore.Context, targetID string) (*discordgo.Member, bool, string) {
 	checker := permissionCheckerForContext(ctx)
 	if checker == nil {
 		return nil, false, "target member could not be resolved right now"
@@ -538,7 +538,7 @@ func buildRoleIndex(roles []*discordgo.Role) map[string]*discordgo.Role {
 	return byID
 }
 
-func resolveUserDisplayName(ctx *core.Context, userID string) string {
+func resolveUserDisplayName(ctx *legacycore.Context, userID string) string {
 	if ctx == nil || ctx.Session == nil || userID == "" {
 		return userID
 	}
@@ -634,7 +634,7 @@ func buildMassBanLogDetails(total, banned int, invalid, skipped, failed []string
 	return strings.Join(parts, " | ")
 }
 
-func nextGuildCaseNumber(ctx *core.Context) (int64, bool) {
+func nextGuildCaseNumber(ctx *legacycore.Context) (int64, bool) {
 	if ctx == nil || ctx.GuildID == "" {
 		return 0, false
 	}
@@ -655,7 +655,7 @@ func nextGuildCaseNumber(ctx *core.Context) (int64, bool) {
 	return n, true
 }
 
-func moderationStoreFromContext(ctx *core.Context) *storage.Store {
+func moderationStoreFromContext(ctx *legacycore.Context) *storage.Store {
 	if ctx == nil {
 		return nil
 	}
@@ -684,7 +684,7 @@ func buildModerationCaseTitle(caseNumber int64, hasCaseNumber bool, actionType s
 	}
 	return actionType + " | case " + casePart
 }
-func sendModerationLog(ctx *core.Context, payload moderationLogPayload) {
+func sendModerationLog(ctx *legacycore.Context, payload moderationLogPayload) {
 	sendModerationLogForEvent(ctx, payload, logging.LogEventModerationCase)
 }
 
@@ -714,7 +714,7 @@ type moderationEventEmit struct {
 // guild has the event type disabled. When enabled, returns the resolved
 // channel ID and any send error so callers can decide whether to record
 // the failure as a metric.
-func postModerationEventEmbed(ctx *core.Context, payload moderationLogPayload, eventType logging.LogEventType) moderationEventEmit {
+func postModerationEventEmbed(ctx *legacycore.Context, payload moderationLogPayload, eventType logging.LogEventType) moderationEventEmit {
 	if ctx == nil || ctx.Session == nil || ctx.Config == nil || ctx.GuildID == "" {
 		return moderationEventEmit{}
 	}
@@ -800,7 +800,7 @@ func postModerationEventEmbed(ctx *core.Context, payload moderationLogPayload, e
 // to match the existing convention in user_prune, automod, and the
 // monitoring user-event paths. Callers that want a metric should invoke
 // postModerationEventEmbed directly and react to the returned error.
-func sendModerationLogForEvent(ctx *core.Context, payload moderationLogPayload, eventType logging.LogEventType) {
+func sendModerationLogForEvent(ctx *legacycore.Context, payload moderationLogPayload, eventType logging.LogEventType) {
 	emit := postModerationEventEmbed(ctx, payload, eventType)
 	if !emit.Enabled || emit.Err == nil {
 		return
@@ -841,7 +841,7 @@ func resolveModerationCaseEmbedMeta(action, actionType string) (string, string, 
 	}
 }
 
-func sendModerationCaseActionLog(ctx *core.Context, payload moderationLogPayload) {
+func sendModerationCaseActionLog(ctx *legacycore.Context, payload moderationLogPayload) {
 	if ctx == nil || ctx.Session == nil || ctx.Config == nil || ctx.GuildID == "" {
 		return
 	}

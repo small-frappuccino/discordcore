@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordgo"
 )
@@ -19,7 +19,7 @@ func TestHandleTranscript_Streaming(t *testing.T) {
 
 	interaction := newTicketInteraction(guildID, "user-1", "ticket-123-id", "ticket_transcript", nil)
 
-	ctx := &core.Context{
+	ctx := &legacycore.Context{
 		Session:     h.session,
 		Interaction: interaction,
 		Config:      h.cm,

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	rolesvc "github.com/small-frappuccino/discordcore/pkg/roles"
 	"github.com/small-frappuccino/discordgo"
@@ -38,7 +38,7 @@ func newRolePanelComponentHandler(configManager *files.ConfigManager) *rolePanel
 }
 
 // HandleComponent handles component.
-func (h *rolePanelComponentHandler) HandleComponent(ctx *core.Context) error {
+func (h *rolePanelComponentHandler) HandleComponent(ctx *legacycore.Context) error {
 	if ctx == nil || ctx.Interaction == nil {
 		return nil
 	}
@@ -115,7 +115,7 @@ func (h *rolePanelComponentHandler) HandleComponent(ctx *core.Context) error {
 	return rolePanelToggleEphemeralSuccess(ctx, fmt.Sprintf("Assigned <@&%s>.", roleID))
 }
 
-func isInteractiveEphemeralDisabled(ctx *core.Context) bool {
+func isInteractiveEphemeralDisabled(ctx *legacycore.Context) bool {
 	if ctx == nil {
 		return false
 	}
@@ -130,7 +130,7 @@ func isInteractiveEphemeralDisabled(ctx *core.Context) bool {
 	return false
 }
 
-func rolePanelToggleEphemeralError(ctx *core.Context, message string) error {
+func rolePanelToggleEphemeralError(ctx *legacycore.Context, message string) error {
 	if isInteractiveEphemeralDisabled(ctx) {
 		return ctx.Session.InteractionRespond(ctx.Interaction.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseDeferredMessageUpdate,
@@ -144,7 +144,7 @@ func rolePanelToggleEphemeralError(ctx *core.Context, message string) error {
 	return nil
 }
 
-func rolePanelToggleEphemeralSuccess(ctx *core.Context, message string) error {
+func rolePanelToggleEphemeralSuccess(ctx *legacycore.Context, message string) error {
 	if isInteractiveEphemeralDisabled(ctx) {
 		return ctx.Session.InteractionRespond(ctx.Interaction.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseDeferredMessageUpdate,

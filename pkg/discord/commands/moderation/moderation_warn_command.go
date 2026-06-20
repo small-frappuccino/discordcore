@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -46,20 +46,20 @@ func (c *warnCommand) RequiresPermissions() bool { return true }
 func (c *warnCommand) DefaultMemberPermissions() int64 { return discordgo.PermissionManageMessages }
 
 // Handle handles.
-func (c *warnCommand) Handle(ctx *core.Context) error {
+func (c *warnCommand) Handle(ctx *legacycore.Context) error {
 	if enabled, _ := ctx.Config.Config().ResolveFeatures(ctx.GuildID).Lookup("moderation.warn"); !enabled {
-		return core.NewMissingConfigError(ctx.GuildID, "Moderation Warn", "/moderation")
+		return legacycore.NewMissingConfigError(ctx.GuildID, "Moderation Warn", "/moderation")
 	}
-	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := legacycore.OptionList(legacycore.GetSubCommandOptions(ctx.Interaction))
 
 	rawUserID, err := extractor.StringRequired("user")
 	if err != nil {
-		return &core.CommandError{Message: err.Error(), Ephemeral: true}
+		return &legacycore.CommandError{Message: err.Error(), Ephemeral: true}
 	}
 
 	userID, ok := normalizeUserID(rawUserID)
 	if !ok {
-		return &core.CommandError{Message: "Invalid user ID or mention.", Ephemeral: true}
+		return &legacycore.CommandError{Message: "Invalid user ID or mention.", Ephemeral: true}
 	}
 
 	reason, truncated := sanitizeReason(extractor.String("reason"))
@@ -70,18 +70,18 @@ func (c *warnCommand) Handle(ctx *core.Context) error {
 	}
 
 	if ok, reasonText := canWarnTarget(ctx, warnCtx, userID); !ok {
-		return &core.CommandError{Message: fmt.Sprintf("Cannot warn `%s`: %s.", userID, reasonText), Ephemeral: true}
+		return &legacycore.CommandError{Message: fmt.Sprintf("Cannot warn `%s`: %s.", userID, reasonText), Ephemeral: true}
 	}
 
 	store := moderationStoreFromContext(ctx)
 	if store == nil {
-		return &core.CommandError{Message: "Warnings storage is not available for this bot instance.", Ephemeral: true}
+		return &legacycore.CommandError{Message: "Warnings storage is not available for this bot instance.", Ephemeral: true}
 	}
 
 	targetUsername := resolveUserDisplayName(ctx, userID)
 	warning, err := store.CreateModerationWarning(ctx.GuildID, userID, ctx.UserID, reason, time.Now().UTC())
 	if err != nil {
-		return &core.CommandError{Message: fmt.Sprintf("Failed to create warning for %s: %v", userID, err), Ephemeral: true}
+		return &legacycore.CommandError{Message: fmt.Sprintf("Failed to create warning for %s: %v", userID, err), Ephemeral: true}
 	}
 
 	details := "Warning recorded"
@@ -99,5 +99,5 @@ func (c *warnCommand) Handle(ctx *core.Context) error {
 		HasCaseNumber: true,
 	})
 
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, buildWarnCommandMessage(targetUsername, warning.CaseNumber, reason, truncated))
+	return legacycore.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, buildWarnCommandMessage(targetUsername, warning.CaseNumber, reason, truncated))
 }

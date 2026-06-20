@@ -1,14 +1,14 @@
 package moderation
 
 import (
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 )
 
 // RegisterModerationCommands registers the moderation slash commands as
 // top-level commands without observability wiring. Equivalent to passing nil
 // to RegisterModerationCommandsWithMetrics; the clean command will fall back
 // to NopMetrics.
-func RegisterModerationCommands(router *core.CommandRouter) {
+func RegisterModerationCommands(router *legacycore.CommandRouter) {
 	RegisterModerationCommandsWithMetrics(router, nil)
 }
 
@@ -18,7 +18,7 @@ func RegisterModerationCommands(router *core.CommandRouter) {
 // in-memory implementation so /v1/health/moderation has counters to expose).
 // Passing a nil metrics value falls back to NopMetrics so library tests that
 // don't care about observability stay clean.
-func RegisterModerationCommandsWithMetrics(router *core.CommandRouter, metrics Metrics) {
+func RegisterModerationCommandsWithMetrics(router *legacycore.CommandRouter, metrics Metrics) {
 	if metrics == nil {
 		metrics = NopMetrics{}
 	}

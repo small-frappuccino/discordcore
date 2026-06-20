@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	applicationqotd "github.com/small-frappuccino/discordcore/pkg/qotd"
@@ -51,7 +51,7 @@ func newIntegrationQOTDCommandTestRouter(
 	session *discordgo.Session,
 	guildID string,
 	ownerID string,
-) (*core.CommandRouter, *files.ConfigManager, *applicationqotd.Service, *storage.Store) {
+) (*legacycore.CommandRouter, *files.ConfigManager, *applicationqotd.Service, *storage.Store) {
 	return newIntegrationQOTDCommandTestRouterWithPublisher(t, session, guildID, ownerID, nil)
 }
 
@@ -61,7 +61,7 @@ func newIntegrationQOTDCommandTestRouterWithPublisher(
 	guildID string,
 	ownerID string,
 	publisher applicationqotd.Publisher,
-) (*core.CommandRouter, *files.ConfigManager, *applicationqotd.Service, *storage.Store) {
+) (*legacycore.CommandRouter, *files.ConfigManager, *applicationqotd.Service, *storage.Store) {
 	t.Helper()
 
 	baseDSN, err := testdb.BaseDatabaseURLFromEnv()
@@ -99,7 +99,7 @@ func newIntegrationQOTDCommandTestRouterWithPublisher(
 	}
 
 	service := applicationqotd.NewService(cm, store, publisher)
-	router := core.NewCommandRouter(session, cm)
+	router := legacycore.NewCommandRouter(session, cm)
 	NewCommands(service).RegisterCommands(router)
 	return router, cm, service, store
 }

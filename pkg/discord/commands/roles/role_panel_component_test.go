@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	rolesvc "github.com/small-frappuccino/discordcore/pkg/roles"
 	"github.com/small-frappuccino/discordgo"
@@ -114,14 +114,14 @@ func newRolePanelTestConfigManager(t *testing.T, guildID, roleID string) *files.
 
 func runRolePanelComponent(t *testing.T, cm *files.ConfigManager, session *discordgo.Session, i *discordgo.InteractionCreate, handler *rolePanelComponentHandler) error {
 	t.Helper()
-	ctx := &core.Context{
+	ctx := &legacycore.Context{
 		Session:     session,
 		Interaction: i,
 		Config:      cm,
 		GuildID:     i.GuildID,
 		UserID:      rolePanelInteractionUserID(i),
-		RouteKey: core.InteractionRouteKey{
-			Kind:     core.InteractionKindComponent,
+		RouteKey: legacycore.InteractionRouteKey{
+			Kind:     legacycore.InteractionKindComponent,
 			Path:     rolesvc.RolePanelComponentRouteID,
 			CustomID: i.MessageComponentData().CustomID,
 		},

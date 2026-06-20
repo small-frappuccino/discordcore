@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
@@ -202,7 +202,7 @@ func NewRuntimeConfigCommands(configManager *files.ConfigManager) *ConfigCommand
 }
 
 // RegisterCommands registers `/config runtime`.
-func (cc *ConfigCommands) RegisterCommands(router *core.CommandRouter) {
+func (cc *ConfigCommands) RegisterCommands(router *legacycore.CommandRouter) {
 	newRuntimeInteractionCatalog(cc.configManager).register(router)
 }
 
@@ -232,10 +232,10 @@ func (c *runtimeSubCommand) RequiresGuild() bool { return false }
 func (c *runtimeSubCommand) RequiresPermissions() bool { return true }
 
 // Handle handles.
-func (c *runtimeSubCommand) Handle(ctx *core.Context) error {
+func (c *runtimeSubCommand) Handle(ctx *legacycore.Context) error {
 	rc, err := loadRuntimeConfig(ctx.Config, "global")
 	if err != nil {
-		return core.NewResponseBuilder(ctx.Session).Ephemeral().Error(ctx.Interaction, fmt.Sprintf("The runtime configuration couldn't be loaded, so this reply stays private: %v", err))
+		return legacycore.NewResponseBuilder(ctx.Session).Ephemeral().Error(ctx.Interaction, fmt.Sprintf("The runtime configuration couldn't be loaded, so this reply stays private: %v", err))
 	}
 
 	st := panelState{
@@ -255,8 +255,8 @@ func (c *runtimeSubCommand) Handle(ctx *core.Context) error {
 	embed := renderMainEmbed(rc, st)
 	components := renderMainComponents(rc, st)
 
-	rm := core.NewResponseBuilder(ctx.Session).Build()
-	cfg := core.ResponseConfig{
+	rm := legacycore.NewResponseBuilder(ctx.Session).Build()
+	cfg := legacycore.ResponseConfig{
 		Ephemeral:  runtimeVisibilityIsEphemeral(runtimeVisibilityAdministrativePanel),
 		WithEmbed:  true,
 		Title:      embed.Title,
@@ -962,7 +962,7 @@ func asRuntimeConfigApplier(applier *runtimeapply.Manager) runtimeConfigApplier 
 	return applier
 }
 
-func runtimeInteractionApplier(ctx *core.Context) runtimeConfigApplier {
+func runtimeInteractionApplier(ctx *legacycore.Context) runtimeConfigApplier {
 	if ctx == nil || ctx.Router() == nil {
 		return nil
 	}
@@ -1029,7 +1029,7 @@ func optionWasProvided(i *discordgo.InteractionCreate, name string) bool {
 	if i == nil {
 		return false
 	}
-	opts := core.GetSubCommandOptions(i)
+	opts := legacycore.GetSubCommandOptions(i)
 	for _, o := range opts {
 		if o != nil && o.Name == name {
 			return true

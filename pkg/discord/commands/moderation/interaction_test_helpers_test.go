@@ -8,7 +8,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordgo"
 )
@@ -37,7 +37,7 @@ func (r *moderationInteractionRecorder) lastResponse(t *testing.T) discordgo.Int
 type moderationCommandTestHarness struct {
 	session *discordgo.Session
 	rec     *moderationInteractionRecorder
-	router  *core.CommandRouter
+	router  *legacycore.CommandRouter
 	cm      *files.ConfigManager
 	guildID string
 	ownerID string
@@ -98,7 +98,7 @@ func newModerationCommandTestSession(t *testing.T) (*discordgo.Session, *moderat
 	return session, rec
 }
 
-func newModerationCommandTestRouter(t *testing.T, session *discordgo.Session, guildID, ownerID string) (*core.CommandRouter, *files.ConfigManager) {
+func newModerationCommandTestRouter(t *testing.T, session *discordgo.Session, guildID, ownerID string) (*legacycore.CommandRouter, *files.ConfigManager) {
 	t.Helper()
 
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
@@ -122,7 +122,7 @@ func newModerationCommandTestRouter(t *testing.T, session *discordgo.Session, gu
 		t.Fatalf("failed to add member to state: %v", err)
 	}
 
-	router := core.NewCommandRouter(session, cm)
+	router := legacycore.NewCommandRouter(session, cm)
 	RegisterModerationCommands(router)
 	return router, cm
 }

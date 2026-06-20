@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	emoji "github.com/kyokomi/emoji/v2"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordgo"
 )
@@ -101,7 +101,7 @@ func (c *reactionBlockCommand) DefaultMemberPermissions() int64 {
 }
 
 // Handle handles.
-func (c *reactionBlockCommand) Handle(ctx *core.Context) error {
+func (c *reactionBlockCommand) Handle(ctx *legacycore.Context) error {
 	action, err := parseReactionBlockAction(ctx)
 	if err != nil {
 		return fmt.Errorf("reactionBlockCommand.Handle: %w", err)
@@ -122,18 +122,18 @@ func (c *reactionBlockCommand) Handle(ctx *core.Context) error {
 	case reactionBlockActionClear:
 		return c.handleClear(ctx, request)
 	default:
-		return &core.CommandError{Message: "Unknown reaction_block action.", Ephemeral: true}
+		return &legacycore.CommandError{Message: "Unknown reaction_block action.", Ephemeral: true}
 	}
 }
 
-func (c *reactionBlockCommand) handleSet(ctx *core.Context, request reactionBlockRequest) error {
+func (c *reactionBlockCommand) handleSet(ctx *legacycore.Context, request reactionBlockRequest) error {
 	updated, err := updateReactionBlockConfig(ctx, c.configManager, func(current files.ReactionBlockConfig) (files.ReactionBlockConfig, error) {
 		return setReactionBlockPair(current, request.reactorUserID, request.targetUserID, request.emojis), nil
 	})
 	if err != nil {
 		return fmt.Errorf("reactionBlockCommand.handleSet: %w", err)
 	}
-	return core.NewResponseBuilder(ctx.Session).Success(
+	return legacycore.NewResponseBuilder(ctx.Session).Success(
 		ctx.Interaction,
 		fmt.Sprintf(
 			"Blocked reactions from <@%s> to <@%s> are now: %s.",
@@ -144,14 +144,14 @@ func (c *reactionBlockCommand) handleSet(ctx *core.Context, request reactionBloc
 	)
 }
 
-func (c *reactionBlockCommand) handleAdd(ctx *core.Context, request reactionBlockRequest) error {
+func (c *reactionBlockCommand) handleAdd(ctx *legacycore.Context, request reactionBlockRequest) error {
 	updated, err := updateReactionBlockConfig(ctx, c.configManager, func(current files.ReactionBlockConfig) (files.ReactionBlockConfig, error) {
 		return addReactionBlockPairEmojis(current, request.reactorUserID, request.targetUserID, request.emojis), nil
 	})
 	if err != nil {
 		return fmt.Errorf("reactionBlockCommand.handleAdd: %w", err)
 	}
-	return core.NewResponseBuilder(ctx.Session).Success(
+	return legacycore.NewResponseBuilder(ctx.Session).Success(
 		ctx.Interaction,
 		fmt.Sprintf(
 			"Blocked reactions from <@%s> to <@%s> now include: %s.",
@@ -162,14 +162,14 @@ func (c *reactionBlockCommand) handleAdd(ctx *core.Context, request reactionBloc
 	)
 }
 
-func (c *reactionBlockCommand) handleRemove(ctx *core.Context, request reactionBlockRequest) error {
+func (c *reactionBlockCommand) handleRemove(ctx *legacycore.Context, request reactionBlockRequest) error {
 	current, err := loadReactionBlockConfig(c.configManager, ctx.GuildID)
 	if err != nil {
 		return fmt.Errorf("reactionBlockCommand.handleRemove: %w", err)
 	}
 	updated := removeReactionBlockPairEmojis(current, request.reactorUserID, request.targetUserID, request.emojis)
 	if sameReactionBlockEmojiList(current.EmojisForPair(request.reactorUserID, request.targetUserID), updated.EmojisForPair(request.reactorUserID, request.targetUserID)) {
-		return core.NewResponseBuilder(ctx.Session).Success(
+		return legacycore.NewResponseBuilder(ctx.Session).Success(
 			ctx.Interaction,
 			fmt.Sprintf("No matching blocked emojis were configured from <@%s> to <@%s>.", request.reactorUserID, request.targetUserID),
 		)
@@ -179,12 +179,12 @@ func (c *reactionBlockCommand) handleRemove(ctx *core.Context, request reactionB
 	}
 	remaining := updated.EmojisForPair(request.reactorUserID, request.targetUserID)
 	if len(remaining) == 0 {
-		return core.NewResponseBuilder(ctx.Session).Success(
+		return legacycore.NewResponseBuilder(ctx.Session).Success(
 			ctx.Interaction,
 			fmt.Sprintf("Blocked reactions from <@%s> to <@%s> were cleared.", request.reactorUserID, request.targetUserID),
 		)
 	}
-	return core.NewResponseBuilder(ctx.Session).Success(
+	return legacycore.NewResponseBuilder(ctx.Session).Success(
 		ctx.Interaction,
 		fmt.Sprintf(
 			"Blocked reactions from <@%s> to <@%s> now include: %s.",
@@ -195,19 +195,19 @@ func (c *reactionBlockCommand) handleRemove(ctx *core.Context, request reactionB
 	)
 }
 
-func (c *reactionBlockCommand) handleList(ctx *core.Context, request reactionBlockRequest) error {
+func (c *reactionBlockCommand) handleList(ctx *legacycore.Context, request reactionBlockRequest) error {
 	current, err := loadReactionBlockConfig(c.configManager, ctx.GuildID)
 	if err != nil {
 		return fmt.Errorf("reactionBlockCommand.handleList: %w", err)
 	}
 	emojis := current.EmojisForPair(request.reactorUserID, request.targetUserID)
 	if len(emojis) == 0 {
-		return core.NewResponseBuilder(ctx.Session).Ephemeral().Info(
+		return legacycore.NewResponseBuilder(ctx.Session).Ephemeral().Info(
 			ctx.Interaction,
 			fmt.Sprintf("No blocked emojis are configured from <@%s> to <@%s>.", request.reactorUserID, request.targetUserID),
 		)
 	}
-	return core.NewResponseBuilder(ctx.Session).Ephemeral().Info(
+	return legacycore.NewResponseBuilder(ctx.Session).Ephemeral().Info(
 		ctx.Interaction,
 		fmt.Sprintf(
 			"Blocked reactions from <@%s> to <@%s>: %s.",
@@ -218,14 +218,14 @@ func (c *reactionBlockCommand) handleList(ctx *core.Context, request reactionBlo
 	)
 }
 
-func (c *reactionBlockCommand) handleClear(ctx *core.Context, request reactionBlockRequest) error {
+func (c *reactionBlockCommand) handleClear(ctx *legacycore.Context, request reactionBlockRequest) error {
 	current, err := loadReactionBlockConfig(c.configManager, ctx.GuildID)
 	if err != nil {
 		return fmt.Errorf("reactionBlockCommand.handleClear: %w", err)
 	}
 	updated := clearReactionBlockPair(current, request.reactorUserID, request.targetUserID)
 	if sameReactionBlockEmojiList(current.EmojisForPair(request.reactorUserID, request.targetUserID), updated.EmojisForPair(request.reactorUserID, request.targetUserID)) {
-		return core.NewResponseBuilder(ctx.Session).Success(
+		return legacycore.NewResponseBuilder(ctx.Session).Success(
 			ctx.Interaction,
 			fmt.Sprintf("No blocked emojis were configured from <@%s> to <@%s>.", request.reactorUserID, request.targetUserID),
 		)
@@ -233,17 +233,17 @@ func (c *reactionBlockCommand) handleClear(ctx *core.Context, request reactionBl
 	if err := saveReactionBlockConfig(ctx, c.configManager, updated); err != nil {
 		return fmt.Errorf("reactionBlockCommand.handleClear: %w", err)
 	}
-	return core.NewResponseBuilder(ctx.Session).Success(
+	return legacycore.NewResponseBuilder(ctx.Session).Success(
 		ctx.Interaction,
 		fmt.Sprintf("Cleared all blocked reactions from <@%s> to <@%s>.", request.reactorUserID, request.targetUserID),
 	)
 }
 
-func parseReactionBlockAction(ctx *core.Context) (string, error) {
-	options := core.GetSubCommandOptions(ctx.Interaction)
-	action := strings.ToLower(strings.TrimSpace(core.OptionList(options).String(reactionBlockActionOptionName)))
+func parseReactionBlockAction(ctx *legacycore.Context) (string, error) {
+	options := legacycore.GetSubCommandOptions(ctx.Interaction)
+	action := strings.ToLower(strings.TrimSpace(legacycore.OptionList(options).String(reactionBlockActionOptionName)))
 	if action == "" {
-		return "", &core.CommandError{Message: "An action is required.", Ephemeral: true}
+		return "", &legacycore.CommandError{Message: "An action is required.", Ephemeral: true}
 	}
 	return action, nil
 }
@@ -257,18 +257,18 @@ func reactionBlockActionRequiresEmojis(action string) bool {
 	}
 }
 
-func parseReactionBlockRequest(ctx *core.Context, requireEmojis bool) (reactionBlockRequest, error) {
-	if err := core.RequiresGuildConfig(ctx); err != nil {
+func parseReactionBlockRequest(ctx *legacycore.Context, requireEmojis bool) (reactionBlockRequest, error) {
+	if err := legacycore.RequiresGuildConfig(ctx); err != nil {
 		return reactionBlockRequest{}, fmt.Errorf("parseReactionBlockRequest: %w", err)
 	}
-	options := core.GetSubCommandOptions(ctx.Interaction)
+	options := legacycore.GetSubCommandOptions(ctx.Interaction)
 	reactorUserID := userOptionID(options, reactionBlockReactorOptionName)
 	if reactorUserID == "" {
-		return reactionBlockRequest{}, &core.CommandError{Message: "A reactor user is required.", Ephemeral: true}
+		return reactionBlockRequest{}, &legacycore.CommandError{Message: "A reactor user is required.", Ephemeral: true}
 	}
 	targetUserID := userOptionID(options, reactionBlockTargetOptionName)
 	if targetUserID == "" {
-		return reactionBlockRequest{}, &core.CommandError{Message: "A target user is required.", Ephemeral: true}
+		return reactionBlockRequest{}, &legacycore.CommandError{Message: "A target user is required.", Ephemeral: true}
 	}
 	request := reactionBlockRequest{
 		reactorUserID: reactorUserID,
@@ -278,9 +278,9 @@ func parseReactionBlockRequest(ctx *core.Context, requireEmojis bool) (reactionB
 		return request, nil
 	}
 
-	emojis, err := parseReactionBlockEmojiList(core.OptionList(options).String(reactionBlockEmojisOptionName))
+	emojis, err := parseReactionBlockEmojiList(legacycore.OptionList(options).String(reactionBlockEmojisOptionName))
 	if err != nil {
-		return reactionBlockRequest{}, &core.CommandError{Message: err.Error(), Ephemeral: true}
+		return reactionBlockRequest{}, &legacycore.CommandError{Message: err.Error(), Ephemeral: true}
 	}
 	request.emojis = emojis
 	return request, nil
@@ -380,7 +380,7 @@ func containsNonASCII(value string) bool {
 }
 
 func updateReactionBlockConfig(
-	ctx *core.Context,
+	ctx *legacycore.Context,
 	configManager *files.ConfigManager,
 	mutate func(files.ReactionBlockConfig) (files.ReactionBlockConfig, error),
 ) (files.ReactionBlockConfig, error) {
@@ -404,22 +404,22 @@ func updateReactionBlockConfig(
 
 func loadReactionBlockConfig(configManager *files.ConfigManager, guildID string) (files.ReactionBlockConfig, error) {
 	if configManager == nil {
-		return files.ReactionBlockConfig{}, &core.CommandError{Message: "Configuration is not available right now.", Ephemeral: true}
+		return files.ReactionBlockConfig{}, &legacycore.CommandError{Message: "Configuration is not available right now.", Ephemeral: true}
 	}
 	current, err := configManager.ReactionBlockConfig(guildID)
 	if err != nil {
-		return files.ReactionBlockConfig{}, &core.CommandError{Message: "The reaction block list for this server couldn't be loaded. This reply stays private so it can be adjusted and retried without extra channel noise.", Ephemeral: true}
+		return files.ReactionBlockConfig{}, &legacycore.CommandError{Message: "The reaction block list for this server couldn't be loaded. This reply stays private so it can be adjusted and retried without extra channel noise.", Ephemeral: true}
 	}
 	return current, nil
 }
 
-func saveReactionBlockConfig(ctx *core.Context, configManager *files.ConfigManager, cfg files.ReactionBlockConfig) error {
+func saveReactionBlockConfig(ctx *legacycore.Context, configManager *files.ConfigManager, cfg files.ReactionBlockConfig) error {
 	if configManager == nil {
-		return &core.CommandError{Message: "Configuration is not available right now.", Ephemeral: true}
+		return &legacycore.CommandError{Message: "Configuration is not available right now.", Ephemeral: true}
 	}
 	if err := configManager.SetReactionBlockConfig(ctx.GuildID, cfg); err != nil {
 		ctx.Logger.Error().Errorf("Failed to save reaction block config: %v", err)
-		return &core.CommandError{Message: "That reaction block change couldn't be saved. This reply stays private so it can be adjusted and retried without extra channel noise.", Ephemeral: true}
+		return &legacycore.CommandError{Message: "That reaction block change couldn't be saved. This reply stays private so it can be adjusted and retried without extra channel noise.", Ephemeral: true}
 	}
 	if ctx.GuildConfig != nil {
 		updated, err := configManager.ReactionBlockConfig(ctx.GuildID)

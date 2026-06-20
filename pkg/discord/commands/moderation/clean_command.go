@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/cleanup"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/logging"
 	"github.com/small-frappuccino/discordgo"
@@ -133,17 +133,17 @@ func (c *cleanCommand) DefaultMemberPermissions() int64 {
 func (c *cleanCommand) RequiresPermissions() bool { return true }
 
 // InteractionAckPolicy interactions ack policy.
-func (c *cleanCommand) InteractionAckPolicy() core.InteractionAckPolicy {
-	return core.InteractionAckPolicy{Mode: core.InteractionAckModeDefer, Ephemeral: true}
+func (c *cleanCommand) InteractionAckPolicy() legacycore.InteractionAckPolicy {
+	return legacycore.InteractionAckPolicy{Mode: legacycore.InteractionAckModeDefer, Ephemeral: true}
 }
 
 // Handle handles.
-func (c *cleanCommand) Handle(ctx *core.Context) error {
+func (c *cleanCommand) Handle(ctx *legacycore.Context) error {
 	start := c.now()
 	c.metrics.RecordCleanAttempt()
 
 	if enabled, _ := ctx.Config.Config().ResolveFeatures(ctx.GuildID).Lookup("moderation.clean"); !enabled {
-		err := core.NewMissingConfigError(ctx.GuildID, "Moderation Clean", "/moderation")
+		err := legacycore.NewMissingConfigError(ctx.GuildID, "Moderation Clean", "/moderation")
 		c.recordEarlyFailure(ctx, "", CleanFailureCauseFeatureDisabled, start, err)
 		return err
 	}
@@ -168,7 +168,7 @@ func (c *cleanCommand) Handle(ctx *core.Context) error {
 		c.sendCleanActionLog(ctx, request, result)
 	}
 
-	return core.NewResponseBuilder(ctx.Session).
+	return legacycore.NewResponseBuilder(ctx.Session).
 		WithContext(ctx).
 		Ephemeral().
 		Success(ctx.Interaction, buildCleanCommandMessage(request, result))
@@ -181,7 +181,7 @@ func (c *cleanCommand) Handle(ctx *core.Context) error {
 // posts an audit-channel embed on successful deletion, so without this
 // log line the audit story would be the slash-command reply alone, which
 // disappears the moment the actor closes the ephemeral message.
-func (c *cleanCommand) recordEarlyFailure(ctx *core.Context, channelID, cause string, start time.Time, err error) {
+func (c *cleanCommand) recordEarlyFailure(ctx *legacycore.Context, channelID, cause string, start time.Time, err error) {
 	duration := c.now().Sub(start)
 	c.metrics.RecordCleanFailure(cause, duration)
 	log.ApplicationLogger().Warn(
@@ -200,7 +200,7 @@ func (c *cleanCommand) recordEarlyFailure(ctx *core.Context, channelID, cause st
 // run. It contains every field the channel-embed audit consumer carries
 // (actor, channel, filters, deletion sub-totals) so the log stream is a
 // self-sufficient record even when the audit channel is unreachable.
-func (c *cleanCommand) logCleanCompleted(ctx *core.Context, request cleanRequest, result cleanResult, duration time.Duration) {
+func (c *cleanCommand) logCleanCompleted(ctx *legacycore.Context, request cleanRequest, result cleanResult, duration time.Duration) {
 	log.ApplicationLogger().Info(
 		"Clean command completed",
 		"operation", "moderation.clean.completed",
@@ -229,17 +229,17 @@ func (c *cleanCommand) logCleanCompleted(ctx *core.Context, request cleanRequest
 // gated in permissionGateMiddleware, and RequiresPermissions=true forces
 // UserID through the permission checker), so this function only validates
 // the inputs that are actually /clean-specific.
-func parseCleanRequest(ctx *core.Context) (cleanRequest, error) {
+func parseCleanRequest(ctx *legacycore.Context) (cleanRequest, error) {
 	channelID := strings.TrimSpace(ctx.Interaction.ChannelID)
 	if channelID == "" {
-		return cleanRequest{}, &core.CommandError{Message: "This command needs a channel context before it can clean messages.", Ephemeral: true}
+		return cleanRequest{}, &legacycore.CommandError{Message: "This command needs a channel context before it can clean messages.", Ephemeral: true}
 	}
 
-	options := core.GetSubCommandOptions(ctx.Interaction)
-	extractor := core.OptionList(options)
+	options := legacycore.GetSubCommandOptions(ctx.Interaction)
+	extractor := legacycore.OptionList(options)
 	count := int(extractor.Int(cleanCountOptionName))
 	if count <= 0 || count > cleanMaxDeleteCount {
-		return cleanRequest{}, &core.CommandError{Message: "Count must be between 1 and 100.", Ephemeral: true}
+		return cleanRequest{}, &legacycore.CommandError{Message: "Count must be between 1 and 100.", Ephemeral: true}
 	}
 	fromID, err := normalizeCleanMessageID(extractor.String(cleanFromOptionName), cleanFromOptionName)
 	if err != nil {
@@ -250,7 +250,7 @@ func parseCleanRequest(ctx *core.Context) (cleanRequest, error) {
 		return cleanRequest{}, fmt.Errorf("parseCleanRequest: %w", err)
 	}
 	if fromID != "" && toID != "" && compareSnowflakeIDs(fromID, toID) >= 0 {
-		return cleanRequest{}, &core.CommandError{Message: "The `from` message ID must be older than the `to` message ID.", Ephemeral: true}
+		return cleanRequest{}, &legacycore.CommandError{Message: "The `from` message ID must be older than the `to` message ID.", Ephemeral: true}
 	}
 
 	request := cleanRequest{
@@ -270,7 +270,7 @@ func normalizeCleanMessageID(input, optionName string) (string, error) {
 		return "", nil
 	}
 	if !isLikelySnowflake(value) {
-		return "", &core.CommandError{Message: fmt.Sprintf("Option `%s` must be a valid Discord message ID.", optionName), Ephemeral: true}
+		return "", &legacycore.CommandError{Message: fmt.Sprintf("Option `%s` must be a valid Discord message ID.", optionName), Ephemeral: true}
 	}
 	return value, nil
 }
@@ -290,7 +290,7 @@ func sanitizeCleanContains(input string) string {
 // ctx.Session, ctx.Session.State, and ctx.Session.State.User are populated
 // by the discordgo Ready handshake that precedes any interaction reception,
 // and channelID has already been validated as non-empty by parseCleanRequest.
-func validateCleanPermissions(ctx *core.Context, channelID string) error {
+func validateCleanPermissions(ctx *legacycore.Context, channelID string) error {
 	botID := ctx.Session.State.User.ID
 
 	if err := requireChannelPermissions(ctx.Session, ctx.UserID, channelID, discordgo.PermissionManageMessages, "You need the Manage Messages permission in this channel to use /clean."); err != nil {
@@ -311,18 +311,18 @@ func validateCleanPermissions(ctx *core.Context, channelID string) error {
 func requireChannelPermissions(session *discordgo.Session, userID, channelID string, required int64, message string) error {
 	perms, err := session.UserChannelPermissions(userID, channelID)
 	if err != nil {
-		return &core.CommandError{Message: "Channel permissions could not be checked right now.", Ephemeral: true}
+		return &legacycore.CommandError{Message: "Channel permissions could not be checked right now.", Ephemeral: true}
 	}
 	if perms&discordgo.PermissionAdministrator == discordgo.PermissionAdministrator {
 		return nil
 	}
 	if perms&required != required {
-		return &core.CommandError{Message: message, Ephemeral: true}
+		return &legacycore.CommandError{Message: message, Ephemeral: true}
 	}
 	return nil
 }
 
-func (c *cleanCommand) executeClean(ctx *core.Context, request cleanRequest, start time.Time) (cleanResult, error) {
+func (c *cleanCommand) executeClean(ctx *legacycore.Context, request cleanRequest, start time.Time) (cleanResult, error) {
 	matched, result, err := c.collectCleanTargets(ctx, request, start)
 	if err != nil {
 		return cleanResult{}, fmt.Errorf("cleanCommand.executeClean: %w", err)
@@ -435,7 +435,7 @@ func cleanFetchErrorMessage(class cleanup.FailureClass) string {
 	}
 }
 
-func (c *cleanCommand) collectCleanTargets(ctx *core.Context, request cleanRequest, start time.Time) ([]*discordgo.Message, cleanResult, error) {
+func (c *cleanCommand) collectCleanTargets(ctx *legacycore.Context, request cleanRequest, start time.Time) ([]*discordgo.Message, cleanResult, error) {
 	result := cleanResult{}
 	matched := make([]*discordgo.Message, 0, request.count)
 	before := request.toID
@@ -463,7 +463,7 @@ func (c *cleanCommand) collectCleanTargets(ctx *core.Context, request cleanReque
 				"err", err,
 			)
 			c.metrics.RecordCleanFailure(ClassifyCleanFetchFailure(class), c.now().Sub(start))
-			return nil, cleanResult{}, &core.CommandError{Message: cleanFetchErrorMessage(class), Ephemeral: true}
+			return nil, cleanResult{}, &legacycore.CommandError{Message: cleanFetchErrorMessage(class), Ephemeral: true}
 		}
 		if len(page) == 0 {
 			break
@@ -676,7 +676,7 @@ func truncateCleanFilterDisplay(value string) string {
 // the primary audit record is the application-log line written by
 // logCleanCompleted, so a broken channel must not look like "everything
 // worked" on /v1/health/moderation.
-func (c *cleanCommand) sendCleanActionLog(ctx *core.Context, request cleanRequest, result cleanResult) {
+func (c *cleanCommand) sendCleanActionLog(ctx *legacycore.Context, request cleanRequest, result cleanResult) {
 	channelLabel := fmt.Sprintf("<#%s> (`%s`)", request.channelID, request.channelID)
 	payload := moderationLogPayload{
 		Action:      cleanCommandName,

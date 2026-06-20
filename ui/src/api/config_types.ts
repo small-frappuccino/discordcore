@@ -38,6 +38,139 @@ export interface RolePanelConfig {
   postings?: RolePanelPostingConfig[];
 }
 
+export interface DiscohookJSON {
+  content?: string;
+  embeds?: DiscohookEmbed[];
+}
+
+export interface DiscohookEmbed {
+  title?: string;
+  description?: string;
+  color?: number;
+  author?: DiscohookAuthor;
+  footer?: DiscohookFooter;
+  image?: DiscohookImage;
+  thumbnail?: DiscohookImage;
+  fields?: DiscohookField[];
+}
+
+export interface DiscohookAuthor {
+  name?: string;
+  icon_url?: string;
+}
+
+export interface DiscohookFooter {
+  text?: string;
+  icon_url?: string;
+}
+
+export interface DiscohookImage {
+  url?: string;
+}
+
+export interface DiscohookField {
+  name?: string;
+  value?: string;
+  inline?: boolean;
+}
+
+export interface FeatureServiceToggles {
+  monitoring?: boolean;
+  commands?: boolean;
+}
+
+export interface FeatureLoggingToggles {
+  avatar_logging?: boolean;
+  role_update?: boolean;
+  member_join?: boolean;
+  member_leave?: boolean;
+  message_process?: boolean;
+  message_edit?: boolean;
+  message_delete?: boolean;
+  reaction_metric?: boolean;
+  automod_action?: boolean;
+  moderation_case?: boolean;
+  clean_action?: boolean;
+}
+
+export interface FeatureModerationToggles {
+  ban?: boolean;
+  massban?: boolean;
+  kick?: boolean;
+  timeout?: boolean;
+  warn?: boolean;
+  warnings?: boolean;
+  clean?: boolean;
+}
+
+export interface FeatureMessageCacheToggles {
+  cleanup_on_startup?: boolean;
+  delete_on_log?: boolean;
+}
+
+export interface FeaturePresenceWatchToggles {
+  bot?: boolean;
+  user?: boolean;
+}
+
+export interface FeatureMaintenanceToggles {
+  db_cleanup?: boolean;
+}
+
+export interface FeatureSafetyToggles {
+  bot_role_perm_mirror?: boolean;
+}
+
+export interface FeatureToggles {
+  services?: FeatureServiceToggles;
+  logging?: FeatureLoggingToggles;
+  moderation?: FeatureModerationToggles;
+  message_cache?: FeatureMessageCacheToggles;
+  presence_watch?: FeaturePresenceWatchToggles;
+  maintenance?: FeatureMaintenanceToggles;
+  safety?: FeatureSafetyToggles;
+  mute_role?: boolean;
+  role_panels?: boolean;
+}
+
+export interface rawQOTDDeckConfig {
+  id?: string;
+  name?: string;
+  enabled?: boolean;
+  channel_id?: string;
+  forum_channel_id?: string;
+  question_channel_id?: string;
+  response_channel_id?: string;
+  selection_strategy?: string;
+}
+
+export interface rawQOTDPublishScheduleConfig {
+  hour_utc?: number;
+  minute_utc?: number;
+  publish_hour_utc?: number;
+  publish_minute_utc?: number;
+  qotd_time_hour_utc?: number;
+  qotd_time_minute_utc?: number;
+}
+
+export interface rawQOTDConfig {
+  verified_role_id?: string;
+  active_deck_id?: string;
+  decks?: QOTDDeckConfig[];
+  schedule?: rawQOTDPublishScheduleConfig;
+  suppress_scheduled_publish_dates_utc?: string[];
+  suppress_scheduled_publish_date_utc?: string;
+  enabled?: boolean;
+  channel_id?: string;
+  forum_channel_id?: string;
+  question_channel_id?: string;
+  response_channel_id?: string;
+  publish_hour_utc?: number;
+  publish_minute_utc?: number;
+  qotd_time_hour_utc?: number;
+  qotd_time_minute_utc?: number;
+}
+
 export interface RuntimeConfig {
   database?: DatabaseRuntimeConfig;
   bot_theme?: string;
@@ -329,101 +462,6 @@ export interface RPCButtonConfig {
   url?: string;
 }
 
-export interface FeatureServiceToggles {
-  monitoring?: boolean;
-  commands?: boolean;
-}
-
-export interface FeatureLoggingToggles {
-  avatar_logging?: boolean;
-  role_update?: boolean;
-  member_join?: boolean;
-  member_leave?: boolean;
-  message_process?: boolean;
-  message_edit?: boolean;
-  message_delete?: boolean;
-  reaction_metric?: boolean;
-  automod_action?: boolean;
-  moderation_case?: boolean;
-  clean_action?: boolean;
-}
-
-export interface FeatureModerationToggles {
-  ban?: boolean;
-  massban?: boolean;
-  kick?: boolean;
-  timeout?: boolean;
-  warn?: boolean;
-  warnings?: boolean;
-  clean?: boolean;
-}
-
-export interface FeatureMessageCacheToggles {
-  cleanup_on_startup?: boolean;
-  delete_on_log?: boolean;
-}
-
-export interface FeaturePresenceWatchToggles {
-  bot?: boolean;
-  user?: boolean;
-}
-
-export interface FeatureMaintenanceToggles {
-  db_cleanup?: boolean;
-}
-
-export interface FeatureSafetyToggles {
-  bot_role_perm_mirror?: boolean;
-}
-
-export interface FeatureToggles {
-  services?: FeatureServiceToggles;
-  logging?: FeatureLoggingToggles;
-  moderation?: FeatureModerationToggles;
-  message_cache?: FeatureMessageCacheToggles;
-  presence_watch?: FeaturePresenceWatchToggles;
-  maintenance?: FeatureMaintenanceToggles;
-  safety?: FeatureSafetyToggles;
-  mute_role?: boolean;
-  role_panels?: boolean;
-}
-
-export interface DiscohookJSON {
-  content?: string;
-  embeds?: DiscohookEmbed[];
-}
-
-export interface DiscohookEmbed {
-  title?: string;
-  description?: string;
-  color?: number;
-  author?: DiscohookAuthor;
-  footer?: DiscohookFooter;
-  image?: DiscohookImage;
-  thumbnail?: DiscohookImage;
-  fields?: DiscohookField[];
-}
-
-export interface DiscohookAuthor {
-  name?: string;
-  icon_url?: string;
-}
-
-export interface DiscohookFooter {
-  text?: string;
-  icon_url?: string;
-}
-
-export interface DiscohookImage {
-  url?: string;
-}
-
-export interface DiscohookField {
-  name?: string;
-  value?: string;
-  inline?: boolean;
-}
-
 export interface payload {
   name: string;
   count: number;
@@ -459,43 +497,5 @@ export interface CustomEmbedConfig {
   thumbnail_url?: string;
   fields?: CustomEmbedFieldConfig[];
   postings?: CustomEmbedPostingConfig[];
-}
-
-export interface rawQOTDDeckConfig {
-  id?: string;
-  name?: string;
-  enabled?: boolean;
-  channel_id?: string;
-  forum_channel_id?: string;
-  question_channel_id?: string;
-  response_channel_id?: string;
-  selection_strategy?: string;
-}
-
-export interface rawQOTDPublishScheduleConfig {
-  hour_utc?: number;
-  minute_utc?: number;
-  publish_hour_utc?: number;
-  publish_minute_utc?: number;
-  qotd_time_hour_utc?: number;
-  qotd_time_minute_utc?: number;
-}
-
-export interface rawQOTDConfig {
-  verified_role_id?: string;
-  active_deck_id?: string;
-  decks?: QOTDDeckConfig[];
-  schedule?: rawQOTDPublishScheduleConfig;
-  suppress_scheduled_publish_dates_utc?: string[];
-  suppress_scheduled_publish_date_utc?: string;
-  enabled?: boolean;
-  channel_id?: string;
-  forum_channel_id?: string;
-  question_channel_id?: string;
-  response_channel_id?: string;
-  publish_hour_utc?: number;
-  publish_minute_utc?: number;
-  qotd_time_hour_utc?: number;
-  qotd_time_minute_utc?: number;
 }
 

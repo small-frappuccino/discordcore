@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/small-frappuccino/discordcore/pkg/discord"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	embedsvc "github.com/small-frappuccino/discordcore/pkg/embeds"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordgo"
@@ -64,14 +64,14 @@ func NewEmbedCommands(configManager *files.ConfigManager, embedService *embedsvc
 }
 
 // RegisterCommands registers the slash group on the supplied router.
-func (ec *EmbedCommands) RegisterCommands(router *core.CommandRouter) {
+func (ec *EmbedCommands) RegisterCommands(router *legacycore.CommandRouter) {
 	if router == nil || ec == nil || ec.configManager == nil {
 		return
 	}
 
-	checker := core.NewPermissionChecker(router.GetSession(), router.GetConfigManager())
+	checker := legacycore.NewPermissionChecker(router.GetSession(), router.GetConfigManager())
 
-	embedGroup := core.NewGroupCommand(
+	embedGroup := legacycore.NewGroupCommand(
 		embedCommandName,
 		"Manage custom embeds for this server",
 		checker,
@@ -86,7 +86,7 @@ func (ec *EmbedCommands) RegisterCommands(router *core.CommandRouter) {
 	embedGroup.AddSubCommand(newEmbedImportSubCommand(ec.configManager))
 	embedGroup.AddSubCommand(newEmbedExportSubCommand(ec.configManager))
 
-	fieldGroup := core.NewGroupCommand(
+	fieldGroup := legacycore.NewGroupCommand(
 		embedFieldGroupName,
 		"Manage the fields on a custom embed",
 		checker,
@@ -138,7 +138,7 @@ func (c *embedPostSubCommand) RequiresGuild() bool { return true }
 func (c *embedPostSubCommand) RequiresPermissions() bool { return true }
 
 // HandleAutocomplete handles autocomplete.
-func (c *embedPostSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+func (c *embedPostSubCommand) HandleAutocomplete(ctx *legacycore.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == embedOptionKey {
 		return handleEmbedKeyAutocomplete(c.configManager, ctx)
 	}
@@ -146,7 +146,7 @@ func (c *embedPostSubCommand) HandleAutocomplete(ctx *core.Context, focusedOptio
 }
 
 // Handle handles.
-func (c *embedPostSubCommand) Handle(ctx *core.Context) error {
+func (c *embedPostSubCommand) Handle(ctx *legacycore.Context) error {
 	key, err := embedKeyFromOptions(ctx.Interaction)
 	if err != nil {
 		return fmt.Errorf("embedPostSubCommand.Handle: %w", err)
@@ -157,7 +157,7 @@ func (c *embedPostSubCommand) Handle(ctx *core.Context) error {
 	}
 
 	channelID := ctx.Interaction.ChannelID
-	opts := core.GetSubCommandOptions(ctx.Interaction)
+	opts := legacycore.GetSubCommandOptions(ctx.Interaction)
 	for _, opt := range opts {
 		if opt.Name == embedOptionChannel {
 			if chVal, ok := opt.Value.(string); ok && strings.TrimSpace(chVal) != "" {
@@ -220,7 +220,7 @@ func (c *embedPreviewSubCommand) RequiresGuild() bool { return true }
 func (c *embedPreviewSubCommand) RequiresPermissions() bool { return true }
 
 // HandleAutocomplete handles autocomplete.
-func (c *embedPreviewSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+func (c *embedPreviewSubCommand) HandleAutocomplete(ctx *legacycore.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == embedOptionKey {
 		return handleEmbedKeyAutocomplete(c.configManager, ctx)
 	}
@@ -228,7 +228,7 @@ func (c *embedPreviewSubCommand) HandleAutocomplete(ctx *core.Context, focusedOp
 }
 
 // Handle handles.
-func (c *embedPreviewSubCommand) Handle(ctx *core.Context) error {
+func (c *embedPreviewSubCommand) Handle(ctx *legacycore.Context) error {
 	key, err := embedKeyFromOptions(ctx.Interaction)
 	if err != nil {
 		return fmt.Errorf("embedPreviewSubCommand.Handle: %w", err)
@@ -282,7 +282,7 @@ func (c *embedSetSubCommand) RequiresGuild() bool { return true }
 func (c *embedSetSubCommand) RequiresPermissions() bool { return true }
 
 // HandleAutocomplete handles autocomplete.
-func (c *embedSetSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+func (c *embedSetSubCommand) HandleAutocomplete(ctx *legacycore.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == embedOptionKey {
 		return handleEmbedKeyAutocomplete(c.configManager, ctx)
 	}
@@ -290,12 +290,12 @@ func (c *embedSetSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption
 }
 
 // Handle handles.
-func (c *embedSetSubCommand) Handle(ctx *core.Context) error {
+func (c *embedSetSubCommand) Handle(ctx *legacycore.Context) error {
 	key, err := embedKeyFromOptions(ctx.Interaction)
 	if err != nil {
 		return fmt.Errorf("embedSetSubCommand.Handle: %w", err)
 	}
-	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := legacycore.OptionList(legacycore.GetSubCommandOptions(ctx.Interaction))
 
 	current, fetchErr := c.configManager.CustomEmbed(ctx.GuildID, key)
 	if fetchErr != nil && !errors.Is(fetchErr, files.ErrCustomEmbedNotFound) {
@@ -370,7 +370,7 @@ func (c *embedDeleteSubCommand) RequiresGuild() bool { return true }
 func (c *embedDeleteSubCommand) RequiresPermissions() bool { return true }
 
 // HandleAutocomplete handles autocomplete.
-func (c *embedDeleteSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+func (c *embedDeleteSubCommand) HandleAutocomplete(ctx *legacycore.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == embedOptionKey {
 		return handleEmbedKeyAutocomplete(c.configManager, ctx)
 	}
@@ -378,7 +378,7 @@ func (c *embedDeleteSubCommand) HandleAutocomplete(ctx *core.Context, focusedOpt
 }
 
 // Handle handles.
-func (c *embedDeleteSubCommand) Handle(ctx *core.Context) error {
+func (c *embedDeleteSubCommand) Handle(ctx *legacycore.Context) error {
 	key, err := embedKeyFromOptions(ctx.Interaction)
 	if err != nil {
 		return fmt.Errorf("embedDeleteSubCommand.Handle: %w", err)
@@ -421,7 +421,7 @@ func (c *embedListSubCommand) RequiresGuild() bool { return true }
 func (c *embedListSubCommand) RequiresPermissions() bool { return true }
 
 // Handle handles.
-func (c *embedListSubCommand) Handle(ctx *core.Context) error {
+func (c *embedListSubCommand) Handle(ctx *legacycore.Context) error {
 	embeds, err := c.configManager.CustomEmbeds(ctx.GuildID)
 	if err != nil {
 		return customEmbedDetailedCommandError(fmt.Sprintf("Failed to list embeds: %v", err))
@@ -470,7 +470,7 @@ func (c *embedRefreshSubCommand) RequiresGuild() bool { return true }
 func (c *embedRefreshSubCommand) RequiresPermissions() bool { return true }
 
 // HandleAutocomplete handles autocomplete.
-func (c *embedRefreshSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+func (c *embedRefreshSubCommand) HandleAutocomplete(ctx *legacycore.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == embedOptionKey {
 		return handleEmbedKeyAutocomplete(c.configManager, ctx)
 	}
@@ -478,7 +478,7 @@ func (c *embedRefreshSubCommand) HandleAutocomplete(ctx *core.Context, focusedOp
 }
 
 // Handle handles.
-func (c *embedRefreshSubCommand) Handle(ctx *core.Context) error {
+func (c *embedRefreshSubCommand) Handle(ctx *legacycore.Context) error {
 	key, err := embedKeyFromOptions(ctx.Interaction)
 	if err != nil {
 		return fmt.Errorf("embedRefreshSubCommand.Handle: %w", err)
@@ -547,7 +547,7 @@ func (c *embedUnpostSubCommand) RequiresGuild() bool { return true }
 func (c *embedUnpostSubCommand) RequiresPermissions() bool { return true }
 
 // HandleAutocomplete handles autocomplete.
-func (c *embedUnpostSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+func (c *embedUnpostSubCommand) HandleAutocomplete(ctx *legacycore.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == embedOptionKey {
 		return handleEmbedKeyAutocomplete(c.configManager, ctx)
 	}
@@ -555,8 +555,8 @@ func (c *embedUnpostSubCommand) HandleAutocomplete(ctx *core.Context, focusedOpt
 }
 
 // Handle handles.
-func (c *embedUnpostSubCommand) Handle(ctx *core.Context) error {
-	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
+func (c *embedUnpostSubCommand) Handle(ctx *legacycore.Context) error {
+	extractor := legacycore.OptionList(legacycore.GetSubCommandOptions(ctx.Interaction))
 	messageID, err := extractor.StringRequired(embedOptionMessageID)
 	if err != nil {
 		return customEmbedDetailedCommandError("A message ID is required.")
@@ -620,7 +620,7 @@ func (c *embedFieldAddSubCommand) RequiresGuild() bool { return true }
 func (c *embedFieldAddSubCommand) RequiresPermissions() bool { return true }
 
 // HandleAutocomplete handles autocomplete.
-func (c *embedFieldAddSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+func (c *embedFieldAddSubCommand) HandleAutocomplete(ctx *legacycore.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == embedOptionKey {
 		return handleEmbedKeyAutocomplete(c.configManager, ctx)
 	}
@@ -628,12 +628,12 @@ func (c *embedFieldAddSubCommand) HandleAutocomplete(ctx *core.Context, focusedO
 }
 
 // Handle handles.
-func (c *embedFieldAddSubCommand) Handle(ctx *core.Context) error {
+func (c *embedFieldAddSubCommand) Handle(ctx *legacycore.Context) error {
 	key, err := embedKeyFromOptions(ctx.Interaction)
 	if err != nil {
 		return fmt.Errorf("embedFieldAddSubCommand.Handle: %w", err)
 	}
-	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := legacycore.OptionList(legacycore.GetSubCommandOptions(ctx.Interaction))
 
 	name, err := extractor.StringRequired(embedOptionFieldName)
 	if err != nil {
@@ -695,7 +695,7 @@ func (c *embedFieldRemoveSubCommand) RequiresGuild() bool { return true }
 func (c *embedFieldRemoveSubCommand) RequiresPermissions() bool { return true }
 
 // HandleAutocomplete handles autocomplete.
-func (c *embedFieldRemoveSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+func (c *embedFieldRemoveSubCommand) HandleAutocomplete(ctx *legacycore.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == embedOptionKey {
 		return handleEmbedKeyAutocomplete(c.configManager, ctx)
 	}
@@ -703,12 +703,12 @@ func (c *embedFieldRemoveSubCommand) HandleAutocomplete(ctx *core.Context, focus
 }
 
 // Handle handles.
-func (c *embedFieldRemoveSubCommand) Handle(ctx *core.Context) error {
+func (c *embedFieldRemoveSubCommand) Handle(ctx *legacycore.Context) error {
 	key, err := embedKeyFromOptions(ctx.Interaction)
 	if err != nil {
 		return fmt.Errorf("embedFieldRemoveSubCommand.Handle: %w", err)
 	}
-	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
+	extractor := legacycore.OptionList(legacycore.GetSubCommandOptions(ctx.Interaction))
 	if !extractor.HasOption(embedOptionFieldIndex) {
 		return customEmbedDetailedCommandError("A field index is required.")
 	}
@@ -758,7 +758,7 @@ func (c *embedFieldListSubCommand) RequiresGuild() bool { return true }
 func (c *embedFieldListSubCommand) RequiresPermissions() bool { return true }
 
 // HandleAutocomplete handles autocomplete.
-func (c *embedFieldListSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+func (c *embedFieldListSubCommand) HandleAutocomplete(ctx *legacycore.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == embedOptionKey {
 		return handleEmbedKeyAutocomplete(c.configManager, ctx)
 	}
@@ -766,7 +766,7 @@ func (c *embedFieldListSubCommand) HandleAutocomplete(ctx *core.Context, focused
 }
 
 // Handle handles.
-func (c *embedFieldListSubCommand) Handle(ctx *core.Context) error {
+func (c *embedFieldListSubCommand) Handle(ctx *legacycore.Context) error {
 	key, err := embedKeyFromOptions(ctx.Interaction)
 	if err != nil {
 		return fmt.Errorf("embedFieldListSubCommand.Handle: %w", err)
@@ -792,7 +792,7 @@ func (c *embedFieldListSubCommand) Handle(ctx *core.Context) error {
 
 // --- Helpers ---
 
-func refreshCustomEmbedPostingsBestEffort(cm *files.ConfigManager, svc *embedsvc.EmbedService, ctx *core.Context, key string) string {
+func refreshCustomEmbedPostingsBestEffort(cm *files.ConfigManager, svc *embedsvc.EmbedService, ctx *legacycore.Context, key string) string {
 	if cm == nil || svc == nil || ctx == nil {
 		return ""
 	}
@@ -830,7 +830,7 @@ func embedKeyOption(required bool) *discordgo.ApplicationCommandOption {
 	}
 }
 
-func handleEmbedKeyAutocomplete(cm *files.ConfigManager, ctx *core.Context) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+func handleEmbedKeyAutocomplete(cm *files.ConfigManager, ctx *legacycore.Context) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if ctx.GuildID == "" {
 		return nil, nil
 	}
@@ -839,8 +839,8 @@ func handleEmbedKeyAutocomplete(cm *files.ConfigManager, ctx *core.Context) ([]*
 		return nil, nil
 	}
 
-	opts := core.GetSubCommandOptions(ctx.Interaction)
-	focused, found := core.HasFocusedOption(opts)
+	opts := legacycore.GetSubCommandOptions(ctx.Interaction)
+	focused, found := legacycore.HasFocusedOption(opts)
 	if !found {
 		return nil, nil
 	}
@@ -863,8 +863,8 @@ func handleEmbedKeyAutocomplete(cm *files.ConfigManager, ctx *core.Context) ([]*
 }
 
 func embedKeyFromOptions(interaction *discordgo.InteractionCreate) (string, error) {
-	opts := core.GetSubCommandOptions(interaction)
-	extractor := core.OptionList(opts)
+	opts := legacycore.GetSubCommandOptions(interaction)
+	extractor := legacycore.OptionList(opts)
 	key, err := extractor.StringRequired(embedOptionKey)
 	if err != nil {
 		return "", customEmbedDetailedCommandError(err.Error())
@@ -888,11 +888,11 @@ func loadCustomEmbed(cm *files.ConfigManager, guildID, key string) (files.Custom
 }
 
 func customEmbedDetailedCommandError(message string) error {
-	return &core.CommandError{Message: message, Ephemeral: true}
+	return &legacycore.CommandError{Message: message, Ephemeral: true}
 }
 
-func customEmbedResponseBuilder(session *discordgo.Session) *core.ResponseBuilder {
-	return core.NewResponseBuilder(session).Ephemeral()
+func customEmbedResponseBuilder(session *discordgo.Session) *legacycore.ResponseBuilder {
+	return legacycore.NewResponseBuilder(session).Ephemeral()
 }
 
 type embedImportSubCommand struct {
@@ -936,7 +936,7 @@ func (c *embedImportSubCommand) RequiresGuild() bool { return true }
 func (c *embedImportSubCommand) RequiresPermissions() bool { return true }
 
 // HandleAutocomplete handles autocomplete.
-func (c *embedImportSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+func (c *embedImportSubCommand) HandleAutocomplete(ctx *legacycore.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == embedOptionKey {
 		return handleEmbedKeyAutocomplete(c.configManager, ctx)
 	}
@@ -944,7 +944,7 @@ func (c *embedImportSubCommand) HandleAutocomplete(ctx *core.Context, focusedOpt
 }
 
 // Handle handles.
-func (c *embedImportSubCommand) Handle(ctx *core.Context) error {
+func (c *embedImportSubCommand) Handle(ctx *legacycore.Context) error {
 	builder := customEmbedResponseBuilder(ctx.Session)
 	guildID := ctx.GuildID
 
@@ -954,7 +954,7 @@ func (c *embedImportSubCommand) Handle(ctx *core.Context) error {
 	}
 
 	var pasteURL string
-	opts := core.GetSubCommandOptions(ctx.Interaction)
+	opts := legacycore.GetSubCommandOptions(ctx.Interaction)
 	for _, opt := range opts {
 		if opt.Name == embedOptionURL {
 			pasteURL = strings.TrimSpace(fmt.Sprint(opt.Value))
@@ -1022,7 +1022,7 @@ func (c *embedExportSubCommand) RequiresGuild() bool { return true }
 func (c *embedExportSubCommand) RequiresPermissions() bool { return true }
 
 // HandleAutocomplete handles autocomplete.
-func (c *embedExportSubCommand) HandleAutocomplete(ctx *core.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+func (c *embedExportSubCommand) HandleAutocomplete(ctx *legacycore.Context, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	if focusedOption == embedOptionKey {
 		return handleEmbedKeyAutocomplete(c.configManager, ctx)
 	}
@@ -1030,7 +1030,7 @@ func (c *embedExportSubCommand) HandleAutocomplete(ctx *core.Context, focusedOpt
 }
 
 // Handle handles.
-func (c *embedExportSubCommand) Handle(ctx *core.Context) error {
+func (c *embedExportSubCommand) Handle(ctx *legacycore.Context) error {
 	builder := customEmbedResponseBuilder(ctx.Session)
 	guildID := ctx.GuildID
 

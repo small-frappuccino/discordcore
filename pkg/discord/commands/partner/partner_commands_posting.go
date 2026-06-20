@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	partnersvc "github.com/small-frappuccino/discordcore/pkg/partners"
 	"github.com/small-frappuccino/discordgo"
@@ -45,11 +45,11 @@ func (c *partnerPostSubCommand) RequiresGuild() bool { return true }
 func (c *partnerPostSubCommand) RequiresPermissions() bool { return true }
 
 // Handle handles.
-func (c *partnerPostSubCommand) Handle(ctx *core.Context) error {
-	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
+func (c *partnerPostSubCommand) Handle(ctx *legacycore.Context) error {
+	extractor := legacycore.OptionList(legacycore.GetSubCommandOptions(ctx.Interaction))
 
 	channelID := ""
-	for _, opt := range core.GetSubCommandOptions(ctx.Interaction) {
+	for _, opt := range legacycore.GetSubCommandOptions(ctx.Interaction) {
 		if opt.Name == "channel" {
 			if chVal, ok := opt.Value.(string); ok && strings.TrimSpace(chVal) != "" {
 				channelID = strings.TrimSpace(chVal)
@@ -156,7 +156,7 @@ func (c *partnerPostSubCommand) Handle(ctx *core.Context) error {
 		successMessage = fmt.Sprintf("Partner board was posted in <#%s>.%s", channelID, postingNote)
 	}
 
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, successMessage)
+	return legacycore.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, successMessage)
 }
 
 // --- Unpost ---
@@ -190,8 +190,8 @@ func (c *partnerUnpostSubCommand) RequiresGuild() bool { return true }
 func (c *partnerUnpostSubCommand) RequiresPermissions() bool { return true }
 
 // Handle handles.
-func (c *partnerUnpostSubCommand) Handle(ctx *core.Context) error {
-	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
+func (c *partnerUnpostSubCommand) Handle(ctx *legacycore.Context) error {
+	extractor := legacycore.OptionList(legacycore.GetSubCommandOptions(ctx.Interaction))
 	messageID, _ := extractor.StringRequired(optionMessageID)
 
 	cfg := c.configManager.GuildConfig(ctx.GuildID)
@@ -238,5 +238,5 @@ func (c *partnerUnpostSubCommand) Handle(ctx *core.Context) error {
 		}
 	}
 
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("The partner board posting has been removed from tracking.%s", deleteErr))
+	return legacycore.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, fmt.Sprintf("The partner board posting has been removed from tracking.%s", deleteErr))
 }

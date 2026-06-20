@@ -15,7 +15,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/httputil/httpdriver"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
@@ -89,7 +89,7 @@ func newStatsCommandTestRouter(
 	guildID string,
 	ownerID string,
 	cfg files.GuildConfig,
-) (*core.ArikawaCommandRouter, *files.ConfigManager, *mockStatsService, *interactionRecorder) {
+) (*legacycore.ArikawaCommandRouter, *files.ConfigManager, *mockStatsService, *interactionRecorder) {
 	t.Helper()
 
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
@@ -97,7 +97,7 @@ func newStatsCommandTestRouter(
 		t.Fatalf("failed to add guild config: %v", err)
 	}
 
-	router := core.NewArikawaCommandRouter("token", cm)
+	router := legacycore.NewArikawaCommandRouter("token", cm)
 	mockSvc := &mockStatsService{}
 	logger := slog.Default()
 	NewStatsCommands(cm, mockSvc, logger).RegisterCommands(router)
@@ -135,7 +135,7 @@ func newStatsSlashInteraction(
 	}
 }
 
-func handleRawStatsInteraction(t *testing.T, router *core.ArikawaCommandRouter, cm *files.ConfigManager, rec *interactionRecorder, ic *discord.InteractionEvent) {
+func handleRawStatsInteraction(t *testing.T, router *legacycore.ArikawaCommandRouter, cm *files.ConfigManager, rec *interactionRecorder, ic *discord.InteractionEvent) {
 	t.Helper()
 
 	cmdData := ic.Data.(*discord.CommandInteraction)
@@ -149,7 +149,7 @@ func handleRawStatsInteraction(t *testing.T, router *core.ArikawaCommandRouter, 
 		Transport: &mockTransport{t: t, rec: rec},
 	})
 
-	ctx := &core.ArikawaContext{
+	ctx := &legacycore.ArikawaContext{
 		Client:      client,
 		Interaction: ic,
 		Config:      cm,
@@ -159,7 +159,7 @@ func handleRawStatsInteraction(t *testing.T, router *core.ArikawaCommandRouter, 
 		GuildConfig: cm.GuildConfig(ic.GuildID.String()),
 	}
 
-	if err := cmd.Handle(ctx); err != nil && err != core.ErrAlreadyAcknowledged {
+	if err := cmd.Handle(ctx); err != nil && err != legacycore.ErrAlreadyAcknowledged {
 		t.Fatalf("command handler failed: %v", err)
 	}
 }

@@ -6,7 +6,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
@@ -23,7 +23,7 @@ func NewLoggingCommands(configManager *files.ConfigManager) *LoggingCommands {
 }
 
 // RegisterCommands registers the commands.
-func (c *LoggingCommands) RegisterCommands(router *core.ArikawaCommandRouter) {
+func (c *LoggingCommands) RegisterCommands(router *legacycore.ArikawaCommandRouter) {
 	if router == nil || c.configManager == nil {
 		return
 	}
@@ -150,7 +150,7 @@ func (c *loggingRootCommand) Options() []discord.CommandOption {
 	}
 }
 
-func (c *loggingRootCommand) Handle(ctx *core.ArikawaContext) error {
+func (c *loggingRootCommand) Handle(ctx *legacycore.ArikawaContext) error {
 	data, ok := ctx.Interaction.Data.(*discord.CommandInteraction)
 	if !ok || len(data.Options) == 0 {
 		return nil
@@ -177,8 +177,8 @@ func (c *loggingRootCommand) Handle(ctx *core.ArikawaContext) error {
 	return nil
 }
 
-func (c *loggingRootCommand) handleAvatar(ctx *core.ArikawaContext, opts []discord.CommandInteractionOption) error {
-	parsedOpts := core.ArikawaOptionList(opts)
+func (c *loggingRootCommand) handleAvatar(ctx *legacycore.ArikawaContext, opts []discord.CommandInteractionOption) error {
+	parsedOpts := legacycore.ArikawaOptionList(opts)
 	channelID := parsedOpts.ChannelID("channel")
 
 	err := c.configManager.UpdateGuildConfig(ctx.GuildID.String(), func(cfg *files.GuildConfig) error {
@@ -194,8 +194,8 @@ func (c *loggingRootCommand) handleAvatar(ctx *core.ArikawaContext, opts []disco
 	})
 }
 
-func (c *loggingRootCommand) handleRoleUpdate(ctx *core.ArikawaContext, opts []discord.CommandInteractionOption) error {
-	parsedOpts := core.ArikawaOptionList(opts)
+func (c *loggingRootCommand) handleRoleUpdate(ctx *legacycore.ArikawaContext, opts []discord.CommandInteractionOption) error {
+	parsedOpts := legacycore.ArikawaOptionList(opts)
 	channelID := parsedOpts.ChannelID("channel")
 
 	err := c.configManager.UpdateGuildConfig(ctx.GuildID.String(), func(cfg *files.GuildConfig) error {
@@ -211,8 +211,8 @@ func (c *loggingRootCommand) handleRoleUpdate(ctx *core.ArikawaContext, opts []d
 	})
 }
 
-func (c *loggingRootCommand) handleAutomod(ctx *core.ArikawaContext, opts []discord.CommandInteractionOption) error {
-	parsedOpts := core.ArikawaOptionList(opts)
+func (c *loggingRootCommand) handleAutomod(ctx *legacycore.ArikawaContext, opts []discord.CommandInteractionOption) error {
+	parsedOpts := legacycore.ArikawaOptionList(opts)
 	channelID := parsedOpts.ChannelID("channel")
 	desc := "Discord native AutoMod logs will now be sent to <#" + channelID + ">."
 
@@ -295,8 +295,8 @@ func (c *loggingRootCommand) handleAutomod(ctx *core.ArikawaContext, opts []disc
 	})
 }
 
-func (c *loggingRootCommand) handleMessages(ctx *core.ArikawaContext, opts []discord.CommandInteractionOption) error {
-	parsedOpts := core.ArikawaOptionList(opts)
+func (c *loggingRootCommand) handleMessages(ctx *legacycore.ArikawaContext, opts []discord.CommandInteractionOption) error {
+	parsedOpts := legacycore.ArikawaOptionList(opts)
 	channelID := parsedOpts.ChannelID("channel")
 
 	err := c.configManager.UpdateGuildConfig(ctx.GuildID.String(), func(cfg *files.GuildConfig) error {
@@ -313,8 +313,8 @@ func (c *loggingRootCommand) handleMessages(ctx *core.ArikawaContext, opts []dis
 	})
 }
 
-func (c *loggingRootCommand) handleEntry(ctx *core.ArikawaContext, opts []discord.CommandInteractionOption) error {
-	parsedOpts := core.ArikawaOptionList(opts)
+func (c *loggingRootCommand) handleEntry(ctx *legacycore.ArikawaContext, opts []discord.CommandInteractionOption) error {
+	parsedOpts := legacycore.ArikawaOptionList(opts)
 	channelID := parsedOpts.ChannelID("channel")
 
 	err := c.configManager.UpdateGuildConfig(ctx.GuildID.String(), func(cfg *files.GuildConfig) error {
@@ -330,8 +330,8 @@ func (c *loggingRootCommand) handleEntry(ctx *core.ArikawaContext, opts []discor
 	})
 }
 
-func (c *loggingRootCommand) handleExit(ctx *core.ArikawaContext, opts []discord.CommandInteractionOption) error {
-	parsedOpts := core.ArikawaOptionList(opts)
+func (c *loggingRootCommand) handleExit(ctx *legacycore.ArikawaContext, opts []discord.CommandInteractionOption) error {
+	parsedOpts := legacycore.ArikawaOptionList(opts)
 	channelID := parsedOpts.ChannelID("channel")
 
 	err := c.configManager.UpdateGuildConfig(ctx.GuildID.String(), func(cfg *files.GuildConfig) error {
@@ -347,8 +347,8 @@ func (c *loggingRootCommand) handleExit(ctx *core.ArikawaContext, opts []discord
 	})
 }
 
-func (c *loggingRootCommand) handleWarnings(ctx *core.ArikawaContext, opts []discord.CommandInteractionOption) error {
-	parsedOpts := core.ArikawaOptionList(opts)
+func (c *loggingRootCommand) handleWarnings(ctx *legacycore.ArikawaContext, opts []discord.CommandInteractionOption) error {
+	parsedOpts := legacycore.ArikawaOptionList(opts)
 	channelID := parsedOpts.ChannelID("channel")
 
 	scope := "discordcore" // Default

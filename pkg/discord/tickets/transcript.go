@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordgo"
 	"golang.org/x/sync/errgroup"
 )
 
 // HandleTranscript handles transcript.
-func (s *TicketService) HandleTranscript(ctx *core.Context) error {
+func (s *TicketService) HandleTranscript(ctx *legacycore.Context) error {
 	channelID := ctx.Interaction.ChannelID
 
 	// Resolve the target channel from config
@@ -21,7 +21,7 @@ func (s *TicketService) HandleTranscript(ctx *core.Context) error {
 	}
 	if auditChannelID == "" {
 		// Fallback to replying in the current channel or returning an error
-		return &core.CommandError{Message: "Audit channel is not configured.", Ephemeral: true}
+		return &legacycore.CommandError{Message: "Audit channel is not configured.", Ephemeral: true}
 	}
 
 	pr, pw := io.Pipe()
@@ -81,7 +81,7 @@ func (s *TicketService) HandleTranscript(ctx *core.Context) error {
 	fileName := fmt.Sprintf("transcript-%s.json", channelID)
 
 	// Acknowledge the interaction first because the upload might take time
-	core.NewResponseBuilder(ctx.Session).WithContext(ctx).Ephemeral().Success(ctx.Interaction, "Generating transcript...")
+	legacycore.NewResponseBuilder(ctx.Session).WithContext(ctx).Ephemeral().Success(ctx.Interaction, "Generating transcript...")
 
 	_, err := ctx.Session.ChannelMessageSendComplex(auditChannelID, &discordgo.MessageSend{
 		Content: fmt.Sprintf("Transcript for ticket <#%s> (Channel ID: %s)", channelID, channelID),

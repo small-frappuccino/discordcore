@@ -3,7 +3,7 @@ package runtime
 import (
 	"fmt"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
@@ -18,7 +18,7 @@ func newRuntimeInteractionCatalog(configManager *files.ConfigManager) runtimeInt
 	return runtimeInteractionCatalog{configManager: configManager}
 }
 
-func (catalog runtimeInteractionCatalog) register(router *core.CommandRouter) {
+func (catalog runtimeInteractionCatalog) register(router *legacycore.CommandRouter) {
 	if router == nil {
 		return
 	}
@@ -27,45 +27,45 @@ func (catalog runtimeInteractionCatalog) register(router *core.CommandRouter) {
 	router.RegisterInteractionRoutes(catalog.bindings()...)
 }
 
-func (catalog runtimeInteractionCatalog) registerSlashTree(router *core.CommandRouter) {
+func (catalog runtimeInteractionCatalog) registerSlashTree(router *legacycore.CommandRouter) {
 	runtimeCommand := newRuntimeSubCommand(catalog.configManager)
 
 	if existing, ok := router.GetRegistry().GetCommand(groupName); ok {
-		if group, ok := existing.(*core.GroupCommand); ok {
+		if group, ok := existing.(*legacycore.GroupCommand); ok {
 			group.AddSubCommand(runtimeCommand)
 			router.RegisterSlashCommand(group)
 			return
 		}
 	}
 
-	checker := core.NewPermissionChecker(router.GetSession(), router.GetConfigManager())
-	group := core.NewGroupCommand(groupName, "Manage server configuration", checker)
+	checker := legacycore.NewPermissionChecker(router.GetSession(), router.GetConfigManager())
+	group := legacycore.NewGroupCommand(groupName, "Manage server configuration", checker)
 	group.AddSubCommand(runtimeCommand)
 	router.RegisterSlashCommand(group)
 }
 
-func (catalog runtimeInteractionCatalog) bindings() []core.InteractionRouteBinding {
+func (catalog runtimeInteractionCatalog) bindings() []legacycore.InteractionRouteBinding {
 	componentHandler := catalog.componentHandler()
-	bindings := make([]core.InteractionRouteBinding, 0, len(runtimeComponentRouteIDs())+1)
+	bindings := make([]legacycore.InteractionRouteBinding, 0, len(runtimeComponentRouteIDs())+1)
 	for _, routeID := range runtimeComponentRouteIDs() {
-		bindings = append(bindings, core.InteractionRouteBinding{
+		bindings = append(bindings, legacycore.InteractionRouteBinding{
 			Path:      routeID,
 			Component: componentHandler,
 			AckPolicy: runtimeComponentAckPolicy(routeID),
 		})
 	}
 
-	bindings = append(bindings, core.InteractionRouteBinding{
+	bindings = append(bindings, legacycore.InteractionRouteBinding{
 		Path:      modalEditValueID,
 		Modal:     catalog.modalHandler(),
-		AckPolicy: core.InteractionAckPolicy{Mode: core.InteractionAckModeDefer},
+		AckPolicy: legacycore.InteractionAckPolicy{Mode: legacycore.InteractionAckModeDefer},
 	})
 
 	return bindings
 }
 
-func (catalog runtimeInteractionCatalog) componentHandler() core.ComponentHandler {
-	return core.ComponentHandlerFunc(func(ctx *core.Context) error {
+func (catalog runtimeInteractionCatalog) componentHandler() legacycore.ComponentHandler {
+	return legacycore.ComponentHandlerFunc(func(ctx *legacycore.Context) error {
 		if ctx == nil || ctx.Session == nil || ctx.Interaction == nil {
 			return nil
 		}
@@ -87,8 +87,8 @@ func (catalog runtimeInteractionCatalog) componentHandler() core.ComponentHandle
 	})
 }
 
-func (catalog runtimeInteractionCatalog) modalHandler() core.ModalHandler {
-	return core.ModalHandlerFunc(func(ctx *core.Context) error {
+func (catalog runtimeInteractionCatalog) modalHandler() legacycore.ModalHandler {
+	return legacycore.ModalHandlerFunc(func(ctx *legacycore.Context) error {
 		if ctx == nil || ctx.Session == nil || ctx.Interaction == nil {
 			return nil
 		}
@@ -96,7 +96,7 @@ func (catalog runtimeInteractionCatalog) modalHandler() core.ModalHandler {
 		done := startRuntimeConfigInteractionTrace(ctx.Interaction)
 		defer done()
 
-		ackPolicy := core.InteractionAckPolicy{Mode: core.InteractionAckModeDefer}
+		ackPolicy := legacycore.InteractionAckPolicy{Mode: legacycore.InteractionAckModeDefer}
 		handled, err := authorizeRuntimeModalInteraction(ctx, ackPolicy)
 		if err != nil {
 			return fmt.Errorf("runtimeInteractionCatalog.modalHandler: %w", err)
@@ -125,10 +125,10 @@ func runtimeComponentRouteIDs() []string {
 	}
 }
 
-func runtimeComponentAckPolicy(routeID string) core.InteractionAckPolicy {
+func runtimeComponentAckPolicy(routeID string) legacycore.InteractionAckPolicy {
 	if routeID == cidButtonEdit {
-		return core.InteractionAckPolicy{}
+		return legacycore.InteractionAckPolicy{}
 	}
 
-	return core.InteractionAckPolicy{Mode: core.InteractionAckModeDefer}
+	return legacycore.InteractionAckPolicy{Mode: legacycore.InteractionAckModeDefer}
 }

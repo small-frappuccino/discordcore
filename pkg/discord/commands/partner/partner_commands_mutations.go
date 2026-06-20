@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	partnersvc "github.com/small-frappuccino/discordcore/pkg/partners"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
@@ -47,8 +47,8 @@ func (c *partnerAddSubCommand) RequiresGuild() bool { return true }
 func (c *partnerAddSubCommand) RequiresPermissions() bool { return true }
 
 // Handle handles.
-func (c *partnerAddSubCommand) Handle(ctx *core.Context) error {
-	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
+func (c *partnerAddSubCommand) Handle(ctx *legacycore.Context) error {
+	extractor := legacycore.OptionList(legacycore.GetSubCommandOptions(ctx.Interaction))
 	fandom, _ := extractor.StringRequired(optionFandom)
 	name, _ := extractor.StringRequired(optionName)
 	link, _ := extractor.StringRequired(optionLink)
@@ -83,7 +83,7 @@ func (c *partnerAddSubCommand) Handle(ctx *core.Context) error {
 	}
 
 	c.partnerService.SyncConfig(ctx.GuildID, ctx.Session)
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, "Partner added successfully.")
+	return legacycore.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, "Partner added successfully.")
 }
 
 // --- Remove ---
@@ -118,13 +118,13 @@ func (c *partnerRemoveSubCommand) RequiresGuild() bool { return true }
 func (c *partnerRemoveSubCommand) RequiresPermissions() bool { return true }
 
 // Autocomplete autocompletes.
-func (c *partnerRemoveSubCommand) Autocomplete(ctx *core.Context) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+func (c *partnerRemoveSubCommand) Autocomplete(ctx *legacycore.Context) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	return autocompletePartnerName(ctx, c.configManager)
 }
 
 // Handle handles.
-func (c *partnerRemoveSubCommand) Handle(ctx *core.Context) error {
-	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
+func (c *partnerRemoveSubCommand) Handle(ctx *legacycore.Context) error {
+	extractor := legacycore.OptionList(legacycore.GetSubCommandOptions(ctx.Interaction))
 	name, _ := extractor.StringRequired(optionName)
 
 	if _, err := c.configManager.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
@@ -153,7 +153,7 @@ func (c *partnerRemoveSubCommand) Handle(ctx *core.Context) error {
 	}
 
 	c.partnerService.SyncConfig(ctx.GuildID, ctx.Session)
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, "Partner removed successfully.")
+	return legacycore.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, "Partner removed successfully.")
 }
 
 // --- Link ---
@@ -189,13 +189,13 @@ func (c *partnerLinkSubCommand) RequiresGuild() bool { return true }
 func (c *partnerLinkSubCommand) RequiresPermissions() bool { return true }
 
 // Autocomplete autocompletes.
-func (c *partnerLinkSubCommand) Autocomplete(ctx *core.Context) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+func (c *partnerLinkSubCommand) Autocomplete(ctx *legacycore.Context) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	return autocompletePartnerName(ctx, c.configManager)
 }
 
 // Handle handles.
-func (c *partnerLinkSubCommand) Handle(ctx *core.Context) error {
-	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
+func (c *partnerLinkSubCommand) Handle(ctx *legacycore.Context) error {
+	extractor := legacycore.OptionList(legacycore.GetSubCommandOptions(ctx.Interaction))
 	name, _ := extractor.StringRequired(optionName)
 	link, _ := extractor.StringRequired(optionLink)
 
@@ -223,7 +223,7 @@ func (c *partnerLinkSubCommand) Handle(ctx *core.Context) error {
 	}
 
 	c.partnerService.SyncConfig(ctx.GuildID, ctx.Session)
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, "Partner link updated successfully.")
+	return legacycore.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, "Partner link updated successfully.")
 }
 
 // --- Rename ---
@@ -260,9 +260,9 @@ func (c *partnerRenameSubCommand) RequiresGuild() bool { return true }
 func (c *partnerRenameSubCommand) RequiresPermissions() bool { return true }
 
 // Autocomplete autocompletes.
-func (c *partnerRenameSubCommand) Autocomplete(ctx *core.Context) ([]*discordgo.ApplicationCommandOptionChoice, error) {
-	opts := core.GetSubCommandOptions(ctx.Interaction)
-	focused, found := core.HasFocusedOption(opts)
+func (c *partnerRenameSubCommand) Autocomplete(ctx *legacycore.Context) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+	opts := legacycore.GetSubCommandOptions(ctx.Interaction)
+	focused, found := legacycore.HasFocusedOption(opts)
 	if found && focused.Name == optionCurrentName {
 		return autocompletePartnerNameFocused(ctx, c.configManager, optionCurrentName)
 	}
@@ -270,8 +270,8 @@ func (c *partnerRenameSubCommand) Autocomplete(ctx *core.Context) ([]*discordgo.
 }
 
 // Handle handles.
-func (c *partnerRenameSubCommand) Handle(ctx *core.Context) error {
-	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
+func (c *partnerRenameSubCommand) Handle(ctx *legacycore.Context) error {
+	extractor := legacycore.OptionList(legacycore.GetSubCommandOptions(ctx.Interaction))
 	currentName, _ := extractor.StringRequired(optionCurrentName)
 	newName, _ := extractor.StringRequired(optionName)
 	fandom := extractor.String(optionFandom)
@@ -316,7 +316,7 @@ func (c *partnerRenameSubCommand) Handle(ctx *core.Context) error {
 	}
 
 	c.partnerService.SyncConfig(ctx.GuildID, ctx.Session)
-	return core.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, "Partner renamed successfully.")
+	return legacycore.NewResponseBuilder(ctx.Session).Success(ctx.Interaction, "Partner renamed successfully.")
 }
 
 // --- List ---
@@ -344,7 +344,7 @@ func (c *partnerListSubCommand) RequiresGuild() bool { return true }
 func (c *partnerListSubCommand) RequiresPermissions() bool { return true }
 
 // Handle handles.
-func (c *partnerListSubCommand) Handle(ctx *core.Context) error {
+func (c *partnerListSubCommand) Handle(ctx *legacycore.Context) error {
 	cfg := c.configManager.GuildConfig(ctx.GuildID)
 	if cfg == nil {
 		return partnerDetailedCommandError("Guild config not found.")
@@ -352,7 +352,7 @@ func (c *partnerListSubCommand) Handle(ctx *core.Context) error {
 
 	boardCfg := cfg.PartnerBoard
 	if len(boardCfg.Partners) == 0 {
-		return core.NewResponseBuilder(ctx.Session).Ephemeral().Success(ctx.Interaction, "There are no partners configured for this server.")
+		return legacycore.NewResponseBuilder(ctx.Session).Ephemeral().Success(ctx.Interaction, "There are no partners configured for this server.")
 	}
 
 	var b strings.Builder
@@ -360,7 +360,7 @@ func (c *partnerListSubCommand) Handle(ctx *core.Context) error {
 		b.WriteString(fmt.Sprintf("%d. `%s` | `%s` | %s\n", i+1, p.Name, p.Fandom, p.Link))
 	}
 
-	return core.NewResponseBuilder(ctx.Session).
+	return legacycore.NewResponseBuilder(ctx.Session).
 		WithEmbed().
 		WithTitle("Partner List").
 		WithColor(theme.Info()).
@@ -393,8 +393,8 @@ func (c *partnerRefreshSubCommand) RequiresGuild() bool { return true }
 func (c *partnerRefreshSubCommand) RequiresPermissions() bool { return true }
 
 // Handle handles.
-func (c *partnerRefreshSubCommand) Handle(ctx *core.Context) error {
-	builder := core.NewResponseBuilder(ctx.Session)
+func (c *partnerRefreshSubCommand) Handle(ctx *legacycore.Context) error {
+	builder := legacycore.NewResponseBuilder(ctx.Session)
 	if err := builder.Build().DeferResponse(ctx.Interaction, true); err != nil {
 		return fmt.Errorf("partnerRefreshSubCommand.Handle: %w", err)
 	}
@@ -406,8 +406,8 @@ func (c *partnerRefreshSubCommand) Handle(ctx *core.Context) error {
 	return builder.WithContext(ctx).Success(ctx.Interaction, "Partner board refreshed successfully.")
 }
 
-func autocompletePartnerNameFocused(ctx *core.Context, cm *files.ConfigManager, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
-	extractor := core.OptionList(core.GetSubCommandOptions(ctx.Interaction))
+func autocompletePartnerNameFocused(ctx *legacycore.Context, cm *files.ConfigManager, focusedOption string) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+	extractor := legacycore.OptionList(legacycore.GetSubCommandOptions(ctx.Interaction))
 	query := extractor.String(focusedOption)
 
 	cfg := cm.GuildConfig(ctx.GuildID)
@@ -433,6 +433,6 @@ func autocompletePartnerNameFocused(ctx *core.Context, cm *files.ConfigManager, 
 	return choices, nil
 }
 
-func autocompletePartnerName(ctx *core.Context, cm *files.ConfigManager) ([]*discordgo.ApplicationCommandOptionChoice, error) {
+func autocompletePartnerName(ctx *legacycore.Context, cm *files.ConfigManager) ([]*discordgo.ApplicationCommandOptionChoice, error) {
 	return autocompletePartnerNameFocused(ctx, cm, optionName)
 }

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordgo"
 )
@@ -22,16 +22,16 @@ func NewTicketService(store *storage.Store) *TicketService {
 }
 
 // HandleCategorySelect handles category select.
-func (s *TicketService) HandleCategorySelect(ctx *core.Context) error {
+func (s *TicketService) HandleCategorySelect(ctx *legacycore.Context) error {
 	data := ctx.Interaction.MessageComponentData()
 	if len(data.Values) == 0 {
-		return &core.CommandError{Message: "No category selected.", Ephemeral: true}
+		return &legacycore.CommandError{Message: "No category selected.", Ephemeral: true}
 	}
 	categoryName := data.Values[0]
 
 	// 1. Resolve role from Config
 	if ctx.GuildConfig == nil || !ctx.GuildConfig.Tickets.Enabled {
-		return &core.CommandError{Message: "Tickets are not enabled on this server.", Ephemeral: true}
+		return &legacycore.CommandError{Message: "Tickets are not enabled on this server.", Ephemeral: true}
 	}
 
 	var roleID string
@@ -42,7 +42,7 @@ func (s *TicketService) HandleCategorySelect(ctx *core.Context) error {
 		}
 	}
 	if roleID == "" {
-		return &core.CommandError{Message: "Invalid category selected.", Ephemeral: true}
+		return &legacycore.CommandError{Message: "Invalid category selected.", Ephemeral: true}
 	}
 
 	// 2. Check 500 channels limit
@@ -51,7 +51,7 @@ func (s *TicketService) HandleCategorySelect(ctx *core.Context) error {
 		return fmt.Errorf("fetch channels: %w", err)
 	}
 	if len(channels) >= 490 {
-		return &core.CommandError{Message: "Cannot create ticket: The server is nearing the 500 channel limit.", Ephemeral: true}
+		return &legacycore.CommandError{Message: "Cannot create ticket: The server is nearing the 500 channel limit.", Ephemeral: true}
 	}
 
 	// 3. Get next ticket ID
@@ -124,11 +124,11 @@ func (s *TicketService) HandleCategorySelect(ctx *core.Context) error {
 	}
 
 	// 6. Acknowledge the interaction
-	return core.NewResponseBuilder(ctx.Session).WithContext(ctx).Ephemeral().Success(ctx.Interaction, fmt.Sprintf("Ticket created: <#%s>", createdChannel.ID))
+	return legacycore.NewResponseBuilder(ctx.Session).WithContext(ctx).Ephemeral().Success(ctx.Interaction, fmt.Sprintf("Ticket created: <#%s>", createdChannel.ID))
 }
 
 // HandleClose handles close.
-func (s *TicketService) HandleClose(ctx *core.Context) error {
+func (s *TicketService) HandleClose(ctx *legacycore.Context) error {
 	channelID := ctx.Interaction.ChannelID
 	ch, err := ctx.Session.Channel(channelID)
 	if err != nil {
@@ -136,7 +136,7 @@ func (s *TicketService) HandleClose(ctx *core.Context) error {
 	}
 
 	if !strings.HasPrefix(ch.Name, "ticket-") {
-		return &core.CommandError{Message: "This is not an open ticket.", Ephemeral: true}
+		return &legacycore.CommandError{Message: "This is not an open ticket.", Ephemeral: true}
 	}
 
 	newName := strings.Replace(ch.Name, "ticket-", "closed-", 1)
@@ -193,11 +193,11 @@ func (s *TicketService) HandleClose(ctx *core.Context) error {
 	}
 
 	// Ack
-	return core.NewResponseBuilder(ctx.Session).WithContext(ctx).Ephemeral().Success(ctx.Interaction, "Ticket has been closed.")
+	return legacycore.NewResponseBuilder(ctx.Session).WithContext(ctx).Ephemeral().Success(ctx.Interaction, "Ticket has been closed.")
 }
 
 // HandleReopen handles reopen.
-func (s *TicketService) HandleReopen(ctx *core.Context) error {
+func (s *TicketService) HandleReopen(ctx *legacycore.Context) error {
 	channelID := ctx.Interaction.ChannelID
 	ch, err := ctx.Session.Channel(channelID)
 	if err != nil {
@@ -205,7 +205,7 @@ func (s *TicketService) HandleReopen(ctx *core.Context) error {
 	}
 
 	if !strings.HasPrefix(ch.Name, "closed-") {
-		return &core.CommandError{Message: "This is not a closed ticket.", Ephemeral: true}
+		return &legacycore.CommandError{Message: "This is not a closed ticket.", Ephemeral: true}
 	}
 
 	newName := strings.Replace(ch.Name, "closed-", "ticket-", 1)
@@ -231,11 +231,11 @@ func (s *TicketService) HandleReopen(ctx *core.Context) error {
 		return fmt.Errorf("send reopen message: %w", err)
 	}
 
-	return core.NewResponseBuilder(ctx.Session).WithContext(ctx).Ephemeral().Success(ctx.Interaction, "Ticket has been reopened.")
+	return legacycore.NewResponseBuilder(ctx.Session).WithContext(ctx).Ephemeral().Success(ctx.Interaction, "Ticket has been reopened.")
 }
 
 // HandleDelete handles delete.
-func (s *TicketService) HandleDelete(ctx *core.Context) error {
+func (s *TicketService) HandleDelete(ctx *legacycore.Context) error {
 	channelID := ctx.Interaction.ChannelID
 	_, err := ctx.Session.ChannelDelete(channelID)
 	if err != nil {

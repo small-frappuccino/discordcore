@@ -1,7 +1,7 @@
 package roles
 
 import (
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -29,8 +29,8 @@ func rolePanelVisibilityIsEphemeral(class rolePanelVisibilityClass) bool {
 	}
 }
 
-func rolePanelResponseBuilder(session *discordgo.Session, class rolePanelVisibilityClass) *core.ResponseBuilder {
-	builder := core.NewResponseBuilder(session)
+func rolePanelResponseBuilder(session *discordgo.Session, class rolePanelVisibilityClass) *legacycore.ResponseBuilder {
+	builder := legacycore.NewResponseBuilder(session)
 	if rolePanelVisibilityIsEphemeral(class) {
 		builder = builder.Ephemeral()
 	}
@@ -38,18 +38,18 @@ func rolePanelResponseBuilder(session *discordgo.Session, class rolePanelVisibil
 }
 
 func rolePanelDetailedCommandError(message string) error {
-	return &core.CommandError{Message: message, Ephemeral: rolePanelVisibilityIsEphemeral(rolePanelVisibilityDetailedError)}
+	return &legacycore.CommandError{Message: message, Ephemeral: rolePanelVisibilityIsEphemeral(rolePanelVisibilityDetailedError)}
 }
 
-func rolePanelConfigurationResponseBuilder(session *discordgo.Session) *core.ResponseBuilder {
+func rolePanelConfigurationResponseBuilder(session *discordgo.Session) *legacycore.ResponseBuilder {
 	return rolePanelResponseBuilder(session, rolePanelVisibilityConfiguration)
 }
 
-func rolePanelPreviewResponseBuilder(session *discordgo.Session) *core.ResponseBuilder {
+func rolePanelPreviewResponseBuilder(session *discordgo.Session) *legacycore.ResponseBuilder {
 	return rolePanelResponseBuilder(session, rolePanelVisibilityPreview)
 }
 
-func rolePanelToggleResponseBuilder(ctx *core.Context) *core.ResponseBuilder {
+func rolePanelToggleResponseBuilder(ctx *legacycore.Context) *legacycore.ResponseBuilder {
 	disableEphemeral := false
 	if ctx != nil {
 		if ctx.GuildConfig != nil {
@@ -61,7 +61,7 @@ func rolePanelToggleResponseBuilder(ctx *core.Context) *core.ResponseBuilder {
 		}
 	}
 
-	builder := core.NewResponseBuilder(ctx.Session)
+	builder := legacycore.NewResponseBuilder(ctx.Session)
 	if !disableEphemeral && rolePanelVisibilityIsEphemeral(rolePanelVisibilityToggle) {
 		builder = builder.Ephemeral()
 	}

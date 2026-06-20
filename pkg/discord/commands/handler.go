@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	qotdcmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/discord/tickets"
@@ -29,7 +29,7 @@ type CommandHandler struct {
 	botInstanceID       string
 	catalogCapabilities CommandCatalogCapabilities
 	catalogRegistrars   []CommandCatalogRegistrar
-	commandManager      *core.CommandManager
+	commandManager      *legacycore.CommandManager
 	qotdService         qotdcmd.QuestionCatalogService
 	statsService        *stats.StatsService
 	moderationMetrics   moderation.Metrics
@@ -188,7 +188,7 @@ func (ch *CommandHandler) SetupCommands() error {
 	}
 
 	// Create the command manager
-	ch.commandManager = core.NewCommandManager(ch.session, ch.configManager)
+	ch.commandManager = legacycore.NewCommandManager(ch.session, ch.configManager)
 	ch.embedService = embeds.NewEmbedService(ch.configManager)
 	ch.rolePanelService = roles.NewRolePanelService(ch.configManager)
 	ch.partnerService = partners.NewPartnerService(ch.configManager)
@@ -227,7 +227,7 @@ func (ch *CommandHandler) SetupCommands() error {
 }
 
 // GetCommandManager returns the command manager (for tests or extensions)
-func (ch *CommandHandler) GetCommandManager() *core.CommandManager {
+func (ch *CommandHandler) GetCommandManager() *legacycore.CommandManager {
 	return ch.commandManager
 }
 
@@ -341,17 +341,17 @@ func (ch *CommandHandler) GetConfigManager() *files.ConfigManager {
 }
 
 func (ch *CommandHandler) handlesGuild(guildID string) bool {
-	return ch.handlesGuildRoute(guildID, core.InteractionRouteKey{})
+	return ch.handlesGuildRoute(guildID, legacycore.InteractionRouteKey{})
 }
 
-func (ch *CommandHandler) handlesGuildRoute(guildID string, routeKey core.InteractionRouteKey) bool {
+func (ch *CommandHandler) handlesGuildRoute(guildID string, routeKey legacycore.InteractionRouteKey) bool {
 	// Debug: Granular tracking of the guild route filter logical flow.
 	slog.Debug("evaluating route authorization for request",
 		slog.String("guildID", guildID),
 		slog.String("routeKeyPath", routeKey.Path),
 	)
 
-	feature := core.ResolveFeatureForCommandPath(routeKey.Path)
+	feature := legacycore.ResolveFeatureForCommandPath(routeKey.Path)
 	if !ch.matchesGuildBotInstance(guildID, feature) {
 		slog.Debug("permission denied: mismatch between bot instance and mapped functionality",
 			slog.String("feature", feature),
