@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api/webhook"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/httputil"
+	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
 // TargetValidationClass classifies webhook target validation failures.
@@ -89,18 +91,29 @@ type ArikawaAPI struct {
 func (a *ArikawaAPI) WebhookMessageEdit(ctx context.Context, webhookID discord.WebhookID, webhookToken string, messageID discord.MessageID, data webhook.EditMessageData) (*discord.Message, error) {
 	c := webhook.New(webhookID, webhookToken).WithContext(ctx)
 	c.Client.Retries = 0
+	slog.Debug("Granular transient state inspection: Dispatching webhook message edit payload",
+		slog.String("webhook_id", webhookID.String()),
+		slog.String("message_id", messageID.String()),
+	)
 	return c.EditMessage(messageID, data)
 }
 
 func (a *ArikawaAPI) WebhookWithToken(ctx context.Context, webhookID discord.WebhookID, webhookToken string) (*discord.Webhook, error) {
 	c := webhook.New(webhookID, webhookToken).WithContext(ctx)
 	c.Client.Retries = 0
+	slog.Debug("Granular transient state inspection: Dispatching webhook target lookup",
+		slog.String("webhook_id", webhookID.String()),
+	)
 	return c.Get()
 }
 
 func (a *ArikawaAPI) WebhookMessage(ctx context.Context, webhookID discord.WebhookID, webhookToken string, messageID discord.MessageID) (*discord.Message, error) {
 	c := webhook.New(webhookID, webhookToken).WithContext(ctx)
 	c.Client.Retries = 0
+	slog.Debug("Granular transient state inspection: Dispatching webhook message lookup",
+		slog.String("webhook_id", webhookID.String()),
+		slog.String("message_id", messageID.String()),
+	)
 	return c.Message(messageID)
 }
 
@@ -158,7 +171,9 @@ func PatchMessageEmbed(ctx context.Context, client API, patch MessageEmbedPatch)
 		}
 	}()
 	if client == nil {
-		return errors.New("nil client API")
+		err = errors.New("nil client API")
+		log.EmitBlockingError("Blocking structural failure: nil client API provided for webhook patch", err, log.GenerateRequestID())
+		return err
 	}
 
 	messageIDStr := strings.TrimSpace(patch.MessageID)
@@ -187,8 +202,17 @@ func PatchMessageEmbed(ctx context.Context, client API, patch MessageEmbedPatch)
 
 	_, err = client.WebhookMessageEdit(ctx, webhookID, webhookToken, messageID, data)
 	if err != nil {
+		slog.Warn("Intercepted and mitigated service degradation: Webhook edit operation failed",
+			slog.String("message_id", messageID.String()),
+			slog.String("error", err.Error()),
+		)
 		return fmt.Errorf("edit message_id=%s: %w", messageID, err)
 	}
+
+	slog.Info("Baseline operational telemetry: Webhook message embed successfully patched",
+		slog.String("message_id", messageID.String()),
+		slog.String("webhook_id", webhookID.String()),
+	)
 	return nil
 }
 
@@ -204,7 +228,9 @@ const defaultWebhookTargetValidationTimeout = 3 * time.Second
 // ValidateMessageTarget ...
 func ValidateMessageTarget(ctx context.Context, client API, validation MessageTargetValidation) error {
 	if client == nil {
-		return errors.New("validate webhook target: nil client API")
+		err := errors.New("validate webhook target: nil client API")
+		log.EmitBlockingError("Blocking structural failure: nil client API provided for validation", err, log.GenerateRequestID())
+		return err
 	}
 
 	messageIDStr := strings.TrimSpace(validation.MessageID)
@@ -238,6 +264,10 @@ func ValidateMessageTarget(ctx context.Context, client API, validation MessageTa
 		return wrapTargetValidationError("message lookup", err)
 	}
 
+	slog.Info("Baseline operational telemetry: Webhook message target successfully validated",
+		slog.String("message_id", messageID.String()),
+		slog.String("webhook_id", webhookID.String()),
+	)
 	return nil
 }
 
