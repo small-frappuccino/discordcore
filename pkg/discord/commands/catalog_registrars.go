@@ -1,9 +1,11 @@
 package commands
 
 import (
+	"context"
 	"log/slog"
 
 	"github.com/diamondburned/arikawa/v3/api"
+	"github.com/diamondburned/arikawa/v3/discord"
 	discordclean "github.com/small-frappuccino/discordcore/pkg/discord/clean"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/clean"
 	embedscmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/embeds"
@@ -53,10 +55,49 @@ func DefaultCommandCatalogRegistrars() []CommandCatalogRegistrar {
 // RuntimeCommandCatalogRegistrar registers the runtime config slash command surface.
 func RuntimeCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
-		Register: func(ch *CommandHandler, router *legacycore.CommandRouter) {
-			runtime.NewRuntimeConfigCommands(ch.configManager).RegisterCommands(router)
+		RegisterArikawa: func(ch *CommandHandler, router *legacycore.ArikawaCommandRouter) {
+			replier := &arikawaReplierAdapter{client: api.NewClient("Bot " + ch.session.Token)}
+			handler := runtime.NewHandler(replier, ch.configManager, ch.commandManager.GetRouter().GetRuntimeApplier())
+			shim := &runtimeShim{handler: handler}
+			router.Register(shim)
+			router.RegisterComponent("runtime|", shim)
 		},
 	}
+}
+
+type runtimeShim struct {
+	handler *runtime.Handler
+}
+
+func (s *runtimeShim) Name() string                     { return "runtime" }
+func (s *runtimeShim) Description() string              { return "Manage runtime configuration for the bot." }
+func (s *runtimeShim) Options() []discord.CommandOption { return nil }
+func (s *runtimeShim) RequiresGuild() bool              { return true }
+func (s *runtimeShim) RequiresPermissions() bool        { return true }
+func (s *runtimeShim) Handle(ctx *legacycore.ArikawaContext) error {
+	return s.handler.HandleSlash(ctx.Context(), ctx.Interaction)
+}
+func (s *runtimeShim) HandleComponent(ctx *legacycore.ArikawaContext) error {
+	switch ctx.Interaction.Data.(type) {
+	case discord.ComponentInteraction:
+		return s.handler.HandleComponent(ctx.Context(), ctx.Interaction)
+	case *discord.ModalInteraction:
+		return s.handler.HandleModal(ctx.Context(), ctx.Interaction)
+	default:
+		return nil
+	}
+}
+
+type arikawaReplierAdapter struct {
+	client *api.Client
+}
+
+func (r *arikawaReplierAdapter) RespondInteraction(ctx context.Context, interactionID discord.InteractionID, token string, resp api.InteractionResponse) error {
+	return r.client.RespondInteraction(interactionID, token, resp)
+}
+
+func (r *arikawaReplierAdapter) EditInteractionResponse(ctx context.Context, appID discord.AppID, token string, data api.EditInteractionResponseData) (*discord.Message, error) {
+	return r.client.EditInteractionResponse(appID, token, data)
 }
 
 // PartnerCommandCatalogRegistrar registers the partner slash command surface.
