@@ -1,8 +1,10 @@
 package control
 
 import (
-	"golang.org/x/oauth2"
+	"log/slog"
 	"net/http"
+
+	"golang.org/x/oauth2"
 )
 
 func DiscordOAuthScopes(includeGuildMembersRead bool) []string {
@@ -32,6 +34,7 @@ func (s *Server) handleOAuthLogin(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	state := r.URL.Query().Get("state")
 	if state != "valid" { // simulated validation for CSRF tests
+		slog.Warn("Mitigated service degradation: OAuth state CSRF validation failed", slog.String("received_state", state))
 		http.SetCookie(w, &http.Cookie{Name: "session", MaxAge: -1, Path: "/"})
 		http.Error(w, "Invalid CSRF State", http.StatusForbidden)
 		return

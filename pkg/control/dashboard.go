@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"io"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -73,6 +74,7 @@ func (h *dashboardHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *dashboardHandler) serveIndex(w http.ResponseWriter, r *http.Request) {
+	slog.Debug("Granular inspection: Serving SPA index fallback", slog.String("path", r.URL.Path))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
 	// Compression Negotiation

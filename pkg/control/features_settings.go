@@ -1,6 +1,7 @@
 package control
 
 import (
+	"log/slog"
 	"net/http"
 )
 
@@ -24,6 +25,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handlePutRuntimeConfig(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	slog.Info("Architectural state transition: Runtime configuration updated via control plane")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"status":"updated"}`))
 }

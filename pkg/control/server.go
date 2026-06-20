@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
@@ -121,6 +122,8 @@ func (s *Server) SetDiscordOAuthConfig(config DiscordOAuthConfig) error {
 }
 
 func (s *Server) Start() error {
+	slog.Info("Architectural state transition: Initializing primary HTTP control plane", slog.String("bind_addr", s.bindAddr))
+
 	mux := http.NewServeMux()
 	s.registerRoutes(mux)
 
@@ -145,8 +148,11 @@ func (s *Server) Start() error {
 
 func (s *Server) Stop(ctx context.Context) error {
 	if s.httpServer == nil {
+		slog.Debug("Granular inspection: Stop invoked on uninitialized HTTP control plane")
 		return nil
 	}
+
+	slog.Info("Architectural state transition: Commencing graceful shutdown of HTTP control plane")
 
 	// Enforce 5s limit
 	shutdownCtx, cancel := context.WithTimeout(ctx, 5*time.Second)

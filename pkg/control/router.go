@@ -1,10 +1,12 @@
 package control
 
 import (
+	"log/slog"
 	"net/http"
 )
 
 func (s *Server) registerRoutes(mux *http.ServeMux) {
+	slog.Debug("Granular inspection: Mounting multiplexed HTTP routes onto main dispatcher")
 	// API Routes (Go 1.22 Method Routing)
 	mux.HandleFunc("GET /v1/features", s.handleGetFeatures)
 	mux.HandleFunc("POST /v1/features", maxBytesMiddleware(s.handlePostFeatures))
