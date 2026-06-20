@@ -3,6 +3,7 @@ package moderation
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/diamondburned/arikawa/v3/discord"
 )
@@ -16,12 +17,16 @@ type CacheFallbackResolver interface {
 
 // FallbackCache wraps Arikawa cache/state mechanisms to ensure robust member resolution.
 type FallbackCache struct {
-	state CacheFallbackResolver
+	state  CacheFallbackResolver
+	logger *slog.Logger
 }
 
 // NewFallbackCache constructs a fallback wrapper over an arikawa state.
-func NewFallbackCache(state CacheFallbackResolver) *FallbackCache {
-	return &FallbackCache{state: state}
+func NewFallbackCache(state CacheFallbackResolver, logger *slog.Logger) *FallbackCache {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return &FallbackCache{state: state, logger: logger}
 }
 
 // ResolveMember attempts to read the target from in-memory caches.
@@ -39,6 +44,11 @@ func (c *FallbackCache) ResolveMember(ctx context.Context, guildID discord.Guild
 	}
 
 	// Fallback to API if cache misses
+	c.logger.Warn("Mitigated service degradation: Target absent from local cache; executing REST fallback",
+		slog.String("guild_id", guildID.String()),
+		slog.String("target_id", userID.String()),
+	)
+
 	member, err = c.state.MemberFromAPI(guildID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed resolving member from REST API: %w", err)

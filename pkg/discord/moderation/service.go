@@ -3,6 +3,7 @@ package moderation
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
@@ -21,12 +22,17 @@ type Client interface {
 // Service provides high-level Discord moderation operations.
 type Service struct {
 	client Client
+	logger *slog.Logger
 }
 
 // NewService instantiates a new moderation service using the provided arikawa client.
-func NewService(client Client) *Service {
+func NewService(client Client, logger *slog.Logger) *Service {
+	if logger == nil {
+		logger = slog.Default() // Fallback safety, though strict DI is expected
+	}
 	return &Service{
 		client: client,
+		logger: logger,
 	}
 }
 
@@ -44,10 +50,21 @@ func (s *Service) Ban(ctx context.Context, guildID discord.GuildID, userID disco
 		DeleteDays: option.NewUint(uint(deleteMessageSeconds / 86400)),
 	}
 
+	s.logger.Debug("Granular transient state inspection: Executing ban payload",
+		slog.String("guild_id", guildID.String()),
+		slog.String("target_id", userID.String()),
+		slog.Int("delete_days", deleteMessageSeconds/86400),
+	)
+
 	// Arikawa requires reason via audit log reason header, which is typically handled by WithContext and api.WithReason,
 	// but for this abstract interface we assume the reason is either passed down or the caller wraps the context via api.WithReason.
 	// Since we strictly enforce arikawa, the context should already carry the audit log reason.
 	if err := s.client.Ban(guildID, userID, data); err != nil {
+		s.logger.Warn("Mitigated service degradation: Ban execution rejected by network or permissions",
+			slog.String("guild_id", guildID.String()),
+			slog.String("target_id", userID.String()),
+			slog.String("error", err.Error()),
+		)
 		return fmt.Errorf("failed to execute ban: %w", err)
 	}
 
@@ -62,7 +79,17 @@ func (s *Service) Kick(ctx context.Context, guildID discord.GuildID, userID disc
 	default:
 	}
 
+	s.logger.Debug("Granular transient state inspection: Executing kick payload",
+		slog.String("guild_id", guildID.String()),
+		slog.String("target_id", userID.String()),
+	)
+
 	if err := s.client.Kick(guildID, userID, reason); err != nil {
+		s.logger.Warn("Mitigated service degradation: Kick execution rejected by network or permissions",
+			slog.String("guild_id", guildID.String()),
+			slog.String("target_id", userID.String()),
+			slog.String("error", err.Error()),
+		)
 		return fmt.Errorf("failed to execute kick: %w", err)
 	}
 
@@ -81,7 +108,18 @@ func (s *Service) Timeout(ctx context.Context, guildID discord.GuildID, userID d
 		CommunicationDisabledUntil: &until,
 	}
 
+	s.logger.Debug("Granular transient state inspection: Executing timeout payload",
+		slog.String("guild_id", guildID.String()),
+		slog.String("target_id", userID.String()),
+		slog.Time("until", until.Time()),
+	)
+
 	if err := s.client.ModifyMember(guildID, userID, data); err != nil {
+		s.logger.Warn("Mitigated service degradation: Timeout execution rejected by network or permissions",
+			slog.String("guild_id", guildID.String()),
+			slog.String("target_id", userID.String()),
+			slog.String("error", err.Error()),
+		)
 		return fmt.Errorf("failed to execute timeout: %w", err)
 	}
 

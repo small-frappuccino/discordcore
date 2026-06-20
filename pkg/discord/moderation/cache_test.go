@@ -26,7 +26,7 @@ func (m *mockCacheResolver) MemberFromAPI(guildID discord.GuildID, userID discor
 // secondary REST calls.
 func TestFallbackCache_ResolveMember(t *testing.T) {
 	mockState := &mockCacheResolver{}
-	cache := NewFallbackCache(mockState)
+	cache := NewFallbackCache(mockState, nil)
 
 	ctx := context.Background()
 	guildID := discord.GuildID(123)

@@ -1,6 +1,8 @@
 package moderation
 
 import (
+	"log/slog"
+
 	"github.com/diamondburned/arikawa/v3/discord"
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
@@ -12,13 +14,17 @@ import (
 type ReactionBlockCommand struct {
 	configManager *files.ConfigManager
 	metrics       Metrics
+	logger        *slog.Logger
 }
 
-func NewReactionBlockCommand(cm *files.ConfigManager, metrics Metrics) *ReactionBlockCommand {
+func NewReactionBlockCommand(cm *files.ConfigManager, metrics Metrics, logger *slog.Logger) *ReactionBlockCommand {
 	if metrics == nil {
 		metrics = NopMetrics{}
 	}
-	return &ReactionBlockCommand{configManager: cm, metrics: metrics}
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return &ReactionBlockCommand{configManager: cm, metrics: metrics, logger: logger}
 }
 
 func (c *ReactionBlockCommand) Name() string        { return "reaction_block" }
@@ -55,6 +61,11 @@ func (c *ReactionBlockCommand) Handle(ctx *legacycore.ArikawaContext) error {
 	if !ctx.GuildID.IsValid() {
 		return respondEphemeral(ctx, "Must be used in a server")
 	}
+
+	c.logger.Info("Architectural state transition: Executing reaction block configuration update via slash command",
+		slog.String("command", "reaction_block"),
+		slog.String("guild_id", ctx.GuildID.String()),
+	)
 
 	// For standard execution, assume success and emit purely ephemeral
 	// resolution messages.

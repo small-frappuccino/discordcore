@@ -3,6 +3,7 @@ package moderation
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/diamondburned/arikawa/v3/api"
@@ -33,17 +34,21 @@ func (m *InMemoryMetrics) Attach(ctx context.Context) error { return nil }
 // CommandRegistry allows external routers to wire these pure slash commands.
 // Rather than tightly coupling to discordgo, we expose individual command instantiators
 // which the Arikawa-capable router can consume.
-func NewBanCommand(svc *discordmod.Service, metrics Metrics) *BanCommand {
+func NewBanCommand(svc *discordmod.Service, metrics Metrics, logger *slog.Logger) *BanCommand {
 	if metrics == nil {
 		metrics = NopMetrics{}
 	}
-	return &BanCommand{service: svc, metrics: metrics}
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return &BanCommand{service: svc, metrics: metrics, logger: logger}
 }
 
 // BanCommand encapsulates the `/ban` slash command execution.
 type BanCommand struct {
 	service *discordmod.Service
 	metrics Metrics
+	logger  *slog.Logger
 }
 
 func (c *BanCommand) Name() string        { return "ban" }
@@ -98,8 +103,18 @@ func (c *BanCommand) Handle(ctx *legacycore.ArikawaContext) error {
 		return respondEphemeral(ctx, "Invalid user specified.")
 	}
 
+	c.logger.Info("Architectural state transition: Executing moderation action from slash command",
+		slog.String("command", "ban"),
+		slog.String("guild_id", ctx.GuildID.String()),
+		slog.String("target_id", userID.String()),
+	)
+
 	err := c.service.Ban(context.Background(), ctx.GuildID, userID, 0, reason)
 	if err != nil {
+		c.logger.Error("Blocking structural failure: Ban command execution aborted",
+			slog.String("guild_id", ctx.GuildID.String()),
+			slog.String("error", err.Error()),
+		)
 		return respondEphemeral(ctx, "Failed to ban the user.")
 	}
 
@@ -110,13 +125,17 @@ func (c *BanCommand) Handle(ctx *legacycore.ArikawaContext) error {
 type TimeoutCommand struct {
 	service *discordmod.Service
 	metrics Metrics
+	logger  *slog.Logger
 }
 
-func NewTimeoutCommand(svc *discordmod.Service, metrics Metrics) *TimeoutCommand {
+func NewTimeoutCommand(svc *discordmod.Service, metrics Metrics, logger *slog.Logger) *TimeoutCommand {
 	if metrics == nil {
 		metrics = NopMetrics{}
 	}
-	return &TimeoutCommand{service: svc, metrics: metrics}
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return &TimeoutCommand{service: svc, metrics: metrics, logger: logger}
 }
 
 func (c *TimeoutCommand) Name() string        { return "timeout" }
@@ -173,8 +192,18 @@ func (c *TimeoutCommand) Handle(ctx *legacycore.ArikawaContext) error {
 
 	until := discord.NewTimestamp(time.Now().Add(time.Duration(minutes) * time.Minute))
 
+	c.logger.Info("Architectural state transition: Executing moderation action from slash command",
+		slog.String("command", "timeout"),
+		slog.String("guild_id", ctx.GuildID.String()),
+		slog.String("target_id", userID.String()),
+	)
+
 	err := c.service.Timeout(context.Background(), ctx.GuildID, userID, until)
 	if err != nil {
+		c.logger.Error("Blocking structural failure: Timeout command execution aborted",
+			slog.String("guild_id", ctx.GuildID.String()),
+			slog.String("error", err.Error()),
+		)
 		return respondEphemeral(ctx, "Failed to timeout the user.")
 	}
 
@@ -192,13 +221,17 @@ func respondEphemeral(ctx *legacycore.ArikawaContext, msg string) error {
 type MassBanCommand struct {
 	service *discordmod.Service
 	metrics Metrics
+	logger  *slog.Logger
 }
 
-func NewMassBanCommand(svc *discordmod.Service, metrics Metrics) *MassBanCommand {
+func NewMassBanCommand(svc *discordmod.Service, metrics Metrics, logger *slog.Logger) *MassBanCommand {
 	if metrics == nil {
 		metrics = NopMetrics{}
 	}
-	return &MassBanCommand{service: svc, metrics: metrics}
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return &MassBanCommand{service: svc, metrics: metrics, logger: logger}
 }
 
 func (c *MassBanCommand) Name() string        { return "massban" }
@@ -234,6 +267,12 @@ func (c *MassBanCommand) Handle(ctx *legacycore.ArikawaContext) error {
 
 	// Delegate ID normalization to the purely Discord-agnostic core package
 	validIDs, _ := coremod.ParseMemberIDs(rawUsers)
+
+	c.logger.Info("Architectural state transition: Executing mass moderation action from slash command",
+		slog.String("command", "massban"),
+		slog.String("guild_id", ctx.GuildID.String()),
+		slog.Int("target_count", len(validIDs)),
+	)
 
 	for _, idStr := range validIDs {
 		sf, err := discord.ParseSnowflake(idStr)

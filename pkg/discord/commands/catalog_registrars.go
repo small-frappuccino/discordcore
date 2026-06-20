@@ -73,11 +73,11 @@ func ModerationCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
 		RegisterArikawa: func(ch *CommandHandler, router *legacycore.ArikawaCommandRouter) {
 			client := api.NewClient("Bot " + ch.session.Token)
-			svc := discordmod.NewService(client)
-			router.Register(moderation.NewBanCommand(svc, ch.moderationMetrics))
-			router.Register(moderation.NewTimeoutCommand(svc, ch.moderationMetrics))
-			router.Register(moderation.NewMassBanCommand(svc, ch.moderationMetrics))
-			router.Register(moderation.NewReactionBlockCommand(ch.configManager, ch.moderationMetrics))
+			svc := discordmod.NewService(client, slog.Default())
+			router.Register(moderation.NewBanCommand(svc, ch.moderationMetrics, slog.Default()))
+			router.Register(moderation.NewTimeoutCommand(svc, ch.moderationMetrics, slog.Default()))
+			router.Register(moderation.NewMassBanCommand(svc, ch.moderationMetrics, slog.Default()))
+			router.Register(moderation.NewReactionBlockCommand(ch.configManager, ch.moderationMetrics, slog.Default()))
 		},
 	}
 }

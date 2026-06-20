@@ -20,11 +20,11 @@ func TestNextFallbackCaseNumber_Race(t *testing.T) {
 	results := make(chan int64, concurrency)
 
 	for i := 0; i < concurrency; i++ {
-		go func() {
+		go func(g string) {
 			defer wg.Done()
 			// Generate the fallback case number concurrently.
-			results <- NextFallbackCaseNumber(guildID)
-		}()
+			results <- NextFallbackCaseNumber(g, nil)
+		}(guildID)
 	}
 
 	wg.Wait()

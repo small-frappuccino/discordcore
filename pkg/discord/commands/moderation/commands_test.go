@@ -39,10 +39,10 @@ func TestCommands_StatelessExecution(t *testing.T) {
 	metricsTimeout := &mockMetrics{}
 
 	client := &mockClient{}
-	svc := discordmod.NewService(client)
+	svc := discordmod.NewService(client, nil)
 
-	banCmd := NewBanCommand(svc, metricsBan)
-	timeoutCmd := NewTimeoutCommand(svc, metricsTimeout)
+	banCmd := NewBanCommand(svc, metricsBan, nil)
+	timeoutCmd := NewTimeoutCommand(svc, metricsTimeout, nil)
 
 	ctx1 := &legacycore.ArikawaContext{
 		GuildID: discord.GuildID(123),
@@ -81,8 +81,8 @@ func TestCommands_StatelessExecution(t *testing.T) {
 
 // TestMassBanCommand_Parity ensures MassBan natively utilizes the core logic parsing.
 func TestMassBanCommand_Parity(t *testing.T) {
-	svc := discordmod.NewService(&mockClient{})
-	cmd := NewMassBanCommand(svc, nil)
+	svc := discordmod.NewService(&mockClient{}, nil)
+	cmd := NewMassBanCommand(svc, nil, nil)
 
 	if cmd.Name() != "massban" {
 		t.Errorf("expected massban name")

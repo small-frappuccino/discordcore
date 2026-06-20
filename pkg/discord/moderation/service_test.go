@@ -27,7 +27,7 @@ func TestService_ContextTimeout(t *testing.T) {
 
 	// Instead of directly using Arikawa's real HTTP calls (since replacing BaseURL cleanly
 	// requires specific Arikawa setup), we test the Service wrapper's context adherence.
-	svc := NewService(client)
+	svc := NewService(client, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
