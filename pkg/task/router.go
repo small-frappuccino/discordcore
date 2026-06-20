@@ -1,3 +1,6 @@
+//go:build !legacy
+// +build !legacy
+
 package task
 
 import (
@@ -18,84 +21,63 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/observability"
 )
 
-// TaskHandler is a function that processes a task payload.
+// TaskHandler represents a state-less processing unit for a single task payload.
+// Handlers must be concurrent-safe and respect context cancellation guarantees.
 type TaskHandler func(ctx context.Context, payload any) error
 
-// TaskOptions configures how a task should be dispatched and executed.
+// TaskOptions dictates the operational routing parameters for a scheduled task.
 type TaskOptions struct {
-	// GroupKey ensures serialized execution for tasks that share the same group.
-	// Use this to guarantee order per guild/user/etc. If empty, tasks use a global group.
+	// GroupKey enforces sequential execution guarantees across concurrent dispatchers.
+	// Tasks sharing an identical group key will never execute in parallel.
 	GroupKey string
 
-	// IdempotencyKey deduplicates tasks enqueued within the IdempotencyTTL window.
-	// If a task with the same key is already in-flight or recently enqueued, it will not be enqueued again.
+	// IdempotencyKey prevents duplicate task queuing within the defined TTL window.
 	IdempotencyKey string
 
-	// MaxAttempts controls how many times the task may be retried on handler error.
-	// If 0, router uses RouterConfig.DefaultMaxAttempts.
+	// MaxAttempts defines the upper bound for handler execution retries.
+	// If 0, the router defaults to RouterConfig.DefaultMaxAttempts.
 	MaxAttempts int
 
-	// InitialBackoff sets the initial backoff used for retries. If 0, router uses RouterConfig.InitialBackoff.
+	// InitialBackoff configures the baseline delay for exponential retry scaling.
 	InitialBackoff time.Duration
 
-	// MaxBackoff caps the exponential backoff. If 0, router uses RouterConfig.MaxBackoff.
+	// MaxBackoff establishes the absolute ceiling for the exponential backoff formula.
 	MaxBackoff time.Duration
 
-	// IdempotencyTTL controls how long the idempotency key is kept for deduplication.
-	// If 0, router uses RouterConfig.IdempotencyTTL.
+	// IdempotencyTTL determines the survival duration of the idempotency token in memory.
 	IdempotencyTTL time.Duration
 }
 
-// EmptyPayload is a concrete struct used for tasks that do not require a payload.
+// EmptyPayload serves as a zero-allocation marker for tasks requiring no dynamic context.
 type EmptyPayload struct{}
 
-// Task encapsulates the work to be executed by the router.
+// Task encapsulates the immutable instructions and metadata required for background dispatch.
 type Task struct {
 	Type    string
 	Payload any
 	Options TaskOptions
 }
 
-// RouterConfig configures the TaskRouter behavior.
+// RouterConfig defines the holistic tuning parameters for the task orchestration layer.
 type RouterConfig struct {
-	// DefaultMaxAttempts applies when TaskOptions.MaxAttempts is 0.
 	DefaultMaxAttempts int
+	InitialBackoff     time.Duration
+	MaxBackoff         time.Duration
+	IdempotencyTTL     time.Duration
+	GroupBuffer        int
+	GroupIdleTTL       time.Duration
+	CleanupInterval    time.Duration
+	GlobalMaxWorkers   int
+	GroupMaxParallel   int
 
-	// InitialBackoff applies when TaskOptions.InitialBackoff is 0.
-	InitialBackoff time.Duration
-
-	// MaxBackoff applies when TaskOptions.MaxBackoff is 0.
-	MaxBackoff time.Duration
-
-	// IdempotencyTTL applies when TaskOptions.IdempotencyTTL is 0.
-	IdempotencyTTL time.Duration
-
-	// GroupBuffer controls the buffered channel size for each group worker.
-	GroupBuffer int
-
-	// GroupIdleTTL after which an idle group worker will be stopped (when no tasks).
-	GroupIdleTTL time.Duration
-
-	// CleanupInterval controls how often background cleanup runs (idle groups, idempotency keys).
-	CleanupInterval time.Duration
-
-	// GlobalMaxWorkers limits how many handler executions can run at the same time across all groups.
-	// 0 or less means unlimited.
-	GlobalMaxWorkers int
-
-	// ExecutionLimiter allows multiple routers to share the same global execution budget.
-	// When nil, NewRouter creates a private limiter from GlobalMaxWorkers.
+	// ExecutionLimiter enables resource sharing across multiple router topologies.
 	ExecutionLimiter *ExecutionLimiter
 
-	// GroupMaxParallel limits how many workers a single group has.
-	// Minimum is 1 (default), which preserves serialized execution per group.
-	GroupMaxParallel int
-
-	// Clock provides a mockable time interface. If nil, RealClock is used.
+	// Clock abstracts the time package to enable deterministic execution testing.
 	Clock clock.Clock
 }
 
-// Defaults returns a RouterConfig with sensible defaults.
+// Defaults provisions a base configuration profile suitable for production operations.
 func Defaults() RouterConfig {
 	return RouterConfig{
 		DefaultMaxAttempts: 3,
@@ -105,18 +87,19 @@ func Defaults() RouterConfig {
 		GroupBuffer:        128,
 		GroupIdleTTL:       2 * time.Minute,
 		CleanupInterval:    2 * time.Minute,
-		GlobalMaxWorkers:   0, // unlimited by default
-		GroupMaxParallel:   1, // serialized per group by default
+		GlobalMaxWorkers:   0,
+		GroupMaxParallel:   1,
 		Clock:              clock.RealClock{},
 	}
 }
 
-// ExecutionLimiter bounds concurrent task handler execution and can be shared across routers.
+// ExecutionLimiter bounds the aggregate concurrency ceiling via a counting semaphore.
 type ExecutionLimiter struct {
 	sem chan struct{}
 }
 
-// NewExecutionLimiter news execution limiter.
+// NewExecutionLimiter allocates a fixed-capacity execution bounded semaphore.
+// A capacity of 0 or less returns a nil limiter, which signifies unbounded execution.
 func NewExecutionLimiter(maxWorkers int) *ExecutionLimiter {
 	if maxWorkers <= 0 {
 		return nil
@@ -126,15 +109,16 @@ func NewExecutionLimiter(maxWorkers int) *ExecutionLimiter {
 	}
 }
 
-// Acquire acquires.
+// Acquire blocks until a concurrency token becomes available within the semaphore.
 func (l *ExecutionLimiter) Acquire() {
 	if l == nil || l.sem == nil {
 		return
 	}
+	// Blocks until capacity is freed.
 	l.sem <- struct{}{}
 }
 
-// Release releases.
+// Release yields a concurrency token back to the semaphore pool.
 func (l *ExecutionLimiter) Release() {
 	if l == nil || l.sem == nil {
 		return
@@ -142,10 +126,11 @@ func (l *ExecutionLimiter) Release() {
 	select {
 	case <-l.sem:
 	default:
+		// Evades panic on over-release, which indicates a severe architectural failure but shouldn't crash the loop.
 	}
 }
 
-// Capacity capacitys.
+// Capacity interrogates the upper bound of the concurrency semaphore.
 func (l *ExecutionLimiter) Capacity() int {
 	if l == nil || l.sem == nil {
 		return 0
@@ -153,7 +138,7 @@ func (l *ExecutionLimiter) Capacity() int {
 	return cap(l.sem)
 }
 
-// Errors returned by the router.
+// Operational errors for routing boundaries.
 var (
 	ErrRouterClosed    = errors.New("task router is closed")
 	ErrUnknownTaskType = errors.New("unknown task type")
@@ -186,27 +171,24 @@ const (
 	queueStateClosed
 )
 
-// TaskRouter is a minimal in-memory dispatcher with per-group serialization,
-// idempotency (dedupe), and retry with exponential backoff.
+// TaskRouter orchestrates background execution scheduling, concurrency boundaries, and idempotency states.
 type TaskRouter struct {
 	mu        sync.RWMutex
 	handlers  map[string]TaskHandler
 	groups    map[string]*groupWorker
-	inflight  map[string]time.Time // idempotencyKey -> expiry
+	inflight  map[string]time.Time
 	closed    bool
 	cfg       RouterConfig
 	startedAt time.Time
 	wg        sync.WaitGroup
 	stopOnce  sync.Once
 	stopCh    chan struct{}
-	// ctx is the router's lifecycle context, handed to every task handler and
-	// canceled by Close before it waits for in-flight handlers. It lets Close
-	// actively cancel running work instead of only blocking on completion.
+
+	// ctx dictates the holistic lifecycle boundary passed into active task handlers.
 	ctx       context.Context
 	cancel    context.CancelFunc
-	randMutex sync.Mutex // for jitter RNG
+	randMutex sync.Mutex
 
-	// Global concurrency limiter; nil when unlimited.
 	execLimiter *ExecutionLimiter
 
 	retryMu     sync.Mutex
@@ -214,11 +196,9 @@ type TaskRouter struct {
 	retryWakeCh chan struct{}
 	retrySeq    uint64
 
-	// Simple cron scheduler
 	cronMu   sync.Mutex
 	cronJobs []*cronJob
 
-	// Cron dispatch counters
 	cronDispatchAttempts int64
 	cronDispatchSuccess  int64
 	cronDispatchFailures int64
@@ -253,12 +233,12 @@ type scheduledRetry struct {
 
 type retryTaskHeap []*scheduledRetry
 
-// Len lens.
+// Len reports the total elements within the retry heap.
 func (h retryTaskHeap) Len() int {
 	return len(h)
 }
 
-// Less less.
+// Less ensures chronological priority, falling back to sequence insertion ordering.
 func (h retryTaskHeap) Less(i, j int) bool {
 	if h[i].at.Equal(h[j].at) {
 		return h[i].seq < h[j].seq
@@ -266,21 +246,21 @@ func (h retryTaskHeap) Less(i, j int) bool {
 	return h[i].at.Before(h[j].at)
 }
 
-// Swap swaps.
+// Swap transposes two elements within the heap to maintain algorithmic invariants.
 func (h retryTaskHeap) Swap(i, j int) {
 	h[i], h[j] = h[j], h[i]
 	h[i].index = i
 	h[j].index = j
 }
 
-// Push pushs.
+// Push allocates a scheduled retry entity onto the trailing tail of the slice.
 func (h *retryTaskHeap) Push(x any) {
 	item := x.(*scheduledRetry)
 	item.index = len(*h)
 	*h = append(*h, item)
 }
 
-// Pop pops.
+// Pop truncates and returns the lowest priority element from the slice tail.
 func (h *retryTaskHeap) Pop() any {
 	old := *h
 	n := len(old)
@@ -297,9 +277,8 @@ type cronJob struct {
 	stopped  bool
 }
 
-// NewRouter creates a new TaskRouter with the provided configuration.
+// NewRouter constructs an isolated task dispatch infrastructure mapping config defaults.
 func NewRouter(cfg RouterConfig) *TaskRouter {
-	// Fill defaults for zero-values
 	def := Defaults()
 	if cfg.DefaultMaxAttempts <= 0 {
 		cfg.DefaultMaxAttempts = def.DefaultMaxAttempts
@@ -352,16 +331,15 @@ func NewRouter(cfg RouterConfig) *TaskRouter {
 	return tr
 }
 
-// RegisterHandler registers a handler for the given task type.
+// RegisterHandler binds an execution callback directly to a string payload type boundary.
 func (tr *TaskRouter) RegisterHandler(taskType string, handler TaskHandler) {
 	tr.mu.Lock()
 	defer tr.mu.Unlock()
 	tr.handlers[taskType] = handler
 }
 
-// Dispatch enqueues a task for execution, respecting grouping and idempotency.
-// Returns ErrUnknownTaskType if no handler is registered.
-// Returns ErrDuplicateTask when a non-expired IdempotencyKey already exists.
+// Dispatch queues an arbitrary payload to the routing engine.
+// Emits ErrDuplicateTask synchronously if idempotency bounds are violated.
 func (tr *TaskRouter) Dispatch(ctx context.Context, t Task) error {
 	groupKey, eff, err := tr.prepareDispatch(t)
 	if err != nil {
@@ -389,6 +367,7 @@ func (tr *TaskRouter) Dispatch(ctx context.Context, t Task) error {
 			tr.rollbackIdempotencyReservation(eff)
 			return ErrRouterClosed
 		case groupSendClosed:
+			// Group was shutting down while attempting dispatch, cycle loop to instantiate cleanly.
 			tr.dropStaleGroup(groupKey, gw)
 		}
 	}
@@ -410,10 +389,8 @@ func (tr *TaskRouter) prepareDispatch(t Task) (string, TaskOptions, error) {
 		return "", TaskOptions{}, ErrUnknownTaskType
 	}
 
-	// Resolve effective options
 	eff := tr.effectiveOptions(t.Options)
 
-	// Idempotency: reject duplicates within TTL window
 	if eff.IdempotencyKey != "" {
 		if expiry, exists := tr.inflight[eff.IdempotencyKey]; exists && tr.cfg.Clock.Now().Before(expiry) {
 			return "", TaskOptions{}, ErrDuplicateTask
@@ -429,8 +406,8 @@ func (tr *TaskRouter) prepareDispatch(t Task) (string, TaskOptions, error) {
 	return groupKey, eff, nil
 }
 
-// Close gracefully stops the router, waits for background goroutines to exit.
-// Enqueued tasks that are not yet picked up may be dropped.
+// Close gracefully halts all pending orchestration and unblocks all background workers.
+// Any execution routines in-flight will be hard-canceled via context propagation.
 func (tr *TaskRouter) Close() {
 	tr.stopOnce.Do(func() {
 		tr.mu.Lock()
@@ -445,11 +422,12 @@ func (tr *TaskRouter) Close() {
 			}
 			groups = append(groups, gw)
 		}
-		// Clear internal maps
+		// Discard memory structures to halt map accesses proactively
 		clear(tr.groups)
 		clear(tr.inflight)
 		clear(tr.handlers)
 		tr.mu.Unlock()
+
 		close(tr.stopCh)
 		if tr.cancel != nil {
 			tr.cancel()
@@ -461,7 +439,7 @@ func (tr *TaskRouter) Close() {
 	})
 }
 
-// Stats provides a snapshot with counts useful for debugging/monitoring.
+// Stats encapsulates operational metrics intended for telemetry scraping.
 type Stats struct {
 	GroupsCount          int
 	InflightCount        int
@@ -472,7 +450,7 @@ type Stats struct {
 	CronDispatchFailures int64
 }
 
-// Stats stats.
+// Stats aggregates immediate internal counters inside a thread-safe read envelope.
 func (tr *TaskRouter) Stats() Stats {
 	tr.mu.RLock()
 	defer tr.mu.RUnlock()
@@ -487,8 +465,7 @@ func (tr *TaskRouter) Stats() Stats {
 	}
 }
 
-// ScheduleEvery registers a simple periodic job that dispatches the given task
-// at the specified interval. Returns a cancel function.
+// ScheduleEvery establishes an interval repetition loop that enqueues the provided task.
 func (tr *TaskRouter) ScheduleEvery(interval time.Duration, t Task) func() {
 	job := &cronJob{
 		Interval: interval,
@@ -512,7 +489,75 @@ func (tr *TaskRouter) ScheduleEvery(interval time.Duration, t Task) func() {
 	return cancel
 }
 
-// --- Internals ---
+// Cancel models the tear-down execution routine for scheduled jobs.
+type Cancel func()
+
+// ScheduleDailyAtUTC registers a recurring periodic submission locking onto an absolute UTC clock boundary.
+func (tr *TaskRouter) ScheduleDailyAtUTC(hour, minute int, t Task) Cancel {
+	return tr.ScheduleEveryNDaysAtUTCWithSeconds(1, hour, minute, 0, t)
+}
+
+// ScheduleDailyAtUTCWithSeconds anchors a 24-hour job repeating down to the exact second precision.
+func (tr *TaskRouter) ScheduleDailyAtUTCWithSeconds(hour, minute, second int, t Task) Cancel {
+	return tr.ScheduleEveryNDaysAtUTCWithSeconds(1, hour, minute, second, t)
+}
+
+// ScheduleEveryNDaysAtUTC schedules across an N day period omitting seconds.
+func (tr *TaskRouter) ScheduleEveryNDaysAtUTC(n int, hour, minute int, t Task) Cancel {
+	return tr.ScheduleEveryNDaysAtUTCWithSeconds(n, hour, minute, 0, t)
+}
+
+// ScheduleEveryNDaysAtUTCWithSeconds computes a localized UTC offset boundary for execution bridging multiple days.
+func (tr *TaskRouter) ScheduleEveryNDaysAtUTCWithSeconds(n int, hour, minute, second int, t Task) Cancel {
+	if n <= 0 {
+		n = 1
+	}
+	hour = clampInt(hour, 0, 23)
+	minute = clampInt(minute, 0, 59)
+	second = clampInt(second, 0, 59)
+
+	interval := time.Duration(n) * 24 * time.Hour
+
+	now := tr.cfg.Clock.Now().UTC()
+	target := nextUTCTimestamp(now, hour, minute, second)
+	if !now.Before(target) {
+		target = target.Add(interval)
+	}
+
+	// Pre-date the lastRun so that when 'now' reaches 'target', exactly 'interval' has passed.
+	lastRun := target.Add(-interval)
+
+	job := &cronJob{
+		Interval: interval,
+		Task:     t,
+		lastRun:  lastRun,
+		stopped:  false,
+	}
+
+	tr.cronMu.Lock()
+	tr.cronJobs = append(tr.cronJobs, job)
+	idx := len(tr.cronJobs) - 1
+	tr.cronMu.Unlock()
+
+	cancel := func() {
+		tr.cronMu.Lock()
+		if idx >= 0 && idx < len(tr.cronJobs) && tr.cronJobs[idx] == job {
+			tr.cronJobs[idx] = nil
+		}
+		job.stopped = true
+		tr.cronMu.Unlock()
+	}
+
+	return cancel
+}
+
+func nextUTCTimestamp(from time.Time, hour, minute, second int) time.Time {
+	return time.Date(from.Year(), from.Month(), from.Day(), hour, minute, second, 0, time.UTC)
+}
+
+func clampInt(v, lo, hi int) int {
+	return max(min(v, hi), lo)
+}
 
 func (tr *TaskRouter) effectiveOptions(opt TaskOptions) TaskOptions {
 	if opt.MaxAttempts <= 0 {
@@ -549,7 +594,6 @@ func newGroupWorker(key string, buffer int, nowNs int64) *groupWorker {
 }
 
 func (tr *TaskRouter) nowNs() int64 {
-	// Keep zero reserved for "never marked active".
 	return tr.cfg.Clock.Now().Sub(tr.startedAt).Nanoseconds() + 1
 }
 
@@ -626,6 +670,7 @@ func (gw *groupWorker) finishStop() {
 	if gw == nil {
 		return
 	}
+	// Blocks aggressively waiting for all pending atomic senders to drain to 0
 	gw.closeMu.Lock()
 	for gw.senders.Load() > 0 {
 		gw.closeCond.Wait()
@@ -646,9 +691,8 @@ func (tr *TaskRouter) ensureGroupLocked(key string) *groupWorker {
 	}
 	gw := newGroupWorker(key, tr.cfg.GroupBuffer, tr.nowNs())
 	tr.groups[key] = gw
-	// Spawn up to GroupMaxParallel workers for this group
 	parallel := tr.effectiveGroupParallel()
-	for range parallel {
+	for i := 0; i < parallel; i++ {
 		tr.wg.Add(1)
 		go tr.groupLoop(gw)
 	}
@@ -682,22 +726,18 @@ func (tr *TaskRouter) groupLoop(gw *groupWorker) {
 			}
 			gw.beginWork(tr.nowNs())
 
-			// Resolve handler and effective options each run (options may be zero).
 			tr.mu.RLock()
 			handler := tr.handlers[enq.task.Type]
 			eff := tr.effectiveOptions(enq.task.Options)
 			tr.mu.RUnlock()
 
-			// Safety: ensure handler still registered
 			if handler == nil {
 				gw.endWork(tr.nowNs())
 				log.ApplicationLogger().Warn("Task dropped (handler not registered)", "type", enq.task.Type, "group", gw.key)
-				tr.maybeReleaseIdempotency(enq.task, eff)
 				continue
 			}
 
-			// Execute with global concurrency control. The handler receives the
-			// router lifecycle context so Close can cancel in-flight work.
+			// Implements execution slot limitation across all topological boundaries to prevent host saturation.
 			tr.acquireExecSlot()
 			startExec := tr.cfg.Clock.Now()
 			err := func() error {
@@ -724,7 +764,6 @@ func (tr *TaskRouter) groupLoop(gw *groupWorker) {
 
 			if err != nil {
 				silent := errors.Is(err, ErrRetrySilent)
-				// Retry if allowed
 				if enq.attempt < eff.MaxAttempts {
 					delay := tr.computeBackoff(eff.InitialBackoff, eff.MaxBackoff, enq.attempt)
 					attempt := enq.attempt + 1
@@ -770,9 +809,6 @@ func (tr *TaskRouter) groupLoop(gw *groupWorker) {
 					)
 				}
 			}
-
-			// Success or final failure: allow idempotency key to naturally expire.
-			tr.maybeReleaseIdempotency(enq.task, eff)
 		}
 	}
 }
@@ -919,8 +955,6 @@ func (tr *TaskRouter) tryEnqueueRetry(groupKey string, et *enqueuedTask) groupSe
 			return groupSendRouterClosed
 		}
 
-		// If enqueue failed, the channel may have been closed concurrently.
-		// Remove stale group reference so the next attempt can recreate workers.
 		tr.dropStaleGroup(groupKey, gw)
 	}
 
@@ -944,10 +978,6 @@ func (tr *TaskRouter) getOrCreateGroup(groupKey string) (*groupWorker, bool) {
 	}
 
 	return tr.ensureGroupLocked(groupKey), true
-}
-
-func (tr *TaskRouter) sendToGroup(gw *groupWorker, et *enqueuedTask) (ok bool) {
-	return tr.sendToGroupContext(nil, gw, et) == groupSendEnqueued
 }
 
 func (tr *TaskRouter) sendToGroupTry(gw *groupWorker, et *enqueuedTask) (result groupSendResult) {
@@ -1011,7 +1041,6 @@ func (tr *TaskRouter) rollbackIdempotencyReservation(eff TaskOptions) {
 }
 
 func (tr *TaskRouter) computeBackoff(initial, max time.Duration, attempt int) time.Duration {
-	// Exponential backoff with jitter: initial * 2^(attempt-1)
 	backoff := initial
 	for i := 1; i < attempt; i++ {
 		backoff *= 2
@@ -1020,7 +1049,6 @@ func (tr *TaskRouter) computeBackoff(initial, max time.Duration, attempt int) ti
 			break
 		}
 	}
-	// Add 10% jitter
 	jitter := tr.jitter(backoff, 0.1)
 	return clampDuration(backoff+jitter, initial, max)
 }
@@ -1035,7 +1063,6 @@ func (tr *TaskRouter) jitter(d time.Duration, ratio float64) time.Duration {
 	if delta <= 0 {
 		return 0
 	}
-	// random in [-delta, +delta]
 	n := rand.Int63n(2*delta+1) - delta
 	return time.Duration(n)
 }
@@ -1081,13 +1108,11 @@ func (tr *TaskRouter) cleanupOnce() {
 	nowNs := tr.nowNs()
 	toClose := make([]*groupWorker, 0)
 
-	// Clean idempotency map
 	tr.mu.Lock()
 	maps.DeleteFunc(tr.inflight, func(_ string, expiry time.Time) bool {
 		return now.After(expiry)
 	})
 
-	// Stop idle groups
 	for key, gw := range tr.groups {
 		if gw == nil {
 			delete(tr.groups, key)
@@ -1136,7 +1161,6 @@ func (tr *TaskRouter) runCronOnce() {
 			job.lastRun = now
 		}
 	}
-	// Trim trailing nil jobs and shrink capacity
 	last := len(tr.cronJobs)
 	for last > 0 && tr.cronJobs[last-1] == nil {
 		last--
@@ -1145,10 +1169,4 @@ func (tr *TaskRouter) runCronOnce() {
 		tr.cronJobs = slices.Clip(tr.cronJobs[:last])
 	}
 	tr.cronMu.Unlock()
-}
-
-func (tr *TaskRouter) maybeReleaseIdempotency(t Task, eff TaskOptions) {
-	// Keep idempotency entry until TTL expires to dedupe follow-up duplicates.
-	// Nothing to do here; cleanupOnce will remove expired entries.
-	// This function exists to provide a single point to change behavior if needed later.
 }

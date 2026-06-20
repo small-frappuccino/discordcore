@@ -1,3 +1,6 @@
+//go:build !legacy
+// +build !legacy
+
 package task
 
 import (
@@ -5,53 +8,48 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/gateway"
+	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
-	"github.com/small-frappuccino/discordgo"
 )
 
-// Task type identifiers for notifications and avatar pipeline
-// MemberNotificationSender defines methods for sending member-related notifications.
+// MemberNotificationSender delegates member lifecycle notifications to downstream subscribers.
 type MemberNotificationSender interface {
-	SendAvatarChangeNotification(channelID string, change files.AvatarChange) error
-	SendMemberJoinNotification(channelID string, member *discordgo.GuildMemberAdd, accountAge time.Duration) error
-	SendMemberLeaveNotification(channelID string, member *discordgo.GuildMemberRemove, serverTime time.Duration, botTime time.Duration) error
+	SendAvatarChangeNotification(channelID discord.ChannelID, change files.AvatarChange) error
+	SendMemberJoinNotification(channelID discord.ChannelID, member *gateway.GuildMemberAddEvent, accountAge time.Duration) error
+	SendMemberLeaveNotification(channelID discord.ChannelID, member *gateway.GuildMemberRemoveEvent, serverTime time.Duration, botTime time.Duration) error
 }
 
-// MessageNotificationSender defines methods for sending message-related notifications.
+// MessageNotificationSender delegates message lifecycle notifications to downstream subscribers.
 type MessageNotificationSender interface {
-	SendMessageEditNotification(channelID string, original *CachedMessage, edited *discordgo.MessageUpdate) error
-	SendMessageDeleteNotification(channelID string, deleted *CachedMessage, deletedBy string) error
+	SendMessageEditNotification(channelID discord.ChannelID, original *CachedMessage, edited *gateway.MessageUpdateEvent) error
+	SendMessageDeleteNotification(channelID discord.ChannelID, deleted *CachedMessage, deletedBy string) error
 }
 
-// NotificationSender defines dependency-free methods for sending notifications.
+// NotificationSender defines unified dependency-free methods for propagating event notifications.
 type NotificationSender interface {
 	MemberNotificationSender
 	MessageNotificationSender
 }
 
-// AvatarProcessor defines the logic for processing avatar changes.
+// AvatarProcessor isolates the synchronization logic applied during avatar hash modifications.
 type AvatarProcessor interface {
 	ProcessChange(guildID, userID, currentAvatar, username string)
 }
 
-// CachedMessage is a minimal snapshot of a Discord message used for notifications.
+// CachedMessage defines an immutable cache snapshot holding essential message telemetry.
 type CachedMessage struct {
-	ID        string
+	ID        discord.MessageID
 	Content   string
-	Author    *discordgo.User
-	ChannelID string
-	GuildID   string
+	Author    *discord.User
+	ChannelID discord.ChannelID
+	GuildID   discord.GuildID
 	Timestamp time.Time
 }
 
-// TaskTypeFlushAvatarCache defines task type flush avatar cache.
-// TaskTypeProcessAvatarChange defines task type process avatar change.
-// TaskTypeSendAutomodAction defines task type send automod action.
-// TaskTypeSendMessageDelete defines task type send message delete.
-// TaskTypeSendMessageEdit defines task type send message edit.
-// TaskTypeSendMemberLeave defines task type send member leave.
-// TaskTypeSendMemberJoin defines task type send member join.
+// Task Type Registry defining hardcoded routing boundaries for the application ecosystem.
 const (
 	TaskTypeSendMemberJoin    = "notifications.member_join"
 	TaskTypeSendMemberLeave   = "notifications.member_leave"
@@ -62,63 +60,62 @@ const (
 	TaskTypeFlushAvatarCache    = "avatar.flush_cache"
 )
 
-// MemberJoinPayload holds information for a member join notification task.
+// MemberJoinPayload models the payload sent during a Discord member join event.
 type MemberJoinPayload struct {
-	ChannelID  string
-	Member     *discordgo.GuildMemberAdd
+	ChannelID  discord.ChannelID
+	Member     *gateway.GuildMemberAddEvent
 	AccountAge time.Duration
 }
 
-// MemberLeavePayload holds information for a member leave notification task.
+// MemberLeavePayload models the payload sent during a Discord member leave event.
 type MemberLeavePayload struct {
-	ChannelID  string
-	Member     *discordgo.GuildMemberRemove
+	ChannelID  discord.ChannelID
+	Member     *gateway.GuildMemberRemoveEvent
 	ServerTime time.Duration
 	BotTime    time.Duration
 }
 
-// MessageEditPayload holds information for a message edit notification task.
+// MessageEditPayload models the payload required to notify a channel about a modified message.
 type MessageEditPayload struct {
-	ChannelID string
+	ChannelID discord.ChannelID
 	Original  *CachedMessage
-	Edited    *discordgo.MessageUpdate
+	Edited    *gateway.MessageUpdateEvent
 }
 
-// MessageDeletePayload holds information for a message delete notification task.
+// MessageDeletePayload models the payload required to track an abruptly removed message.
 type MessageDeletePayload struct {
-	ChannelID string
+	ChannelID discord.ChannelID
 	Deleted   *CachedMessage
 	DeletedBy string
 }
 
-// FlushAvatarCachePayload holds information for flushing the avatar cache.
+// FlushAvatarCachePayload acts as an empty trigger for synchronizing internal avatar structures.
 type FlushAvatarCachePayload struct{}
 
-// AvatarChangePayload holds information to process an avatar change. Username is
-// optional; the handler looks it up when empty.
+// AvatarChangePayload encodes the domain request to refresh profile pictures asynchronously.
 type AvatarChangePayload struct {
 	GuildID   string
 	UserID    string
-	Username  string // optional; handler may look up if empty
+	Username  string // Optional, processor can hydrate if omitted.
 	NewAvatar string
 }
 
-// NotificationAdapters wires NotificationSender and AvatarCache to the TaskRouter.
+// NotificationAdapters orchestrates dependency injection for bridging background events to actual side effects.
 type NotificationAdapters struct {
 	Router          *TaskRouter
 	Notifier        NotificationSender
 	AvatarProcessor AvatarProcessor
 	Store           *storage.Store
 	Config          *files.ConfigManager
-	Session         *discordgo.Session
+	Session         *state.State
 }
 
-// SetAvatarProcessor sets the processor for avatar change tasks.
+// SetAvatarProcessor dynamically overrides the avatar synchronization engine.
 func (a *NotificationAdapters) SetAvatarProcessor(p AvatarProcessor) {
 	a.AvatarProcessor = p
 }
 
-// RegisterHandlers registers all handlers for the supported task types.
+// RegisterHandlers maps execution endpoints natively into the TaskRouter topology.
 func (a *NotificationAdapters) RegisterHandlers() {
 	a.Router.RegisterHandler(TaskTypeSendMemberJoin, a.handleSendMemberJoin)
 	a.Router.RegisterHandler(TaskTypeSendMemberLeave, a.handleSendMemberLeave)
@@ -129,11 +126,9 @@ func (a *NotificationAdapters) RegisterHandlers() {
 	a.Router.RegisterHandler(TaskTypeFlushAvatarCache, a.handleFlushAvatarCache)
 }
 
-// ---- Producer convenience methods ----
-
-// EnqueueMemberJoin enqueues a member join notification.
-func (a *NotificationAdapters) EnqueueMemberJoin(channelID string, member *discordgo.GuildMemberAdd, accountAge time.Duration) error {
-	if member == nil || member.User == nil {
+// EnqueueMemberJoin provisions an immutable background dispatch modeling a new server member.
+func (a *NotificationAdapters) EnqueueMemberJoin(channelID discord.ChannelID, member *gateway.GuildMemberAddEvent, accountAge time.Duration) error {
+	if member == nil {
 		return nil
 	}
 	return a.Router.Dispatch(context.Background(), Task{
@@ -144,7 +139,7 @@ func (a *NotificationAdapters) EnqueueMemberJoin(channelID string, member *disco
 			AccountAge: accountAge,
 		},
 		Options: TaskOptions{
-			GroupKey:       member.GuildID, // serialize per guild
+			GroupKey:       member.GuildID.String(),
 			IdempotencyKey: fmt.Sprintf("join:%s:%s", member.GuildID, member.User.ID),
 			IdempotencyTTL: 10 * time.Second,
 			MaxAttempts:    3,
@@ -154,9 +149,9 @@ func (a *NotificationAdapters) EnqueueMemberJoin(channelID string, member *disco
 	})
 }
 
-// EnqueueMemberLeave enqueues a member leave notification.
-func (a *NotificationAdapters) EnqueueMemberLeave(channelID string, member *discordgo.GuildMemberRemove, serverTime time.Duration, botTime time.Duration) error {
-	if member == nil || member.User == nil {
+// EnqueueMemberLeave guarantees delivery of an account eviction notification natively scoped to the guild.
+func (a *NotificationAdapters) EnqueueMemberLeave(channelID discord.ChannelID, member *gateway.GuildMemberRemoveEvent, serverTime time.Duration, botTime time.Duration) error {
+	if member == nil {
 		return nil
 	}
 	return a.Router.Dispatch(context.Background(), Task{
@@ -168,7 +163,7 @@ func (a *NotificationAdapters) EnqueueMemberLeave(channelID string, member *disc
 			BotTime:    botTime,
 		},
 		Options: TaskOptions{
-			GroupKey:       member.GuildID,
+			GroupKey:       member.GuildID.String(),
 			IdempotencyKey: fmt.Sprintf("leave:%s:%s", member.GuildID, member.User.ID),
 			IdempotencyTTL: 10 * time.Second,
 			MaxAttempts:    3,
@@ -178,13 +173,13 @@ func (a *NotificationAdapters) EnqueueMemberLeave(channelID string, member *disc
 	})
 }
 
-// EnqueueMessageEdit enqueues a message edit notification.
-func (a *NotificationAdapters) EnqueueMessageEdit(channelID string, original *CachedMessage, edited *discordgo.MessageUpdate) error {
+// EnqueueMessageEdit captures string delta events directly within the underlying event stream.
+func (a *NotificationAdapters) EnqueueMessageEdit(channelID discord.ChannelID, original *CachedMessage, edited *gateway.MessageUpdateEvent) error {
 	if original == nil || edited == nil {
 		return nil
 	}
 	group := original.GuildID
-	if group == "" {
+	if !group.IsValid() {
 		group = edited.GuildID
 	}
 	return a.Router.Dispatch(context.Background(), Task{
@@ -195,7 +190,7 @@ func (a *NotificationAdapters) EnqueueMessageEdit(channelID string, original *Ca
 			Edited:    edited,
 		},
 		Options: TaskOptions{
-			GroupKey:       group,
+			GroupKey:       group.String(),
 			IdempotencyKey: fmt.Sprintf("edit:%s:%s", group, original.ID),
 			IdempotencyTTL: 10 * time.Second,
 			MaxAttempts:    3,
@@ -205,12 +200,11 @@ func (a *NotificationAdapters) EnqueueMessageEdit(channelID string, original *Ca
 	})
 }
 
-// EnqueueMessageDelete enqueues a message delete notification.
-func (a *NotificationAdapters) EnqueueMessageDelete(channelID string, deleted *CachedMessage, deletedBy string) error {
+// EnqueueMessageDelete guarantees reliable historical destruction tracking across all active environments.
+func (a *NotificationAdapters) EnqueueMessageDelete(channelID discord.ChannelID, deleted *CachedMessage, deletedBy string) error {
 	if deleted == nil {
 		return nil
 	}
-	group := deleted.GuildID
 	return a.Router.Dispatch(context.Background(), Task{
 		Type: TaskTypeSendMessageDelete,
 		Payload: MessageDeletePayload{
@@ -219,8 +213,8 @@ func (a *NotificationAdapters) EnqueueMessageDelete(channelID string, deleted *C
 			DeletedBy: deletedBy,
 		},
 		Options: TaskOptions{
-			GroupKey:       group,
-			IdempotencyKey: fmt.Sprintf("delete:%s:%s", group, deleted.ID),
+			GroupKey:       deleted.GuildID.String(),
+			IdempotencyKey: fmt.Sprintf("delete:%s:%s", deleted.GuildID, deleted.ID),
 			IdempotencyTTL: 10 * time.Second,
 			MaxAttempts:    3,
 			InitialBackoff: 1 * time.Second,
@@ -229,7 +223,7 @@ func (a *NotificationAdapters) EnqueueMessageDelete(channelID string, deleted *C
 	})
 }
 
-// EnqueueProcessAvatarChange enqueues processing of an avatar change.
+// EnqueueProcessAvatarChange encapsulates the processing layer targeting external database systems.
 func (a *NotificationAdapters) EnqueueProcessAvatarChange(guildID, userID, username, newAvatar string) error {
 	return a.Router.Dispatch(context.Background(), Task{
 		Type: TaskTypeProcessAvatarChange,
@@ -240,7 +234,7 @@ func (a *NotificationAdapters) EnqueueProcessAvatarChange(guildID, userID, usern
 			NewAvatar: newAvatar,
 		},
 		Options: TaskOptions{
-			GroupKey:       guildID + ":" + userID, // serialize per user in guild
+			GroupKey:       guildID + ":" + userID,
 			IdempotencyKey: fmt.Sprintf("avatar:%s:%s:%s", guildID, userID, newAvatar),
 			IdempotencyTTL: 60 * time.Second,
 			MaxAttempts:    3,
@@ -250,28 +244,27 @@ func (a *NotificationAdapters) EnqueueProcessAvatarChange(guildID, userID, usern
 	})
 }
 
-// EnqueueFlushAvatarCache enqueues a flush of the avatar cache to disk.
+// EnqueueFlushAvatarCache issues an isolated execution request specifically targeted at persistent memory pools.
 func (a *NotificationAdapters) EnqueueFlushAvatarCache() error {
 	return a.Router.Dispatch(context.Background(), Task{
 		Type:    TaskTypeFlushAvatarCache,
 		Payload: FlushAvatarCachePayload{},
 		Options: TaskOptions{
 			GroupKey:       "avatar_cache",
-			IdempotencyKey: fmt.Sprintf("avatar_flush:%d", time.Now().Unix()/5), // coalesce every 5s
+			IdempotencyKey: fmt.Sprintf("avatar_flush:%d", time.Now().Unix()/5),
 			IdempotencyTTL: 5 * time.Second,
 			MaxAttempts:    2,
 		},
 	})
 }
 
-// ---- Handlers ----
-
+// handleSendMemberJoin resolves the internal payload structure and delegates correctly back to the notifier.
 func (a *NotificationAdapters) handleSendMemberJoin(ctx context.Context, payload any) error {
 	if a.Notifier == nil {
 		return fmt.Errorf("notifier is nil")
 	}
 	p, ok := payload.(MemberJoinPayload)
-	if !ok || p.Member == nil || p.Member.User == nil {
+	if !ok || p.Member == nil {
 		return fmt.Errorf("invalid payload for %s", TaskTypeSendMemberJoin)
 	}
 	err := a.Notifier.SendMemberJoinNotification(p.ChannelID, p.Member, p.AccountAge)
@@ -281,12 +274,13 @@ func (a *NotificationAdapters) handleSendMemberJoin(ctx context.Context, payload
 	return nil
 }
 
+// handleSendMemberLeave unwraps the strict leave context and pushes back into arbitrary delivery pipelines.
 func (a *NotificationAdapters) handleSendMemberLeave(ctx context.Context, payload any) error {
 	if a.Notifier == nil {
 		return fmt.Errorf("notifier is nil")
 	}
 	p, ok := payload.(MemberLeavePayload)
-	if !ok || p.Member == nil || p.Member.User == nil {
+	if !ok || p.Member == nil {
 		return fmt.Errorf("invalid payload for %s", TaskTypeSendMemberLeave)
 	}
 	err := a.Notifier.SendMemberLeaveNotification(p.ChannelID, p.Member, p.ServerTime, p.BotTime)
@@ -296,6 +290,7 @@ func (a *NotificationAdapters) handleSendMemberLeave(ctx context.Context, payloa
 	return nil
 }
 
+// handleSendMessageEdit delegates strict updates to channel systems, validating internal models synchronously.
 func (a *NotificationAdapters) handleSendMessageEdit(ctx context.Context, payload any) error {
 	if a.Notifier == nil {
 		return fmt.Errorf("notifier is nil")
@@ -311,6 +306,7 @@ func (a *NotificationAdapters) handleSendMessageEdit(ctx context.Context, payloa
 	return nil
 }
 
+// handleSendMessageDelete encapsulates message purges from raw storage.
 func (a *NotificationAdapters) handleSendMessageDelete(ctx context.Context, payload any) error {
 	if a.Notifier == nil {
 		return fmt.Errorf("notifier is nil")
@@ -326,6 +322,7 @@ func (a *NotificationAdapters) handleSendMessageDelete(ctx context.Context, payl
 	return nil
 }
 
+// handleProcessAvatarChange executes fallback state insertion directly to Postgres bypassing memory tiers entirely.
 func (a *NotificationAdapters) handleProcessAvatarChange(ctx context.Context, payload any) error {
 	p, ok := payload.(AvatarChangePayload)
 	if !ok || p.GuildID == "" || p.UserID == "" {
@@ -337,20 +334,23 @@ func (a *NotificationAdapters) handleProcessAvatarChange(ctx context.Context, pa
 		return nil
 	}
 
-	// Fallback to minimal persistence if no processor is available (should not happen in production)
+	// Transactions simulate direct structural fallbacks when complex processor injections are fully ignored.
 	if a.Store != nil {
-		err := a.Store.UpsertGuildMemberSnapshotsContext(context.Background(), p.GuildID, []storage.GuildMemberSnapshot{{UserID: p.UserID, HasAvatar: true, AvatarHash: p.NewAvatar}}, time.Now())
-		return err
+		err := a.Store.UpsertGuildMemberSnapshotsContext(ctx, p.GuildID, []storage.GuildMemberSnapshot{{UserID: p.UserID, HasAvatar: true, AvatarHash: p.NewAvatar}}, time.Now())
+		if err != nil {
+			return fmt.Errorf("Store.UpsertGuildMemberSnapshotsContext: %w", err)
+		}
+		return nil
 	}
 
-	return fmt.Errorf("avatar processor not initialized")
+	return fmt.Errorf("avatar processor and store both absent")
 }
 
+// handleFlushAvatarCache represents a dead-end boundary interface for components demanding periodic executions.
 func (a *NotificationAdapters) handleFlushAvatarCache(ctx context.Context, payload any) error {
 	_, ok := payload.(FlushAvatarCachePayload)
 	if !ok {
 		return fmt.Errorf("invalid payload type for avatar cache flush")
 	}
-	// No-op when using database-backed avatar persistence
 	return nil
 }

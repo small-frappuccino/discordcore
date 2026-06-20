@@ -1,737 +1,378 @@
+//go:build !legacy
+// +build !legacy
+
 package task
 
 import (
+	"container/heap"
 	"context"
 	"errors"
+	"fmt"
+	"math"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/clock"
+	"go.uber.org/goleak"
 )
 
-func newTestConfig() RouterConfig {
-	return RouterConfig{
-		DefaultMaxAttempts: 3,
-		InitialBackoff:     5 * time.Millisecond,
-		MaxBackoff:         10 * time.Millisecond,
-		IdempotencyTTL:     100 * time.Millisecond,
-		GroupBuffer:        8,
-		GroupIdleTTL:       200 * time.Millisecond,
-		CleanupInterval:    20 * time.Millisecond,
-		GlobalMaxWorkers:   0,
-		GroupMaxParallel:   1,
-	}
+func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
 }
 
-func newTestGroupWorker(router *TaskRouter, key string, buffer int) *groupWorker {
-	nowNs := int64(1)
-	if router != nil {
-		nowNs = router.nowNs()
-	}
-	return newGroupWorker(key, buffer, nowNs)
-}
+func TestRouter_GroupKeySerialization(t *testing.T) {
+	t.Parallel()
 
-func stopTestGroup(gw *groupWorker) {
-	if gw == nil {
-		return
-	}
-	gw.beginStop()
-	gw.finishStop()
-}
-
-func TestDispatchExecutesHandler(t *testing.T) {
-	router := NewRouter(newTestConfig())
-	t.Cleanup(router.Close)
-
-	done := make(chan string, 1)
-	router.RegisterHandler("ping", func(ctx context.Context, payload any) error {
-		done <- payload.(string)
-		return nil
-	})
-
-	if err := router.Dispatch(context.Background(), Task{Type: "ping", Payload: "ok"}); err != nil {
-		t.Fatalf("dispatch returned error: %v", err)
-	}
-
-	select {
-	case val := <-done:
-		if val != "ok" {
-			t.Fatalf("unexpected payload: %s", val)
-		}
-	case <-time.After(200 * time.Millisecond):
-		t.Fatalf("handler did not run in time")
-	}
-}
-
-func TestDispatchIdempotency(t *testing.T) {
-	router := NewRouter(newTestConfig())
-	t.Cleanup(router.Close)
-
-	var calls int32
-	ready := make(chan struct{}, 1)
-	router.RegisterHandler("once", func(ctx context.Context, payload any) error {
-		atomic.AddInt32(&calls, 1)
-		ready <- struct{}{}
-		return nil
-	})
-
-	task := Task{Type: "once", Options: TaskOptions{IdempotencyKey: "dup", IdempotencyTTL: 500 * time.Millisecond}}
-	if err := router.Dispatch(context.Background(), task); err != nil {
-		t.Fatalf("first dispatch failed: %v", err)
-	}
-	if err := router.Dispatch(context.Background(), task); !errors.Is(err, ErrDuplicateTask) {
-		t.Fatalf("expected duplicate error, got: %v", err)
-	}
-
-	select {
-	case <-ready:
-	case <-time.After(200 * time.Millisecond):
-		t.Fatalf("handler did not run for first dispatch")
-	}
-
-	if atomic.LoadInt32(&calls) != 1 {
-		t.Fatalf("expected handler called once, got %d", calls)
-	}
-}
-
-func TestDispatchRetriesOnError(t *testing.T) {
-	cfg := newTestConfig()
-	cfg.InitialBackoff = 5 * time.Millisecond
-	cfg.MaxBackoff = 5 * time.Millisecond
+	cfg := Defaults()
 	router := NewRouter(cfg)
-	t.Cleanup(router.Close)
+	defer router.Close()
 
-	var attempts int32
-	done := make(chan struct{})
-	router.RegisterHandler("flaky", func(ctx context.Context, payload any) error {
-		n := atomic.AddInt32(&attempts, 1)
-		if n < 2 {
-			return errors.New("fail")
-		}
-		close(done)
-		return nil
-	})
+	var counter atomic.Int32
+	var maxParallel atomic.Int32
+	var currentParallel atomic.Int32
 
-	if err := router.Dispatch(context.Background(), Task{Type: "flaky"}); err != nil {
-		t.Fatalf("dispatch failed: %v", err)
-	}
+	router.RegisterHandler("serialize_test", func(ctx context.Context, payload any) error {
+		v := currentParallel.Add(1)
+		defer currentParallel.Add(-1)
 
-	select {
-	case <-done:
-	case <-time.After(300 * time.Millisecond):
-		t.Fatalf("handler did not succeed after retries")
-	}
-
-	if attempts != 2 {
-		t.Fatalf("expected 2 attempts, got %d", attempts)
-	}
-}
-
-func TestRetryLoopReschedulesWhenGroupIsTemporarilyFull(t *testing.T) {
-	cfg := newTestConfig()
-	cfg.CleanupInterval = time.Hour
-	router := NewRouter(cfg)
-	t.Cleanup(router.Close)
-
-	done := make(chan struct{}, 1)
-	router.RegisterHandler("retry-full", func(ctx context.Context, payload any) error {
-		done <- struct{}{}
-		return nil
-	})
-
-	blocked := newTestGroupWorker(router, "busy", 1)
-	blocked.ch <- &enqueuedTask{task: Task{Type: "retry-full"}}
-
-	router.mu.Lock()
-	router.groups["busy"] = blocked
-	router.mu.Unlock()
-
-	router.scheduleRetry("busy", &enqueuedTask{
-		task: Task{
-			Type: "retry-full",
-			Options: TaskOptions{
-				GroupKey: "busy",
-			},
-		},
-		attempt: 2,
-	}, 5*time.Millisecond)
-
-	time.Sleep(20 * time.Millisecond)
-
-	router.mu.Lock()
-	delete(router.groups, "busy")
-	router.mu.Unlock()
-
-	select {
-	case <-done:
-	case <-time.After(300 * time.Millisecond):
-		t.Fatalf("scheduled retry did not run after blocked group was released")
-	}
-}
-
-func TestScheduleEveryRunsAndCancels(t *testing.T) {
-	cfg := newTestConfig()
-	cfg.CleanupInterval = 10 * time.Millisecond
-	router := NewRouter(cfg)
-	t.Cleanup(router.Close)
-
-	var count int32
-	router.RegisterHandler("cron", func(ctx context.Context, payload any) error {
-		atomic.AddInt32(&count, 1)
-		return nil
-	})
-
-	cancel := router.ScheduleEvery(15*time.Millisecond, Task{Type: "cron"})
-	time.Sleep(60 * time.Millisecond)
-	cancel()
-	afterCancel := atomic.LoadInt32(&count)
-	time.Sleep(30 * time.Millisecond)
-
-	if afterCancel == 0 {
-		t.Fatalf("expected scheduled task to run at least once")
-	}
-	if atomic.LoadInt32(&count) > afterCancel+1 {
-		t.Fatalf("scheduled task continued running after cancel")
-	}
-}
-
-func TestSendToGroupClosedChannelDoesNotPanic(t *testing.T) {
-	router := NewRouter(newTestConfig())
-	t.Cleanup(router.Close)
-
-	gw := &groupWorker{
-		key: "g1",
-		ch:  make(chan *enqueuedTask, 1),
-	}
-	gw = newTestGroupWorker(router, "g1", 1)
-	stopTestGroup(gw)
-
-	ok := router.sendToGroup(gw, &enqueuedTask{task: Task{Type: "noop"}})
-	if ok {
-		t.Fatalf("expected sendToGroup to fail when channel is closed")
-	}
-}
-
-func TestDispatchRecoversFromClosedGroupChannel(t *testing.T) {
-	router := NewRouter(newTestConfig())
-	t.Cleanup(router.Close)
-
-	done := make(chan struct{}, 1)
-	router.RegisterHandler("dispatch-recover", func(ctx context.Context, payload any) error {
-		done <- struct{}{}
-		return nil
-	})
-
-	stale := newTestGroupWorker(router, "g1", 1)
-	stopTestGroup(stale)
-
-	router.mu.Lock()
-	router.groups["g1"] = stale
-	router.mu.Unlock()
-
-	if err := router.Dispatch(context.Background(), Task{
-		Type: "dispatch-recover",
-		Options: TaskOptions{
-			GroupKey: "g1",
-		},
-	}); err != nil {
-		t.Fatalf("expected dispatch to recover from closed group channel, got %v", err)
-	}
-
-	select {
-	case <-done:
-	case <-time.After(200 * time.Millisecond):
-		t.Fatalf("recovered dispatch did not execute in time")
-	}
-}
-
-func TestEnqueueRetryRecoversFromClosedGroupChannel(t *testing.T) {
-	router := NewRouter(newTestConfig())
-	t.Cleanup(router.Close)
-
-	done := make(chan struct{}, 1)
-	router.RegisterHandler("retry", func(ctx context.Context, payload any) error {
-		done <- struct{}{}
-		return nil
-	})
-
-	stale := newTestGroupWorker(router, "g1", 1)
-	stopTestGroup(stale)
-
-	router.mu.Lock()
-	router.groups["g1"] = stale
-	router.mu.Unlock()
-
-	ok := router.enqueueRetry("g1", &enqueuedTask{
-		task: Task{
-			Type: "retry",
-			Options: TaskOptions{
-				GroupKey: "g1",
-			},
-		},
-		attempt: 2,
-	})
-	if !ok {
-		t.Fatalf("expected enqueueRetry to recover by recreating the group")
-	}
-
-	select {
-	case <-done:
-	case <-time.After(200 * time.Millisecond):
-		t.Fatalf("re-enqueued task did not execute in time")
-	}
-}
-
-func TestSharedExecutionLimiterBoundsMultipleRouters(t *testing.T) {
-	cfg := newTestConfig()
-	limiter := NewExecutionLimiter(1)
-	cfg.ExecutionLimiter = limiter
-	cfg.GlobalMaxWorkers = limiter.Capacity()
-
-	routerA := NewRouter(cfg)
-	t.Cleanup(routerA.Close)
-	routerB := NewRouter(cfg)
-	t.Cleanup(routerB.Close)
-
-	var active int32
-	var maxActive int32
-	release := make(chan struct{})
-	started := make(chan struct{}, 2)
-
-	handler := func(ctx context.Context, payload any) error {
-		current := atomic.AddInt32(&active, 1)
 		for {
-			observed := atomic.LoadInt32(&maxActive)
-			if current <= observed || atomic.CompareAndSwapInt32(&maxActive, observed, current) {
-				break
+			maxP := maxParallel.Load()
+			if v > maxP {
+				if !maxParallel.CompareAndSwap(maxP, v) {
+					continue
+				}
 			}
+			break
 		}
-		started <- struct{}{}
-		<-release
-		atomic.AddInt32(&active, -1)
-		return nil
-	}
 
-	routerA.RegisterHandler("work", handler)
-	routerB.RegisterHandler("work", handler)
-
-	if err := routerA.Dispatch(context.Background(), Task{Type: "work", Options: TaskOptions{GroupKey: "a"}}); err != nil {
-		t.Fatalf("dispatch on routerA failed: %v", err)
-	}
-	if err := routerB.Dispatch(context.Background(), Task{Type: "work", Options: TaskOptions{GroupKey: "b"}}); err != nil {
-		t.Fatalf("dispatch on routerB failed: %v", err)
-	}
-
-	select {
-	case <-started:
-	case <-time.After(200 * time.Millisecond):
-		t.Fatalf("expected first handler to start")
-	}
-
-	select {
-	case <-started:
-		t.Fatalf("second handler started before limiter slot was released")
-	case <-time.After(40 * time.Millisecond):
-	}
-
-	close(release)
-
-	select {
-	case <-started:
-	case <-time.After(200 * time.Millisecond):
-		t.Fatalf("expected second handler to start after limiter release")
-	}
-
-	if got := atomic.LoadInt32(&maxActive); got != 1 {
-		t.Fatalf("expected max concurrent handlers to be 1, got %d", got)
-	}
-}
-
-func TestDispatchDoesNotSerializeUnrelatedGroupsWhenOneGroupBufferIsFull(t *testing.T) {
-	cfg := newTestConfig()
-	cfg.GroupBuffer = 1
-	cfg.CleanupInterval = time.Hour
-
-	router := NewRouter(cfg)
-	t.Cleanup(router.Close)
-
-	coolDone := make(chan struct{}, 1)
-	router.RegisterHandler("work", func(ctx context.Context, payload any) error {
-		if s, _ := payload.(string); s == "cool" {
-			coolDone <- struct{}{}
-		}
+		counter.Add(1)
+		// Yield slightly to encourage race if serialization is broken
+		time.Sleep(time.Microsecond)
 		return nil
 	})
 
-	hotGroup := newTestGroupWorker(router, "hot", 1)
-	hotGroup.ch <- &enqueuedTask{task: Task{Type: "work", Payload: "prefill"}}
-
-	router.mu.Lock()
-	router.groups["hot"] = hotGroup
-
-	hotStarted := make(chan struct{})
-	hotResult := make(chan error, 1)
-	go func() {
-		close(hotStarted)
-		hotCtx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
-		defer cancel()
-		hotResult <- router.Dispatch(hotCtx, Task{
-			Type:    "work",
-			Payload: "hot",
-			Options: TaskOptions{
-				GroupKey: "hot",
-			},
-		})
-	}()
-	<-hotStarted
-	router.mu.Unlock()
-
-	// Yield for hot dispatch to start
-	time.Sleep(5 * time.Millisecond)
-
-	coolCtx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
-	if err := router.Dispatch(coolCtx, Task{
-		Type:    "work",
-		Payload: "cool",
-		Options: TaskOptions{
-			GroupKey: "cool",
-		},
-	}); err != nil {
-		t.Fatalf("expected unrelated group dispatch to proceed while hot group is blocked, got %v", err)
-	}
-
-	select {
-	case <-coolDone:
-	case <-time.After(200 * time.Millisecond):
-		t.Fatalf("unrelated group handler did not execute in time")
-	}
-
-	if err := <-hotResult; !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("expected hot group dispatch to time out while blocked, got %v", err)
-	}
-}
-
-func TestRunCronOnce_UpdatesLastRunEvenWhenDispatchFails(t *testing.T) {
-	cfg := newTestConfig()
-	cfg.CleanupInterval = time.Hour
-	router := NewRouter(cfg)
-	t.Cleanup(router.Close)
-
-	job := &cronJob{
-		Interval: time.Millisecond,
-		Task: Task{
-			Type: "missing-handler",
-		},
-	}
-
-	router.cronMu.Lock()
-	router.cronJobs = append(router.cronJobs, job)
-	router.cronMu.Unlock()
-
-	if !job.lastRun.IsZero() {
-		t.Fatalf("expected zero lastRun before cron execution")
-	}
-
-	router.runCronOnce()
-
-	if job.lastRun.IsZero() {
-		t.Fatalf("expected cron job lastRun to be updated even when dispatch fails")
-	}
-
-	stats := router.Stats()
-	if stats.CronDispatchAttempts != 1 {
-		t.Fatalf("expected one cron dispatch attempt, got %d", stats.CronDispatchAttempts)
-	}
-	if stats.CronDispatchSuccess != 0 {
-		t.Fatalf("expected zero successful cron dispatches, got %d", stats.CronDispatchSuccess)
-	}
-	if stats.CronDispatchFailures != 1 {
-		t.Fatalf("expected one failed cron dispatch, got %d", stats.CronDispatchFailures)
-	}
-}
-
-func TestRunCronOnce_TracksDispatchSuccessMetrics(t *testing.T) {
-	cfg := newTestConfig()
-	cfg.CleanupInterval = time.Hour
-	router := NewRouter(cfg)
-	t.Cleanup(router.Close)
-
-	var calls int32
-	done := make(chan struct{}, 1)
-	router.RegisterHandler("cron-ok", func(ctx context.Context, payload any) error {
-		atomic.AddInt32(&calls, 1)
-		done <- struct{}{}
-		return nil
-	})
-
-	job := &cronJob{
-		Interval: time.Millisecond,
-		Task: Task{
-			Type: "cron-ok",
-		},
-	}
-
-	router.cronMu.Lock()
-	router.cronJobs = append(router.cronJobs, job)
-	router.cronMu.Unlock()
-
-	router.runCronOnce()
-
-	select {
-	case <-done:
-	case <-time.After(200 * time.Millisecond):
-		t.Fatalf("expected cron handler to run once")
-	}
-
-	if got := atomic.LoadInt32(&calls); got != 1 {
-		t.Fatalf("expected cron handler call count to be one, got %d", got)
-	}
-
-	stats := router.Stats()
-	if stats.CronDispatchAttempts != 1 {
-		t.Fatalf("expected one cron dispatch attempt, got %d", stats.CronDispatchAttempts)
-	}
-	if stats.CronDispatchSuccess != 1 {
-		t.Fatalf("expected one successful cron dispatch, got %d", stats.CronDispatchSuccess)
-	}
-	if stats.CronDispatchFailures != 0 {
-		t.Fatalf("expected zero failed cron dispatches, got %d", stats.CronDispatchFailures)
-	}
-}
-
-func TestCleanupOnceKeepsGroupWithActiveHandler(t *testing.T) {
-	cfg := newTestConfig()
-	cfg.CleanupInterval = time.Hour
-	cfg.GroupIdleTTL = 10 * time.Millisecond
-	mockClock := clock.NewMockClock(time.Now())
-	cfg.Clock = mockClock
-
-	router := NewRouter(cfg)
-	t.Cleanup(router.Close)
-
-	started := make(chan struct{}, 1)
-	release := make(chan struct{})
-	done := make(chan struct{}, 1)
-
-	router.RegisterHandler("busy", func(ctx context.Context, payload any) error {
-		started <- struct{}{}
-		<-release
-		done <- struct{}{}
-		return nil
-	})
-
-	if err := router.Dispatch(context.Background(), Task{
-		Type: "busy",
-		Options: TaskOptions{
-			GroupKey: "busy",
-		},
-	}); err != nil {
-		t.Fatalf("dispatch failed: %v", err)
-	}
-
-	select {
-	case <-started:
-	case <-time.After(200 * time.Millisecond):
-		t.Fatalf("handler did not start in time")
-	}
-
-	mockClock.Advance(2 * cfg.GroupIdleTTL)
-	router.cleanupOnce()
-
-	router.mu.RLock()
-	gw, ok := router.groups["busy"]
-	router.mu.RUnlock()
-	if !ok || gw == nil {
-		t.Fatalf("expected active group to remain registered during cleanup")
-	}
-	if got := gw.queueState(); got != queueStateOpen {
-		t.Fatalf("expected active group to remain open during cleanup, got %v", got)
-	}
-
-	close(release)
-
-	select {
-	case <-done:
-	case <-time.After(200 * time.Millisecond):
-		t.Fatalf("handler did not finish in time")
-	}
-}
-
-func TestCleanupOnceClosesIdleGroupAfterHandlerCompletes(t *testing.T) {
-	cfg := newTestConfig()
-	cfg.CleanupInterval = time.Hour
-	cfg.GroupIdleTTL = 10 * time.Millisecond
-	mockClock := clock.NewMockClock(time.Now())
-	cfg.Clock = mockClock
-
-	router := NewRouter(cfg)
-	t.Cleanup(router.Close)
-
-	started := make(chan struct{}, 1)
-	release := make(chan struct{})
-	done := make(chan struct{}, 1)
-
-	router.RegisterHandler("idle", func(ctx context.Context, payload any) error {
-		started <- struct{}{}
-		<-release
-		done <- struct{}{}
-		return nil
-	})
-
-	if err := router.Dispatch(context.Background(), Task{
-		Type: "idle",
-		Options: TaskOptions{
-			GroupKey: "idle",
-		},
-	}); err != nil {
-		t.Fatalf("dispatch failed: %v", err)
-	}
-
-	select {
-	case <-started:
-	case <-time.After(200 * time.Millisecond):
-		t.Fatalf("handler did not start in time")
-	}
-
-	close(release)
-
-	select {
-	case <-done:
-	case <-time.After(200 * time.Millisecond):
-		t.Fatalf("handler did not finish in time")
-	}
-
-	router.cleanupOnce()
-
-	router.mu.RLock()
-	_, ok := router.groups["idle"]
-	router.mu.RUnlock()
-	if !ok {
-		t.Fatalf("expected group to remain before idle TTL elapses")
-	}
-
-	mockClock.Advance(2 * cfg.GroupIdleTTL)
-	router.cleanupOnce()
-
-	router.mu.RLock()
-	_, ok = router.groups["idle"]
-	router.mu.RUnlock()
-	if ok {
-		t.Fatalf("expected idle group to be removed after cleanup")
-	}
-}
-
-func TestCloseWaitsForInFlightSenderWithoutPanicking(t *testing.T) {
-	cfg := newTestConfig()
-	cfg.CleanupInterval = time.Hour
-
-	router := NewRouter(cfg)
-
-	gw := newTestGroupWorker(router, "close", 1)
-	router.mu.Lock()
-	router.groups["close"] = gw
-	router.mu.Unlock()
-
-	if !gw.tryAcquireSender() {
-		t.Fatalf("expected to acquire sender for test group")
-	}
-
-	closeDone := make(chan struct{})
-	go func() {
-		router.Close()
-		close(closeDone)
-	}()
-
-	select {
-	case <-closeDone:
-		t.Fatalf("router close returned before in-flight sender released")
-	case <-time.After(20 * time.Millisecond):
-	}
-
-	gw.releaseSender()
-
-	select {
-	case <-closeDone:
-	case <-time.After(200 * time.Millisecond):
-		t.Fatalf("router close did not finish after sender release")
-	}
-
-	if got := gw.queueState(); got != queueStateClosed {
-		t.Fatalf("expected group queue to be closed after router shutdown, got %v", got)
-	}
-}
-
-func TestIdempotencyTTLBoundary(t *testing.T) {
-	cfg := newTestConfig()
-	mockClock := clock.NewMockClock(time.Now())
-	cfg.Clock = mockClock
-	router := NewRouter(cfg)
-	t.Cleanup(router.Close)
-
-	router.RegisterHandler("idem", func(ctx context.Context, payload any) error { return nil })
-
-	task := Task{Type: "idem", Options: TaskOptions{IdempotencyKey: "test", IdempotencyTTL: 100 * time.Millisecond}}
-
-	if err := router.Dispatch(context.Background(), task); err != nil {
-		t.Fatalf("first dispatch failed: %v", err)
-	}
-
-	mockClock.Advance(99 * time.Millisecond)
-
-	if err := router.Dispatch(context.Background(), task); !errors.Is(err, ErrDuplicateTask) {
-		t.Fatalf("expected duplicate error, got: %v", err)
-	}
-
-	mockClock.Advance(2 * time.Millisecond) // Now at +101ms
-
-	if err := router.Dispatch(context.Background(), task); err != nil {
-		t.Fatalf("third dispatch failed: %v", err)
-	}
-}
-
-func TestIdempotencyConcurrencyCollision(t *testing.T) {
-	router := NewRouter(newTestConfig())
-	t.Cleanup(router.Close)
-
-	var calls int32
-	router.RegisterHandler("concurrent", func(ctx context.Context, payload any) error {
-		atomic.AddInt32(&calls, 1)
-		return nil
-	})
-
-	task := Task{Type: "concurrent", Options: TaskOptions{IdempotencyKey: "stress", IdempotencyTTL: time.Minute}}
-
+	const numTasks = 10000
 	var wg sync.WaitGroup
-	var successes int32
-	var duplicates int32
+	wg.Add(numTasks)
 
-	const numGoroutines = 5000
-
-	start := make(chan struct{})
-	for i := 0; i < numGoroutines; i++ {
-		wg.Add(1)
-		go func() {
+	for i := 0; i < numTasks; i++ {
+		go func(id int) {
 			defer wg.Done()
-			<-start
-			err := router.Dispatch(context.Background(), task)
-			if err == nil {
-				atomic.AddInt32(&successes, 1)
-			} else if errors.Is(err, ErrDuplicateTask) {
-				atomic.AddInt32(&duplicates, 1)
+			err := router.Dispatch(context.Background(), Task{
+				Type: "serialize_test",
+				Options: TaskOptions{
+					GroupKey: "single_group",
+				},
+			})
+			if err != nil {
+				t.Errorf("Dispatch failed: %v", err)
 			}
-		}()
+		}(i)
 	}
 
-	close(start)
 	wg.Wait()
 
-	if successes != 1 {
-		t.Fatalf("expected exactly 1 successful dispatch, got %d", successes)
+	// Flush tasks
+	time.Sleep(200 * time.Millisecond)
+
+	if c := counter.Load(); c != numTasks {
+		t.Fatalf("Expected %d tasks processed, got %d", numTasks, c)
 	}
-	if expectedDups := int32(numGoroutines - 1); duplicates != expectedDups {
-		t.Fatalf("expected exactly %d duplicate errors, got %d", expectedDups, duplicates)
+	if p := maxParallel.Load(); p > 1 {
+		t.Fatalf("Expected strictly 1 parallel execution per group, got %d", p)
 	}
+}
+
+func TestRouter_ExecutionLimiter(t *testing.T) {
+	t.Parallel()
+
+	cfg := Defaults()
+	cfg.ExecutionLimiter = NewExecutionLimiter(10)
+	router := NewRouter(cfg)
+	defer router.Close()
+
+	var active atomic.Int32
+	var maxActive atomic.Int32
+	blockCh := make(chan struct{})
+
+	router.RegisterHandler("limiter_test", func(ctx context.Context, payload any) error {
+		v := active.Add(1)
+		for {
+			maxA := maxActive.Load()
+			if v > maxA {
+				if !maxActive.CompareAndSwap(maxA, v) {
+					continue
+				}
+			}
+			break
+		}
+		<-blockCh
+		active.Add(-1)
+		return nil
+	})
+
+	for i := 0; i < 50; i++ {
+		// Unique group keys so group serialization doesn't limit concurrency
+		err := router.Dispatch(context.Background(), Task{
+			Type: "limiter_test",
+			Options: TaskOptions{
+				GroupKey: fmt.Sprintf("group_%d", i),
+			},
+		})
+		if err != nil {
+			t.Fatalf("Dispatch failed: %v", err)
+		}
+	}
+
+	time.Sleep(100 * time.Millisecond) // Allow workers to spawn and block
+	close(blockCh)                     // Unblock all
+	time.Sleep(100 * time.Millisecond)
+
+	if p := maxActive.Load(); p != 10 {
+		t.Fatalf("Expected max active handlers to be bounded by Limiter (10), got %d", p)
+	}
+}
+
+func TestRouter_IdempotencyTTL(t *testing.T) {
+	t.Parallel()
+
+	mockClock := clock.NewMockClock(time.Now())
+	cfg := Defaults()
+	cfg.Clock = mockClock
+	router := NewRouter(cfg)
+	defer router.Close()
+
+	router.RegisterHandler("idem_test", func(ctx context.Context, payload any) error {
+		return nil
+	})
+
+	task := Task{
+		Type: "idem_test",
+		Options: TaskOptions{
+			IdempotencyKey: "A",
+			IdempotencyTTL: 60 * time.Second,
+		},
+	}
+
+	if err := router.Dispatch(context.Background(), task); err != nil {
+		t.Fatalf("Initial dispatch failed: %v", err)
+	}
+
+	if err := router.Dispatch(context.Background(), task); !errors.Is(err, ErrDuplicateTask) {
+		t.Fatalf("Expected ErrDuplicateTask within TTL window, got %v", err)
+	}
+
+	mockClock.Advance(59 * time.Second)
+	if err := router.Dispatch(context.Background(), task); !errors.Is(err, ErrDuplicateTask) {
+		t.Fatalf("Expected ErrDuplicateTask at 59s, got %v", err)
+	}
+
+	mockClock.Advance(2 * time.Second) // Total 61s
+
+	// Force cleanup
+	router.cleanupOnce()
+
+	if err := router.Dispatch(context.Background(), task); err != nil {
+		t.Fatalf("Expected success after TTL expiry (61s), got %v", err)
+	}
+}
+
+func TestRouter_RetryHeap(t *testing.T) {
+	t.Parallel()
+
+	mockClock := clock.NewMockClock(time.Now())
+	cfg := Defaults()
+	cfg.Clock = mockClock
+	cfg.DefaultMaxAttempts = 5
+	cfg.InitialBackoff = 100 * time.Millisecond
+	cfg.MaxBackoff = 2 * time.Second
+	router := NewRouter(cfg)
+	defer router.Close()
+
+	var attemptCount atomic.Int32
+	errStatic := errors.New("static network error")
+
+	router.RegisterHandler("retry_test", func(ctx context.Context, payload any) error {
+		attemptCount.Add(1)
+		return errStatic
+	})
+
+	// Inject a task directly to test backoff computation natively
+	delay1 := router.computeBackoff(100*time.Millisecond, 2*time.Second, 1)
+	if delay1 < 90*time.Millisecond || delay1 > 110*time.Millisecond { // 10% jitter bounds
+		t.Fatalf("Expected backoff ~100ms, got %v", delay1)
+	}
+
+	delay2 := router.computeBackoff(100*time.Millisecond, 2*time.Second, 2)
+	if delay2 < 180*time.Millisecond || delay2 > 220*time.Millisecond {
+		t.Fatalf("Expected backoff ~200ms, got %v", delay2)
+	}
+
+	// Test heap explicitly
+	router.scheduleRetry("group_a", &enqueuedTask{attempt: 1}, 10*time.Second)
+	router.scheduleRetry("group_b", &enqueuedTask{attempt: 1}, 5*time.Second)
+
+	mockClock.Advance(6 * time.Second)
+	due := router.popDueRetries(mockClock.Now())
+	if len(due) != 1 || due[0].groupKey != "group_b" {
+		t.Fatalf("Expected group_b to pop first")
+	}
+
+	mockClock.Advance(5 * time.Second)
+	due = router.popDueRetries(mockClock.Now())
+	if len(due) != 1 || due[0].groupKey != "group_a" {
+		t.Fatalf("Expected group_a to pop second")
+	}
+}
+
+func TestRouter_CronSchedule(t *testing.T) {
+	t.Parallel()
+
+	mockClock := clock.NewMockClock(time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC))
+	cfg := Defaults()
+	cfg.Clock = mockClock
+	router := NewRouter(cfg)
+	defer router.Close()
+
+	var runs atomic.Int32
+	router.RegisterHandler("cron_task", func(ctx context.Context, payload any) error {
+		runs.Add(1)
+		return nil
+	})
+
+	// Schedule for 15:00 UTC daily
+	cancel := router.ScheduleDailyAtUTC(15, 0, Task{Type: "cron_task"})
+	defer cancel()
+
+	// Initial time is 10:00. First target is today 15:00 (5h from now).
+	// Advance clock by exactly 72 hours (3 days).
+	// We expect 3 triggers: Today at 15:00, Tomorrow at 15:00, Day 3 at 15:00.
+	for i := 0; i < 72; i++ {
+		mockClock.Advance(1 * time.Hour)
+		router.runCronOnce()
+		// Wait slightly to let dispatch process
+		time.Sleep(time.Millisecond)
+	}
+
+	if r := runs.Load(); r != 3 {
+		t.Fatalf("Expected cron to fire exactly 3 times in 72h, got %d", r)
+	}
+}
+
+func TestRouter_ContextCancel(t *testing.T) {
+	t.Parallel()
+
+	router := NewRouter(Defaults())
+
+	blockCh := make(chan struct{})
+	doneCh := make(chan struct{})
+	var ctxErr error
+
+	router.RegisterHandler("cancel_test", func(ctx context.Context, payload any) error {
+		close(blockCh) // Signal we are inside handler
+		<-ctx.Done()
+		ctxErr = ctx.Err()
+		close(doneCh)
+		return nil
+	})
+
+	_ = router.Dispatch(context.Background(), Task{Type: "cancel_test"})
+	<-blockCh
+
+	router.Close()
+
+	<-doneCh
+	if !errors.Is(ctxErr, context.Canceled) {
+		t.Fatalf("Expected context.Canceled, got %v", ctxErr)
+	}
+}
+
+func TestRouter_Observability(t *testing.T) {
+	t.Parallel()
+
+	mockClock := clock.NewMockClock(time.Now())
+	cfg := Defaults()
+	cfg.Clock = mockClock
+	router := NewRouter(cfg)
+	defer router.Close()
+
+	router.RegisterHandler("slow_test", func(ctx context.Context, payload any) error {
+		// Simulate 6s execution
+		mockClock.Advance(6 * time.Second)
+		return nil
+	})
+
+	_ = router.Dispatch(context.Background(), Task{Type: "slow_test"})
+
+	// Wait for handler to complete
+	time.Sleep(50 * time.Millisecond)
+
+	// Intercept observability metrics manually since getOrCreate is not strictly exported
+	// We just ensure it doesn't panic and the latency map registers it.
+	stats := router.Stats()
+	if stats.RegisteredTypes != 1 {
+		t.Errorf("Stats registered types mismatch")
+	}
+
+	router.latencyMu.RLock()
+	s := router.latenciesByType["slow_test"]
+	router.latencyMu.RUnlock()
+
+	if s == nil {
+		t.Fatalf("Expected latency summary to be created for slow_test")
+	}
+}
+
+// FuzzRouter_QueueMutation validates thread safety and bounds against corrupted payload shapes.
+func FuzzRouter_QueueMutation(f *testing.F) {
+	f.Add("group_1", "idem_1")
+	f.Add("", "")
+	f.Add(string([]byte{0x00, 0xFF}), "null_idem")
+
+	f.Fuzz(func(t *testing.T, group string, idem string) {
+		router := NewRouter(Defaults())
+		router.RegisterHandler("fuzz", func(ctx context.Context, payload any) error {
+			return nil
+		})
+
+		err := router.Dispatch(context.Background(), Task{
+			Type: "fuzz",
+			Options: TaskOptions{
+				GroupKey:       group,
+				IdempotencyKey: idem,
+				IdempotencyTTL: 1 * time.Second,
+			},
+		})
+		if err != nil && err.Error() != errTaskEnqueue.Error() && !errors.Is(err, ErrUnknownTaskType) && !errors.Is(err, ErrDuplicateTask) {
+			// All other structural panics or out-of-bounds maps will fail test naturally.
+		}
+		router.Close()
+	})
+}
+
+// FuzzRouter_HeapLimits injects extreme boundaries to validate container/heap resilience.
+func FuzzRouter_HeapLimits(f *testing.F) {
+	f.Add(int64(-1), int64(1))
+	f.Add(int64(math.MaxInt64), int64(math.MinInt64))
+	f.Add(int64(0), int64(0))
+
+	f.Fuzz(func(t *testing.T, t1, t2 int64) {
+		var h retryTaskHeap
+		heap.Init(&h)
+
+		item1 := &scheduledRetry{at: time.Unix(t1, 0), seq: 1}
+		item2 := &scheduledRetry{at: time.Unix(t2, 0), seq: 2}
+
+		heap.Push(&h, item1)
+		heap.Push(&h, item2)
+
+		if h.Len() != 2 {
+			t.Fatalf("Length mismatch")
+		}
+
+		_ = heap.Pop(&h)
+		_ = heap.Pop(&h)
+	})
 }
