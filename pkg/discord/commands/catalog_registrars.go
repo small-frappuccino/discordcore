@@ -3,6 +3,9 @@ package commands
 import (
 	"log/slog"
 
+	"github.com/diamondburned/arikawa/v3/api"
+	discordclean "github.com/small-frappuccino/discordcore/pkg/discord/clean"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/clean"
 	embedscmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/embeds"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/logging"
@@ -13,6 +16,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/runtime"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/stats"
 	tickets_cmds "github.com/small-frappuccino/discordcore/pkg/discord/commands/tickets"
+	"time"
 )
 
 // CommandCatalogCapabilities captures runtime capabilities that can gate
@@ -36,6 +40,7 @@ func DefaultCommandCatalogRegistrars() []CommandCatalogRegistrar {
 		RuntimeCommandCatalogRegistrar(),
 		PartnerCommandCatalogRegistrar(),
 		ModerationCommandCatalogRegistrar(),
+		CleanCommandCatalogRegistrar(),
 		RolesCommandCatalogRegistrar(),
 		EmbedsCommandCatalogRegistrar(),
 		TicketsCommandCatalogRegistrar(),
@@ -69,6 +74,67 @@ func ModerationCommandCatalogRegistrar() CommandCatalogRegistrar {
 		Register: func(ch *CommandHandler, router *legacycore.CommandRouter) {
 			moderation.RegisterModerationCommandsWithMetrics(router, ch.moderationMetrics)
 		},
+	}
+}
+
+func CleanCommandCatalogRegistrar() CommandCatalogRegistrar {
+	return CommandCatalogRegistrar{
+		RegisterArikawa: func(ch *CommandHandler, router *legacycore.ArikawaCommandRouter) {
+			client := api.NewClient("Bot " + ch.session.Token)
+			var metrics discordclean.Metrics
+			if ch.moderationMetrics != nil {
+				metrics = cleanMetricsAdapter{m: ch.moderationMetrics}
+			}
+			svc := discordclean.NewService(client, metrics, nil)
+			router.Register(clean.NewCleanCommand(ch.configManager, svc))
+		},
+	}
+}
+
+type cleanMetricsAdapter struct {
+	m moderation.Metrics
+}
+
+func (a cleanMetricsAdapter) RecordCleanAttempt() {
+	if a.m != nil {
+		a.m.RecordCleanAttempt()
+	}
+}
+func (a cleanMetricsAdapter) RecordCleanSuccess(durationMs int64, deleted int) {
+	if a.m != nil {
+		a.m.RecordCleanSuccess(time.Duration(durationMs)*time.Millisecond, deleted)
+	}
+}
+func (a cleanMetricsAdapter) RecordCleanFailure(cause string, durationMs int64) {
+	if a.m != nil {
+		a.m.RecordCleanFailure(cause, time.Duration(durationMs)*time.Millisecond)
+	}
+}
+func (a cleanMetricsAdapter) RecordCleanDeleteFailure(class string) {
+	if a.m != nil {
+		var c moderation.CleanFailureClass
+		switch class {
+		case "missing_message":
+			c = moderation.CleanFailureClassMissingMessage
+		case "missing_channel":
+			c = moderation.CleanFailureClassMissingChannel
+		case "forbidden":
+			c = moderation.CleanFailureClassForbidden
+		case "bulk_delete_age":
+			c = moderation.CleanFailureClassBulkDeleteAge
+		case "rate_limited":
+			c = moderation.CleanFailureClassRateLimited
+		case "transient":
+			c = moderation.CleanFailureClassTransient
+		default:
+			c = moderation.CleanFailureClassUnknown
+		}
+		a.m.RecordCleanDeleteFailure(c)
+	}
+}
+func (a cleanMetricsAdapter) RecordCleanAuditLogFailure() {
+	if a.m != nil {
+		a.m.RecordCleanAuditLogFailure()
 	}
 }
 

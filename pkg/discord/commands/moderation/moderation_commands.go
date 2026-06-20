@@ -26,7 +26,6 @@ func RegisterModerationCommandsWithMetrics(router *legacycore.CommandRouter, met
 
 	router.RegisterSlashCommand(newBanCommand())
 	router.RegisterSlashCommand(newMassBanCommand())
-	router.RegisterSlashCommand(newCleanCommand(metrics))
 	router.RegisterSlashCommand(newKickCommand())
 	router.RegisterSlashCommand(newMuteCommand())
 	router.RegisterSlashCommand(newReactionBlockCommand(configManager))

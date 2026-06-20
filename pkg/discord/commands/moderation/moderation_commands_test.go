@@ -48,7 +48,7 @@ func TestRegisterModerationCommandsRegistersTopLevel(t *testing.T) {
 
 	RegisterModerationCommands(router)
 
-	expected := []string{"ban", "clean", "kick", "massban", "mute", "reaction_block", "timeout", "warn", "warnings"}
+	expected := []string{"ban", "kick", "massban", "mute", "reaction_block", "timeout", "warn", "warnings"}
 	for _, name := range expected {
 		if _, ok := router.GetRegistry().GetCommand(name); !ok {
 			t.Fatalf("expected %q to be registered as a top-level slash command", name)
