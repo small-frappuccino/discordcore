@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/diamondburned/arikawa/v3/api"
@@ -20,13 +21,18 @@ type Handler struct {
 	replier InteractionReplier
 	cm      *files.ConfigManager
 	applier runtimeConfigApplier
+	logger  *slog.Logger
 }
 
-func NewHandler(replier InteractionReplier, cm *files.ConfigManager, applier runtimeConfigApplier) *Handler {
+func NewHandler(replier InteractionReplier, cm *files.ConfigManager, applier runtimeConfigApplier, logger *slog.Logger) *Handler {
+	if logger == nil {
+		logger = slog.Default() // Fallback
+	}
 	return &Handler{
 		replier: replier,
 		cm:      cm,
 		applier: applier,
+		logger:  logger,
 	}
 }
 
@@ -78,6 +84,10 @@ func (h *Handler) HandleSlash(ctx context.Context, i *discord.InteractionEvent) 
 		return h.denyEphemeral(ctx, i, fmt.Sprintf("Failed to load runtime configuration: %v", err))
 	}
 
+	h.logger.Info("Interaction routed to runtime configuration slash command",
+		slog.String("guild_id", i.GuildID.String()),
+		slog.String("request_id", i.ID.String()))
+
 	st := panelState{
 		Mode:  pageMain,
 		Group: "ALL",
@@ -105,10 +115,19 @@ func (h *Handler) HandleComponent(ctx context.Context, i *discord.InteractionEve
 
 	routeID, rawState, hasState := strings.Cut(string(d.ID()), stateSep)
 	if !hasState {
+		h.logger.Warn("Failed to decode runtime state from component interaction",
+			slog.String("custom_id", string(d.ID())),
+			slog.String("request_id", i.ID.String()))
 		return h.denyEphemeral(ctx, i, "Invalid interaction state format.")
 	}
 
 	st := decodeState(rawState)
+
+	h.logger.Debug("Decoded runtime state from component",
+		slog.String("request_id", i.ID.String()),
+		slog.String("key", string(st.Key)),
+		slog.String("mode", string(st.Mode)),
+		slog.String("group", st.Group))
 
 	if routeID != cidButtonEdit {
 		_ = h.respond(ctx, i, api.InteractionResponse{
@@ -287,8 +306,22 @@ func (h *Handler) HandleModal(ctx context.Context, i *discord.InteractionEvent) 
 	}
 
 	st, token, valid := decodeRuntimeModalState(string(d.CustomID))
-	if !valid || !h.authorizeInteraction(ctx, i, token) {
-		return nil
+	if !valid {
+		h.logger.Warn("Failed to decode runtime state from modal interaction",
+			slog.String("custom_id", string(d.CustomID)),
+			slog.String("request_id", i.ID.String()))
+		return h.denyEphemeral(ctx, i, "Invalid modal interaction.")
+	}
+
+	h.logger.Debug("Decoded runtime modal state",
+		slog.String("request_id", i.ID.String()),
+		slog.String("key", string(st.Key)))
+
+	if !h.authorizeInteraction(ctx, i, token) {
+		h.logger.Warn("Interaction authorization failed for runtime modal",
+			slog.String("guild_id", i.GuildID.String()),
+			slog.String("request_id", i.ID.String()))
+		return h.denyEphemeral(ctx, i, "You do not have permission to submit this modal.")
 	}
 
 	_ = h.respond(ctx, i, api.InteractionResponse{

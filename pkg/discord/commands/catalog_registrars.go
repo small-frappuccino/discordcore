@@ -57,7 +57,7 @@ func RuntimeCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
 		RegisterArikawa: func(ch *CommandHandler, router *legacycore.ArikawaCommandRouter) {
 			replier := &arikawaReplierAdapter{client: api.NewClient("Bot " + ch.session.Token)}
-			handler := runtime.NewHandler(replier, ch.configManager, ch.commandManager.GetRouter().GetRuntimeApplier())
+			handler := runtime.NewHandler(replier, ch.configManager, ch.commandManager.GetRouter().GetRuntimeApplier(), slog.Default())
 			shim := &runtimeShim{handler: handler}
 			router.Register(shim)
 			router.RegisterComponent("runtime|", shim)

@@ -27,7 +27,7 @@ func TestHandler_HandleSlash_EphemeralValidation(t *testing.T) {
 	cm := files.NewConfigManagerWithStore(store, nil)
 	_ = cm.LoadConfig()
 
-	handler := NewHandler(replier, cm, nil)
+	handler := NewHandler(replier, cm, nil, nil)
 
 	// Construct an isolated, synthetic interaction mimicking a user triggering /config runtime.
 	ev := &discord.InteractionEvent{
