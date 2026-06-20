@@ -17,14 +17,16 @@ func TestSession_SingleflightLoad(t *testing.T) {
 
 	var fetches int32
 	var wg sync.WaitGroup
+	start := make(chan struct{})
 
 	for i := 0; i < 1000; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			<-start // Wait for all goroutines to be spawned
 			_, err, _ := cs.sf.Do("guild:123", func() (any, error) {
 				atomic.AddInt32(&fetches, 1)
-				time.Sleep(10 * time.Millisecond) // simulate fetch
+				time.Sleep(50 * time.Millisecond) // simulate fetch, enough time for others to block
 				return &discord.Guild{ID: discord.GuildID(123)}, nil
 			})
 			if err != nil {
@@ -33,6 +35,7 @@ func TestSession_SingleflightLoad(t *testing.T) {
 		}()
 	}
 
+	close(start) // Unleash all goroutines at once
 	wg.Wait()
 
 	if atomic.LoadInt32(&fetches) != 1 {

@@ -279,11 +279,13 @@ func (ch *CommandHandler) SetCommandCatalogCapabilities(capabilities CommandCata
 
 func (ch *CommandHandler) registerCommandCatalog() error {
 	router := ch.commandManager.GetRouter()
+	arikawaRouter := ch.commandManager.GetArikawaRouter()
 	for _, registrar := range ch.commandCatalogRegistrarsForSetup() {
-		if registrar.Register == nil {
-			continue
+		if registrar.RegisterArikawa != nil {
+			registrar.RegisterArikawa(ch, arikawaRouter)
+		} else if registrar.Register != nil {
+			registrar.Register(ch, router)
 		}
-		registrar.Register(ch, router)
 	}
 
 	slog.Info("Command catalog fragments coupled to the router")

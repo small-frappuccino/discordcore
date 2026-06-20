@@ -52,3 +52,15 @@ func (c *ArikawaContext) Respond(data api.InteractionResponseData) error {
 		Data: &data,
 	})
 }
+
+// Defer defers the interaction with optional message flags.
+func (c *ArikawaContext) Defer(flags discord.MessageFlags) error {
+	var data *api.InteractionResponseData
+	if flags != 0 {
+		data = &api.InteractionResponseData{Flags: flags}
+	}
+	return c.Client.RespondInteraction(c.Interaction.ID, c.Interaction.Token, api.InteractionResponse{
+		Type: api.DeferredMessageInteractionWithSource,
+		Data: data,
+	})
+}

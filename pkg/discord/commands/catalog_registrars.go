@@ -26,6 +26,7 @@ type CommandCatalogCapabilities struct {
 type CommandCatalogRegistrar struct {
 	RequiredCapabilities CommandCatalogCapabilities
 	Register             func(*CommandHandler, *legacycore.CommandRouter)
+	RegisterArikawa      func(*CommandHandler, *legacycore.ArikawaCommandRouter)
 }
 
 // DefaultCommandCatalogRegistrars preserves the legacy all-catalog behavior for
@@ -56,7 +57,7 @@ func RuntimeCommandCatalogRegistrar() CommandCatalogRegistrar {
 // PartnerCommandCatalogRegistrar registers the partner slash command surface.
 func PartnerCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
-		Register: func(ch *CommandHandler, router *legacycore.CommandRouter) {
+		RegisterArikawa: func(ch *CommandHandler, router *legacycore.ArikawaCommandRouter) {
 			partnercmd.NewPartnerCommands(ch.configManager, ch.partnerService).RegisterCommands(router)
 		},
 	}
@@ -74,7 +75,7 @@ func ModerationCommandCatalogRegistrar() CommandCatalogRegistrar {
 // RolesCommandCatalogRegistrar registers the roles slash command surface.
 func RolesCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
-		Register: func(ch *CommandHandler, router *legacycore.CommandRouter) {
+		RegisterArikawa: func(ch *CommandHandler, router *legacycore.ArikawaCommandRouter) {
 			rolescmd.NewRolePanelCommands(ch.configManager, ch.rolePanelService).RegisterCommands(router)
 		},
 	}
@@ -83,7 +84,7 @@ func RolesCommandCatalogRegistrar() CommandCatalogRegistrar {
 // EmbedsCommandCatalogRegistrar registers the embeds slash command surface.
 func EmbedsCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
-		Register: func(ch *CommandHandler, router *legacycore.CommandRouter) {
+		RegisterArikawa: func(ch *CommandHandler, router *legacycore.ArikawaCommandRouter) {
 			embedscmd.NewEmbedCommands(ch.configManager, ch.embedService).RegisterCommands(router)
 		},
 	}

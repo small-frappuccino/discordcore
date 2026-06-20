@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"runtime"
+	"strings"
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
@@ -19,17 +21,24 @@ var ErrAlreadyAcknowledged = errors.New("interaction has already been acknowledg
 
 // ArikawaCommandRouter manages routing and execution of Arikawa commands.
 type ArikawaCommandRouter struct {
-	commands map[string]ArikawaCommand
-	client   *api.Client
-	config   *files.ConfigManager
+	commands   map[string]ArikawaCommand
+	components map[string]ArikawaComponentHandler
+	client     *api.Client
+	config     *files.ConfigManager
+}
+
+// ArikawaComponentHandler defines the interface for native component handlers.
+type ArikawaComponentHandler interface {
+	HandleComponent(ctx *ArikawaContext) error
 }
 
 // NewArikawaCommandRouter creates a new Arikawa router.
 func NewArikawaCommandRouter(token string, config *files.ConfigManager) *ArikawaCommandRouter {
 	router := &ArikawaCommandRouter{
-		commands: make(map[string]ArikawaCommand),
-		client:   api.NewClient(token),
-		config:   config,
+		commands:   make(map[string]ArikawaCommand),
+		components: make(map[string]ArikawaComponentHandler),
+		client:     api.NewClient("Bot " + token),
+		config:     config,
 	}
 	log.ApplicationLogger().Info("Initialized Arikawa command router")
 	return router
@@ -40,6 +49,11 @@ func (r *ArikawaCommandRouter) Register(cmd ArikawaCommand) {
 	r.commands[cmd.Name()] = cmd
 }
 
+// RegisterComponent registers a component interaction handler.
+func (r *ArikawaCommandRouter) RegisterComponent(customID string, handler ArikawaComponentHandler) {
+	r.components[customID] = handler
+}
+
 // HandleRawEvent intercepts raw Discord events and routes INTERACTION_CREATE natively to Arikawa.
 func (r *ArikawaCommandRouter) HandleRawEvent(s *discordgo.Session, e *discordgo.Event) {
 	if e.Type != "INTERACTION_CREATE" {
@@ -48,28 +62,67 @@ func (r *ArikawaCommandRouter) HandleRawEvent(s *discordgo.Session, e *discordgo
 
 	var interactionEvent discord.InteractionEvent
 	if err := json.Unmarshal(e.RawData, &interactionEvent); err != nil {
-		log.ErrorLoggerRaw().Error("Failed to unmarshal raw interaction to Arikawa type", slog.Any("error", err))
 		return
 	}
 
-	data, ok := interactionEvent.Data.(*discord.CommandInteraction)
-	if !ok {
-		return
-	}
+	r.HandleInteractionEvent(&interactionEvent)
+}
 
-	cmd, exists := r.commands[data.Name]
-	if !exists {
-		return
-	}
+// HandleInteractionEvent natively processes an Arikawa InteractionEvent (useful for testing or direct routing).
+func (r *ArikawaCommandRouter) HandleInteractionEvent(interactionEvent *discord.InteractionEvent) {
+	switch data := interactionEvent.Data.(type) {
+	case *discord.CommandInteraction:
+		cmd, exists := r.commands[data.Name]
+		if !exists {
+			return
+		}
 
-	log.DiscordLogger().Debug("Received Arikawa interaction event",
-		slog.String("interaction_id", interactionEvent.ID.String()),
-		slog.String("command_name", data.Name),
+		ctx := r.buildContext(interactionEvent)
+		if err := cmd.Handle(ctx); err != nil && !errors.Is(err, ErrAlreadyAcknowledged) {
+			r.logHandlerError("command", data.Name, interactionEvent, err)
+		}
+	default:
+		// Attempt to extract CustomID if it's a component interaction
+		if cmp, ok := data.(interface{ ID() discord.ComponentID }); ok {
+			var handler ArikawaComponentHandler
+			var matchedID string
+
+			for id, h := range r.components {
+				if strings.HasPrefix(string(cmp.ID()), id) {
+					handler = h
+					matchedID = id
+					break
+				}
+			}
+
+			if handler != nil {
+				ctx := r.buildContext(interactionEvent)
+				if err := handler.HandleComponent(ctx); err != nil && !errors.Is(err, ErrAlreadyAcknowledged) {
+					r.logHandlerError("component", matchedID, interactionEvent, err)
+				}
+			}
+		}
+	}
+}
+
+func (r *ArikawaCommandRouter) logHandlerError(kind, name string, interactionEvent *discord.InteractionEvent, err error) {
+	stackBuf := make([]byte, 4096)
+	n := runtime.Stack(stackBuf, false)
+
+	log.ErrorLoggerRaw().Error("Arikawa handler failed",
+		slog.String("kind", kind),
+		slog.String("name", name),
+		slog.String("request_id", interactionEvent.ID.String()),
+		slog.Int("http_status", 500),
+		slog.Any("error", err),
+		slog.String("stack_trace", string(stackBuf[:n])),
 	)
+}
 
+func (r *ArikawaCommandRouter) buildContext(interactionEvent *discord.InteractionEvent) *ArikawaContext {
 	ctx := &ArikawaContext{
 		Client:      r.client,
-		Interaction: &interactionEvent,
+		Interaction: interactionEvent,
 		Config:      r.config,
 		Logger:      log.DiscordLogger(),
 		GuildID:     interactionEvent.GuildID,
@@ -84,15 +137,7 @@ func (r *ArikawaCommandRouter) HandleRawEvent(s *discordgo.Session, e *discordgo
 	if r.config != nil {
 		ctx.GuildConfig = r.config.GuildConfig(interactionEvent.GuildID.String())
 	}
-
-	if err := cmd.Handle(ctx); err != nil && !errors.Is(err, ErrAlreadyAcknowledged) {
-		log.ErrorLoggerRaw().Error("Arikawa command handler failed",
-			slog.String("cmd", cmd.Name()),
-			slog.String("request_id", interactionEvent.ID.String()),
-			slog.Int("http_status", 500),
-			slog.Any("error", err),
-		)
-	}
+	return ctx
 }
 
 // GetAllCommands returns all registered Arikawa commands.

@@ -51,3 +51,57 @@ func (l ArikawaOptionList) Float(name string) float64 {
 	}
 	return 0
 }
+
+// HasOption checks if an option is present.
+func (l ArikawaOptionList) HasOption(name string) bool {
+	for _, opt := range l {
+		if opt.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// Bool gets a boolean option.
+func (l ArikawaOptionList) Bool(name string) bool {
+	for _, opt := range l {
+		if opt.Name == name {
+			b, _ := opt.BoolValue()
+			return b
+		}
+	}
+	return false
+}
+
+// Int gets an integer option.
+func (l ArikawaOptionList) Int(name string) int64 {
+	for _, opt := range l {
+		if opt.Name == name {
+			i, _ := opt.IntValue()
+			return i
+		}
+	}
+	return 0
+}
+
+// GetArikawaSubCommandOptions extracts options considering subcommand nesting.
+func GetArikawaSubCommandOptions(i *discord.InteractionEvent) []discord.CommandInteractionOption {
+	if i == nil {
+		return nil
+	}
+	data, ok := i.Data.(*discord.CommandInteraction)
+	if !ok || len(data.Options) == 0 {
+		return nil
+	}
+
+	opt := data.Options[0]
+	if opt.Type == discord.SubcommandOptionType {
+		return opt.Options
+	}
+	if opt.Type == discord.SubcommandGroupOptionType && len(opt.Options) > 0 {
+		// Subcommand inside a group
+		return opt.Options[0].Options
+	}
+
+	return data.Options
+}
