@@ -2,12 +2,10 @@ package moderation
 
 import (
 	"context"
+	"github.com/small-frappuccino/discordcore/pkg/observability"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/small-frappuccino/discordcore/pkg/discord/cleanup"
-	"github.com/small-frappuccino/discordcore/pkg/observability"
 )
 
 // Metrics is the narrow observability seam moderation commands write through.
@@ -46,11 +44,11 @@ type CleanLifecycleMetrics interface {
 // CleanDetailMetrics tracks specific sub-failures during a /clean invocation.
 type CleanDetailMetrics interface {
 	// RecordCleanDeleteFailure is called once per message that Discord
-	// rejected during the deletion pass. The cleanup.FailureClass is
+	// rejected during the deletion pass. The CleanFailureClass is
 	// preserved (forbidden, missing_channel, rate_limited, transient,
 	// unknown) so operators can distinguish "lost permission mid-flight"
 	// from "Discord 5xx spike" without grepping logs.
-	RecordCleanDeleteFailure(class cleanup.FailureClass)
+	RecordCleanDeleteFailure(class CleanFailureClass)
 
 	// RecordCleanAuditLogFailure is called when the audit-log channel
 	// embed POST fails (the secondary audit consumer). The primary audit
@@ -119,42 +117,57 @@ const (
 	CleanFailureCauseFetchUnknown     = "fetch_unknown"
 )
 
-// ClassifyCleanFetchFailure maps a fetch-side cleanup.FailureClass into
+// CleanFailureClass labels a Discord delete failure so callers can branch on the
+// underlying cause (counters, log dedup, user-facing messages) instead of
+// lumping every failure into one bucket.
+type CleanFailureClass int
+
+const (
+	CleanFailureClassUnknown CleanFailureClass = iota
+	CleanFailureClassMissingMessage
+	CleanFailureClassMissingChannel
+	CleanFailureClassForbidden
+	CleanFailureClassBulkDeleteAge
+	CleanFailureClassRateLimited
+	CleanFailureClassTransient
+)
+
+// ClassifyCleanFetchFailure maps a fetch-side CleanFailureClass into
 // the stable CleanFailureCauseFetch* token. Separate function (not just
 // a string concat) so the cause vocabulary stays grep-able when adding
 // new fetch errors.
-func ClassifyCleanFetchFailure(class cleanup.FailureClass) string {
+func ClassifyCleanFetchFailure(class CleanFailureClass) string {
 	switch class {
-	case cleanup.FailureClassForbidden:
+	case CleanFailureClassForbidden:
 		return CleanFailureCauseFetchForbidden
-	case cleanup.FailureClassMissingChannel:
+	case CleanFailureClassMissingChannel:
 		return CleanFailureCauseFetchMissing
-	case cleanup.FailureClassRateLimited:
+	case CleanFailureClassRateLimited:
 		return CleanFailureCauseFetchRateLimited
-	case cleanup.FailureClassTransient:
+	case CleanFailureClassTransient:
 		return CleanFailureCauseFetchTransient
 	default:
 		return CleanFailureCauseFetchUnknown
 	}
 }
 
-// FailureClassToken maps a cleanup.FailureClass to the canonical short
+// FailureClassToken maps a CleanFailureClass to the canonical short
 // token used in logs, /v1/health/moderation snapshots, and dashboards.
 // Single source of truth: both the clean command's structured logs and
 // the per-class delete failure counters route through here.
-func FailureClassToken(class cleanup.FailureClass) string {
+func FailureClassToken(class CleanFailureClass) string {
 	switch class {
-	case cleanup.FailureClassMissingMessage:
+	case CleanFailureClassMissingMessage:
 		return "missing_message"
-	case cleanup.FailureClassMissingChannel:
+	case CleanFailureClassMissingChannel:
 		return "missing_channel"
-	case cleanup.FailureClassForbidden:
+	case CleanFailureClassForbidden:
 		return "forbidden"
-	case cleanup.FailureClassBulkDeleteAge:
+	case CleanFailureClassBulkDeleteAge:
 		return "bulk_delete_age"
-	case cleanup.FailureClassRateLimited:
+	case CleanFailureClassRateLimited:
 		return "rate_limited"
-	case cleanup.FailureClassTransient:
+	case CleanFailureClassTransient:
 		return "transient"
 	default:
 		return "unknown"
@@ -179,7 +192,7 @@ func (NopMetrics) RecordCleanSuccess(time.Duration, int) {}
 func (NopMetrics) RecordCleanFailure(string, time.Duration) {}
 
 // RecordCleanDeleteFailure records clean delete failure.
-func (NopMetrics) RecordCleanDeleteFailure(cleanup.FailureClass) {}
+func (NopMetrics) RecordCleanDeleteFailure(CleanFailureClass) {}
 
 // RecordCleanAuditLogFailure records clean audit log failure.
 func (NopMetrics) RecordCleanAuditLogFailure() {}
@@ -233,7 +246,7 @@ func (m *InMemoryMetrics) RecordCleanFailure(cause string, duration time.Duratio
 }
 
 // RecordCleanDeleteFailure records clean delete failure.
-func (m *InMemoryMetrics) RecordCleanDeleteFailure(class cleanup.FailureClass) {
+func (m *InMemoryMetrics) RecordCleanDeleteFailure(class CleanFailureClass) {
 	m.classCounter(FailureClassToken(class)).Add(1)
 }
 

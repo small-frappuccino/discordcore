@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/cleanup"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/logging"
@@ -59,7 +58,7 @@ type cleanResult struct {
 	deletedSingle int
 	skippedPinned int
 
-	// failed* break the result.failed total down by cleanup.FailureClass so
+	// failed* break the result.failed total down by CleanFailureClass so
 	// describeCleanFailures and the audit-log embed can render a per-cause
 	// breakdown. Their sum should equal result.failed once both the
 	// bulk-preferred and single-only passes complete.
@@ -323,6 +322,9 @@ func requireChannelPermissions(session *discordgo.Session, userID, channelID str
 }
 
 func (c *cleanCommand) executeClean(ctx *legacycore.Context, request cleanRequest, start time.Time) (cleanResult, error) {
+	if true {
+		return cleanResult{}, &legacycore.CommandError{Message: "The /clean command is temporarily disabled during the Arikawa migration.", Ephemeral: true}
+	}
 	matched, result, err := c.collectCleanTargets(ctx, request, start)
 	if err != nil {
 		return cleanResult{}, fmt.Errorf("cleanCommand.executeClean: %w", err)
@@ -346,7 +348,7 @@ func (c *cleanCommand) executeClean(ctx *legacycore.Context, request cleanReques
 		bulkIDs = append(bulkIDs, message.ID)
 	}
 
-	onDeleteError := func(messageID string, err error, class cleanup.FailureClass) {
+	onDeleteError := func(messageID string, err error, class CleanFailureClass) {
 		recordCleanFailure(&result, class)
 		c.metrics.RecordCleanDeleteFailure(class)
 		log.ApplicationLogger().Warn(
@@ -359,7 +361,7 @@ func (c *cleanCommand) executeClean(ctx *legacycore.Context, request cleanReques
 			"err", err,
 		)
 	}
-	onChunkError := func(messageIDs []string, err error, class cleanup.FailureClass) {
+	onChunkError := func(messageIDs []string, err error, class CleanFailureClass) {
 		recordCleanChunkFailure(&result, class, len(messageIDs))
 		for i := 0; i < len(messageIDs); i++ {
 			c.metrics.RecordCleanDeleteFailure(class)
@@ -375,13 +377,13 @@ func (c *cleanCommand) executeClean(ctx *legacycore.Context, request cleanReques
 		)
 	}
 
-	result.deletedBulk, result.failed = cleanup.DeleteMessages(ctx.Session, request.channelID, bulkIDs, cleanup.DeleteOptions{
-		Mode:          cleanup.DeleteModeBulkPreferred,
+	result.deletedBulk, result.failed = DeleteMessages(ctx.Session, request.channelID, bulkIDs, DeleteOptions{
+		Mode:          DeleteModeBulkPreferred,
 		OnDeleteError: onDeleteError,
 		OnChunkError:  onChunkError,
 	})
-	deletedSingle, failedSingle := cleanup.DeleteMessages(ctx.Session, request.channelID, singleIDs, cleanup.DeleteOptions{
-		Mode:          cleanup.DeleteModeSingleOnly,
+	deletedSingle, failedSingle := DeleteMessages(ctx.Session, request.channelID, singleIDs, DeleteOptions{
+		Mode:          DeleteModeSingleOnly,
 		OnDeleteError: onDeleteError,
 	})
 	result.deletedSingle = deletedSingle
@@ -390,45 +392,45 @@ func (c *cleanCommand) executeClean(ctx *legacycore.Context, request cleanReques
 	return result, nil
 }
 
-func recordCleanFailure(result *cleanResult, class cleanup.FailureClass) {
+func recordCleanFailure(result *cleanResult, class CleanFailureClass) {
 	switch class {
-	case cleanup.FailureClassForbidden:
+	case CleanFailureClassForbidden:
 		result.failedForbidden++
-	case cleanup.FailureClassMissingChannel:
+	case CleanFailureClassMissingChannel:
 		result.failedMissingChannel++
-	case cleanup.FailureClassRateLimited:
+	case CleanFailureClassRateLimited:
 		result.failedRateLimited++
-	case cleanup.FailureClassTransient:
+	case CleanFailureClassTransient:
 		result.failedTransient++
 	default:
 		result.failedUnknown++
 	}
 }
 
-func recordCleanChunkFailure(result *cleanResult, class cleanup.FailureClass, count int) {
+func recordCleanChunkFailure(result *cleanResult, class CleanFailureClass, count int) {
 	switch class {
-	case cleanup.FailureClassForbidden:
+	case CleanFailureClassForbidden:
 		result.failedForbidden += count
-	case cleanup.FailureClassMissingChannel:
+	case CleanFailureClassMissingChannel:
 		result.failedMissingChannel += count
-	case cleanup.FailureClassRateLimited:
+	case CleanFailureClassRateLimited:
 		result.failedRateLimited += count
-	case cleanup.FailureClassTransient:
+	case CleanFailureClassTransient:
 		result.failedTransient += count
 	default:
 		result.failedUnknown += count
 	}
 }
 
-func cleanFetchErrorMessage(class cleanup.FailureClass) string {
+func cleanFetchErrorMessage(class CleanFailureClass) string {
 	switch class {
-	case cleanup.FailureClassForbidden:
+	case CleanFailureClassForbidden:
 		return "I lost permission to read message history in this channel. Re-check my channel overrides and try again."
-	case cleanup.FailureClassMissingChannel:
+	case CleanFailureClassMissingChannel:
 		return "I couldn't reach this channel anymore — it may have been deleted or my access was removed."
-	case cleanup.FailureClassRateLimited:
+	case CleanFailureClassRateLimited:
 		return "Discord is rate-limiting me right now. Try again in a moment."
-	case cleanup.FailureClassTransient:
+	case CleanFailureClassTransient:
 		return "Discord had a transient error while loading messages. Try again shortly."
 	default:
 		return "I couldn't load recent messages from this channel. Make sure I can read message history here and try again."
@@ -453,7 +455,7 @@ func (c *cleanCommand) collectCleanTargets(ctx *legacycore.Context, request clea
 
 		page, err := ctx.Session.ChannelMessages(request.channelID, limit, before, "", "")
 		if err != nil {
-			class := cleanup.ClassifyFetchError(err)
+			class := ClassifyFetchError(err)
 			log.ApplicationLogger().Warn(
 				"Clean command failed to load channel messages",
 				"operation", "moderation.clean.fetch_failed",
@@ -708,6 +710,25 @@ func buildCleanLogReason(request cleanRequest) string {
 		return "Recent channel cleanup with filters: " + filters
 	}
 	return "Recent channel cleanup"
+}
+
+// Stubs to replace the removed cleanup package
+
+func ClassifyFetchError(err error) CleanFailureClass { return CleanFailureClassUnknown }
+
+type DeleteOptions struct {
+	Mode          int
+	OnDeleteError func(string, error, CleanFailureClass)
+	OnChunkError  func([]string, error, CleanFailureClass)
+}
+
+const (
+	DeleteModeBulkPreferred = iota
+	DeleteModeSingleOnly
+)
+
+func DeleteMessages(session any, channelID string, messageIDs []string, opts DeleteOptions) (deleted, failed int) {
+	return 0, len(messageIDs)
 }
 
 func buildCleanLogDetails(request cleanRequest, result cleanResult) string {

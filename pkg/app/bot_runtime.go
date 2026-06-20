@@ -21,7 +21,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
-	"github.com/small-frappuccino/discordcore/pkg/discord/maintenance"
 	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/discord/session"
 	discordstats "github.com/small-frappuccino/discordcore/pkg/discord/stats"
@@ -799,9 +798,6 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 		}
 	}
 
-	if err := registerUserPruneService(runtime, opts, runtime.taskRouter); err != nil {
-		return err
-	}
 	if err := registerQOTDRuntimeService(runtime, opts); err != nil {
 		return err
 	}
@@ -843,25 +839,6 @@ func buildAutomodService(runtime *botRuntime, opts botRuntimeOptions, routerConf
 	automodService := discord_automod.NewArikawaAdapter(runtime.arikawaState, eventLogger, opts.logger)
 
 	return automodService
-}
-
-func registerUserPruneService(runtime *botRuntime, opts botRuntimeOptions, taskRouter *task.TaskRouter) error {
-	if !runtime.capabilities.userPrune {
-		return nil
-	}
-	userPruneService := maintenance.NewUserPruneService(runtime.legacySession, opts.configManager, opts.store, runtime.instanceID)
-	userPruneDependencies := []string{}
-	userPruneService.SetDependencies(userPruneDependencies)
-
-	if err := runtime.serviceManager.Register(userPruneService); err != nil {
-		errWrap := fmt.Errorf("register user prune service for %s: %w", runtime.instanceID, err)
-		log.EmitBlockingError("Blocking structural failure during user prune registration", errWrap, log.GenerateRequestID())
-		return errWrap
-	}
-	slog.Info("Architectural state transition: User prune operational routine initialized",
-		slog.String("botInstanceID", runtime.instanceID),
-	)
-	return nil
 }
 
 func registerQOTDRuntimeService(runtime *botRuntime, opts botRuntimeOptions) error {

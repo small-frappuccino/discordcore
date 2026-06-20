@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"iter"
+	"log/slog"
 	"sync"
 
 	"github.com/diamondburned/arikawa/v3/api"
@@ -77,8 +78,23 @@ func (r *CommandRegistry) Sync(client BulkOverwriteClient, appID discord.AppID) 
 			Description: cmd.Description,
 		})
 	}
+	count := len(createData)
 	r.mu.RUnlock()
 
+	slog.Info("Syncing commands to Discord",
+		slog.String("operation", "registry.sync"),
+		slog.String("appID", appID.String()),
+		slog.Int("count", count),
+	)
+
 	_, err := client.BulkOverwriteCommands(appID, createData)
+	if err != nil {
+		slog.Error("Failed to sync commands to Discord",
+			slog.String("operation", "registry.sync_failed"),
+			slog.String("appID", appID.String()),
+			slog.String("error", err.Error()),
+			slog.String("syntheticFailure", "500"),
+		)
+	}
 	return err
 }
