@@ -30,7 +30,6 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/messages"
 	applicationqotd "github.com/small-frappuccino/discordcore/pkg/qotd"
-	"github.com/small-frappuccino/discordcore/pkg/reactions"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/stats"
@@ -40,17 +39,16 @@ import (
 )
 
 type botRuntimeCapabilities struct {
-	monitoring           bool
-	automod              bool
-	userPrune            bool
-	qotdRuntime          bool
-	stats                bool
-	warmup               bool
-	intents              discordgo.Intent
-	hasCommands          bool
-	messageEventService  bool
-	memberEventService   bool
-	reactionEventService bool
+	monitoring          bool
+	automod             bool
+	userPrune           bool
+	qotdRuntime         bool
+	stats               bool
+	warmup              bool
+	intents             discordgo.Intent
+	hasCommands         bool
+	messageEventService bool
+	memberEventService  bool
 }
 
 // hasCommands reports whether any command catalog should be installed.
@@ -171,7 +169,6 @@ func resolveBotRuntimeCapabilities(
 			}
 			if botRuntimeNeedsReactions(runtimeConfig) {
 				capabilities.intents |= discordgo.IntentsGuildMessageReactions
-				capabilities.reactionEventService = true
 			}
 		}
 
@@ -769,22 +766,6 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 
 		if err := runtime.serviceManager.Register(memSvc); err != nil {
 			errWrap := fmt.Errorf("register member event service for %s: %w", runtime.instanceID, err)
-			log.EmitBlockingError("Blocking structural failure during service registry update", errWrap, log.GenerateRequestID())
-			return errWrap
-		}
-	}
-
-	if runtime.capabilities.reactionEventService {
-		reSvc := reactions.NewReactionEventServiceForBot(
-			runtime.legacySession,
-			opts.configManager,
-			opts.store,
-			runtime.instanceID,
-			slog.Default(),
-		)
-
-		if err := runtime.serviceManager.Register(reSvc); err != nil {
-			errWrap := fmt.Errorf("register reaction event service for %s: %w", runtime.instanceID, err)
 			log.EmitBlockingError("Blocking structural failure during service registry update", errWrap, log.GenerateRequestID())
 			return errWrap
 		}
