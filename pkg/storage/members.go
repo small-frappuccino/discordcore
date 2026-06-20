@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"iter"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -91,6 +92,8 @@ func (s *Store) UpsertGuildMemberSnapshotsContext(ctx context.Context, guildID s
 		return nil
 	}
 
+	s.log().Debug("upserting guild member snapshots batch", slog.String("guild_id", guildID), slog.Int("count", len(normalized)))
+
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("Store.UpsertGuildMemberSnapshotsContext: %w", err)
@@ -98,6 +101,7 @@ func (s *Store) UpsertGuildMemberSnapshotsContext(ctx context.Context, guildID s
 	defer func() {
 		// Rollback logic intercepts pgx.ErrTxClosed for idempotent execution safety
 		if rerr := tx.Rollback(ctx); rerr != nil && !errors.Is(rerr, pgx.ErrTxClosed) {
+			s.log().Error("failed to rollback transaction", slog.String("guild_id", guildID), slog.String("error", rerr.Error()))
 			err = errors.Join(err, fmt.Errorf("rollback failed: %w", rerr))
 		}
 	}()

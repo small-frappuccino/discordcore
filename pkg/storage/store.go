@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"errors"
+	"io"
 	"log/slog"
 
 	"github.com/jackc/pgx/v5"
@@ -35,15 +36,15 @@ func NewStore(db DB, logger *slog.Logger) (*Store, error) {
 	if db == nil {
 		return nil, errors.New("storage: NewStore requires a non-nil DB interface")
 	}
+	if logger == nil {
+		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
 	return &Store{db: db, logger: logger}, nil
 }
 
-// log provides safe access to the configured logger or a default fallback.
+// log provides safe access to the configured logger.
 func (s *Store) log() *slog.Logger {
-	if s.logger != nil {
-		return s.logger
-	}
-	return slog.Default()
+	return s.logger
 }
 
 // Close gracefully releases the underlying database connections.

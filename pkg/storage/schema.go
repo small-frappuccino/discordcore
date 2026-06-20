@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -56,19 +57,22 @@ func (s *Store) Init() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	s.log().Debug("Storage subsystem initializing: verifying schema and priming deployment state")
+	s.log().Info("storage subsystem initializing", slog.String("phase", "schema_verify"))
 
 	if err := s.ensureMemberJoinColumns(ctx); err != nil {
+		s.log().Error("failed to ensure member join columns", slog.String("error", err.Error()))
 		return fmt.Errorf("ensure member join state columns: %w", err)
 	}
 	if err := s.validateSchema(ctx); err != nil {
+		s.log().Error("schema validation failed", slog.String("error", err.Error()))
 		return fmt.Errorf("validate schema: %w", err)
 	}
 	if err := s.resetQOTDQuestionSequenceWhenEmpty(ctx); err != nil {
+		s.log().Error("failed to reset QOTD sequence", slog.String("error", err.Error()))
 		return fmt.Errorf("reset qotd question sequence: %w", err)
 	}
 
-	s.log().Debug("Storage subsystem initialized successfully")
+	s.log().Info("storage subsystem initialized successfully")
 	return nil
 }
 
