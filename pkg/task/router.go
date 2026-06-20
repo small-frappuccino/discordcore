@@ -8,6 +8,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"maps"
 	"math/rand"
 	"runtime/debug"
@@ -17,7 +19,6 @@ import (
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/clock"
-	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/observability"
 )
 
@@ -75,6 +76,9 @@ type RouterConfig struct {
 
 	// Clock abstracts the time package to enable deterministic execution testing.
 	Clock clock.Clock
+
+	// Logger receives the injected application logger for structural reporting.
+	Logger *slog.Logger
 }
 
 // Defaults provisions a base configuration profile suitable for production operations.
@@ -90,6 +94,7 @@ func Defaults() RouterConfig {
 		GlobalMaxWorkers:   0,
 		GroupMaxParallel:   1,
 		Clock:              clock.RealClock{},
+		Logger:             slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 }
 
@@ -307,6 +312,9 @@ func NewRouter(cfg RouterConfig) *TaskRouter {
 	if cfg.Clock == nil {
 		cfg.Clock = def.Clock
 	}
+	if cfg.Logger == nil {
+		cfg.Logger = def.Logger
+	}
 
 	tr := &TaskRouter{
 		handlers:    make(map[string]TaskHandler),
@@ -328,6 +336,7 @@ func NewRouter(cfg RouterConfig) *TaskRouter {
 	go tr.backgroundLoop()
 	tr.wg.Add(1)
 	go tr.retryLoop()
+	tr.cfg.Logger.Info("TaskRouter initialized")
 	return tr
 }
 
@@ -410,6 +419,7 @@ func (tr *TaskRouter) prepareDispatch(t Task) (string, TaskOptions, error) {
 // Any execution routines in-flight will be hard-canceled via context propagation.
 func (tr *TaskRouter) Close() {
 	tr.stopOnce.Do(func() {
+		tr.cfg.Logger.Info("TaskRouter shutting down")
 		tr.mu.Lock()
 		tr.closed = true
 		groups := make([]*groupWorker, 0, len(tr.groups))
@@ -711,14 +721,14 @@ func (tr *TaskRouter) groupLoop(gw *groupWorker) {
 	defer tr.wg.Done()
 	defer func() {
 		if r := recover(); r != nil {
-			log.ApplicationLogger().Error("Worker runtime panic pre-empted", "panic", r, "stack", string(debug.Stack()))
+			tr.cfg.Logger.Error("Worker runtime panic pre-empted", "panic", r, "stack", string(debug.Stack()))
 		}
 	}()
 
 	for {
 		select {
 		case <-tr.ctx.Done():
-			log.ApplicationLogger().Warn("Context cancelled: abandoning unread queue", "group", gw.key)
+			tr.cfg.Logger.Warn("Context cancelled: abandoning unread queue", "group", gw.key)
 			return
 		case enq, ok := <-gw.ch:
 			if !ok {
@@ -733,7 +743,7 @@ func (tr *TaskRouter) groupLoop(gw *groupWorker) {
 
 			if handler == nil {
 				gw.endWork(tr.nowNs())
-				log.ApplicationLogger().Warn("Task dropped (handler not registered)", "type", enq.task.Type, "group", gw.key)
+				tr.cfg.Logger.Warn("Task dropped (handler not registered)", "type", enq.task.Type, "group", gw.key)
 				continue
 			}
 
@@ -754,7 +764,7 @@ func (tr *TaskRouter) groupLoop(gw *groupWorker) {
 			summary.Observe(execDuration)
 
 			if execDuration > 5*time.Second {
-				log.ApplicationLogger().Warn("slow background task execution",
+				tr.cfg.Logger.Warn("slow background task execution",
 					"type", enq.task.Type,
 					"duration", execDuration.String(),
 					"duration_ms", execDuration.Milliseconds(),
@@ -769,7 +779,7 @@ func (tr *TaskRouter) groupLoop(gw *groupWorker) {
 					attempt := enq.attempt + 1
 
 					if silent {
-						log.ApplicationLogger().Debug("Task failed, scheduling retry",
+						tr.cfg.Logger.Debug("Task failed, scheduling retry",
 							"type", enq.task.Type,
 							"group", gw.key,
 							"attempt", attempt,
@@ -778,7 +788,7 @@ func (tr *TaskRouter) groupLoop(gw *groupWorker) {
 							"err", err,
 						)
 					} else {
-						log.ApplicationLogger().Warn("Task failed, scheduling retry",
+						tr.cfg.Logger.Warn("Task failed, scheduling retry",
 							"type", enq.task.Type,
 							"group", gw.key,
 							"attempt", attempt,
@@ -794,14 +804,14 @@ func (tr *TaskRouter) groupLoop(gw *groupWorker) {
 				}
 
 				if silent {
-					log.ApplicationLogger().Info("Task dropped after retry window",
+					tr.cfg.Logger.Info("Task dropped after retry window",
 						"type", enq.task.Type,
 						"group", gw.key,
 						"attempts", enq.attempt,
 						"err", err,
 					)
 				} else {
-					log.ErrorLoggerRaw().Error("Task failed; max attempts reached",
+					tr.cfg.Logger.Error("Task dropped after retry window",
 						"type", enq.task.Type,
 						"group", gw.key,
 						"attempts", enq.attempt,
@@ -889,7 +899,7 @@ func (tr *TaskRouter) retryLoop() {
 			case groupSendRouterClosed:
 				return
 			default:
-				log.ApplicationLogger().Debug("Task retry dropped while enqueuing",
+				tr.cfg.Logger.Debug("Task retry dropped while enqueuing",
 					"type", item.task.task.Type,
 					"group", item.groupKey,
 					"attempt", item.task.attempt,
@@ -1075,7 +1085,7 @@ func (tr *TaskRouter) backgroundLoop() {
 	defer tr.wg.Done()
 	defer func() {
 		if r := recover(); r != nil {
-			log.ApplicationLogger().Error("TaskRouter background loop panic caught", "panic", r, "stack", string(debug.Stack()))
+			tr.cfg.Logger.Error("TaskRouter background loop panic caught", "panic", r, "stack", string(debug.Stack()))
 		}
 	}()
 
@@ -1146,7 +1156,7 @@ func (tr *TaskRouter) runCronOnce() {
 			atomic.AddInt64(&tr.cronDispatchAttempts, 1)
 			if err := tr.Dispatch(context.Background(), job.Task); err != nil {
 				atomic.AddInt64(&tr.cronDispatchFailures, 1)
-				log.ErrorLoggerRaw().Error(
+				tr.cfg.Logger.Error(
 					"Cron task dispatch failed",
 					"operation", "task.router.cron.dispatch",
 					"taskType", job.Task.Type,

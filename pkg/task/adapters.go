@@ -6,6 +6,7 @@ package task
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/diamondburned/arikawa/v3/discord"
@@ -108,6 +109,7 @@ type NotificationAdapters struct {
 	Store           *storage.Store
 	Config          *files.ConfigManager
 	Session         *state.State
+	Logger          *slog.Logger
 }
 
 // SetAvatarProcessor dynamically overrides the avatar synchronization engine.
