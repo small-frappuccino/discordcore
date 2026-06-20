@@ -15,13 +15,15 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
-// RolePanelCommands wires the /roles command tree into the router natively via Arikawa.
+// RolePanelCommands orchestrates the slash-command routing for role panel workflows.
+// It integrates directly with the Arikawa router to execute lifecycle mutations.
 type RolePanelCommands struct {
 	configManager    *files.ConfigManager
 	rolePanelService *rolesvc.RolePanelService
 }
 
-// NewRolePanelCommands builds the command bundle.
+// NewRolePanelCommands constructs the primary slash-command controller for role panels.
+// It mandates the injection of the configuration manager and domain service.
 func NewRolePanelCommands(configManager *files.ConfigManager, svc *rolesvc.RolePanelService) *RolePanelCommands {
 	return &RolePanelCommands{
 		configManager:    configManager,
@@ -29,7 +31,7 @@ func NewRolePanelCommands(configManager *files.ConfigManager, svc *rolesvc.RoleP
 	}
 }
 
-// RegisterCommands registers the slash group and the component route on the supplied Arikawa router.
+// RegisterCommands binds the /roles slash group and the component toggle route to the application router.
 func (rc *RolePanelCommands) RegisterCommands(router *legacycore.ArikawaCommandRouter) {
 	if router == nil || rc == nil || rc.configManager == nil {
 		return
@@ -211,6 +213,8 @@ func convertPanelToArikawa(panel files.RolePanelConfig) (discord.Embed, []discor
 	if len(panel.Buttons) > 0 {
 		var current discord.ActionRowComponent
 		for _, b := range panel.Buttons {
+			// Operational annotation: Discord API enforces a maximum of 5 buttons per ActionRow.
+			// We dynamically chunk the button array into multiple container components to comply.
 			if len(current) == 5 {
 				components = append(components, &current)
 				current = discord.ActionRowComponent{}

@@ -43,6 +43,7 @@ func Run(args []string, output io.Writer, spec Spec, runner Runner) error {
 	if pathEnv == "" {
 		pathEnv = os.Getenv("Path")
 	}
+	// Scan dynamic environment path boundaries to isolate local developer configurations before execution.
 	for _, dir := range strings.Split(pathEnv, string(os.PathListSeparator)) {
 		dir = strings.TrimSpace(dir)
 		if dir == "" {

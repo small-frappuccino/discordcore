@@ -76,14 +76,15 @@ func (e *TargetValidationError) Unwrap() error {
 	return e.Cause
 }
 
-// API interface matching exactly the required methods
+// API defines the contract for Discord webhook and message manipulation operations.
+// It isolates the runtime execution from the underlying HTTP client implementation.
 type API interface {
 	WebhookMessageEdit(ctx context.Context, webhookID discord.WebhookID, webhookToken string, messageID discord.MessageID, data webhook.EditMessageData) (*discord.Message, error)
 	WebhookWithToken(ctx context.Context, webhookID discord.WebhookID, webhookToken string) (*discord.Webhook, error)
 	WebhookMessage(ctx context.Context, webhookID discord.WebhookID, webhookToken string, messageID discord.MessageID) (*discord.Message, error)
 }
 
-// ArikawaAPI implements API via arikawa/v3
+// ArikawaAPI implements the API interface utilizing the arikawa/v3 Discord library.
 type ArikawaAPI struct {
 	Client *api.Client // Optional base client
 }
@@ -120,7 +121,7 @@ func (a *ArikawaAPI) WebhookMessage(ctx context.Context, webhookID discord.Webho
 // Ensure the implementation is correct
 var _ API = (*ArikawaAPI)(nil)
 
-// ParseWebhookURL parses standard Discord webhook URLs
+// ParseWebhookURL extracts the webhook ID and token from a standard Discord webhook URL.
 func ParseWebhookURL(rawURL string) (discord.WebhookID, string, error) {
 	if rawURL == "" {
 		return 0, "", errors.New("missing webhook_url")
@@ -156,15 +157,17 @@ func ParseWebhookURL(rawURL string) (discord.WebhookID, string, error) {
 	return 0, "", errors.New("invalid webhook_url path")
 }
 
-// MessageEmbedPatch ...
+// MessageEmbedPatch encapsulates the necessary data to modify an existing webhook message embed.
 type MessageEmbedPatch struct {
 	MessageID  string
 	WebhookURL string
 	Embed      json.RawMessage
 }
 
-// PatchMessageEmbed ...
+// PatchMessageEmbed updates a target webhook message with the provided embed payload.
+// It mandates a valid API client and translates upstream errors into operational telemetry.
 func PatchMessageEmbed(ctx context.Context, client API, patch MessageEmbedPatch) (err error) {
+	// Wrap any returned error on exit to preserve the operational context boundary.
 	defer func() {
 		if err != nil {
 			err = fmt.Errorf("patch webhook message embed: %w", err)
@@ -216,7 +219,7 @@ func PatchMessageEmbed(ctx context.Context, client API, patch MessageEmbedPatch)
 	return nil
 }
 
-// MessageTargetValidation ...
+// MessageTargetValidation defines the parameters required to perform a validation check on a webhook message target.
 type MessageTargetValidation struct {
 	MessageID  string
 	WebhookURL string
@@ -225,7 +228,7 @@ type MessageTargetValidation struct {
 
 const defaultWebhookTargetValidationTimeout = 3 * time.Second
 
-// ValidateMessageTarget ...
+// ValidateMessageTarget performs sequential HTTP lookups to verify the existence and accessibility of a webhook and its target message.
 func ValidateMessageTarget(ctx context.Context, client API, validation MessageTargetValidation) error {
 	if client == nil {
 		err := errors.New("validate webhook target: nil client API")
@@ -277,6 +280,7 @@ func decodeEmbeds(raw json.RawMessage) ([]discord.Embed, error) {
 		return nil, errors.New("missing embed payload")
 	}
 
+	// Process payloads structured directly as a JSON array of embeds.
 	if trimmed[0] == '[' {
 		var embeds []discord.Embed
 		if err := json.Unmarshal(trimmed, &embeds); err != nil {
@@ -316,6 +320,7 @@ func decodeEmbeds(raw json.RawMessage) ([]discord.Embed, error) {
 }
 
 func wrapTargetValidationError(operation string, err error) error {
+	// Map specific HTTP status codes to internal operational failure classes for deterministic error handling.
 	var httpErr *httputil.HTTPError
 	if errors.As(err, &httpErr) {
 		status := httpErr.Status

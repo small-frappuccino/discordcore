@@ -10,12 +10,14 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
+// CachedSession acts as a transparent, caching proxy layer wrapping an underlying Arikawa Discord API client.
 type CachedSession struct {
 	client *api.Client
 	cache  *UnifiedCache
 	sf     singleflight.Group
 }
 
+// NewCachedSession initializes a resilient API client wrapper equipped with singleflight request deduplication.
 func NewCachedSession(client *api.Client, cache *UnifiedCache) *CachedSession {
 	slog.Info("Architectural state transition: Initializing CachedSession wrapper")
 	return &CachedSession{
@@ -24,6 +26,8 @@ func NewCachedSession(client *api.Client, cache *UnifiedCache) *CachedSession {
 	}
 }
 
+// GuildMember attempts to resolve a user within a guild, preferring the local cache before executing a network request.
+// It leverages singleflight to coalesce concurrent fetches for the same member, preventing thundering herd exhaustion.
 func (cs *CachedSession) GuildMember(guildID, userID string) (*discord.Member, error) {
 	if member, ok := cs.cache.GetMember(guildID, userID); ok {
 		return member, nil
@@ -59,6 +63,8 @@ func (cs *CachedSession) GuildMember(guildID, userID string) (*discord.Member, e
 	return member, nil
 }
 
+// Guild resolves a Discord guild structure, checking the local cache prior to a fallback REST call.
+// It prevents redundant concurrent API requests for the identical resource using singleflight deduplication.
 func (cs *CachedSession) Guild(guildID string) (*discord.Guild, error) {
 	if guild, ok := cs.cache.GetGuild(guildID); ok {
 		return guild, nil
@@ -91,11 +97,14 @@ func (cs *CachedSession) Guild(guildID string) (*discord.Guild, error) {
 	return guild, nil
 }
 
+// HandleGuildMemberUpdate processes gateway synchronization payloads by explicitly evicting stale member cache lines.
 func (cs *CachedSession) HandleGuildMemberUpdate(e *gateway.GuildMemberUpdateEvent) {
 	slog.Info("Architectural state transition: Invalidation via Gateway", slog.String("event", "GuildMemberUpdate"))
 	cs.cache.InvalidateMember(e.GuildID.String(), e.User.ID.String())
 }
 
+// HandleGuildRoleDelete processes gateway synchronization payloads by iterating and purging the targeted role from the cached slice.
+// This implements a partial-update strategy to avoid entirely invalidating the guild's role aggregate.
 func (cs *CachedSession) HandleGuildRoleDelete(e *gateway.GuildRoleDeleteEvent) {
 	slog.Info("Architectural state transition: Partial Invalidation via Gateway", slog.String("event", "GuildRoleDelete"))
 	if roles, ok := cs.cache.GetRoles(e.GuildID.String()); ok {

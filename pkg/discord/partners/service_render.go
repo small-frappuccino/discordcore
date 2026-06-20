@@ -62,13 +62,15 @@ type rendererLimits struct {
 	maxEmbeds           int
 }
 
-// BoardRenderer renders partner records into final Discord embeds.
+// BoardRenderer translates partner records and templates into native Discord embeds.
+// It implements aggressive bounds checking to respect Discord API limits such as
+// description lengths and maximum embed counts per message.
 type BoardRenderer struct {
 	maxDescriptionChars int
 	maxEmbeds           int
 }
 
-// NewBoardRenderer creates a renderer with Discord-safe defaults.
+// NewBoardRenderer constructs a layout generator initialized with strict Discord-safe constraints.
 func NewBoardRenderer() *BoardRenderer {
 	return &BoardRenderer{
 		maxDescriptionChars: defaultMaxEmbedDescriptionChars,
@@ -83,7 +85,7 @@ func newBoardRendererWithLimits(maxDescriptionChars, maxEmbeds int) *BoardRender
 	}
 }
 
-// Render transforms template + partner list into one or more embeds.
+// Render compiles the template structure and sorts the partner list, generating paginated embeds.
 func (r *BoardRenderer) Render(template PartnerBoardTemplate, partners []PartnerRecord) ([]discord.Embed, error) {
 	limits := normalizeRendererLimits(r)
 	tpl := normalizeTemplate(template)

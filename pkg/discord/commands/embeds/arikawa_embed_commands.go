@@ -53,13 +53,15 @@ const (
 	embedOptionURL          = "url"
 )
 
-// EmbedCommands wires the /embed command tree into the router natively via Arikawa.
+// EmbedCommands orchestrates the slash-command routing for custom embed workflows.
+// It integrates directly with the Arikawa router to execute lifecycle mutations.
 type EmbedCommands struct {
 	configManager *files.ConfigManager
 	embedService  *embedsvc.EmbedService
 }
 
-// NewEmbedCommands builds the command bundle.
+// NewEmbedCommands constructs the primary slash-command controller for embeds.
+// It mandates the injection of the configuration manager and domain service.
 func NewEmbedCommands(configManager *files.ConfigManager, embedService *embedsvc.EmbedService) *EmbedCommands {
 	return &EmbedCommands{
 		configManager: configManager,
@@ -67,7 +69,7 @@ func NewEmbedCommands(configManager *files.ConfigManager, embedService *embedsvc
 	}
 }
 
-// RegisterCommands registers the slash group on the supplied Arikawa router.
+// RegisterCommands binds the /embed slash group and its nested execution trees to the application router.
 func (ec *EmbedCommands) RegisterCommands(router *legacycore.ArikawaCommandRouter) {
 	if router == nil || ec == nil || ec.configManager == nil {
 		return
@@ -171,6 +173,9 @@ func refreshCustomEmbedPostingsBestEffort(cm *files.ConfigManager, svc *embedsvc
 		return ""
 	}
 	embed := svc.Render(ce)
+	// Operational annotation: The following sync relies on a best-effort mitigation.
+	// We execute it synchronously during the command response lifecycle, but avoid
+	// failing the interaction if the background refresh encounters partial state drops.
 	result := svc.Sync(
 		ctx.Client,
 		ctx.GuildID.String(),

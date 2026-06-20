@@ -29,13 +29,15 @@ const (
 	optionURL         = "url"
 )
 
-// PartnerCommands registers and backs the "/partner" command group.
+// PartnerCommands orchestrates the slash-command routing for partner board workflows.
+// It integrates directly with the Arikawa router to execute lifecycle mutations.
 type PartnerCommands struct {
 	configManager  *files.ConfigManager
 	partnerService *partnersvc.PartnerService
 }
 
-// NewPartnerCommands builds the command bundle.
+// NewPartnerCommands constructs the primary slash-command controller for partner boards.
+// It mandates the injection of the configuration manager and domain service.
 func NewPartnerCommands(configManager *files.ConfigManager, svc *partnersvc.PartnerService) *PartnerCommands {
 	return &PartnerCommands{
 		configManager:  configManager,
@@ -43,7 +45,7 @@ func NewPartnerCommands(configManager *files.ConfigManager, svc *partnersvc.Part
 	}
 }
 
-// RegisterCommands registers commands natively via Arikawa.
+// RegisterCommands binds the /partner slash group to the application router.
 func (pc *PartnerCommands) RegisterCommands(router *legacycore.ArikawaCommandRouter) {
 	if router == nil || pc == nil || pc.configManager == nil {
 		return
@@ -161,6 +163,8 @@ func (c *partnerAddSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
 	}
 	for _, p := range cfg.PartnerBoard.Partners {
 		if strings.EqualFold(p.Name, name) {
+			// Operational annotation: Partner names must remain strictly unique within a guild
+			// to guarantee reliable resolution during autocomplete and targeted deletions.
 			return partnerDetailedCommandError(ctx, "A partner with this name already exists.")
 		}
 	}
@@ -659,7 +663,9 @@ func (c *partnerUnpostSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
 	}
 
 	if found != nil && found.ChannelID != "" && found.MessageID != "" {
-		// Best effort delete message
+		// Operational annotation: Execution of native message deletion is treated as best-effort.
+		// Missing permissions or an already-deleted message will fail silently to prioritize
+		// successful configuration state mutation over strict API parity.
 		chID, _ := discord.ParseSnowflake(found.ChannelID)
 		msgID, _ := discord.ParseSnowflake(found.MessageID)
 		if chID != 0 && msgID != 0 {

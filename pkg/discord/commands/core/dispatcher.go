@@ -10,11 +10,16 @@ import (
 	"github.com/diamondburned/arikawa/v3/gateway"
 )
 
+// Dispatcher routes incoming Discord interaction events to their corresponding command handlers.
+// It bridges the raw Arikawa gateway event stream with the abstracted command registry.
 type Dispatcher struct {
 	client   *api.Client
 	registry *CommandRegistry
 }
 
+// NewDispatcher constructs a new Dispatcher leveraging the provided API client and registry.
+// The registry should ideally be sealed before binding the dispatcher to live gateway events
+// to prevent concurrent mutation during active dispatch cycles.
 func NewDispatcher(client *api.Client, registry *CommandRegistry) *Dispatcher {
 	return &Dispatcher{
 		client:   client,
@@ -22,12 +27,19 @@ func NewDispatcher(client *api.Client, registry *CommandRegistry) *Dispatcher {
 	}
 }
 
+// Dispatch evaluates a typed interaction creation event and invokes the matching handler.
+// It guarantees isolated execution boundaries per command, capturing and logging panics
+// or operational errors returned by the underlying handler implementation.
 func (d *Dispatcher) Dispatch(event *gateway.InteractionCreateEvent) error {
+	// Fast-path rejection for non-command interactions (e.g. message components, modals).
+	// These require separate routing domains beyond slash command registration.
 	data, ok := event.Data.(*discord.CommandInteraction)
 	if !ok || data == nil {
 		return nil
 	}
 
+	// Extract standard contextual identifiers for structured logging tracing.
+	// Fallback to "unknown" prevents nil pointer dereferences during DM interactions.
 	guildID := "unknown"
 	if event.GuildID.IsValid() {
 		guildID = event.GuildID.String()
@@ -69,6 +81,9 @@ func (d *Dispatcher) Dispatch(event *gateway.InteractionCreateEvent) error {
 	return nil
 }
 
+// DispatchRaw decodes a raw JSON payload into an interaction event and routes it.
+// This supports serverless or direct webhook-based interaction ingestion models where
+// events bypass the standard gateway websocket connection.
 func (d *Dispatcher) DispatchRaw(payload []byte) error {
 	var event gateway.InteractionCreateEvent
 	if err := json.Unmarshal(payload, &event); err != nil {

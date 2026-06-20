@@ -442,6 +442,7 @@ var (
 	shutdownBotRuntimeFn   = shutdownBotRuntime
 )
 
+// ResolveRuntimeStartupParallelism calculates the optimal concurrency limit for initial runtime setup based on instance count.
 func ResolveRuntimeStartupParallelism(runtimeCount int) int {
 	switch {
 	case runtimeCount <= 1:
@@ -453,6 +454,7 @@ func ResolveRuntimeStartupParallelism(runtimeCount int) int {
 	}
 }
 
+// ResolveRuntimeBackgroundParallelism calculates the optimal concurrency limit for generic background tasks.
 func ResolveRuntimeBackgroundParallelism(runtimeCount int) int {
 	switch {
 	case runtimeCount <= 1:
@@ -462,6 +464,7 @@ func ResolveRuntimeBackgroundParallelism(runtimeCount int) int {
 	}
 }
 
+// ResolveStartupLightParallelism computes the concurrency limit for non-blocking I/O tasks during startup.
 func ResolveStartupLightParallelism(runtimeCount int) int {
 	switch {
 	case runtimeCount <= 1:
@@ -473,6 +476,7 @@ func ResolveStartupLightParallelism(runtimeCount int) int {
 	}
 }
 
+// ResolveStartupLightQueueSize determines the maximum queued capacity for light startup operations.
 func ResolveStartupLightQueueSize(runtimeCount int) int {
 	switch {
 	case runtimeCount <= 1:
@@ -484,6 +488,7 @@ func ResolveStartupLightQueueSize(runtimeCount int) int {
 	}
 }
 
+// RuntimeStartupBackgroundWorker manages a bounded worker pool for executing asynchronous initialization routines.
 type RuntimeStartupBackgroundWorker struct {
 	ctx          context.Context
 	cancel       context.CancelFunc
@@ -495,6 +500,7 @@ type RuntimeStartupBackgroundWorker struct {
 	waitErr      error
 }
 
+// NewRuntimeStartupBackgroundWorker initializes a generic worker pool based on the detected runtime count.
 func NewRuntimeStartupBackgroundWorker(runtimeCount int) *RuntimeStartupBackgroundWorker {
 	return NewRuntimeStartupBackgroundWorkerWithLimits(
 		ResolveRuntimeBackgroundParallelism(runtimeCount),
@@ -502,6 +508,7 @@ func NewRuntimeStartupBackgroundWorker(runtimeCount int) *RuntimeStartupBackgrou
 	)
 }
 
+// NewRuntimeStartupBackgroundWorkerWithLimits creates a custom background worker with explicit concurrency and queue limits.
 func NewRuntimeStartupBackgroundWorkerWithLimits(parallelism, queueSize int) *RuntimeStartupBackgroundWorker {
 	ctx, cancel := context.WithCancel(context.Background())
 	group, groupCtx := errgroup.WithContext(ctx)
@@ -532,11 +539,13 @@ func NewRuntimeStartupBackgroundWorkerWithLimits(parallelism, queueSize int) *Ru
 	return worker
 }
 
+// StartupTaskOrchestrator coordinates multi-tier asynchronous execution pipelines during the boot phase.
 type StartupTaskOrchestrator struct {
 	light *RuntimeStartupBackgroundWorker
 	heavy *RuntimeStartupBackgroundWorker
 }
 
+// NewStartupTaskOrchestrator allocates a tiered worker pool system to manage concurrent startup sequences.
 func NewStartupTaskOrchestrator(runtimeCount int) *StartupTaskOrchestrator {
 	slog.Info("Architectural state transition: Startup task orchestrator instantiated",
 		slog.Int("runtime_count_heuristic", runtimeCount),
@@ -551,7 +560,7 @@ func NewStartupTaskOrchestrator(runtimeCount int) *StartupTaskOrchestrator {
 	}
 }
 
-// GoLight gos light.
+// GoLight enqueues a non-blocking asynchronous routine into the high-throughput, low-latency execution tier.
 func (o *StartupTaskOrchestrator) GoLight(name string, fn func(context.Context) error) {
 	if o == nil {
 		return
@@ -559,7 +568,7 @@ func (o *StartupTaskOrchestrator) GoLight(name string, fn func(context.Context) 
 	o.goTask(o.light, name, "light", fn)
 }
 
-// GoHeavy gos heavy.
+// GoHeavy enqueues an intensive asynchronous routine into the constrained, high-latency execution tier.
 func (o *StartupTaskOrchestrator) GoHeavy(name string, fn func(context.Context) error) {
 	if o == nil {
 		return
@@ -595,7 +604,7 @@ func (o *StartupTaskOrchestrator) goTask(worker *RuntimeStartupBackgroundWorker,
 	})
 }
 
-// Shutdown shutdowns.
+// Shutdown triggers a graceful teardown of all managed execution pipelines, blocking until completion or context expiration.
 func (o *StartupTaskOrchestrator) Shutdown(ctx context.Context) error {
 	if o == nil {
 		return nil
@@ -621,7 +630,7 @@ func (o *StartupTaskOrchestrator) Shutdown(ctx context.Context) error {
 	return stdErrors.Join(errs...)
 }
 
-// Go gos.
+// Go submits an asynchronous workload into the worker pool for execution.
 func (w *RuntimeStartupBackgroundWorker) Go(fn func(context.Context) error) {
 	if w == nil || fn == nil {
 		return
@@ -634,7 +643,7 @@ func (w *RuntimeStartupBackgroundWorker) Go(fn func(context.Context) error) {
 	}
 }
 
-// Shutdown shutdowns.
+// Shutdown signals the worker pool to reject new tasks and blocks until the active queue is fully drained.
 func (w *RuntimeStartupBackgroundWorker) Shutdown(ctx context.Context) error {
 	if w == nil {
 		return nil

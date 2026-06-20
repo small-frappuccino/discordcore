@@ -59,6 +59,8 @@ func (h *rolePanelComponentHandler) HandleComponent(ctx *legacycore.ArikawaConte
 
 	if _, _, err := h.configManager.RolePanelButtonByRoleID(guildID.String(), roleIDStr); err != nil {
 		if errors.Is(err, files.ErrRolePanelButtonNotFound) {
+			// Operational annotation: If the configuration was deleted but the Discord message
+			// remains active, we intercept the toggle and notify the user safely.
 			return rolePanelToggleEphemeralError(ctx, "This button is no longer linked to a configured role. Ask a moderator to repost the panel.")
 		}
 		slog.Error("Blocking structural failure restricted to operational scope",
@@ -94,6 +96,8 @@ func (h *rolePanelComponentHandler) HandleComponent(ctx *legacycore.ArikawaConte
 				slog.Int("fail_id", 500),
 				slog.String("error", fmt.Sprintf("role removal failed for user %s: %v", userID, err)),
 			)
+			// Operational annotation: We bubble up the underlying Discord API failure to the user
+			// to provide actionable context (e.g., missing bot permissions).
 			return rolePanelToggleEphemeralError(ctx, fmt.Sprintf("Could not remove <@&%s>. Discord said: %v", roleIDStr, err))
 		}
 		return rolePanelToggleEphemeralSuccess(ctx, fmt.Sprintf("Removed <@&%s>.", roleIDStr))

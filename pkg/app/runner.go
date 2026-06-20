@@ -91,6 +91,7 @@ func runWithOptions(appName string, opts RunOptions) error {
 		return errWrap
 	}
 
+	// Initialize core operational telemetry pipeline prior to bootstrapping subsystem dependencies.
 	if err := log.SetupLogger(files.EffectiveBotName(), files.GetLogFilePath()); err != nil {
 		errWrap := fmt.Errorf("configure logger: %w", err)
 		log.EmitBlockingError("Structural dependency failure: Core logging infrastructure aborted", errWrap, log.GenerateRequestID())
@@ -111,6 +112,7 @@ func runWithOptions(appName string, opts RunOptions) error {
 		slog.String("version_info", msg),
 	)
 
+	// Resolve centralized Postgres persistence manifest to configure underlying storage adapter parameters.
 	databaseBootstrap, err := resolveDatabaseBootstrap()
 	if err != nil {
 		errWrap := fmt.Errorf("RunWithOptions resolveDatabaseBootstrap: %w", err)
@@ -142,6 +144,7 @@ func runWithOptions(appName string, opts RunOptions) error {
 	closeStoreOnReturn := true
 	defer func() { rollbackStoreClose(closeStoreOnReturn, store) }()
 
+	// Cascade remote UX parameters into the local process UI theme structure.
 	applyConfiguredTheme(configManager)
 
 	cleanupStop := scheduleDBCleanup(store, configManager)
@@ -305,6 +308,7 @@ func runWithOptions(appName string, opts RunOptions) error {
 		slog.Duration("boot_time", time.Since(started).Round(time.Millisecond)),
 	)
 
+	// Attach contextual bindings to standard POSIX interrupt signals for managed daemon shutdown.
 	rootCtx, stopRoot := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopRoot()
 
@@ -504,6 +508,7 @@ func setupStorage(dbb resolvedDatabaseBootstrap) (*storage.Store, *files.ConfigM
 		PingTimeoutMS:       dbCfg.PingTimeoutMS,
 	}
 
+	// Enforce strict time bounds on initial connection allocation to prevent silent process deadlocks.
 	openCtx, openCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer openCancel()
 	db, err := persistence.Open(openCtx, dbc)
@@ -530,6 +535,7 @@ func setupStorage(dbb resolvedDatabaseBootstrap) (*storage.Store, *files.ConfigM
 		slog.String("driver", "postgres"),
 	)
 
+	// Apply atomic relational schema mutations to ensure the canonical structure matches the binary version.
 	migrateCtx, migrateCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer migrateCancel()
 	migrator := persistence.NewPostgresMigrator(db)

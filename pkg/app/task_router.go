@@ -39,6 +39,7 @@ func configuredRuntimeTaskRouterWorkers(
 		selected = cfg.RuntimeConfig.GlobalMaxWorkers
 	}
 
+	// Iterate through all attached guilds to identify the most restrictive concurrency limit.
 	for _, guild := range cfg.GuildsForBotInstance(botInstanceID) {
 		override := guild.RuntimeConfig.GlobalMaxWorkers
 		if override <= 0 {
@@ -61,6 +62,8 @@ func newRuntimeTaskRouterConfig(
 	runtimeCount int,
 ) task.RouterConfig {
 	workers := resolveRuntimeTaskRouterWorkers(cfg, botInstanceID, runtimeCount)
+
+	// Initialize execution limiter to enforce global concurrency boundaries across the runtime.
 	limiter := task.NewExecutionLimiter(workers)
 
 	slog.Info("Architectural state transition: Configured background worker budget for task router",

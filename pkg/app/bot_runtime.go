@@ -62,6 +62,7 @@ func resolveBotRuntimeCapabilities(
 		intents: discordgo.IntentsGuilds,
 	}
 
+	// Fallback to basal intent mapping when target configuration pointer evaluates to nil.
 	if cfg == nil {
 		slog.Warn("Mitigated service degradation: Configuration reference resolves to nil; enforcing basal gateway intents",
 			slog.String("bot_instance_id", botInstanceID),
@@ -196,6 +197,7 @@ func botRuntimeNeedsMonitoring(
 	runtimeConfig files.RuntimeConfig,
 	guild files.GuildConfig,
 ) bool {
+	// Synthesize complex sub-capability evaluation flags across divergent configuration schemas.
 	return botRuntimeNeedsMessages(runtimeConfig, guild) ||
 		botRuntimeNeedsReactions(runtimeConfig) ||
 		botRuntimeNeedsPresence(features, runtimeConfig, guild) ||
@@ -657,6 +659,7 @@ func openBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabil
 	arikawaState := state.New("Bot " + botToken)
 	arikawaState.AddIntents(gateway.Intents(capabilities.intents))
 
+	// Enforce hard execution deadlines on gateway socket binding to prevent invisible deadlocks.
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
@@ -715,6 +718,7 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 
 	runtime.serviceManager = service.NewServiceManager(slog.Default())
 
+	// Ensure Discord gateway token conformity prior to state machine initialization.
 	token := runtime.legacySession.Token
 	if !strings.HasPrefix(token, "Bot ") {
 		token = "Bot " + token
@@ -726,6 +730,7 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 		opts.runtimeApplier.AddRuntime(runtime.serviceManager, nil)
 	}
 
+	// Conditionally boot event aggregation service based on explicit capability matrix evaluation.
 	if runtime.capabilities.messageEventService {
 		var eventLogger *logging.Logger
 		if runtime.arikawaState != nil && runtime.arikawaState.Session != nil {

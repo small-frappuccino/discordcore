@@ -55,6 +55,7 @@ func (p *dualSDKPublisher) getArikawaPublisher(guildID string) (domain.Publisher
 		return qotd.NewArikawaPublisher(st), nil
 	}
 
+	// Fallback to legacy session token extraction to instantiate Arikawa capability wrapper.
 	session, err := p.resolver.sessionForGuild(guildID, "qotd")
 	if err != nil {
 		errWrap := fmt.Errorf("resolve discord session for guild %s: %w", guildID, err)
@@ -163,6 +164,7 @@ func notifyLifecycleEvent(reason, detail string) {
 		slog.String("reason", reason),
 	)
 
+	// Serialize payload symmetrically with Discord's webhook interface expectations.
 	content := buildLifecycleContent(reason, detail)
 	payload, err := json.Marshal(map[string]string{"content": content})
 	if err != nil {
@@ -174,6 +176,7 @@ func notifyLifecycleEvent(reason, detail string) {
 		return
 	}
 
+	// Bound HTTP transport lifecycle to prevent blocking the primary teardown sequence.
 	ctx, cancel := context.WithTimeout(context.Background(), lifecycleWebhookTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, webhookURL, bytes.NewReader(payload))
@@ -267,6 +270,7 @@ func collectStartupWebhookEmbedUpdates(cfg *files.BotConfig) []startupWebhookEmb
 
 	var out []startupWebhookEmbedUpdate
 
+	// Extract globally scoped embed configurations prior to iterating over guild-specific overrides.
 	for idx, update := range cfg.RuntimeConfig.NormalizedWebhookEmbedUpdates() {
 		out = append(out, startupWebhookEmbedUpdate{
 			scope:  "global",

@@ -22,25 +22,32 @@ type customEmbedSyncFailure struct {
 	Err     error
 }
 
+// customEmbedSyncResult aggregates the outcomes of a batch synchronization.
+// It explicitly separates successfully edited postings from irrecoverable drops
+// and transient failures to allow callers to safely trigger compensatory logic.
 type customEmbedSyncResult struct {
 	Edited  int
 	Dropped []files.CustomEmbedPostingConfig
 	Failed  []customEmbedSyncFailure
 }
 
-// HasIssues has issues.
+// HasIssues indicates whether the synchronization cycle encountered irrecoverable
+// drops or transient failures requiring downstream mitigation.
 func (r customEmbedSyncResult) HasIssues() bool {
 	return len(r.Dropped) > 0 || len(r.Failed) > 0
 }
 
-// EmbedService manages the rendering and synchronization of custom embeds.
+// EmbedService orchestrates the rendering and synchronization of custom embeds.
+// It manages the conversion of configuration states into Discord-compatible
+// payloads and executes lifecycle mutations on the Discord platform.
 type EmbedService struct {
 	configManager *files.ConfigManager
 	editMessage   func(client *api.Client, channelID discord.ChannelID, messageID discord.MessageID, data api.EditMessageData) error
 	dropPostings  func(cm *files.ConfigManager, guildID, key string, messageIDs []string) error
 }
 
-// NewEmbedService creates a new embed domain service.
+// NewEmbedService instantiates the primary domain service for custom embed management.
+// It mandates the injection of the configuration manager to enforce state constraints.
 func NewEmbedService(configManager *files.ConfigManager) *EmbedService {
 	return &EmbedService{
 		configManager: configManager,
@@ -49,7 +56,8 @@ func NewEmbedService(configManager *files.ConfigManager) *EmbedService {
 	}
 }
 
-// Post sends a custom embed to a specific channel.
+// Post generates a Discord embed payload and dispatches it to the designated channel.
+// It isolates the creation of the payload from the persistence of the posting state.
 func (s *EmbedService) Post(client *api.Client, channelID discord.ChannelID, ce files.CustomEmbedConfig) (*discord.Message, error) {
 	embed := s.Render(ce)
 	data := api.SendMessageData{
@@ -58,12 +66,15 @@ func (s *EmbedService) Post(client *api.Client, channelID discord.ChannelID, ce 
 	return client.SendMessageComplex(channelID, data)
 }
 
-// DeletePosting deletes a custom embed posting from a channel.
+// DeletePosting executes a permanent removal of an embed message from Discord.
+// It appends an audit reason to the deletion request for moderation transparency.
 func (s *EmbedService) DeletePosting(client *api.Client, channelID discord.ChannelID, messageID discord.MessageID) error {
 	return client.DeleteMessage(channelID, messageID, "Embed unposted via command")
 }
 
 // Sync updates all active postings of a custom embed to match the provided layout.
+// It implements a fault-tolerant batch reconciliation loop that distinguishes
+// between transient API errors and permanently dropped identifiers (HTTP 10003/10008).
 func (s *EmbedService) Sync(
 	client *api.Client,
 	guildID string,
@@ -100,6 +111,9 @@ func (s *EmbedService) Sync(
 		}
 
 		if isCustomEmbedPostingMissingError(err) {
+			// Operational annotation: HTTP 10003 (Unknown Channel) and 10008 (Unknown Message)
+			// indicate the posting was deleted natively on Discord. We accumulate these
+			// to trigger a bulk retirement cleanup off the primary loop.
 			result.Dropped = append(result.Dropped, posting)
 			continue
 		}
@@ -112,6 +126,8 @@ func (s *EmbedService) Sync(
 		for _, p := range result.Dropped {
 			ids = append(ids, p.MessageID)
 		}
+		// Operational annotation: We execute dropPostings synchronously rather than spawning
+		// a background goroutine to guarantee deterministic state resolution before returning.
 		if dropErr := s.dropPostings(s.configManager, guildID, key, ids); dropErr != nil {
 			slog.Warn("Service degradation intercepted and mitigated",
 				slog.String("reason", "Custom embed batch posting cleanup failed"),
@@ -125,7 +141,8 @@ func (s *EmbedService) Sync(
 	return result
 }
 
-// Render returns the Discord embed payload for a given custom embed configuration.
+// Render converts the native configuration into a strict Discord payload struct.
+// It applies semantic trimming on all textual fields to prevent whitespace rendering anomalies.
 func Render(ce files.CustomEmbedConfig) discord.Embed {
 	embed := discord.Embed{}
 	if title := strings.TrimSpace(ce.Title); title != "" {
@@ -177,12 +194,13 @@ func Render(ce files.CustomEmbedConfig) discord.Embed {
 	return embed
 }
 
-// Render returns the Discord embed payload for a given custom embed configuration.
+// Render translates the custom embed configuration using the core utility function.
 func (s *EmbedService) Render(ce files.CustomEmbedConfig) discord.Embed {
 	return Render(ce)
 }
 
-// FormatSyncSummary returns a human-readable summary of the sync operation.
+// FormatSyncSummary maps the aggregated sync result structure into a human-readable diagnostic.
+// It guarantees that dropped resources and transient failure states are accurately formatted.
 func (s *EmbedService) FormatSyncSummary(result customEmbedSyncResult, action string) string {
 	if !result.HasIssues() && result.Edited == 0 {
 		return ""

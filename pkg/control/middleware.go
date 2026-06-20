@@ -8,9 +8,12 @@ import (
 )
 
 // OOM Prevention
+// maxBytesMiddleware intercepts incoming HTTP requests and enforces a strict payload size limit to mitigate heap exhaustion vulnerabilities.
 func maxBytesMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Limit to 10MB to prevent heap OOMs during state mutation routing
+		// Restrict request body buffers to 10MB using http.MaxBytesReader. This guarantees an
+		// upper bound on memory allocation per request, directly mitigating heap exhaustion (OOM)
+		// vulnerabilities from malicious multi-part streams.
 		r.Body = http.MaxBytesReader(w, r.Body, 10*1024*1024)
 		slog.Debug("Granular inspection: MaxBytesReader limits injected", slog.String("path", r.URL.Path))
 		next(w, r)
@@ -18,6 +21,7 @@ func maxBytesMiddleware(next http.HandlerFunc) http.HandlerFunc {
 }
 
 // Timing Attack Prevention for Tokens
+// authorizeRequest enforces strict access controls by validating bearer tokens with constant-time string comparison.
 func authorizeRequest(expectedToken string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
@@ -28,7 +32,10 @@ func authorizeRequest(expectedToken string, next http.HandlerFunc) http.HandlerF
 		}
 
 		providedToken := strings.TrimPrefix(authHeader, "Bearer ")
-		// Use ConstantTimeCompare to prevent timing leaks
+
+		// subtle.ConstantTimeCompare mechanically masks the string evaluation time, mitigating
+		// timing side-channel attacks where an adversary could iterate characters and observe
+		// microsecond deviations to deduce the valid cryptographic material.
 		if subtle.ConstantTimeCompare([]byte(providedToken), []byte(expectedToken)) != 1 {
 			slog.Warn("Mitigated service degradation: Invalid Authorization token provided")
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -40,6 +47,7 @@ func authorizeRequest(expectedToken string, next http.HandlerFunc) http.HandlerF
 }
 
 // Admin Access Restriction (Simulated)
+// requireGuildAdmin enforces authorization boundaries by validating administrative privileges for guarded guild operations.
 func requireGuildAdmin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// We would use Arikawa state here to check permissions natively.

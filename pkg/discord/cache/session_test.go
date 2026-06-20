@@ -11,6 +11,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/gateway"
 )
 
+// TestSession_SingleflightLoad verifies the singleflight primitive correctly coalesces massive concurrent cache misses.
 func TestSession_SingleflightLoad(t *testing.T) {
 	uc := NewUnifiedCache(CacheConfig{GuildTTL: time.Minute})
 	cs := NewCachedSession(nil, uc)
@@ -43,6 +44,7 @@ func TestSession_SingleflightLoad(t *testing.T) {
 	}
 }
 
+// TestSession_SingleflightError ensures that underlying REST failures during singleflight fetches do not pollute the cache.
 func TestSession_SingleflightError(t *testing.T) {
 	uc := NewUnifiedCache(CacheConfig{GuildTTL: time.Minute})
 	cs := NewCachedSession(nil, uc)
@@ -71,6 +73,7 @@ func TestSession_SingleflightError(t *testing.T) {
 	}
 }
 
+// TestSession_PartialInvalidation confirms that RoleDelete events target specific slice indices without evicting the entire guild role aggregate.
 func TestSession_PartialInvalidation(t *testing.T) {
 	uc := NewUnifiedCache(CacheConfig{RolesTTL: time.Minute})
 	cs := NewCachedSession(nil, uc)
@@ -92,6 +95,7 @@ func TestSession_PartialInvalidation(t *testing.T) {
 	}
 }
 
+// TestSession_RaceUpdate asserts that Gateway invalidations correctly preempt and overwrite stale background REST fetches.
 func TestSession_RaceUpdate(t *testing.T) {
 	uc := NewUnifiedCache(CacheConfig{MemberTTL: time.Minute})
 	cs := NewCachedSession(nil, uc)

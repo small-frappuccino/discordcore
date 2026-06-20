@@ -37,7 +37,7 @@ func newPlatformTrustInstaller() TrustInstaller {
 	return windowsTrustInstaller{}
 }
 
-// EnsureTrusted ensures trusted.
+// EnsureTrusted injects the provided certificate into the Windows CurrentUser\Root trust store.
 func (windowsTrustInstaller) EnsureTrusted(_ context.Context, cert *x509.Certificate) (TrustResult, error) {
 	if cert == nil {
 		return TrustResult{}, fmt.Errorf("ca certificate is required")

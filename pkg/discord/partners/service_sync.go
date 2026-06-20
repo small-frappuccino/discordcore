@@ -23,13 +23,15 @@ type partnerSyncFailure struct {
 	Err     error
 }
 
+// partnerSyncResult aggregates the outcomes of a bulk partner board synchronization.
 type partnerSyncResult struct {
 	Edited  int
 	Dropped []files.CustomEmbedPostingConfig
 	Failed  []partnerSyncFailure
 }
 
-// HasIssues has issues.
+// HasIssues indicates whether the synchronization loop encountered irrecoverable
+// drops or transient failures requiring downstream mitigation.
 func (r partnerSyncResult) HasIssues() bool {
 	return len(r.Dropped) > 0 || len(r.Failed) > 0
 }
@@ -85,6 +87,8 @@ func (s *partnerPostingSyncer) Sync(
 		}
 
 		if isPartnerPostingMissingError(err) {
+			// Operational annotation: HTTP 10003 and 10008 indicate native deletion on Discord.
+			// These postings are queued for batch removal from local configuration.
 			result.Dropped = append(result.Dropped, posting)
 			continue
 		}
@@ -97,6 +101,8 @@ func (s *partnerPostingSyncer) Sync(
 		for _, p := range result.Dropped {
 			ids = append(ids, p.MessageID)
 		}
+		// Operational annotation: Execution of posting drops is strictly synchronous
+		// to enforce immediate configuration consistency before unlocking.
 		if dropErr := s.dropPostings(s.configManager, guildID, ids); dropErr != nil {
 			slog.Warn("Service degradation intercepted and mitigated",
 				slog.String("reason", "Partner board posting cleanup failed"),

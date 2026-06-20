@@ -37,44 +37,6 @@ export interface DiscohookField {
   inline?: boolean;
 }
 
-export interface rawQOTDDeckConfig {
-  id?: string;
-  name?: string;
-  enabled?: boolean;
-  channel_id?: string;
-  forum_channel_id?: string;
-  question_channel_id?: string;
-  response_channel_id?: string;
-  selection_strategy?: string;
-}
-
-export interface rawQOTDPublishScheduleConfig {
-  hour_utc?: number;
-  minute_utc?: number;
-  publish_hour_utc?: number;
-  publish_minute_utc?: number;
-  qotd_time_hour_utc?: number;
-  qotd_time_minute_utc?: number;
-}
-
-export interface rawQOTDConfig {
-  verified_role_id?: string;
-  active_deck_id?: string;
-  decks?: QOTDDeckConfig[];
-  schedule?: rawQOTDPublishScheduleConfig;
-  suppress_scheduled_publish_dates_utc?: string[];
-  suppress_scheduled_publish_date_utc?: string;
-  enabled?: boolean;
-  channel_id?: string;
-  forum_channel_id?: string;
-  question_channel_id?: string;
-  response_channel_id?: string;
-  publish_hour_utc?: number;
-  publish_minute_utc?: number;
-  qotd_time_hour_utc?: number;
-  qotd_time_minute_utc?: number;
-}
-
 export interface RuntimeConfig {
   database?: DatabaseRuntimeConfig;
   bot_theme?: string;
@@ -366,13 +328,42 @@ export interface RPCButtonConfig {
   url?: string;
 }
 
-export interface testConfigContainer {
-  secret: string;
+export interface rawQOTDDeckConfig {
+  id?: string;
+  name?: string;
+  enabled?: boolean;
+  channel_id?: string;
+  forum_channel_id?: string;
+  question_channel_id?: string;
+  response_channel_id?: string;
+  selection_strategy?: string;
 }
 
-export interface payload {
-  name: string;
-  count: number;
+export interface rawQOTDPublishScheduleConfig {
+  hour_utc?: number;
+  minute_utc?: number;
+  publish_hour_utc?: number;
+  publish_minute_utc?: number;
+  qotd_time_hour_utc?: number;
+  qotd_time_minute_utc?: number;
+}
+
+export interface rawQOTDConfig {
+  verified_role_id?: string;
+  active_deck_id?: string;
+  decks?: QOTDDeckConfig[];
+  schedule?: rawQOTDPublishScheduleConfig;
+  suppress_scheduled_publish_dates_utc?: string[];
+  suppress_scheduled_publish_date_utc?: string;
+  enabled?: boolean;
+  channel_id?: string;
+  forum_channel_id?: string;
+  question_channel_id?: string;
+  response_channel_id?: string;
+  publish_hour_utc?: number;
+  publish_minute_utc?: number;
+  qotd_time_hour_utc?: number;
+  qotd_time_minute_utc?: number;
 }
 
 export interface CustomEmbedFieldConfig {
@@ -401,6 +392,15 @@ export interface CustomEmbedConfig {
   thumbnail_url?: string;
   fields?: CustomEmbedFieldConfig[];
   postings?: CustomEmbedPostingConfig[];
+}
+
+export interface payload {
+  name: string;
+  count: number;
+}
+
+export interface testConfigContainer {
+  secret: string;
 }
 
 export interface FeatureServiceToggles {

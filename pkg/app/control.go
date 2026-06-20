@@ -109,6 +109,7 @@ func resolveControlRuntime(ctx context.Context, opts RunOptions) (resolvedContro
 
 	slog.Info("Architectural state transition: Instantiating resolution pipeline for control plane bindings")
 
+	// Inject default loopback topologies when local HTTPS is enforced and explicit overrides are absent.
 	if opts.Control.LocalHTTPS.Enabled {
 		if bindAddr == "" {
 			bindAddr = defaultLocalHTTPSControlAddr
@@ -132,6 +133,7 @@ func resolveControlRuntime(ctx context.Context, opts RunOptions) (resolvedContro
 		return resolvedControlRuntime{}, errWrap
 	}
 
+	// Trigger ad-hoc cryptographic generation and automatic trust-store installation for local TLS bindings.
 	if tlsCertFile == "" && tlsKeyFile == "" && opts.Control.LocalHTTPS.Enabled {
 		slog.Info("Architectural state transition: Initiating ad-hoc generation of local TLS credentials for control plane binding")
 		ready, readyErr := prepareManagedLocalTLS(ctx, profile, publicOrigin, opts.Control.LocalHTTPS.AutoTrust)
@@ -184,6 +186,7 @@ func prepareManagedLocalTLS(ctx context.Context, profile RunProfile, publicOrigi
 }
 
 func localTLSSANs(profile RunProfile, publicOrigin string) (string, []net.IP, error) {
+	// Fallback to loopback primitive binding if a canonical public origin is undefined.
 	if strings.TrimSpace(publicOrigin) == "" {
 		slog.Debug("Granular inspection: Parsing local TLS Subject Alternate Names skipped, utilizing fallback parameters")
 		return defaultLocalTLSCommonNameForProfile(profile), []net.IP{net.ParseIP("127.0.0.1")}, nil
@@ -208,6 +211,7 @@ func localTLSSANs(profile RunProfile, publicOrigin string) (string, []net.IP, er
 	if ip := net.ParseIP(host); ip != nil {
 		return host, []net.IP{ip}, nil
 	}
+	// Differentiate between IP scalars and canonical domain hostnames for correct SAN issuance.
 	return host, nil, nil
 }
 

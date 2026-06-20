@@ -13,9 +13,12 @@ import (
 )
 
 const (
+	// RolePanelComponentRouteID defines the canonical routing prefix for button interactions.
 	RolePanelComponentRouteID  = "roles_panel:toggle"
 	rolePanelCustomIDSeparator = "|"
-	rolePanelMaxButtonsPerRow  = 5
+
+	// rolePanelMaxButtonsPerRow enforces the hard Discord limitation of 5 components per ActionRow.
+	rolePanelMaxButtonsPerRow = 5
 
 	discordErrUnknownChannel = 10003
 	discordErrUnknownMessage = 10008
@@ -26,22 +29,29 @@ type rolePanelSyncFailure struct {
 	Err     error
 }
 
+// rolePanelSyncResult aggregates the outcomes of a bulk role panel synchronization loop.
 type rolePanelSyncResult struct {
 	Edited  int
 	Dropped []files.RolePanelPostingConfig
 	Failed  []rolePanelSyncFailure
 }
 
+// HasIssues indicates whether the synchronization loop encountered irrecoverable
+// drops or transient failures requiring explicit downstream mitigation.
 func (r rolePanelSyncResult) HasIssues() bool {
 	return len(r.Dropped) > 0 || len(r.Failed) > 0
 }
 
+// RolePanelService manages the rendering and synchronization of role assignment panels.
+// It translates internal configurations into Discord-consumable ActionRows and Embeds.
 type RolePanelService struct {
 	configManager *files.ConfigManager
 	editMessage   func(client *api.Client, channelID discord.ChannelID, messageID discord.MessageID, data api.EditMessageData) error
 	dropPostings  func(cm *files.ConfigManager, guildID, key string, messageIDs []string) error
 }
 
+// NewRolePanelService instantiates the core domain service for role panels.
+// It mandates the injection of the configuration manager to enforce state coherence.
 func NewRolePanelService(configManager *files.ConfigManager) *RolePanelService {
 	return &RolePanelService{
 		configManager: configManager,
@@ -50,10 +60,14 @@ func NewRolePanelService(configManager *files.ConfigManager) *RolePanelService {
 	}
 }
 
+// RolePanelButtonCustomID generates a structured Discord component CustomID.
+// It concatenates the canonical routing prefix and the target role identifier.
 func RolePanelButtonCustomID(roleID string) string {
 	return RolePanelComponentRouteID + rolePanelCustomIDSeparator + strings.TrimSpace(roleID)
 }
 
+// RolePanelButtonRoleIDFromCustomID extracts the target role identifier from a component interaction ID.
+// It returns an empty string if the provided CustomID does not match the canonical routing prefix.
 func RolePanelButtonRoleIDFromCustomID(customID string) string {
 	prefix := RolePanelComponentRouteID + rolePanelCustomIDSeparator
 	if !strings.HasPrefix(customID, prefix) {
@@ -62,6 +76,7 @@ func RolePanelButtonRoleIDFromCustomID(customID string) string {
 	return strings.TrimSpace(strings.TrimPrefix(customID, prefix))
 }
 
+// Post constructs a fully formed role panel payload and dispatches it to the designated channel.
 func (s *RolePanelService) Post(client *api.Client, channelID discord.ChannelID, panel files.RolePanelConfig) (*discord.Message, error) {
 	embed := s.RenderEmbed(&panel)
 	components := s.RenderComponents(&panel)
@@ -73,10 +88,14 @@ func (s *RolePanelService) Post(client *api.Client, channelID discord.ChannelID,
 	return client.SendMessageComplex(channelID, data)
 }
 
+// DeletePosting executes a permanent removal of a role panel message from Discord.
 func (s *RolePanelService) DeletePosting(client *api.Client, channelID discord.ChannelID, messageID discord.MessageID) error {
 	return client.DeleteMessage(channelID, messageID, "Role panel unposted via command")
 }
 
+// Sync updates all active postings of a role panel to match the provided layout.
+// It employs a fault-tolerant batch reconciliation loop that aggregates failures and
+// automatically retires natively deleted Discord messages.
 func (s *RolePanelService) Sync(
 	client *api.Client,
 	guildID string,
@@ -110,7 +129,8 @@ func (s *RolePanelService) Sync(
 			Components: &components,
 		}
 
-		// Ignoring webhook message edits for now as Arikawa client edit covers bot messages.
+		// Operational annotation: We purposefully ignore webhook message edits for now
+		// as the Arikawa client's default edit capability covers primary bot messages natively.
 		err := s.editMessage(client, discord.ChannelID(chID), discord.MessageID(msgID), data)
 		if err == nil {
 			result.Edited++
@@ -143,6 +163,7 @@ func (s *RolePanelService) Sync(
 	return result
 }
 
+// RenderEmbed isolates the conversion of the panel's visual configuration into a strict Discord Embed payload.
 func (s *RolePanelService) RenderEmbed(panel *files.RolePanelConfig) discord.Embed {
 	embed := discord.Embed{}
 	if title := strings.TrimSpace(panel.Title); title != "" {
@@ -194,6 +215,9 @@ func (s *RolePanelService) RenderEmbed(panel *files.RolePanelConfig) discord.Emb
 	return embed
 }
 
+// RenderComponents constructs a multidimensional Discord component array.
+// It automatically chunks buttons into multiple ActionRows to respect the Discord API limitation
+// dictated by rolePanelMaxButtonsPerRow.
 func (s *RolePanelService) RenderComponents(panel *files.RolePanelConfig) discord.ContainerComponents {
 	if len(panel.Buttons) == 0 {
 		return nil
@@ -234,6 +258,7 @@ func buildRolePanelButton(b files.RolePanelButtonConfig) *discord.ButtonComponen
 	return button
 }
 
+// FormatSyncSummary maps the aggregated sync result structure into a human-readable diagnostic output.
 func (s *RolePanelService) FormatSyncSummary(result rolePanelSyncResult, action string) string {
 	if !result.HasIssues() && result.Edited == 0 {
 		return ""
@@ -259,6 +284,8 @@ func (s *RolePanelService) FormatSyncSummary(result rolePanelSyncResult, action 
 	return strings.Join(lines, "\n")
 }
 
+// FormatRolePanelButtonForList generates a markdown-formatted string representing a single role button.
+// It is intended exclusively for list diagnostics in administrative views.
 func FormatRolePanelButtonForList(b files.RolePanelButtonConfig) string {
 	var sb strings.Builder
 	if b.HasEmoji() {

@@ -5,6 +5,7 @@ import (
 	"net/http"
 )
 
+// serveHealthRoute constructs an HTTP handler that evaluates a health resolver and securely serializes the operational state into JSON.
 func serveHealthRoute[T any](resolver func() T) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

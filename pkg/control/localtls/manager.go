@@ -73,7 +73,7 @@ type Config struct {
 	CertRotateAfter time.Duration
 }
 
-// EnsureReady ensures ready.
+// EnsureReady provisions, rotates, and optionally trusts local TLS certificates according to the provided configuration.
 func EnsureReady(ctx context.Context, cfg Config) (ReadyResult, error) {
 	now := cfg.now()
 	if err := cfg.validate(); err != nil {
@@ -127,12 +127,12 @@ type invalidMaterialError struct {
 	err error
 }
 
-// Error errors.
+// Error returns the underlying error message.
 func (e invalidMaterialError) Error() string {
 	return e.err.Error()
 }
 
-// Unwrap unwraps.
+// Unwrap returns the original wrapped error.
 func (e invalidMaterialError) Unwrap() error {
 	return e.err
 }
@@ -157,6 +157,9 @@ func ensureCAPair(certPath string, keyPath string, cfg Config, now time.Time) (c
 }
 
 func ensureServerPair(certPath string, keyPath string, cfg Config, ca certificatePair, forceRotate bool, now time.Time) (certificatePair, error) {
+	// If the CA underwent a deterministic rotation in the current boot cycle, we forcefully bypass
+	// the server certificate validity check, ensuring descendant key material is always synchronized
+	// with the active root of trust.
 	if !forceRotate {
 		if pair, err := loadCertificatePair(certPath, keyPath); err == nil {
 			if err := validateServerPair(pair, ca.cert, cfg, now); err == nil {
@@ -208,6 +211,8 @@ func persistCertificatePair(certPath string, keyPath string, pair certificatePai
 		Bytes: x509.MarshalPKCS1PrivateKey(pair.key),
 	})
 
+	// Writing key material demands explicit 0600 filesystem permissions (read/write only by owner)
+	// to prevent local privilege escalation vectors or unauthorized scraping of the private RSA key.
 	if err := os.WriteFile(certPath, certPEM, 0o600); err != nil {
 		return fmt.Errorf("write certificate %s: %w", certPath, err)
 	}

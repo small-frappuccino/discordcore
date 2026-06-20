@@ -22,13 +22,18 @@ import (
 
 var identifyStaggerDelay = 5 * time.Second
 
+// InstanceStatus represents the lifecycle state of a managed bot instance.
 type InstanceStatus string
 
 const (
+	// StatusStarting indicates the bot instance is initializing.
 	StatusStarting InstanceStatus = "starting"
-	StatusRunning  InstanceStatus = "running"
+	// StatusRunning indicates the bot instance is active and connected.
+	StatusRunning InstanceStatus = "running"
+	// StatusStopping indicates the bot instance is in the process of shutting down.
 	StatusStopping InstanceStatus = "stopping"
-	StatusError    InstanceStatus = "error"
+	// StatusError indicates the bot instance encountered an irreversible failure.
+	StatusError InstanceStatus = "error"
 )
 
 type botInstanceState struct {
@@ -38,6 +43,7 @@ type botInstanceState struct {
 	StopWG        *sync.WaitGroup
 }
 
+// BotSupervisor manages the lifecycle, configuration synchronization, and background state of all active Discord bot instances.
 type BotSupervisor struct {
 	configManager  *files.ConfigManager
 	resolver       *botRuntimeResolver
@@ -56,6 +62,7 @@ type BotSupervisor struct {
 	fatalCallback func(error)
 }
 
+// NewBotSupervisor initializes a new BotSupervisor to manage bot runtimes.
 func NewBotSupervisor(configManager *files.ConfigManager, opts botRuntimeOptions) *BotSupervisor {
 	ctx, cancel := context.WithCancel(context.Background())
 	supervisor := &BotSupervisor{
@@ -86,12 +93,14 @@ func (s *BotSupervisor) SetFatalCallback(cb func(error)) {
 	s.fatalCallback = cb
 }
 
+// Start triggers the initial configuration resolution and boots up required bot instances.
 func (s *BotSupervisor) Start() error {
 	s.log().Info("Initializing primary routines of BotSupervisor", slog.String("component", "BotSupervisor"))
 	s.onConfigChanged(context.Background(), nil, nil) // trigger initial resolution
 	return nil
 }
 
+// Stop initiates a graceful shutdown of all managed bot instances and waits for background processes to terminate.
 func (s *BotSupervisor) Stop(ctx context.Context) error {
 	s.log().Info("Triggering planned shutdown of main BotSupervisor instances")
 	s.cancel() // signal background goroutines to abort
@@ -148,6 +157,7 @@ func (s *BotSupervisor) Stop(ctx context.Context) error {
 	return nil
 }
 
+// GetResolver returns the internal runtime resolver responsible for routing requests to active bot instances.
 func (s *BotSupervisor) GetResolver() *botRuntimeResolver {
 	return s.resolver
 }
@@ -165,7 +175,7 @@ func (s *BotSupervisor) onConfigChanged(ctx context.Context, oldCfg, newCfg *fil
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// 1. Gather all tokens from all guilds
+	// Phase 1: Aggregate operational credentials from all attached guild configurations to determine target runtime states.
 	currentTokens := make(map[string]string)
 	currentStatuses := make(map[string]string)
 
@@ -200,7 +210,7 @@ func (s *BotSupervisor) onConfigChanged(ctx context.Context, oldCfg, newCfg *fil
 		}
 	}
 
-	// 2. Compute differences
+	// Phase 2: Compute state deltas to trigger necessary lifecycle transitions (start, stop, or update presence).
 	toStart := make(map[string]string)
 	toStop := make([]string, 0, len(s.instances))
 	s.log().Debug("Tracking configuration deltas",
@@ -246,7 +256,7 @@ func (s *BotSupervisor) onConfigChanged(ctx context.Context, oldCfg, newCfg *fil
 		}
 	}
 
-	// 3. Trigger Stops
+	// Phase 3: Initiate shutdown sequence for instances whose credentials have been revoked or removed.
 	for _, id := range toStop {
 		if state, exists := s.instances[id]; exists && state.Status != StatusStopping {
 			s.log().Info("Planned instance shutdown triggered by token removal", slog.String("botInstanceID", id))
@@ -260,7 +270,7 @@ func (s *BotSupervisor) onConfigChanged(ctx context.Context, oldCfg, newCfg *fil
 		}
 	}
 
-	// 4. Trigger Starts (with Stop barrier)
+	// Phase 4: Execute startup pipeline for new or updated instances, blocking on prior shutdown completion.
 	var startWG sync.WaitGroup
 	for id, token := range toStart {
 		var oldState *botInstanceState
@@ -291,7 +301,7 @@ func (s *BotSupervisor) onConfigChanged(ctx context.Context, oldCfg, newCfg *fil
 		}(id, token, currentStatuses[id], oldState)
 	}
 
-	// 5. Trigger dynamic command syncs for feature changes
+	// Phase 5: Enqueue asynchronous command catalog synchronization to reconcile Discord API state with local feature flags.
 	type syncTask struct {
 		guildID   string
 		instances []string
@@ -499,6 +509,7 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token, status str
 	maxDelay := 30 * time.Second
 	maxRetries := 5
 
+	// Implement exponential backoff to mitigate gateway identification rate limits and transient network failures.
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		s.mu.Lock()
 		now := time.Now()
