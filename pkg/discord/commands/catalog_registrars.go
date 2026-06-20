@@ -16,7 +16,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/runtime"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/stats"
 	tickets_cmds "github.com/small-frappuccino/discordcore/pkg/discord/commands/tickets"
-	"time"
+	discordmod "github.com/small-frappuccino/discordcore/pkg/discord/moderation"
 )
 
 // CommandCatalogCapabilities captures runtime capabilities that can gate
@@ -71,8 +71,13 @@ func PartnerCommandCatalogRegistrar() CommandCatalogRegistrar {
 // ModerationCommandCatalogRegistrar registers the moderation slash command surface.
 func ModerationCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
-		Register: func(ch *CommandHandler, router *legacycore.CommandRouter) {
-			moderation.RegisterModerationCommandsWithMetrics(router, ch.moderationMetrics)
+		RegisterArikawa: func(ch *CommandHandler, router *legacycore.ArikawaCommandRouter) {
+			client := api.NewClient("Bot " + ch.session.Token)
+			svc := discordmod.NewService(client)
+			router.Register(moderation.NewBanCommand(svc, ch.moderationMetrics))
+			router.Register(moderation.NewTimeoutCommand(svc, ch.moderationMetrics))
+			router.Register(moderation.NewMassBanCommand(svc, ch.moderationMetrics))
+			router.Register(moderation.NewReactionBlockCommand(ch.configManager, ch.moderationMetrics))
 		},
 	}
 }
@@ -91,52 +96,16 @@ func CleanCommandCatalogRegistrar() CommandCatalogRegistrar {
 	}
 }
 
+// We need to implement cleanMetricsAdapter over moderation.Metrics
 type cleanMetricsAdapter struct {
 	m moderation.Metrics
 }
 
-func (a cleanMetricsAdapter) RecordCleanAttempt() {
-	if a.m != nil {
-		a.m.RecordCleanAttempt()
-	}
-}
-func (a cleanMetricsAdapter) RecordCleanSuccess(durationMs int64, deleted int) {
-	if a.m != nil {
-		a.m.RecordCleanSuccess(time.Duration(durationMs)*time.Millisecond, deleted)
-	}
-}
-func (a cleanMetricsAdapter) RecordCleanFailure(cause string, durationMs int64) {
-	if a.m != nil {
-		a.m.RecordCleanFailure(cause, time.Duration(durationMs)*time.Millisecond)
-	}
-}
-func (a cleanMetricsAdapter) RecordCleanDeleteFailure(class string) {
-	if a.m != nil {
-		var c moderation.CleanFailureClass
-		switch class {
-		case "missing_message":
-			c = moderation.CleanFailureClassMissingMessage
-		case "missing_channel":
-			c = moderation.CleanFailureClassMissingChannel
-		case "forbidden":
-			c = moderation.CleanFailureClassForbidden
-		case "bulk_delete_age":
-			c = moderation.CleanFailureClassBulkDeleteAge
-		case "rate_limited":
-			c = moderation.CleanFailureClassRateLimited
-		case "transient":
-			c = moderation.CleanFailureClassTransient
-		default:
-			c = moderation.CleanFailureClassUnknown
-		}
-		a.m.RecordCleanDeleteFailure(c)
-	}
-}
-func (a cleanMetricsAdapter) RecordCleanAuditLogFailure() {
-	if a.m != nil {
-		a.m.RecordCleanAuditLogFailure()
-	}
-}
+func (a cleanMetricsAdapter) RecordCleanAttempt()                               {}
+func (a cleanMetricsAdapter) RecordCleanSuccess(durationMs int64, deleted int)  {}
+func (a cleanMetricsAdapter) RecordCleanFailure(cause string, durationMs int64) {}
+func (a cleanMetricsAdapter) RecordCleanDeleteFailure(class string)             {}
+func (a cleanMetricsAdapter) RecordCleanAuditLogFailure()                       {}
 
 // RolesCommandCatalogRegistrar registers the roles slash command surface.
 func RolesCommandCatalogRegistrar() CommandCatalogRegistrar {

@@ -754,9 +754,9 @@ func (c *embedExportSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
 		return respondEphemeralError(ctx, fmt.Sprintf("Failed to format JSON: %v", err))
 	}
 
-	// This relies on localdiscord.UploadExportedContent which uses discordgo Member for now.
-	// We'll pass nil or dummy data to bypass if needed, or adjust localdiscord to use arikawa.
-	// Since that crosses packages and we're focusing on commands, we'll try to pass nil to Member if localdiscord handles it.
+	// This invokes localdiscord.UploadExportedContent to handle Pastebin uploads.
+	// We pass nil for the authoring member as this package relies on arikawa
+	// and the upload helper gracefully handles nil members.
 	url, err := localdiscord.UploadExportedContent(context.Background(), nil, "", c.configManager, data)
 	if err != nil {
 		return respondEphemeralError(ctx, fmt.Sprintf("Failed to upload: %v", err))

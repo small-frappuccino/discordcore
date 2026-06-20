@@ -128,20 +128,35 @@ func (c *CleanCommand) Handle(ctx *legacycore.ArikawaContext) error {
 		for _, opt := range cmdData.Options {
 			switch opt.Name {
 			case "count":
+				if opt.Type != discord.IntegerOptionType {
+					return &EphemeralError{UserMessage: "Invalid format for count.", InternalErr: fmt.Errorf("structural anomaly: expected IntegerOptionType for count")}
+				}
 				val, err := opt.IntValue()
 				if err == nil {
 					count = int(val)
 				}
 			case "user":
+				if opt.Type != discord.UserOptionType {
+					return &EphemeralError{UserMessage: "Invalid format for user.", InternalErr: fmt.Errorf("structural anomaly: expected UserOptionType for user")}
+				}
 				val, err := opt.SnowflakeValue()
 				if err == nil {
 					userID = val.String()
 				}
 			case "contains":
+				if opt.Type != discord.StringOptionType {
+					return &EphemeralError{UserMessage: "Invalid format for contains.", InternalErr: fmt.Errorf("structural anomaly: expected StringOptionType for contains")}
+				}
 				contains = opt.String()
 			case "from":
+				if opt.Type != discord.StringOptionType {
+					return &EphemeralError{UserMessage: "Invalid format for from.", InternalErr: fmt.Errorf("structural anomaly: expected StringOptionType for from")}
+				}
 				fromID = opt.String()
 			case "to":
+				if opt.Type != discord.StringOptionType {
+					return &EphemeralError{UserMessage: "Invalid format for to.", InternalErr: fmt.Errorf("structural anomaly: expected StringOptionType for to")}
+				}
 				toID = opt.String()
 			}
 		}
