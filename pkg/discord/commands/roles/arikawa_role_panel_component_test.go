@@ -137,3 +137,84 @@ func TestRolePanelComponentHandler_InjectionAndRouting(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildRolePanelToggleResponseArikawa_VisibilityFlags(t *testing.T) {
+	t.Parallel()
+
+	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+
+	tests := []struct {
+		name           string
+		ctx            *legacycore.ArikawaContext
+		expectedFlags  discord.MessageFlags
+		expectHasFlags bool
+	}{
+		{
+			name:           "Degradation: Nil Context forces Ephemeral fallback",
+			ctx:            nil,
+			expectedFlags:  discord.EphemeralMessage,
+			expectHasFlags: true,
+		},
+		{
+			name: "Degradation: Nil GuildConfig forces Ephemeral fallback",
+			ctx: &legacycore.ArikawaContext{
+				GuildConfig: nil,
+			},
+			expectedFlags:  discord.EphemeralMessage,
+			expectHasFlags: true,
+		},
+		{
+			name: "Feature: DisableInteractiveEphemeral is false (Default Ephemeral)",
+			ctx: &legacycore.ArikawaContext{
+				GuildConfig: &files.GuildConfig{
+					RuntimeConfig: files.RuntimeConfig{
+						DisableInteractiveEphemeral: false,
+					},
+				},
+			},
+			expectedFlags:  discord.EphemeralMessage,
+			expectHasFlags: true,
+		},
+		{
+			name: "Feature: DisableInteractiveEphemeral is true (Public Response)",
+			ctx: &legacycore.ArikawaContext{
+				GuildConfig: &files.GuildConfig{
+					RuntimeConfig: files.RuntimeConfig{
+						DisableInteractiveEphemeral: true,
+					},
+				},
+			},
+			expectedFlags:  0,
+			expectHasFlags: false,
+		},
+		{
+			name: "State Isolation: Global config does not leak into missing GuildConfig",
+			ctx: &legacycore.ArikawaContext{
+				GuildConfig: nil,
+				GuildID:     discord.GuildID(999),
+				Config:      cm, // Uses cm from the upper scope, or we can just leave it since the guild doesn't have the flag
+			},
+			expectedFlags:  discord.EphemeralMessage,
+			expectHasFlags: true,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			response := buildRolePanelToggleResponseArikawa(tc.ctx, "Role panel action")
+
+			if tc.expectHasFlags {
+				if response.Flags != tc.expectedFlags {
+					t.Fatalf("expected flags to be %v, got %v", tc.expectedFlags, response.Flags)
+				}
+			} else {
+				if response.Flags != 0 {
+					t.Fatalf("expected no flags (public visibility), got %v", response.Flags)
+				}
+			}
+		})
+	}
+}

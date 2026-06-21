@@ -32,7 +32,7 @@ func (m *InMemoryMetrics) RecordCommandExec(name string)    {}
 func (m *InMemoryMetrics) Attach(ctx context.Context) error { return nil }
 
 // CommandRegistry allows external routers to wire these pure slash commands.
-// Rather than tightly coupling to discordgo, we expose individual command instantiators
+// We expose individual command instantiators
 // which the Arikawa-capable router can consume.
 func NewBanCommand(svc *discordmod.Service, metrics Metrics, logger *slog.Logger) *BanCommand {
 	if metrics == nil {

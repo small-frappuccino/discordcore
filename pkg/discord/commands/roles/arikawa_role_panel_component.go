@@ -115,18 +115,35 @@ func (h *rolePanelComponentHandler) HandleComponent(ctx *legacycore.ArikawaConte
 	return rolePanelToggleEphemeralSuccess(ctx, fmt.Sprintf("Assigned <@&%s>.", roleIDStr))
 }
 
-func rolePanelToggleEphemeralError(ctx *legacycore.ArikawaContext, message string) error {
-	return ctx.Respond(api.InteractionResponseData{
+func buildRolePanelToggleResponseArikawa(ctx *legacycore.ArikawaContext, message string) api.InteractionResponseData {
+	data := api.InteractionResponseData{
 		Content: option.NewNullableString(message),
-		Flags:   discord.EphemeralMessage,
-	})
+	}
+
+	disableEphemeral := false
+	if ctx != nil {
+		if ctx.GuildConfig != nil {
+			disableEphemeral = ctx.GuildConfig.RuntimeConfig.DisableInteractiveEphemeral
+		} else if ctx.Config != nil && ctx.GuildID.IsValid() {
+			if gc := ctx.Config.GuildConfig(ctx.GuildID.String()); gc != nil {
+				disableEphemeral = gc.RuntimeConfig.DisableInteractiveEphemeral
+			}
+		}
+	}
+
+	if !disableEphemeral {
+		data.Flags = discord.EphemeralMessage
+	}
+
+	return data
+}
+
+func rolePanelToggleEphemeralError(ctx *legacycore.ArikawaContext, message string) error {
+	return ctx.Respond(buildRolePanelToggleResponseArikawa(ctx, message))
 }
 
 func rolePanelToggleEphemeralSuccess(ctx *legacycore.ArikawaContext, message string) error {
-	return ctx.Respond(api.InteractionResponseData{
-		Content: option.NewNullableString(message),
-		Flags:   discord.EphemeralMessage,
-	})
+	return ctx.Respond(buildRolePanelToggleResponseArikawa(ctx, message))
 }
 
 func defaultRolePanelMemberHasRoleArikawa(ctx *legacycore.ArikawaContext, roleIDStr string) (bool, error) {

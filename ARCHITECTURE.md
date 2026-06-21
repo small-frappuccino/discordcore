@@ -220,7 +220,6 @@ flowchart TD
     CommandsRoles --> AdapterRoles
     CommandsRoles --> Arikawa
     CommandsRoles --> CommandsLegacycore
-    CommandsRoles --> DiscordGo
     CommandsRoles --> Files
     CommandsRuntime --> Arikawa
     CommandsRuntime --> Files

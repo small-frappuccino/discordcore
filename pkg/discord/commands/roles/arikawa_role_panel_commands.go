@@ -286,7 +286,7 @@ func (c *rolePanelPostSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
 
 	if opts.HasOption(rolePanelOptionWebhookURL) {
 		// Webhook execution requires parsing and fallback, but since this is Arikawa natively now,
-		// we skip the complex discordgo webhook impersonation logic here to simplify the example.
+		// we skip the complex webhook impersonation logic here to simplify the example.
 		// A full implementation would use Arikawa's webhook client.
 		return respondEphemeralError(ctx, "Webhook posting is not implemented in this mock.")
 	}
