@@ -11,199 +11,280 @@ flowchart TD
     DiscordAPI((Discord API))
 
     %% SDKs
-    DiscordGo(("DiscordGo SDK (Fork)"))
+    DiscordGo(("DiscordGo SDK"))
     Arikawa(("Arikawa SDK"))
-    
-    %% Entrypoints
-    CmdMain["cmd/discordcore"]
-    CmdClean["cmd/clean-config"]
-    CmdTSGen["cmd/tsgen"]
-    
-    %% Application Bootstrapper
-    App["pkg/app (Bootstrapper)"]
-    DualSDK["pkg/app (dual_sdk_publisher.go)"]
 
-    %% Dashboard (UI)
-    UI["ui (React/Vite Dashboard)"]
-    
-    %% Discord Sub-domains & Adapters
-    Session["pkg/discord/session"]
-    Commands["pkg/discord/commands"]
-    Cache["pkg/discord/cache"]
-    Control["pkg/control (HTTP API)"]
-    ControlTLS["pkg/control/localtls"]
-    Task["pkg/task (Background Jobs)"]
-    RPC["pkg/discordrpc (Local IPC)"]
-    Webhook["pkg/discord/webhook"]
-    Perf["pkg/discord/perf"]
-    Cleanup["pkg/discord/cleanup"]
-    Maintenance["pkg/discord/maintenance"]
-    MessageUpdate["pkg/discord/messageupdate"]
-    AdapterQOTD["pkg/discord/qotd"]
-    AdapterTickets["pkg/discord/tickets"]
-    AdapterStats["pkg/discord/stats"]
-    EventLog["pkg/discord/eventlog"]
-
-    %% Vertical Features (Domain)
-    QOTD["pkg/qotd"]
-    Roles["pkg/roles"]
-    Embeds["pkg/embeds"]
-    Partners["pkg/partners"]
-    Stats["pkg/stats"]
+    %% Nodes
+    CmdClean-config["cmd/clean-config"]
+    CmdDiscordcore["cmd/discordcore"]
+    CmdTsgen["cmd/tsgen"]
+    App["pkg/app"]
+    AppRuntimecmd["pkg/app/runtimecmd"]
     Automod["pkg/automod"]
-    Monitoring["pkg/monitoring"]
-    Messages["pkg/messages"]
-    Members["pkg/members"]
-    Reactions["pkg/reactions"]
-    Notifications["pkg/notifications"]
-    
-    %% Core Domain
-    Files["pkg/files (Config & State)"]
-    Storage["pkg/storage (Postgres)"]
-    Persistence["pkg/persistence"]
-    RuntimeApply["pkg/runtimeapply"]
-
-    %% Infrastructure & Observability
-    Service["pkg/service (Lifecycle)"]
-    Log["pkg/log"]
-    LogPolicy["pkg/logpolicy"]
-    Observability["pkg/observability"]
+    Clean["pkg/clean"]
     Clock["pkg/clock"]
+    Control["pkg/control"]
+    ControlLocaltls["pkg/control/localtls"]
+    Discord["pkg/discord"]
+    AdapterAutomod["pkg/discord/automod"]
+    AdapterCache["pkg/discord/cache"]
+    AdapterClean["pkg/discord/clean"]
+    Commands["pkg/discord/commands"]
+    CommandsClean["pkg/discord/commands/clean"]
+    CommandsCore["pkg/discord/commands/core"]
+    CommandsEmbeds["pkg/discord/commands/embeds"]
+    CommandsLegacycore["pkg/discord/commands/legacycore"]
+    CommandsLogging["pkg/discord/commands/logging"]
+    CommandsModeration["pkg/discord/commands/moderation"]
+    CommandsPartners["pkg/discord/commands/partners"]
+    CommandsQotd["pkg/discord/commands/qotd"]
+    CommandsRoles["pkg/discord/commands/roles"]
+    CommandsRuntime["pkg/discord/commands/runtime"]
+    CommandsStats["pkg/discord/commands/stats"]
+    CommandsTickets["pkg/discord/commands/tickets"]
+    AdapterEmbeds["pkg/discord/embeds"]
+    AdapterLogging["pkg/discord/logging"]
+    AdapterMembers["pkg/discord/members"]
+    AdapterMessages["pkg/discord/messages"]
+    AdapterModeration["pkg/discord/moderation"]
+    AdapterPartners["pkg/discord/partners"]
+    AdapterPerf["pkg/discord/perf"]
+    AdapterQotd["pkg/discord/qotd"]
+    AdapterRoles["pkg/discord/roles"]
+    AdapterSession["pkg/discord/session"]
+    AdapterStats["pkg/discord/stats"]
+    AdapterTickets["pkg/discord/tickets"]
+    AdapterWebhook["pkg/discord/webhook"]
+    Files["pkg/files"]
+    Idgen["pkg/idgen"]
+    Log["pkg/log"]
+    Logging["pkg/logging"]
+    Members["pkg/members"]
+    Messages["pkg/messages"]
+    Moderation["pkg/moderation"]
+    Observability["pkg/observability"]
+    Persistence["pkg/persistence"]
+    Qotd["pkg/qotd"]
+    Runtimeapply["pkg/runtimeapply"]
+    Service["pkg/service"]
+    Stats["pkg/stats"]
+    Storage["pkg/storage"]
+    StorageStoragetest["pkg/storage/storagetest"]
+    Task["pkg/task"]
+    Testdb["pkg/testdb"]
     Theme["pkg/theme"]
-    TestDB["pkg/testdb"]
-    IDGen["pkg/idgen"]
+    Tickets["pkg/tickets"]
+    UI["ui"]
 
     %% SDK & API Flow
     DiscordGateway -. WebSocket .-> DiscordGo
     DiscordGo -. REST Calls .-> DiscordAPI
     Arikawa -. REST Calls .-> DiscordAPI
-    
-    %% Downward dependencies from SDKs
-    DiscordGo --> Session
-    DiscordGo --> Commands
-    DiscordGo --> Cache
-    DiscordGo -- Provides Token --> App
-    
-    App -- Instantiates --> DualSDK
-    DualSDK -- Instantiates --> Arikawa
-    
-    %% Application Bootstrapping
+
     %% Auto-generated internal dependencies
-    %% Auto-generated internal dependencies
-    AdapterQOTD --> Log
-    AdapterQOTD --> QOTD
-    AdapterQOTD --> Service
+    AdapterAutomod --> AdapterPerf
+    AdapterAutomod --> Arikawa
+    AdapterAutomod --> Automod
+    AdapterAutomod --> Service
+    AdapterCache --> Arikawa
+    AdapterCache --> Storage
+    AdapterClean --> Arikawa
+    AdapterClean --> Clean
+    AdapterEmbeds --> Arikawa
+    AdapterEmbeds --> Files
+    AdapterLogging --> AdapterEmbeds
+    AdapterLogging --> Arikawa
+    AdapterLogging --> Automod
+    AdapterLogging --> Files
+    AdapterLogging --> Logging
+    AdapterLogging --> Theme
+    AdapterMembers --> Arikawa
+    AdapterMembers --> Members
+    AdapterMembers --> Service
+    AdapterMessages --> Arikawa
+    AdapterMessages --> Messages
+    AdapterMessages --> Service
+    AdapterModeration --> Arikawa
+    AdapterPartners --> Arikawa
+    AdapterPartners --> Files
+    AdapterPartners --> Theme
+    AdapterPerf --> Files
+    AdapterPerf --> Log
+    AdapterPerf --> Observability
+    AdapterQotd --> Arikawa
+    AdapterQotd --> Log
+    AdapterQotd --> Qotd
+    AdapterQotd --> Service
+    AdapterRoles --> Arikawa
+    AdapterRoles --> Files
+    AdapterSession --> DiscordGo
+    AdapterSession --> Log
+    AdapterStats --> Arikawa
+    AdapterStats --> DiscordGo
     AdapterStats --> Stats
-    App --> AdapterQOTD
+    AdapterTickets --> Arikawa
+    AdapterTickets --> Tickets
+    AdapterWebhook --> Arikawa
+    AdapterWebhook --> Log
+    App --> AdapterAutomod
+    App --> AdapterCache
+    App --> AdapterLogging
+    App --> AdapterQotd
+    App --> AdapterSession
     App --> AdapterStats
-    App --> Cache
+    App --> AdapterWebhook
+    App --> Arikawa
     App --> Clock
     App --> Commands
+    App --> CommandsModeration
     App --> Control
-    App --> ControlTLS
+    App --> ControlLocaltls
+    App --> DiscordGo
     App --> Files
-    App --> IDGen
+    App --> Idgen
     App --> Log
     App --> Members
     App --> Messages
     App --> Persistence
-    App --> QOTD
-    App --> RuntimeApply
+    App --> Qotd
+    App --> Runtimeapply
     App --> Service
-    App --> Session
     App --> Stats
     App --> Storage
     App --> Task
-    App --> Webhook
-    Cache --> Storage
+    AppRuntimecmd --> App
+    AppRuntimecmd --> Commands
+    Automod --> Arikawa
     Clock --> Log
-    CmdClean --> Files
-    CmdClean --> Persistence
-    CmdMain --> App
+    CmdClean-config --> Files
+    CmdClean-config --> Persistence
+    CmdDiscordcore --> App
+    CmdDiscordcore --> AppRuntimecmd
+    Commands --> AdapterClean
+    Commands --> AdapterEmbeds
+    Commands --> AdapterModeration
+    Commands --> AdapterPartners
+    Commands --> AdapterRoles
     Commands --> AdapterTickets
+    Commands --> Arikawa
+    Commands --> CommandsClean
+    Commands --> CommandsEmbeds
+    Commands --> CommandsLegacycore
+    Commands --> CommandsLogging
+    Commands --> CommandsModeration
+    Commands --> CommandsPartners
+    Commands --> CommandsQotd
+    Commands --> CommandsRoles
+    Commands --> CommandsRuntime
+    Commands --> CommandsStats
+    Commands --> DiscordGo
     Commands --> Files
     Commands --> Service
     Commands --> Stats
-    Control --> Cache
+    CommandsClean --> Arikawa
+    CommandsClean --> Clean
+    CommandsClean --> CommandsLegacycore
+    CommandsClean --> Files
+    CommandsCore --> Arikawa
+    CommandsEmbeds --> AdapterEmbeds
+    CommandsEmbeds --> Arikawa
+    CommandsEmbeds --> CommandsLegacycore
+    CommandsEmbeds --> Discord
+    CommandsEmbeds --> Files
+    CommandsLegacycore --> AdapterCache
+    CommandsLegacycore --> AdapterPerf
+    CommandsLegacycore --> Arikawa
+    CommandsLegacycore --> DiscordGo
+    CommandsLegacycore --> Files
+    CommandsLegacycore --> Log
+    CommandsLegacycore --> Runtimeapply
+    CommandsLegacycore --> Storage
+    CommandsLegacycore --> Task
+    CommandsLegacycore --> Theme
+    CommandsLogging --> Arikawa
+    CommandsLogging --> CommandsLegacycore
+    CommandsLogging --> Files
+    CommandsModeration --> AdapterModeration
+    CommandsModeration --> Arikawa
+    CommandsModeration --> CommandsLegacycore
+    CommandsModeration --> Files
+    CommandsModeration --> Moderation
+    CommandsPartners --> AdapterPartners
+    CommandsPartners --> Arikawa
+    CommandsPartners --> CommandsLegacycore
+    CommandsPartners --> Discord
+    CommandsPartners --> Files
+    CommandsPartners --> Theme
+    CommandsQotd --> Arikawa
+    CommandsQotd --> Log
+    CommandsRoles --> AdapterRoles
+    CommandsRoles --> Arikawa
+    CommandsRoles --> CommandsLegacycore
+    CommandsRoles --> DiscordGo
+    CommandsRoles --> Files
+    CommandsRuntime --> Arikawa
+    CommandsRuntime --> Files
+    CommandsStats --> Arikawa
+    CommandsStats --> CommandsLegacycore
+    CommandsStats --> Files
+    CommandsTickets --> AdapterTickets
+    CommandsTickets --> Arikawa
+    CommandsTickets --> Files
+    CommandsTickets --> Tickets
+    Control --> AdapterCache
+    Control --> Arikawa
     Control --> Files
     Control --> Log
     Control --> Members
     Control --> Messages
-    Control --> RuntimeApply
+    Control --> Runtimeapply
     Control --> Storage
     Control --> UI
-    Files --> IDGen
+    Discord --> DiscordGo
+    Discord --> Files
+    Files --> DiscordGo
+    Files --> Idgen
     Files --> Log
     Files --> Persistence
     Files --> Theme
+    Logging --> Arikawa
+    Logging --> Files
+    Members --> AdapterPerf
+    Members --> Arikawa
     Members --> Files
-    Members --> Perf
+    Members --> Logging
     Members --> Service
     Members --> Storage
+    Messages --> AdapterPerf
+    Messages --> Arikawa
     Messages --> Files
+    Messages --> Logging
     Messages --> Observability
-    Messages --> Perf
     Messages --> Service
     Messages --> Storage
     Messages --> Task
-    Perf --> Files
-    Perf --> Log
-    Perf --> Observability
     Persistence --> Log
     Persistence --> Observability
-    QOTD --> Clock
-    QOTD --> Files
-    QOTD --> Storage
-    RuntimeApply --> Files
-    RuntimeApply --> Service
+    Qotd --> Clock
+    Qotd --> Files
+    Qotd --> Storage
+    Runtimeapply --> Files
+    Runtimeapply --> Service
     Service --> Storage
-    Session --> Log
     Stats --> Files
     Stats --> Service
     Stats --> Storage
-    Storage --> IDGen
+    Storage --> Idgen
+    StorageStoragetest --> Storage
+    Task --> Arikawa
     Task --> Clock
     Task --> Files
     Task --> Observability
     Task --> Storage
-    TestDB --> Persistence
-    Webhook --> Log
-    
-    
-    %% Additional Adapter Connections
-    
-    %% Infrastructure Dependencies
-    TestDB -. Used by tests .-> Storage
-    
-    %% UI & Control Relationships
-    Control -. Serves embedded .-> UI
-    Control -. Authenticates .-> DiscordAPI
-    UI -- Fetches via Control API --> Control
-    UI -. Configures .-> Partners
-    UI -. Configures .-> Roles
-    UI -. Configures .-> Monitoring
-    
-    %% Dual SDK Injection into Vertical Features
-    DualSDK == Injected as Publisher ==> QOTD
-    
-    %% Commands orchestrating features
-    
-    %% Discord Domain to Adapters
-    
+    Testdb --> Persistence
+    Tickets --> Arikawa
+    Tickets --> Storage
 
-    AdapterStats --> Arikawa
-    
-    Monitoring --> Arikawa
-    Messages --> Arikawa
-    Members --> Arikawa
-    
-    EventLog --> Arikawa
-    
-    
-    
-    %% Vertical Features touching Core
-    
-    
     %% Styling
     classDef core fill:#232B2B,stroke:#5E81AC,stroke-width:2px,color:#ECEFF4;
     classDef adapter fill:#3B4252,stroke:#88C0D0,stroke-width:2px,color:#ECEFF4;
@@ -211,15 +292,14 @@ flowchart TD
     classDef infra fill:#4C566A,stroke:#D8DEE9,stroke-width:2px,color:#ECEFF4;
     classDef external fill:#744210,stroke:#D69E2E,stroke-width:2px,color:#ECEFF4,shape:circle;
     classDef ui fill:#A3BE8C,stroke:#8FBCBB,stroke-width:2px,color:#2E3440;
-    
-    class Files,Storage,Persistence,RuntimeApply core;
-    class Control,ControlTLS,Task,RPC,Commands,Cache,Session,DualSDK,Webhook,Perf,Cleanup,Maintenance,MessageUpdate,AdapterQOTD,AdapterTickets,AdapterStats,EventLog adapter;
-    class QOTD,Roles,Embeds,Partners,Stats,Automod,Monitoring,Messages,Members,Reactions,Notifications feature;
-    class Service,Log,LogPolicy,Observability,Clock,Theme,TestDB,IDGen infra;
-    class DiscordGo,Arikawa,DiscordAPI,DiscordGateway external;
-    class UI ui;
-```
 
+    class App,AppRuntimecmd,Files,Persistence,Runtimeapply,Storage,StorageStoragetest core;
+    class Discord,AdapterAutomod,AdapterCache,AdapterClean,Commands,CommandsClean,CommandsCore,CommandsEmbeds,CommandsLegacycore,CommandsLogging,CommandsModeration,CommandsPartners,CommandsQotd,CommandsRoles,CommandsRuntime,CommandsStats,CommandsTickets,AdapterEmbeds,AdapterLogging,AdapterMembers,AdapterMessages,AdapterModeration,AdapterPartners,AdapterPerf,AdapterQotd,AdapterRoles,AdapterSession,AdapterStats,AdapterTickets,AdapterWebhook adapter;
+    class Automod,Clean,Control,ControlLocaltls,Logging,Members,Messages,Moderation,Qotd,Stats,Task,Tickets feature;
+    class Clock,Idgen,Log,Observability,Service,Testdb,Theme infra;
+    class DiscordGo,Arikawa,DiscordAPI,DiscordGateway external;
+    class CmdClean-config,CmdDiscordcore,CmdTsgen,UI ui;
+```
 ## Layer Breakdown
 
 - **Entrypoints (`cmd/*`)**: Contains the `main` package binaries (`discordcore`, `clean-config`, `tsgen`) that bootstrap the environment and start the application, or generate typescript types.
