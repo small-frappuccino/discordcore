@@ -41,7 +41,7 @@ func TestCatalogRegistrars_RegisterArikawa(t *testing.T) {
 				session:       &discordgo.Session{Token: "mock-token"},
 				configManager: files.NewConfigManagerWithStore(nil, nil),
 			}
-			spyRouter := commands.NewCommandRouter(nil, nil)
+			spyRouter := commands.NewSpyRouter()
 			registrar := tt.factory()
 
 			require.NotNil(t, registrar.RegisterArikawa, "RegisterArikawa must be implemented")
@@ -50,15 +50,15 @@ func TestCatalogRegistrars_RegisterArikawa(t *testing.T) {
 			registrar.RegisterArikawa(mockHandler, spyRouter)
 
 			// Assert
-			registry := spyRouter.Registry()
-			allCmds := registry.GetAllCommands()
+			allCmds := spyRouter.GetRegisteredArikawaCommands()
 			require.Len(t, allCmds, len(tt.expectedCmds), "Mismatch in registered commands count")
 
 			for _, expectedName := range tt.expectedCmds {
-				cmd, exists := registry.GetCommand(expectedName)
+				exists := spyRouter.HasCommand(expectedName)
 				assert.True(t, exists, "Missing expected Arikawa command: %s", expectedName)
 				if exists {
-					assert.NotEmpty(t, cmd.Description(), "Command %s must have a description", expectedName)
+					cmdData := spyRouter.GetCommandData(expectedName)
+					assert.NotEmpty(t, cmdData.Description, "Command %s must have a description", expectedName)
 				}
 			}
 		})
@@ -80,7 +80,7 @@ func TestCatalogRegistrars_DIFailures(t *testing.T) {
 		registrar := StatsCommandCatalogRegistrar()
 		require.NotNil(t, registrar.RegisterArikawa)
 
-		spyRouter := commands.NewCommandRouter(nil, nil)
+		spyRouter := commands.NewSpyRouter()
 
 		// Expect the factory or the closure execution to handle the missing dependency gracefully
 		// stats.NewStatsCommands().RegisterCommands(router) safely aborts if configManager is nil.
@@ -88,8 +88,7 @@ func TestCatalogRegistrars_DIFailures(t *testing.T) {
 			registrar.RegisterArikawa(handlerWithoutConfig, spyRouter)
 		}, "Registrar should not panic if configManager is missing")
 
-		registry := spyRouter.Registry()
-		allCmds := registry.GetAllCommands()
+		allCmds := spyRouter.GetRegisteredArikawaCommands()
 		assert.Empty(t, allCmds, "No commands should be registered if configManager is nil")
 	})
 }

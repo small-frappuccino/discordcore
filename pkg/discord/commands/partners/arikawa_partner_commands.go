@@ -46,7 +46,7 @@ func NewPartnerCommands(configManager *files.ConfigManager, svc *partnersvc.Part
 }
 
 // RegisterCommands binds the /partner slash group to the application router.
-func (pc *PartnerCommands) RegisterCommands(router *commands.CommandRouter) {
+func (pc *PartnerCommands) RegisterCommands(router commands.ArikawaRegisterer) {
 	if router == nil || pc == nil || pc.configManager == nil {
 		return
 	}

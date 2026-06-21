@@ -32,7 +32,7 @@ func NewRolePanelCommands(configManager *files.ConfigManager, svc *rolesvc.RoleP
 }
 
 // RegisterCommands binds the /roles slash group and the component toggle route to the application router.
-func (rc *RolePanelCommands) RegisterCommands(router *commands.CommandRouter) {
+func (rc *RolePanelCommands) RegisterCommands(router commands.ArikawaRegisterer) {
 	if router == nil || rc == nil || rc.configManager == nil {
 		return
 	}

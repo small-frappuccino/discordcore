@@ -40,3 +40,9 @@ type AutocompleteHandler interface {
 type InteractionRouteKey struct {
 	Path string
 }
+
+// ArikawaRegisterer is the interface that allows domain commands to register themselves.
+type ArikawaRegisterer interface {
+	Register(cmd ArikawaCommand)
+	RegisterComponent(customIDPrefix string, handler ComponentHandler)
+}

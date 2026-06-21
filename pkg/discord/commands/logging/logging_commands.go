@@ -24,7 +24,7 @@ func NewLoggingCommands(configManager *files.ConfigManager) *LoggingCommands {
 }
 
 // RegisterCommands registers the commands.
-func (c *LoggingCommands) RegisterCommands(router *commands.CommandRouter) {
+func (c *LoggingCommands) RegisterCommands(router commands.ArikawaRegisterer) {
 	if router == nil || c.configManager == nil {
 		return
 	}

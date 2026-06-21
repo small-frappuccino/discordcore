@@ -37,7 +37,7 @@ func NewStatsCommands(configManager *files.ConfigManager, statsService StatsServ
 }
 
 // RegisterCommands registers the commands.
-func (c *StatsCommands) RegisterCommands(router *commands.CommandRouter) {
+func (c *StatsCommands) RegisterCommands(router commands.ArikawaRegisterer) {
 	if router == nil || c.configManager == nil {
 		return
 	}

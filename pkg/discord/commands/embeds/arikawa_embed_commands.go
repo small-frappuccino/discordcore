@@ -70,7 +70,7 @@ func NewEmbedCommands(configManager *files.ConfigManager, embedService *embedsvc
 }
 
 // RegisterCommands binds the /embed slash group and its nested execution trees to the application router.
-func (ec *EmbedCommands) RegisterCommands(router *commands.CommandRouter) {
+func (ec *EmbedCommands) RegisterCommands(router commands.ArikawaRegisterer) {
 	if router == nil || ec == nil || ec.configManager == nil {
 		return
 	}
