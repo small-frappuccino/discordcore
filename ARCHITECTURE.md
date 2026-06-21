@@ -173,10 +173,8 @@ flowchart TD
     CmdDiscordcore --> App
     CmdDiscordcore --> AppRuntimecmd
     Commands --> Arikawa
-    Commands --> DiscordGo
     Commands --> Files
     Commands --> Log
-    Commands --> Theme
     CommandsClean --> Arikawa
     CommandsClean --> Clean
     CommandsClean --> Commands

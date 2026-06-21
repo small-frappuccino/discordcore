@@ -199,7 +199,7 @@ func (c *statsRootCommand) handleAdd(ctx *commands.ArikawaContext, opts []discor
 func (c *statsRootCommand) handleRemove(ctx *commands.ArikawaContext, opts []discord.CommandInteractionOption) error {
 	cfg := ctx.GuildConfig
 	if len(cfg.Stats.Channels) == 0 {
-		ctx.Respond(commands.NewArikawaMissingConfigErrorData(ctx.GuildID.String(), "Stats Channels", "/stats"))
+		ctx.Respond(commands.NewArikawaMissingConfigErrorData("Stats Channels"))
 		return commands.ErrAlreadyAcknowledged
 	}
 
@@ -253,7 +253,7 @@ func (c *statsRootCommand) handleRemove(ctx *commands.ArikawaContext, opts []dis
 func (c *statsRootCommand) handleList(ctx *commands.ArikawaContext) error {
 	cfg := ctx.GuildConfig
 	if len(cfg.Stats.Channels) == 0 {
-		return ctx.Respond(commands.NewArikawaMissingConfigErrorData(ctx.GuildID.String(), "Stats Channels", "/stats"))
+		return ctx.Respond(commands.NewArikawaMissingConfigErrorData("Stats Channels"))
 	}
 
 	var buf strings.Builder
