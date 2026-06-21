@@ -88,44 +88,91 @@ flowchart TD
     DualSDK -- Instantiates --> Arikawa
     
     %% Application Bootstrapping
-    CmdMain --> App
-    CmdClean --> Files
-    
-    App --> Session
+    %% Auto-generated internal dependencies
+    %% Auto-generated internal dependencies
+    AdapterQOTD --> Log
+    AdapterQOTD --> QOTD
+    AdapterQOTD --> Service
+    AdapterStats --> Stats
+    App --> AdapterQOTD
+    App --> AdapterStats
+    App --> Cache
+    App --> Clock
     App --> Commands
-    App --> Monitoring
-    App --> Messages
-    App --> Members
-    App --> Reactions
-    App --> Notifications
     App --> Control
-    App --> Task
+    App --> ControlTLS
+    App --> Files
+    App --> IDGen
+    App --> Log
+    App --> Members
+    App --> Messages
     App --> Persistence
-    App --> RPC
+    App --> QOTD
+    App --> RuntimeApply
     App --> Service
+    App --> Session
     App --> Stats
-    App --> Automod
+    App --> Storage
+    App --> Task
+    App --> Webhook
+    Cache --> Storage
+    Clock --> Log
+    CmdClean --> Files
+    CmdClean --> Persistence
+    CmdMain --> App
+    Commands --> AdapterTickets
+    Commands --> Files
+    Commands --> Service
+    Commands --> Stats
+    Control --> Cache
+    Control --> Files
+    Control --> Log
+    Control --> Members
+    Control --> Messages
+    Control --> RuntimeApply
+    Control --> Storage
+    Control --> UI
+    Files --> IDGen
+    Files --> Log
+    Files --> Persistence
+    Files --> Theme
+    Members --> Files
+    Members --> Perf
+    Members --> Service
+    Members --> Storage
+    Messages --> Files
+    Messages --> Observability
+    Messages --> Perf
+    Messages --> Service
+    Messages --> Storage
+    Messages --> Task
+    Perf --> Files
+    Perf --> Log
+    Perf --> Observability
+    Persistence --> Log
+    Persistence --> Observability
+    QOTD --> Clock
+    QOTD --> Files
+    QOTD --> Storage
+    RuntimeApply --> Files
+    RuntimeApply --> Service
+    Service --> Storage
+    Session --> Log
+    Stats --> Files
+    Stats --> Service
+    Stats --> Storage
+    Storage --> IDGen
+    Task --> Clock
+    Task --> Files
+    Task --> Observability
+    Task --> Storage
+    TestDB --> Persistence
+    Webhook --> Log
+    
     
     %% Additional Adapter Connections
-    App --> Webhook
-    App --> Maintenance
-    App --> MessageUpdate
-    App --> AdapterStats
-    Commands --> Perf
-    Monitoring --> Perf
-    Messages --> Perf
-    Members --> Perf
-    Reactions --> Perf
-    Cache --> Perf
-    Commands --> Cleanup
-    Control --> Cleanup
     
     %% Infrastructure Dependencies
-    App --> Log
-    App --> LogPolicy
-    App --> Observability
-    App --> Clock
-    App --> Theme
     TestDB -. Used by tests .-> Storage
     
     %% UI & Control Relationships
@@ -140,70 +187,22 @@ flowchart TD
     DualSDK == Injected as Publisher ==> QOTD
     
     %% Commands orchestrating features
-    Commands --> Files
-    Commands --> Storage
-    Commands --> QOTD
-    Commands --> Roles
-    Commands --> Embeds
-    Commands --> Partners
-    Commands --> AdapterTickets
-    Commands --> Stats
     
     %% Discord Domain to Adapters
-    AdapterQOTD --> QOTD
-    AdapterQOTD --> Files
-    AdapterQOTD --> Storage
-    AdapterQOTD --> Log
-    AdapterQOTD --> Clock
-    AdapterQOTD --> Service
     
-    AdapterTickets --> Commands
-    AdapterTickets --> Storage
 
-    AdapterStats --> Stats
     AdapterStats --> Arikawa
     
-    Monitoring --> Files
-    Monitoring --> Storage
     Monitoring --> Arikawa
-    Monitoring --> EventLog
-    Messages --> Files
-    Messages --> Storage
     Messages --> Arikawa
-    Messages --> EventLog
-    Members --> Files
-    Members --> Storage
     Members --> Arikawa
-    Members --> EventLog
-    Reactions --> Files
-    Reactions --> Storage
     
     EventLog --> Arikawa
-    EventLog --> LogPolicy
     
-    Control --> Files
-    Control --> Storage
-    Control --> QOTD
-    Control --> AdapterQOTD
-    Control --> Commands
-    Control --> ControlTLS
     
-    Task --> Files
-    Task --> Storage
     
     %% Vertical Features touching Core
-    QOTD --> Files
-    QOTD --> Storage
-    Roles --> Files
-    Embeds --> Files
-    Partners --> Files
-    Stats --> Files
-    Stats --> Storage
-    Automod --> Files
     
-    Persistence --> Storage
-    RuntimeApply --> Files
-    RuntimeApply --> Service
     
     %% Styling
     classDef core fill:#232B2B,stroke:#5E81AC,stroke-width:2px,color:#ECEFF4;
