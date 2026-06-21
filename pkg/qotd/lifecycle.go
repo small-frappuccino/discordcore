@@ -1,138 +1,176 @@
 package qotd
 
-import "time"
+import (
+	"context"
+	"fmt"
+	"time"
 
-// BecomesPreviousAt returns when a published QOTD leaves the current-day slot.
-func BecomesPreviousAt(schedule PublishSchedule, publishDate time.Time) time.Time {
+	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/storage"
+)
+
+// PublishSchedule represents a QOTD publish schedule config.
+type PublishSchedule = files.QOTDPublishScheduleConfig
+
+// resolvePublishSchedule resolves the schedule from config.
+func resolvePublishSchedule(cfg files.QOTDConfig) (PublishSchedule, error) {
+	if !cfg.Schedule.IsComplete() {
+		return PublishSchedule{}, fmt.Errorf("qotd publish schedule is incomplete")
+	}
+	return cfg.Schedule, nil
+}
+
+// NormalizePublishDateUTC returns the canonical UTC calendar date for a QOTD slot.
+func NormalizePublishDateUTC(t time.Time) time.Time {
+	if t.IsZero() {
+		return time.Time{}
+	}
+	u := t.UTC()
+	return time.Date(u.Year(), u.Month(), u.Day(), 0, 0, 0, 0, time.UTC)
+}
+
+// PublishTimeUTC returns the exact publish time for a QOTD date.
+func PublishTimeUTC(schedule PublishSchedule, publishDate time.Time) time.Time {
 	date := NormalizePublishDateUTC(publishDate)
 	if date.IsZero() {
 		return time.Time{}
 	}
-	return PublishTimeUTC(schedule, date.AddDate(0, 0, 1))
-}
-
-// ArchiveAt returns when a published QOTD ages out of the current+previous window.
-func ArchiveAt(schedule PublishSchedule, publishDate time.Time) time.Time {
-	date := NormalizePublishDateUTC(publishDate)
-	if date.IsZero() {
+	hourUTC, minuteUTC, ok := schedule.Values()
+	if !ok {
 		return time.Time{}
 	}
-	return PublishTimeUTC(schedule, date.AddDate(0, 0, 2))
+	return time.Date(date.Year(), date.Month(), date.Day(), hourUTC, minuteUTC, 0, 0, time.UTC)
 }
 
-// ManualBecomesPreviousAt returns when an independently published manual QOTD
-// leaves its first 24-hour answer window.
-func ManualBecomesPreviousAt(publishedAt time.Time) time.Time {
-	if publishedAt.IsZero() {
-		return time.Time{}
-	}
-	return publishedAt.UTC().Add(24 * time.Hour)
-}
-
-// ManualArchiveAt returns when an independently published manual QOTD ages out
-// of its two-day answer window.
-func ManualArchiveAt(publishedAt time.Time) time.Time {
-	if publishedAt.IsZero() {
-		return time.Time{}
-	}
-	return publishedAt.UTC().Add(48 * time.Hour)
-}
-
-// StateWithinWindow returns the lifecycle state for any official post whose
-// current/previous/archive boundaries are already stored.
-func StateWithinWindow(graceUntil, archiveAt, now time.Time) OfficialPostState {
-	if graceUntil.IsZero() || archiveAt.IsZero() {
-		return OfficialPostStateArchived
-	}
+// CurrentPublishDateUTC returns the active publish date at the given time.
+func CurrentPublishDateUTC(schedule PublishSchedule, now time.Time) time.Time {
 	now = normalizeClockInput(now)
-	graceUntil = graceUntil.UTC()
-	archiveAt = archiveAt.UTC()
-
-	switch {
-	case now.Before(graceUntil):
-		return OfficialPostStateCurrent
-	case now.Before(archiveAt):
-		return OfficialPostStatePrevious
-	default:
-		return OfficialPostStateArchived
+	today := NormalizePublishDateUTC(now)
+	if now.After(PublishTimeUTC(schedule, today)) {
+		return today.AddDate(0, 0, 1)
 	}
+	return today
 }
 
-// StateAt returns the lifecycle state for an official QOTD post at a given time.
-func StateAt(schedule PublishSchedule, publishDate, now time.Time) OfficialPostState {
-	date := NormalizePublishDateUTC(publishDate)
-	if date.IsZero() {
-		return OfficialPostStateArchived
-	}
-	return StateWithinWindow(BecomesPreviousAt(schedule, date), ArchiveAt(schedule, date), now)
-}
-
-// EvaluateOfficialPostWindow returns the pure lifecycle view for any post whose
-// current/previous/archive boundaries are already known.
-func EvaluateOfficialPostWindow(publishDate, publishAt, graceUntil, archiveAt, now time.Time) OfficialPostLifecycle {
-	publishDate = NormalizePublishDateUTC(publishDate)
-	if publishDate.IsZero() {
-		publishDate = NormalizePublishDateUTC(publishAt)
-	}
-	if publishDate.IsZero() || graceUntil.IsZero() || archiveAt.IsZero() {
-		return OfficialPostLifecycle{}
-	}
+// DuePublishDateUTC returns the most recent scheduled publish date at the given time.
+func DuePublishDateUTC(schedule PublishSchedule, now time.Time) time.Time {
 	now = normalizeClockInput(now)
-	publishAt = publishAt.UTC()
-	graceUntil = graceUntil.UTC()
-	archiveAt = archiveAt.UTC()
-
-	state := StateWithinWindow(graceUntil, archiveAt, now)
-	answerWindow := AnswerWindow{
-		IsOpen:   state == OfficialPostStateCurrent || state == OfficialPostStatePrevious,
-		State:    state,
-		ClosesAt: archiveAt,
+	today := NormalizePublishDateUTC(now)
+	if now.Before(PublishTimeUTC(schedule, today)) {
+		return today.AddDate(0, 0, -1)
 	}
-
-	return OfficialPostLifecycle{
-		PublishDateUTC:    publishDate,
-		PublishAt:         publishAt,
-		BecomesPreviousAt: graceUntil,
-		ArchiveAt:         archiveAt,
-		State:             state,
-		AnswerWindow:      answerWindow,
-	}
+	return today
 }
 
-// EvaluateOfficialPost returns the pure lifecycle view for a published official post.
-func EvaluateOfficialPost(schedule PublishSchedule, publishDate, now time.Time) OfficialPostLifecycle {
-	date := NormalizePublishDateUTC(publishDate)
-	if date.IsZero() {
-		return OfficialPostLifecycle{}
+// normalizeClockInput normalizes input to UTC.
+func normalizeClockInput(now time.Time) time.Time {
+	if now.IsZero() {
+		return time.Now().UTC()
 	}
-	return EvaluateOfficialPostWindow(date, PublishTimeUTC(schedule, date), BecomesPreviousAt(schedule, date), ArchiveAt(schedule, date), now)
+	return now.UTC()
 }
 
-// EvaluateManualOfficialPost returns the lifecycle view for a manually
-// published official post whose window is anchored to its publish timestamp.
-func EvaluateManualOfficialPost(publishedAt, now time.Time) OfficialPostLifecycle {
-	if publishedAt.IsZero() {
-		return OfficialPostLifecycle{}
-	}
-	publishedAt = publishedAt.UTC()
-	return EvaluateOfficialPostWindow(
-		NormalizePublishDateUTC(publishedAt),
-		publishedAt,
-		ManualBecomesPreviousAt(publishedAt),
-		ManualArchiveAt(publishedAt),
-		now,
-	)
+// currentSlotState maintains the state of the current slot.
+type currentSlotState struct {
+	ScheduleConfigured bool
+	Schedule           PublishSchedule
+	PublishDateUTC     time.Time
+	PublishAtUTC       time.Time
+	OfficialPost       *storage.QOTDOfficialPostRecord
 }
 
-// ShouldArchive reports whether the post should be archived now, ignoring already-archived rows.
-func ShouldArchive(schedule PublishSchedule, publishDate, now time.Time, archivedAt *time.Time) bool {
-	if archivedAt != nil && !archivedAt.IsZero() {
-		return false
-	}
-	date := NormalizePublishDateUTC(publishDate)
-	if date.IsZero() {
+// BoundaryPassed boundarys passed.
+func (st currentSlotState) BoundaryPassed(now time.Time) bool {
+	if !st.ScheduleConfigured || st.PublishAtUTC.IsZero() {
 		return false
 	}
 	now = normalizeClockInput(now)
-	return !now.Before(ArchiveAt(schedule, date))
+	publishAt := st.PublishAtUTC.UTC()
+	return !now.Before(publishAt)
+}
+
+// HasOfficialPostRecord has official post record.
+func (st currentSlotState) HasOfficialPostRecord() bool {
+	return st.OfficialPost != nil
+}
+
+// HasPublishedOfficialPost has published official post.
+func (st currentSlotState) HasPublishedOfficialPost() bool {
+	if st.OfficialPost == nil {
+		return false
+	}
+	return st.OfficialPost.State != string(OfficialPostStateProvisioning) && st.OfficialPost.State != string(OfficialPostStateAbandoned)
+}
+
+// HasProvisioningOfficialPost has provisioning official post.
+func (st currentSlotState) HasProvisioningOfficialPost() bool {
+	if !st.HasOfficialPostRecord() {
+		return false
+	}
+	if st.OfficialPost.State == string(OfficialPostStateAbandoned) {
+		return false
+	}
+	return !st.HasPublishedOfficialPost()
+}
+
+// DetermineOfficialPostLifecycle derives the state and boundaries.
+func DetermineOfficialPostLifecycle(post storage.QOTDOfficialPostRecord, schedule files.QOTDPublishScheduleConfig, now time.Time) OfficialPostLifecycle {
+	lc := OfficialPostLifecycle{
+		PublishDateUTC: NormalizePublishDateUTC(post.PublishDateUTC),
+		State:          OfficialPostState(post.State),
+	}
+
+	if schedule.IsComplete() {
+		lc.PublishAt = PublishTimeUTC(schedule, lc.PublishDateUTC)
+		// A post becomes previous the exact millisecond the next day's slot begins.
+		lc.BecomesPreviousAt = PublishTimeUTC(schedule, lc.PublishDateUTC.AddDate(0, 0, 1))
+		// It archives 24 hours after becoming previous.
+		lc.ArchiveAt = lc.BecomesPreviousAt.AddDate(0, 0, 1)
+	}
+
+	lc.AnswerWindow = AnswerWindow{
+		State:  lc.State,
+		IsOpen: lc.State == OfficialPostStateCurrent,
+	}
+	if lc.AnswerWindow.IsOpen && !lc.BecomesPreviousAt.IsZero() {
+		lc.AnswerWindow.ClosesAt = lc.BecomesPreviousAt
+	}
+
+	return lc
+}
+
+// CalculateNextPublishDelay returns the duration until the next schedule publish triggers.
+func CalculateNextPublishDelay(cfg files.QOTDConfig, now time.Time) time.Duration {
+	if !cfg.Schedule.IsComplete() {
+		return 0
+	}
+
+	now = normalizeClockInput(now)
+	publishDate := CurrentPublishDateUTC(cfg.Schedule, now)
+	publishTime := PublishTimeUTC(cfg.Schedule, publishDate)
+
+	delay := publishTime.Sub(now)
+	if delay < 0 {
+		return 0
+	}
+	return delay
+}
+
+// loadDueSlotState loads the slot state.
+func (s *Service) loadDueSlotState(ctx context.Context, guildID string, cfg files.QOTDConfig, now time.Time) (currentSlotState, error) {
+	state := currentSlotState{}
+	schedule, err := resolvePublishSchedule(cfg)
+	if err != nil {
+		return state, nil
+	}
+
+	state.ScheduleConfigured = true
+	state.Schedule = schedule
+	state.PublishDateUTC = NormalizePublishDateUTC(now)
+	state.PublishAtUTC = PublishTimeUTC(schedule, state.PublishDateUTC)
+	state.OfficialPost, err = s.store.GetQOTDOfficialPostByDate(ctx, guildID, state.PublishDateUTC)
+	if err != nil {
+		return currentSlotState{}, fmt.Errorf("loadDueSlotState: %w", err)
+	}
+	return state, nil
 }

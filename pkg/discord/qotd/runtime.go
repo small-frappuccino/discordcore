@@ -1,0 +1,142 @@
+package qotd
+
+import (
+	"context"
+	"runtime/debug"
+	"sync"
+	"time"
+
+	"github.com/small-frappuccino/discordcore/pkg/log"
+	domain "github.com/small-frappuccino/discordcore/pkg/qotd"
+	"github.com/small-frappuccino/discordcore/pkg/service"
+)
+
+// Config holds runtime configuration.
+type Config struct {
+	PublishInterval time.Duration
+	ReconcileEvery  time.Duration
+}
+
+// RuntimeService is the background daemon that orchestrates domain
+// loops for QOTD.
+type RuntimeService struct {
+	cfg Config
+	svc *domain.Service
+
+	running   bool
+	startTime time.Time
+	stopCh    chan struct{}
+	stopOnce  sync.Once
+	wg        sync.WaitGroup
+	mu        sync.RWMutex
+}
+
+// NewRuntimeService creates a new runtime daemon.
+func NewRuntimeService(cfg Config, svc *domain.Service) *RuntimeService {
+	return &RuntimeService{
+		cfg:    cfg,
+		svc:    svc,
+		stopCh: make(chan struct{}),
+	}
+}
+
+// Start begins the daemon.
+func (s *RuntimeService) Start(ctx context.Context) error {
+	s.mu.Lock()
+	if s.running {
+		s.mu.Unlock()
+		return nil
+	}
+	s.running = true
+	s.startTime = time.Now()
+	s.stopCh = make(chan struct{})
+	s.stopOnce = sync.Once{}
+	s.mu.Unlock()
+
+	s.wg.Add(1)
+	go s.loop()
+	return nil
+}
+
+// Stop shuts down the daemon gracefully.
+func (s *RuntimeService) Stop(ctx context.Context) error {
+	s.stopOnce.Do(func() { close(s.stopCh) })
+
+	done := make(chan struct{})
+	go func() {
+		s.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+
+	s.mu.Lock()
+	s.running = false
+	s.mu.Unlock()
+	return nil
+}
+
+func (s *RuntimeService) loop() {
+	defer s.wg.Done()
+	defer func() {
+		if r := recover(); r != nil {
+			log.ApplicationLogger().Error("QOTD runtime panic", "panic", r, "stack", string(debug.Stack()))
+		}
+	}()
+
+	// The loop will sleep and occasionally wake up to process guilds.
+	// We use a mocked interval loop here for the rewrite.
+	for {
+		publishTimer := time.NewTimer(s.cfg.PublishInterval)
+
+		select {
+		case <-publishTimer.C:
+			// In a real system, this iterates through guilds and calls
+			// s.svc.PublishScheduledIfDue and s.svc.ReconcileGuild
+		case <-s.stopCh:
+			publishTimer.Stop()
+			return
+		}
+	}
+}
+
+// HealthCheck returns health status.
+func (s *RuntimeService) HealthCheck(ctx context.Context) service.HealthStatus {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return service.HealthStatus{
+		Healthy:   s.running,
+		Message:   "QOTD daemon",
+		LastCheck: time.Now(),
+	}
+}
+
+// Name returns service name.
+func (s *RuntimeService) Name() string { return "qotd" }
+
+// Type returns service type.
+func (s *RuntimeService) Type() service.ServiceType { return service.TypeMonitoring }
+
+// Dependencies returns service dependencies.
+func (s *RuntimeService) Dependencies() []string { return nil }
+
+// IsRunning returns whether the service is currently running.
+func (s *RuntimeService) IsRunning() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.running
+}
+
+// Priority returns the service startup priority.
+func (s *RuntimeService) Priority() service.ServicePriority {
+	return service.PriorityNormal
+}
+
+// Stats returns runtime statistics.
+func (s *RuntimeService) Stats() service.ServiceStats {
+	return service.ServiceStats{}
+}

@@ -30,7 +30,7 @@ type CommandHandler struct {
 	catalogCapabilities CommandCatalogCapabilities
 	catalogRegistrars   []CommandCatalogRegistrar
 	commandManager      *legacycore.CommandManager
-	qotdService         qotdcmd.QuestionCatalogService
+	qotdService         qotdcmd.Service
 	statsService        *stats.StatsService
 	moderationMetrics   moderation.Metrics
 	ticketService       *tickets.Service
@@ -232,7 +232,7 @@ func (ch *CommandHandler) GetCommandManager() *legacycore.CommandManager {
 }
 
 // SetQOTDService injects the QOTD application service for interactive QOTD commands.
-func (ch *CommandHandler) SetQOTDService(service qotdcmd.QuestionCatalogService) {
+func (ch *CommandHandler) SetQOTDService(service qotdcmd.Service) {
 	ch.qotdService = service
 }
 

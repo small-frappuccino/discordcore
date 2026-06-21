@@ -178,7 +178,7 @@ func runWithOptions(appName string, opts RunOptions) error {
 	startupTasks := NewStartupTaskOrchestrator(runtimeCount)
 	defer shutdownStartupServices(startupTasks, controlServerRegistry, "Startup background tasks did not finish cleanly")
 
-	qotdMetrics := &qotd.InMemoryMetrics{}
+	qotdMetrics := qotd.NopMetrics{}
 	qotdService := qotd.NewServiceWithMetrics(configManager, store, nil, qotdMetrics)
 
 	appClock := clock.NewHTTPClock("https://discord.com")
@@ -213,7 +213,6 @@ func runWithOptions(appName string, opts RunOptions) error {
 		commandCatalogRegistrars: opts.CommandCatalogRegistrars,
 		runtimeApplier:           runtimeApplier,
 		qotdCommandService:       qotdService,
-		qotdLifecycleService:     qotdService,
 		moderationMetrics:        moderationMetrics,
 		membersMetrics:           membersMetrics,
 		messagesMetrics:          messagesMetrics,
@@ -255,11 +254,6 @@ func runWithOptions(appName string, opts RunOptions) error {
 
 	attachCtx, attachCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer attachCancel()
-	if err := qotdMetrics.Attach(attachCtx); err != nil {
-		errWrap := fmt.Errorf("fatal abort: qotd metrics pipeline failed to attach: %w", err)
-		log.EmitBlockingError("Structural dependency failure: Core metrics pipeline desync", errWrap, log.GenerateRequestID())
-		return errWrap
-	}
 	if err := moderationMetrics.Attach(attachCtx); err != nil {
 		errWrap := fmt.Errorf("fatal abort: moderation metrics pipeline failed to attach: %w", err)
 		log.EmitBlockingError("Structural dependency failure: Moderation metrics pipeline desync", errWrap, log.GenerateRequestID())

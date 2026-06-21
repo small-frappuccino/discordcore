@@ -1,7 +1,6 @@
 package qotd
 
 import (
-	"errors"
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -15,8 +14,7 @@ type QuestionRecord = storage.QOTDQuestionRecord
 type OfficialPostRecord = storage.QOTDOfficialPostRecord
 
 // QuestionStatus is the lifecycle state of a QOTD question as it moves from
-// authoring through reservation to publication. See the QuestionStatus*
-// constants.
+// authoring through reservation to publication.
 type QuestionStatus string
 
 // QuestionStatusDraft defines question status draft.
@@ -61,8 +59,7 @@ func (p PublishNowParams) ShouldConsumeAutomaticSlot() bool {
 
 // OfficialPostState is the lifecycle state of an official QOTD post. It drives
 // reconcile behavior: most states are transient and advance automatically,
-// while Failed is retryable and Abandoned is terminal (see the constants below
-// and isUnrecoverableDiscordPublishError).
+// while Failed is retryable and Abandoned is terminal.
 type OfficialPostState string
 
 // OfficialPostStateArchiving defines official post state archiving.
@@ -71,6 +68,8 @@ type OfficialPostState string
 // OfficialPostStateProvisioning defines official post state provisioning.
 // OfficialPostStateMissingDiscord defines official post state missing discord.
 // OfficialPostStateCurrent defines official post state current.
+// OfficialPostStateFailed defines official post state failed.
+// OfficialPostStateAbandoned defines official post state abandoned.
 const (
 	OfficialPostStateProvisioning   OfficialPostState = "provisioning"
 	OfficialPostStateCurrent        OfficialPostState = "current"
@@ -78,21 +77,13 @@ const (
 	OfficialPostStateArchiving      OfficialPostState = "archiving"
 	OfficialPostStateArchived       OfficialPostState = "archived"
 	OfficialPostStateMissingDiscord OfficialPostState = "missing_discord"
-	// OfficialPostStateFailed is a transient failure (DB hiccup, DNS blip,
-	// 5xx from Discord). The reconcile loop retries it every cycle.
-	OfficialPostStateFailed OfficialPostState = "failed"
-	// OfficialPostStateAbandoned is a terminal failure that the bot cannot
-	// recover from on its own — the channel was deleted, the bot was kicked
-	// from the guild, or it lost the permissions to post. The reconcile loop
-	// must NOT retry these or it spams Discord every 15 minutes forever; an
-	// admin has to fix the Discord-side state and re-trigger publishing
-	// manually.
-	OfficialPostStateAbandoned OfficialPostState = "abandoned"
+	OfficialPostStateFailed         OfficialPostState = "failed"
+	OfficialPostStateAbandoned      OfficialPostState = "abandoned"
 )
 
 // AnswerRecordState is the lifecycle state of the answer surface attached to an
 // official post, tracked separately from the post itself so the answer thread
-// can be reconciled independently. See the AnswerRecordState* constants.
+// can be reconciled independently.
 type AnswerRecordState string
 
 // AnswerRecordStateActive defines answer record state active.
@@ -110,9 +101,6 @@ const (
 	AnswerRecordStateFailed         AnswerRecordState = "failed"
 )
 
-// ErrNoCurrentPublish defines err no current publish.
-var ErrNoCurrentPublish = errors.New("no current qotd publish found to replace")
-
 // AnswerWindow describes whether answers are currently accepted for a post and,
 // when open, the moment the window closes.
 type AnswerWindow struct {
@@ -123,8 +111,7 @@ type AnswerWindow struct {
 
 // OfficialPostLifecycle holds the computed timeline of a post: when it
 // publishes, becomes the previous post, and is archived, plus the derived state
-// and answer window. The times are deterministic functions of PublishDateUTC
-// and the schedule.
+// and answer window.
 type OfficialPostLifecycle struct {
 	PublishDateUTC    time.Time
 	PublishAt         time.Time
@@ -143,4 +130,64 @@ type DeckSummary struct {
 	CardsRemaining int
 	IsActive       bool
 	CanPublish     bool
+}
+
+// QuestionCounts holds aggregated statistics for a QOTD deck.
+type QuestionCounts struct {
+	Draft    int
+	Ready    int
+	Reserved int
+	Used     int
+	Disabled int
+}
+
+// PublishOfficialPostParams is the full set of inputs needed to publish (or
+// idempotently re-publish) an official QOTD post to Discord.
+type PublishOfficialPostParams struct {
+	GuildID                    string
+	OfficialPostID             int64
+	DisplayID                  int64
+	DeckName                   string
+	AvailableQuestions         int
+	ChannelID                  string
+	QuestionListThreadID       string
+	QuestionListEntryMessageID string
+	OfficialThreadID           string
+	OfficialStarterMessageID   string
+	OfficialAnswerChannelID    string
+	ExistingPublishedAt        time.Time
+	QuestionText               string
+	PublishDateUTC             time.Time
+	ThreadName                 string
+	Nonce                      string
+}
+
+// PublishedOfficialPost reports the Discord-side identifiers produced by a
+// successful publish, which the caller persists back onto the official-post
+// record.
+type PublishedOfficialPost struct {
+	QuestionListThreadID       string
+	QuestionListEntryMessageID string
+	ThreadID                   string
+	StarterMessageID           string
+	AnswerChannelID            string
+	PublishedAt                time.Time
+	PostURL                    string
+}
+
+// ThreadState is the desired pin/lock/archive state applied to a QOTD thread.
+type ThreadState struct {
+	Pinned   bool
+	Locked   bool
+	Archived bool
+}
+
+// DeleteOfficialPostParams carries the parameters to best-effort delete a QOTD official post from Discord.
+type DeleteOfficialPostParams struct {
+	GuildID                    string
+	DiscordThreadID            string
+	DiscordStarterMessageID    string
+	ChannelID                  string
+	QuestionListThreadID       string
+	QuestionListEntryMessageID string
 }

@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
@@ -216,10 +215,9 @@ func TestBotRuntime_InitializationRouting(t *testing.T) {
 			}
 
 			err := initializeBotRuntime(context.Background(), rt, botRuntimeOptions{
-				runtimeCount:         1,
-				configManager:        cfgMgr,
-				qotdLifecycleService: &mockQotdLifecycleService{},
-				store:                &storage.Store{},
+				runtimeCount:  1,
+				configManager: cfgMgr,
+				store:         &storage.Store{},
 			})
 			if err != nil {
 				t.Fatalf("unexpected init error: %v", err)
@@ -256,28 +254,3 @@ func TestBotRuntime_InitializationRouting(t *testing.T) {
 		})
 	}
 }
-
-type mockQotdLifecycleService struct{}
-
-func (m *mockQotdLifecycleService) InitializeGuilds(ctx context.Context, session *session.LegacySession, config *files.ConfigManager) error {
-	return nil
-}
-func (m *mockQotdLifecycleService) Start() {}
-func (m *mockQotdLifecycleService) Stop()  {}
-func (m *mockQotdLifecycleService) EnforcePoliciesNow(ctx context.Context, session *session.LegacySession, config *files.ConfigManager, guildID string) error {
-	return nil
-}
-func (m *mockQotdLifecycleService) GetRunningPolicyGoroutines() int { return 0 }
-func (m *mockQotdLifecycleService) StartThreadArchivePolicy(ctx context.Context, session *session.LegacySession, config *files.ConfigManager) {
-}
-func (m *mockQotdLifecycleService) NextScheduledPublishTime(guildID string, now time.Time) (time.Time, bool) {
-	return time.Time{}, false
-}
-func (m *mockQotdLifecycleService) PublishScheduledIfDue(ctx context.Context, guildID string) (bool, error) {
-	return false, nil
-}
-func (m *mockQotdLifecycleService) ReconcileGuild(ctx context.Context, guildID string) error {
-	return nil
-}
-func (m *mockQotdLifecycleService) ScheduleDailyAutomatedArchiveForGuild(guildID string) {}
-func (m *mockQotdLifecycleService) CancelDailyAutomatedArchiveForGuild(guildID string)   {}

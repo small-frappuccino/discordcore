@@ -6,6 +6,7 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/gateway"
 	discordclean "github.com/small-frappuccino/discordcore/pkg/discord/clean"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/clean"
 	embedscmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/embeds"
@@ -178,10 +179,32 @@ func TicketsCommandCatalogRegistrar() CommandCatalogRegistrar {
 // QOTDCommandCatalogRegistrar registers the QOTD domain slash command surfaces.
 func QOTDCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
-		Register: func(ch *CommandHandler, router *legacycore.CommandRouter) {
-			qotdcmd.NewCommands(ch.qotdService).RegisterCommands(router)
+		RegisterArikawa: func(ch *CommandHandler, router *legacycore.ArikawaCommandRouter) {
+			client := api.NewClient("Bot " + ch.session.Token)
+			handler := qotdcmd.NewCommandHandler(ch.qotdService, client)
+			shim := &qotdShim{handler: handler}
+			router.Register(shim)
+			router.RegisterComponent("qotd|", shim)
 		},
 	}
+}
+
+type qotdShim struct {
+	handler *qotdcmd.CommandHandler
+}
+
+func (s *qotdShim) Name() string                     { return "qotd" }
+func (s *qotdShim) Description() string              { return "Question of the Day management" }
+func (s *qotdShim) Options() []discord.CommandOption { return qotdcmd.CommandsList()[0].Options }
+func (s *qotdShim) RequiresGuild() bool              { return true }
+func (s *qotdShim) RequiresPermissions() bool        { return true }
+func (s *qotdShim) Handle(ctx *legacycore.ArikawaContext) error {
+	s.handler.HandleInteraction(&gateway.InteractionCreateEvent{InteractionEvent: *ctx.Interaction})
+	return nil
+}
+func (s *qotdShim) HandleComponent(ctx *legacycore.ArikawaContext) error {
+	s.handler.HandleInteraction(&gateway.InteractionCreateEvent{InteractionEvent: *ctx.Interaction})
+	return nil
 }
 
 // StatsCommandCatalogRegistrar registers the stats domain slash command surface.

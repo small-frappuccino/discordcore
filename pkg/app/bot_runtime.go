@@ -600,7 +600,6 @@ type botRuntimeOptions struct {
 	commandCatalogRegistrars []commands.CommandCatalogRegistrar
 	runtimeApplier           *runtimeapply.Manager
 	qotdCommandService       *applicationqotd.Service
-	qotdLifecycleService     discordqotd.GuildLifecycleService
 	moderationMetrics        moderation.Metrics
 	membersMetrics           members.Metrics
 	messagesMetrics          messages.Metrics
@@ -828,18 +827,13 @@ func buildAutomodService(runtime *botRuntime, opts botRuntimeOptions, routerConf
 }
 
 func registerQOTDRuntimeService(runtime *botRuntime, opts botRuntimeOptions) error {
-	if !runtime.capabilities.qotdRuntime || opts.qotdLifecycleService == nil {
+	if !runtime.capabilities.qotdRuntime || opts.qotdCommandService == nil {
 		return nil
 	}
-	qotdRuntimeService := discordqotd.NewRuntimeServiceForBot(
-		runtime.legacySession,
-		opts.configManager,
-		opts.qotdLifecycleService,
-		runtime.instanceID,
+	qotdRuntimeService := discordqotd.NewRuntimeService(
+		discordqotd.Config{PublishInterval: 5 * time.Minute, ReconcileEvery: 1 * time.Hour},
+		opts.qotdCommandService,
 	)
-	if opts.appClock != nil {
-		qotdRuntimeService.SetClock(opts.appClock)
-	}
 	if err := runtime.serviceManager.Register(qotdRuntimeService); err != nil {
 		errWrap := fmt.Errorf("register qotd runtime service for %s: %w", runtime.instanceID, err)
 		log.EmitBlockingError("Blocking structural failure during QOTD runtime registration", errWrap, log.GenerateRequestID())

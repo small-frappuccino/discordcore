@@ -10,38 +10,13 @@ import (
 	"testing"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	applicationqotd "github.com/small-frappuccino/discordcore/pkg/qotd"
-	"github.com/small-frappuccino/discordcore/pkg/storage"
 	"github.com/small-frappuccino/discordgo"
 )
 
 type handlerQOTDServiceStub struct{}
 
-func (handlerQOTDServiceStub) Settings(string) (files.QOTDConfig, error) {
-	return files.QOTDConfig{}, nil
-}
-func (handlerQOTDServiceStub) ListQuestions(context.Context, string, string) ([]storage.QOTDQuestionRecord, error) {
-	return nil, nil
-}
-func (handlerQOTDServiceStub) CreateQuestion(context.Context, string, string, applicationqotd.QuestionMutation) (*storage.QOTDQuestionRecord, error) {
-	return nil, nil
-}
-func (handlerQOTDServiceStub) DeleteQuestion(context.Context, string, int64) error { return nil }
-func (handlerQOTDServiceStub) RestoreUsedQuestion(context.Context, string, string, int64) (*storage.QOTDQuestionRecord, error) {
-	return nil, nil
-}
-func (handlerQOTDServiceStub) MarkQuestionPublished(context.Context, string, string, int64) (*storage.QOTDQuestionRecord, error) {
-	return nil, nil
-}
-func (handlerQOTDServiceStub) GetAutomaticQueueState(context.Context, string, string) (applicationqotd.AutomaticQueueState, error) {
-	return applicationqotd.AutomaticQueueState{}, nil
-}
-func (handlerQOTDServiceStub) PublishNowWithParams(context.Context, string, *discordgo.Session, applicationqotd.PublishNowParams) (*applicationqotd.PublishResult, error) {
-	return nil, nil
-}
-
-func (handlerQOTDServiceStub) ReplaceCurrentPublish(context.Context, string, *discordgo.Session) (*applicationqotd.PublishResult, error) {
-	return nil, nil
+func (handlerQOTDServiceStub) ExecuteInGuildActorWithResult(guildID string, fn func() (any, error)) (any, error) {
+	return fn()
 }
 
 func newCommandHandlerSession(t *testing.T, handler http.HandlerFunc) *discordgo.Session {

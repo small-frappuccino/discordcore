@@ -52,7 +52,7 @@ func (p *dualSDKPublisher) getArikawaPublisher(guildID string) (domain.Publisher
 			slog.String("bot_instance_id", botInstanceID),
 			slog.String("guild_id", guildID),
 		)
-		return qotd.NewArikawaPublisher(st), nil
+		return qotd.NewArikawaPublisher(st.Session.Client), nil
 	}
 
 	// Fallback to legacy session token extraction to instantiate Arikawa capability wrapper.
@@ -75,7 +75,7 @@ func (p *dualSDKPublisher) getArikawaPublisher(guildID string) (domain.Publisher
 	st := state.New("Bot " + strings.TrimPrefix(token, "Bot "))
 	p.clients[botInstanceID] = st
 
-	return qotd.NewArikawaPublisher(st), nil
+	return qotd.NewArikawaPublisher(st.Session.Client), nil
 }
 
 // PublishOfficialPost implements domain.Publisher by routing the call to Arikawa.
