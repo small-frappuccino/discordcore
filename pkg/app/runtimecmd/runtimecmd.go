@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -52,6 +53,8 @@ func Run(args []string, output io.Writer, spec Spec, runner Runner) error {
 		envPath := filepath.Join(dir, ".env")
 		if _, err := os.Stat(envPath); err == nil {
 			if err := godotenv.Load(envPath); err != nil {
+				slog.Error("failed to load .env", slog.String("path", envPath), slog.Any("error", err))
+
 				return fmt.Errorf("failed to load .env from PATH (%s): %w", envPath, err)
 			}
 			break
@@ -61,6 +64,8 @@ func Run(args []string, output io.Writer, spec Spec, runner Runner) error {
 	discordcoreapp.SetAppVersion(discordcoreapp.Version)
 
 	if err := runner(spec.RuntimeAppName, spec.BuildRunOptions()); err != nil {
+		slog.Error("Runner execution failed", slog.String("app_name", spec.RuntimeAppName), slog.Any("error", err))
+
 		return err
 	}
 	return nil

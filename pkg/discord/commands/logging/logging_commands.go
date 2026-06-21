@@ -2,6 +2,7 @@ package logging
 
 import (
 	"fmt"
+	"log/slog"
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
@@ -189,6 +190,7 @@ func (c *loggingRootCommand) handleAvatar(ctx *commands.ArikawaContext, opts []d
 		return err
 	}
 
+	slog.Info("Operational telemetry: Logging channel updated", slog.String("channel_id", channelID))
 	return ctx.Respond(api.InteractionResponseData{
 		Content: option.NewNullableString("Avatar update logs will now be sent to <#" + channelID + ">."),
 	})
@@ -206,6 +208,7 @@ func (c *loggingRootCommand) handleRoleUpdate(ctx *commands.ArikawaContext, opts
 		return err
 	}
 
+	slog.Info("Operational telemetry: Logging channel updated", slog.String("channel_id", channelID))
 	return ctx.Respond(api.InteractionResponseData{
 		Content: option.NewNullableString("Role update logs will now be sent to <#" + channelID + ">."),
 	})
@@ -224,6 +227,7 @@ func (c *loggingRootCommand) handleAutomod(ctx *commands.ArikawaContext, opts []
 
 		rule, err := ctx.Client.GetAutoModerationRule(guildID, discord.AutoModerationRuleID(ruleID))
 		if err != nil {
+			slog.Info("Operational telemetry: Logging channel updated", slog.String("channel_id", channelID))
 			return ctx.Respond(api.InteractionResponseData{
 				Content: option.NewNullableString(fmt.Sprintf("Failed to fetch rule `%s`: %v\nThe logging channel was NOT configured internally because the Discord native rule could not be found.", ruleIDStr, err)),
 			})
@@ -256,6 +260,7 @@ func (c *loggingRootCommand) handleAutomod(ctx *commands.ArikawaContext, opts []
 			Actions: &rule.Actions,
 		})
 		if err != nil {
+			slog.Info("Operational telemetry: Logging channel updated", slog.String("channel_id", channelID))
 			return ctx.Respond(api.InteractionResponseData{
 				Content: option.NewNullableString(fmt.Sprintf("Failed to update Discord rule `%s`: %v\nThe logging channel was NOT configured internally because the Discord native rule could not be updated.", ruleIDStr, err)),
 			})
@@ -290,6 +295,7 @@ func (c *loggingRootCommand) handleAutomod(ctx *commands.ArikawaContext, opts []
 		return err
 	}
 
+	slog.Info("Operational telemetry: Logging channel updated", slog.String("channel_id", channelID))
 	return ctx.Respond(api.InteractionResponseData{
 		Content: option.NewNullableString(desc),
 	})
@@ -308,6 +314,7 @@ func (c *loggingRootCommand) handleMessages(ctx *commands.ArikawaContext, opts [
 		return err
 	}
 
+	slog.Info("Operational telemetry: Logging channel updated", slog.String("channel_id", channelID))
 	return ctx.Respond(api.InteractionResponseData{
 		Content: option.NewNullableString("Message edit and delete logs will now be sent to <#" + channelID + ">."),
 	})
@@ -325,6 +332,7 @@ func (c *loggingRootCommand) handleEntry(ctx *commands.ArikawaContext, opts []di
 		return err
 	}
 
+	slog.Info("Operational telemetry: Logging channel updated", slog.String("channel_id", channelID))
 	return ctx.Respond(api.InteractionResponseData{
 		Content: option.NewNullableString("Member join logs will now be sent to <#" + channelID + ">."),
 	})
@@ -342,6 +350,7 @@ func (c *loggingRootCommand) handleExit(ctx *commands.ArikawaContext, opts []dis
 		return err
 	}
 
+	slog.Info("Operational telemetry: Logging channel updated", slog.String("channel_id", channelID))
 	return ctx.Respond(api.InteractionResponseData{
 		Content: option.NewNullableString("Member leave logs will now be sent to <#" + channelID + ">."),
 	})
@@ -365,6 +374,7 @@ func (c *loggingRootCommand) handleWarnings(ctx *commands.ArikawaContext, opts [
 		return err
 	}
 
+	slog.Info("Operational telemetry: Logging channel updated", slog.String("channel_id", channelID))
 	return ctx.Respond(api.InteractionResponseData{
 		Content: option.NewNullableString("Moderation action logs will now be sent to <#" + channelID + ">\nScope: `" + scope + "`"),
 	})

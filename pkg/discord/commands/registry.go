@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"log/slog"
 	"sync"
 )
 
@@ -30,6 +31,10 @@ func (r *CommandRegistry) Register(cmd ArikawaCommand) {
 	// during multi-module concurrent registration at bot boot sequence.
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
+	slog.Info("Architectural state transition: Registering native command",
+		slog.String("command_name", cmd.Name()),
+	)
 
 	r.commands[cmd.Name()] = cmd
 }

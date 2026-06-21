@@ -3,6 +3,7 @@ package clean
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
@@ -182,8 +183,19 @@ func (c *CleanCommand) Handle(ctx *commands.ArikawaContext) error {
 
 	deleted, err := c.cleanExecutor.ExecuteClean(context.Background(), ctx.Interaction.ChannelID, filter, auditChannel, ctx.UserID.String())
 	if err != nil {
+		slog.Error("Blocking structural failure restricted to operational scope: execute clean failed",
+			slog.String("guild_id", ctx.GuildID.String()),
+			slog.String("channel_id", ctx.Interaction.ChannelID.String()),
+			slog.String("error", err.Error()),
+		)
 		return &EphemeralError{UserMessage: "Failed to clean messages.", InternalErr: err}
 	}
+
+	slog.Info("Operational telemetry: ExecuteClean completed successfully",
+		slog.String("guild_id", ctx.GuildID.String()),
+		slog.String("channel_id", ctx.Interaction.ChannelID.String()),
+		slog.Int("deleted_count", deleted),
+	)
 
 	msg := fmt.Sprintf("Cleaned %d message(s).", deleted)
 	_, editErr := ctx.Client.EditInteractionResponse(ctx.Interaction.AppID, ctx.Interaction.Token, api.EditInteractionResponseData{

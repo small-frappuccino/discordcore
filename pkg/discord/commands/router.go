@@ -61,6 +61,10 @@ func (r *CommandRouter) HandleEvent(event *discord.InteractionEvent) error {
 	case *discord.CommandInteraction:
 		cmd, exists := r.registry.GetCommand(data.Name)
 		if !exists {
+			slog.Warn("Intercepted service degradation: Unregistered command executed",
+				slog.String("command", data.Name),
+				slog.String("interaction_id", event.ID.String()),
+			)
 			return ErrCommandNotFound
 		}
 
@@ -106,6 +110,11 @@ func (r *CommandRouter) HandleEvent(event *discord.InteractionEvent) error {
 					r.logHandlerError("component", matchedID, event, err)
 					return err
 				}
+			} else {
+				slog.Warn("Intercepted service degradation: Unregistered component executed",
+					slog.String("custom_id", rawID),
+					slog.String("interaction_id", event.ID.String()),
+				)
 			}
 		}
 		return nil
