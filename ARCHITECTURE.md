@@ -33,7 +33,6 @@ flowchart TD
     CommandsClean["pkg/discord/commands/clean"]
     CommandsCore["pkg/discord/commands/core"]
     CommandsEmbeds["pkg/discord/commands/embeds"]
-    CommandsLegacycore["pkg/discord/commands/legacycore"]
     CommandsLogging["pkg/discord/commands/logging"]
     CommandsModeration["pkg/discord/commands/moderation"]
     CommandsPartners["pkg/discord/commands/partners"]
@@ -128,15 +127,29 @@ flowchart TD
     AdapterWebhook --> Log
     App --> AdapterAutomod
     App --> AdapterCache
+    App --> AdapterClean
+    App --> AdapterEmbeds
     App --> AdapterLogging
+    App --> AdapterModeration
+    App --> AdapterPartners
     App --> AdapterQotd
+    App --> AdapterRoles
     App --> AdapterSession
     App --> AdapterStats
+    App --> AdapterTickets
     App --> AdapterWebhook
     App --> Arikawa
     App --> Clock
     App --> Commands
+    App --> CommandsClean
+    App --> CommandsEmbeds
+    App --> CommandsLogging
     App --> CommandsModeration
+    App --> CommandsPartners
+    App --> CommandsQotd
+    App --> CommandsRoles
+    App --> CommandsRuntime
+    App --> CommandsStats
     App --> Control
     App --> ControlLocaltls
     App --> DiscordGo
@@ -153,65 +166,38 @@ flowchart TD
     App --> Storage
     App --> Task
     AppRuntimecmd --> App
-    AppRuntimecmd --> Commands
     Automod --> Arikawa
     Clock --> Log
     CmdClean-config --> Files
     CmdClean-config --> Persistence
     CmdDiscordcore --> App
     CmdDiscordcore --> AppRuntimecmd
-    Commands --> AdapterClean
-    Commands --> AdapterEmbeds
-    Commands --> AdapterModeration
-    Commands --> AdapterPartners
-    Commands --> AdapterRoles
-    Commands --> AdapterTickets
     Commands --> Arikawa
-    Commands --> CommandsClean
-    Commands --> CommandsEmbeds
-    Commands --> CommandsLegacycore
-    Commands --> CommandsLogging
-    Commands --> CommandsModeration
-    Commands --> CommandsPartners
-    Commands --> CommandsQotd
-    Commands --> CommandsRoles
-    Commands --> CommandsRuntime
-    Commands --> CommandsStats
     Commands --> DiscordGo
     Commands --> Files
-    Commands --> Service
-    Commands --> Stats
+    Commands --> Log
+    Commands --> Theme
     CommandsClean --> Arikawa
     CommandsClean --> Clean
-    CommandsClean --> CommandsLegacycore
+    CommandsClean --> Commands
     CommandsClean --> Files
     CommandsCore --> Arikawa
     CommandsEmbeds --> AdapterEmbeds
     CommandsEmbeds --> Arikawa
-    CommandsEmbeds --> CommandsLegacycore
+    CommandsEmbeds --> Commands
     CommandsEmbeds --> Discord
     CommandsEmbeds --> Files
-    CommandsLegacycore --> AdapterCache
-    CommandsLegacycore --> AdapterPerf
-    CommandsLegacycore --> Arikawa
-    CommandsLegacycore --> DiscordGo
-    CommandsLegacycore --> Files
-    CommandsLegacycore --> Log
-    CommandsLegacycore --> Runtimeapply
-    CommandsLegacycore --> Storage
-    CommandsLegacycore --> Task
-    CommandsLegacycore --> Theme
     CommandsLogging --> Arikawa
-    CommandsLogging --> CommandsLegacycore
+    CommandsLogging --> Commands
     CommandsLogging --> Files
     CommandsModeration --> AdapterModeration
     CommandsModeration --> Arikawa
-    CommandsModeration --> CommandsLegacycore
+    CommandsModeration --> Commands
     CommandsModeration --> Files
     CommandsModeration --> Moderation
     CommandsPartners --> AdapterPartners
     CommandsPartners --> Arikawa
-    CommandsPartners --> CommandsLegacycore
+    CommandsPartners --> Commands
     CommandsPartners --> Discord
     CommandsPartners --> Files
     CommandsPartners --> Theme
@@ -219,12 +205,12 @@ flowchart TD
     CommandsQotd --> Log
     CommandsRoles --> AdapterRoles
     CommandsRoles --> Arikawa
-    CommandsRoles --> CommandsLegacycore
+    CommandsRoles --> Commands
     CommandsRoles --> Files
     CommandsRuntime --> Arikawa
     CommandsRuntime --> Files
     CommandsStats --> Arikawa
-    CommandsStats --> CommandsLegacycore
+    CommandsStats --> Commands
     CommandsStats --> Files
     CommandsTickets --> AdapterTickets
     CommandsTickets --> Arikawa
@@ -293,7 +279,7 @@ flowchart TD
     classDef ui fill:#A3BE8C,stroke:#8FBCBB,stroke-width:2px,color:#2E3440;
 
     class App,AppRuntimecmd,Files,Persistence,Runtimeapply,Storage,StorageStoragetest core;
-    class Discord,AdapterAutomod,AdapterCache,AdapterClean,Commands,CommandsClean,CommandsCore,CommandsEmbeds,CommandsLegacycore,CommandsLogging,CommandsModeration,CommandsPartners,CommandsQotd,CommandsRoles,CommandsRuntime,CommandsStats,CommandsTickets,AdapterEmbeds,AdapterLogging,AdapterMembers,AdapterMessages,AdapterModeration,AdapterPartners,AdapterPerf,AdapterQotd,AdapterRoles,AdapterSession,AdapterStats,AdapterTickets,AdapterWebhook adapter;
+    class Discord,AdapterAutomod,AdapterCache,AdapterClean,Commands,CommandsClean,CommandsCore,CommandsEmbeds,CommandsLogging,CommandsModeration,CommandsPartners,CommandsQotd,CommandsRoles,CommandsRuntime,CommandsStats,CommandsTickets,AdapterEmbeds,AdapterLogging,AdapterMembers,AdapterMessages,AdapterModeration,AdapterPartners,AdapterPerf,AdapterQotd,AdapterRoles,AdapterSession,AdapterStats,AdapterTickets,AdapterWebhook adapter;
     class Automod,Clean,Control,ControlLocaltls,Logging,Members,Messages,Moderation,Qotd,Stats,Task,Tickets feature;
     class Clock,Idgen,Log,Observability,Service,Testdb,Theme infra;
     class DiscordGo,Arikawa,DiscordAPI,DiscordGateway external;

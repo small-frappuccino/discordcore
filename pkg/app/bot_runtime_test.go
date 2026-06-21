@@ -7,7 +7,6 @@ import (
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/state"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/discord/session"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/storage"
@@ -105,10 +104,10 @@ func TestBotRuntime_InitializationRouting(t *testing.T) {
 		newCommandHandlerForBot = origNewCommandHandlerForBot
 		setupCommandHandler = origSetupCommandHandler
 	})
-	newCommandHandlerForBot = func(session *session.LegacySession, configManager *files.ConfigManager, botInstanceID string) *commands.CommandHandler {
-		return commands.NewCommandHandlerForBot(session, configManager, botInstanceID)
+	newCommandHandlerForBot = func(session *session.LegacySession, configManager *files.ConfigManager, botInstanceID string) *CommandHandler {
+		return NewCommandHandlerForBot(session, configManager, botInstanceID)
 	}
-	setupCommandHandler = func(ch *commands.CommandHandler) error { return nil }
+	setupCommandHandler = func(ch *CommandHandler) error { return nil }
 
 	tests := []struct {
 		name                 string

@@ -1,4 +1,4 @@
-package legacycore
+package commands
 
 import (
 	"time"

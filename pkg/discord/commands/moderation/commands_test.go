@@ -5,7 +5,7 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	discordmod "github.com/small-frappuccino/discordcore/pkg/discord/moderation"
 )
 
@@ -44,11 +44,11 @@ func TestCommands_StatelessExecution(t *testing.T) {
 	banCmd := NewBanCommand(svc, metricsBan, nil)
 	timeoutCmd := NewTimeoutCommand(svc, metricsTimeout, nil)
 
-	ctx1 := &legacycore.ArikawaContext{
+	ctx1 := &commands.ArikawaContext{
 		GuildID: discord.GuildID(123),
 		Client:  nil, // EditInteractionResponse will panic, but we only check metrics routing before that.
 	}
-	ctx2 := &legacycore.ArikawaContext{
+	ctx2 := &commands.ArikawaContext{
 		GuildID: discord.GuildID(123),
 		Client:  nil,
 	}

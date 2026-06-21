@@ -13,7 +13,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
 	localdiscord "github.com/small-frappuccino/discordcore/pkg/discord"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	embedsvc "github.com/small-frappuccino/discordcore/pkg/discord/embeds"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
@@ -70,7 +70,7 @@ func NewEmbedCommands(configManager *files.ConfigManager, embedService *embedsvc
 }
 
 // RegisterCommands binds the /embed slash group and its nested execution trees to the application router.
-func (ec *EmbedCommands) RegisterCommands(router *legacycore.ArikawaCommandRouter) {
+func (ec *EmbedCommands) RegisterCommands(router *commands.CommandRouter) {
 	if router == nil || ec == nil || ec.configManager == nil {
 		return
 	}
@@ -79,7 +79,7 @@ func (ec *EmbedCommands) RegisterCommands(router *legacycore.ArikawaCommandRoute
 		slog.String("component", "EmbedCommands"),
 	)
 
-	embedGroup := legacycore.NewArikawaGroupCommand(
+	embedGroup := commands.NewArikawaGroupCommand(
 		embedCommandName,
 		"Manage custom embeds for this server",
 	)
@@ -93,7 +93,7 @@ func (ec *EmbedCommands) RegisterCommands(router *legacycore.ArikawaCommandRoute
 	embedGroup.AddSubCommand(newEmbedImportSubCommand(ec.configManager))
 	embedGroup.AddSubCommand(newEmbedExportSubCommand(ec.configManager))
 
-	fieldGroup := legacycore.NewArikawaGroupCommand(
+	fieldGroup := commands.NewArikawaGroupCommand(
 		embedFieldGroupName,
 		"Manage the fields on a custom embed",
 	)
@@ -116,8 +116,8 @@ func embedKeyOption(required bool) discord.CommandOption {
 	}
 }
 
-func embedKeyFromOptions(ctx *legacycore.ArikawaContext) (string, error) {
-	opts := legacycore.ArikawaOptionList(legacycore.GetArikawaSubCommandOptions(ctx.Interaction))
+func embedKeyFromOptions(ctx *commands.ArikawaContext) (string, error) {
+	opts := commands.ArikawaOptionList(commands.GetArikawaSubCommandOptions(ctx.Interaction))
 	key := opts.String(embedOptionKey)
 	if key == "" {
 		return "", errors.New("a non-empty key option is required")
@@ -140,14 +140,14 @@ func loadCustomEmbed(cm *files.ConfigManager, guildID discord.GuildID, key strin
 	return ce, nil
 }
 
-func respondEphemeralError(ctx *legacycore.ArikawaContext, message string) error {
+func respondEphemeralError(ctx *commands.ArikawaContext, message string) error {
 	return ctx.Respond(api.InteractionResponseData{
 		Content: option.NewNullableString("❌ " + message),
 		Flags:   discord.EphemeralMessage,
 	})
 }
 
-func respondStructuralError(ctx *legacycore.ArikawaContext, action string, err error) error {
+func respondStructuralError(ctx *commands.ArikawaContext, action string, err error) error {
 	slog.Error("Blocking structural failure restricted to operational scope",
 		slog.String("req_id", ctx.GuildID.String()),
 		slog.String("stack_trace", string(debug.Stack())),
@@ -157,14 +157,14 @@ func respondStructuralError(ctx *legacycore.ArikawaContext, action string, err e
 	return respondEphemeralError(ctx, fmt.Sprintf("%s: %v", action, err))
 }
 
-func respondEphemeralSuccess(ctx *legacycore.ArikawaContext, message string) error {
+func respondEphemeralSuccess(ctx *commands.ArikawaContext, message string) error {
 	return ctx.Respond(api.InteractionResponseData{
 		Content: option.NewNullableString(message),
 		Flags:   discord.EphemeralMessage,
 	})
 }
 
-func refreshCustomEmbedPostingsBestEffort(cm *files.ConfigManager, svc *embedsvc.EmbedService, ctx *legacycore.ArikawaContext, key string) string {
+func refreshCustomEmbedPostingsBestEffort(cm *files.ConfigManager, svc *embedsvc.EmbedService, ctx *commands.ArikawaContext, key string) string {
 	if cm == nil || svc == nil || ctx == nil {
 		return ""
 	}
@@ -220,7 +220,7 @@ func (c *embedPostSubCommand) Options() []discord.CommandOption {
 }
 func (c *embedPostSubCommand) RequiresGuild() bool       { return true }
 func (c *embedPostSubCommand) RequiresPermissions() bool { return true }
-func (c *embedPostSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *embedPostSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	key, err := embedKeyFromOptions(ctx)
 	if err != nil {
 		return respondEphemeralError(ctx, err.Error())
@@ -230,7 +230,7 @@ func (c *embedPostSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
 		return respondEphemeralError(ctx, err.Error())
 	}
 
-	opts := legacycore.ArikawaOptionList(legacycore.GetArikawaSubCommandOptions(ctx.Interaction))
+	opts := commands.ArikawaOptionList(commands.GetArikawaSubCommandOptions(ctx.Interaction))
 	channelID := ctx.Interaction.ChannelID
 	if chID := opts.ChannelID(embedOptionChannel); chID != "" {
 		cid, _ := discord.ParseSnowflake(chID)
@@ -281,7 +281,7 @@ func (c *embedPreviewSubCommand) Options() []discord.CommandOption {
 }
 func (c *embedPreviewSubCommand) RequiresGuild() bool       { return true }
 func (c *embedPreviewSubCommand) RequiresPermissions() bool { return true }
-func (c *embedPreviewSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *embedPreviewSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	key, err := embedKeyFromOptions(ctx)
 	if err != nil {
 		return respondEphemeralError(ctx, err.Error())
@@ -333,12 +333,12 @@ func (c *embedSetSubCommand) Options() []discord.CommandOption {
 }
 func (c *embedSetSubCommand) RequiresGuild() bool       { return true }
 func (c *embedSetSubCommand) RequiresPermissions() bool { return true }
-func (c *embedSetSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *embedSetSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	key, err := embedKeyFromOptions(ctx)
 	if err != nil {
 		return respondEphemeralError(ctx, err.Error())
 	}
-	opts := legacycore.ArikawaOptionList(legacycore.GetArikawaSubCommandOptions(ctx.Interaction))
+	opts := commands.ArikawaOptionList(commands.GetArikawaSubCommandOptions(ctx.Interaction))
 
 	current, fetchErr := c.configManager.CustomEmbed(ctx.GuildID.String(), key)
 	if fetchErr != nil && !errors.Is(fetchErr, files.ErrCustomEmbedNotFound) {
@@ -399,7 +399,7 @@ func (c *embedDeleteSubCommand) Options() []discord.CommandOption {
 }
 func (c *embedDeleteSubCommand) RequiresGuild() bool       { return true }
 func (c *embedDeleteSubCommand) RequiresPermissions() bool { return true }
-func (c *embedDeleteSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *embedDeleteSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	key, err := embedKeyFromOptions(ctx)
 	if err != nil {
 		return respondEphemeralError(ctx, err.Error())
@@ -428,7 +428,7 @@ func (c *embedListSubCommand) Description() string              { return "List c
 func (c *embedListSubCommand) Options() []discord.CommandOption { return nil }
 func (c *embedListSubCommand) RequiresGuild() bool              { return true }
 func (c *embedListSubCommand) RequiresPermissions() bool        { return true }
-func (c *embedListSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *embedListSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	embeds, err := c.configManager.CustomEmbeds(ctx.GuildID.String())
 	if err != nil {
 		return respondEphemeralError(ctx, fmt.Sprintf("Failed to list embeds: %v", err))
@@ -463,7 +463,7 @@ func (c *embedRefreshSubCommand) Options() []discord.CommandOption {
 }
 func (c *embedRefreshSubCommand) RequiresGuild() bool       { return true }
 func (c *embedRefreshSubCommand) RequiresPermissions() bool { return true }
-func (c *embedRefreshSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *embedRefreshSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	key, err := embedKeyFromOptions(ctx)
 	if err != nil {
 		return respondEphemeralError(ctx, err.Error())
@@ -515,8 +515,8 @@ func (c *embedUnpostSubCommand) Options() []discord.CommandOption {
 }
 func (c *embedUnpostSubCommand) RequiresGuild() bool       { return true }
 func (c *embedUnpostSubCommand) RequiresPermissions() bool { return true }
-func (c *embedUnpostSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
-	opts := legacycore.ArikawaOptionList(legacycore.GetArikawaSubCommandOptions(ctx.Interaction))
+func (c *embedUnpostSubCommand) Handle(ctx *commands.ArikawaContext) error {
+	opts := commands.ArikawaOptionList(commands.GetArikawaSubCommandOptions(ctx.Interaction))
 	messageID := opts.String(embedOptionMessageID)
 	if messageID == "" {
 		return respondEphemeralError(ctx, "A message ID is required.")
@@ -568,12 +568,12 @@ func (c *embedFieldAddSubCommand) Options() []discord.CommandOption {
 }
 func (c *embedFieldAddSubCommand) RequiresGuild() bool       { return true }
 func (c *embedFieldAddSubCommand) RequiresPermissions() bool { return true }
-func (c *embedFieldAddSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *embedFieldAddSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	key, err := embedKeyFromOptions(ctx)
 	if err != nil {
 		return respondEphemeralError(ctx, err.Error())
 	}
-	opts := legacycore.ArikawaOptionList(legacycore.GetArikawaSubCommandOptions(ctx.Interaction))
+	opts := commands.ArikawaOptionList(commands.GetArikawaSubCommandOptions(ctx.Interaction))
 
 	name := opts.String(embedOptionFieldName)
 	value := opts.String(embedOptionFieldValue)
@@ -612,12 +612,12 @@ func (c *embedFieldRemoveSubCommand) Options() []discord.CommandOption {
 }
 func (c *embedFieldRemoveSubCommand) RequiresGuild() bool       { return true }
 func (c *embedFieldRemoveSubCommand) RequiresPermissions() bool { return true }
-func (c *embedFieldRemoveSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *embedFieldRemoveSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	key, err := embedKeyFromOptions(ctx)
 	if err != nil {
 		return respondEphemeralError(ctx, err.Error())
 	}
-	opts := legacycore.ArikawaOptionList(legacycore.GetArikawaSubCommandOptions(ctx.Interaction))
+	opts := commands.ArikawaOptionList(commands.GetArikawaSubCommandOptions(ctx.Interaction))
 	if !opts.HasOption(embedOptionFieldIndex) {
 		return respondEphemeralError(ctx, "A field index is required.")
 	}
@@ -647,7 +647,7 @@ func (c *embedFieldListSubCommand) Options() []discord.CommandOption {
 }
 func (c *embedFieldListSubCommand) RequiresGuild() bool       { return true }
 func (c *embedFieldListSubCommand) RequiresPermissions() bool { return true }
-func (c *embedFieldListSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *embedFieldListSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	key, err := embedKeyFromOptions(ctx)
 	if err != nil {
 		return respondEphemeralError(ctx, err.Error())
@@ -688,13 +688,13 @@ func (c *embedImportSubCommand) Options() []discord.CommandOption {
 }
 func (c *embedImportSubCommand) RequiresGuild() bool       { return true }
 func (c *embedImportSubCommand) RequiresPermissions() bool { return true }
-func (c *embedImportSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *embedImportSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	key, err := embedKeyFromOptions(ctx)
 	if err != nil {
 		return respondEphemeralError(ctx, err.Error())
 	}
 
-	opts := legacycore.ArikawaOptionList(legacycore.GetArikawaSubCommandOptions(ctx.Interaction))
+	opts := commands.ArikawaOptionList(commands.GetArikawaSubCommandOptions(ctx.Interaction))
 	pasteURL := opts.String(embedOptionURL)
 
 	data, err := localdiscord.FetchPastebinContent(context.Background(), pasteURL)
@@ -737,7 +737,7 @@ func (c *embedExportSubCommand) Options() []discord.CommandOption {
 }
 func (c *embedExportSubCommand) RequiresGuild() bool       { return true }
 func (c *embedExportSubCommand) RequiresPermissions() bool { return true }
-func (c *embedExportSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *embedExportSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	key, err := embedKeyFromOptions(ctx)
 	if err != nil {
 		return respondEphemeralError(ctx, err.Error())

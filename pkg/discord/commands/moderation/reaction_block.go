@@ -5,7 +5,7 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/discord"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
@@ -55,7 +55,7 @@ func (c *ReactionBlockCommand) DefaultMemberPermissions() discord.Permissions {
 	return discord.PermissionManageMessages
 }
 
-func (c *ReactionBlockCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *ReactionBlockCommand) Handle(ctx *commands.ArikawaContext) error {
 	c.metrics.RecordCommandExec("reaction_block")
 
 	if !ctx.GuildID.IsValid() {

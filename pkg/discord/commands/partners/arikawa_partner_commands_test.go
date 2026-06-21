@@ -9,7 +9,7 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	partnersvc "github.com/small-frappuccino/discordcore/pkg/discord/partners"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
@@ -87,7 +87,7 @@ func TestPartnerCommands_ConcurrentStateMutation(t *testing.T) {
 				{Name: optionLink, Type: discord.StringOptionType, Value: []byte(`"https://discord.gg/test"`)},
 			}
 
-			actx := &legacycore.ArikawaContext{
+			actx := &commands.ArikawaContext{
 				Client: client.Client,
 				Interaction: &discord.InteractionEvent{
 					GuildID: discord.GuildID(12345),
@@ -116,7 +116,7 @@ func TestPartnerCommands_ConcurrentStateMutation(t *testing.T) {
 				{Name: optionName, Type: discord.StringOptionType, Value: []byte(fmt.Sprintf(`"Partner%d"`, idx-1))},
 			}
 
-			actx := &legacycore.ArikawaContext{
+			actx := &commands.ArikawaContext{
 				Client: client.Client,
 				Interaction: &discord.InteractionEvent{
 					GuildID: discord.GuildID(12345),

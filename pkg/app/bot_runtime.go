@@ -18,7 +18,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/control"
 	discord_automod "github.com/small-frappuccino/discordcore/pkg/discord/automod"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
 	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
@@ -280,7 +279,7 @@ type botRuntime struct {
 	serviceManager *service.ServiceManager
 	unifiedCache   *cache.UnifiedCache
 	taskRouter     *task.TaskRouter
-	commandHandler *commands.CommandHandler
+	commandHandler *CommandHandler
 }
 
 type botRuntimeResolver struct {
@@ -597,7 +596,7 @@ type botRuntimeOptions struct {
 	runtimeCount             int
 	configManager            *files.ConfigManager
 	store                    *storage.Store
-	commandCatalogRegistrars []commands.CommandCatalogRegistrar
+	commandCatalogRegistrars []CommandCatalogRegistrar
 	runtimeApplier           *runtimeapply.Manager
 	qotdCommandService       *applicationqotd.Service
 	moderationMetrics        moderation.Metrics
@@ -855,24 +854,17 @@ func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg
 	if len(opts.commandCatalogRegistrars) > 0 {
 		commandHandler.SetCommandCatalogRegistrars(opts.commandCatalogRegistrars...)
 	}
-	commandHandler.SetCommandCatalogCapabilities(commands.CommandCatalogCapabilities{
+	commandHandler.SetCommandCatalogCapabilities(CommandCatalogCapabilities{
 		Stats: runtime.capabilities.stats,
 	})
 	commandHandler.SetQOTDService(opts.qotdCommandService)
 	commandHandler.SetModerationMetrics(opts.moderationMetrics)
 	commandHandler.SetStatsService(statsService)
 
-	if cm := commandHandler.GetCommandManager(); cm != nil {
-		if router := cm.GetRouter(); router != nil {
-			router.SetStore(opts.store)
-			if unifiedCache != nil {
-				router.SetCache(unifiedCache)
-			}
-			if taskRouter != nil {
-				router.SetTaskRouter(taskRouter)
-			}
-			router.SetRuntimeApplier(opts.runtimeApplier)
-		}
+	if router := commandHandler.GetRouter(); router != nil {
+		// Native router no longer requires dynamic dependency injection
+		// for stores and caches here. Domain handlers receive them via
+		// constructor injection during SetupCommands.
 	}
 	runtime.commandHandler = commandHandler
 

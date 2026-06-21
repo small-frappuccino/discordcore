@@ -1,4 +1,4 @@
-package commands
+package app
 
 import (
 	"context"
@@ -85,7 +85,7 @@ func TestCommandHandlerSetupAndShutdownLifecycle(t *testing.T) {
 	if err := handler.SetupCommands(); err != nil {
 		t.Fatalf("first setup: %v", err)
 	}
-	if handler.commandManager == nil {
+	if handler.GetRouter() == nil {
 		t.Fatalf("expected command manager to be initialized")
 	}
 
@@ -93,7 +93,7 @@ func TestCommandHandlerSetupAndShutdownLifecycle(t *testing.T) {
 	if err := handler.SetupCommands(); err != nil {
 		t.Fatalf("second setup: %v", err)
 	}
-	if handler.commandManager == nil {
+	if handler.GetRouter() == nil {
 		t.Fatalf("expected command manager after reinit")
 	}
 
@@ -107,7 +107,7 @@ func TestCommandHandlerSetupAndShutdownLifecycle(t *testing.T) {
 	if err := handler.Shutdown(); err != nil {
 		t.Fatalf("shutdown: %v", err)
 	}
-	if handler.commandManager != nil {
+	if handler.GetRouter() != nil {
 		t.Fatalf("expected command manager to be cleared on shutdown")
 	}
 
@@ -135,7 +135,7 @@ func TestCommandHandlerSetupRollbackOnManagerFailure(t *testing.T) {
 	if !strings.Contains(err.Error(), "failed to setup commands") {
 		t.Fatalf("unexpected setup error: %v", err)
 	}
-	if handler.commandManager != nil {
+	if handler.GetRouter() != nil {
 		t.Fatalf("command manager should be cleared on setup rollback")
 	}
 }

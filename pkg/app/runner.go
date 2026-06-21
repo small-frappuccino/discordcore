@@ -13,7 +13,6 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/clock"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	"github.com/small-frappuccino/discordcore/pkg/discord/session"
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -30,10 +29,10 @@ import (
 )
 
 var (
-	newCommandHandler       = commands.NewCommandHandler
-	newCommandHandlerForBot = commands.NewCommandHandlerForBot
-	setupCommandHandler     = func(ch *commands.CommandHandler) error { return ch.SetupCommands() }
-	shutdownCommandHandler  = func(ch *commands.CommandHandler) error { return ch.Shutdown() }
+	newCommandHandler       = NewCommandHandler
+	newCommandHandlerForBot = NewCommandHandlerForBot
+	setupCommandHandler     = func(ch *CommandHandler) error { return ch.SetupCommands() }
+	shutdownCommandHandler  = func(ch *CommandHandler) error { return ch.Shutdown() }
 	closeStore              = func(c interface{ Close() error }) error { return c.Close() }
 	closeDiscordSession     = func(c interface{ Close() error }) error { return c.Close() }
 	shutdownDelay           = time.Sleep

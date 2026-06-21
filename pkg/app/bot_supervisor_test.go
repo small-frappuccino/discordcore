@@ -8,7 +8,6 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/state"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
@@ -42,8 +41,8 @@ func TestSupervisorFaultIsolation(t *testing.T) {
 	})
 
 	identifyStaggerDelay = 0
-	setupCommandHandler = func(ch *commands.CommandHandler) error { return nil }
-	shutdownCommandHandler = func(ch *commands.CommandHandler) error { return nil }
+	setupCommandHandler = func(ch *CommandHandler) error { return nil }
+	shutdownCommandHandler = func(ch *CommandHandler) error { return nil }
 
 	cfgManager := files.NewConfigManagerWithStore(nil, nil)
 	cfg := files.BotConfig{
@@ -174,8 +173,8 @@ func TestSupervisorSwarmTopology(t *testing.T) {
 	})
 
 	identifyStaggerDelay = 0
-	setupCommandHandler = func(ch *commands.CommandHandler) error { return nil }
-	shutdownCommandHandler = func(ch *commands.CommandHandler) error { return nil }
+	setupCommandHandler = func(ch *CommandHandler) error { return nil }
+	shutdownCommandHandler = func(ch *CommandHandler) error { return nil }
 
 	cfgManager := files.NewConfigManagerWithStore(nil, nil)
 
@@ -260,8 +259,8 @@ func TestSupervisorConfigChange(t *testing.T) {
 	})
 
 	identifyStaggerDelay = 0
-	setupCommandHandler = func(ch *commands.CommandHandler) error { return nil }
-	shutdownCommandHandler = func(ch *commands.CommandHandler) error { return nil }
+	setupCommandHandler = func(ch *CommandHandler) error { return nil }
+	shutdownCommandHandler = func(ch *CommandHandler) error { return nil }
 
 	cfgManager := files.NewConfigManagerWithStore(nil, nil)
 	cfg := files.BotConfig{

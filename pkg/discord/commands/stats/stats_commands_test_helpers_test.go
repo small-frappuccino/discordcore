@@ -15,7 +15,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/httputil/httpdriver"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
@@ -89,7 +89,7 @@ func newStatsCommandTestRouter(
 	guildID string,
 	ownerID string,
 	cfg files.GuildConfig,
-) (*legacycore.ArikawaCommandRouter, *files.ConfigManager, *mockStatsService, *interactionRecorder) {
+) (*commands.CommandRouter, *files.ConfigManager, *mockStatsService, *interactionRecorder) {
 	t.Helper()
 
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
@@ -97,7 +97,7 @@ func newStatsCommandTestRouter(
 		t.Fatalf("failed to add guild config: %v", err)
 	}
 
-	router := legacycore.NewArikawaCommandRouter("token", cm)
+	router := commands.NewCommandRouter(api.NewClient("token"), cm)
 	mockSvc := &mockStatsService{}
 	logger := slog.Default()
 	NewStatsCommands(cm, mockSvc, logger).RegisterCommands(router)
@@ -135,11 +135,11 @@ func newStatsSlashInteraction(
 	}
 }
 
-func handleRawStatsInteraction(t *testing.T, router *legacycore.ArikawaCommandRouter, cm *files.ConfigManager, rec *interactionRecorder, ic *discord.InteractionEvent) {
+func handleRawStatsInteraction(t *testing.T, router *commands.CommandRouter, cm *files.ConfigManager, rec *interactionRecorder, ic *discord.InteractionEvent) {
 	t.Helper()
 
 	cmdData := ic.Data.(*discord.CommandInteraction)
-	cmd := router.GetAllCommands()[cmdData.Name]
+	cmd := router.Registry().GetAllCommands()[cmdData.Name]
 	if cmd == nil {
 		t.Fatalf("command %s not found", cmdData.Name)
 	}
@@ -149,7 +149,7 @@ func handleRawStatsInteraction(t *testing.T, router *legacycore.ArikawaCommandRo
 		Transport: &mockTransport{t: t, rec: rec},
 	})
 
-	ctx := &legacycore.ArikawaContext{
+	ctx := &commands.ArikawaContext{
 		Client:      client,
 		Interaction: ic,
 		Config:      cm,
@@ -159,7 +159,7 @@ func handleRawStatsInteraction(t *testing.T, router *legacycore.ArikawaCommandRo
 		GuildConfig: cm.GuildConfig(ic.GuildID.String()),
 	}
 
-	if err := cmd.Handle(ctx); err != nil && err != legacycore.ErrAlreadyAcknowledged {
+	if err := cmd.Handle(ctx); err != nil && err != commands.ErrAlreadyAcknowledged {
 		t.Fatalf("command handler failed: %v", err)
 	}
 }

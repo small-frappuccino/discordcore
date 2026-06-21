@@ -5,8 +5,10 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/diamondburned/arikawa/v3/api"
+
 	"github.com/diamondburned/arikawa/v3/discord"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	rolesvc "github.com/small-frappuccino/discordcore/pkg/discord/roles"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
@@ -93,22 +95,22 @@ func TestRolePanelComponentHandler_InjectionAndRouting(t *testing.T) {
 
 			handler := &rolePanelComponentHandler{
 				configManager: cm,
-				memberLookup: func(ctx *legacycore.ArikawaContext, targetRoleID string) (bool, error) {
+				memberLookup: func(ctx *commands.ArikawaContext, targetRoleID string) (bool, error) {
 					return tt.mockHasRole, tt.mockLookupErr
 				},
-				addRole: func(ctx *legacycore.ArikawaContext, gID, uID, rID string) error {
+				addRole: func(ctx *commands.ArikawaContext, gID, uID, rID string) error {
 					addCalls++
 					capturedRoleID = rID
 					return tt.mockAddErr
 				},
-				removeRole: func(ctx *legacycore.ArikawaContext, gID, uID, rID string) error {
+				removeRole: func(ctx *commands.ArikawaContext, gID, uID, rID string) error {
 					removeCalls++
 					capturedRoleID = rID
 					return tt.mockRemoveErr
 				},
 			}
 
-			router := legacycore.NewArikawaCommandRouter("fake-token", cm)
+			router := commands.NewCommandRouter(api.NewClient("dummy"), cm)
 			router.RegisterComponent(rolesvc.RolePanelComponentRouteID, handler)
 
 			interaction := &discord.InteractionEvent{
@@ -123,7 +125,7 @@ func TestRolePanelComponentHandler_InjectionAndRouting(t *testing.T) {
 			}
 
 			// Call HandleInteractionEvent to test router structural partitioning
-			router.HandleInteractionEvent(interaction)
+			router.HandleEvent(interaction)
 
 			if addCalls != tt.expectAdd {
 				t.Errorf("expected %d addRole calls, got %d", tt.expectAdd, addCalls)
@@ -145,7 +147,7 @@ func TestBuildRolePanelToggleResponseArikawa_VisibilityFlags(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		ctx            *legacycore.ArikawaContext
+		ctx            *commands.ArikawaContext
 		expectedFlags  discord.MessageFlags
 		expectHasFlags bool
 	}{
@@ -157,7 +159,7 @@ func TestBuildRolePanelToggleResponseArikawa_VisibilityFlags(t *testing.T) {
 		},
 		{
 			name: "Degradation: Nil GuildConfig forces Ephemeral fallback",
-			ctx: &legacycore.ArikawaContext{
+			ctx: &commands.ArikawaContext{
 				GuildConfig: nil,
 			},
 			expectedFlags:  discord.EphemeralMessage,
@@ -165,7 +167,7 @@ func TestBuildRolePanelToggleResponseArikawa_VisibilityFlags(t *testing.T) {
 		},
 		{
 			name: "Feature: DisableInteractiveEphemeral is false (Default Ephemeral)",
-			ctx: &legacycore.ArikawaContext{
+			ctx: &commands.ArikawaContext{
 				GuildConfig: &files.GuildConfig{
 					RuntimeConfig: files.RuntimeConfig{
 						DisableInteractiveEphemeral: false,
@@ -177,7 +179,7 @@ func TestBuildRolePanelToggleResponseArikawa_VisibilityFlags(t *testing.T) {
 		},
 		{
 			name: "Feature: DisableInteractiveEphemeral is true (Public Response)",
-			ctx: &legacycore.ArikawaContext{
+			ctx: &commands.ArikawaContext{
 				GuildConfig: &files.GuildConfig{
 					RuntimeConfig: files.RuntimeConfig{
 						DisableInteractiveEphemeral: true,
@@ -189,7 +191,7 @@ func TestBuildRolePanelToggleResponseArikawa_VisibilityFlags(t *testing.T) {
 		},
 		{
 			name: "State Isolation: Global config does not leak into missing GuildConfig",
-			ctx: &legacycore.ArikawaContext{
+			ctx: &commands.ArikawaContext{
 				GuildConfig: nil,
 				GuildID:     discord.GuildID(999),
 				Config:      cm, // Uses cm from the upper scope, or we can just leave it since the guild doesn't have the flag

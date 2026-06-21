@@ -13,7 +13,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
 	localdiscord "github.com/small-frappuccino/discordcore/pkg/discord"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	partnersvc "github.com/small-frappuccino/discordcore/pkg/discord/partners"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
@@ -46,7 +46,7 @@ func NewPartnerCommands(configManager *files.ConfigManager, svc *partnersvc.Part
 }
 
 // RegisterCommands binds the /partner slash group to the application router.
-func (pc *PartnerCommands) RegisterCommands(router *legacycore.ArikawaCommandRouter) {
+func (pc *PartnerCommands) RegisterCommands(router *commands.CommandRouter) {
 	if router == nil || pc == nil || pc.configManager == nil {
 		return
 	}
@@ -55,7 +55,7 @@ func (pc *PartnerCommands) RegisterCommands(router *legacycore.ArikawaCommandRou
 		slog.String("component", "PartnerCommands"),
 	)
 
-	group := legacycore.NewArikawaGroupCommand(
+	group := commands.NewArikawaGroupCommand(
 		"partner",
 		"Manage partner board records",
 	)
@@ -96,14 +96,14 @@ func parseWebhookURL(url string) (string, string, bool) {
 	return creds[0], creds[1], true
 }
 
-func partnerDetailedCommandError(ctx *legacycore.ArikawaContext, message string) error {
+func partnerDetailedCommandError(ctx *commands.ArikawaContext, message string) error {
 	return ctx.Respond(api.InteractionResponseData{
 		Content: option.NewNullableString("❌ " + message),
 		Flags:   discord.EphemeralMessage,
 	})
 }
 
-func partnerStructuralError(ctx *legacycore.ArikawaContext, action string, err error) error {
+func partnerStructuralError(ctx *commands.ArikawaContext, action string, err error) error {
 	slog.Error("Blocking structural failure restricted to operational scope",
 		slog.String("req_id", ctx.GuildID.String()),
 		slog.String("stack_trace", string(debug.Stack())),
@@ -113,7 +113,7 @@ func partnerStructuralError(ctx *legacycore.ArikawaContext, action string, err e
 	return partnerDetailedCommandError(ctx, fmt.Sprintf("%s: %v", action, err))
 }
 
-func partnerSuccess(ctx *legacycore.ArikawaContext, message string) error {
+func partnerSuccess(ctx *commands.ArikawaContext, message string) error {
 	return ctx.Respond(api.InteractionResponseData{
 		Content: option.NewNullableString("✅ " + message),
 		Flags:   discord.EphemeralMessage,
@@ -147,8 +147,8 @@ func (c *partnerAddSubCommand) Options() []discord.CommandOption {
 func (c *partnerAddSubCommand) RequiresGuild() bool       { return true }
 func (c *partnerAddSubCommand) RequiresPermissions() bool { return true }
 
-func (c *partnerAddSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
-	opts := legacycore.ArikawaOptionList(legacycore.GetArikawaSubCommandOptions(ctx.Interaction))
+func (c *partnerAddSubCommand) Handle(ctx *commands.ArikawaContext) error {
+	opts := commands.ArikawaOptionList(commands.GetArikawaSubCommandOptions(ctx.Interaction))
 	fandom := strings.TrimSpace(opts.String(optionFandom))
 	name := strings.TrimSpace(opts.String(optionName))
 	link := strings.TrimSpace(opts.String(optionLink))
@@ -186,7 +186,7 @@ func (c *partnerAddSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
 	return partnerSuccess(ctx, "Partner added successfully.")
 }
 
-func autocompletePartnerNameFocused(ctx *legacycore.ArikawaContext, cm *files.ConfigManager, focusedOption string) (api.AutocompleteChoices, error) {
+func autocompletePartnerNameFocused(ctx *commands.ArikawaContext, cm *files.ConfigManager, focusedOption string) (api.AutocompleteChoices, error) {
 	var query string
 	if data, ok := ctx.Interaction.Data.(*discord.AutocompleteInteraction); ok {
 		var opts []discord.AutocompleteOption
@@ -231,7 +231,7 @@ func autocompletePartnerNameFocused(ctx *legacycore.ArikawaContext, cm *files.Co
 	return choices, nil
 }
 
-func autocompletePartnerName(ctx *legacycore.ArikawaContext, cm *files.ConfigManager) (api.AutocompleteChoices, error) {
+func autocompletePartnerName(ctx *commands.ArikawaContext, cm *files.ConfigManager) (api.AutocompleteChoices, error) {
 	return autocompletePartnerNameFocused(ctx, cm, optionName)
 }
 
@@ -259,12 +259,12 @@ func (c *partnerRemoveSubCommand) Options() []discord.CommandOption {
 func (c *partnerRemoveSubCommand) RequiresGuild() bool       { return true }
 func (c *partnerRemoveSubCommand) RequiresPermissions() bool { return true }
 
-func (c *partnerRemoveSubCommand) Autocomplete(ctx *legacycore.ArikawaContext) (api.AutocompleteChoices, error) {
+func (c *partnerRemoveSubCommand) Autocomplete(ctx *commands.ArikawaContext) (api.AutocompleteChoices, error) {
 	return autocompletePartnerName(ctx, c.configManager)
 }
 
-func (c *partnerRemoveSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
-	opts := legacycore.ArikawaOptionList(legacycore.GetArikawaSubCommandOptions(ctx.Interaction))
+func (c *partnerRemoveSubCommand) Handle(ctx *commands.ArikawaContext) error {
+	opts := commands.ArikawaOptionList(commands.GetArikawaSubCommandOptions(ctx.Interaction))
 	name := strings.TrimSpace(opts.String(optionName))
 
 	if _, err := c.configManager.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
@@ -321,12 +321,12 @@ func (c *partnerLinkSubCommand) Options() []discord.CommandOption {
 func (c *partnerLinkSubCommand) RequiresGuild() bool       { return true }
 func (c *partnerLinkSubCommand) RequiresPermissions() bool { return true }
 
-func (c *partnerLinkSubCommand) Autocomplete(ctx *legacycore.ArikawaContext) (api.AutocompleteChoices, error) {
+func (c *partnerLinkSubCommand) Autocomplete(ctx *commands.ArikawaContext) (api.AutocompleteChoices, error) {
 	return autocompletePartnerName(ctx, c.configManager)
 }
 
-func (c *partnerLinkSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
-	opts := legacycore.ArikawaOptionList(legacycore.GetArikawaSubCommandOptions(ctx.Interaction))
+func (c *partnerLinkSubCommand) Handle(ctx *commands.ArikawaContext) error {
+	opts := commands.ArikawaOptionList(commands.GetArikawaSubCommandOptions(ctx.Interaction))
 	name := strings.TrimSpace(opts.String(optionName))
 	link := strings.TrimSpace(opts.String(optionLink))
 
@@ -383,7 +383,7 @@ func (c *partnerRenameSubCommand) Options() []discord.CommandOption {
 func (c *partnerRenameSubCommand) RequiresGuild() bool       { return true }
 func (c *partnerRenameSubCommand) RequiresPermissions() bool { return true }
 
-func (c *partnerRenameSubCommand) Autocomplete(ctx *legacycore.ArikawaContext) (api.AutocompleteChoices, error) {
+func (c *partnerRenameSubCommand) Autocomplete(ctx *commands.ArikawaContext) (api.AutocompleteChoices, error) {
 	var focusedName string
 	if data, ok := ctx.Interaction.Data.(*discord.AutocompleteInteraction); ok {
 		var opts []discord.AutocompleteOption
@@ -411,8 +411,8 @@ func (c *partnerRenameSubCommand) Autocomplete(ctx *legacycore.ArikawaContext) (
 	return nil, nil
 }
 
-func (c *partnerRenameSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
-	opts := legacycore.ArikawaOptionList(legacycore.GetArikawaSubCommandOptions(ctx.Interaction))
+func (c *partnerRenameSubCommand) Handle(ctx *commands.ArikawaContext) error {
+	opts := commands.ArikawaOptionList(commands.GetArikawaSubCommandOptions(ctx.Interaction))
 	currentName := strings.TrimSpace(opts.String(optionCurrentName))
 	newName := strings.TrimSpace(opts.String(optionName))
 	fandom := strings.TrimSpace(opts.String(optionFandom))
@@ -474,7 +474,7 @@ func (c *partnerListSubCommand) Options() []discord.CommandOption { return nil }
 func (c *partnerListSubCommand) RequiresGuild() bool       { return true }
 func (c *partnerListSubCommand) RequiresPermissions() bool { return true }
 
-func (c *partnerListSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *partnerListSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	cfg := c.configManager.GuildConfig(ctx.GuildID.String())
 	if cfg == nil {
 		return partnerDetailedCommandError(ctx, "Guild config not found.")
@@ -526,8 +526,8 @@ func (c *partnerPostSubCommand) Options() []discord.CommandOption {
 func (c *partnerPostSubCommand) RequiresGuild() bool       { return true }
 func (c *partnerPostSubCommand) RequiresPermissions() bool { return true }
 
-func (c *partnerPostSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
-	opts := legacycore.ArikawaOptionList(legacycore.GetArikawaSubCommandOptions(ctx.Interaction))
+func (c *partnerPostSubCommand) Handle(ctx *commands.ArikawaContext) error {
+	opts := commands.ArikawaOptionList(commands.GetArikawaSubCommandOptions(ctx.Interaction))
 	webhookURL := strings.TrimSpace(opts.String(optionWebhookURL))
 
 	if webhookURL != "" {
@@ -617,8 +617,8 @@ func (c *partnerUnpostSubCommand) Options() []discord.CommandOption {
 func (c *partnerUnpostSubCommand) RequiresGuild() bool       { return true }
 func (c *partnerUnpostSubCommand) RequiresPermissions() bool { return true }
 
-func (c *partnerUnpostSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
-	opts := legacycore.ArikawaOptionList(legacycore.GetArikawaSubCommandOptions(ctx.Interaction))
+func (c *partnerUnpostSubCommand) Handle(ctx *commands.ArikawaContext) error {
+	opts := commands.ArikawaOptionList(commands.GetArikawaSubCommandOptions(ctx.Interaction))
 	messageID := strings.TrimSpace(opts.String(optionMessageID))
 	webhookURL := strings.TrimSpace(opts.String(optionWebhookURL))
 
@@ -692,7 +692,7 @@ func (c *partnerRefreshSubCommand) Options() []discord.CommandOption { return ni
 func (c *partnerRefreshSubCommand) RequiresGuild() bool       { return true }
 func (c *partnerRefreshSubCommand) RequiresPermissions() bool { return true }
 
-func (c *partnerRefreshSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *partnerRefreshSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	ctx.Defer(discord.EphemeralMessage)
 
 	if err := c.partnerService.SyncConfig(ctx.GuildID.String(), ctx.Client); err != nil {
@@ -724,8 +724,8 @@ func (c *partnerImportTemplateSubCommand) Options() []discord.CommandOption {
 func (c *partnerImportTemplateSubCommand) RequiresGuild() bool       { return true }
 func (c *partnerImportTemplateSubCommand) RequiresPermissions() bool { return true }
 
-func (c *partnerImportTemplateSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
-	opts := legacycore.ArikawaOptionList(legacycore.GetArikawaSubCommandOptions(ctx.Interaction))
+func (c *partnerImportTemplateSubCommand) Handle(ctx *commands.ArikawaContext) error {
+	opts := commands.ArikawaOptionList(commands.GetArikawaSubCommandOptions(ctx.Interaction))
 	pasteURL := strings.TrimSpace(opts.String(optionURL))
 
 	data, err := localdiscord.FetchPastebinContent(context.Background(), pasteURL)
@@ -779,7 +779,7 @@ func (c *partnerExportTemplateSubCommand) Options() []discord.CommandOption { re
 func (c *partnerExportTemplateSubCommand) RequiresGuild() bool       { return true }
 func (c *partnerExportTemplateSubCommand) RequiresPermissions() bool { return true }
 
-func (c *partnerExportTemplateSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *partnerExportTemplateSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	cfg := c.configManager.GuildConfig(ctx.GuildID.String())
 	if cfg == nil {
 		return partnerDetailedCommandError(ctx, "Guild config not found.")

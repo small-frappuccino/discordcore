@@ -10,7 +10,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	discordmod "github.com/small-frappuccino/discordcore/pkg/discord/moderation"
 	coremod "github.com/small-frappuccino/discordcore/pkg/moderation"
 )
@@ -74,7 +74,7 @@ func (c *BanCommand) DefaultMemberPermissions() discord.Permissions {
 	return discord.PermissionBanMembers
 }
 
-func (c *BanCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *BanCommand) Handle(ctx *commands.ArikawaContext) error {
 	c.metrics.RecordCommandExec("ban")
 
 	if !ctx.GuildID.IsValid() {
@@ -162,7 +162,7 @@ func (c *TimeoutCommand) DefaultMemberPermissions() discord.Permissions {
 	return discord.PermissionModerateMembers
 }
 
-func (c *TimeoutCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *TimeoutCommand) Handle(ctx *commands.ArikawaContext) error {
 	c.metrics.RecordCommandExec("timeout")
 
 	var userID discord.UserID
@@ -210,7 +210,7 @@ func (c *TimeoutCommand) Handle(ctx *legacycore.ArikawaContext) error {
 	return respondEphemeral(ctx, fmt.Sprintf("Successfully timed out user %s.", userID))
 }
 
-func respondEphemeral(ctx *legacycore.ArikawaContext, msg string) error {
+func respondEphemeral(ctx *commands.ArikawaContext, msg string) error {
 	_, err := ctx.Client.EditInteractionResponse(ctx.Interaction.AppID, ctx.Interaction.Token, api.EditInteractionResponseData{
 		Content: option.NewNullableString(msg),
 	})
@@ -252,7 +252,7 @@ func (c *MassBanCommand) DefaultMemberPermissions() discord.Permissions {
 	return discord.PermissionBanMembers
 }
 
-func (c *MassBanCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *MassBanCommand) Handle(ctx *commands.ArikawaContext) error {
 	c.metrics.RecordCommandExec("massban")
 
 	var rawUsers string

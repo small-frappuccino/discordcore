@@ -9,7 +9,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
 
 	coreclean "github.com/small-frappuccino/discordcore/pkg/clean"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
@@ -110,7 +110,7 @@ func (e *EphemeralError) InteractionResponse() api.InteractionResponse {
 }
 
 // Handle parses the interaction event, asserts operational preconditions, maps the user payload into a domain Filter, and hands off to the Service executor.
-func (c *CleanCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *CleanCommand) Handle(ctx *commands.ArikawaContext) error {
 	if !ctx.GuildID.IsValid() {
 		return &EphemeralError{UserMessage: "This command must be used in a server.", InternalErr: fmt.Errorf("missing guild_id")}
 	}

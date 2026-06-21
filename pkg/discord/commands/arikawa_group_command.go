@@ -1,4 +1,4 @@
-package legacycore
+package commands
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 type ArikawaGroupCommand struct {
 	name        string
 	description string
-	checker     *PermissionChecker // Keep legacy checker for now if needed, or rely on DefaultMemberPermissions
+
 	subcommands map[string]ArikawaCommand
 }
 

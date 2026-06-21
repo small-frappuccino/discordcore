@@ -9,16 +9,16 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	rolesvc "github.com/small-frappuccino/discordcore/pkg/discord/roles"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 type rolePanelComponentHandler struct {
 	configManager *files.ConfigManager
-	memberLookup  func(ctx *legacycore.ArikawaContext, roleID string) (bool, error)
-	addRole       func(ctx *legacycore.ArikawaContext, guildID, userID, roleID string) error
-	removeRole    func(ctx *legacycore.ArikawaContext, guildID, userID, roleID string) error
+	memberLookup  func(ctx *commands.ArikawaContext, roleID string) (bool, error)
+	addRole       func(ctx *commands.ArikawaContext, guildID, userID, roleID string) error
+	removeRole    func(ctx *commands.ArikawaContext, guildID, userID, roleID string) error
 }
 
 func newRolePanelComponentHandler(configManager *files.ConfigManager) *rolePanelComponentHandler {
@@ -30,7 +30,7 @@ func newRolePanelComponentHandler(configManager *files.ConfigManager) *rolePanel
 	}
 }
 
-func (h *rolePanelComponentHandler) HandleComponent(ctx *legacycore.ArikawaContext) error {
+func (h *rolePanelComponentHandler) HandleComponent(ctx *commands.ArikawaContext) error {
 	if ctx == nil || ctx.Interaction == nil {
 		return nil
 	}
@@ -115,7 +115,7 @@ func (h *rolePanelComponentHandler) HandleComponent(ctx *legacycore.ArikawaConte
 	return rolePanelToggleEphemeralSuccess(ctx, fmt.Sprintf("Assigned <@&%s>.", roleIDStr))
 }
 
-func buildRolePanelToggleResponseArikawa(ctx *legacycore.ArikawaContext, message string) api.InteractionResponseData {
+func buildRolePanelToggleResponseArikawa(ctx *commands.ArikawaContext, message string) api.InteractionResponseData {
 	data := api.InteractionResponseData{
 		Content: option.NewNullableString(message),
 	}
@@ -138,15 +138,15 @@ func buildRolePanelToggleResponseArikawa(ctx *legacycore.ArikawaContext, message
 	return data
 }
 
-func rolePanelToggleEphemeralError(ctx *legacycore.ArikawaContext, message string) error {
+func rolePanelToggleEphemeralError(ctx *commands.ArikawaContext, message string) error {
 	return ctx.Respond(buildRolePanelToggleResponseArikawa(ctx, message))
 }
 
-func rolePanelToggleEphemeralSuccess(ctx *legacycore.ArikawaContext, message string) error {
+func rolePanelToggleEphemeralSuccess(ctx *commands.ArikawaContext, message string) error {
 	return ctx.Respond(buildRolePanelToggleResponseArikawa(ctx, message))
 }
 
-func defaultRolePanelMemberHasRoleArikawa(ctx *legacycore.ArikawaContext, roleIDStr string) (bool, error) {
+func defaultRolePanelMemberHasRoleArikawa(ctx *commands.ArikawaContext, roleIDStr string) (bool, error) {
 	if ctx == nil || roleIDStr == "" {
 		return false, nil
 	}
@@ -176,7 +176,7 @@ func defaultRolePanelMemberHasRoleArikawa(ctx *legacycore.ArikawaContext, roleID
 	return false, nil
 }
 
-func defaultRolePanelAddRoleArikawa(ctx *legacycore.ArikawaContext, guildIDStr, userIDStr, roleIDStr string) error {
+func defaultRolePanelAddRoleArikawa(ctx *commands.ArikawaContext, guildIDStr, userIDStr, roleIDStr string) error {
 	if ctx.Client == nil {
 		return errors.New("client is nil")
 	}
@@ -186,7 +186,7 @@ func defaultRolePanelAddRoleArikawa(ctx *legacycore.ArikawaContext, guildIDStr, 
 	return ctx.Client.AddRole(discord.GuildID(gID), discord.UserID(uID), discord.RoleID(rID), api.AddRoleData{AuditLogReason: "Role Panel self-assign"})
 }
 
-func defaultRolePanelRemoveRoleArikawa(ctx *legacycore.ArikawaContext, guildIDStr, userIDStr, roleIDStr string) error {
+func defaultRolePanelRemoveRoleArikawa(ctx *commands.ArikawaContext, guildIDStr, userIDStr, roleIDStr string) error {
 	if ctx.Client == nil {
 		return errors.New("client is nil")
 	}

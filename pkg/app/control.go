@@ -12,7 +12,6 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/control"
 	"github.com/small-frappuccino/discordcore/pkg/control/localtls"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 )
@@ -42,7 +41,7 @@ const (
 type RunOptions struct {
 	Profile                  RunProfile
 	Control                  ControlOptions
-	CommandCatalogRegistrars []commands.CommandCatalogRegistrar
+	CommandCatalogRegistrars []CommandCatalogRegistrar
 	DisableControl           bool
 	Logger                   *slog.Logger
 }

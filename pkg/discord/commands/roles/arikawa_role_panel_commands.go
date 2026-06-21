@@ -10,7 +10,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	rolesvc "github.com/small-frappuccino/discordcore/pkg/discord/roles"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
@@ -32,7 +32,7 @@ func NewRolePanelCommands(configManager *files.ConfigManager, svc *rolesvc.RoleP
 }
 
 // RegisterCommands binds the /roles slash group and the component toggle route to the application router.
-func (rc *RolePanelCommands) RegisterCommands(router *legacycore.ArikawaCommandRouter) {
+func (rc *RolePanelCommands) RegisterCommands(router *commands.CommandRouter) {
 	if router == nil || rc == nil || rc.configManager == nil {
 		return
 	}
@@ -41,7 +41,7 @@ func (rc *RolePanelCommands) RegisterCommands(router *legacycore.ArikawaCommandR
 		slog.String("component", "RolePanelCommands"),
 	)
 
-	rolesGroup := legacycore.NewArikawaGroupCommand(
+	rolesGroup := commands.NewArikawaGroupCommand(
 		rolePanelCommandName,
 		"Manage self-service role panels for this server",
 	)
@@ -56,7 +56,7 @@ func (rc *RolePanelCommands) RegisterCommands(router *legacycore.ArikawaCommandR
 	rolesGroup.AddSubCommand(newRolePanelImportSubCommand(rc.configManager, rc.rolePanelService))
 	rolesGroup.AddSubCommand(newRolePanelExportSubCommand(rc.configManager))
 
-	buttonGroup := legacycore.NewArikawaGroupCommand(
+	buttonGroup := commands.NewArikawaGroupCommand(
 		rolePanelButtonGroupName,
 		"Manage the buttons on one role panel",
 	)
@@ -65,7 +65,7 @@ func (rc *RolePanelCommands) RegisterCommands(router *legacycore.ArikawaCommandR
 	buttonGroup.AddSubCommand(newRolePanelButtonListSubCommand(rc.configManager))
 	rolesGroup.AddSubCommand(buttonGroup)
 
-	fieldGroup := legacycore.NewArikawaGroupCommand(
+	fieldGroup := commands.NewArikawaGroupCommand(
 		rolePanelFieldGroupName,
 		"Manage the fields on one role panel embed",
 	)
@@ -90,8 +90,8 @@ func rolePanelKeyOption(required bool) discord.CommandOption {
 	}
 }
 
-func rolePanelKeyFromOptions(ctx *legacycore.ArikawaContext) (string, error) {
-	opts := legacycore.ArikawaOptionList(legacycore.GetArikawaSubCommandOptions(ctx.Interaction))
+func rolePanelKeyFromOptions(ctx *commands.ArikawaContext) (string, error) {
+	opts := commands.ArikawaOptionList(commands.GetArikawaSubCommandOptions(ctx.Interaction))
 	key := opts.String(rolePanelOptionKey)
 	if key == "" {
 		return "", errors.New("a non-empty key option is required")
@@ -114,14 +114,14 @@ func loadRolePanel(cm *files.ConfigManager, guildID discord.GuildID, key string)
 	return panel, nil
 }
 
-func respondEphemeralError(ctx *legacycore.ArikawaContext, message string) error {
+func respondEphemeralError(ctx *commands.ArikawaContext, message string) error {
 	return ctx.Respond(api.InteractionResponseData{
 		Content: option.NewNullableString("❌ " + message),
 		Flags:   discord.EphemeralMessage,
 	})
 }
 
-func respondStructuralError(ctx *legacycore.ArikawaContext, action string, err error) error {
+func respondStructuralError(ctx *commands.ArikawaContext, action string, err error) error {
 	slog.Error("Blocking structural failure restricted to operational scope",
 		slog.String("req_id", ctx.GuildID.String()),
 		slog.String("stack_trace", string(debug.Stack())),
@@ -131,14 +131,14 @@ func respondStructuralError(ctx *legacycore.ArikawaContext, action string, err e
 	return respondEphemeralError(ctx, fmt.Sprintf("%s: %v", action, err))
 }
 
-func respondEphemeralSuccess(ctx *legacycore.ArikawaContext, message string) error {
+func respondEphemeralSuccess(ctx *commands.ArikawaContext, message string) error {
 	return ctx.Respond(api.InteractionResponseData{
 		Content: option.NewNullableString(message),
 		Flags:   discord.EphemeralMessage,
 	})
 }
 
-func ensureRolePanelEnabled(ctx *legacycore.ArikawaContext) error {
+func ensureRolePanelEnabled(ctx *commands.ArikawaContext) error {
 	if ctx == nil || ctx.Config == nil {
 		return nil
 	}
@@ -150,7 +150,7 @@ func ensureRolePanelEnabled(ctx *legacycore.ArikawaContext) error {
 	return nil
 }
 
-func refreshRolePanelPostingsBestEffort(cm *files.ConfigManager, svc *rolesvc.RolePanelService, ctx *legacycore.ArikawaContext, key string) string {
+func refreshRolePanelPostingsBestEffort(cm *files.ConfigManager, svc *rolesvc.RolePanelService, ctx *commands.ArikawaContext, key string) string {
 	if cm == nil || svc == nil || ctx == nil {
 		return ""
 	}
@@ -264,7 +264,7 @@ func (c *rolePanelPostSubCommand) Options() []discord.CommandOption {
 }
 func (c *rolePanelPostSubCommand) RequiresGuild() bool       { return true }
 func (c *rolePanelPostSubCommand) RequiresPermissions() bool { return true }
-func (c *rolePanelPostSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *rolePanelPostSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return respondEphemeralError(ctx, err.Error())
 	}
@@ -280,7 +280,7 @@ func (c *rolePanelPostSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
 		return respondEphemeralError(ctx, fmt.Sprintf("Panel `%s` has no buttons configured yet. Add at least one with /roles button add.", panel.Key))
 	}
 
-	opts := legacycore.ArikawaOptionList(legacycore.GetArikawaSubCommandOptions(ctx.Interaction))
+	opts := commands.ArikawaOptionList(commands.GetArikawaSubCommandOptions(ctx.Interaction))
 
 	var messageID, channelID, webhookID, webhookToken string
 
@@ -339,7 +339,7 @@ func (c *rolePanelPreviewSubCommand) Options() []discord.CommandOption {
 }
 func (c *rolePanelPreviewSubCommand) RequiresGuild() bool       { return true }
 func (c *rolePanelPreviewSubCommand) RequiresPermissions() bool { return true }
-func (c *rolePanelPreviewSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *rolePanelPreviewSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return respondEphemeralError(ctx, err.Error())
 	}
@@ -389,7 +389,7 @@ func (c *rolePanelSetSubCommand) Options() []discord.CommandOption {
 }
 func (c *rolePanelSetSubCommand) RequiresGuild() bool       { return true }
 func (c *rolePanelSetSubCommand) RequiresPermissions() bool { return true }
-func (c *rolePanelSetSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *rolePanelSetSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return respondEphemeralError(ctx, err.Error())
 	}
@@ -397,7 +397,7 @@ func (c *rolePanelSetSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
 	if err != nil {
 		return respondEphemeralError(ctx, err.Error())
 	}
-	opts := legacycore.ArikawaOptionList(legacycore.GetArikawaSubCommandOptions(ctx.Interaction))
+	opts := commands.ArikawaOptionList(commands.GetArikawaSubCommandOptions(ctx.Interaction))
 
 	current, fetchErr := c.configManager.RolePanel(ctx.GuildID.String(), key)
 	if fetchErr != nil && !errors.Is(fetchErr, files.ErrRolePanelNotFound) {
@@ -456,7 +456,7 @@ func (c *rolePanelDeleteSubCommand) Options() []discord.CommandOption {
 }
 func (c *rolePanelDeleteSubCommand) RequiresGuild() bool       { return true }
 func (c *rolePanelDeleteSubCommand) RequiresPermissions() bool { return true }
-func (c *rolePanelDeleteSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *rolePanelDeleteSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return respondEphemeralError(ctx, err.Error())
 	}
@@ -502,7 +502,7 @@ func (c *rolePanelListSubCommand) Description() string {
 func (c *rolePanelListSubCommand) Options() []discord.CommandOption { return nil }
 func (c *rolePanelListSubCommand) RequiresGuild() bool              { return true }
 func (c *rolePanelListSubCommand) RequiresPermissions() bool        { return true }
-func (c *rolePanelListSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *rolePanelListSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return respondEphemeralError(ctx, err.Error())
 	}
@@ -539,7 +539,7 @@ func (c *rolePanelRefreshSubCommand) Options() []discord.CommandOption {
 }
 func (c *rolePanelRefreshSubCommand) RequiresGuild() bool       { return true }
 func (c *rolePanelRefreshSubCommand) RequiresPermissions() bool { return true }
-func (c *rolePanelRefreshSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *rolePanelRefreshSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	return respondEphemeralSuccess(ctx, "Refresh logic placeholder.")
 }
 
@@ -562,7 +562,7 @@ func (c *rolePanelUnpostSubCommand) Options() []discord.CommandOption {
 }
 func (c *rolePanelUnpostSubCommand) RequiresGuild() bool       { return true }
 func (c *rolePanelUnpostSubCommand) RequiresPermissions() bool { return true }
-func (c *rolePanelUnpostSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *rolePanelUnpostSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	return respondEphemeralSuccess(ctx, "Unpost logic placeholder.")
 }
 
@@ -578,7 +578,7 @@ func (c *rolePanelToggleSubCommand) Description() string              { return "
 func (c *rolePanelToggleSubCommand) Options() []discord.CommandOption { return nil }
 func (c *rolePanelToggleSubCommand) RequiresGuild() bool              { return true }
 func (c *rolePanelToggleSubCommand) RequiresPermissions() bool        { return true }
-func (c *rolePanelToggleSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *rolePanelToggleSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	return respondEphemeralSuccess(ctx, "Toggle logic placeholder.")
 }
 
@@ -600,7 +600,7 @@ func (c *rolePanelImportSubCommand) Options() []discord.CommandOption {
 }
 func (c *rolePanelImportSubCommand) RequiresGuild() bool       { return true }
 func (c *rolePanelImportSubCommand) RequiresPermissions() bool { return true }
-func (c *rolePanelImportSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *rolePanelImportSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	return respondEphemeralSuccess(ctx, "Import logic placeholder.")
 }
 
@@ -618,7 +618,7 @@ func (c *rolePanelExportSubCommand) Options() []discord.CommandOption {
 }
 func (c *rolePanelExportSubCommand) RequiresGuild() bool       { return true }
 func (c *rolePanelExportSubCommand) RequiresPermissions() bool { return true }
-func (c *rolePanelExportSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *rolePanelExportSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	return respondEphemeralSuccess(ctx, "Export logic placeholder.")
 }
 
@@ -646,7 +646,7 @@ func (c *rolePanelButtonAddSubCommand) Options() []discord.CommandOption {
 }
 func (c *rolePanelButtonAddSubCommand) RequiresGuild() bool       { return true }
 func (c *rolePanelButtonAddSubCommand) RequiresPermissions() bool { return true }
-func (c *rolePanelButtonAddSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *rolePanelButtonAddSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	if err := ensureRolePanelEnabled(ctx); err != nil {
 		return respondEphemeralError(ctx, err.Error())
 	}
@@ -654,7 +654,7 @@ func (c *rolePanelButtonAddSubCommand) Handle(ctx *legacycore.ArikawaContext) er
 	if err != nil {
 		return respondEphemeralError(ctx, err.Error())
 	}
-	opts := legacycore.ArikawaOptionList(legacycore.GetArikawaSubCommandOptions(ctx.Interaction))
+	opts := commands.ArikawaOptionList(commands.GetArikawaSubCommandOptions(ctx.Interaction))
 
 	roleID := opts.String(rolePanelOptionRole)
 	if roleID == "" {
@@ -707,12 +707,12 @@ func (c *rolePanelButtonRemoveSubCommand) Options() []discord.CommandOption {
 }
 func (c *rolePanelButtonRemoveSubCommand) RequiresGuild() bool       { return true }
 func (c *rolePanelButtonRemoveSubCommand) RequiresPermissions() bool { return true }
-func (c *rolePanelButtonRemoveSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *rolePanelButtonRemoveSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	key, err := rolePanelKeyFromOptions(ctx)
 	if err != nil {
 		return respondEphemeralError(ctx, err.Error())
 	}
-	opts := legacycore.ArikawaOptionList(legacycore.GetArikawaSubCommandOptions(ctx.Interaction))
+	opts := commands.ArikawaOptionList(commands.GetArikawaSubCommandOptions(ctx.Interaction))
 	roleID := opts.String(rolePanelOptionRole)
 	if roleID == "" {
 		return respondEphemeralError(ctx, "A role is required.")
@@ -739,7 +739,7 @@ func (c *rolePanelButtonListSubCommand) Options() []discord.CommandOption {
 }
 func (c *rolePanelButtonListSubCommand) RequiresGuild() bool       { return true }
 func (c *rolePanelButtonListSubCommand) RequiresPermissions() bool { return true }
-func (c *rolePanelButtonListSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *rolePanelButtonListSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	key, err := rolePanelKeyFromOptions(ctx)
 	if err != nil {
 		return respondEphemeralError(ctx, err.Error())
@@ -777,7 +777,7 @@ func (c *rolePanelFieldAddSubCommand) Options() []discord.CommandOption {
 }
 func (c *rolePanelFieldAddSubCommand) RequiresGuild() bool       { return true }
 func (c *rolePanelFieldAddSubCommand) RequiresPermissions() bool { return true }
-func (c *rolePanelFieldAddSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *rolePanelFieldAddSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	return respondEphemeralSuccess(ctx, "Field add placeholder.")
 }
 
@@ -799,7 +799,7 @@ func (c *rolePanelFieldRemoveSubCommand) Options() []discord.CommandOption {
 }
 func (c *rolePanelFieldRemoveSubCommand) RequiresGuild() bool       { return true }
 func (c *rolePanelFieldRemoveSubCommand) RequiresPermissions() bool { return true }
-func (c *rolePanelFieldRemoveSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *rolePanelFieldRemoveSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	return respondEphemeralSuccess(ctx, "Field remove placeholder.")
 }
 
@@ -817,6 +817,6 @@ func (c *rolePanelFieldListSubCommand) Options() []discord.CommandOption {
 }
 func (c *rolePanelFieldListSubCommand) RequiresGuild() bool       { return true }
 func (c *rolePanelFieldListSubCommand) RequiresPermissions() bool { return true }
-func (c *rolePanelFieldListSubCommand) Handle(ctx *legacycore.ArikawaContext) error {
+func (c *rolePanelFieldListSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	return respondEphemeralSuccess(ctx, "Field list placeholder.")
 }

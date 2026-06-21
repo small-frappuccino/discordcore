@@ -9,6 +9,7 @@ import (
 	"os"
 	"reflect"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -381,8 +382,9 @@ func (s *BotSupervisor) onConfigChanged(ctx context.Context, oldCfg, newCfg *fil
 					if !ok || runtime == nil || runtime.commandHandler == nil {
 						continue
 					}
-					if cm := runtime.commandHandler.GetCommandManager(); cm != nil {
-						if syncErr := cm.SyncGuildCommands(t.guildID); syncErr != nil {
+					if syncer := runtime.commandHandler.GetSyncer(); syncer != nil {
+						appIDInt, _ := strconv.ParseInt(t.guildID, 10, 64)
+						if syncErr := syncer.SyncBulkOverwrite(discord.GuildID(appIDInt), runtime.commandHandler.GetRouter().Registry()); syncErr != nil {
 							if strings.Contains(syncErr.Error(), "403") {
 								s.log().Warn("Dynamic command synchronization ignored due to authorization barrier",
 									slog.String("guildID", t.guildID),

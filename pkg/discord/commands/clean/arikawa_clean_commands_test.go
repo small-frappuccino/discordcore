@@ -7,7 +7,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/discord"
 
 	coreclean "github.com/small-frappuccino/discordcore/pkg/clean"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
@@ -39,7 +39,7 @@ func TestArikawaCleanCommand_SyntheticPayloadInjection(t *testing.T) {
 	cmd := NewCleanCommand(cm, mockExec)
 
 	// Injecting structural typing anomaly: passing Integer for User option
-	ctx := &legacycore.ArikawaContext{
+	ctx := &commands.ArikawaContext{
 		GuildID: discord.GuildID(123),
 		UserID:  discord.UserID(456),
 		Interaction: &discord.InteractionEvent{

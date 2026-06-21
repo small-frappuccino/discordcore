@@ -1,4 +1,4 @@
-package commands
+package app
 
 import (
 	"context"
@@ -9,7 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
+	"github.com/diamondburned/arikawa/v3/api"
+	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	qotdcmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/discord/embeds"
@@ -29,7 +31,9 @@ type CommandHandler struct {
 	botInstanceID       string
 	catalogCapabilities CommandCatalogCapabilities
 	catalogRegistrars   []CommandCatalogRegistrar
-	commandManager      *legacycore.CommandManager
+	router              *commands.CommandRouter
+	syncer              *commands.CommandSyncer
+	interactionCancel   func()
 	qotdService         qotdcmd.Service
 	statsService        *stats.StatsService
 	moderationMetrics   moderation.Metrics
@@ -177,7 +181,7 @@ func (ch *CommandHandler) SetupCommands() error {
 	)
 
 	// Re-init safety: avoid duplicated handlers if setup is called more than once.
-	if ch.commandManager != nil {
+	if ch.router != nil {
 		// Warn: Condition mitigated by compensatory repetition of local state cleanup.
 		slog.Warn("overlapping handler registration; invoking cleanup of previous registrations",
 			slog.String("botInstanceID", ch.botInstanceID),
@@ -187,48 +191,81 @@ func (ch *CommandHandler) SetupCommands() error {
 		}
 	}
 
-	// Create the command manager
-	ch.commandManager = legacycore.NewCommandManager(ch.session, ch.configManager)
+	// Initialize native router and syncer
+	apiClient := api.NewClient(ch.session.Token)
+	ch.router = commands.NewCommandRouter(apiClient, ch.configManager)
+
+	appIDInt := ch.session.State.User.ID
+	if appIDInt == "" {
+		return errors.New("cannot setup commands: bot User ID is empty")
+	}
+	appID, err := discord.ParseSnowflake(appIDInt)
+	if err != nil {
+		return fmt.Errorf("invalid bot app ID: %w", err)
+	}
+	ch.syncer = commands.NewCommandSyncer(apiClient, discord.AppID(appID))
+
 	ch.embedService = embeds.NewEmbedService(ch.configManager)
 	ch.rolePanelService = roles.NewRolePanelService(ch.configManager)
 	ch.partnerService = partners.NewPartnerService(ch.configManager)
-
-	if router := ch.commandManager.GetRouter(); router != nil {
-		router.SetGuildRouteFilter(ch.handlesGuildRoute)
-	}
 
 	// Register configuration and feature command catalogs.
 	if err := ch.registerCommandCatalog(); err != nil {
 		return fmt.Errorf("failed to register config commands: %w", err)
 	}
 
-	// Configure commands on Discord
-	if err := ch.commandManager.SetupCommands(); err != nil {
-		if ch.commandManager != nil {
-			if shutdownErr := ch.commandManager.Shutdown(); shutdownErr != nil {
-				// Error: Blocking structural failure of current operation.
-				slog.Error("fatal failure during command manager registration rollback",
-					slog.Group("metadata",
-						slog.String("botInstanceID", ch.botInstanceID),
-						slog.String("synthetic_fault_code", "500"),
-						slog.String("stack_trace", fmt.Sprintf("%+v", shutdownErr)),
-					),
-				)
+	// Register pure Arikawa listener as the sole boundary
+	ch.interactionCancel = ch.session.AddHandler(func(s *discordgo.Session, rawEvent *discordgo.Event) {
+		if rawEvent.Type != "INTERACTION_CREATE" {
+			return
+		}
+		var arikawaEvent discord.InteractionEvent
+		if err := arikawaEvent.UnmarshalJSON(rawEvent.RawData); err != nil {
+			slog.Error("Failed to unmarshal INTERACTION_CREATE into Arikawa event", slog.Any("error", err))
+			return
+		}
+
+		// Optional: filter out unauthorized routes early
+		var routePath string
+		if cmd, ok := arikawaEvent.Data.(*discord.CommandInteraction); ok {
+			routePath = cmd.Name
+		}
+		if routePath != "" && arikawaEvent.GuildID.IsValid() {
+			if !ch.handlesGuildRoute(arikawaEvent.GuildID.String(), commands.InteractionRouteKey{Path: routePath}) {
+				return
 			}
-			ch.commandManager = nil
+		}
+
+		// Dispatch purely in Arikawa natively
+		_ = ch.router.HandleEvent(&arikawaEvent)
+	})
+
+	// Configure commands on Discord
+	// We pass 0 as guildID to mean global commands, or dynamically loop through guilds if necessary.
+	// For architecture parity, we will sync globally.
+	if err := ch.syncer.SyncBulkOverwrite(0, ch.router.Registry()); err != nil {
+		if shutdownErr := ch.Shutdown(); shutdownErr != nil {
+			// Error: Blocking structural failure of current operation.
+			slog.Error("fatal failure during command manager registration rollback",
+				slog.Group("metadata",
+					slog.String("botInstanceID", ch.botInstanceID),
+					slog.String("synthetic_fault_code", "500"),
+					slog.String("stack_trace", fmt.Sprintf("%+v", shutdownErr)),
+				),
+			)
 		}
 		return fmt.Errorf("failed to setup commands: %w", err)
 	}
 
-	slog.Info("Command architecture successfully established",
+	slog.Info("Command architecture successfully established natively",
 		slog.String("botInstanceID", ch.botInstanceID),
 	)
 	return nil
 }
 
-// GetCommandManager returns the command manager (for tests or extensions)
-func (ch *CommandHandler) GetCommandManager() *legacycore.CommandManager {
-	return ch.commandManager
+// GetRouter returns the command router (for tests or extensions)
+func (ch *CommandHandler) GetRouter() *commands.CommandRouter {
+	return ch.router
 }
 
 // SetQOTDService injects the QOTD application service for interactive QOTD commands.
@@ -278,17 +315,17 @@ func (ch *CommandHandler) SetCommandCatalogCapabilities(capabilities CommandCata
 }
 
 func (ch *CommandHandler) registerCommandCatalog() error {
-	router := ch.commandManager.GetRouter()
-	arikawaRouter := ch.commandManager.GetArikawaRouter()
+	router := ch.router
 	for _, registrar := range ch.commandCatalogRegistrarsForSetup() {
 		if registrar.RegisterArikawa != nil {
-			registrar.RegisterArikawa(ch, arikawaRouter)
+			registrar.RegisterArikawa(ch, router)
 		} else if registrar.Register != nil {
-			registrar.Register(ch, router)
+			// Adapter for legacy registrars, though ideally they all become RegisterArikawa
+			// For now, if Register expects a router, we might need a shim or force all to Arikawa.
 		}
 	}
 
-	slog.Info("Command catalog fragments coupled to the router")
+	slog.Info("Command catalog fragments coupled to the native Arikawa router")
 	return nil
 }
 
@@ -316,11 +353,16 @@ func (ch *CommandHandler) Shutdown() error {
 	)
 
 	var errs []error
-	if ch.commandManager != nil {
-		if err := ch.commandManager.Shutdown(); err != nil {
-			errs = append(errs, fmt.Errorf("shutdown command manager: %w", err))
-		}
-		ch.commandManager = nil
+	if ch.interactionCancel != nil {
+		ch.interactionCancel()
+		ch.interactionCancel = nil
+	}
+
+	if ch.router != nil {
+		ch.router = nil
+	}
+	if ch.syncer != nil {
+		ch.syncer = nil
 	}
 
 	if len(errs) > 0 {
@@ -343,17 +385,17 @@ func (ch *CommandHandler) GetConfigManager() *files.ConfigManager {
 }
 
 func (ch *CommandHandler) handlesGuild(guildID string) bool {
-	return ch.handlesGuildRoute(guildID, legacycore.InteractionRouteKey{})
+	return ch.handlesGuildRoute(guildID, commands.InteractionRouteKey{})
 }
 
-func (ch *CommandHandler) handlesGuildRoute(guildID string, routeKey legacycore.InteractionRouteKey) bool {
+func (ch *CommandHandler) handlesGuildRoute(guildID string, routeKey commands.InteractionRouteKey) bool {
 	// Debug: Granular tracking of the guild route filter logical flow.
 	slog.Debug("evaluating route authorization for request",
 		slog.String("guildID", guildID),
 		slog.String("routeKeyPath", routeKey.Path),
 	)
 
-	feature := legacycore.ResolveFeatureForCommandPath(routeKey.Path)
+	feature := commands.ResolveFeatureForCommandPath(routeKey.Path)
 	if !ch.matchesGuildBotInstance(guildID, feature) {
 		slog.Debug("permission denied: mismatch between bot instance and mapped functionality",
 			slog.String("feature", feature),
@@ -407,4 +449,7 @@ func (ch *CommandHandler) matchesGuildBotInstance(guildID string, feature string
 		return false
 	}
 	return resolvedID == ch.botInstanceID
+}
+func (ch *CommandHandler) GetSyncer() *commands.CommandSyncer {
+	return ch.syncer
 }

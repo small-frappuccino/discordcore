@@ -1,10 +1,10 @@
-package commands
+package app
 
 import (
 	"context"
 	"testing"
 
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
@@ -47,7 +47,7 @@ func TestCommandHandlerRoutesFeaturesToCorrectBotInstance(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handles := genericHandler.handlesGuildRoute("guild-1", legacycore.InteractionRouteKey{Path: tt.path})
+			handles := genericHandler.handlesGuildRoute("guild-1", commands.InteractionRouteKey{Path: tt.path})
 			if handles != tt.wantHandles {
 				t.Errorf("generic handles %s: got %v, want %v", tt.path, handles, tt.wantHandles)
 			}

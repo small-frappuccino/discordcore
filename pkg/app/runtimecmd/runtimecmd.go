@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/joho/godotenv"
+	"github.com/small-frappuccino/discordcore/pkg/app"
 	discordcoreapp "github.com/small-frappuccino/discordcore/pkg/app"
-	discordcommands "github.com/small-frappuccino/discordcore/pkg/discord/commands"
 )
 
 // MainRuntimeAppName is the canonical identifier for the primary Discord bot process.
@@ -84,6 +84,6 @@ func buildMainRunOptions() discordcoreapp.RunOptions {
 				AutoTrust: true,
 			},
 		},
-		CommandCatalogRegistrars: discordcommands.DefaultCommandCatalogRegistrars(),
+		CommandCatalogRegistrars: app.DefaultCommandCatalogRegistrars(),
 	}
 }

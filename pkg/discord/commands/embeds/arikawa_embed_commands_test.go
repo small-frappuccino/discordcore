@@ -10,8 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/legacycore"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	embedsvc "github.com/small-frappuccino/discordcore/pkg/discord/embeds"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
@@ -57,7 +58,7 @@ func TestEmbedCommands_ConcurrentMutation(t *testing.T) {
 
 	// We'll simulate multiple goroutines adding fields to the same embed concurrently.
 	// First, let's establish the embed.
-	setCtx := &legacycore.ArikawaContext{
+	setCtx := &commands.ArikawaContext{
 		GuildID: discord.GuildID(12345),
 		Interaction: &discord.InteractionEvent{
 			GuildID: discord.GuildID(12345),
@@ -155,7 +156,7 @@ func TestEmbedCommands_ObservabilityStructuralFaults(t *testing.T) {
 	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
 
-	router := legacycore.NewArikawaCommandRouter("dummy_token", cm)
+	router := commands.NewCommandRouter(api.NewClient("dummy_token"), cm)
 	svc := embedsvc.NewEmbedService(cm)
 	embedCmds := NewEmbedCommands(cm, svc)
 	embedCmds.RegisterCommands(router)
@@ -196,7 +197,7 @@ func TestEmbedCommands_ObservabilityStructuralFaults(t *testing.T) {
 	interaction.GuildID = discord.GuildID(123)
 
 	// Call handle raw event which simulates the router catching it
-	router.HandleInteractionEvent(interaction)
+	router.HandleEvent(interaction)
 
 	// Validate JSON matrix and stack trace in debug.Stack()
 	logOutput := buf.String()
