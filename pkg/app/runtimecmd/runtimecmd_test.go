@@ -43,7 +43,7 @@ func TestRunUsesMainProfileOptions(t *testing.T) {
 	if len(called.opts.CommandCatalogRegistrars) != 10 {
 		t.Fatalf("unexpected main command registrars: %+v", called.opts.CommandCatalogRegistrars)
 	}
-	if called.opts.CommandCatalogRegistrars[0].RequiredCapabilities.Stats {
+	if called.opts.CommandCatalogRegistrars[0].RequiredCapabilities.Has(discordcoreapp.CapStats) {
 		t.Fatalf("expected runtime registrar first, got %+v", called.opts.CommandCatalogRegistrars)
 	}
 	if !called.opts.Control.LocalHTTPS.Enabled || !called.opts.Control.LocalHTTPS.AutoTrust {

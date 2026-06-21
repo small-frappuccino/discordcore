@@ -195,6 +195,9 @@ func (ch *CommandHandler) SetupCommands() error {
 	apiClient := api.NewClient(ch.session.Token)
 	ch.router = commands.NewCommandRouter(apiClient, ch.configManager)
 
+	if ch.session == nil || ch.session.State == nil || ch.session.State.User == nil {
+		return errors.New("cannot setup commands: session user state is missing")
+	}
 	appIDInt := ch.session.State.User.ID
 	if appIDInt == "" {
 		return errors.New("cannot setup commands: bot User ID is empty")
@@ -319,9 +322,6 @@ func (ch *CommandHandler) registerCommandCatalog() error {
 	for _, registrar := range ch.commandCatalogRegistrarsForSetup() {
 		if registrar.RegisterArikawa != nil {
 			registrar.RegisterArikawa(ch, router)
-		} else if registrar.Register != nil {
-			// Adapter for legacy registrars, though ideally they all become RegisterArikawa
-			// For now, if Register expects a router, we might need a shim or force all to Arikawa.
 		}
 	}
 
@@ -340,10 +340,7 @@ func (ch *CommandHandler) commandCatalogRegistrarsForSetup() []CommandCatalogReg
 }
 
 func (ch *CommandHandler) supportsCatalogCapabilities(required CommandCatalogCapabilities) bool {
-	if required.Stats && !ch.catalogCapabilities.Stats {
-		return false
-	}
-	return true
+	return ch.catalogCapabilities.Has(required)
 }
 
 // Shutdown performs cleanup for the command handler resources

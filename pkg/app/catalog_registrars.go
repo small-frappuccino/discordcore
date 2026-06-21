@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"log/slog"
+	"strings"
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
@@ -21,10 +22,54 @@ import (
 	discordmod "github.com/small-frappuccino/discordcore/pkg/discord/moderation"
 )
 
-// CommandCatalogCapabilities captures runtime capabilities that can gate
-// catalog registration.
-type CommandCatalogCapabilities struct {
-	Stats bool
+// CommandCatalogCapabilities defines a bitmask for capability requirements.
+type CommandCatalogCapabilities uint64
+
+const (
+	// CapNone represents no special capabilities required.
+	CapNone CommandCatalogCapabilities = 0
+
+	// CapStats indicates the registrar requires the Stats subsystem.
+	CapStats CommandCatalogCapabilities = 1 << iota
+	CapBanMembers
+	CapKickMembers
+	CapManageMessages
+	CapQOTDAdmin
+)
+
+// Has evaluates if the target capability is present in the bitmask.
+func (c CommandCatalogCapabilities) Has(target CommandCatalogCapabilities) bool {
+	if target == CapNone {
+		return true
+	}
+	return (c & target) == target
+}
+
+// String provides a human-readable representation of the bitmask.
+func (c CommandCatalogCapabilities) String() string {
+	if c == CapNone {
+		return "CapNone"
+	}
+
+	var parts []string
+	flags := map[CommandCatalogCapabilities]string{
+		CapStats:          "CapStats",
+		CapBanMembers:     "CapBanMembers",
+		CapKickMembers:    "CapKickMembers",
+		CapManageMessages: "CapManageMessages",
+		CapQOTDAdmin:      "CapQOTDAdmin",
+	}
+
+	for flag, name := range flags {
+		if c.Has(flag) {
+			parts = append(parts, name)
+		}
+	}
+
+	if len(parts) == 0 {
+		return "CapUnknown"
+	}
+	return strings.Join(parts, "|")
 }
 
 // CommandCatalogRegistrar applies one domain-scoped command catalog fragment to
@@ -32,8 +77,6 @@ type CommandCatalogCapabilities struct {
 type CommandCatalogRegistrar struct {
 	RequiredCapabilities CommandCatalogCapabilities
 	RegisterArikawa      func(*CommandHandler, *commands.CommandRouter)
-	// Register was used for discordgo, but we unify around RegisterArikawa now
-	Register func(*CommandHandler, *commands.CommandRouter)
 }
 
 // DefaultCommandCatalogRegistrars preserves the legacy all-catalog behavior for
@@ -214,10 +257,8 @@ func (s *qotdShim) HandleComponent(ctx *commands.ArikawaContext) error {
 // StatsCommandCatalogRegistrar registers the stats domain slash command surface.
 func StatsCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
-		RequiredCapabilities: CommandCatalogCapabilities{
-			Stats: true,
-		},
-		Register: func(ch *CommandHandler, router *commands.CommandRouter) {
+		RequiredCapabilities: CapStats,
+		RegisterArikawa: func(ch *CommandHandler, router *commands.CommandRouter) {
 			stats.NewStatsCommands(ch.configManager, ch.statsService, slog.Default()).RegisterCommands(router)
 		},
 	}
@@ -226,7 +267,7 @@ func StatsCommandCatalogRegistrar() CommandCatalogRegistrar {
 // LoggingCommandCatalogRegistrar registers the logging slash command surface.
 func LoggingCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
-		Register: func(ch *CommandHandler, router *commands.CommandRouter) {
+		RegisterArikawa: func(ch *CommandHandler, router *commands.CommandRouter) {
 			logging.NewLoggingCommands(ch.configManager).RegisterCommands(router)
 		},
 	}

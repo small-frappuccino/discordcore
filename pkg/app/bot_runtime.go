@@ -854,9 +854,11 @@ func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg
 	if len(opts.commandCatalogRegistrars) > 0 {
 		commandHandler.SetCommandCatalogRegistrars(opts.commandCatalogRegistrars...)
 	}
-	commandHandler.SetCommandCatalogCapabilities(CommandCatalogCapabilities{
-		Stats: runtime.capabilities.stats,
-	})
+	var caps CommandCatalogCapabilities
+	if runtime.capabilities.stats {
+		caps |= CapStats
+	}
+	commandHandler.SetCommandCatalogCapabilities(caps)
 	commandHandler.SetQOTDService(opts.qotdCommandService)
 	commandHandler.SetModerationMetrics(opts.moderationMetrics)
 	commandHandler.SetStatsService(statsService)
