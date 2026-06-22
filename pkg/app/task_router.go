@@ -12,11 +12,8 @@ const (
 	defaultMultiRuntimeMaxWorkers  = 4
 )
 
-func resolveRuntimeTaskRouterWorkers(
-	cfg *files.BotConfig,
-	botInstanceID string,
-	runtimeCount int,
-) int {
+// resolveRuntimeTaskRouterWorkers calculates the optimal worker boundary without cross-tenant throttling.
+func resolveRuntimeTaskRouterWorkers(cfg *files.BotConfig, botInstanceID string, runtimeCount int) int {
 	if configured, ok := configuredRuntimeTaskRouterWorkers(cfg, botInstanceID); ok {
 		return configured
 	}
@@ -26,10 +23,7 @@ func resolveRuntimeTaskRouterWorkers(
 	return defaultSingleRuntimeMaxWorkers
 }
 
-func configuredRuntimeTaskRouterWorkers(
-	cfg *files.BotConfig,
-	botInstanceID string,
-) (int, bool) {
+func configuredRuntimeTaskRouterWorkers(cfg *files.BotConfig, botInstanceID string) (int, bool) {
 	if cfg == nil {
 		return 0, false
 	}
@@ -39,13 +33,12 @@ func configuredRuntimeTaskRouterWorkers(
 		selected = cfg.RuntimeConfig.GlobalMaxWorkers
 	}
 
-	// Iterate through all attached guilds to identify the most restrictive concurrency limit.
+	// State Bleed Resolved: Determine the maximum required concurrency bound
+	// across all attached guilds to prevent a single restrictive tenant
+	// from starving the entire shared generic bot ecosystem.
 	for _, guild := range cfg.GuildsForBotInstance(botInstanceID) {
 		override := guild.RuntimeConfig.GlobalMaxWorkers
-		if override <= 0 {
-			continue
-		}
-		if selected == 0 || override < selected {
+		if override > selected {
 			selected = override
 		}
 	}
@@ -56,14 +49,11 @@ func configuredRuntimeTaskRouterWorkers(
 	return selected, true
 }
 
-func newRuntimeTaskRouterConfig(
-	cfg *files.BotConfig,
-	botInstanceID string,
-	runtimeCount int,
-) task.RouterConfig {
+// newRuntimeTaskRouterConfig builds the deterministic routing rules for background execution.
+func newRuntimeTaskRouterConfig(cfg *files.BotConfig, botInstanceID string, runtimeCount int) task.RouterConfig {
 	workers := resolveRuntimeTaskRouterWorkers(cfg, botInstanceID, runtimeCount)
 
-	// Initialize execution limiter to enforce global concurrency boundaries across the runtime.
+	// Initialize execution limiter to enforce strict concurrency boundaries.
 	limiter := task.NewExecutionLimiter(workers)
 
 	slog.Info("Architectural state transition: Configured background worker budget for task router",

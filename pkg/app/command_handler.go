@@ -19,6 +19,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/roles"
 	"github.com/small-frappuccino/discordcore/pkg/discord/tickets"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/stats"
 	"github.com/small-frappuccino/discordgo"
@@ -41,6 +42,7 @@ type CommandHandler struct {
 	embedService        *embeds.EmbedService
 	rolePanelService    *roles.RolePanelService
 	partnerService      *partners.PartnerService
+	runtimeApplier      *runtimeapply.Manager
 
 	mu           sync.RWMutex
 	running      bool
@@ -59,6 +61,7 @@ type CommandHandlerDeps struct {
 	StatsService        *stats.StatsService
 	ModerationMetrics   moderation.Metrics
 	TicketService       *tickets.Service
+	RuntimeApplier      *runtimeapply.Manager
 }
 
 // NewCommandHandler creates a new CommandHandler instance
@@ -92,6 +95,7 @@ func NewCommandHandlerForBot(deps CommandHandlerDeps) (*CommandHandler, error) {
 		statsService:        deps.StatsService,
 		moderationMetrics:   deps.ModerationMetrics,
 		ticketService:       deps.TicketService,
+		runtimeApplier:      deps.RuntimeApplier,
 	}, nil
 }
 
@@ -253,11 +257,19 @@ func (ch *CommandHandler) SetupCommands() error {
 			return
 		}
 
-		// Optional: filter out unauthorized routes early
+		// Enforce strict data validation before state mutation
 		var routePath string
-		if cmd, ok := arikawaEvent.Data.(*discord.CommandInteraction); ok {
-			routePath = cmd.Name
+		switch data := arikawaEvent.Data.(type) {
+		case *discord.CommandInteraction:
+			routePath = data.Name
+		case *discord.AutocompleteInteraction:
+			routePath = data.Name
+		case discord.ComponentInteraction:
+			routePath = string(data.ID())
+		case *discord.ModalInteraction:
+			routePath = string(data.CustomID)
 		}
+
 		if routePath != "" && arikawaEvent.GuildID.IsValid() {
 			if !ch.handlesGuildRoute(arikawaEvent.GuildID.String(), commands.InteractionRouteKey{Path: routePath}) {
 				return

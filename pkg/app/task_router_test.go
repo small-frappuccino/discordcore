@@ -17,12 +17,12 @@ func TestResolveRuntimeTaskRouterWorkersUsesAutoBudgets(t *testing.T) {
 	}
 }
 
-func TestResolveRuntimeTaskRouterWorkersUsesSmallestRuntimeOverride(t *testing.T) {
+func TestResolveRuntimeTaskRouterWorkersUsesLargestRuntimeOverride(t *testing.T) {
 	t.Parallel()
 
 	cfg := &files.BotConfig{
 		RuntimeConfig: files.RuntimeConfig{
-			GlobalMaxWorkers: 10,
+			GlobalMaxWorkers: 5,
 		},
 		Guilds: []files.GuildConfig{
 			{
@@ -36,7 +36,7 @@ func TestResolveRuntimeTaskRouterWorkersUsesSmallestRuntimeOverride(t *testing.T
 				GuildID:           "g2",
 				BotInstanceTokens: map[string]files.EncryptedString{"alpha": "a"},
 				RuntimeConfig: files.RuntimeConfig{
-					GlobalMaxWorkers: 3,
+					GlobalMaxWorkers: 12,
 				},
 			},
 			{
@@ -46,11 +46,11 @@ func TestResolveRuntimeTaskRouterWorkersUsesSmallestRuntimeOverride(t *testing.T
 		},
 	}
 
-	if got := resolveRuntimeTaskRouterWorkers(cfg, "alpha", 2); got != 3 {
-		t.Fatalf("expected alpha runtime to use smallest non-zero override 3, got %d", got)
+	if got := resolveRuntimeTaskRouterWorkers(cfg, "alpha", 2); got != 12 {
+		t.Fatalf("expected alpha runtime to use largest override 12, got %d", got)
 	}
-	if got := resolveRuntimeTaskRouterWorkers(cfg, "beta", 2); got != 10 {
-		t.Fatalf("expected beta runtime to fall back to global override 10, got %d", got)
+	if got := resolveRuntimeTaskRouterWorkers(cfg, "beta", 2); got != 5 {
+		t.Fatalf("expected beta runtime to fall back to global override 5, got %d", got)
 	}
 }
 

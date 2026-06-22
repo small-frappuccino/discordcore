@@ -35,6 +35,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/storage/postgres"
 	"github.com/small-frappuccino/discordcore/pkg/task"
 	"github.com/small-frappuccino/discordgo"
+	"golang.org/x/sync/errgroup"
 )
 
 type botRuntimeCapabilities struct {
@@ -787,21 +788,31 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 		return err
 	}
 
-	statsGateway := discordstats.NewArikawaGateway(runtime.arikawaState, slog.Default())
-	statsService := stats.NewStatsService(statsGateway, opts.configManager, opts.store, slog.Default(), runtime.instanceID)
-	discordstats.RegisterDiscordGoEventHandlers(runtime.legacySession, statsService, slog.Default())
+	if runtime.capabilities.stats {
+		statsGateway := discordstats.NewArikawaGateway(runtime.arikawaState, slog.Default())
+		statsService := stats.NewStatsService(statsGateway, opts.configManager, opts.store, slog.Default(), runtime.instanceID)
+		discordstats.RegisterDiscordGoEventHandlers(runtime.legacySession, statsService, slog.Default())
 
-	if err := runtime.serviceManager.Register(statsService); err != nil {
-		errWrap := fmt.Errorf("register stats service for %s: %w", runtime.instanceID, err)
-		log.EmitBlockingError("Blocking structural failure during service registry update", errWrap, log.GenerateRequestID())
-		return errWrap
-	}
-
-	if commandHandler := setupRuntimeCommandHandler(runtime, opts, cfg, runtime.unifiedCache, runtime.taskRouter, statsService); commandHandler != nil {
-		if err := runtime.serviceManager.Register(commandHandler); err != nil {
-			errWrap := fmt.Errorf("register command handler service for %s: %w", runtime.instanceID, err)
+		if err := runtime.serviceManager.Register(statsService); err != nil {
+			errWrap := fmt.Errorf("register stats service for %s: %w", runtime.instanceID, err)
 			log.EmitBlockingError("Blocking structural failure during service registry update", errWrap, log.GenerateRequestID())
 			return errWrap
+		}
+
+		if commandHandler := setupRuntimeCommandHandler(runtime, opts, cfg, runtime.unifiedCache, runtime.taskRouter, statsService); commandHandler != nil {
+			if err := runtime.serviceManager.Register(commandHandler); err != nil {
+				errWrap := fmt.Errorf("register command handler service for %s: %w", runtime.instanceID, err)
+				log.EmitBlockingError("Blocking structural failure during service registry update", errWrap, log.GenerateRequestID())
+				return errWrap
+			}
+		}
+	} else {
+		if commandHandler := setupRuntimeCommandHandler(runtime, opts, cfg, runtime.unifiedCache, runtime.taskRouter, nil); commandHandler != nil {
+			if err := runtime.serviceManager.Register(commandHandler); err != nil {
+				errWrap := fmt.Errorf("register command handler service for %s: %w", runtime.instanceID, err)
+				log.EmitBlockingError("Blocking structural failure during service registry update", errWrap, log.GenerateRequestID())
+				return errWrap
+			}
 		}
 	}
 
@@ -865,6 +876,7 @@ func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg
 		QotdService:         opts.qotdCommandService,
 		StatsService:        statsService,
 		ModerationMetrics:   opts.moderationMetrics,
+		RuntimeApplier:      opts.runtimeApplier,
 	}
 
 	commandHandler, err := newCommandHandlerForBot(deps)
@@ -920,17 +932,19 @@ func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *post
 	}
 
 	if startupTasks == nil {
-		go func() {
-			if err := runWarmup(ctx, memberWarmupConfig); err != nil {
-				if ctx.Err() != nil {
-					return
+		eg, egCtx := errgroup.WithContext(ctx)
+		eg.Go(func() error {
+			if err := runWarmup(egCtx, memberWarmupConfig); err != nil {
+				if egCtx.Err() != nil {
+					return nil
 				}
 				slog.Warn("Mitigated service degradation: Cache warmup failed, executing compensatory bypass",
 					slog.String("botInstanceID", runtime.instanceID),
 					slog.String("error", err.Error()),
 				)
 			}
-		}()
+			return nil
+		})
 		return
 	}
 

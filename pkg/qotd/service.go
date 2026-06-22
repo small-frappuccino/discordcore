@@ -97,6 +97,11 @@ func (s *Service) SetPublisher(p Publisher) {
 	s.publisher = p
 }
 
+// GetPublisher returns the underlying publisher.
+func (s *Service) GetPublisher() Publisher {
+	return s.publisher
+}
+
 // SetClock injects a custom clock.
 func (s *Service) SetClock(c clock.Clock) {
 	if c == nil {

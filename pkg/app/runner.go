@@ -82,18 +82,9 @@ func RunWithOptions(appName string, opts RunOptions) (err error) {
 func runWithOptions(appName string, opts RunOptions) error {
 	started := time.Now()
 
-	files.SetAppName(appName)
-
 	if err := idgen.Init(1); err != nil {
 		errWrap := fmt.Errorf("initialize idgen: %w", err)
 		log.EmitBlockingError("Structural dependency failure: ID generator initialization aborted", errWrap, log.GenerateRequestID())
-		return errWrap
-	}
-
-	// Initialize core operational telemetry pipeline prior to bootstrapping subsystem dependencies.
-	if err := log.SetupLogger(files.EffectiveBotName(), files.GetLogFilePath()); err != nil {
-		errWrap := fmt.Errorf("configure logger: %w", err)
-		log.EmitBlockingError("Structural dependency failure: Core logging infrastructure aborted", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
 

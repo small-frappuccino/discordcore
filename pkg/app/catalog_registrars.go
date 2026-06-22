@@ -100,11 +100,11 @@ func DefaultCommandCatalogRegistrars() []CommandCatalogRegistrar {
 func RuntimeCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
 		RegisterArikawa: func(ch *CommandHandler, router commands.ArikawaRegisterer) {
+			if ch.runtimeApplier == nil {
+				panic("fail-fast violation: runtimeApplier is strictly required for RuntimeCommandCatalogRegistrar")
+			}
 			replier := &arikawaReplierAdapter{client: api.NewClient("Bot " + ch.session.Token)}
-			// Notice: GetRuntimeApplier requires reaching into some dependencies;
-			// Since we removed legacycore, we assume runtime application is managed elsewhere or passed.
-			// For this refactor, we inject a mock or real applier if available.
-			handler := runtime.NewHandler(replier, ch.configManager, nil, slog.Default())
+			handler := runtime.NewHandler(replier, ch.configManager, ch.runtimeApplier, slog.Default())
 			shim := &runtimeShim{handler: handler}
 			router.Register(shim)
 			router.RegisterComponent("runtime|", shim)

@@ -1,5 +1,5 @@
 ```
-Considering the scope of this package, and considering state-of-the-art models for it's scope, what a modernization based on the map provided would look like?
+Considering the scope of this package, its core files, and considering state-of-the-art models for it's scope, what a modernization based on the audit provided would look like?
 
 ``````
 ```

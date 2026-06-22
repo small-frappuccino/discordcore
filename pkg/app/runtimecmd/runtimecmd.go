@@ -36,8 +36,6 @@ func Run(args []string, output io.Writer, spec Spec, runner Runner) error {
 		return fmt.Errorf("Run: %w", err)
 	}
 
-	discordcoreapp.SetAppVersion(discordcoreapp.Version)
-
 	if err := runner(spec.RuntimeAppName, spec.BuildRunOptions()); err != nil {
 		slog.Error("Runner execution failed", slog.String("app_name", spec.RuntimeAppName), slog.Any("error", err))
 

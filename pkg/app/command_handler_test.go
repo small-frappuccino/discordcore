@@ -6,6 +6,7 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -35,9 +36,10 @@ func TestCommandHandlerRoutesFeaturesToCorrectBotInstance(t *testing.T) {
 
 	session, _ := discordgo.New("Bot test-token")
 	genericHandler, err := NewCommandHandlerForBot(CommandHandlerDeps{
-		Session:       session,
-		ConfigManager: cfgMgr,
-		BotInstanceID: "generic",
+		Session:        session,
+		ConfigManager:  cfgMgr,
+		BotInstanceID:  "generic",
+		RuntimeApplier: runtimeapply.New(nil, nil),
 	})
 	if err != nil {
 		t.Fatalf("setup handler: %v", err)

@@ -388,6 +388,7 @@ func (s *BotSupervisor) onConfigChanged(ctx context.Context, oldCfg, newCfg *fil
 									slog.String("botInstanceID", instanceID),
 									slog.Any("error", syncErr),
 								)
+								return fmt.Errorf("sync bulk overwrite for guild %s: %w", t.guildID, syncErr)
 							}
 						} else {
 							s.log().Info("Dynamic guild command synchronization completed", slog.String("guildID", t.guildID), slog.String("botInstanceID", instanceID))
@@ -428,6 +429,13 @@ func (s *BotSupervisor) executeStopAndRemove(ctx context.Context, id string, sta
 		}
 	}
 	s.resolver.swapRuntimes(newRuntimes)
+
+	// Evict the stale client from dualSDKPublisher LRU cache equivalents
+	if s.opts.qotdCommandService != nil {
+		if pub, ok := s.opts.qotdCommandService.GetPublisher().(*dualSDKPublisher); ok {
+			pub.Evict(id)
+		}
+	}
 
 	if err != nil && strings.Contains(err.Error(), "not found") {
 		err = nil

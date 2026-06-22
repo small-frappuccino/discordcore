@@ -35,6 +35,13 @@ func newDualSDKPublisher(resolver *botRuntimeResolver) *dualSDKPublisher {
 	}
 }
 
+// Evict forcefully removes a cached Arikawa state to release memory bindings.
+func (p *dualSDKPublisher) Evict(botInstanceID string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.clients, botInstanceID)
+}
+
 // getArikawaPublisher resolves the guild's bot instance and returns a cached Arikawa publisher.
 func (p *dualSDKPublisher) getArikawaPublisher(guildID string) (domain.Publisher, error) {
 	_, botInstanceID, err := p.resolver.runtimeForGuild(guildID, "qotd")

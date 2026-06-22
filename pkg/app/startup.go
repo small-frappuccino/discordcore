@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
-	"time"
+	"sync/atomic"
 
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordcore/pkg/control"
@@ -119,8 +119,7 @@ func syncBootstrapDatabaseConfig(configManager *files.ConfigManager, cfg files.D
 }
 
 type controlServerHolder struct {
-	mu     sync.Mutex
-	server *control.Server
+	server atomic.Pointer[control.Server]
 }
 
 // Set updates the held control server reference safely.
@@ -128,11 +127,8 @@ func (h *controlServerHolder) Set(server *control.Server) {
 	if h == nil || server == nil {
 		return
 	}
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
 	slog.Debug("Updating control server reference in memory holder")
-	h.server = server
+	h.server.Store(server)
 }
 
 // Stop safely shuts down the held control server if one is active.
@@ -141,10 +137,7 @@ func (h *controlServerHolder) Stop(ctx context.Context) error {
 		return nil
 	}
 
-	h.mu.Lock()
-	server := h.server
-	h.server = nil
-	h.mu.Unlock()
+	server := h.server.Swap(nil)
 
 	if server == nil {
 		return nil
@@ -165,9 +158,7 @@ func (h *controlServerHolder) BroadcastGuildEvent(guildID string, botPresent boo
 	if h == nil {
 		return
 	}
-	h.mu.Lock()
-	server := h.server
-	h.mu.Unlock()
+	server := h.server.Load()
 
 	if server == nil {
 		return
@@ -496,8 +487,6 @@ type RuntimeStartupBackgroundWorker struct {
 	queue        chan func(context.Context) error
 	dispatchDone chan struct{}
 	shutdownOnce sync.Once
-	done         chan struct{}
-	waitErr      error
 }
 
 // NewRuntimeStartupBackgroundWorker initializes a generic worker pool based on the detected runtime count.
@@ -527,7 +516,6 @@ func NewRuntimeStartupBackgroundWorkerWithLimits(parallelism, queueSize int) *Ru
 		group:        group,
 		queue:        make(chan func(context.Context) error, queueSize),
 		dispatchDone: make(chan struct{}),
-		done:         make(chan struct{}),
 	}
 
 	slog.Info("Architectural state transition: Background worker pool initialized",
@@ -656,36 +644,33 @@ func (w *RuntimeStartupBackgroundWorker) Shutdown(ctx context.Context) error {
 		if w.cancel != nil {
 			w.cancel()
 		}
-		go func() {
-			<-w.dispatchDone
-
-			waitDone := make(chan struct{})
-			go func() {
-				w.waitErr = w.group.Wait()
-				close(waitDone)
-			}()
-
-			select {
-			case <-waitDone:
-			case <-time.After(5 * time.Second):
-				slog.Warn("Startup task taking unexpectedly long...", slog.String("component", "RuntimeStartupBackgroundWorker"))
-				<-waitDone
-			}
-
-			close(w.done)
-		}()
 	})
 
-	select {
-	case <-w.done:
-		return w.waitErr
-	case <-ctx.Done():
-		errWrap := ctx.Err()
+	eg, egCtx := errgroup.WithContext(ctx)
+	eg.Go(func() error {
+		select {
+		case <-w.dispatchDone:
+		case <-egCtx.Done():
+			return egCtx.Err()
+		}
+
+		waitCh := make(chan error, 1)
+		go func() { waitCh <- w.group.Wait() }()
+		select {
+		case err := <-waitCh:
+			return err
+		case <-egCtx.Done():
+			return egCtx.Err()
+		}
+	})
+
+	err := eg.Wait()
+	if err != nil {
 		slog.Warn("Mitigated service degradation: Context deadline exceeded while awaiting worker pool drain",
-			slog.String("error", errWrap.Error()),
+			slog.String("error", err.Error()),
 		)
-		return errWrap
 	}
+	return err
 }
 
 func (w *RuntimeStartupBackgroundWorker) dispatch() {

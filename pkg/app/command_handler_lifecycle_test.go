@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -90,8 +91,9 @@ func TestCommandHandlerSetupAndShutdownLifecycle(t *testing.T) {
 
 	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	handler, err := NewCommandHandler(CommandHandlerDeps{
-		Session:       session,
-		ConfigManager: cfgMgr,
+		Session:        session,
+		ConfigManager:  cfgMgr,
+		RuntimeApplier: runtimeapply.New(nil, nil),
 	})
 	if err != nil {
 		t.Fatalf("setup handler: %v", err)
@@ -139,8 +141,9 @@ func TestCommandHandlerSetupRollbackOnManagerFailure(t *testing.T) {
 
 	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	handler, err := NewCommandHandler(CommandHandlerDeps{
-		Session:       session,
-		ConfigManager: cfgMgr,
+		Session:        session,
+		ConfigManager:  cfgMgr,
+		RuntimeApplier: runtimeapply.New(nil, nil),
 	})
 	if err != nil {
 		t.Fatalf("setup handler: %v", err)
@@ -186,9 +189,10 @@ func TestCommandHandlerSkipsGuildWithoutCommandsFeature(t *testing.T) {
 
 	session, _ := discordgo.New("Bot test-token")
 	handler, err := NewCommandHandlerForBot(CommandHandlerDeps{
-		Session:       session,
-		ConfigManager: cfgMgr,
-		BotInstanceID: "generic",
+		Session:        session,
+		ConfigManager:  cfgMgr,
+		BotInstanceID:  "generic",
+		RuntimeApplier: runtimeapply.New(nil, nil),
 	})
 	if err != nil {
 		t.Fatalf("setup handler: %v", err)
