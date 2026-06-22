@@ -9,18 +9,18 @@ import (
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordcore/pkg/members"
 )
 
 type mockStateStore struct {
-	members      map[string]map[string]storage.GuildMemberCurrentState
+	members      map[string]map[string]members.CurrentState
 	metadata     map[string]time.Time
 	botHeartbeat map[string]time.Time
 }
 
 func newMockStateStore() *mockStateStore {
 	return &mockStateStore{
-		members: map[string]map[string]storage.GuildMemberCurrentState{
+		members: map[string]map[string]members.CurrentState{
 			"guild-stats-main": {
 				"user1": {
 					UserID:   "user1",
@@ -36,8 +36,8 @@ func newMockStateStore() *mockStateStore {
 	}
 }
 
-func (m *mockStateStore) GetActiveGuildMemberStatesContext(ctx context.Context, guildID string) iter.Seq2[storage.GuildMemberCurrentState, error] {
-	return func(yield func(storage.GuildMemberCurrentState, error) bool) {
+func (m *mockStateStore) GetActiveGuildMemberStatesContext(ctx context.Context, guildID string) iter.Seq2[members.CurrentState, error] {
+	return func(yield func(members.CurrentState, error) bool) {
 		for _, v := range m.members[guildID] {
 			if !yield(v, nil) {
 				return
@@ -56,9 +56,9 @@ func (m *mockStateStore) SetMetadata(ctx context.Context, key string, at time.Ti
 	return nil
 }
 
-func (m *mockStateStore) UpsertMemberPresenceContext(ctx context.Context, input storage.MemberPresenceInput) error {
+func (m *mockStateStore) UpsertMemberPresenceContext(ctx context.Context, input members.PresenceInput) error {
 	if m.members[input.GuildID] == nil {
-		m.members[input.GuildID] = make(map[string]storage.GuildMemberCurrentState)
+		m.members[input.GuildID] = make(map[string]members.CurrentState)
 	}
 	v := m.members[input.GuildID][input.UserID]
 	v.UserID = input.UserID
@@ -69,7 +69,7 @@ func (m *mockStateStore) UpsertMemberPresenceContext(ctx context.Context, input 
 
 func (m *mockStateStore) UpsertMemberRoles(guildID, userID string, roles []string, at time.Time) error {
 	if m.members[guildID] == nil {
-		m.members[guildID] = make(map[string]storage.GuildMemberCurrentState)
+		m.members[guildID] = make(map[string]members.CurrentState)
 	}
 	v := m.members[guildID][userID]
 	v.UserID = userID
@@ -80,7 +80,7 @@ func (m *mockStateStore) UpsertMemberRoles(guildID, userID string, roles []strin
 
 func (m *mockStateStore) MarkMemberLeftContext(ctx context.Context, guildID, userID string, at time.Time) error {
 	if m.members[guildID] == nil {
-		m.members[guildID] = make(map[string]storage.GuildMemberCurrentState)
+		m.members[guildID] = make(map[string]members.CurrentState)
 	}
 	v := m.members[guildID][userID]
 	v.UserID = userID
@@ -287,7 +287,7 @@ func TestStatsSnapshotHelpers(t *testing.T) {
 		t.Errorf("unexpected tracked roles: %v", snap.trackedRoles)
 	}
 
-	storedState := storage.GuildMemberCurrentState{
+	storedState := members.CurrentState{
 		UserID: "u2",
 		IsBot:  false,
 		Roles:  []string{"r1", "r2"},

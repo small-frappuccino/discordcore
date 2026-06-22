@@ -1,4 +1,4 @@
-package storage
+package postgres
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pashagolub/pgxmock/v4"
 	"github.com/small-frappuccino/discordcore/pkg/idgen"
+	"github.com/small-frappuccino/discordcore/pkg/members"
 )
 
 func init() {
@@ -97,7 +98,7 @@ func TestStore_Context_ExecutionBoundaryTimeout(t *testing.T) {
 
 	mock.ExpectExec("INSERT INTO member_joins").WithArgs(pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg()).WillReturnResult(pgxmock.NewResult("INSERT", 1)).WillDelayFor(10 * time.Millisecond)
 
-	err = store.UpsertMemberPresenceContext(ctx, MemberPresenceInput{
+	err = store.UpsertMemberPresenceContext(ctx, members.PresenceInput{
 		GuildID: "123",
 		UserID:  "456",
 	})
@@ -125,7 +126,7 @@ func TestStore_Context_StructuralMisalignment(t *testing.T) {
 	})
 	mock.ExpectRollback()
 
-	snapshots := []GuildMemberSnapshot{
+	snapshots := []members.Snapshot{
 		{UserID: "1", HasAvatar: true, AvatarHash: "hash1"},
 		{UserID: "2", HasAvatar: true, AvatarHash: "hash2"},
 	}
@@ -178,7 +179,7 @@ func TestStore_Members_Idempotency_And_Temporal_Precedence(t *testing.T) {
 	mock.MatchExpectationsInOrder(false)
 	store, _ := NewStore(mock, nil)
 
-	snapshots := []GuildMemberSnapshot{
+	snapshots := []members.Snapshot{
 		{
 			UserID:   "user1",
 			JoinedAt: time.Now().Add(-10 * time.Hour),

@@ -1,4 +1,4 @@
-package storage
+package postgres
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/pashagolub/pgxmock/v4"
+	"github.com/small-frappuccino/discordcore/pkg/members"
 )
 
 func TestStore_TransactionalLifecycle_CommitValidation(t *testing.T) {
@@ -23,7 +24,7 @@ func TestStore_TransactionalLifecycle_CommitValidation(t *testing.T) {
 	}
 
 	guildID := "12345"
-	snapshots := []GuildMemberSnapshot{
+	snapshots := []members.Snapshot{
 		{UserID: "1", JoinedAt: time.Now(), HasBot: true, IsBot: false},
 	}
 	updatedAt := time.Now()
@@ -61,7 +62,7 @@ func TestStore_TransactionalLifecycle_HybridRollbackFailures(t *testing.T) {
 	}
 
 	guildID := "12345"
-	snapshots := []GuildMemberSnapshot{
+	snapshots := []members.Snapshot{
 		{UserID: "1", JoinedAt: time.Now(), HasBot: true, IsBot: false},
 	}
 	updatedAt := time.Now()

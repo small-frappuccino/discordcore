@@ -1,4 +1,4 @@
-package storage
+package postgres
 
 import (
 	"context"
@@ -30,7 +30,7 @@ func TestStore_Moderation_GetGuildOwnerID_ErrNoRows(t *testing.T) {
 	store.GetGuildOwnerID(context.Background(), "guild1")
 }
 
-func TestStore_Moderation_CreateModerationWarning(t *testing.T) {
+func TestStore_Moderation_CreateWarning(t *testing.T) {
 	idgen.Init(1)
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()

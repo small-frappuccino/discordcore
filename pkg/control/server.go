@@ -15,7 +15,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/members"
 	"github.com/small-frappuccino/discordcore/pkg/messages"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
-	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordcore/pkg/storage/postgres"
 	"golang.org/x/oauth2"
 )
 
@@ -53,7 +53,7 @@ type Server struct {
 	moderationMetrics         interface{} // Use specific type if known
 	membersMetricsResolver    func() members.Metrics
 	messagesMetricsResolver   func() messages.Metrics
-	store                     *storage.Store
+	store                     *postgres.Store
 	cacheObservability        func() *cache.UnifiedCache
 	arikawaStateResolver      func(guildID string) (*state.State, error)
 	botGuildBindingsProvider  func(ctx context.Context) ([]BotGuildBinding, error)
@@ -106,10 +106,10 @@ func (s *Server) SetMessagesMetricsResolver(resolver func() messages.Metrics) {
 }
 
 // SetStorage injects the persistent PostgreSQL domain storage dependency into the server instance.
-func (s *Server) SetStorage(store *storage.Store) { s.store = store }
+func (s *Server) SetStorage(store *postgres.Store) { s.store = store }
 
 // SetCacheObservability configures the callback to access the unified cache state for observability endpoints.
-func (s *Server) SetCacheObservability(resolver func() *cache.UnifiedCache, store *storage.Store) {
+func (s *Server) SetCacheObservability(resolver func() *cache.UnifiedCache, store *postgres.Store) {
 	s.cacheObservability = resolver
 }
 
@@ -118,7 +118,7 @@ func (s *Server) SetArikawaStateResolver(resolver func(guildID string) (*state.S
 	s.arikawaStateResolver = resolver
 }
 
-// SetBotGuildBindingsProvider provides the callback for fetching active guild bindings from persistent storage.
+// SetBotGuildBindingsProvider provides the callback for fetching active guild bindings from persistent postgres.
 func (s *Server) SetBotGuildBindingsProvider(provider func(ctx context.Context) ([]BotGuildBinding, error)) {
 	s.botGuildBindingsProvider = provider
 }

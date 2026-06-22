@@ -1,10 +1,11 @@
 //go:build integration
 
-package storage
+package postgres
 
 import (
 	"context"
 	"fmt"
+	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/testdb"
 	"iter"
 	"slices"
@@ -106,7 +107,7 @@ func TestInitResetsQOTDQuestionSequenceWhenTableEmpty(t *testing.T) {
 	store := newTempStore(t)
 	ctx := context.Background()
 
-	first, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+	first, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 		GuildID: "g1",
 		DeckID:  "default",
 		Body:    "First question",
@@ -126,7 +127,7 @@ func TestInitResetsQOTDQuestionSequenceWhenTableEmpty(t *testing.T) {
 		t.Fatalf("Init() after emptying qotd_questions failed: %v", err)
 	}
 
-	second, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+	second, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 		GuildID: "g1",
 		DeckID:  "default",
 		Body:    "Second question",
@@ -144,7 +145,7 @@ func TestDeleteQOTDQuestionReindexesDisplayIDs(t *testing.T) {
 	store := newTempStore(t)
 	ctx := context.Background()
 
-	first, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+	first, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 		GuildID: "g1",
 		DeckID:  "default",
 		Body:    "First question",
@@ -153,7 +154,7 @@ func TestDeleteQOTDQuestionReindexesDisplayIDs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateQOTDQuestion(first) failed: %v", err)
 	}
-	second, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+	second, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 		GuildID: "g1",
 		DeckID:  "default",
 		Body:    "Second question",
@@ -185,7 +186,7 @@ func TestDeleteQOTDQuestionReindexesDisplayIDs(t *testing.T) {
 		t.Fatalf("expected remaining question display id to be renumbered to 1, got %d", remaining[0].DisplayID)
 	}
 
-	third, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+	third, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 		GuildID: "g1",
 		DeckID:  "default",
 		Body:    "Third question",
@@ -203,7 +204,7 @@ func TestReserveNextQOTDQuestionUsesQueueOrder(t *testing.T) {
 	store := newTempStore(t)
 	ctx := context.Background()
 
-	if _, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+	if _, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 		GuildID:       "g1",
 		DeckID:        "default",
 		Body:          "Second question",
@@ -212,7 +213,7 @@ func TestReserveNextQOTDQuestionUsesQueueOrder(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("CreateQOTDQuestion(second) failed: %v", err)
 	}
-	first, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+	first, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 		GuildID:       "g1",
 		DeckID:        "default",
 		Body:          "First question",
@@ -224,7 +225,7 @@ func TestReserveNextQOTDQuestionUsesQueueOrder(t *testing.T) {
 	}
 
 	publishDate := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
-	reserved, err := store.ReserveNextQOTDQuestion(ctx, "g1", "default", publishDate, QOTDQuestionSelectorQueue)
+	reserved, err := store.ReserveNextQOTDQuestion(ctx, "g1", "default", publishDate, qotd.QuestionSelectorQueue)
 	if err != nil {
 		t.Fatalf("ReserveNextQOTDQuestion() failed: %v", err)
 	}
@@ -247,7 +248,7 @@ func TestReserveNextQOTDQuestionSkipsPublishedOnceQuestion(t *testing.T) {
 	ctx := context.Background()
 	publishedAt := time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 
-	first, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+	first, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 		GuildID:       "g1",
 		DeckID:        "default",
 		Body:          "Already published question",
@@ -262,7 +263,7 @@ func TestReserveNextQOTDQuestionSkipsPublishedOnceQuestion(t *testing.T) {
 		t.Fatalf("UpdateQOTDQuestion(first) failed: %v", err)
 	}
 
-	second, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+	second, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 		GuildID:       "g1",
 		DeckID:        "default",
 		Body:          "Still publishable question",
@@ -274,7 +275,7 @@ func TestReserveNextQOTDQuestionSkipsPublishedOnceQuestion(t *testing.T) {
 	}
 
 	publishDate := time.Date(2026, 4, 4, 0, 0, 0, 0, time.UTC)
-	reserved, err := store.ReserveNextQOTDQuestion(ctx, "g1", "default", publishDate, QOTDQuestionSelectorQueue)
+	reserved, err := store.ReserveNextQOTDQuestion(ctx, "g1", "default", publishDate, qotd.QuestionSelectorQueue)
 	if err != nil {
 		t.Fatalf("ReserveNextQOTDQuestion() failed: %v", err)
 	}
@@ -288,7 +289,7 @@ func TestReserveNextReadyQOTDQuestionSkipsPublishedOnceQuestion(t *testing.T) {
 	ctx := context.Background()
 	publishedAt := time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
 
-	first, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+	first, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 		GuildID:       "g1",
 		DeckID:        "default",
 		Body:          "Already published question",
@@ -303,7 +304,7 @@ func TestReserveNextReadyQOTDQuestionSkipsPublishedOnceQuestion(t *testing.T) {
 		t.Fatalf("UpdateQOTDQuestion(first) failed: %v", err)
 	}
 
-	second, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+	second, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 		GuildID:       "g1",
 		DeckID:        "default",
 		Body:          "Still publishable question",
@@ -314,7 +315,7 @@ func TestReserveNextReadyQOTDQuestionSkipsPublishedOnceQuestion(t *testing.T) {
 		t.Fatalf("CreateQOTDQuestion(second) failed: %v", err)
 	}
 
-	reserved, err := store.ReserveNextReadyQOTDQuestion(ctx, "g1", "default", QOTDQuestionSelectorQueue)
+	reserved, err := store.ReserveNextReadyQOTDQuestion(ctx, "g1", "default", qotd.QuestionSelectorQueue)
 	if err != nil {
 		t.Fatalf("ReserveNextReadyQOTDQuestion() failed: %v", err)
 	}
@@ -334,7 +335,7 @@ func TestReserveNextReadyQOTDQuestionRandomCoversAllReadyQuestions(t *testing.T)
 	const totalQuestions = 5
 	createdIDs := make(map[int64]struct{}, totalQuestions)
 	for i := 0; i < totalQuestions; i++ {
-		question, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+		question, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 			GuildID:       "g1",
 			DeckID:        "default",
 			Body:          fmt.Sprintf("Question %d", i+1),
@@ -349,7 +350,7 @@ func TestReserveNextReadyQOTDQuestionRandomCoversAllReadyQuestions(t *testing.T)
 
 	pickedIDs := make(map[int64]struct{}, totalQuestions)
 	for i := 0; i < totalQuestions; i++ {
-		picked, err := store.ReserveNextReadyQOTDQuestion(ctx, "g1", "default", QOTDQuestionSelectorRandom)
+		picked, err := store.ReserveNextReadyQOTDQuestion(ctx, "g1", "default", qotd.QuestionSelectorRandom)
 		if err != nil {
 			t.Fatalf("ReserveNextReadyQOTDQuestion(random, iteration %d) failed: %v", i, err)
 		}
@@ -372,7 +373,7 @@ func TestReserveNextReadyQOTDQuestionRandomCoversAllReadyQuestions(t *testing.T)
 	// With every ready question now reserved, the random selector must
 	// degrade to nil (no eligible rows left) rather than ignore the WHERE
 	// clause.
-	exhausted, err := store.ReserveNextReadyQOTDQuestion(ctx, "g1", "default", QOTDQuestionSelectorRandom)
+	exhausted, err := store.ReserveNextReadyQOTDQuestion(ctx, "g1", "default", qotd.QuestionSelectorRandom)
 	if err != nil {
 		t.Fatalf("ReserveNextReadyQOTDQuestion(random, exhausted) failed: %v", err)
 	}
@@ -394,9 +395,9 @@ func TestCreateQOTDOfficialPostProvisioningAssignsMonotonicPublishOrdinal(t *tes
 	// guild must hand out distinct days. We allocate from a monotonically
 	// increasing counter and let each deck take whatever slot comes next.
 	dayCounter := 0
-	makePost := func(deckID string) *QOTDOfficialPostRecord {
+	makePost := func(deckID string) *qotd.OfficialPostRecord {
 		dayCounter++
-		question, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+		question, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 			GuildID:       "g1",
 			DeckID:        deckID,
 			Body:          fmt.Sprintf("Question %s/%d", deckID, dayCounter),
@@ -407,7 +408,7 @@ func TestCreateQOTDOfficialPostProvisioningAssignsMonotonicPublishOrdinal(t *tes
 			t.Fatalf("CreateQOTDQuestion(%s/%d) failed: %v", deckID, dayCounter, err)
 		}
 		publishDate := time.Date(2026, 5, dayCounter, 0, 0, 0, 0, time.UTC)
-		post, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
+		post, err := store.CreateQOTDOfficialPostProvisioning(ctx, qotd.OfficialPostRecord{
 			GuildID:              "g1",
 			DeckID:               deckID,
 			DeckNameSnapshot:     deckID,
@@ -461,7 +462,7 @@ func TestCreateQOTDOfficialPostProvisioningOrdinalSurvivesUpdates(t *testing.T) 
 	ctx := context.Background()
 	publishDate := time.Date(2026, 6, 4, 0, 0, 0, 0, time.UTC)
 
-	question, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+	question, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 		GuildID:       "g1",
 		DeckID:        "default",
 		Body:          "Stable ordinal question",
@@ -472,7 +473,7 @@ func TestCreateQOTDOfficialPostProvisioningOrdinalSurvivesUpdates(t *testing.T) 
 		t.Fatalf("CreateQOTDQuestion() failed: %v", err)
 	}
 
-	post, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
+	post, err := store.CreateQOTDOfficialPostProvisioning(ctx, qotd.OfficialPostRecord{
 		GuildID:              "g1",
 		DeckID:               "default",
 		DeckNameSnapshot:     "Default",
@@ -496,7 +497,7 @@ func TestCreateQOTDOfficialPostProvisioningOrdinalSurvivesUpdates(t *testing.T) 
 
 	// Each lifecycle write below has historically refreshed every
 	// returnable column. We assert ordinal stays put through all of them.
-	progressed, err := store.UpdateQOTDOfficialPostProgress(ctx, post.ID, QOTDOfficialPostRecord{
+	progressed, err := store.UpdateQOTDOfficialPostProgress(ctx, post.ID, qotd.OfficialPostRecord{
 		QuestionListThreadID:       "qlist-thread",
 		QuestionListEntryMessageID: "qlist-entry",
 		DiscordThreadID:            "thread-1",
@@ -510,7 +511,7 @@ func TestCreateQOTDOfficialPostProvisioningOrdinalSurvivesUpdates(t *testing.T) 
 		t.Fatalf("UpdateQOTDOfficialPostProgress mutated publish_ordinal: %d -> %d", originalOrdinal, progressed.PublishOrdinal)
 	}
 
-	finalized, err := store.FinalizeQOTDOfficialPost(ctx, FinalizeQOTDOfficialPostParams{
+	finalized, err := store.FinalizeQOTDOfficialPost(ctx, qotd.FinalizeOfficialPostParams{
 		ID:                         post.ID,
 		QuestionListThreadID:       "qlist-thread",
 		QuestionListEntryMessageID: "qlist-entry",
@@ -552,8 +553,8 @@ func TestCreateQOTDOfficialPostProvisioningOrdinalSharedAcrossPublishModes(t *te
 	store := newTempStore(t)
 	ctx := context.Background()
 
-	makePost := func(mode string, day int) *QOTDOfficialPostRecord {
-		question, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+	makePost := func(mode string, day int) *qotd.OfficialPostRecord {
+		question, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 			GuildID:       "g1",
 			DeckID:        "default",
 			Body:          fmt.Sprintf("Question %s/%d", mode, day),
@@ -564,7 +565,7 @@ func TestCreateQOTDOfficialPostProvisioningOrdinalSharedAcrossPublishModes(t *te
 			t.Fatalf("CreateQOTDQuestion(%s/%d) failed: %v", mode, day, err)
 		}
 		publishDate := time.Date(2026, 7, day, 0, 0, 0, 0, time.UTC)
-		post, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
+		post, err := store.CreateQOTDOfficialPostProvisioning(ctx, qotd.OfficialPostRecord{
 			GuildID:              "g1",
 			DeckID:               "default",
 			DeckNameSnapshot:     "Default",
@@ -603,7 +604,7 @@ func TestReorderQOTDQuestionsAllowsQueuePositionSwap(t *testing.T) {
 	store := newTempStore(t)
 	ctx := context.Background()
 
-	first, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+	first, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 		GuildID: "g1",
 		DeckID:  "default",
 		Body:    "First question",
@@ -612,7 +613,7 @@ func TestReorderQOTDQuestionsAllowsQueuePositionSwap(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateQOTDQuestion(first) failed: %v", err)
 	}
-	second, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+	second, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 		GuildID: "g1",
 		DeckID:  "default",
 		Body:    "Second question",
@@ -646,7 +647,7 @@ func TestGetQOTDOfficialPostByDatePrefersPublishedPostAcrossModes(t *testing.T) 
 	store := newTempStore(t)
 	ctx := context.Background()
 
-	question, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+	question, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 		GuildID: "g1",
 		DeckID:  "default",
 		Body:    "Question one",
@@ -655,7 +656,7 @@ func TestGetQOTDOfficialPostByDatePrefersPublishedPostAcrossModes(t *testing.T) 
 	if err != nil {
 		t.Fatalf("CreateQOTDQuestion(first) failed: %v", err)
 	}
-	second, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+	second, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 		GuildID: "g1",
 		DeckID:  "default",
 		Body:    "Question two",
@@ -670,7 +671,7 @@ func TestGetQOTDOfficialPostByDatePrefersPublishedPostAcrossModes(t *testing.T) 
 	archiveAt := time.Date(2026, 4, 5, 12, 43, 0, 0, time.UTC)
 	publishedAt := time.Date(2026, 4, 3, 12, 43, 0, 0, time.UTC)
 
-	manual, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
+	manual, err := store.CreateQOTDOfficialPostProvisioning(ctx, qotd.OfficialPostRecord{
 		GuildID:              "g1",
 		DeckID:               "default",
 		DeckNameSnapshot:     "Default",
@@ -686,7 +687,7 @@ func TestGetQOTDOfficialPostByDatePrefersPublishedPostAcrossModes(t *testing.T) 
 	if err != nil {
 		t.Fatalf("CreateQOTDOfficialPostProvisioning(manual) failed: %v", err)
 	}
-	manual, err = store.FinalizeQOTDOfficialPost(ctx, FinalizeQOTDOfficialPostParams{
+	manual, err = store.FinalizeQOTDOfficialPost(ctx, qotd.FinalizeOfficialPostParams{
 		ID:                         manual.ID,
 		QuestionListThreadID:       "questions-list-thread",
 		QuestionListEntryMessageID: "questions-list-entry-manual",
@@ -699,7 +700,7 @@ func TestGetQOTDOfficialPostByDatePrefersPublishedPostAcrossModes(t *testing.T) 
 		t.Fatalf("FinalizeQOTDOfficialPost(manual) failed: %v", err)
 	}
 
-	if _, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
+	if _, err := store.CreateQOTDOfficialPostProvisioning(ctx, qotd.OfficialPostRecord{
 		GuildID:              "g1",
 		DeckID:               "default",
 		DeckNameSnapshot:     "Default",
@@ -737,7 +738,7 @@ func TestGetQOTDOfficialPostByDateRoundTrip(t *testing.T) {
 	store := newTempStore(t)
 	ctx := context.Background()
 
-	question, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+	question, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 		GuildID: "g1",
 		DeckID:  "default",
 		Body:    "Round-trip question",
@@ -748,7 +749,7 @@ func TestGetQOTDOfficialPostByDateRoundTrip(t *testing.T) {
 	}
 
 	publishDate := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-	created, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
+	created, err := store.CreateQOTDOfficialPostProvisioning(ctx, qotd.OfficialPostRecord{
 		GuildID:              "g1",
 		DeckID:               "default",
 		DeckNameSnapshot:     "Default",
@@ -793,7 +794,7 @@ func TestGetScheduledQOTDOfficialPostByDateIgnoresManualPost(t *testing.T) {
 	store := newTempStore(t)
 	ctx := context.Background()
 
-	scheduledQuestion, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+	scheduledQuestion, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 		GuildID: "g1",
 		DeckID:  "default",
 		Body:    "Scheduled question",
@@ -802,7 +803,7 @@ func TestGetScheduledQOTDOfficialPostByDateIgnoresManualPost(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateQOTDQuestion(scheduled) failed: %v", err)
 	}
-	manualQuestion, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+	manualQuestion, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 		GuildID: "g1",
 		DeckID:  "default",
 		Body:    "Manual question",
@@ -817,7 +818,7 @@ func TestGetScheduledQOTDOfficialPostByDateIgnoresManualPost(t *testing.T) {
 	archiveAt := time.Date(2026, 4, 5, 12, 43, 0, 0, time.UTC)
 	publishedAt := time.Date(2026, 4, 3, 12, 43, 0, 0, time.UTC)
 
-	manual, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
+	manual, err := store.CreateQOTDOfficialPostProvisioning(ctx, qotd.OfficialPostRecord{
 		GuildID:              "g1",
 		DeckID:               "default",
 		DeckNameSnapshot:     "Default",
@@ -833,7 +834,7 @@ func TestGetScheduledQOTDOfficialPostByDateIgnoresManualPost(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateQOTDOfficialPostProvisioning(manual) failed: %v", err)
 	}
-	if _, err := store.FinalizeQOTDOfficialPost(ctx, FinalizeQOTDOfficialPostParams{
+	if _, err := store.FinalizeQOTDOfficialPost(ctx, qotd.FinalizeOfficialPostParams{
 		ID:                         manual.ID,
 		QuestionListThreadID:       "questions-list-thread",
 		QuestionListEntryMessageID: "questions-list-entry-manual",
@@ -845,7 +846,7 @@ func TestGetScheduledQOTDOfficialPostByDateIgnoresManualPost(t *testing.T) {
 		t.Fatalf("FinalizeQOTDOfficialPost(manual) failed: %v", err)
 	}
 
-	scheduled, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
+	scheduled, err := store.CreateQOTDOfficialPostProvisioning(ctx, qotd.OfficialPostRecord{
 		GuildID:              "g1",
 		DeckID:               "default",
 		DeckNameSnapshot:     "Default",
@@ -884,7 +885,7 @@ func TestReclaimOrphanReservedQOTDQuestionsReleasesPastReservationsWithoutPosts(
 	pastDate := time.Date(2026, 4, 2, 0, 0, 0, 0, time.UTC)
 	todayUTC := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
 
-	orphan, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+	orphan, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 		GuildID:       "g1",
 		DeckID:        "default",
 		Body:          "Stuck after crash",
@@ -894,7 +895,7 @@ func TestReclaimOrphanReservedQOTDQuestionsReleasesPastReservationsWithoutPosts(
 	if err != nil {
 		t.Fatalf("CreateQOTDQuestion(orphan) failed: %v", err)
 	}
-	if _, err := store.ReserveNextQOTDQuestion(ctx, "g1", "default", pastDate, QOTDQuestionSelectorQueue); err != nil {
+	if _, err := store.ReserveNextQOTDQuestion(ctx, "g1", "default", pastDate, qotd.QuestionSelectorQueue); err != nil {
 		t.Fatalf("ReserveNextQOTDQuestion(orphan) failed: %v", err)
 	}
 
@@ -927,7 +928,7 @@ func TestReclaimOrphanReservedQOTDQuestionsKeepsTodayReservation(t *testing.T) {
 
 	todayUTC := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
 
-	question, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+	question, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 		GuildID:       "g1",
 		DeckID:        "default",
 		Body:          "Active reservation",
@@ -937,7 +938,7 @@ func TestReclaimOrphanReservedQOTDQuestionsKeepsTodayReservation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateQOTDQuestion() failed: %v", err)
 	}
-	if _, err := store.ReserveNextQOTDQuestion(ctx, "g1", "default", todayUTC, QOTDQuestionSelectorQueue); err != nil {
+	if _, err := store.ReserveNextQOTDQuestion(ctx, "g1", "default", todayUTC, qotd.QuestionSelectorQueue); err != nil {
 		t.Fatalf("ReserveNextQOTDQuestion() failed: %v", err)
 	}
 
@@ -968,7 +969,7 @@ func TestReclaimOrphanReservedQOTDQuestionsLeavesQuestionsWithLinkedPosts(t *tes
 	pastDate := time.Date(2026, 4, 2, 0, 0, 0, 0, time.UTC)
 	todayUTC := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
 
-	question, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+	question, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 		GuildID:       "g1",
 		DeckID:        "default",
 		Body:          "Linked to a real post",
@@ -978,11 +979,11 @@ func TestReclaimOrphanReservedQOTDQuestionsLeavesQuestionsWithLinkedPosts(t *tes
 	if err != nil {
 		t.Fatalf("CreateQOTDQuestion() failed: %v", err)
 	}
-	reserved, err := store.ReserveNextQOTDQuestion(ctx, "g1", "default", pastDate, QOTDQuestionSelectorQueue)
+	reserved, err := store.ReserveNextQOTDQuestion(ctx, "g1", "default", pastDate, qotd.QuestionSelectorQueue)
 	if err != nil || reserved == nil {
 		t.Fatalf("ReserveNextQOTDQuestion() failed: %v", err)
 	}
-	if _, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
+	if _, err := store.CreateQOTDOfficialPostProvisioning(ctx, qotd.OfficialPostRecord{
 		GuildID:              "g1",
 		DeckID:               "default",
 		DeckNameSnapshot:     "Default",
@@ -1022,7 +1023,7 @@ func TestQOTDOfficialPostProgressAndPendingRecoveryLifecycle(t *testing.T) {
 	store := newTempStore(t)
 	ctx := context.Background()
 
-	question, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+	question, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 		GuildID: "g1",
 		DeckID:  "default",
 		Body:    "Question one",
@@ -1032,7 +1033,7 @@ func TestQOTDOfficialPostProgressAndPendingRecoveryLifecycle(t *testing.T) {
 		t.Fatalf("CreateQOTDQuestion() failed: %v", err)
 	}
 
-	official, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
+	official, err := store.CreateQOTDOfficialPostProvisioning(ctx, qotd.OfficialPostRecord{
 		GuildID:              "g1",
 		DeckID:               "default",
 		DeckNameSnapshot:     "Default",
@@ -1049,7 +1050,7 @@ func TestQOTDOfficialPostProgressAndPendingRecoveryLifecycle(t *testing.T) {
 		t.Fatalf("CreateQOTDOfficialPostProvisioning() failed: %v", err)
 	}
 
-	progress, err := store.UpdateQOTDOfficialPostProgress(ctx, official.ID, QOTDOfficialPostRecord{
+	progress, err := store.UpdateQOTDOfficialPostProgress(ctx, official.ID, qotd.OfficialPostRecord{
 		QuestionListThreadID:    "questions-list-thread",
 		DiscordThreadID:         "official-thread-1",
 		DiscordStarterMessageID: "starter-message-1",
@@ -1069,7 +1070,7 @@ func TestQOTDOfficialPostProgressAndPendingRecoveryLifecycle(t *testing.T) {
 		t.Fatalf("UpdateQOTDOfficialPostState(failed) failed: %v", err)
 	}
 
-	var pending []QOTDOfficialPostRecord
+	var pending []qotd.OfficialPostRecord
 	for post, err := range store.ListQOTDOfficialPostsPendingRecovery(ctx, "g1") {
 		if err != nil {
 			t.Fatalf("ListQOTDOfficialPostsPendingRecovery() failed: %v", err)
@@ -1081,7 +1082,7 @@ func TestQOTDOfficialPostProgressAndPendingRecoveryLifecycle(t *testing.T) {
 	}
 
 	finalizedAt := time.Date(2026, 4, 3, 12, 43, 0, 0, time.UTC)
-	finalized, err := store.FinalizeQOTDOfficialPost(ctx, FinalizeQOTDOfficialPostParams{
+	finalized, err := store.FinalizeQOTDOfficialPost(ctx, qotd.FinalizeOfficialPostParams{
 		ID:                         official.ID,
 		QuestionListThreadID:       "questions-list-thread",
 		QuestionListEntryMessageID: "list-entry-1",
@@ -1116,7 +1117,7 @@ func TestDeleteQOTDQuestionsByDecksPreservesOfficialPostHistory(t *testing.T) {
 	store := newTempStore(t)
 	ctx := context.Background()
 
-	question, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+	question, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 		GuildID: "g1",
 		DeckID:  "deck-a",
 		Body:    "Question one",
@@ -1125,7 +1126,7 @@ func TestDeleteQOTDQuestionsByDecksPreservesOfficialPostHistory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateQOTDQuestion() failed: %v", err)
 	}
-	official, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
+	official, err := store.CreateQOTDOfficialPostProvisioning(ctx, qotd.OfficialPostRecord{
 		GuildID:              "g1",
 		DeckID:               "deck-a",
 		DeckNameSnapshot:     "Deck A",
@@ -1179,7 +1180,7 @@ func TestDeleteQOTDOfficialPostsByDeckRemovesOnlyMatchingDeck(t *testing.T) {
 	store := newTempStore(t)
 	ctx := context.Background()
 
-	deckAQuestion, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+	deckAQuestion, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 		GuildID: "g1",
 		DeckID:  "deck-a",
 		Body:    "Deck A question",
@@ -1188,7 +1189,7 @@ func TestDeleteQOTDOfficialPostsByDeckRemovesOnlyMatchingDeck(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateQOTDQuestion(deck-a) failed: %v", err)
 	}
-	deckBQuestion, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+	deckBQuestion, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 		GuildID: "g1",
 		DeckID:  "deck-b",
 		Body:    "Deck B question",
@@ -1198,7 +1199,7 @@ func TestDeleteQOTDOfficialPostsByDeckRemovesOnlyMatchingDeck(t *testing.T) {
 		t.Fatalf("CreateQOTDQuestion(deck-b) failed: %v", err)
 	}
 
-	if _, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
+	if _, err := store.CreateQOTDOfficialPostProvisioning(ctx, qotd.OfficialPostRecord{
 		GuildID:              "g1",
 		DeckID:               "deck-a",
 		DeckNameSnapshot:     "Deck A",
@@ -1213,7 +1214,7 @@ func TestDeleteQOTDOfficialPostsByDeckRemovesOnlyMatchingDeck(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("CreateQOTDOfficialPostProvisioning(deck-a) failed: %v", err)
 	}
-	deckBOfficial, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
+	deckBOfficial, err := store.CreateQOTDOfficialPostProvisioning(ctx, qotd.OfficialPostRecord{
 		GuildID:              "g1",
 		DeckID:               "deck-b",
 		DeckNameSnapshot:     "Deck B",
@@ -1262,7 +1263,7 @@ func TestListQOTDOfficialPostsByDateReturnsAllMatchingRecords(t *testing.T) {
 	store := newTempStore(t)
 	ctx := context.Background()
 
-	questionA, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+	questionA, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 		GuildID: "g1",
 		DeckID:  "default",
 		Body:    "Question A",
@@ -1271,7 +1272,7 @@ func TestListQOTDOfficialPostsByDateReturnsAllMatchingRecords(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateQOTDQuestion(questionA) failed: %v", err)
 	}
-	questionB, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+	questionB, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 		GuildID: "g1",
 		DeckID:  "default",
 		Body:    "Question B",
@@ -1285,7 +1286,7 @@ func TestListQOTDOfficialPostsByDateReturnsAllMatchingRecords(t *testing.T) {
 	graceUntil := time.Date(2026, 5, 8, 12, 43, 0, 0, time.UTC)
 	archiveAt := time.Date(2026, 5, 9, 12, 43, 0, 0, time.UTC)
 
-	first, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
+	first, err := store.CreateQOTDOfficialPostProvisioning(ctx, qotd.OfficialPostRecord{
 		GuildID:              "g1",
 		DeckID:               "default",
 		DeckNameSnapshot:     "Default",
@@ -1301,7 +1302,7 @@ func TestListQOTDOfficialPostsByDateReturnsAllMatchingRecords(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateQOTDOfficialPostProvisioning(first) failed: %v", err)
 	}
-	if _, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
+	if _, err := store.CreateQOTDOfficialPostProvisioning(ctx, qotd.OfficialPostRecord{
 		GuildID:              "g1",
 		DeckID:               "default",
 		DeckNameSnapshot:     "Default",
@@ -1340,7 +1341,7 @@ func TestDeleteQOTDOfficialPostByIDRemovesOnlyTargetRecord(t *testing.T) {
 	store := newTempStore(t)
 	ctx := context.Background()
 
-	questionA, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+	questionA, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 		GuildID: "g1",
 		DeckID:  "default",
 		Body:    "Question A",
@@ -1349,7 +1350,7 @@ func TestDeleteQOTDOfficialPostByIDRemovesOnlyTargetRecord(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateQOTDQuestion(questionA) failed: %v", err)
 	}
-	questionB, err := store.CreateQOTDQuestion(ctx, QOTDQuestionRecord{
+	questionB, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
 		GuildID: "g1",
 		DeckID:  "default",
 		Body:    "Question B",
@@ -1364,7 +1365,7 @@ func TestDeleteQOTDOfficialPostByIDRemovesOnlyTargetRecord(t *testing.T) {
 	graceUntil := time.Date(2026, 5, 9, 12, 43, 0, 0, time.UTC)
 	archiveAt := time.Date(2026, 5, 10, 12, 43, 0, 0, time.UTC)
 
-	target, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
+	target, err := store.CreateQOTDOfficialPostProvisioning(ctx, qotd.OfficialPostRecord{
 		GuildID:              "g1",
 		DeckID:               "default",
 		DeckNameSnapshot:     "Default",
@@ -1380,7 +1381,7 @@ func TestDeleteQOTDOfficialPostByIDRemovesOnlyTargetRecord(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateQOTDOfficialPostProvisioning(target) failed: %v", err)
 	}
-	if _, err := store.CreateQOTDOfficialPostProvisioning(ctx, QOTDOfficialPostRecord{
+	if _, err := store.CreateQOTDOfficialPostProvisioning(ctx, qotd.OfficialPostRecord{
 		GuildID:              "g1",
 		DeckID:               "default",
 		DeckNameSnapshot:     "Default",
@@ -1431,8 +1432,8 @@ func newTempStore(t *testing.T) *Store {
 	store, _ := NewStore(pool, nil)
 	return store
 }
-func collectQuestions(t *testing.T, seq iter.Seq2[QOTDQuestionRecord, error]) []QOTDQuestionRecord {
-	var res []QOTDQuestionRecord
+func collectQuestions(t *testing.T, seq iter.Seq2[qotd.QuestionRecord, error]) []qotd.QuestionRecord {
+	var res []qotd.QuestionRecord
 	for q, err := range seq {
 		if err != nil {
 			t.Fatalf("iteration error: %v", err)

@@ -21,6 +21,7 @@ flowchart TD
     App["pkg/app"]
     AppRuntimecmd["pkg/app/runtimecmd"]
     Automod["pkg/automod"]
+    AutomodAutomodmocks["pkg/automod/automodmocks"]
     Clean["pkg/clean"]
     Clock["pkg/clock"]
     Control["pkg/control"]
@@ -67,8 +68,9 @@ flowchart TD
     Runtimeapply["pkg/runtimeapply"]
     Service["pkg/service"]
     Stats["pkg/stats"]
-    Storage["pkg/storage"]
-    StorageStoragetest["pkg/storage/storagetest"]
+    StoragePostgres["pkg/storage/postgres"]
+    StoragePostgresStoragetest["pkg/storage/postgres/storagetest"]
+    System["pkg/system"]
     Task["pkg/task"]
     Testdb["pkg/testdb"]
     Theme["pkg/theme"]
@@ -86,7 +88,7 @@ flowchart TD
     AdapterAutomod --> Automod
     AdapterAutomod --> Service
     AdapterCache --> Arikawa
-    AdapterCache --> Storage
+    AdapterCache --> StoragePostgres
     AdapterClean --> Arikawa
     AdapterClean --> Clean
     AdapterEmbeds --> Arikawa
@@ -163,10 +165,12 @@ flowchart TD
     App --> Runtimeapply
     App --> Service
     App --> Stats
-    App --> Storage
+    App --> StoragePostgres
     App --> Task
     AppRuntimecmd --> App
     Automod --> Arikawa
+    AutomodAutomodmocks --> Arikawa
+    AutomodAutomodmocks --> Automod
     Clock --> Log
     CmdClean-config --> Files
     CmdClean-config --> Persistence
@@ -221,7 +225,7 @@ flowchart TD
     Control --> Members
     Control --> Messages
     Control --> Runtimeapply
-    Control --> Storage
+    Control --> StoragePostgres
     Control --> UI
     Discord --> DiscordGo
     Discord --> Files
@@ -237,36 +241,40 @@ flowchart TD
     Members --> Files
     Members --> Logging
     Members --> Service
-    Members --> Storage
+    Members --> System
     Messages --> AdapterPerf
     Messages --> Arikawa
     Messages --> Files
     Messages --> Logging
     Messages --> Observability
     Messages --> Service
-    Messages --> Storage
+    Messages --> System
     Messages --> Task
     Persistence --> Log
     Persistence --> Observability
     Qotd --> Clock
     Qotd --> Files
-    Qotd --> Storage
     Runtimeapply --> Files
     Runtimeapply --> Service
-    Service --> Storage
+    Service --> System
     Stats --> Files
+    Stats --> Members
     Stats --> Service
-    Stats --> Storage
-    Storage --> Idgen
-    StorageStoragetest --> Storage
+    StoragePostgres --> Idgen
+    StoragePostgres --> Members
+    StoragePostgres --> Messages
+    StoragePostgres --> Moderation
+    StoragePostgres --> Qotd
+    StoragePostgres --> System
+    StoragePostgresStoragetest --> StoragePostgres
     Task --> Arikawa
     Task --> Clock
     Task --> Files
+    Task --> Members
     Task --> Observability
-    Task --> Storage
     Testdb --> Persistence
     Tickets --> Arikawa
-    Tickets --> Storage
+    Tickets --> StoragePostgres
 
     %% Styling
     classDef core fill:#232B2B,stroke:#5E81AC,stroke-width:2px,color:#ECEFF4;
@@ -276,10 +284,10 @@ flowchart TD
     classDef external fill:#744210,stroke:#D69E2E,stroke-width:2px,color:#ECEFF4,shape:circle;
     classDef ui fill:#A3BE8C,stroke:#8FBCBB,stroke-width:2px,color:#2E3440;
 
-    class App,AppRuntimecmd,Files,Persistence,Runtimeapply,Storage,StorageStoragetest core;
+    class App,AppRuntimecmd,Files,Persistence,Runtimeapply,StoragePostgres,StoragePostgresStoragetest core;
     class Discord,AdapterAutomod,AdapterCache,AdapterClean,Commands,CommandsClean,CommandsCore,CommandsEmbeds,CommandsLogging,CommandsModeration,CommandsPartners,CommandsQotd,CommandsRoles,CommandsRuntime,CommandsStats,CommandsTickets,AdapterEmbeds,AdapterLogging,AdapterMembers,AdapterMessages,AdapterModeration,AdapterPartners,AdapterPerf,AdapterQotd,AdapterRoles,AdapterSession,AdapterStats,AdapterTickets,AdapterWebhook adapter;
     class Automod,Clean,Control,ControlLocaltls,Logging,Members,Messages,Moderation,Qotd,Stats,Task,Tickets feature;
-    class Clock,Idgen,Log,Observability,Service,Testdb,Theme infra;
+    class AutomodAutomodmocks,Clock,Idgen,Log,Observability,Service,System,Testdb,Theme infra;
     class DiscordGo,Arikawa,DiscordAPI,DiscordGateway external;
     class CmdClean-config,CmdDiscordcore,CmdTsgen,UI ui;
 ```

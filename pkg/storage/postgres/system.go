@@ -1,4 +1,4 @@
-package storage
+package postgres
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/small-frappuccino/discordcore/pkg/system"
 )
 
 // SetBotSince sets the bot_since timestamp for a guild.
@@ -112,18 +113,9 @@ func (s *Store) NextTicketID(ctx context.Context, guildID string) (int64, error)
 	return nextID, nil
 }
 
-// CacheEntryRecord is a single persisted cache row.
-type CacheEntryRecord struct {
-	Key       string
-	CacheType string
-	GuildID   string
-	Data      string
-	ExpiresAt time.Time
-}
-
 // UpsertCacheEntriesContext upserts cache entries utilizing UNNEST.
-func (s *Store) UpsertCacheEntriesContext(ctx context.Context, entries []CacheEntryRecord) error {
-	normalized := make([]CacheEntryRecord, 0, len(entries))
+func (s *Store) UpsertCacheEntriesContext(ctx context.Context, entries []system.CacheEntryRecord) error {
+	normalized := make([]system.CacheEntryRecord, 0, len(entries))
 	for _, entry := range entries {
 		if entry.Key == "" || entry.CacheType == "" || entry.Data == "" {
 			continue
@@ -134,7 +126,7 @@ func (s *Store) UpsertCacheEntriesContext(ctx context.Context, entries []CacheEn
 		return nil
 	}
 
-	byGuild := make(map[string][]CacheEntryRecord)
+	byGuild := make(map[string][]system.CacheEntryRecord)
 	for _, entry := range normalized {
 		byGuild[entry.GuildID] = append(byGuild[entry.GuildID], entry)
 	}
@@ -209,26 +201,20 @@ func (s *Store) GetCacheEntry(ctx context.Context, key string) (cacheType, data 
 	return cacheType, data, expiresAt, true, nil
 }
 
-type CacheEntry struct {
-	Key       string
-	Data      string
-	ExpiresAt time.Time
-}
-
 // GetCacheEntriesByType streams cache entries via iter.Seq2.
-func (s *Store) GetCacheEntriesByType(ctx context.Context, cacheType string) iter.Seq2[CacheEntry, error] {
-	return func(yield func(CacheEntry, error) bool) {
+func (s *Store) GetCacheEntriesByType(ctx context.Context, cacheType string) iter.Seq2[system.CacheEntry, error] {
+	return func(yield func(system.CacheEntry, error) bool) {
 		rows, err := s.db.Query(ctx, `SELECT cache_key, data, expires_at FROM persistent_cache WHERE cache_type=$1 AND expires_at > $2`, cacheType, time.Now().UTC())
 		if err != nil {
-			yield(CacheEntry{}, fmt.Errorf("Store.GetCacheEntriesByType: %w", err))
+			yield(system.CacheEntry{}, fmt.Errorf("Store.GetCacheEntriesByType: %w", err))
 			return
 		}
 		defer rows.Close()
 
 		for rows.Next() {
-			var entry CacheEntry
+			var entry system.CacheEntry
 			if err := rows.Scan(&entry.Key, &entry.Data, &entry.ExpiresAt); err != nil {
-				yield(CacheEntry{}, fmt.Errorf("Store.GetCacheEntriesByType: %w", err))
+				yield(system.CacheEntry{}, fmt.Errorf("Store.GetCacheEntriesByType: %w", err))
 				return
 			}
 			if !yield(entry, nil) {
@@ -236,7 +222,7 @@ func (s *Store) GetCacheEntriesByType(ctx context.Context, cacheType string) ite
 			}
 		}
 		if err := rows.Err(); err != nil {
-			yield(CacheEntry{}, fmt.Errorf("Store.GetCacheEntriesByType: %w", err))
+			yield(system.CacheEntry{}, fmt.Errorf("Store.GetCacheEntriesByType: %w", err))
 		}
 	}
 }
@@ -247,31 +233,26 @@ func (s *Store) CleanupExpiredCacheEntries(ctx context.Context) error {
 	return err
 }
 
-type PersistentCacheStats struct {
-	Total  int            `json:"total"`
-	ByType map[string]int `json:"by_type,omitempty"`
-}
-
 // GetCacheStatsContext returns persistent_cache stats.
-func (s *Store) GetCacheStatsContext(ctx context.Context) (PersistentCacheStats, error) {
+func (s *Store) GetCacheStatsContext(ctx context.Context) (system.PersistentCacheStats, error) {
 	rows, err := s.db.Query(ctx, `SELECT cache_type, COUNT(*) FROM persistent_cache WHERE expires_at > $1 GROUP BY cache_type`, time.Now().UTC())
 	if err != nil {
-		return PersistentCacheStats{}, fmt.Errorf("Store.GetCacheStatsContext: %w", err)
+		return system.PersistentCacheStats{}, fmt.Errorf("Store.GetCacheStatsContext: %w", err)
 	}
 	defer rows.Close()
 
-	stats := PersistentCacheStats{ByType: make(map[string]int)}
+	stats := system.PersistentCacheStats{ByType: make(map[string]int)}
 	for rows.Next() {
 		var cacheType string
 		var count int
 		if err := rows.Scan(&cacheType, &count); err != nil {
-			return PersistentCacheStats{}, fmt.Errorf("Store.GetCacheStatsContext: %w", err)
+			return system.PersistentCacheStats{}, fmt.Errorf("Store.GetCacheStatsContext: %w", err)
 		}
 		stats.ByType[cacheType] = count
 		stats.Total += count
 	}
 	if err := rows.Err(); err != nil {
-		return PersistentCacheStats{}, fmt.Errorf("Store.GetCacheStatsContext: %w", err)
+		return system.PersistentCacheStats{}, fmt.Errorf("Store.GetCacheStatsContext: %w", err)
 	}
 	if len(stats.ByType) == 0 {
 		stats.ByType = nil

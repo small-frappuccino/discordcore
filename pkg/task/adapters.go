@@ -13,7 +13,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordcore/pkg/members"
 )
 
 // MemberNotificationSender delegates member lifecycle notifications to downstream subscribers.
@@ -106,7 +106,7 @@ type NotificationAdapters struct {
 	Router          *TaskRouter
 	Notifier        NotificationSender
 	AvatarProcessor AvatarProcessor
-	Store           *storage.Store
+	MembersRepo     members.Repository
 	Config          *files.ConfigManager
 	Session         *state.State
 	Logger          *slog.Logger
@@ -308,7 +308,7 @@ func (a *NotificationAdapters) handleSendMessageEdit(ctx context.Context, payloa
 	return nil
 }
 
-// handleSendMessageDelete encapsulates message purges from raw storage.
+// handleSendMessageDelete encapsulates message purges from raw postgres.
 func (a *NotificationAdapters) handleSendMessageDelete(ctx context.Context, payload any) error {
 	if a.Notifier == nil {
 		return fmt.Errorf("notifier is nil")
@@ -337,8 +337,8 @@ func (a *NotificationAdapters) handleProcessAvatarChange(ctx context.Context, pa
 	}
 
 	// Transactions simulate direct structural fallbacks when complex processor injections are fully ignored.
-	if a.Store != nil {
-		err := a.Store.UpsertGuildMemberSnapshotsContext(ctx, p.GuildID, []storage.GuildMemberSnapshot{{UserID: p.UserID, HasAvatar: true, AvatarHash: p.NewAvatar}}, time.Now())
+	if a.MembersRepo != nil {
+		err := a.MembersRepo.UpsertGuildMemberSnapshotsContext(ctx, p.GuildID, []members.Snapshot{{UserID: p.UserID, HasAvatar: true, AvatarHash: p.NewAvatar}}, time.Now())
 		if err != nil {
 			return fmt.Errorf("Store.UpsertGuildMemberSnapshotsContext: %w", err)
 		}

@@ -1,0 +1,98 @@
+package clock_test
+
+import (
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/small-frappuccino/discordcore/pkg/clock"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/goleak"
+)
+
+func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
+}
+
+func TestMockClock_Concurrency(t *testing.T) {
+	c := clock.NewMockClock(time.Now())
+	var wg sync.WaitGroup
+
+	numGoroutines := 200
+	wg.Add(numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func(i int) {
+			defer wg.Done()
+			if i%2 == 0 {
+				for j := 0; j < 100; j++ {
+					_ = c.Now()
+				}
+			} else {
+				for j := 0; j < 100; j++ {
+					if j%2 == 0 {
+						c.Advance(time.Millisecond)
+					} else {
+						c.SetTime(time.Now().Add(time.Duration(j) * time.Second))
+					}
+				}
+			}
+		}(i)
+	}
+
+	wg.Wait()
+}
+
+func TestMockClock_TimersAndTickers(t *testing.T) {
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	c := clock.NewMockClock(start)
+
+	timer := c.NewTimer(5 * time.Second)
+	ticker := c.NewTicker(2 * time.Second)
+
+	// Advance by 3 seconds. Timer shouldn't fire, ticker should fire once.
+	c.Advance(3 * time.Second)
+
+	select {
+	case <-timer.C():
+		t.Fatal("Timer fired too early")
+	default:
+	}
+
+	select {
+	case tickTime := <-ticker.C():
+		require.Equal(t, start.Add(2*time.Second), tickTime)
+	default:
+		t.Fatal("Ticker should have fired")
+	}
+
+	// Advance past timer.
+	c.Advance(3 * time.Second)
+
+	select {
+	case timerTime := <-timer.C():
+		require.Equal(t, start.Add(6*time.Second), timerTime)
+	default:
+		t.Fatal("Timer should have fired")
+	}
+
+	// Ticker should fire again at +4s and +6s (we advanced to +6s).
+	select {
+	case tickTime := <-ticker.C():
+		require.True(t, tickTime.Equal(start.Add(4*time.Second)) || tickTime.Equal(start.Add(6*time.Second)))
+	default:
+		t.Fatal("Ticker should have fired")
+	}
+
+	timer.Stop()
+	ticker.Stop()
+}
+
+func TestMockClock_NonBlockingDispatch(t *testing.T) {
+	// Verify that if a channel isn't read, Advance still proceeds.
+	c := clock.NewMockClock(time.Now())
+	timer := c.NewTimer(1 * time.Second)
+	c.Advance(2 * time.Second)
+	c.Advance(2 * time.Second) // Second advance should not block.
+	timer.Stop()
+}

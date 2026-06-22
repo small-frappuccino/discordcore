@@ -1,4 +1,4 @@
-package storage
+package postgres
 
 import (
 	"context"
@@ -8,45 +8,11 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/small-frappuccino/discordcore/pkg/messages"
 )
 
-// MessageRecord represents a cached Discord message snapshot for edit/delete notifications.
-type MessageRecord struct {
-	GuildID        string
-	MessageID      string
-	ChannelID      string
-	AuthorID       string
-	AuthorUsername string
-	AuthorAvatar   string
-	Content        string
-	CachedAt       time.Time
-	ExpiresAt      time.Time
-	HasExpiry      bool
-}
-
-// MessageDeleteKey identifies one cached message row to delete.
-type MessageDeleteKey struct {
-	GuildID   string
-	MessageID string
-}
-
-// MessageVersion is one persisted revision of a Discord message.
-type MessageVersion struct {
-	GuildID     string
-	MessageID   string
-	ChannelID   string
-	AuthorID    string
-	Version     int
-	EventType   string
-	Content     string
-	Attachments int
-	Embeds      int
-	Stickers    int
-	CreatedAt   time.Time
-}
-
 // UpsertMessage inserts or updates a message record transactionally.
-func (s *Store) UpsertMessage(m MessageRecord) error {
+func (s *Store) UpsertMessage(m messages.Record) error {
 	var expires any
 	if m.HasExpiry {
 		expires = m.ExpiresAt.UTC()
@@ -69,7 +35,7 @@ func (s *Store) UpsertMessage(m MessageRecord) error {
 }
 
 // UpsertMessagesContext upserts a batch of cached messages.
-func (s *Store) UpsertMessagesContext(ctx context.Context, records []MessageRecord) error {
+func (s *Store) UpsertMessagesContext(ctx context.Context, records []messages.Record) error {
 	normalized := normalizeMessageRecords(records)
 	if len(normalized) == 0 {
 		return nil
@@ -116,12 +82,12 @@ func (s *Store) UpsertMessagesContext(ctx context.Context, records []MessageReco
 	return err
 }
 
-func normalizeMessageRecords(records []MessageRecord) []MessageRecord {
+func normalizeMessageRecords(records []messages.Record) []messages.Record {
 	if len(records) == 0 {
 		return nil
 	}
 	order := make([]string, 0, len(records))
-	byKey := make(map[string]MessageRecord, len(records))
+	byKey := make(map[string]messages.Record, len(records))
 	for _, record := range records {
 		guildID := strings.TrimSpace(record.GuildID)
 		messageID := strings.TrimSpace(record.MessageID)
@@ -137,7 +103,7 @@ func normalizeMessageRecords(records []MessageRecord) []MessageRecord {
 		byKey[key] = record
 	}
 
-	normalized := make([]MessageRecord, 0, len(order))
+	normalized := make([]messages.Record, 0, len(order))
 	for _, key := range order {
 		normalized = append(normalized, byKey[key])
 	}
@@ -145,7 +111,7 @@ func normalizeMessageRecords(records []MessageRecord) []MessageRecord {
 }
 
 // GetMessage returns a non-expired message if present.
-func (s *Store) GetMessage(ctx context.Context, guildID, messageID string) (*MessageRecord, error) {
+func (s *Store) GetMessage(ctx context.Context, guildID, messageID string) (*messages.Record, error) {
 	row := s.db.QueryRow(ctx,
 		`SELECT guild_id, message_id, channel_id, author_id, author_username, author_avatar, content, cached_at, expires_at
          FROM messages
@@ -153,7 +119,7 @@ func (s *Store) GetMessage(ctx context.Context, guildID, messageID string) (*Mes
 		guildID, messageID,
 	)
 
-	var rec MessageRecord
+	var rec messages.Record
 	var expires *time.Time
 	if err := row.Scan(&rec.GuildID, &rec.MessageID, &rec.ChannelID, &rec.AuthorID, &rec.AuthorUsername, &rec.AuthorAvatar, &rec.Content, &rec.CachedAt, &expires); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -169,7 +135,7 @@ func (s *Store) GetMessage(ctx context.Context, guildID, messageID string) (*Mes
 }
 
 // DeleteMessagesContext removes a batch of message records via UNNEST.
-func (s *Store) DeleteMessagesContext(ctx context.Context, keys []MessageDeleteKey) error {
+func (s *Store) DeleteMessagesContext(ctx context.Context, keys []messages.DeleteKey) error {
 	normalized := normalizeMessageDeleteKeys(keys)
 	if len(normalized) == 0 {
 		return nil
@@ -192,12 +158,12 @@ func (s *Store) DeleteMessagesContext(ctx context.Context, keys []MessageDeleteK
 	return err
 }
 
-func normalizeMessageDeleteKeys(keys []MessageDeleteKey) []MessageDeleteKey {
+func normalizeMessageDeleteKeys(keys []messages.DeleteKey) []messages.DeleteKey {
 	if len(keys) == 0 {
 		return nil
 	}
 	order := make([]string, 0, len(keys))
-	byKey := make(map[string]MessageDeleteKey, len(keys))
+	byKey := make(map[string]messages.DeleteKey, len(keys))
 	for _, key := range keys {
 		key.GuildID = strings.TrimSpace(key.GuildID)
 		key.MessageID = strings.TrimSpace(key.MessageID)
@@ -211,7 +177,7 @@ func normalizeMessageDeleteKeys(keys []MessageDeleteKey) []MessageDeleteKey {
 		byKey[composite] = key
 	}
 
-	normalized := make([]MessageDeleteKey, 0, len(order))
+	normalized := make([]messages.DeleteKey, 0, len(order))
 	for _, composite := range order {
 		normalized = append(normalized, byKey[composite])
 	}
@@ -219,7 +185,7 @@ func normalizeMessageDeleteKeys(keys []MessageDeleteKey) []MessageDeleteKey {
 }
 
 // InsertMessageVersionsMixedBatchContext inserts a batch of message history rows.
-func (s *Store) InsertMessageVersionsMixedBatchContext(ctx context.Context, versions []MessageVersion) (err error) {
+func (s *Store) InsertMessageVersionsMixedBatchContext(ctx context.Context, versions []messages.Version) (err error) {
 	normalized := normalizeMessageVersions(versions)
 	if len(normalized) == 0 {
 		return nil
@@ -245,11 +211,11 @@ func (s *Store) InsertMessageVersionsMixedBatchContext(ctx context.Context, vers
 	return tx.Commit(ctx)
 }
 
-func normalizeMessageVersions(versions []MessageVersion) []MessageVersion {
+func normalizeMessageVersions(versions []messages.Version) []messages.Version {
 	if len(versions) == 0 {
 		return nil
 	}
-	normalized := make([]MessageVersion, 0, len(versions))
+	normalized := make([]messages.Version, 0, len(versions))
 	for _, version := range versions {
 		if strings.TrimSpace(version.GuildID) == "" || strings.TrimSpace(version.MessageID) == "" || strings.TrimSpace(version.EventType) == "" {
 			continue
@@ -270,12 +236,12 @@ type messageVersionGroup struct {
 	Indexes   []int
 }
 
-func reserveMessageVersionRangesTx(ctx context.Context, tx pgx.Tx, versions []MessageVersion) ([]MessageVersion, error) {
+func reserveMessageVersionRangesTx(ctx context.Context, tx pgx.Tx, versions []messages.Version) ([]messages.Version, error) {
 	if len(versions) == 0 {
 		return nil, nil
 	}
 
-	assigned := append([]MessageVersion(nil), versions...)
+	assigned := append([]messages.Version(nil), versions...)
 	groups := groupMessageVersions(assigned)
 
 	for _, group := range groups {
@@ -303,7 +269,7 @@ func reserveMessageVersionRangesTx(ctx context.Context, tx pgx.Tx, versions []Me
 	return assigned, nil
 }
 
-func groupMessageVersions(versions []MessageVersion) []messageVersionGroup {
+func groupMessageVersions(versions []messages.Version) []messageVersionGroup {
 	if len(versions) == 0 {
 		return nil
 	}
@@ -356,7 +322,7 @@ func updateMessageVersionCounterTx(ctx context.Context, tx pgx.Tx, guildID, mess
 	return nil
 }
 
-func insertMessageHistoryBatchTx(ctx context.Context, tx pgx.Tx, versions []MessageVersion) error {
+func insertMessageHistoryBatchTx(ctx context.Context, tx pgx.Tx, versions []messages.Version) error {
 	if len(versions) == 0 {
 		return nil
 	}
@@ -402,17 +368,8 @@ func (s *Store) CleanupExpiredMessages() error {
 	return err
 }
 
-// DailyMessageCountDelta represents a delta for daily message counts.
-type DailyMessageCountDelta struct {
-	GuildID   string
-	ChannelID string
-	UserID    string
-	Day       time.Time
-	Count     int
-}
-
 // IncrementDailyMessageCountsContext increments the daily message counts for multiple guilds.
-func (s *Store) IncrementDailyMessageCountsContext(ctx context.Context, deltas []DailyMessageCountDelta) error {
+func (s *Store) IncrementDailyMessageCountsContext(ctx context.Context, deltas []messages.DailyCountDelta) error {
 	if len(deltas) == 0 {
 		return nil
 	}
@@ -438,7 +395,7 @@ func (s *Store) DeleteMessage(ctx context.Context, guildID, messageID string) er
 }
 
 // InsertMessageVersion records a new version of a message.
-func (s *Store) InsertMessageVersion(ctx context.Context, v MessageVersion) error {
+func (s *Store) InsertMessageVersion(ctx context.Context, v messages.Version) error {
 	_, err := s.db.Exec(ctx, `
 		INSERT INTO messages_history (guild_id, message_id, channel_id, author_id, version, event_type, content, attachments, embeds, stickers, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)

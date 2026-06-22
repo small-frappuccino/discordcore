@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/diamondburned/arikawa/v3/discord"
-	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordcore/pkg/storage/postgres"
 	"github.com/small-frappuccino/discordcore/pkg/testdb"
 )
 
@@ -96,7 +96,7 @@ func TestNextID_ACID(t *testing.T) {
 		}
 	})
 
-	store, err := storage.NewStore(db, nil)
+	store, err := postgres.NewStore(db, nil)
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}

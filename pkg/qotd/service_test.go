@@ -10,7 +10,6 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
-	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
 type mockPublisher struct {
@@ -41,7 +40,7 @@ func (m *mockMetrics) RecordSuppressionCleared()    { atomic.AddUint32(&m.cleare
 func TestExecuteInGuildActor_Serialization(t *testing.T) {
 	svc := qotd.NewService(
 		&files.ConfigManager{},
-		&storage.Store{},
+		nil,
 		&mockPublisher{},
 	)
 
@@ -86,7 +85,7 @@ func TestExecuteInGuildActor_Serialization(t *testing.T) {
 func TestExecuteInGuildActor_Parallelism(t *testing.T) {
 	svc := qotd.NewService(
 		&files.ConfigManager{},
-		&storage.Store{},
+		nil,
 		&mockPublisher{},
 	)
 
@@ -128,7 +127,7 @@ func TestPublishScheduledIfDue_ContextExpiration(t *testing.T) {
 	}
 	svc := qotd.NewService(
 		&files.ConfigManager{},
-		&storage.Store{},
+		nil,
 		pub,
 	)
 
@@ -157,7 +156,7 @@ func TestReconcileGuild_SystemicFailureIsolation(t *testing.T) {
 	metrics := &mockMetrics{}
 	svc := qotd.NewServiceWithMetrics(
 		&files.ConfigManager{},
-		&storage.Store{},
+		nil,
 		pub,
 		metrics,
 	)

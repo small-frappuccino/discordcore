@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/members"
 	"github.com/small-frappuccino/discordcore/pkg/stats"
-	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
 // blockingStore is a mock that blocks indefinitely until context is canceled.
@@ -26,9 +26,9 @@ func (b *blockingStore) Metadata(ctx context.Context, key string) (time.Time, bo
 	return time.Time{}, false, ctx.Err()
 }
 
-func (b *blockingStore) GetActiveGuildMemberStatesContext(ctx context.Context, guildID string) iter.Seq2[storage.GuildMemberCurrentState, error] {
+func (b *blockingStore) GetActiveGuildMemberStatesContext(ctx context.Context, guildID string) iter.Seq2[members.CurrentState, error] {
 	<-ctx.Done()
-	return func(yield func(storage.GuildMemberCurrentState, error) bool) {}
+	return func(yield func(members.CurrentState, error) bool) {}
 }
 
 func TestStatsService_DatabasePreemption(t *testing.T) {

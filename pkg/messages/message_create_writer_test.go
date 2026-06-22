@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordcore/pkg/storage/postgres"
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -397,9 +397,9 @@ func TestMessageCreateWriterEnqueueAfterStopReturnsStopped(t *testing.T) {
 		t.Fatalf("stop writer: %v", err)
 	}
 
-	err := writer.Enqueue(storage.MessageRecord{
+	err := writer.Enqueue(messages.Record{
 		GuildID:   "guild",
-		MessageID: "message"}, nil, storage.DailyMessageCountDelta{})
+		MessageID: "message"}, nil, messages.DailyCountDelta{})
 	if !errors.Is(err, errMessageCreateWriterStopped) {
 		t.Fatalf("expected stopped error after shutdown, got %v", err)
 	}

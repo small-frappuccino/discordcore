@@ -1,4 +1,4 @@
-package storage
+package postgres
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/pashagolub/pgxmock/v4"
+	"github.com/small-frappuccino/discordcore/pkg/messages"
 )
 
 func TestStore_Messages_UpsertMessagesContext(t *testing.T) {
@@ -17,7 +18,7 @@ func TestStore_Messages_UpsertMessagesContext(t *testing.T) {
 		pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(), pgxmock.AnyArg(),
 	).WillReturnResult(pgxmock.NewResult("INSERT", 1))
 
-	store.UpsertMessagesContext(context.Background(), []MessageRecord{{GuildID: "g", MessageID: "m"}})
+	store.UpsertMessagesContext(context.Background(), []messages.Record{{GuildID: "g", MessageID: "m"}})
 }
 
 func TestStore_Messages_GetMessage_ErrNoRows(t *testing.T) {

@@ -5,106 +5,72 @@ package task
 
 import (
 	"context"
+	"iter"
 	"strings"
 	"testing"
+	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordcore/pkg/members"
 )
 
-// mockDB implements storage.DB
 type mockDB struct {
 	execCount int
 }
 
-func (m *mockDB) Begin(ctx context.Context) (pgx.Tx, error) {
-	return &mockTx{db: m}, nil
+type mockMembersRepo struct {
+	db *mockDB
 }
-func (m *mockDB) Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error) {
-	return pgconn.CommandTag{}, nil
-}
-func (m *mockDB) Query(ctx context.Context, sql string, arguments ...any) (pgx.Rows, error) {
+
+func (m *mockMembersRepo) GetUserPreferences(ctx context.Context, userID string) (*members.UserPreferences, error) {
 	return nil, nil
 }
-func (m *mockDB) QueryRow(ctx context.Context, sql string, arguments ...any) pgx.Row {
+func (m *mockMembersRepo) UpdateUserPreferences(ctx context.Context, prefs *members.UserPreferences) error {
 	return nil
 }
-func (m *mockDB) Ping(ctx context.Context) error { return nil }
-func (m *mockDB) Close()                         {}
-
-type mockTx struct {
-	db *mockDB
-	pgx.Tx
-}
-
-func (tx *mockTx) Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error) {
-	if err := ctx.Err(); err != nil {
-		return pgconn.CommandTag{}, err
+func (m *mockMembersRepo) UpsertGuildMemberSnapshotsContext(ctx context.Context, guildID string, snapshots []members.Snapshot, updatedAt time.Time) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+		m.db.execCount++
+		return nil
 	}
-	tx.db.execCount++
-	return pgconn.CommandTag{}, nil
+}
+func (m *mockMembersRepo) UpsertMemberJoinContext(ctx context.Context, guildID, userID string, joinedAt time.Time) error {
+	return nil
+}
+func (m *mockMembersRepo) UpsertMemberPresenceContext(ctx context.Context, input members.PresenceInput) error {
+	return nil
+}
+func (m *mockMembersRepo) MemberJoin(ctx context.Context, guildID, userID string) (time.Time, bool, error) {
+	return time.Time{}, false, nil
+}
+func (m *mockMembersRepo) GetAvatar(ctx context.Context, guildID, userID string) (hash string, updatedAt time.Time, ok bool, err error) {
+	return "", time.Time{}, false, nil
+}
+func (m *mockMembersRepo) GetActiveGuildMemberStatesContext(ctx context.Context, guildID string) iter.Seq2[members.CurrentState, error] {
+	return nil
+}
+func (m *mockMembersRepo) StreamAllGuildMemberRoles(ctx context.Context, guildID string) (iter.Seq2[string, []string], error) {
+	return nil, nil
+}
+func (m *mockMembersRepo) MarkMemberLeftContext(ctx context.Context, guildID, userID string, at time.Time) error {
+	return nil
+}
+func (m *mockMembersRepo) UpsertMemberRoles(guildID, userID string, roles []string, at time.Time) error {
+	return nil
 }
 
-type mockRows struct {
-	pgx.Rows
-}
-
-func (m *mockRows) Err() error             { return nil }
-func (m *mockRows) Close()                 {}
-func (m *mockRows) Next() bool             { return false }
-func (m *mockRows) Scan(dest ...any) error { return nil }
-
-func (tx *mockTx) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	tx.db.execCount++
-	return &mockRows{}, nil
-}
-
-type mockRow struct {
-	pgx.Row
-}
-
-func (m *mockRow) Scan(dest ...any) error {
-	return pgx.ErrNoRows
-}
-
-func (tx *mockTx) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
-	tx.db.execCount++
-	return &mockRow{}
-}
-
-type mockBatchResults struct {
-	pgx.BatchResults
-}
-
-func (m *mockBatchResults) Close() error                     { return nil }
-func (m *mockBatchResults) Exec() (pgconn.CommandTag, error) { return pgconn.CommandTag{}, nil }
-func (m *mockBatchResults) Query() (pgx.Rows, error)         { return &mockRows{}, nil }
-func (m *mockBatchResults) QueryRow() pgx.Row                { return &mockRow{} }
-
-func (tx *mockTx) SendBatch(ctx context.Context, b *pgx.Batch) pgx.BatchResults {
-	tx.db.execCount++
-	return &mockBatchResults{}
-}
-
-func (tx *mockTx) Commit(ctx context.Context) error   { return nil }
-func (tx *mockTx) Rollback(ctx context.Context) error { return nil }
-
-// TestAdapters_TransactionalFallback ensures that when the AvatarProcessor is suppressed,
-// avatar updates safely execute a direct transactional fallback to Postgres storage.
 func TestAdapters_TransactionalFallback(t *testing.T) {
 	t.Parallel()
 
 	db := &mockDB{}
-	store, _ := storage.NewStore(db, nil)
+	store := &mockMembersRepo{db: db}
 
 	adapters := &NotificationAdapters{
 		Router:          NewRouter(Defaults()),
 		AvatarProcessor: nil, // Intentionally suppressed to trigger storage fallback
-		Store:           store,
+		MembersRepo:     store,
 	}
 	defer adapters.Router.Close()
 
@@ -113,8 +79,7 @@ func TestAdapters_TransactionalFallback(t *testing.T) {
 	payload := AvatarChangePayload{
 		GuildID:   "123456789012345678",
 		UserID:    "876543210987654321",
-		Username:  "Alice",
-		NewAvatar: "a_deadbeef1234567890",
+		NewAvatar: "abcdef1234567890",
 	}
 
 	// First pass: Valid context (Commit)
@@ -137,6 +102,6 @@ func TestAdapters_TransactionalFallback(t *testing.T) {
 		t.Fatalf("Expected context cancellation to force a database transaction rollback, got success")
 	}
 	if !strings.Contains(errRollback.Error(), "context canceled") {
-		t.Fatalf("Expected 'context canceled' to trigger rollback, got: %v", errRollback)
+		t.Fatalf("Expected context cancellation error, got: %v", errRollback)
 	}
 }

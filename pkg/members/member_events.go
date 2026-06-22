@@ -19,7 +19,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/logging"
 	"github.com/small-frappuccino/discordcore/pkg/service"
-	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordcore/pkg/system"
 )
 
 // Hardcoded IDs for automatic role assignment
@@ -38,8 +38,8 @@ type MemberEventService struct {
 	joinTimes map[string]time.Time // key: guildID:userID
 	joinMu    sync.RWMutex
 
-	// Complementary persistence (Postgres)
-	store *storage.Store
+	membersRepo Repository
+	systemRepo  system.Repository
 
 	arikawaState *state.State
 }
@@ -50,18 +50,20 @@ type MemberEventService struct {
 type EventServiceDeps struct {
 	ConfigManager *files.ConfigManager
 	Sink          MemberSink
-	Store         *storage.Store
+	MembersRepo   Repository
+	SystemRepo    system.Repository
 	BotInstanceID string
 	Logger        *slog.Logger
 	ArikawaState  *state.State
 }
 
 // NewMemberEventService creates a new instance of the member events service
-func NewMemberEventService(configManager *files.ConfigManager, sink MemberSink, store *storage.Store, logger *slog.Logger) *MemberEventService {
+func NewMemberEventService(configManager *files.ConfigManager, sink MemberSink, membersRepo Repository, systemRepo system.Repository, logger *slog.Logger) *MemberEventService {
 	return NewMemberEventServiceForBot(EventServiceDeps{
 		ConfigManager: configManager,
 		Sink:          sink,
-		Store:         store,
+		MembersRepo:   membersRepo,
+		SystemRepo:    systemRepo,
 		Logger:        logger,
 		ArikawaState:  nil, // Fallback if no arikawa state
 	})
@@ -73,9 +75,10 @@ func NewMemberEventServiceForBot(deps EventServiceDeps) *MemberEventService {
 		configManager: deps.ConfigManager,
 		botInstanceID: files.NormalizeBotInstanceID(deps.BotInstanceID),
 		sink:          deps.Sink,
-		store:         deps.Store,
+		membersRepo:   deps.MembersRepo,
+		systemRepo:    deps.SystemRepo,
 		logger:        deps.Logger,
-		activity: service.NewRuntimeActivity(deps.Store, service.RuntimeActivityOptions{
+		activity: service.NewRuntimeActivity(deps.SystemRepo, service.RuntimeActivityOptions{
 			RunErr:        service.RunErrWithTimeoutContext,
 			EventTimeout:  service.DependencyTimeout,
 			BotInstanceID: files.NormalizeBotInstanceID(deps.BotInstanceID),
@@ -88,7 +91,7 @@ func NewMemberEventServiceForBot(deps EventServiceDeps) *MemberEventService {
 
 // Start registers member event handlers
 func (mes *MemberEventService) Start(ctx context.Context) error {
-	runCtx, err := mes.lifecycle.Start(ctx)
+	_, err := mes.lifecycle.Start(ctx)
 	if err != nil {
 		return fmt.Errorf("MemberEventService.Start: %w", err)
 	}
@@ -96,13 +99,6 @@ func (mes *MemberEventService) Start(ctx context.Context) error {
 	// Ensure join map is initialized
 	if mes.joinTimes == nil {
 		mes.joinTimes = make(map[string]time.Time)
-	}
-
-	// Store should be injected and already initialized
-	if mes.store != nil {
-		if err := service.RunErrWithTimeoutContext(runCtx, service.DependencyTimeout, func(context.Context) error { return mes.store.Init() }); err != nil {
-			mes.logger.Warn(fmt.Sprintf("Member event service: failed to initialize store (continuing): %v", err))
-		}
 	}
 
 	// Handlers are managed externally
@@ -238,14 +234,14 @@ func (mes *MemberEventService) IngestGuildMemberAdd(ctx context.Context, m *gate
 	joinedAt := m.Joined.Time()
 
 	// Persist absolute join time to Postgres store (best effort)
-	if mes.store != nil && !joinedAt.IsZero() {
+	if mes.membersRepo != nil && mes.systemRepo != nil && !joinedAt.IsZero() {
 		if err := service.RunErrWithTimeoutContext(ctx, service.DependencyTimeout, func(runCtx context.Context) error {
-			return mes.store.UpsertMemberJoinContext(runCtx, m.GuildID.String(), m.User.ID.String(), joinedAt)
+			return mes.membersRepo.UpsertMemberJoinContext(runCtx, m.GuildID.String(), m.User.ID.String(), joinedAt)
 		}); err != nil {
 			mes.logger.Warn("Failed to persist member join timestamp", "guildID", m.GuildID, "userID", m.User.ID, "joinedAt", joinedAt, "error", err)
 		}
 		if err := service.RunErrWithTimeoutContext(ctx, service.DependencyTimeout, func(runCtx context.Context) error {
-			return mes.store.IncrementDailyMemberJoinContext(runCtx, m.GuildID.String(), m.User.ID.String(), joinedAt)
+			return mes.systemRepo.IncrementDailyMemberJoinContext(runCtx, m.GuildID.String(), m.User.ID.String(), joinedAt)
 		}); err != nil {
 			mes.logger.Warn("Failed to increment daily member join metric", "guildID", m.GuildID, "userID", m.User.ID, "joinedAt", joinedAt, "error", err)
 		}
@@ -312,9 +308,9 @@ func (mes *MemberEventService) IngestGuildMemberRemove(ctx context.Context, m *g
 	botTime := mes.getBotTimeOnServer(ctx, m.GuildID.String())
 
 	// Increment daily member leave metric
-	if mes.store != nil {
+	if mes.systemRepo != nil {
 		if err := service.RunErrWithTimeoutContext(ctx, service.DependencyTimeout, func(runCtx context.Context) error {
-			return mes.store.IncrementDailyMemberLeaveContext(runCtx, m.GuildID.String(), m.User.ID.String(), time.Now().UTC())
+			return mes.systemRepo.IncrementDailyMemberLeaveContext(runCtx, m.GuildID.String(), m.User.ID.String(), time.Now().UTC())
 		}); err != nil {
 			mes.logger.Warn("Failed to increment daily member leave metric", "guildID", m.GuildID, "userID", m.User.ID, "error", err)
 		}
@@ -455,13 +451,13 @@ func (mes *MemberEventService) calculateServerTime(ctx context.Context, guildID,
 	}
 
 	// 3) Persistent store (Postgres)
-	if mes.store != nil {
+	if mes.systemRepo != nil {
 		type joinLookup struct {
 			at time.Time
 			ok bool
 		}
 		res, err := service.RunWithTimeoutContext(ctx, service.DependencyTimeout, func(runCtx context.Context) (joinLookup, error) {
-			at, ok, err := mes.store.MemberJoin(runCtx, guildID, userID)
+			at, ok, err := mes.membersRepo.MemberJoin(runCtx, guildID, userID)
 			return joinLookup{at: at, ok: ok}, err
 		})
 		if err != nil {

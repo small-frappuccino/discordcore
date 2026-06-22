@@ -19,7 +19,8 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/logging"
 	"github.com/small-frappuccino/discordcore/pkg/service"
-	"github.com/small-frappuccino/discordcore/pkg/storage"
+
+	"github.com/small-frappuccino/discordcore/pkg/system"
 	"github.com/small-frappuccino/discordcore/pkg/task"
 )
 
@@ -99,7 +100,8 @@ type MessageEventService struct {
 	configManager *files.ConfigManager
 	botInstanceID string
 	sink          MessageSink
-	store         *storage.Store
+	store         Repository
+	systemRepo    system.Repository
 	activity      *service.RuntimeActivity
 	lifecycle     service.BaseLifecycle
 	logger        *slog.Logger
@@ -153,7 +155,8 @@ type MessageDeleteTaskPayload struct {
 type EventServiceDeps struct {
 	ConfigManager *files.ConfigManager
 	Sink          MessageSink
-	Store         *storage.Store
+	Store         Repository
+	SystemRepo    system.Repository
 	BotInstanceID string
 	Logger        *slog.Logger
 	ArikawaState  *state.State
@@ -167,8 +170,9 @@ func NewMessageEventServiceForBot(deps EventServiceDeps) *MessageEventService {
 		botInstanceID: files.NormalizeBotInstanceID(deps.BotInstanceID),
 		sink:          deps.Sink,
 		store:         deps.Store,
+		systemRepo:    deps.SystemRepo,
 		logger:        deps.Logger,
-		activity: service.NewRuntimeActivity(deps.Store, service.RuntimeActivityOptions{
+		activity: service.NewRuntimeActivity(deps.SystemRepo, service.RuntimeActivityOptions{
 			RunErr:        service.RunErrWithTimeoutContext,
 			EventTimeout:  service.DependencyTimeout,
 			BotInstanceID: files.NormalizeBotInstanceID(deps.BotInstanceID),
@@ -827,7 +831,7 @@ func (mes *MessageEventService) persistMessageCreate(guildID string, m *gateway.
 	}
 
 	now := time.Now().UTC()
-	record := storage.MessageRecord{
+	record := Record{
 		GuildID:        guildID,
 		MessageID:      m.ID.String(),
 		ChannelID:      m.ChannelID.String(),
@@ -840,9 +844,9 @@ func (mes *MessageEventService) persistMessageCreate(guildID string, m *gateway.
 		HasExpiry:      true,
 	}
 
-	var version *storage.MessageVersion
+	var version *Version
 	if mes.versioningEnabled {
-		version = &storage.MessageVersion{
+		version = &Version{
 			GuildID:     guildID,
 			MessageID:   m.ID.String(),
 			ChannelID:   m.ChannelID.String(),
@@ -857,7 +861,7 @@ func (mes *MessageEventService) persistMessageCreate(guildID string, m *gateway.
 		}
 	}
 
-	metric := storage.DailyMessageCountDelta{
+	metric := DailyCountDelta{
 		GuildID:   guildID,
 		ChannelID: m.ChannelID.String(),
 		UserID:    m.Author.ID.String(),
@@ -881,7 +885,7 @@ func (mes *MessageEventService) persistMessageCreate(guildID string, m *gateway.
 			mes.logger.Warn("MessageCreate: failed to persist message version", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID, "error", err)
 		}
 	}
-	if err := mes.store.IncrementDailyMessageCountsContext(context.Background(), []storage.DailyMessageCountDelta{{GuildID: guildID, ChannelID: m.ChannelID.String(), UserID: m.Author.ID.String(), Day: now, Count: 1}}); err != nil {
+	if err := mes.store.IncrementDailyMessageCountsContext(context.Background(), []DailyCountDelta{{GuildID: guildID, ChannelID: m.ChannelID.String(), UserID: m.Author.ID.String(), Day: now, Count: 1}}); err != nil {
 		mes.logger.Warn("MessageCreate: failed to increment daily message metric", "guildID", guildID, "channelID", m.ChannelID, "messageID", m.ID, "userID", m.Author.ID, "error", err)
 	}
 }
@@ -892,7 +896,7 @@ func (mes *MessageEventService) persistMessageUpdate(updated *CachedMessage, con
 	}
 
 	now := time.Now().UTC()
-	record := storage.MessageRecord{
+	record := Record{
 		GuildID:        updated.GuildID,
 		MessageID:      updated.ID,
 		ChannelID:      updated.ChannelID,
@@ -905,9 +909,9 @@ func (mes *MessageEventService) persistMessageUpdate(updated *CachedMessage, con
 		HasExpiry:      true,
 	}
 
-	var version *storage.MessageVersion
+	var version *Version
 	if mes.versioningEnabled {
-		version = &storage.MessageVersion{
+		version = &Version{
 			GuildID:   updated.GuildID,
 			MessageID: updated.ID,
 			ChannelID: updated.ChannelID,
@@ -919,7 +923,7 @@ func (mes *MessageEventService) persistMessageUpdate(updated *CachedMessage, con
 	}
 
 	if mes.messageCreateWriter != nil {
-		if err := mes.messageCreateWriter.Enqueue(record, version, storage.DailyMessageCountDelta{}); err == nil {
+		if err := mes.messageCreateWriter.Enqueue(record, version, DailyCountDelta{}); err == nil {
 			return
 		} else {
 			mes.logger.Warn("MessageUpdate: async writer enqueue failed; falling back to synchronous persistence", "guildID", updated.GuildID, "channelID", updated.ChannelID, "messageID", updated.ID, "userID", updated.Author.ID, "error", err)
@@ -941,9 +945,9 @@ func (mes *MessageEventService) persistMessageDelete(cached *CachedMessage, dele
 		return
 	}
 
-	var version *storage.MessageVersion
+	var version *Version
 	if includeVersion && cached.Author != nil {
-		version = &storage.MessageVersion{
+		version = &Version{
 			GuildID:   cached.GuildID,
 			MessageID: cached.ID,
 			ChannelID: cached.ChannelID,

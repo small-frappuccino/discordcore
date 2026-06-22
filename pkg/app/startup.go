@@ -21,7 +21,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/messages"
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
-	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordcore/pkg/storage/postgres"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -186,7 +186,7 @@ type controlStartupTaskOptions struct {
 	runtimeApplier        *runtimeapply.Manager
 	controlBearerToken    string
 	runtimeResolver       *botRuntimeResolver
-	store                 *storage.Store
+	store                 *postgres.Store
 	qotdService           *qotd.Service
 	moderationMetrics     moderation.Metrics
 	membersMetrics        members.Metrics

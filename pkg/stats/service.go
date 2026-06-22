@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/members"
 	svc "github.com/small-frappuccino/discordcore/pkg/service"
-	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
 const (
@@ -28,10 +28,10 @@ const (
 
 // StateStore abstracts the storage operations required by the StatsService.
 type StateStore interface {
-	GetActiveGuildMemberStatesContext(ctx context.Context, guildID string) iter.Seq2[storage.GuildMemberCurrentState, error]
+	GetActiveGuildMemberStatesContext(ctx context.Context, guildID string) iter.Seq2[members.CurrentState, error]
 	Metadata(ctx context.Context, key string) (time.Time, bool, error)
 	SetMetadata(ctx context.Context, key string, at time.Time) error
-	UpsertMemberPresenceContext(ctx context.Context, input storage.MemberPresenceInput) error
+	UpsertMemberPresenceContext(ctx context.Context, input members.PresenceInput) error
 	UpsertMemberRoles(guildID, userID string, roles []string, at time.Time) error
 	MarkMemberLeftContext(ctx context.Context, guildID, userID string, at time.Time) error
 	HeartbeatForBot(ctx context.Context, botInstanceID string) (time.Time, bool, error)
@@ -666,7 +666,7 @@ func statsSnapshotFromGatewayMember(member MemberSnapshot, trackedRoles map[stri
 	}, true
 }
 
-func statsSnapshotFromStoredState(member storage.GuildMemberCurrentState, trackedRoles map[string]struct{}) (string, statsMemberSnapshot, bool) {
+func statsSnapshotFromStoredState(member members.CurrentState, trackedRoles map[string]struct{}) (string, statsMemberSnapshot, bool) {
 	userID := strings.TrimSpace(member.UserID)
 	if userID == "" || !member.Active {
 		return "", statsMemberSnapshot{}, false
@@ -944,7 +944,7 @@ func (s *StatsService) persistStatsMemberActive(guildID, userID string, joinedAt
 	runCtx, cancel := context.WithTimeout(context.Background(), monitoringPersistenceTimeout)
 	defer cancel()
 
-	if err := s.store.UpsertMemberPresenceContext(runCtx, storage.MemberPresenceInput{GuildID: guildID, UserID: userID, JoinedAt: joinedAt, SeenAt: time.Now().UTC(), IsBot: isBot}); err != nil {
+	if err := s.store.UpsertMemberPresenceContext(runCtx, members.PresenceInput{GuildID: guildID, UserID: userID, JoinedAt: joinedAt, SeenAt: time.Now().UTC(), IsBot: isBot}); err != nil {
 		s.log(guildID).Warn(
 			"Failed to persist stats member state",
 			"operation", "monitoring.stats.persist_member_active",

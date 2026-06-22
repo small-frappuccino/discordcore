@@ -8,7 +8,6 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/clock"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
 // Publisher abstracts the Discord-side official-post operations the Service
@@ -33,7 +32,7 @@ func (n NopMetrics) RecordSuppressionCleared()    {}
 // Service is the QOTD domain coordinator. It serializes guild work via an actor model.
 type Service struct {
 	configManager *files.ConfigManager
-	store         *storage.Store
+	repo          Repository
 	publisher     Publisher
 	metrics       Metrics
 	now           func() time.Time
@@ -43,18 +42,18 @@ type Service struct {
 }
 
 // NewService constructs the QOTD service.
-func NewService(configManager *files.ConfigManager, store *storage.Store, publisher Publisher) *Service {
-	return NewServiceWithMetrics(configManager, store, publisher, nil)
+func NewService(configManager *files.ConfigManager, repo Repository, publisher Publisher) *Service {
+	return NewServiceWithMetrics(configManager, repo, publisher, nil)
 }
 
 // NewServiceWithMetrics constructs the QOTD service with metrics.
-func NewServiceWithMetrics(configManager *files.ConfigManager, store *storage.Store, publisher Publisher, metrics Metrics) *Service {
+func NewServiceWithMetrics(configManager *files.ConfigManager, repo Repository, publisher Publisher, metrics Metrics) *Service {
 	if metrics == nil {
 		metrics = NopMetrics{}
 	}
 	return &Service{
 		configManager: configManager,
-		store:         store,
+		repo:          repo,
 		publisher:     publisher,
 		metrics:       metrics,
 		now: func() time.Time {

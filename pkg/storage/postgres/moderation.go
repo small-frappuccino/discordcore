@@ -1,4 +1,4 @@
-package storage
+package postgres
 
 import (
 	"context"
@@ -10,18 +10,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/small-frappuccino/discordcore/pkg/idgen"
+	"github.com/small-frappuccino/discordcore/pkg/moderation"
 )
-
-// ModerationWarning is a stored warning against a user in a guild.
-type ModerationWarning struct {
-	ID          int64
-	GuildID     string
-	UserID      string
-	CaseNumber  int64
-	ModeratorID string
-	Reason      string
-	CreatedAt   time.Time
-}
 
 // NextModerationCaseNumber atomically increments and returns the next case number.
 func (s *Store) NextModerationCaseNumber(ctx context.Context, guildID string) (int64, error) {
@@ -46,13 +36,13 @@ func (s *Store) NextModerationCaseNumber(ctx context.Context, guildID string) (i
 }
 
 // CreateModerationWarning creates a moderation warning transactionally.
-func (s *Store) CreateModerationWarning(ctx context.Context, guildID, userID, moderatorID, reason string, createdAt time.Time) (warning ModerationWarning, err error) {
+func (s *Store) CreateModerationWarning(ctx context.Context, guildID, userID, moderatorID, reason string, createdAt time.Time) (warning moderation.Warning, err error) {
 	guildID = strings.TrimSpace(guildID)
 	userID = strings.TrimSpace(userID)
 	moderatorID = strings.TrimSpace(moderatorID)
 	reason = strings.TrimSpace(reason)
 	if guildID == "" || userID == "" || moderatorID == "" || reason == "" {
-		return ModerationWarning{}, fmt.Errorf("missing required fields for warning")
+		return moderation.Warning{}, fmt.Errorf("missing required fields for warning")
 	}
 	if createdAt.IsZero() {
 		createdAt = time.Now().UTC()
@@ -62,7 +52,7 @@ func (s *Store) CreateModerationWarning(ctx context.Context, guildID, userID, mo
 
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
-		return ModerationWarning{}, fmt.Errorf("Store.CreateModerationWarning: %w", err)
+		return moderation.Warning{}, fmt.Errorf("Store.CreateModerationWarning: %w", err)
 	}
 	defer func() {
 		if rerr := tx.Rollback(ctx); rerr != nil && !errors.Is(rerr, pgx.ErrTxClosed) {
@@ -79,10 +69,10 @@ func (s *Store) CreateModerationWarning(ctx context.Context, guildID, userID, mo
          RETURNING last_case_number`,
 		guildID,
 	).Scan(&caseNumber); err != nil {
-		return ModerationWarning{}, err
+		return moderation.Warning{}, err
 	}
 
-	warning = ModerationWarning{
+	warning = moderation.Warning{
 		GuildID:     guildID,
 		UserID:      userID,
 		CaseNumber:  caseNumber,
@@ -97,18 +87,18 @@ func (s *Store) CreateModerationWarning(ctx context.Context, guildID, userID, mo
          RETURNING id, created_at`,
 		idgen.GenerateID(), warning.GuildID, warning.UserID, warning.CaseNumber, warning.ModeratorID, warning.Reason, warning.CreatedAt,
 	).Scan(&warning.ID, &warning.CreatedAt); err != nil {
-		return ModerationWarning{}, err
+		return moderation.Warning{}, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return ModerationWarning{}, fmt.Errorf("Store.CreateModerationWarning: %w", err)
+		return moderation.Warning{}, fmt.Errorf("Store.CreateModerationWarning: %w", err)
 	}
 	return warning, nil
 }
 
 // ListModerationWarnings lists moderation warnings utilizing iter.Seq2.
-func (s *Store) ListModerationWarnings(ctx context.Context, guildID, userID string, limit int) iter.Seq2[ModerationWarning, error] {
-	return func(yield func(ModerationWarning, error) bool) {
+func (s *Store) ListModerationWarnings(ctx context.Context, guildID, userID string, limit int) iter.Seq2[moderation.Warning, error] {
+	return func(yield func(moderation.Warning, error) bool) {
 		guildID = strings.TrimSpace(guildID)
 		userID = strings.TrimSpace(userID)
 		if guildID == "" || userID == "" {
@@ -130,15 +120,15 @@ func (s *Store) ListModerationWarnings(ctx context.Context, guildID, userID stri
 			guildID, userID, limit,
 		)
 		if err != nil {
-			yield(ModerationWarning{}, fmt.Errorf("Store.ListModerationWarnings: %w", err))
+			yield(moderation.Warning{}, fmt.Errorf("Store.ListModerationWarnings: %w", err))
 			return
 		}
 		defer rows.Close()
 
 		for rows.Next() {
-			var warning ModerationWarning
+			var warning moderation.Warning
 			if err := rows.Scan(&warning.ID, &warning.GuildID, &warning.UserID, &warning.CaseNumber, &warning.ModeratorID, &warning.Reason, &warning.CreatedAt); err != nil {
-				yield(ModerationWarning{}, err)
+				yield(moderation.Warning{}, err)
 				return
 			}
 			warning.CreatedAt = warning.CreatedAt.UTC()
@@ -147,7 +137,7 @@ func (s *Store) ListModerationWarnings(ctx context.Context, guildID, userID stri
 			}
 		}
 		if err := rows.Err(); err != nil {
-			yield(ModerationWarning{}, fmt.Errorf("Store.ListModerationWarnings: %w", err))
+			yield(moderation.Warning{}, fmt.Errorf("Store.ListModerationWarnings: %w", err))
 		}
 	}
 }

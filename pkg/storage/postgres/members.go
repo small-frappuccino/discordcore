@@ -1,4 +1,4 @@
-package storage
+package postgres
 
 import (
 	"context"
@@ -11,48 +11,18 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/small-frappuccino/discordcore/pkg/idgen"
+	"github.com/small-frappuccino/discordcore/pkg/members"
 )
-
-// GuildMemberSnapshot represents the persisted snapshot for one guild member.
-type GuildMemberSnapshot struct {
-	UserID     string
-	AvatarHash string
-	HasAvatar  bool
-	Roles      []string
-	HasRoles   bool
-	JoinedAt   time.Time
-	IsBot      bool
-	HasBot     bool
-}
-
-// GuildMemberCurrentState is the persisted current membership state for a user.
-type GuildMemberCurrentState struct {
-	UserID     string
-	JoinedAt   time.Time
-	LastSeenAt time.Time
-	LeftAt     time.Time
-	Active     bool
-	IsBot      bool
-	HasBot     bool
-	Roles      []string
-}
-
-// UserPreferences represents user-specific settings.
-type UserPreferences struct {
-	UserID   string `json:"user_id"`
-	Theme    string `json:"theme"`
-	Timezone string `json:"timezone"`
-}
 
 // GetUserPreferences retrieves preferences or returns defaults if none exist.
 //
 // Defaults to "system" theme and "UTC" timezone upon pgx.ErrNoRows interception.
-func (s *Store) GetUserPreferences(ctx context.Context, userID string) (*UserPreferences, error) {
-	var prefs UserPreferences
+func (s *Store) GetUserPreferences(ctx context.Context, userID string) (*members.UserPreferences, error) {
+	var prefs members.UserPreferences
 	err := s.db.QueryRow(ctx, `SELECT user_id, theme, timezone FROM user_preferences WHERE user_id = $1`, userID).Scan(&prefs.UserID, &prefs.Theme, &prefs.Timezone)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return &UserPreferences{UserID: userID, Theme: "system", Timezone: "UTC"}, nil
+			return &members.UserPreferences{UserID: userID, Theme: "system", Timezone: "UTC"}, nil
 		}
 		return nil, fmt.Errorf("GetUserPreferences scan: %w", err)
 	}
@@ -60,7 +30,7 @@ func (s *Store) GetUserPreferences(ctx context.Context, userID string) (*UserPre
 }
 
 // UpdateUserPreferences upserts user preferences.
-func (s *Store) UpdateUserPreferences(ctx context.Context, prefs *UserPreferences) error {
+func (s *Store) UpdateUserPreferences(ctx context.Context, prefs *members.UserPreferences) error {
 	_, err := s.db.Exec(ctx, `
 		INSERT INTO user_preferences (user_id, theme, timezone, created_at, updated_at)
 		VALUES ($1, $2, $3, NOW(), NOW())
@@ -76,7 +46,7 @@ func (s *Store) UpdateUserPreferences(ctx context.Context, prefs *UserPreference
 }
 
 // UpsertGuildMemberSnapshotsContext persists a batch of member snapshots transactionally.
-func (s *Store) UpsertGuildMemberSnapshotsContext(ctx context.Context, guildID string, snapshots []GuildMemberSnapshot, updatedAt time.Time) (err error) {
+func (s *Store) UpsertGuildMemberSnapshotsContext(ctx context.Context, guildID string, snapshots []members.Snapshot, updatedAt time.Time) (err error) {
 	guildID = strings.TrimSpace(guildID)
 	if guildID == "" || len(snapshots) == 0 {
 		return nil
@@ -112,10 +82,10 @@ func (s *Store) UpsertGuildMemberSnapshotsContext(ctx context.Context, guildID s
 	return tx.Commit(ctx)
 }
 
-func upsertGuildMemberSnapshotBatch(ctx context.Context, tx pgx.Tx, guildID string, snapshots []GuildMemberSnapshot, updatedAt time.Time) error {
-	avatarRows := make([]GuildMemberSnapshot, 0, len(snapshots))
-	roleRows := make([]GuildMemberSnapshot, 0, len(snapshots))
-	joinRows := make([]GuildMemberSnapshot, 0, len(snapshots))
+func upsertGuildMemberSnapshotBatch(ctx context.Context, tx pgx.Tx, guildID string, snapshots []members.Snapshot, updatedAt time.Time) error {
+	avatarRows := make([]members.Snapshot, 0, len(snapshots))
+	roleRows := make([]members.Snapshot, 0, len(snapshots))
+	joinRows := make([]members.Snapshot, 0, len(snapshots))
 	avatarUserIDs := make([]string, 0, len(snapshots))
 	roleUserIDs := make([]string, 0, len(snapshots))
 
@@ -164,13 +134,13 @@ func upsertGuildMemberSnapshotBatch(ctx context.Context, tx pgx.Tx, guildID stri
 	return nil
 }
 
-func normalizeGuildMemberSnapshots(snapshots []GuildMemberSnapshot) []GuildMemberSnapshot {
+func normalizeGuildMemberSnapshots(snapshots []members.Snapshot) []members.Snapshot {
 	if len(snapshots) == 0 {
 		return nil
 	}
 
 	order := make([]string, 0, len(snapshots))
-	byUser := make(map[string]*GuildMemberSnapshot, len(snapshots))
+	byUser := make(map[string]*members.Snapshot, len(snapshots))
 	for _, snapshot := range snapshots {
 		userID := strings.TrimSpace(snapshot.UserID)
 		if userID == "" {
@@ -178,7 +148,7 @@ func normalizeGuildMemberSnapshots(snapshots []GuildMemberSnapshot) []GuildMembe
 		}
 		existing, ok := byUser[userID]
 		if !ok {
-			existing = &GuildMemberSnapshot{UserID: userID}
+			existing = &members.Snapshot{UserID: userID}
 			byUser[userID] = existing
 			order = append(order, userID)
 		}
@@ -205,7 +175,7 @@ func normalizeGuildMemberSnapshots(snapshots []GuildMemberSnapshot) []GuildMembe
 		}
 	}
 
-	normalized := make([]GuildMemberSnapshot, 0, len(order))
+	normalized := make([]members.Snapshot, 0, len(order))
 	for _, userID := range order {
 		normalized = append(normalized, *byUser[userID])
 	}
@@ -255,7 +225,7 @@ func queryCurrentAvatarHashesByUserID(ctx context.Context, tx pgx.Tx, guildID st
 
 type avatarHistoryBatch struct {
 	GuildID       string
-	Snapshots     []GuildMemberSnapshot
+	Snapshots     []members.Snapshot
 	CurrentHashes map[string]string
 	UpdatedAt     time.Time
 }
@@ -308,7 +278,7 @@ func insertAvatarHistoryBatch(ctx context.Context, tx pgx.Tx, batch avatarHistor
 	return err
 }
 
-func upsertAvatarCurrentBatch(ctx context.Context, tx pgx.Tx, guildID string, snapshots []GuildMemberSnapshot, updatedAt time.Time) error {
+func upsertAvatarCurrentBatch(ctx context.Context, tx pgx.Tx, guildID string, snapshots []members.Snapshot, updatedAt time.Time) error {
 	if len(snapshots) == 0 {
 		return nil
 	}
@@ -343,7 +313,7 @@ func deleteRolesForUsersBatch(ctx context.Context, tx pgx.Tx, guildID string, us
 	return err
 }
 
-func insertMemberRolesBatch(ctx context.Context, tx pgx.Tx, guildID string, snapshots []GuildMemberSnapshot, updatedAt time.Time) error {
+func insertMemberRolesBatch(ctx context.Context, tx pgx.Tx, guildID string, snapshots []members.Snapshot, updatedAt time.Time) error {
 	var totalRoles int
 	for _, snap := range snapshots {
 		totalRoles += len(snap.Roles)
@@ -374,7 +344,7 @@ func insertMemberRolesBatch(ctx context.Context, tx pgx.Tx, guildID string, snap
 	return err
 }
 
-func upsertMemberJoinsBatch(ctx context.Context, tx pgx.Tx, guildID string, snapshots []GuildMemberSnapshot, seenAt time.Time) error {
+func upsertMemberJoinsBatch(ctx context.Context, tx pgx.Tx, guildID string, snapshots []members.Snapshot, seenAt time.Time) error {
 	if len(snapshots) == 0 {
 		return nil
 	}
@@ -454,17 +424,8 @@ func (s *Store) UpsertMemberJoinContext(ctx context.Context, guildID, userID str
 	return err
 }
 
-// MemberPresenceInput describes a member presence upsert payload.
-type MemberPresenceInput struct {
-	GuildID  string
-	UserID   string
-	JoinedAt time.Time
-	SeenAt   time.Time
-	IsBot    bool
-}
-
 // UpsertMemberPresenceContext records that a member is currently present in a guild.
-func (s *Store) UpsertMemberPresenceContext(ctx context.Context, input MemberPresenceInput) error {
+func (s *Store) UpsertMemberPresenceContext(ctx context.Context, input members.PresenceInput) error {
 	input.GuildID = strings.TrimSpace(input.GuildID)
 	input.UserID = strings.TrimSpace(input.UserID)
 	if input.GuildID == "" || input.UserID == "" {
@@ -532,8 +493,8 @@ func (s *Store) GetAvatar(ctx context.Context, guildID, userID string) (hash str
 }
 
 // GetActiveGuildMemberStatesContext streams current member states utilizing iter.Seq2, avoiding slice heap allocations.
-func (s *Store) GetActiveGuildMemberStatesContext(ctx context.Context, guildID string) iter.Seq2[GuildMemberCurrentState, error] {
-	return func(yield func(GuildMemberCurrentState, error) bool) {
+func (s *Store) GetActiveGuildMemberStatesContext(ctx context.Context, guildID string) iter.Seq2[members.CurrentState, error] {
+	return func(yield func(members.CurrentState, error) bool) {
 		guildID = strings.TrimSpace(guildID)
 		if guildID == "" {
 			return
@@ -551,12 +512,12 @@ func (s *Store) GetActiveGuildMemberStatesContext(ctx context.Context, guildID s
 			 ORDER BY CAST(mj.user_id AS BIGINT), rc.role_id
 		`, guildID)
 		if err != nil {
-			yield(GuildMemberCurrentState{}, fmt.Errorf("Store.GetActiveGuildMemberStatesContext: %w", err))
+			yield(members.CurrentState{}, fmt.Errorf("Store.GetActiveGuildMemberStatesContext: %w", err))
 			return
 		}
 		defer rows.Close()
 
-		var currentState *GuildMemberCurrentState
+		var currentState *members.CurrentState
 
 		for rows.Next() {
 			var (
@@ -567,7 +528,7 @@ func (s *Store) GetActiveGuildMemberStatesContext(ctx context.Context, guildID s
 				roleID     *string
 			)
 			if err := rows.Scan(&userID, &joinedAt, &lastSeenAt, &isBot, &roleID); err != nil {
-				yield(GuildMemberCurrentState{}, fmt.Errorf("Store.GetActiveGuildMemberStatesContext: %w", err))
+				yield(members.CurrentState{}, fmt.Errorf("Store.GetActiveGuildMemberStatesContext: %w", err))
 				return
 			}
 
@@ -579,7 +540,7 @@ func (s *Store) GetActiveGuildMemberStatesContext(ctx context.Context, guildID s
 			}
 
 			if currentState == nil {
-				currentState = &GuildMemberCurrentState{
+				currentState = &members.CurrentState{
 					UserID:   userID,
 					JoinedAt: joinedAt.UTC(),
 					Active:   true,
@@ -599,7 +560,7 @@ func (s *Store) GetActiveGuildMemberStatesContext(ctx context.Context, guildID s
 		}
 
 		if err := rows.Err(); err != nil {
-			yield(GuildMemberCurrentState{}, fmt.Errorf("Store.GetActiveGuildMemberStatesContext: %w", err))
+			yield(members.CurrentState{}, fmt.Errorf("Store.GetActiveGuildMemberStatesContext: %w", err))
 			return
 		}
 

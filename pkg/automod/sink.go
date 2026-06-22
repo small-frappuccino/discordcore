@@ -6,6 +6,8 @@ import (
 	"github.com/diamondburned/arikawa/v3/discord"
 )
 
+//go:generate mockery --name=Sink --output=automodmocks --outpkg=automodmocks --with-expecter
+
 // Sink receives validated automod events.
 type Sink interface {
 	// OnAutomodBlock is called when Discord executes an AutoMod action.

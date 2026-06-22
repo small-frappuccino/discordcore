@@ -32,7 +32,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/stats"
-	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordcore/pkg/storage/postgres"
 	"github.com/small-frappuccino/discordcore/pkg/task"
 	"github.com/small-frappuccino/discordgo"
 )
@@ -595,7 +595,7 @@ func listBotGuildBindingsFromSessionState(botInstanceID string, session *session
 type botRuntimeOptions struct {
 	runtimeCount             int
 	configManager            *files.ConfigManager
-	store                    *storage.Store
+	store                    *postgres.Store
 	commandCatalogRegistrars []CommandCatalogRegistrar
 	runtimeApplier           *runtimeapply.Manager
 	qotdCommandService       *applicationqotd.Service
@@ -762,7 +762,8 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 			ArikawaState:  runtime.arikawaState,
 			ConfigManager: opts.configManager,
 			Sink:          memberSinkWrapper{logger: eventLogger},
-			Store:         opts.store,
+			MembersRepo:   opts.store,
+			SystemRepo:    opts.store,
 			BotInstanceID: runtime.instanceID,
 			Logger:        slog.Default(),
 		})
@@ -884,7 +885,7 @@ func logRuntimeCommandsSkipped(runtime *botRuntime, opts botRuntimeOptions, cfg 
 
 var intelligentWarmupFn = cache.IntelligentWarmupContext
 
-func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *storage.Store, startupTasks *StartupTaskOrchestrator) {
+func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *postgres.Store, startupTasks *StartupTaskOrchestrator) {
 	if runtime == nil || runtime.legacySession == nil || !runtime.capabilities.warmup || runtime.unifiedCache == nil {
 		return
 	}

@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/diamondburned/arikawa/v3/discord"
-	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
 const (
@@ -43,15 +42,15 @@ type messageWriteRequest struct {
 	key      string
 	token    uint64
 	recordOp messageWriteRecordOp
-	record   storage.MessageRecord
-	version  *storage.MessageVersion
-	metric   storage.DailyMessageCountDelta
+	record   Record
+	version  *Version
+	metric   DailyCountDelta
 }
 
 type pendingMessageState struct {
 	token   uint64
 	deleted bool
-	record  storage.MessageRecord
+	record  Record
 }
 
 type pendingMessageToken struct {
@@ -60,7 +59,7 @@ type pendingMessageToken struct {
 }
 
 type messageCreateWriter struct {
-	store         *storage.Store
+	store         Repository
 	queue         chan messageWriteRequest
 	stopCh        chan struct{}
 	done          chan struct{}
@@ -77,7 +76,7 @@ type messageCreateWriter struct {
 	logger    *slog.Logger
 }
 
-func newMessageCreateWriter(store *storage.Store, metrics MessageWriterMetrics, logger *slog.Logger) *messageCreateWriter {
+func newMessageCreateWriter(store Repository, metrics MessageWriterMetrics, logger *slog.Logger) *messageCreateWriter {
 	if metrics == nil {
 		metrics = NopMessageWriterMetrics{}
 	}
@@ -139,7 +138,7 @@ func (w *messageCreateWriter) beginStop() {
 }
 
 // Enqueue enqueues.
-func (w *messageCreateWriter) Enqueue(record storage.MessageRecord, version *storage.MessageVersion, metric storage.DailyMessageCountDelta) error {
+func (w *messageCreateWriter) Enqueue(record Record, version *Version, metric DailyCountDelta) error {
 	if w == nil {
 		return fmt.Errorf("message create writer is nil")
 	}
@@ -165,7 +164,7 @@ func (w *messageCreateWriter) Enqueue(record storage.MessageRecord, version *sto
 }
 
 // EnqueueDelete enqueues delete.
-func (w *messageCreateWriter) EnqueueDelete(guildID, messageID string, version *storage.MessageVersion) error {
+func (w *messageCreateWriter) EnqueueDelete(guildID, messageID string, version *Version) error {
 	if w == nil {
 		return fmt.Errorf("message create writer is nil")
 	}
@@ -189,7 +188,7 @@ func (w *messageCreateWriter) EnqueueDelete(guildID, messageID string, version *
 }
 
 // EnqueueVersion enqueues version.
-func (w *messageCreateWriter) EnqueueVersion(version storage.MessageVersion) error {
+func (w *messageCreateWriter) EnqueueVersion(version Version) error {
 	if w == nil {
 		return fmt.Errorf("message create writer is nil")
 	}
@@ -200,7 +199,7 @@ func (w *messageCreateWriter) EnqueueVersion(version storage.MessageVersion) err
 	return w.enqueueRequest(req)
 }
 
-func cloneMessageVersion(version *storage.MessageVersion) *storage.MessageVersion {
+func cloneMessageVersion(version *Version) *Version {
 	if version == nil {
 		return nil
 	}
@@ -344,12 +343,12 @@ func (w *messageCreateWriter) flushBatch(batch []messageWriteRequest) {
 		w.metrics.RecordFlush(len(batch), time.Since(start))
 	}()
 
-	upserts := make([]storage.MessageRecord, 0, len(batch))
+	upserts := make([]Record, 0, len(batch))
 	upsertTokens := make([]pendingMessageToken, 0, len(batch))
-	deletes := make([]storage.MessageDeleteKey, 0, len(batch))
+	deletes := make([]DeleteKey, 0, len(batch))
 	deleteTokens := make([]pendingMessageToken, 0, len(batch))
-	versions := make([]storage.MessageVersion, 0, len(batch))
-	deltasByKey := make(map[string]storage.DailyMessageCountDelta, len(batch))
+	versions := make([]Version, 0, len(batch))
+	deltasByKey := make(map[string]DailyCountDelta, len(batch))
 
 	for _, req := range batch {
 		switch req.recordOp {
@@ -360,14 +359,14 @@ func (w *messageCreateWriter) flushBatch(batch []messageWriteRequest) {
 			}
 		case messageWriteRecordOpDelete:
 			if w.pendingStateMatches(req.key, req.token, true) {
-				deletes = append(deletes, storage.MessageDeleteKey{
+				deletes = append(deletes, DeleteKey{
 					GuildID:   req.record.GuildID,
 					MessageID: req.record.MessageID,
 				})
 				if req.record.GuildID == "" || req.record.MessageID == "" {
 					parts := strings.SplitN(req.key, ":", 2)
 					if len(parts) == 2 {
-						deletes[len(deletes)-1] = storage.MessageDeleteKey{GuildID: parts[0], MessageID: parts[1]}
+						deletes[len(deletes)-1] = DeleteKey{GuildID: parts[0], MessageID: parts[1]}
 					}
 				}
 				deleteTokens = append(deleteTokens, pendingMessageToken{key: req.key, token: req.token})
@@ -421,7 +420,7 @@ func (w *messageCreateWriter) flushBatch(batch []messageWriteRequest) {
 	}
 
 	if len(deltasByKey) > 0 {
-		deltas := make([]storage.DailyMessageCountDelta, 0, len(deltasByKey))
+		deltas := make([]DailyCountDelta, 0, len(deltasByKey))
 		for _, delta := range deltasByKey {
 			deltas = append(deltas, delta)
 		}
@@ -429,7 +428,7 @@ func (w *messageCreateWriter) flushBatch(batch []messageWriteRequest) {
 			w.metrics.RecordFlushFallback(MessageWriterFlushOpMetricBuckets, len(deltas))
 			w.logger.Warn("MessageCreate writer: batch daily metric flush failed; falling back to sequential increments", "operation", "message_create_writer.flush_metrics", "buckets", len(deltas), "error", err)
 			for _, delta := range deltas {
-				if err := w.store.IncrementDailyMessageCountsContext(context.Background(), []storage.DailyMessageCountDelta{delta}); err != nil {
+				if err := w.store.IncrementDailyMessageCountsContext(context.Background(), []DailyCountDelta{delta}); err != nil {
 					w.logger.Warn("MessageCreate writer: sequential daily metric increment failed", "operation", "message_create_writer.flush_metrics_fallback", "guildID", delta.GuildID, "channelID", delta.ChannelID, "userID", delta.UserID, "error", err)
 				} else {
 					w.metrics.RecordFlushSuccess(MessageWriterFlushOpMetricBuckets, 1)
@@ -441,7 +440,7 @@ func (w *messageCreateWriter) flushBatch(batch []messageWriteRequest) {
 	}
 }
 
-func (w *messageCreateWriter) flushMessagesSequentially(records []storage.MessageRecord, tokens []pendingMessageToken) {
+func (w *messageCreateWriter) flushMessagesSequentially(records []Record, tokens []pendingMessageToken) {
 	for i, record := range records {
 		if err := w.store.UpsertMessage(record); err != nil {
 			w.logger.Warn("MessageCreate writer: sequential message upsert failed", "operation", "message_create_writer.flush_messages_fallback", "guildID", record.GuildID, "channelID", record.ChannelID, "messageID", record.MessageID, "userID", record.AuthorID, "error", err)
@@ -454,7 +453,7 @@ func (w *messageCreateWriter) flushMessagesSequentially(records []storage.Messag
 	}
 }
 
-func (w *messageCreateWriter) flushDeletesSequentially(keys []storage.MessageDeleteKey, tokens []pendingMessageToken) {
+func (w *messageCreateWriter) flushDeletesSequentially(keys []DeleteKey, tokens []pendingMessageToken) {
 	for i, key := range keys {
 		if err := w.store.DeleteMessage(context.Background(), key.GuildID, key.MessageID); err != nil {
 			w.logger.Warn("MessageCreate writer: sequential message delete failed", "operation", "message_create_writer.flush_deletes_fallback", "guildID", key.GuildID, "messageID", key.MessageID, "error", err)
@@ -467,7 +466,7 @@ func (w *messageCreateWriter) flushDeletesSequentially(keys []storage.MessageDel
 	}
 }
 
-func (w *messageCreateWriter) flushVersionsSequentially(versions []storage.MessageVersion, operation string) {
+func (w *messageCreateWriter) flushVersionsSequentially(versions []Version, operation string) {
 	for _, version := range versions {
 		if err := w.store.InsertMessageVersion(context.Background(), version); err != nil {
 			w.logger.Warn("MessageCreate writer: sequential history insert failed", "operation", operation, "guildID", version.GuildID, "channelID", version.ChannelID, "messageID", version.MessageID, "userID", version.AuthorID, "eventType", version.EventType, "error", err)
@@ -477,7 +476,7 @@ func (w *messageCreateWriter) flushVersionsSequentially(versions []storage.Messa
 	}
 }
 
-func (w *messageCreateWriter) storePendingRecord(key string, record storage.MessageRecord) uint64 {
+func (w *messageCreateWriter) storePendingRecord(key string, record Record) uint64 {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.nextToken++

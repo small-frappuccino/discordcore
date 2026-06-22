@@ -9,7 +9,7 @@ import (
 
 	"log/slog"
 
-	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordcore/pkg/system"
 )
 
 type RuntimeActivityRunner func(ctx context.Context, timeout time.Duration, fn func(context.Context) error) error
@@ -38,7 +38,7 @@ type RuntimeActivityOptions struct {
 }
 
 type RuntimeActivity struct {
-	store            *storage.Store
+	store            system.Repository
 	runErr           RuntimeActivityRunner
 	eventTimeout     time.Duration
 	heartbeatTimeout time.Duration
@@ -53,7 +53,7 @@ type RuntimeActivity struct {
 	hbWg     sync.WaitGroup
 }
 
-func NewRuntimeActivity(store *storage.Store, opts RuntimeActivityOptions) *RuntimeActivity {
+func NewRuntimeActivity(store system.Repository, opts RuntimeActivityOptions) *RuntimeActivity {
 	runErr := opts.RunErr
 	if runErr == nil {
 		runErr = RunErrWithTimeoutContext
@@ -76,7 +76,7 @@ func NewRuntimeActivity(store *storage.Store, opts RuntimeActivityOptions) *Runt
 	}
 }
 
-func NewMonitoringRuntimeActivity(store *storage.Store, logger *slog.Logger, botInstanceID ...string) *RuntimeActivity {
+func NewMonitoringRuntimeActivity(store system.Repository, logger *slog.Logger, botInstanceID ...string) *RuntimeActivity {
 	scopedBotInstanceID := ""
 	if len(botInstanceID) > 0 {
 		scopedBotInstanceID = botInstanceID[0]

@@ -6,7 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/diamondburned/arikawa/v3/discord"
-	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordcore/pkg/storage/postgres"
 )
 
 // GenerateTicketName creates a canonical text channel name for a new ticket.
@@ -75,12 +75,12 @@ func ComputeReopenMemberDeny(current discord.Permissions) discord.Permissions {
 
 // Manager orchestrates domain logic for tickets avoiding direct Discord integrations.
 type Manager struct {
-	store  *storage.Store
+	store  *postgres.Store
 	logger *slog.Logger
 }
 
 // NewManager constructs a ticket manager.
-func NewManager(store *storage.Store, logger *slog.Logger) *Manager {
+func NewManager(store *postgres.Store, logger *slog.Logger) *Manager {
 	return &Manager{
 		store:  store,
 		logger: logger,

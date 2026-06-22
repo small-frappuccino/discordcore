@@ -24,7 +24,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordcore/pkg/service"
-	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordcore/pkg/storage/postgres"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -406,7 +406,7 @@ func applyConfiguredTheme(configManager *files.ConfigManager) {
 	}
 }
 
-func scheduleDBCleanup(store *storage.Store, configManager *files.ConfigManager) chan struct{} {
+func scheduleDBCleanup(store *postgres.Store, configManager *files.ConfigManager) chan struct{} {
 	disableCleanup := false
 	features := (&files.BotConfig{}).ResolveFeatures("")
 	if cfg := configManager.Config(); cfg != nil {
@@ -449,7 +449,7 @@ func resolveRuntimeCapabilities(configSnapshot *files.BotConfig, botInstances []
 	return capabilities
 }
 
-func rollbackStoreClose(enabled bool, store *storage.Store) {
+func rollbackStoreClose(enabled bool, store *postgres.Store) {
 	if !enabled || store == nil {
 		return
 	}
@@ -489,7 +489,7 @@ func formatStartupMessage(appName, appVersion, coreVersion string) string {
 	return msg + fmt.Sprintf(" (discordcore %s)...", coreVersion)
 }
 
-func setupStorage(dbb resolvedDatabaseBootstrap) (*storage.Store, *files.ConfigManager, error) {
+func setupStorage(dbb resolvedDatabaseBootstrap) (*postgres.Store, *files.ConfigManager, error) {
 	dbCfg := dbb.Config
 	dbc := persistence.Config{
 		Driver:              dbCfg.Driver,
@@ -543,7 +543,7 @@ func setupStorage(dbb resolvedDatabaseBootstrap) (*storage.Store, *files.ConfigM
 		slog.String("driver", "postgres"),
 	)
 
-	store, err := storage.NewStore(db, slog.Default())
+	store, err := postgres.NewStore(db, slog.Default())
 	if err != nil {
 		db.Close()
 		errWrap := fmt.Errorf("create postgres store: %w", err)

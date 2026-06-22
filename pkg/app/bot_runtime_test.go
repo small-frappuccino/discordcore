@@ -9,7 +9,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordcore/pkg/discord/session"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordcore/pkg/storage/postgres"
 )
 
 func TestResolveBotRuntimeCapabilities_GuildAggregation(t *testing.T) {
@@ -216,7 +216,7 @@ func TestBotRuntime_InitializationRouting(t *testing.T) {
 			err := initializeBotRuntime(context.Background(), rt, botRuntimeOptions{
 				runtimeCount:  1,
 				configManager: cfgMgr,
-				store:         &storage.Store{},
+				store:         &postgres.Store{},
 			})
 			if err != nil {
 				t.Fatalf("unexpected init error: %v", err)

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
 // PublishSchedule represents a QOTD publish schedule config.
@@ -76,7 +75,7 @@ type currentSlotState struct {
 	Schedule           PublishSchedule
 	PublishDateUTC     time.Time
 	PublishAtUTC       time.Time
-	OfficialPost       *storage.QOTDOfficialPostRecord
+	OfficialPost       *OfficialPostRecord
 }
 
 // BoundaryPassed boundarys passed.
@@ -114,7 +113,7 @@ func (st currentSlotState) HasProvisioningOfficialPost() bool {
 }
 
 // DetermineOfficialPostLifecycle derives the state and boundaries.
-func DetermineOfficialPostLifecycle(post storage.QOTDOfficialPostRecord, schedule files.QOTDPublishScheduleConfig, now time.Time) OfficialPostLifecycle {
+func DetermineOfficialPostLifecycle(post OfficialPostRecord, schedule files.QOTDPublishScheduleConfig, now time.Time) OfficialPostLifecycle {
 	lc := OfficialPostLifecycle{
 		PublishDateUTC: NormalizePublishDateUTC(post.PublishDateUTC),
 		State:          OfficialPostState(post.State),
@@ -168,7 +167,7 @@ func (s *Service) loadDueSlotState(ctx context.Context, guildID string, cfg file
 	state.Schedule = schedule
 	state.PublishDateUTC = NormalizePublishDateUTC(now)
 	state.PublishAtUTC = PublishTimeUTC(schedule, state.PublishDateUTC)
-	state.OfficialPost, err = s.store.GetQOTDOfficialPostByDate(ctx, guildID, state.PublishDateUTC)
+	state.OfficialPost, err = s.repo.GetQOTDOfficialPostByDate(ctx, guildID, state.PublishDateUTC)
 	if err != nil {
 		return currentSlotState{}, fmt.Errorf("loadDueSlotState: %w", err)
 	}

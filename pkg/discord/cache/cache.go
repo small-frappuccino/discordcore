@@ -13,7 +13,7 @@ import (
 	"weak"
 
 	"github.com/diamondburned/arikawa/v3/discord"
-	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordcore/pkg/storage/postgres"
 )
 
 // WeakRef encapsulates a weak pointer and an explicit time-to-live expiration boundary.
@@ -137,7 +137,7 @@ type CacheConfig struct {
 	GuildTTL   time.Duration
 	RolesTTL   time.Duration
 	ChannelTTL time.Duration
-	Store      *storage.Store
+	Store      *postgres.Store
 }
 
 // UnifiedCache serves as the central orchestration registry for all entity-specific memory segments.
@@ -147,7 +147,7 @@ type UnifiedCache struct {
 	roles    *Segment[[]discord.Role]
 	channels *Segment[discord.Channel]
 
-	store *storage.Store
+	store *postgres.Store
 }
 
 // NewUnifiedCache instantiates a comprehensive caching layer bound to the provided TTL configurations.
@@ -265,7 +265,7 @@ func DefaultWarmupConfig() WarmupConfig {
 }
 
 // IntelligentWarmupContext orchestrates an adaptive hydration phase tailored to specific cache contexts.
-func IntelligentWarmupContext(ctx context.Context, session any, uc *UnifiedCache, store *storage.Store, config WarmupConfig) error {
+func IntelligentWarmupContext(ctx context.Context, session any, uc *UnifiedCache, store *postgres.Store, config WarmupConfig) error {
 	return uc.Warmup(ctx)
 }
 
@@ -276,7 +276,7 @@ func (uc *UnifiedCache) WasWarmedUpRecently(d time.Duration) bool {
 
 // SchedulePeriodicCleanup initializes a background goroutine to purge expired entries from the durable store.
 // Callers must close the returned channel to terminate the background collector safely.
-func SchedulePeriodicCleanup(store *storage.Store, interval time.Duration) chan struct{} {
+func SchedulePeriodicCleanup(store *postgres.Store, interval time.Duration) chan struct{} {
 	slog.Info("Architectural state transition: Initializing persistent cache garbage collector")
 	stop := make(chan struct{})
 	go func() {

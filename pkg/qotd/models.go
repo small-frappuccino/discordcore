@@ -4,14 +4,116 @@ import (
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
-// QuestionRecord represents question record.
-type QuestionRecord = storage.QOTDQuestionRecord
+// QuestionRecord is a stored QOTD question. ID is the global primary key;
+// DisplayID is the stable per-guild identifier shown to users. Status holds a
+// qotd.QuestionStatus value, and the *time.Time fields are nil until the
+// corresponding lifecycle event (scheduled, used, first published) occurs.
+type QuestionRecord struct {
+	ID                  int64
+	DisplayID           int64
+	GuildID             string
+	DeckID              string
+	Body                string
+	Status              string
+	QueuePosition       int64
+	CreatedBy           string
+	ScheduledForDateUTC *time.Time
+	UsedAt              *time.Time
+	PublishedOnceAt     *time.Time
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+}
 
-// OfficialPostRecord represents official post record.
-type OfficialPostRecord = storage.QOTDOfficialPostRecord
+// OfficialPostRecord is the durable state of one official QOTD post and the
+// source of truth the reconcile loop drives toward Discord. State holds a
+// qotd.OfficialPostState value. Two of its fields anchor publish idempotency
+// (see the PublishOrdinal and Nonce field comments); changing publish paths
+// must preserve both.
+type OfficialPostRecord struct {
+	ID                         int64
+	GuildID                    string
+	DeckID                     string
+	DeckNameSnapshot           string
+	QuestionID                 int64
+	PublishOrdinal             int64
+	PublishMode                string
+	ConsumeAutomaticSlot       bool
+	PublishDateUTC             time.Time
+	State                      string
+	ChannelID                  string
+	QuestionListThreadID       string
+	QuestionListEntryMessageID string
+	DiscordThreadID            string
+	DiscordStarterMessageID    string
+	AnswerChannelID            string
+	QuestionTextSnapshot       string
+	Nonce                      string
+	PublishedAt                *time.Time
+	GraceUntil                 time.Time
+	ArchiveAt                  time.Time
+	ClosedAt                   *time.Time
+	ArchivedAt                 *time.Time
+	LastReconciledAt           *time.Time
+	CreatedAt                  time.Time
+	UpdatedAt                  time.Time
+}
+
+// SurfaceRecord maps a guild deck to its Discord surface: the channel and
+// the question-list thread used to render the deck's published questions.
+type SurfaceRecord struct {
+	ID                   int64
+	GuildID              string
+	DeckID               string
+	ChannelID            string
+	QuestionListThreadID string
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+}
+
+// QuestionSelector controls how the next question is picked when
+// reserving for a publish. It is decoupled from OfficialPostRecord's
+// PublishOrdinal so the visible thread numbering stays monotonic regardless
+// of which strategy ran.
+type QuestionSelector string
+
+const (
+	// QuestionSelectorQueue picks the head of the queue (queue_position
+	// ASC, id ASC). This is the historical default.
+	QuestionSelectorQueue QuestionSelector = "queue"
+	// QuestionSelectorRandom picks a uniformly-random eligible question.
+	QuestionSelectorRandom QuestionSelector = "random"
+)
+
+// FinalizeOfficialPostParams contains data needed to finalize a post.
+type FinalizeOfficialPostParams struct {
+	ID                         int64
+	QuestionListThreadID       string
+	QuestionListEntryMessageID string
+	DiscordThreadID            string
+	StarterMessageID           string
+	AnswerChannelID            string
+	PublishedAt                time.Time
+}
+
+// AnswerMessageRecord is a stored answer posted against an official post.
+// State holds a qotd.AnswerRecordState value; ClosedAt and ArchivedAt are nil
+// until the answer surface closes or is archived.
+type AnswerMessageRecord struct {
+	ID                      int64
+	GuildID                 string
+	OfficialPostID          int64
+	UserID                  string
+	State                   string
+	AnswerChannelID         string
+	DiscordMessageID        string
+	CreatedViaInteractionID string
+	CreatedAt               time.Time
+	UpdatedAt               time.Time
+	ClosedAt                *time.Time
+	ArchivedAt              *time.Time
+}
 
 // QuestionStatus is the lifecycle state of a QOTD question as it moves from
 // authoring through reservation to publication.

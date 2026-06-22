@@ -12,11 +12,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	domain "github.com/small-frappuccino/discordcore/pkg/stats"
-	"github.com/small-frappuccino/discordcore/pkg/storage"
+	"github.com/small-frappuccino/discordcore/pkg/storage/postgres"
 	"github.com/small-frappuccino/discordcore/pkg/testdb"
 )
 
-func setupTestDB(t *testing.T) (*storage.Store, *pgxpool.Pool, func()) {
+func setupTestDB(t *testing.T) (*postgres.Store, *pgxpool.Pool, func()) {
 	t.Helper()
 	baseDSN, err := testdb.BaseDatabaseURLFromEnv()
 	if err != nil {
@@ -31,7 +31,7 @@ func setupTestDB(t *testing.T) (*storage.Store, *pgxpool.Pool, func()) {
 		t.Fatalf("failed to open database: %v", err)
 	}
 
-	store, err := storage.NewStore(db, slog.Default())
+	store, err := postgres.NewStore(db, slog.Default())
 	if err != nil {
 		cleanup()
 		t.Fatalf("failed to create store: %v", err)
