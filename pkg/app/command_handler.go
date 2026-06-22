@@ -48,26 +48,51 @@ type CommandHandler struct {
 	dependencies []string
 }
 
+// CommandHandlerDeps encapsulates all required invariants for the CommandHandler.
+type CommandHandlerDeps struct {
+	Session             *discordgo.Session
+	ConfigManager       *files.ConfigManager
+	BotInstanceID       string
+	CatalogCapabilities CommandCatalogCapabilities
+	CatalogRegistrars   []CommandCatalogRegistrar
+	QotdService         qotdcmd.Service
+	StatsService        *stats.StatsService
+	ModerationMetrics   moderation.Metrics
+	TicketService       *tickets.Service
+}
+
 // NewCommandHandler creates a new CommandHandler instance
-func NewCommandHandler(
-	session *discordgo.Session,
-	configManager *files.ConfigManager,
-) *CommandHandler {
-	return NewCommandHandlerForBot(session, configManager, "")
+func NewCommandHandler(deps CommandHandlerDeps) (*CommandHandler, error) {
+	deps.BotInstanceID = ""
+	return NewCommandHandlerForBot(deps)
 }
 
 // NewCommandHandlerForBot creates a command handler scoped to a bot-instance guild assignment.
-func NewCommandHandlerForBot(
-	session *discordgo.Session,
-	configManager *files.ConfigManager,
-	botInstanceID string,
-) *CommandHandler {
-	return &CommandHandler{
-		session:           session,
-		configManager:     configManager,
-		botInstanceID:     botInstanceID,
-		catalogRegistrars: DefaultCommandCatalogRegistrars(),
+// It forces fail-fast initialization: missing invariants halt bootstrapping.
+func NewCommandHandlerForBot(deps CommandHandlerDeps) (*CommandHandler, error) {
+	if deps.Session == nil {
+		return nil, errors.New("initialization failure: Session is strictly required")
 	}
+	if deps.ConfigManager == nil {
+		return nil, errors.New("initialization failure: ConfigManager is strictly required")
+	}
+
+	registrars := deps.CatalogRegistrars
+	if len(registrars) == 0 {
+		registrars = DefaultCommandCatalogRegistrars()
+	}
+
+	return &CommandHandler{
+		session:             deps.Session,
+		configManager:       deps.ConfigManager,
+		botInstanceID:       deps.BotInstanceID,
+		catalogCapabilities: deps.CatalogCapabilities,
+		catalogRegistrars:   registrars,
+		qotdService:         deps.QotdService,
+		statsService:        deps.StatsService,
+		moderationMetrics:   deps.ModerationMetrics,
+		ticketService:       deps.TicketService,
+	}, nil
 }
 
 // SetDependencies allows the orchestrator to inject dynamic dependencies.
@@ -269,52 +294,6 @@ func (ch *CommandHandler) SetupCommands() error {
 // GetRouter returns the command router (for tests or extensions)
 func (ch *CommandHandler) GetRouter() *commands.CommandRouter {
 	return ch.router
-}
-
-// SetQOTDService injects the QOTD application service for interactive QOTD commands.
-func (ch *CommandHandler) SetQOTDService(service qotdcmd.Service) {
-	ch.qotdService = service
-}
-
-// SetStatsService injects the StatsService for immediate channel updates from the /stats command tree.
-func (ch *CommandHandler) SetStatsService(service *stats.StatsService) {
-	ch.statsService = service
-}
-
-// SetModerationMetrics injects the moderation observability sink so the
-// /clean command records attempts, outcomes, and per-message delete failures.
-// Nil falls back to NopMetrics inside the moderation registrar.
-func (ch *CommandHandler) SetModerationMetrics(metrics moderation.Metrics) {
-	if ch == nil {
-		return
-	}
-	ch.moderationMetrics = metrics
-}
-
-// SetTicketService injects the ticket management service.
-func (ch *CommandHandler) SetTicketService(service *tickets.Service) {
-	if ch == nil {
-		return
-	}
-	ch.ticketService = service
-}
-
-// SetCommandCatalogRegistrars overrides the slash command catalogs registered by
-// this handler.
-func (ch *CommandHandler) SetCommandCatalogRegistrars(registrars ...CommandCatalogRegistrar) {
-	if ch == nil {
-		return
-	}
-	ch.catalogRegistrars = append([]CommandCatalogRegistrar(nil), registrars...)
-}
-
-// SetCommandCatalogCapabilities sets runtime capabilities used to filter
-// capability-gated command registrars.
-func (ch *CommandHandler) SetCommandCatalogCapabilities(capabilities CommandCatalogCapabilities) {
-	if ch == nil {
-		return
-	}
-	ch.catalogCapabilities = capabilities
 }
 
 func (ch *CommandHandler) registerCommandCatalog() error {

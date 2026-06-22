@@ -292,110 +292,9 @@ export interface RPCButtonConfig {
   url?: string;
 }
 
-export interface testConfigContainer {
-  secret: string;
-}
-
-export interface rawQOTDDeckConfig {
-  id?: string;
-  name?: string;
-  enabled?: boolean;
-  channel_id?: string;
-  forum_channel_id?: string;
-  question_channel_id?: string;
-  response_channel_id?: string;
-  selection_strategy?: string;
-}
-
-export interface rawQOTDPublishScheduleConfig {
-  hour_utc?: number;
-  minute_utc?: number;
-  publish_hour_utc?: number;
-  publish_minute_utc?: number;
-  qotd_time_hour_utc?: number;
-  qotd_time_minute_utc?: number;
-}
-
-export interface rawQOTDConfig {
-  verified_role_id?: string;
-  active_deck_id?: string;
-  decks?: QOTDDeckConfig[];
-  schedule?: rawQOTDPublishScheduleConfig;
-  suppress_scheduled_publish_dates_utc?: string[];
-  suppress_scheduled_publish_date_utc?: string;
-  enabled?: boolean;
-  channel_id?: string;
-  forum_channel_id?: string;
-  question_channel_id?: string;
-  response_channel_id?: string;
-  publish_hour_utc?: number;
-  publish_minute_utc?: number;
-  qotd_time_hour_utc?: number;
-  qotd_time_minute_utc?: number;
-}
-
-export interface CustomEmbedFieldConfig {
+export interface payload {
   name: string;
-  value: string;
-  inline?: boolean;
-}
-
-export interface CustomEmbedPostingConfig {
-  channel_id: string;
-  message_id: string;
-  webhook_id?: string;
-  webhook_token?: string;
-}
-
-export interface CustomEmbedConfig {
-  key: string;
-  title?: string;
-  description?: string;
-  color?: number;
-  author_name?: string;
-  author_icon_url?: string;
-  footer_text?: string;
-  footer_icon_url?: string;
-  image_url?: string;
-  thumbnail_url?: string;
-  fields?: CustomEmbedFieldConfig[];
-  postings?: CustomEmbedPostingConfig[];
-}
-
-export interface DiscohookJSON {
-  content?: string;
-  embeds?: DiscohookEmbed[];
-}
-
-export interface DiscohookEmbed {
-  title?: string;
-  description?: string;
-  color?: number;
-  author?: DiscohookAuthor;
-  footer?: DiscohookFooter;
-  image?: DiscohookImage;
-  thumbnail?: DiscohookImage;
-  fields?: DiscohookField[];
-}
-
-export interface DiscohookAuthor {
-  name?: string;
-  icon_url?: string;
-}
-
-export interface DiscohookFooter {
-  text?: string;
-  icon_url?: string;
-}
-
-export interface DiscohookImage {
-  url?: string;
-}
-
-export interface DiscohookField {
-  name?: string;
-  value?: string;
-  inline?: boolean;
+  count: number;
 }
 
 export interface RolePanelEmbedFieldConfig {
@@ -433,6 +332,38 @@ export interface RolePanelConfig {
   fields?: RolePanelEmbedFieldConfig[];
   buttons?: RolePanelButtonConfig[];
   postings?: RolePanelPostingConfig[];
+}
+
+export interface testConfigContainer {
+  secret: string;
+}
+
+export interface CustomEmbedFieldConfig {
+  name: string;
+  value: string;
+  inline?: boolean;
+}
+
+export interface CustomEmbedPostingConfig {
+  channel_id: string;
+  message_id: string;
+  webhook_id?: string;
+  webhook_token?: string;
+}
+
+export interface CustomEmbedConfig {
+  key: string;
+  title?: string;
+  description?: string;
+  color?: number;
+  author_name?: string;
+  author_icon_url?: string;
+  footer_text?: string;
+  footer_icon_url?: string;
+  image_url?: string;
+  thumbnail_url?: string;
+  fields?: CustomEmbedFieldConfig[];
+  postings?: CustomEmbedPostingConfig[];
 }
 
 export interface FeatureServiceToggles {
@@ -494,8 +425,77 @@ export interface FeatureToggles {
   role_panels?: boolean;
 }
 
-export interface payload {
-  name: string;
-  count: number;
+export interface DiscohookJSON {
+  content?: string;
+  embeds?: DiscohookEmbed[];
+}
+
+export interface DiscohookEmbed {
+  title?: string;
+  description?: string;
+  color?: number;
+  author?: DiscohookAuthor;
+  footer?: DiscohookFooter;
+  image?: DiscohookImage;
+  thumbnail?: DiscohookImage;
+  fields?: DiscohookField[];
+}
+
+export interface DiscohookAuthor {
+  name?: string;
+  icon_url?: string;
+}
+
+export interface DiscohookFooter {
+  text?: string;
+  icon_url?: string;
+}
+
+export interface DiscohookImage {
+  url?: string;
+}
+
+export interface DiscohookField {
+  name?: string;
+  value?: string;
+  inline?: boolean;
+}
+
+export interface rawQOTDDeckConfig {
+  id?: string;
+  name?: string;
+  enabled?: boolean;
+  channel_id?: string;
+  forum_channel_id?: string;
+  question_channel_id?: string;
+  response_channel_id?: string;
+  selection_strategy?: string;
+}
+
+export interface rawQOTDPublishScheduleConfig {
+  hour_utc?: number;
+  minute_utc?: number;
+  publish_hour_utc?: number;
+  publish_minute_utc?: number;
+  qotd_time_hour_utc?: number;
+  qotd_time_minute_utc?: number;
+}
+
+export interface rawQOTDConfig {
+  verified_role_id?: string;
+  active_deck_id?: string;
+  decks?: QOTDDeckConfig[];
+  schedule?: rawQOTDPublishScheduleConfig;
+  suppress_scheduled_publish_dates_utc?: string[];
+  suppress_scheduled_publish_date_utc?: string;
+  enabled?: boolean;
+  channel_id?: string;
+  forum_channel_id?: string;
+  question_channel_id?: string;
+  response_channel_id?: string;
+  publish_hour_utc?: number;
+  publish_minute_utc?: number;
+  qotd_time_hour_utc?: number;
+  qotd_time_minute_utc?: number;
 }
 

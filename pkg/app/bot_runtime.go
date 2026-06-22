@@ -851,18 +851,30 @@ func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg
 		return nil
 	}
 
-	commandHandler := newCommandHandlerForBot(runtime.legacySession, opts.configManager, runtime.instanceID)
-	if len(opts.commandCatalogRegistrars) > 0 {
-		commandHandler.SetCommandCatalogRegistrars(opts.commandCatalogRegistrars...)
-	}
 	var caps CommandCatalogCapabilities
 	if runtime.capabilities.stats {
 		caps |= CapStats
 	}
-	commandHandler.SetCommandCatalogCapabilities(caps)
-	commandHandler.SetQOTDService(opts.qotdCommandService)
-	commandHandler.SetModerationMetrics(opts.moderationMetrics)
-	commandHandler.SetStatsService(statsService)
+
+	deps := CommandHandlerDeps{
+		Session:             runtime.legacySession,
+		ConfigManager:       opts.configManager,
+		BotInstanceID:       runtime.instanceID,
+		CatalogCapabilities: caps,
+		CatalogRegistrars:   opts.commandCatalogRegistrars,
+		QotdService:         opts.qotdCommandService,
+		StatsService:        statsService,
+		ModerationMetrics:   opts.moderationMetrics,
+	}
+
+	commandHandler, err := newCommandHandlerForBot(deps)
+	if err != nil {
+		slog.Error("Blocking structural failure: Failed to construct CommandHandler",
+			slog.String("botInstanceID", runtime.instanceID),
+			slog.Any("error", err),
+		)
+		return nil
+	}
 
 	if router := commandHandler.GetRouter(); router != nil {
 		// Native router no longer requires dynamic dependency injection
@@ -871,8 +883,8 @@ func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg
 	}
 	runtime.commandHandler = commandHandler
 
-	deps := []string{}
-	commandHandler.SetDependencies(deps)
+	depStrings := []string{}
+	commandHandler.SetDependencies(depStrings)
 
 	return commandHandler
 }

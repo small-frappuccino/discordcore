@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
@@ -20,8 +19,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/service"
 	"golang.org/x/sync/errgroup"
 )
-
-var identifyStaggerDelay = 5 * time.Second
 
 // InstanceStatus represents the lifecycle state of a managed bot instance.
 type InstanceStatus string
@@ -60,21 +57,23 @@ type BotSupervisor struct {
 	instances    map[string]*botInstanceState // botInstanceID -> state
 	nextIdentify time.Time
 
-	fatalCallback func(error)
+	fatalCallback        func(error)
+	identifyStaggerDelay time.Duration
 }
 
 // NewBotSupervisor initializes a new BotSupervisor to manage bot runtimes.
 func NewBotSupervisor(configManager *files.ConfigManager, opts botRuntimeOptions) *BotSupervisor {
 	ctx, cancel := context.WithCancel(context.Background())
 	supervisor := &BotSupervisor{
-		configManager:  configManager,
-		resolver:       newBotRuntimeResolver(configManager, make(map[string]*botRuntime)),
-		serviceManager: service.NewManager(),
-		opts:           opts,
-		logger:         opts.logger,
-		ctx:            ctx,
-		cancel:         cancel,
-		instances:      make(map[string]*botInstanceState),
+		configManager:        configManager,
+		resolver:             newBotRuntimeResolver(configManager, make(map[string]*botRuntime)),
+		serviceManager:       service.NewManager(),
+		opts:                 opts,
+		logger:               opts.logger,
+		ctx:                  ctx,
+		cancel:               cancel,
+		instances:            make(map[string]*botInstanceState),
+		identifyStaggerDelay: 5 * time.Second,
 	}
 
 	return supervisor
@@ -106,42 +105,35 @@ func (s *BotSupervisor) Stop(ctx context.Context) error {
 	s.log().Info("Triggering planned shutdown of main BotSupervisor instances")
 	s.cancel() // signal background goroutines to abort
 
-	var globalWG sync.WaitGroup
-	errsCh := make(chan error, len(s.instances))
+	eg, egCtx := errgroup.WithContext(ctx)
 
 	s.mu.Lock()
 	for id, state := range s.instances {
 		if state.Status != StatusStopping {
 			state.Status = StatusStopping
 			state.StopWG.Add(1)
-			globalWG.Add(1)
 			s.bgWG.Add(1)
-			go func(id string, state *botInstanceState) {
+
+			instanceID := id
+			instanceState := state
+			eg.Go(func() error {
 				defer s.bgWG.Done()
-				if err := s.executeStopAndRemove(ctx, id, state, &globalWG); err != nil {
-					errsCh <- err
-				}
-			}(id, state)
+				return s.executeStopAndRemove(egCtx, instanceID, instanceState)
+			})
 		}
 	}
 	s.mu.Unlock()
 
-	// Mandatory barrier: prevents process shutdown while I/O is pending
-	done := make(chan struct{})
+	done := make(chan error, 1)
 	go func() {
-		globalWG.Wait()
+		err := eg.Wait()
 		s.bgWG.Wait() // Secondary barrier: ensures bg processes like retries clean up memory
-		close(errsCh)
-		close(done)
+		done <- err
 	}()
 
-	var stopErrors []error
-
 	select {
-	case <-done:
-		for err := range errsCh {
-			stopErrors = append(stopErrors, err)
-		}
+	case err := <-done:
+		return err
 	case <-ctx.Done():
 		s.log().Error("BotSupervisor stop timeout exceeded before background task completion",
 			slog.String("request_id", "supervisor_shutdown"),
@@ -149,13 +141,8 @@ func (s *BotSupervisor) Stop(ctx context.Context) error {
 			slog.String("stacktrace", string(debug.Stack())),
 			slog.Any("error", ctx.Err()),
 		)
-		stopErrors = append(stopErrors, ctx.Err())
+		return ctx.Err()
 	}
-
-	if len(stopErrors) > 0 {
-		return errors.Join(stopErrors...)
-	}
-	return nil
 }
 
 // GetResolver returns the internal runtime resolver responsible for routing requests to active bot instances.
@@ -266,7 +253,7 @@ func (s *BotSupervisor) onConfigChanged(ctx context.Context, oldCfg, newCfg *fil
 			s.bgWG.Add(1)
 			go func(id string, state *botInstanceState) {
 				defer s.bgWG.Done()
-				s.executeStopAndRemove(context.Background(), id, state, nil)
+				s.executeStopAndRemove(context.Background(), id, state)
 			}(id, state)
 		}
 	}
@@ -287,7 +274,7 @@ func (s *BotSupervisor) onConfigChanged(ctx context.Context, oldCfg, newCfg *fil
 				s.bgWG.Add(1)
 				go func(id string, state *botInstanceState) {
 					defer s.bgWG.Done()
-					s.executeStopAndRemove(context.Background(), id, state, nil)
+					s.executeStopAndRemove(context.Background(), id, state)
 				}(id, state)
 			}
 			oldState = state
@@ -416,10 +403,7 @@ func (s *BotSupervisor) onConfigChanged(ctx context.Context, oldCfg, newCfg *fil
 	return nil
 }
 
-func (s *BotSupervisor) executeStopAndRemove(ctx context.Context, id string, state *botInstanceState, wgGlobal *sync.WaitGroup) error {
-	if wgGlobal != nil {
-		defer wgGlobal.Done()
-	}
+func (s *BotSupervisor) executeStopAndRemove(ctx context.Context, id string, state *botInstanceState) error {
 	defer state.StopWG.Done()
 
 	stopCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
@@ -518,9 +502,9 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token, status str
 		var sleepDur time.Duration
 		if s.nextIdentify.After(now) {
 			sleepDur = s.nextIdentify.Sub(now)
-			s.nextIdentify = s.nextIdentify.Add(identifyStaggerDelay)
+			s.nextIdentify = s.nextIdentify.Add(s.identifyStaggerDelay)
 		} else {
-			s.nextIdentify = now.Add(identifyStaggerDelay)
+			s.nextIdentify = now.Add(s.identifyStaggerDelay)
 		}
 		s.mu.Unlock()
 

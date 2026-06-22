@@ -37,10 +37,8 @@ func TestSupervisorFaultIsolation(t *testing.T) {
 	t.Cleanup(func() {
 		setupCommandHandler = origSetupCommandHandler
 		shutdownCommandHandler = origShutdownCommandHandler
-		identifyStaggerDelay = 5 * time.Second
 	})
 
-	identifyStaggerDelay = 0
 	setupCommandHandler = func(ch *CommandHandler) error { return nil }
 	shutdownCommandHandler = func(ch *CommandHandler) error { return nil }
 
@@ -65,6 +63,7 @@ func TestSupervisorFaultIsolation(t *testing.T) {
 	cfgManager.ApplyConfig(&cfg)
 
 	supervisor := NewBotSupervisor(cfgManager, botRuntimeOptions{configManager: cfgManager})
+	supervisor.identifyStaggerDelay = 0
 
 	fatalCount := 0
 	supervisor.SetFatalCallback(func(err error) {
@@ -122,6 +121,7 @@ func TestZeroStateIdling(t *testing.T) {
 	cfgManager.ApplyConfig(&cfg)
 
 	supervisor := NewBotSupervisor(cfgManager, botRuntimeOptions{configManager: cfgManager})
+	supervisor.identifyStaggerDelay = 0
 
 	fatalCount := 0
 	supervisor.SetFatalCallback(func(err error) {
@@ -169,10 +169,8 @@ func TestSupervisorSwarmTopology(t *testing.T) {
 	t.Cleanup(func() {
 		setupCommandHandler = origSetupCommandHandler
 		shutdownCommandHandler = origShutdownCommandHandler
-		identifyStaggerDelay = 5 * time.Second
 	})
 
-	identifyStaggerDelay = 0
 	setupCommandHandler = func(ch *CommandHandler) error { return nil }
 	shutdownCommandHandler = func(ch *CommandHandler) error { return nil }
 
@@ -199,6 +197,7 @@ func TestSupervisorSwarmTopology(t *testing.T) {
 	cfgManager.ApplyConfig(&cfg)
 
 	supervisor := NewBotSupervisor(cfgManager, botRuntimeOptions{configManager: cfgManager})
+	supervisor.identifyStaggerDelay = 0
 
 	if err := supervisor.Start(); err != nil {
 		t.Fatalf("supervisor start: %v", err)
@@ -255,10 +254,8 @@ func TestSupervisorConfigChange(t *testing.T) {
 	t.Cleanup(func() {
 		setupCommandHandler = origSetupCommandHandler
 		shutdownCommandHandler = origShutdownCommandHandler
-		identifyStaggerDelay = 5 * time.Second
 	})
 
-	identifyStaggerDelay = 0
 	setupCommandHandler = func(ch *CommandHandler) error { return nil }
 	shutdownCommandHandler = func(ch *CommandHandler) error { return nil }
 
@@ -281,6 +278,7 @@ func TestSupervisorConfigChange(t *testing.T) {
 	cfgManager.ApplyConfig(&cfg)
 
 	supervisor := NewBotSupervisor(cfgManager, botRuntimeOptions{configManager: cfgManager})
+	supervisor.identifyStaggerDelay = 0
 
 	if err := supervisor.Start(); err != nil {
 		t.Fatalf("supervisor start: %v", err)

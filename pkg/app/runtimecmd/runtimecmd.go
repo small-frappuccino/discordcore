@@ -5,11 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
-	"path/filepath"
-	"strings"
 
-	"github.com/joho/godotenv"
 	"github.com/small-frappuccino/discordcore/pkg/app"
 	discordcoreapp "github.com/small-frappuccino/discordcore/pkg/app"
 )
@@ -38,27 +34,6 @@ func Run(args []string, output io.Writer, spec Spec, runner Runner) error {
 	fs.SetOutput(output)
 	if err := fs.Parse(args); err != nil {
 		return fmt.Errorf("Run: %w", err)
-	}
-
-	pathEnv := os.Getenv("PATH")
-	if pathEnv == "" {
-		pathEnv = os.Getenv("Path")
-	}
-	// Scan dynamic environment path boundaries to isolate local developer configurations before execution.
-	for _, dir := range strings.Split(pathEnv, string(os.PathListSeparator)) {
-		dir = strings.TrimSpace(dir)
-		if dir == "" {
-			continue
-		}
-		envPath := filepath.Join(dir, ".env")
-		if _, err := os.Stat(envPath); err == nil {
-			if err := godotenv.Load(envPath); err != nil {
-				slog.Error("failed to load .env", slog.String("path", envPath), slog.Any("error", err))
-
-				return fmt.Errorf("failed to load .env from PATH (%s): %w", envPath, err)
-			}
-			break
-		}
 	}
 
 	discordcoreapp.SetAppVersion(discordcoreapp.Version)

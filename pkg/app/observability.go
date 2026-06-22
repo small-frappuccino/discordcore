@@ -22,7 +22,7 @@ import (
 // Discord client token based on the target guild ID, enabling an active dual-SDK rollout.
 type dualSDKPublisher struct {
 	resolver *botRuntimeResolver
-	mu       sync.Mutex
+	mu       sync.RWMutex
 	clients  map[string]*state.State // botInstanceID -> Arikawa State
 }
 
@@ -44,10 +44,11 @@ func (p *dualSDKPublisher) getArikawaPublisher(guildID string) (domain.Publisher
 		return nil, errWrap
 	}
 
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	p.mu.RLock()
+	st, ok := p.clients[botInstanceID]
+	p.mu.RUnlock()
 
-	if st, ok := p.clients[botInstanceID]; ok {
+	if ok {
 		slog.Debug("Tracking complex conditional branch: Arikawa state publisher resolved from memory cache",
 			slog.String("bot_instance_id", botInstanceID),
 			slog.String("guild_id", guildID),
@@ -63,6 +64,13 @@ func (p *dualSDKPublisher) getArikawaPublisher(guildID string) (domain.Publisher
 		return nil, errWrap
 	}
 
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if st, ok := p.clients[botInstanceID]; ok {
+		return qotd.NewArikawaPublisher(st.Session.Client), nil
+	}
+
 	token := session.Token
 	if !strings.HasPrefix(token, "Bot ") {
 		token = "Bot " + token
@@ -72,7 +80,7 @@ func (p *dualSDKPublisher) getArikawaPublisher(guildID string) (domain.Publisher
 		slog.String("bot_instance_id", botInstanceID),
 	)
 
-	st := state.New("Bot " + strings.TrimPrefix(token, "Bot "))
+	st = state.New("Bot " + strings.TrimPrefix(token, "Bot "))
 	p.clients[botInstanceID] = st
 
 	return qotd.NewArikawaPublisher(st.Session.Client), nil

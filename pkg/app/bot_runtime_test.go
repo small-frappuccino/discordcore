@@ -9,6 +9,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordcore/pkg/discord/session"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/storage/postgres"
 )
 
@@ -104,8 +105,8 @@ func TestBotRuntime_InitializationRouting(t *testing.T) {
 		newCommandHandlerForBot = origNewCommandHandlerForBot
 		setupCommandHandler = origSetupCommandHandler
 	})
-	newCommandHandlerForBot = func(session *session.LegacySession, configManager *files.ConfigManager, botInstanceID string) *CommandHandler {
-		return NewCommandHandlerForBot(session, configManager, botInstanceID)
+	newCommandHandlerForBot = func(deps CommandHandlerDeps) (*CommandHandler, error) {
+		return &CommandHandler{botInstanceID: deps.BotInstanceID, session: deps.Session}, nil
 	}
 	setupCommandHandler = func(ch *CommandHandler) error { return nil }
 
@@ -214,9 +215,10 @@ func TestBotRuntime_InitializationRouting(t *testing.T) {
 			}
 
 			err := initializeBotRuntime(context.Background(), rt, botRuntimeOptions{
-				runtimeCount:  1,
-				configManager: cfgMgr,
-				store:         &postgres.Store{},
+				runtimeCount:       1,
+				configManager:      cfgMgr,
+				store:              &postgres.Store{},
+				qotdCommandService: &qotd.Service{},
 			})
 			if err != nil {
 				t.Fatalf("unexpected init error: %v", err)

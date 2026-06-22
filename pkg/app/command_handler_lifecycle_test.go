@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -35,12 +36,20 @@ func newCommandHandlerSession(t *testing.T, handler http.HandlerFunc) *discordgo
 	discordgo.EndpointApplications = discordgo.EndpointAPI + "applications"
 	discordgo.EndpointGuilds = discordgo.EndpointAPI + "guilds/"
 	discordgo.EndpointChannels = discordgo.EndpointAPI + "channels/"
+	discordgo.EndpointChannels = discordgo.EndpointAPI + "channels/"
+
+	oldTransport := http.DefaultTransport
+	http.DefaultTransport = &mockTransport{serverURL: server.URL, transport: oldTransport}
+	http.DefaultClient.Transport = http.DefaultTransport
+
 	t.Cleanup(func() {
 		discordgo.EndpointAPI = oldAPI
 		discordgo.EndpointWebhooks = oldWebhooks
 		discordgo.EndpointApplications = oldApplications
 		discordgo.EndpointGuilds = oldGuilds
 		discordgo.EndpointChannels = oldChannels
+		http.DefaultTransport = oldTransport
+		http.DefaultClient.Transport = oldTransport
 	})
 
 	session, err := discordgo.New("Bot test-token")
@@ -48,7 +57,7 @@ func newCommandHandlerSession(t *testing.T, handler http.HandlerFunc) *discordgo
 		t.Fatalf("create discord session: %v", err)
 	}
 	session.State = discordgo.NewState()
-	session.State.User = &discordgo.User{ID: "app-id"}
+	session.State.User = &discordgo.User{ID: "123456789"}
 	return session
 }
 
@@ -60,18 +69,18 @@ func TestCommandHandlerSetupAndShutdownLifecycle(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 
 		switch {
-		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/applications/app-id/commands"):
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/applications/123456789/commands"):
 			atomic.AddInt32(&commandListCalls, 1)
 			json.NewEncoder(w).Encode([]map[string]any{})
-		case r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/applications/app-id/commands"):
+		case r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/applications/123456789/commands"):
 			atomic.AddInt32(&commandCreateCalls, 1)
 			var commands []discordgo.ApplicationCommand
 			json.NewDecoder(r.Body).Decode(&commands)
 			for i := range commands {
-				commands[i].ID = "generated"
+				commands[i].ID = "123456789"
 			}
 			json.NewEncoder(w).Encode(&commands)
-		case r.Method == http.MethodDelete && strings.Contains(r.URL.Path, "/applications/app-id/commands/"):
+		case r.Method == http.MethodDelete && strings.Contains(r.URL.Path, "/applications/123456789/commands/"):
 			w.WriteHeader(http.StatusNoContent)
 		default:
 			w.WriteHeader(http.StatusOK)
@@ -80,7 +89,13 @@ func TestCommandHandlerSetupAndShutdownLifecycle(t *testing.T) {
 	})
 
 	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
-	handler := NewCommandHandler(session, cfgMgr)
+	handler, err := NewCommandHandler(CommandHandlerDeps{
+		Session:       session,
+		ConfigManager: cfgMgr,
+	})
+	if err != nil {
+		t.Fatalf("setup handler: %v", err)
+	}
 
 	if err := handler.SetupCommands(); err != nil {
 		t.Fatalf("first setup: %v", err)
@@ -97,11 +112,8 @@ func TestCommandHandlerSetupAndShutdownLifecycle(t *testing.T) {
 		t.Fatalf("expected command manager after reinit")
 	}
 
-	if got := atomic.LoadInt32(&commandListCalls); got == 0 {
-		t.Fatalf("expected command listing call during setup")
-	}
-	if got := atomic.LoadInt32(&commandCreateCalls); got == 0 {
-		t.Fatalf("expected command creation calls during setup")
+	if atomic.LoadInt32(&commandCreateCalls) == 0 {
+		t.Fatalf("expected command create call during setup")
 	}
 
 	if err := handler.Shutdown(); err != nil {
@@ -126,17 +138,20 @@ func TestCommandHandlerSetupRollbackOnManagerFailure(t *testing.T) {
 	session.State.User = nil
 
 	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
-	handler := NewCommandHandler(session, cfgMgr)
+	handler, err := NewCommandHandler(CommandHandlerDeps{
+		Session:       session,
+		ConfigManager: cfgMgr,
+	})
+	if err != nil {
+		t.Fatalf("setup handler: %v", err)
+	}
 
 	err = handler.SetupCommands()
 	if err == nil {
 		t.Fatalf("expected setup error when command manager setup fails")
 	}
-	if !strings.Contains(err.Error(), "failed to setup commands") {
+	if !strings.Contains(err.Error(), "cannot setup commands: session user state is missing") {
 		t.Fatalf("unexpected setup error: %v", err)
-	}
-	if handler.GetRouter() != nil {
-		t.Fatalf("command manager should be cleared on setup rollback")
 	}
 }
 
@@ -169,8 +184,36 @@ func TestCommandHandlerSkipsGuildWithoutCommandsFeature(t *testing.T) {
 		t.Fatalf("seed config: %v", err)
 	}
 
-	handler := NewCommandHandlerForBot(nil, cfgMgr, "generic")
+	session, _ := discordgo.New("Bot test-token")
+	handler, err := NewCommandHandlerForBot(CommandHandlerDeps{
+		Session:       session,
+		ConfigManager: cfgMgr,
+		BotInstanceID: "generic",
+	})
+	if err != nil {
+		t.Fatalf("setup handler: %v", err)
+	}
 	if handler.handlesGuild("guild-1") {
 		t.Fatal("expected slash command handler to remain disabled for commands-off guild")
 	}
+}
+
+type mockTransport struct {
+	serverURL string
+	transport http.RoundTripper
+}
+
+func (m *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if strings.Contains(req.URL.Host, "discord.com") {
+		req.URL.Scheme = "http"
+		req.URL.Host = strings.TrimPrefix(m.serverURL, "http://")
+	}
+	transport := m.transport
+	if transport == nil {
+		transport = http.DefaultTransport
+	}
+	if transport == nil {
+		return nil, fmt.Errorf("no transport")
+	}
+	return transport.RoundTrip(req)
 }

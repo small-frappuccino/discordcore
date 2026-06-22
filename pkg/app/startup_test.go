@@ -233,12 +233,16 @@ func TestScheduleStartupWebhookEmbedUpdates(t *testing.T) {
 
 func TestStartControlServerStartupTask(t *testing.T) {
 	runtimes := make(map[string]*botRuntime)
-	resolver := newBotRuntimeResolver(files.NewConfigManagerWithStore(nil, nil), runtimes)
+	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	resolver := newBotRuntimeResolver(cfgMgr, runtimes)
 	opts := controlStartupTaskOptions{
 		runOptions: RunOptions{
 			DisableControl: false,
+			Control: ControlOptions{
+				BindAddr: "127.0.0.1:0",
+			},
 		},
-		configManager:      files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil),
+		configManager:      cfgMgr,
 		runtimeResolver:    resolver,
 		controlBearerToken: "test",
 	}
