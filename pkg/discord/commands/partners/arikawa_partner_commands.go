@@ -29,6 +29,11 @@ const (
 	optionURL         = "url"
 )
 
+var (
+	errPartnerNotFound = errors.New("partner not found")
+	errPartnerExists   = errors.New("a partner with the new name already exists")
+)
+
 // PartnerCommands orchestrates the slash-command routing for partner board workflows.
 // It integrates directly with the Arikawa router to execute lifecycle mutations.
 type PartnerCommands struct {
@@ -282,13 +287,16 @@ func (c *partnerRemoveSubCommand) Handle(ctx *commands.ArikawaContext) error {
 					}
 				}
 				if !found {
-					return errors.New("partner not found")
+					return errPartnerNotFound
 				}
 				return nil
 			}
 		}
 		return errors.New("guild not found in config")
 	}); err != nil {
+		if errors.Is(err, errPartnerNotFound) {
+			return partnerDetailedCommandError(ctx, "Partner not found.")
+		}
 		return partnerStructuralError(ctx, "Failed to remove partner", err)
 	}
 
@@ -343,13 +351,16 @@ func (c *partnerLinkSubCommand) Handle(ctx *commands.ArikawaContext) error {
 					}
 				}
 				if !found {
-					return errors.New("partner not found")
+					return errPartnerNotFound
 				}
 				return nil
 			}
 		}
 		return errors.New("guild not found in config")
 	}); err != nil {
+		if errors.Is(err, errPartnerNotFound) {
+			return partnerDetailedCommandError(ctx, "Partner not found.")
+		}
 		return partnerStructuralError(ctx, "Failed to update partner link", err)
 	}
 
@@ -428,7 +439,7 @@ func (c *partnerRenameSubCommand) Handle(ctx *commands.ArikawaContext) error {
 
 				for _, p := range bc.Partners {
 					if strings.EqualFold(p.Name, newName) && !strings.EqualFold(currentName, newName) {
-						return errors.New("a partner with the new name already exists")
+						return errPartnerExists
 					}
 				}
 
@@ -444,13 +455,19 @@ func (c *partnerRenameSubCommand) Handle(ctx *commands.ArikawaContext) error {
 					}
 				}
 				if !found {
-					return errors.New("partner not found")
+					return errPartnerNotFound
 				}
 				return nil
 			}
 		}
 		return errors.New("guild not found in config")
 	}); err != nil {
+		if errors.Is(err, errPartnerNotFound) {
+			return partnerDetailedCommandError(ctx, "Partner not found.")
+		}
+		if errors.Is(err, errPartnerExists) {
+			return partnerDetailedCommandError(ctx, "A partner with the new name already exists.")
+		}
 		return partnerStructuralError(ctx, "Failed to rename partner", err)
 	}
 
