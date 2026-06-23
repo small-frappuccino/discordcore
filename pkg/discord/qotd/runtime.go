@@ -7,6 +7,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	domain "github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/service"
@@ -26,49 +28,62 @@ type RuntimeService struct {
 
 	running   atomic.Bool
 	startTime time.Time
-	stopCh    chan struct{}
-	stopOnce  sync.Once
-	wg        sync.WaitGroup
-	mu        sync.Mutex
+
+	cancel context.CancelFunc
+	eg     *errgroup.Group
+	mu     sync.Mutex
 }
 
 // NewRuntimeService creates a new runtime daemon.
 func NewRuntimeService(cfg Config, svc *domain.Service) *RuntimeService {
 	return &RuntimeService{
-		cfg:    cfg,
-		svc:    svc,
-		stopCh: make(chan struct{}),
+		cfg: cfg,
+		svc: svc,
 	}
 }
 
 // Start begins the daemon.
 func (s *RuntimeService) Start(ctx context.Context) error {
 	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if s.running.Load() {
-		s.mu.Unlock()
 		return nil
 	}
 	s.running.Store(true)
 	s.startTime = time.Now()
-	s.stopCh = make(chan struct{})
-	s.stopOnce = sync.Once{}
-	s.mu.Unlock()
 
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		s.loop()
-	}()
+	runCtx, cancel := context.WithCancel(context.Background())
+	s.cancel = cancel
+	s.eg, _ = errgroup.WithContext(runCtx)
+
+	s.eg.Go(func() error {
+		defer func() {
+			if r := recover(); r != nil {
+				log.ApplicationLogger().Error("QOTD runtime panic", "panic", r, "stack", string(debug.Stack()))
+			}
+		}()
+		s.loop(runCtx)
+		return nil
+	})
+
 	return nil
 }
 
 // Stop shuts down the daemon gracefully.
 func (s *RuntimeService) Stop(ctx context.Context) error {
-	s.stopOnce.Do(func() { close(s.stopCh) })
+	s.mu.Lock()
+	if !s.running.Load() || s.cancel == nil {
+		s.mu.Unlock()
+		return nil
+	}
+	s.cancel()
+	eg := s.eg
+	s.mu.Unlock()
 
 	done := make(chan struct{})
 	go func() {
-		s.wg.Wait()
+		_ = eg.Wait()
 		close(done)
 	}()
 
@@ -78,31 +93,23 @@ func (s *RuntimeService) Stop(ctx context.Context) error {
 		return ctx.Err()
 	}
 
-	s.mu.Lock()
 	s.running.Store(false)
-	s.mu.Unlock()
 	return nil
 }
 
-func (s *RuntimeService) loop() {
-	defer s.wg.Done()
-	defer func() {
-		if r := recover(); r != nil {
-			log.ApplicationLogger().Error("QOTD runtime panic", "panic", r, "stack", string(debug.Stack()))
-		}
-	}()
-
+func (s *RuntimeService) loop(ctx context.Context) {
 	// The loop will sleep and occasionally wake up to process guilds.
 	// We use a mocked interval loop here for the rewrite.
-	for {
-		publishTimer := time.NewTimer(s.cfg.PublishInterval)
+	publishTimer := time.NewTimer(s.cfg.PublishInterval)
+	defer publishTimer.Stop()
 
+	for {
 		select {
 		case <-publishTimer.C:
 			// In a real system, this iterates through guilds and calls
 			// s.svc.PublishScheduledIfDue and s.svc.ReconcileGuild
-		case <-s.stopCh:
-			publishTimer.Stop()
+			publishTimer.Reset(s.cfg.PublishInterval)
+		case <-ctx.Done():
 			return
 		}
 	}

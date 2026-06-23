@@ -216,7 +216,8 @@ func convertPanelToArikawa(panel files.RolePanelConfig) (discord.Embed, []discor
 			// Operational annotation: Discord API enforces a maximum of 5 buttons per ActionRow.
 			// We dynamically chunk the button array into multiple container components to comply.
 			if len(current) == 5 {
-				components = append(components, &current)
+				row := current
+				components = append(components, &row)
 				current = discord.ActionRowComponent{}
 			}
 			button := discord.ButtonComponent{
@@ -236,7 +237,8 @@ func convertPanelToArikawa(panel files.RolePanelConfig) (discord.Embed, []discor
 			current = append(current, &button)
 		}
 		if len(current) > 0 {
-			components = append(components, &current)
+			row := current
+			components = append(components, &row)
 		}
 	}
 	return embed, components

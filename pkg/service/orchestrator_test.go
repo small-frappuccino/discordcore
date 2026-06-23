@@ -11,6 +11,10 @@ import (
 
 // TestOrchestrator_Preemption checks if long-running I/O calls are preempted correctly.
 func TestOrchestrator_Preemption(t *testing.T) {
+	oldDeadline := shutdownDeadline
+	shutdownDeadline = 10 * time.Millisecond
+	defer func() { shutdownDeadline = oldDeadline }()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

@@ -70,6 +70,10 @@ func (r *CommandRouter) HandleEvent(event *discord.InteractionEvent) error {
 
 		ctx, err := NewArikawaContext(*event, r.config)
 		if err != nil {
+			slog.Warn("Intercepted service degradation: Invalid interaction context",
+				slog.String("interaction_id", event.ID.String()),
+				slog.Any("error", err),
+			)
 			return err
 		}
 		ctx.SetClient(r.client)
@@ -102,6 +106,10 @@ func (r *CommandRouter) HandleEvent(event *discord.InteractionEvent) error {
 			if handler != nil {
 				ctx, err := NewArikawaContext(*event, r.config)
 				if err != nil {
+					slog.Warn("Intercepted service degradation: Invalid interaction context",
+						slog.String("interaction_id", event.ID.String()),
+						slog.Any("error", err),
+					)
 					return err
 				}
 				ctx.SetClient(r.client)

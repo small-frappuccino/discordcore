@@ -11,6 +11,9 @@ import (
 
 // ExecuteOrchestration is a resilient wrapper that executes a service lifecycle step
 // using synchronized propagation and explicit preemption.
+
+var shutdownDeadline = 30 * time.Second
+
 func ExecuteOrchestration(rootCtx context.Context, action func(context.Context) error) error {
 	eg, ctx := errgroup.WithContext(rootCtx)
 
@@ -35,7 +38,7 @@ func ExecuteOrchestration(rootCtx context.Context, action func(context.Context) 
 	select {
 	case err := <-waitCh:
 		return err
-	case <-time.After(time.Second * 30):
+	case <-time.After(shutdownDeadline):
 		return fmt.Errorf("shutdown deadline exceeded: pre-empting execution")
 	}
 }

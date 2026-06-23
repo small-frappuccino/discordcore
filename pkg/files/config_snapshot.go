@@ -242,6 +242,7 @@ func cloneGuildConfig(in GuildConfig) GuildConfig {
 		RolePanels:          cloneRolePanels(in.RolePanels),
 		CustomEmbeds:        cloneCustomEmbeds(in.CustomEmbeds),
 		RuntimeConfig:       cloneRuntimeConfig(in.RuntimeConfig),
+		LogModerationScope:  in.LogModerationScope,
 	}
 }
 
@@ -313,6 +314,7 @@ func cloneRuntimeConfig(in RuntimeConfig) RuntimeConfig {
 		WebhookEmbedUpdates:          cloneWebhookEmbedUpdateList(in.WebhookEmbedUpdates),
 		WebhookEmbedValidation:       in.WebhookEmbedValidation,
 		DisableInteractiveEphemeral:  in.DisableInteractiveEphemeral,
+		LogModerationScope:           in.LogModerationScope,
 	}
 }
 
