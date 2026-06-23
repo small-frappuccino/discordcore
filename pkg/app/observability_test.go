@@ -15,21 +15,23 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
 )
 
-// The dual_sdk_publisher_test.go logic:
-func TestDualSDKPublisher_GetArikawaPublisher(t *testing.T) {
+// The arikawa_qotd_publisher_test.go logic:
+func TestArikawaQOTDPublisher_GetArikawaPublisher(t *testing.T) {
+	t.Parallel()
 	resolver := newBotRuntimeResolver(nil, nil)
-	publisher := newDualSDKPublisher(resolver)
+	publisher := NewArikawaQOTDPublisher(resolver)
 
 	// Will error because guild has no runtime
 	_, err := publisher.getArikawaPublisher("missing_guild")
 	if err == nil {
-		t.Fatal("expected error for missing guild runtime")
+		t.Fatal("expected structural isolation error for missing guild runtime")
 	}
 }
 
-func TestDualSDKPublisher_PublishOfficialPost(t *testing.T) {
+func TestArikawaQOTDPublisher_PublishOfficialPost(t *testing.T) {
+	t.Parallel()
 	resolver := newBotRuntimeResolver(nil, nil)
-	publisher := newDualSDKPublisher(resolver)
+	publisher := NewArikawaQOTDPublisher(resolver)
 
 	_, err := publisher.PublishOfficialPost(context.Background(), qotd.PublishOfficialPostParams{
 		GuildID:                  "guild1",
@@ -38,13 +40,14 @@ func TestDualSDKPublisher_PublishOfficialPost(t *testing.T) {
 		OfficialStarterMessageID: "content",
 	})
 	if err == nil {
-		t.Fatal("expected error due to missing guild binding")
+		t.Fatal("expected early failure due to missing guild gateway binding")
 	}
 }
 
-func TestDualSDKPublisher_DeleteOfficialPost(t *testing.T) {
+func TestArikawaQOTDPublisher_DeleteOfficialPost(t *testing.T) {
+	t.Parallel()
 	resolver := newBotRuntimeResolver(nil, nil)
-	publisher := newDualSDKPublisher(resolver)
+	publisher := NewArikawaQOTDPublisher(resolver)
 
 	err := publisher.DeleteOfficialPost(context.Background(), qotd.DeleteOfficialPostParams{
 		GuildID:                 "guild1",
@@ -52,7 +55,7 @@ func TestDualSDKPublisher_DeleteOfficialPost(t *testing.T) {
 		DiscordStarterMessageID: "message1",
 	})
 	if err == nil {
-		t.Fatal("expected error due to missing guild binding")
+		t.Fatal("expected early failure due to missing guild gateway binding")
 	}
 }
 

@@ -9,11 +9,15 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/control"
 	"github.com/small-frappuccino/discordcore/pkg/control/localtls"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
+
+	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/state"
 )
 
 const (
@@ -44,6 +48,20 @@ type RunOptions struct {
 	CommandCatalogRegistrars []CommandCatalogRegistrar
 	DisableControl           bool
 	Logger                   *slog.Logger
+
+	// Testing Hooks (Replacing globals)
+	StoreCloseHook          func(c interface{ Close() error }) error
+	DiscordSessionCloseHook func(c interface{ Close() error }) error
+	ShutdownDelay           time.Duration
+	TestShutdownCh          <-chan struct{}
+
+	// unexported test hooks
+	openBotArikawaState     func(ctx context.Context, s *state.State) error
+	fetchBotArikawaMe       func(s *state.State) (*discord.User, error)
+	newCommandHandlerForBot func(deps CommandHandlerDeps) (*CommandHandler, error)
+	newCommandHandler       func(deps CommandHandlerDeps) (*CommandHandler, error)
+	setupCommandHandler     func(ch *CommandHandler) error
+	shutdownCommandHandler  func(ch *CommandHandler) error
 }
 
 // ControlOptions configures the local control plane. BindAddr and PublicOrigin

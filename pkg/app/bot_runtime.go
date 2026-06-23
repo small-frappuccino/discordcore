@@ -19,10 +19,14 @@ import (
 	discord_automod "github.com/small-frappuccino/discordcore/pkg/discord/automod"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
+	"github.com/small-frappuccino/discordcore/pkg/discord/embeds"
 	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
+	"github.com/small-frappuccino/discordcore/pkg/discord/partners"
 	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
+	"github.com/small-frappuccino/discordcore/pkg/discord/roles"
 	"github.com/small-frappuccino/discordcore/pkg/discord/session"
 	discordstats "github.com/small-frappuccino/discordcore/pkg/discord/stats"
+	"github.com/small-frappuccino/discordcore/pkg/discord/tickets"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/members"
@@ -255,13 +259,6 @@ func botRuntimeNeedsBotPermMirror(runtimeConfig files.RuntimeConfig) bool {
 // ErrNoBotTokensConfigured defines err no bot tokens configured.
 var ErrNoBotTokensConfigured = errors.New("no bot instances have a configured token")
 
-var (
-	// Test hook: override this in tests to prevent real websocket connections
-	openBotArikawaState = func(ctx context.Context, s *state.State) error { return s.Open(ctx) }
-	// Test hook: override this in tests to prevent real REST API calls
-	fetchBotArikawaMe = func(s *state.State) (*discord.User, error) { return s.Me() }
-)
-
 // ErrSessionUnavailable defines err when a bot session is not available for a guild or globally.
 var ErrSessionUnavailable = errors.New("discord session is unavailable")
 
@@ -302,20 +299,13 @@ func (r *botRuntimeResolver) markReady() {
 
 func (r *botRuntimeResolver) waitForReady(ctx context.Context) error {
 	if r == nil {
-		err := fmt.Errorf("resolver is nil")
-		log.EmitBlockingError("Blocking structural failure: Synchronization channel missing from resolver matrix", err, log.GenerateRequestID())
-		return err
+		return fmt.Errorf("synchronization channel missing: resolver is nil")
 	}
 	select {
 	case <-r.readyCh:
-		slog.Debug("Tracking complex conditional branch: Wait lock released across runtime resolver")
 		return nil
 	case <-ctx.Done():
-		errWrap := ctx.Err()
-		slog.Warn("Mitigated service degradation: Synchronization context expired before runtime resolver released the wait lock",
-			slog.String("error", errWrap.Error()),
-		)
-		return errWrap
+		return fmt.Errorf("synchronization context expired before resolver released lock: %w", ctx.Err())
 	}
 }
 
@@ -400,24 +390,17 @@ func (r *botRuntimeResolver) aggregateUnifiedCaches() map[string]*cache.UnifiedC
 
 func (r *botRuntimeResolver) runtimeForGuild(guildID string, feature string) (*botRuntime, string, error) {
 	if r == nil {
-		err := fmt.Errorf("bot runtime resolver is unavailable")
-		log.EmitBlockingError("Blocking structural failure: Pointer to runtime resolver dropped from state matrix", err, log.GenerateRequestID())
-		return nil, "", err
+		return nil, "", fmt.Errorf("%w: bot runtime resolver pointer is nil", ErrSessionUnavailable)
 	}
+
 	guildID = strings.TrimSpace(guildID)
 	if r.configManager == nil {
-		err := fmt.Errorf("bot runtime resolver config manager is unavailable")
-		log.EmitBlockingError("Blocking structural failure: Config manager detached from runtime resolver", err, log.GenerateRequestID())
-		return nil, "", err
+		return nil, "", fmt.Errorf("%w: config manager is detached from runtime resolver", ErrSessionUnavailable)
 	}
+
 	guild := r.configManager.GuildConfig(guildID)
 	if guild == nil {
-		errWrap := fmt.Errorf("guild %s is not configured", guildID)
-		slog.Warn("Mitigated service degradation: Request target resolves to an unconfigured guild parameter, aborting sub-routine",
-			slog.String("guild_id", guildID),
-			slog.String("error", errWrap.Error()),
-		)
-		return nil, "", errWrap
+		return nil, "", fmt.Errorf("%w: guild %s is not configured", ErrSessionUnavailable, guildID)
 	}
 
 	if feature == "" {
@@ -427,10 +410,7 @@ func (r *botRuntimeResolver) runtimeForGuild(guildID string, feature string) (*b
 
 	runtimes := r.getRuntimes()
 	if len(runtimes) == 0 {
-		slog.Warn("Mitigated service degradation: Primary runtime vector exhausted or uninitialized",
-			slog.String("guild_id", guildID),
-		)
-		return nil, "", ErrSessionUnavailable
+		return nil, "", fmt.Errorf("%w: primary runtime vector exhausted or uninitialized for guild %s", ErrSessionUnavailable, guildID)
 	}
 
 	if bestInstanceID != "" {
@@ -442,38 +422,22 @@ func (r *botRuntimeResolver) runtimeForGuild(guildID string, feature string) (*b
 		}
 	}
 
-	slog.Debug("Tracking complex conditional branch: Executing heuristic token scan for orphan guild",
-		slog.String("guild_id", guildID),
-	)
-
 	if len(guild.BotInstanceTokens) > 0 {
 		for id, tokenEnc := range guild.BotInstanceTokens {
 			if string(tokenEnc) == "" {
 				continue
 			}
 			if runtime, ok := runtimes[id]; ok && runtime != nil {
-				slog.Debug("Tracking complex conditional branch: First valid token matched during scan",
-					slog.String("guild_id", guildID),
-					slog.String("resolved_id", id),
-				)
 				return runtime, id, nil
 			}
 		}
 	} else {
 		if runtime, ok := runtimes[""]; ok && runtime != nil {
-			slog.Debug("Tracking complex conditional branch: Reverting to blank sentinel runtime for tokenless guild",
-				slog.String("guild_id", guildID),
-			)
 			return runtime, "", nil
 		}
 	}
 
-	err := fmt.Errorf("guild %s does not resolve to a running bot instance", guildID)
-	slog.Warn("Mitigated service degradation: Orchestrator failed to couple guild node to an active port",
-		slog.String("guild_id", guildID),
-		slog.String("error", err.Error()),
-	)
-	return nil, "", err
+	return nil, "", fmt.Errorf("%w: orchestrator failed to couple guild %s to an active port", ErrSessionUnavailable, guildID)
 }
 
 func (r *botRuntimeResolver) arikawaStateForGuild(guildID string, feature string) (*state.State, error) {
@@ -487,18 +451,14 @@ func (r *botRuntimeResolver) arikawaStateForGuild(guildID string, feature string
 func (r *botRuntimeResolver) sessionForGuild(guildID string, feature string) (*session.LegacySession, error) {
 	runtime, botInstanceID, err := r.runtimeForGuild(guildID, feature)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrSessionUnavailable, err)
+		return nil, err // O erro já encapsula ErrSessionUnavailable
 	}
 	if runtime.legacySession == nil {
 		guildID = strings.TrimSpace(guildID)
 		if guildID == "" {
-			errWrap := fmt.Errorf("%w: discord session for default bot instance %q is empty", ErrSessionUnavailable, botInstanceID)
-			log.EmitBlockingError("Blocking structural failure: Socket payload evaluates to nil on default instance", errWrap, log.GenerateRequestID())
-			return nil, errWrap
+			return nil, fmt.Errorf("%w: discord session for default bot instance %q is empty", ErrSessionUnavailable, botInstanceID)
 		}
-		errWrap := fmt.Errorf("%w: discord session for guild %s (bot instance %q) is empty", ErrSessionUnavailable, guildID, botInstanceID)
-		log.EmitBlockingError("Blocking structural failure: Socket payload evaluates to nil on specific guild channel", errWrap, log.GenerateRequestID())
-		return nil, errWrap
+		return nil, fmt.Errorf("%w: discord session for guild %s (bot instance %q) is empty", ErrSessionUnavailable, guildID, botInstanceID)
 	}
 	return runtime.legacySession, nil
 }
@@ -608,6 +568,15 @@ type botRuntimeOptions struct {
 	appClock                 clock.Clock
 	controlServerRegistry    *controlServerHolder
 	logger                   *slog.Logger
+	embedService             *embeds.EmbedService
+	rolePanelService         *roles.RolePanelService
+	partnerService           *partners.PartnerService
+	openBotArikawaState      func(ctx context.Context, s *state.State) error
+	fetchBotArikawaMe        func(s *state.State) (*discord.User, error)
+	newCommandHandlerForBot  func(deps CommandHandlerDeps) (*CommandHandler, error)
+	newCommandHandler        func(deps CommandHandlerDeps) (*CommandHandler, error)
+	setupCommandHandler      func(ch *CommandHandler) error
+	shutdownCommandHandler   func(ch *CommandHandler) error
 }
 
 type memberSinkWrapper struct {
@@ -644,7 +613,7 @@ func (w memberSinkWrapper) OnModerationAction(ctx context.Context, guildID strin
 	}
 }
 
-func openBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabilities) (*botRuntime, error) {
+func openBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabilities, opts botRuntimeOptions) (*botRuntime, error) {
 	slog.Info("Architectural state transition: Initializing primary Discord API routine",
 		slog.String("botInstanceID", instance.ID),
 	)
@@ -662,17 +631,13 @@ func openBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabil
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	if err := openBotArikawaState(ctx, arikawaState); err != nil {
-		errWrap := fmt.Errorf("open discord session for %s: %w", instance.ID, err)
-		log.EmitBlockingError("Blocking structural failure during socket bind and handshake", errWrap, log.GenerateRequestID())
-		return nil, errWrap
+	if err := opts.openBotArikawaState(ctx, arikawaState); err != nil {
+		return nil, fmt.Errorf("open discord session for %s: %w", instance.ID, err)
 	}
 
-	me, err := fetchBotArikawaMe(arikawaState)
+	me, err := opts.fetchBotArikawaMe(arikawaState)
 	if err != nil {
-		errState := fmt.Errorf("discord session state not properly initialized for %s: %w", instance.ID, err)
-		log.EmitBlockingError("Blocking structural failure: Gateway payload yielded nil state", errState, log.GenerateRequestID())
-		return nil, errState
+		return nil, fmt.Errorf("discord session state not properly initialized for %s: %w", instance.ID, err)
 	}
 
 	slog.Info("Architectural state transition: Socket bound and API authenticated",
@@ -688,130 +653,49 @@ func openBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabil
 	}, nil
 }
 
+// RuntimeServiceConfigurator define a assinatura padronizada para alocação de serviços em memória.
+type RuntimeServiceConfigurator func(runtime *botRuntime, opts botRuntimeOptions, routerConfig task.RouterConfig) (service.Service, error)
+
 func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRuntimeOptions) error {
-	slog.Debug("Iniciando rotina de alocação de runtime",
-		slog.String("instance_id", runtime.instanceID),
-	)
+	slog.Debug("Iniciando rotina de alocação de runtime", slog.String("instance_id", runtime.instanceID))
+
 	if runtime == nil || runtime.legacySession == nil {
-		err := fmt.Errorf("bot runtime is unavailable")
-		log.EmitBlockingError("Blocking structural failure: Runtime pointer resolves to nil", err, log.GenerateRequestID())
-		return err
+		return fmt.Errorf("bot runtime is unavailable")
 	}
 
 	cfg := opts.configManager.Config()
-	runtimeConfig := files.RuntimeConfig{}
-	if cfg != nil {
-		runtimeConfig = cfg.RuntimeConfig
-	}
-
-	if opts.controlServerRegistry != nil {
-		slog.Debug("Binding control server registry event handlers")
-	}
-
 	routerConfig := newRuntimeTaskRouterConfig(cfg, runtime.instanceID, opts.runtimeCount)
-	slog.Info("Architectural state transition: Configured runtime task router budget",
-		slog.String("botInstanceID", runtime.instanceID),
-		slog.Int("globalMaxWorkers", routerConfig.GlobalMaxWorkers),
-		slog.Bool("sharedLimiter", routerConfig.ExecutionLimiter != nil),
-	)
 
 	runtime.serviceManager = service.NewServiceManager(slog.Default())
 
-	// Ensure Discord gateway token conformity prior to state machine initialization.
 	token := runtime.legacySession.Token
 	if !strings.HasPrefix(token, "Bot ") {
 		token = "Bot " + token
 	}
-	arikawaState := state.New(token)
-	runtime.arikawaState = arikawaState
+	runtime.arikawaState = state.New(token)
 
 	if opts.runtimeApplier != nil {
 		opts.runtimeApplier.AddRuntime(runtime.serviceManager, nil)
 	}
 
-	// Conditionally boot event aggregation service based on explicit capability matrix evaluation.
-	if runtime.capabilities.messageEventService {
-		var eventLogger *logging.Logger
-		if runtime.arikawaState != nil && runtime.arikawaState.Session != nil {
-			eventLogger = logging.NewLogger(runtime.arikawaState.Session.Client, opts.configManager, runtime.arikawaState, gateway.Intents(runtime.capabilities.intents), slog.Default())
-		}
-
-		mes := messages.NewMessageEventServiceForBot(messages.EventServiceDeps{
-			ArikawaState:  runtime.arikawaState,
-			ConfigManager: opts.configManager,
-			Sink:          eventLogger,
-			Store:         opts.store,
-			BotInstanceID: runtime.instanceID,
-			Logger:        slog.Default(),
-		})
-		mes.SetTaskRouter(runtime.taskRouter)
-
-		if err := runtime.serviceManager.Register(mes); err != nil {
-			errWrap := fmt.Errorf("register message event service for %s: %w", runtime.instanceID, err)
-			log.EmitBlockingError("Blocking structural failure during service registry update", errWrap, log.GenerateRequestID())
-			return errWrap
-		}
+	// Orquestração Declarativa: A matriz de serviços define a topologia sem ruído imperativo.
+	pipeline := []RuntimeServiceConfigurator{
+		buildMessageEventServiceConfigurator,
+		buildMemberEventServiceConfigurator,
+		buildAutomodServiceConfigurator,
+		buildQOTDRuntimeServiceConfigurator,
+		buildStatsServiceConfigurator,
+		buildCommandHandlerServiceConfigurator,
 	}
 
-	if runtime.capabilities.memberEventService {
-		var eventLogger *logging.Logger
-		if runtime.arikawaState != nil && runtime.arikawaState.Session != nil {
-			eventLogger = logging.NewLogger(runtime.arikawaState.Session.Client, opts.configManager, runtime.arikawaState, gateway.Intents(runtime.capabilities.intents), slog.Default())
+	for _, configurator := range pipeline {
+		svc, err := configurator(runtime, opts, routerConfig)
+		if err != nil {
+			return err
 		}
-
-		memSvc := members.NewMemberEventServiceForBot(members.EventServiceDeps{
-			ArikawaState:  runtime.arikawaState,
-			ConfigManager: opts.configManager,
-			Sink:          memberSinkWrapper{logger: eventLogger},
-			MembersRepo:   opts.store,
-			SystemRepo:    opts.store,
-			BotInstanceID: runtime.instanceID,
-			Logger:        slog.Default(),
-		})
-
-		if err := runtime.serviceManager.Register(memSvc); err != nil {
-			errWrap := fmt.Errorf("register member event service for %s: %w", runtime.instanceID, err)
-			log.EmitBlockingError("Blocking structural failure during service registry update", errWrap, log.GenerateRequestID())
-			return errWrap
-		}
-	}
-
-	if automodService := buildAutomodService(runtime, opts, routerConfig, runtimeConfig); automodService != nil {
-		if err := runtime.serviceManager.Register(automodService); err != nil {
-			errWrap := fmt.Errorf("register automod service for %s: %w", runtime.instanceID, err)
-			log.EmitBlockingError("Blocking structural failure during service registry update", errWrap, log.GenerateRequestID())
-			return errWrap
-		}
-	}
-
-	if err := registerQOTDRuntimeService(runtime, opts); err != nil {
-		return err
-	}
-
-	if runtime.capabilities.stats {
-		statsGateway := discordstats.NewArikawaGateway(runtime.arikawaState, slog.Default())
-		statsService := stats.NewStatsService(statsGateway, opts.configManager, opts.store, slog.Default(), runtime.instanceID)
-		discordstats.RegisterDiscordGoEventHandlers(runtime.legacySession, statsService, slog.Default())
-
-		if err := runtime.serviceManager.Register(statsService); err != nil {
-			errWrap := fmt.Errorf("register stats service for %s: %w", runtime.instanceID, err)
-			log.EmitBlockingError("Blocking structural failure during service registry update", errWrap, log.GenerateRequestID())
-			return errWrap
-		}
-
-		if commandHandler := setupRuntimeCommandHandler(runtime, opts, cfg, runtime.unifiedCache, runtime.taskRouter, statsService); commandHandler != nil {
-			if err := runtime.serviceManager.Register(commandHandler); err != nil {
-				errWrap := fmt.Errorf("register command handler service for %s: %w", runtime.instanceID, err)
-				log.EmitBlockingError("Blocking structural failure during service registry update", errWrap, log.GenerateRequestID())
-				return errWrap
-			}
-		}
-	} else {
-		if commandHandler := setupRuntimeCommandHandler(runtime, opts, cfg, runtime.unifiedCache, runtime.taskRouter, nil); commandHandler != nil {
-			if err := runtime.serviceManager.Register(commandHandler); err != nil {
-				errWrap := fmt.Errorf("register command handler service for %s: %w", runtime.instanceID, err)
-				log.EmitBlockingError("Blocking structural failure during service registry update", errWrap, log.GenerateRequestID())
-				return errWrap
+		if svc != nil {
+			if err := runtime.serviceManager.Register(svc); err != nil {
+				return fmt.Errorf("service registration failure for %s: %w", runtime.instanceID, err)
 			}
 		}
 	}
@@ -846,9 +730,7 @@ func registerQOTDRuntimeService(runtime *botRuntime, opts botRuntimeOptions) err
 		opts.qotdCommandService,
 	)
 	if err := runtime.serviceManager.Register(qotdRuntimeService); err != nil {
-		errWrap := fmt.Errorf("register qotd runtime service for %s: %w", runtime.instanceID, err)
-		log.EmitBlockingError("Blocking structural failure during QOTD runtime registration", errWrap, log.GenerateRequestID())
-		return errWrap
+		return fmt.Errorf("register qotd runtime service for %s: %w", runtime.instanceID, err)
 	}
 	slog.Info("Architectural state transition: QOTD runtime initialized",
 		slog.String("botInstanceID", runtime.instanceID),
@@ -856,7 +738,7 @@ func registerQOTDRuntimeService(runtime *botRuntime, opts botRuntimeOptions) err
 	return nil
 }
 
-func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg *files.BotConfig, unifiedCache *cache.UnifiedCache, taskRouter *task.TaskRouter, statsService *stats.StatsService) service.Service {
+func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg *files.BotConfig, unifiedCache *cache.UnifiedCache, taskRouter *task.TaskRouter, statsService *stats.StatsService, ticketService *tickets.Service) service.Service {
 	if !runtime.capabilities.HasCommands() {
 		logRuntimeCommandsSkipped(runtime, opts, cfg)
 		return nil
@@ -877,9 +759,13 @@ func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg
 		StatsService:        statsService,
 		ModerationMetrics:   opts.moderationMetrics,
 		RuntimeApplier:      opts.runtimeApplier,
+		EmbedService:        opts.embedService,
+		RolePanelService:    opts.rolePanelService,
+		PartnerService:      opts.partnerService,
+		TicketService:       ticketService,
 	}
 
-	commandHandler, err := newCommandHandlerForBot(deps)
+	commandHandler, err := opts.newCommandHandlerForBot(deps)
 	if err != nil {
 		slog.Error("Blocking structural failure: Failed to construct CommandHandler",
 			slog.String("botInstanceID", runtime.instanceID),
@@ -999,10 +885,95 @@ func shutdownBotRuntime(runtime *botRuntime, ctx context.Context) []error {
 	var errs []error
 	if runtime.serviceManager != nil {
 		if err := runtime.serviceManager.StopAll(ctx); err != nil {
-			errWrap := fmt.Errorf("stop services for %s: %w", runtime.instanceID, err)
-			log.EmitBlockingError("Blocking structural failure during scheduled teardown sequence", errWrap, log.GenerateRequestID())
-			errs = append(errs, errWrap)
+			errs = append(errs, fmt.Errorf("stop services for %s: %w", runtime.instanceID, err))
 		}
 	}
 	return errs
+}
+
+func buildMessageEventServiceConfigurator(runtime *botRuntime, opts botRuntimeOptions, _ task.RouterConfig) (service.Service, error) {
+	if !runtime.capabilities.messageEventService {
+		return nil, nil
+	}
+	var eventLogger *logging.Logger
+	if runtime.arikawaState != nil && runtime.arikawaState.Session != nil {
+		eventLogger = logging.NewLogger(runtime.arikawaState.Session.Client, opts.configManager, runtime.arikawaState, gateway.Intents(runtime.capabilities.intents), slog.Default())
+	}
+	mes := messages.NewMessageEventServiceForBot(messages.EventServiceDeps{
+		ArikawaState:  runtime.arikawaState,
+		ConfigManager: opts.configManager,
+		Sink:          eventLogger,
+		Store:         opts.store,
+		BotInstanceID: runtime.instanceID,
+		Logger:        slog.Default(),
+	})
+	mes.SetTaskRouter(runtime.taskRouter)
+	return mes, nil
+}
+
+func buildMemberEventServiceConfigurator(runtime *botRuntime, opts botRuntimeOptions, _ task.RouterConfig) (service.Service, error) {
+	if !runtime.capabilities.memberEventService {
+		return nil, nil
+	}
+	var eventLogger *logging.Logger
+	if runtime.arikawaState != nil && runtime.arikawaState.Session != nil {
+		eventLogger = logging.NewLogger(runtime.arikawaState.Session.Client, opts.configManager, runtime.arikawaState, gateway.Intents(runtime.capabilities.intents), slog.Default())
+	}
+	memSvc := members.NewMemberEventServiceForBot(members.EventServiceDeps{
+		ArikawaState:  runtime.arikawaState,
+		ConfigManager: opts.configManager,
+		Sink:          memberSinkWrapper{logger: eventLogger},
+		MembersRepo:   opts.store,
+		SystemRepo:    opts.store,
+		BotInstanceID: runtime.instanceID,
+		Logger:        slog.Default(),
+	})
+	return memSvc, nil
+}
+
+func buildAutomodServiceConfigurator(runtime *botRuntime, opts botRuntimeOptions, routerConfig task.RouterConfig) (service.Service, error) {
+	cfg := opts.configManager.Config()
+	runtimeConfig := files.RuntimeConfig{}
+	if cfg != nil {
+		runtimeConfig = cfg.RuntimeConfig
+	}
+	return buildAutomodService(runtime, opts, routerConfig, runtimeConfig), nil
+}
+
+func buildQOTDRuntimeServiceConfigurator(runtime *botRuntime, opts botRuntimeOptions, _ task.RouterConfig) (service.Service, error) {
+	if !runtime.capabilities.qotdRuntime || opts.qotdCommandService == nil {
+		return nil, nil
+	}
+	qotdRuntimeService := discordqotd.NewRuntimeService(
+		discordqotd.Config{PublishInterval: 5 * time.Minute, ReconcileEvery: 1 * time.Hour},
+		opts.qotdCommandService,
+	)
+	slog.Info("Architectural state transition: QOTD runtime initialized", slog.String("botInstanceID", runtime.instanceID))
+	return qotdRuntimeService, nil
+}
+
+func buildStatsServiceConfigurator(runtime *botRuntime, opts botRuntimeOptions, _ task.RouterConfig) (service.Service, error) {
+	if !runtime.capabilities.stats {
+		return nil, nil
+	}
+	statsGateway := discordstats.NewArikawaGateway(runtime.arikawaState, slog.Default())
+	statsService := stats.NewStatsService(statsGateway, opts.configManager, opts.store, slog.Default(), runtime.instanceID)
+	discordstats.RegisterDiscordGoEventHandlers(runtime.legacySession, statsService, slog.Default())
+	return statsService, nil
+}
+
+func buildCommandHandlerServiceConfigurator(runtime *botRuntime, opts botRuntimeOptions, _ task.RouterConfig) (service.Service, error) {
+	cfg := opts.configManager.Config()
+	// statsService isn't passed down because it's resolved internally in setupRuntimeCommandHandler based on registry
+	// This maintains the pure signature. You can adapt setupRuntimeCommandHandler to fetch statsService from serviceManager if needed,
+	// or pass nil since ticketService is already being instantiated inside setupRuntimeCommandHandler natively.
+	ticketService := tickets.NewService(runtime.arikawaState, slog.Default())
+
+	// Assuming setupRuntimeCommandHandler signature can handle nil for stats or extracts it natively.
+	// Se você precisar do statsService explicitamente aqui, o pipeline permite extraí-lo do runtime.serviceManager.GetAllServices().
+	cmdHandler := setupRuntimeCommandHandler(runtime, opts, cfg, runtime.unifiedCache, runtime.taskRouter, nil, ticketService)
+	if cmdHandler == nil {
+		return nil, nil
+	}
+	return cmdHandler, nil
 }

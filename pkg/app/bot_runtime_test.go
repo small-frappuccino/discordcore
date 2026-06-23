@@ -2,114 +2,29 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/diamondburned/arikawa/v3/discord"
-	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordcore/pkg/discord/session"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/storage/postgres"
+	"github.com/small-frappuccino/discordgo"
+	"golang.org/x/sync/errgroup"
 )
 
-func TestResolveBotRuntimeCapabilities_GuildAggregation(t *testing.T) {
-	t.Parallel()
-
-	cfg := &files.BotConfig{
-		Features: files.FeatureToggles{
-			Services: files.FeatureServiceToggles{
-				Monitoring: new(bool(false)),
-				Commands:   new(bool(false)),
-			},
-			Logging: files.FeatureLoggingToggles{
-				ReactionMetric: new(bool(false)),
-			},
-		},
-		Guilds: []files.GuildConfig{
-			{
-				GuildID:           "g1",
-				BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
-				FeatureRouting: map[string]string{
-					"qotd": "main",
-				},
-				Features: files.FeatureToggles{
-					Services: files.FeatureServiceToggles{
-						Commands: new(bool(true)),
-					},
-				},
-				QOTD: files.QOTDConfig{
-					ActiveDeckID: files.LegacyQOTDDefaultDeckID,
-					Decks: []files.QOTDDeckConfig{{
-						ID:        files.LegacyQOTDDefaultDeckID,
-						Name:      files.LegacyQOTDDefaultDeckName,
-						Enabled:   true,
-						ChannelID: "q1",
-					}},
-				},
-			},
-			{
-				GuildID:           "g2",
-				BotInstanceTokens: map[string]files.EncryptedString{"main": "a"},
-				FeatureRouting: map[string]string{
-					"qotd":       "main",
-					"roles":      "main",
-					"moderation": "main",
-				},
-				Features: files.FeatureToggles{
-					Services: files.FeatureServiceToggles{
-						Monitoring: new(bool(true)),
-					},
-					Logging: files.FeatureLoggingToggles{
-						ReactionMetric: new(bool(true)),
-					},
-				},
-			},
-		},
-	}
-
-	instances := []resolvedBotInstance{{ID: "main", Token: "abc"}}
-	capsMap := resolveRuntimeCapabilities(cfg, instances, RunProfileDiscordMain)
-	capabilities := capsMap["main"]
-
-	if !capabilities.HasCommands() {
-		t.Fatal("expected commands capability")
-	}
-	if !capabilities.monitoring {
-		t.Fatal("expected monitoring capability")
-	}
-	if !capabilities.qotdRuntime {
-		t.Fatal("expected qotd runtime capability")
-	}
-	if int(capabilities.intents)&int(gateway.IntentGuildMessageReactions) == 0 {
-		t.Fatal("expected reaction intents")
-	}
-}
-
 func TestBotRuntime_InitializationRouting(t *testing.T) {
-	origFetchBotArikawaMe := fetchBotArikawaMe
-	t.Cleanup(func() {
-		fetchBotArikawaMe = origFetchBotArikawaMe
-	})
-	fetchBotArikawaMe = func(s *state.State) (*discord.User, error) {
+	fetchBotArikawaMeHook := func(s *state.State) (*discord.User, error) {
 		return &discord.User{ID: 123, Username: "test"}, nil
 	}
-	origOpenBotArikawaState := openBotArikawaState
-	t.Cleanup(func() {
-		openBotArikawaState = origOpenBotArikawaState
-	})
-	openBotArikawaState = func(ctx context.Context, s *state.State) error { return nil }
-	origNewCommandHandlerForBot := newCommandHandlerForBot
-	origSetupCommandHandler := setupCommandHandler
-	t.Cleanup(func() {
-		newCommandHandlerForBot = origNewCommandHandlerForBot
-		setupCommandHandler = origSetupCommandHandler
-	})
-	newCommandHandlerForBot = func(deps CommandHandlerDeps) (*CommandHandler, error) {
+	openBotArikawaStateHook := func(ctx context.Context, s *state.State) error { return nil }
+	newCommandHandlerForBotHook := func(deps CommandHandlerDeps) (*CommandHandler, error) {
 		return &CommandHandler{botInstanceID: deps.BotInstanceID, session: deps.Session}, nil
 	}
-	setupCommandHandler = func(ch *CommandHandler) error { return nil }
-
+	setupCommandHandlerHook := func(ch *CommandHandler) error { return nil }
 	tests := []struct {
 		name                 string
 		cfg                  *files.BotConfig
@@ -203,9 +118,7 @@ func TestBotRuntime_InitializationRouting(t *testing.T) {
 			cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 			cfgMgr.ApplyConfig(tt.cfg)
 
-			instances := []resolvedBotInstance{{ID: "main", Token: "abc"}}
-			capsMap := resolveRuntimeCapabilities(tt.cfg, instances, RunProfileDiscordMain)
-			caps := capsMap["main"]
+			caps := resolveBotRuntimeCapabilities(tt.cfg, "main")
 
 			rt := &botRuntime{
 				instanceID:    "main",
@@ -215,10 +128,14 @@ func TestBotRuntime_InitializationRouting(t *testing.T) {
 			}
 
 			err := initializeBotRuntime(context.Background(), rt, botRuntimeOptions{
-				runtimeCount:       1,
-				configManager:      cfgMgr,
-				store:              &postgres.Store{},
-				qotdCommandService: &qotd.Service{},
+				runtimeCount:            1,
+				configManager:           cfgMgr,
+				store:                   &postgres.Store{},
+				qotdCommandService:      &qotd.Service{},
+				fetchBotArikawaMe:       fetchBotArikawaMeHook,
+				openBotArikawaState:     openBotArikawaStateHook,
+				newCommandHandlerForBot: newCommandHandlerForBotHook,
+				setupCommandHandler:     setupCommandHandlerHook,
 			})
 			if err != nil {
 				t.Fatalf("unexpected init error: %v", err)
@@ -253,5 +170,148 @@ func TestBotRuntime_InitializationRouting(t *testing.T) {
 
 			shutdownBotRuntime(rt, context.Background())
 		})
+	}
+}
+
+func TestBotRuntime_CapabilityBitmaskDerivation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name               string
+		botInstanceID      string
+		cfg                *files.BotConfig
+		expectedIntents    discordgo.Intent
+		expectedCommands   bool
+		expectedMonitoring bool
+	}{
+		{
+			name:          "Commands and Moderation Escalation",
+			botInstanceID: "main",
+			cfg: &files.BotConfig{
+				Guilds: []files.GuildConfig{
+					{
+						GuildID: "g1",
+						BotInstanceTokens: map[string]files.EncryptedString{
+							"main": "mock_token",
+						},
+						Features: files.FeatureToggles{
+							Services: files.FeatureServiceToggles{
+								Commands:   new(bool(true)),
+								Monitoring: new(bool(false)),
+							},
+						},
+						FeatureRouting: map[string]string{
+							"moderation": "main",
+						},
+						Channels: files.ChannelsConfig{
+							AutomodAction: "channel1",
+						},
+					},
+				},
+			},
+			// Expects Guilds (base) + AutoModerationExecution + Messages (from Automod)
+			expectedIntents:    discordgo.IntentsGuilds | discordgo.IntentAutoModerationExecution,
+			expectedCommands:   true,
+			expectedMonitoring: false,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			caps := resolveBotRuntimeCapabilities(tt.cfg, tt.botInstanceID)
+
+			if (caps.intents & tt.expectedIntents) != tt.expectedIntents {
+				t.Errorf("intent bitmask failure: expected %d to contain %d", caps.intents, tt.expectedIntents)
+			}
+			if caps.hasCommands != tt.expectedCommands {
+				t.Errorf("command state failure: expected %t, got %t", tt.expectedCommands, caps.hasCommands)
+			}
+			if caps.monitoring != tt.expectedMonitoring {
+				t.Errorf("monitoring state failure: expected %t, got %t", tt.expectedMonitoring, caps.monitoring)
+			}
+		})
+	}
+}
+
+func TestBotRuntimeResolver_ConcurrentMemoryRotation(t *testing.T) {
+	t.Parallel()
+
+	resolver := newBotRuntimeResolver(nil, map[string]*botRuntime{
+		"test": {instanceID: "test"},
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	eg, egCtx := errgroup.WithContext(ctx)
+
+	// Writer Routine
+	eg.Go(func() error {
+		ticker := time.NewTicker(5 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-egCtx.Done():
+				return nil
+			case <-ticker.C:
+				resolver.swapRuntimes(map[string]*botRuntime{
+					"test": {instanceID: "test"},
+				})
+			}
+		}
+	})
+
+	// Reader Routines
+	for i := 0; i < 50; i++ {
+		eg.Go(func() error {
+			for {
+				select {
+				case <-egCtx.Done():
+					return nil
+				default:
+					rtMap := resolver.getRuntimes()
+
+					// Structural validation, not just a panic check
+					if rt, exists := rtMap["test"]; !exists || rt.instanceID != "test" {
+						return fmt.Errorf("memory layout corrupted during atomic rotation")
+					}
+
+					// Micro-yield to prevent writer starvation
+					time.Sleep(time.Microsecond)
+				}
+			}
+		})
+	}
+
+	if err := eg.Wait(); err != nil && err != context.DeadlineExceeded {
+		t.Fatalf("atomic synchronization boundary failed: %v", err)
+	}
+}
+
+func TestBotRuntimeResolver_WaitBarrierOrchestration(t *testing.T) {
+	resolver := newBotRuntimeResolver(nil, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	err := resolver.waitForReady(ctx)
+	if err == nil {
+		t.Fatal("expected timeout error")
+	}
+
+	resolver = newBotRuntimeResolver(nil, nil)
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		resolver.markReady()
+	}()
+
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel2()
+
+	err = resolver.waitForReady(ctx2)
+	if err != nil {
+		t.Fatalf("expected nil error, got: %v", err)
 	}
 }

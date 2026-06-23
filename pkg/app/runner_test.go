@@ -54,10 +54,6 @@ func TestRunner_ShutdownStartupServices(t *testing.T) {
 	shutdownStartupServices(nil, nil, "ok")
 }
 
-func TestRunner_RollbackStoreClose(t *testing.T) {
-	rollbackStoreClose(true, nil)
-}
-
 func TestRunner_ResolveRuntimeCapabilities(t *testing.T) {
 	cfg := &files.BotConfig{}
 
@@ -198,18 +194,10 @@ func seedRunnerConfig(t *testing.T, dbCfg files.DatabaseRuntimeConfig, cfg files
 }
 
 func TestRun_CascadingRollbackFailures(t *testing.T) {
-	origFetchBotArikawaMe := fetchBotArikawaMe
-	t.Cleanup(func() {
-		fetchBotArikawaMe = origFetchBotArikawaMe
-	})
-	fetchBotArikawaMe = func(s *state.State) (*discord.User, error) {
+	fetchBotArikawaMeHook := func(s *state.State) (*discord.User, error) {
 		return &discord.User{ID: 123, Username: "test"}, nil
 	}
-	origOpenBotArikawaState := openBotArikawaState
-	t.Cleanup(func() {
-		openBotArikawaState = origOpenBotArikawaState
-	})
-	openBotArikawaState = func(ctx context.Context, s *state.State) error { return nil }
+	openBotArikawaStateHook := func(ctx context.Context, s *state.State) error { return nil }
 	const appName = "discordmain-cascading-rollback-test"
 
 	appDataDir := t.TempDir()
@@ -239,41 +227,30 @@ func TestRun_CascadingRollbackFailures(t *testing.T) {
 	}
 	seedRunnerConfig(t, dbCfg, cfg)
 
-	origShutdownDelay := shutdownDelay
-	origSetupCommandHandler := setupCommandHandler
-	origCloseStore := closeStore
-	origCloseDiscordSession := closeDiscordSession
-
-	t.Cleanup(func() {
-		shutdownDelay = origShutdownDelay
-		setupCommandHandler = origSetupCommandHandler
-		closeStore = origCloseStore
-		closeDiscordSession = origCloseDiscordSession
-	})
-
-	shutdownDelay = func(time.Duration) {}
+	t.Parallel()
 
 	sabotageErr := errors.New("store close failure")
 	storeCloseErr := sabotageErr
 	discordCloseErr := errors.New("discord close failure")
 
-	closeStore = func(c interface{ Close() error }) error {
-		return storeCloseErr
-	}
-	closeDiscordSession = func(c interface{ Close() error }) error {
-		return discordCloseErr
-	}
-
 	shutdownCh := make(chan struct{})
-	testShutdownCh = shutdownCh
-	t.Cleanup(func() { testShutdownCh = nil })
 
 	go func() {
 		time.Sleep(2 * time.Second)
 		close(shutdownCh)
 	}()
 
-	err := Run(appName)
+	setupCommandHandlerHook := func(ch *CommandHandler) error { return nil }
+
+	err := RunWithOptions(appName, RunOptions{
+		openBotArikawaState:     openBotArikawaStateHook,
+		fetchBotArikawaMe:       fetchBotArikawaMeHook,
+		setupCommandHandler:     setupCommandHandlerHook,
+		StoreCloseHook:          func(c interface{ Close() error }) error { return storeCloseErr },
+		DiscordSessionCloseHook: func(c interface{ Close() error }) error { return discordCloseErr },
+		ShutdownDelay:           time.Nanosecond,
+		TestShutdownCh:          shutdownCh,
+	})
 
 	if err == nil {
 		t.Fatalf("expected Run to return cascading errors on shutdown")
@@ -292,18 +269,10 @@ func TestRun_CascadingRollbackFailures(t *testing.T) {
 }
 
 func TestRun_ResourceCleanupOnBootFailure(t *testing.T) {
-	origFetchBotArikawaMe := fetchBotArikawaMe
-	t.Cleanup(func() {
-		fetchBotArikawaMe = origFetchBotArikawaMe
-	})
-	fetchBotArikawaMe = func(s *state.State) (*discord.User, error) {
+	fetchBotArikawaMeHook := func(s *state.State) (*discord.User, error) {
 		return &discord.User{ID: 123, Username: "test"}, nil
 	}
-	origOpenBotArikawaState := openBotArikawaState
-	t.Cleanup(func() {
-		openBotArikawaState = origOpenBotArikawaState
-	})
-	openBotArikawaState = func(ctx context.Context, s *state.State) error { return nil }
+	openBotArikawaStateHook := func(ctx context.Context, s *state.State) error { return nil }
 	const appName = "discordmain-resource-cleanup-test"
 
 	appDataDir := t.TempDir()
@@ -333,34 +302,12 @@ func TestRun_ResourceCleanupOnBootFailure(t *testing.T) {
 	}
 	seedRunnerConfig(t, dbCfg, cfg)
 
-	origShutdownDelay := shutdownDelay
-	origSetupCommandHandler := setupCommandHandler
-	origCloseStore := closeStore
-	origCloseDiscordSession := closeDiscordSession
-
-	t.Cleanup(func() {
-		shutdownDelay = origShutdownDelay
-		setupCommandHandler = origSetupCommandHandler
-		closeStore = origCloseStore
-		closeDiscordSession = origCloseDiscordSession
-	})
-
-	shutdownDelay = func(time.Duration) {}
+	t.Parallel()
 
 	var storeCloseCalls int32
 	var discordCloseCalls int32
-	closeStore = func(c interface{ Close() error }) error {
-		atomic.AddInt32(&storeCloseCalls, 1)
-		return nil
-	}
-	closeDiscordSession = func(c interface{ Close() error }) error {
-		atomic.AddInt32(&discordCloseCalls, 1)
-		return nil
-	}
 
 	shutdownCh := make(chan struct{})
-	testShutdownCh = shutdownCh
-	t.Cleanup(func() { testShutdownCh = nil })
 
 	go func() {
 		time.Sleep(2 * time.Second)
@@ -370,7 +317,23 @@ func TestRun_ResourceCleanupOnBootFailure(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	goroutinesBefore := runtime.NumGoroutine()
 
-	err := Run(appName)
+	setupCommandHandlerHook := func(ch *CommandHandler) error { return nil }
+
+	err := RunWithOptions(appName, RunOptions{
+		openBotArikawaState: openBotArikawaStateHook,
+		fetchBotArikawaMe:   fetchBotArikawaMeHook,
+		setupCommandHandler: setupCommandHandlerHook,
+		StoreCloseHook: func(c interface{ Close() error }) error {
+			atomic.AddInt32(&storeCloseCalls, 1)
+			return nil
+		},
+		DiscordSessionCloseHook: func(c interface{ Close() error }) error {
+			atomic.AddInt32(&discordCloseCalls, 1)
+			return nil
+		},
+		ShutdownDelay:  time.Nanosecond,
+		TestShutdownCh: shutdownCh,
+	})
 
 	if err != nil {
 		t.Fatalf("expected clean shutdown, got: %v", err)

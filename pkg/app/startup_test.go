@@ -60,6 +60,7 @@ func TestResolveDatabaseBootstrapRequiresEnv(t *testing.T) {
 }
 
 func TestStartupTaskOrchestrator_GoLight(t *testing.T) {
+	t.Parallel()
 	orchestrator := NewStartupTaskOrchestrator(1)
 
 	var executed int32
@@ -84,6 +85,7 @@ func TestStartupTaskOrchestrator_GoLight(t *testing.T) {
 }
 
 func TestStartupTaskOrchestrator_GoHeavy(t *testing.T) {
+	t.Parallel()
 	orchestrator := NewStartupTaskOrchestrator(2)
 
 	var executed int32
@@ -110,6 +112,7 @@ func TestStartupTaskOrchestrator_GoHeavy(t *testing.T) {
 }
 
 func TestStartupTaskOrchestrator_ShutdownWithContextCancellation(t *testing.T) {
+	t.Parallel()
 	orchestrator := NewStartupTaskOrchestrator(1)
 
 	taskStarted := make(chan struct{})
@@ -141,6 +144,7 @@ func TestStartupTaskOrchestrator_ShutdownWithContextCancellation(t *testing.T) {
 }
 
 func TestStartupTaskOrchestrator_ShutdownTaskErrorSwallowed(t *testing.T) {
+	t.Parallel()
 	orchestrator := NewStartupTaskOrchestrator(1)
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -161,6 +165,7 @@ func TestStartupTaskOrchestrator_ShutdownTaskErrorSwallowed(t *testing.T) {
 }
 
 func TestStartupTaskOrchestrator_GoNil(t *testing.T) {
+	t.Parallel()
 	orchestrator := NewStartupTaskOrchestrator(1)
 	orchestrator.GoLight("nil_task", nil)
 	orchestrator.GoHeavy("nil_task", nil)
@@ -174,6 +179,7 @@ func TestStartupTaskOrchestrator_GoNil(t *testing.T) {
 }
 
 func TestResolveParallelism(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		resolver func(int) int
@@ -197,6 +203,7 @@ func TestResolveParallelism(t *testing.T) {
 }
 
 func TestControlServerHolder_SetAndStop(t *testing.T) {
+	t.Parallel()
 	var h *controlServerHolder
 
 	// Nil holder
@@ -216,6 +223,7 @@ func TestControlServerHolder_SetAndStop(t *testing.T) {
 }
 
 func TestScheduleControlServerStartup(t *testing.T) {
+	t.Parallel()
 	opts := controlStartupTaskOptions{
 		runOptions: RunOptions{
 			DisableControl: true,
@@ -228,10 +236,12 @@ func TestScheduleControlServerStartup(t *testing.T) {
 }
 
 func TestScheduleStartupWebhookEmbedUpdates(t *testing.T) {
+	t.Parallel()
 	scheduleStartupWebhookEmbedUpdates(nil, &files.BotConfig{}, func(g string) *session.LegacySession { return nil })
 }
 
 func TestStartControlServerStartupTask(t *testing.T) {
+	t.Parallel()
 	runtimes := make(map[string]*botRuntime)
 	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	resolver := newBotRuntimeResolver(cfgMgr, runtimes)

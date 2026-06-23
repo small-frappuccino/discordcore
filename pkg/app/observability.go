@@ -5,141 +5,59 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/small-frappuccino/discordcore/pkg/discord/qotd"
+	"github.com/small-frappuccino/discordcore/pkg/files"
+	domain "github.com/small-frappuccino/discordcore/pkg/qotd"
 	"log/slog"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
-
-	"github.com/diamondburned/arikawa/v3/state"
-	"github.com/small-frappuccino/discordcore/pkg/discord/qotd"
-	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/log"
-	domain "github.com/small-frappuccino/discordcore/pkg/qotd"
 )
 
-// dualSDKPublisher wraps the Arikawa publisher and dynamically injects the appropriate
-// Discord client token based on the target guild ID, enabling an active dual-SDK rollout.
-type dualSDKPublisher struct {
+// ArikawaQOTDPublisher routes domain publishing requests directly to the
+// active Arikawa gateway state, eliminating dual-SDK translation locks and local caching.
+type ArikawaQOTDPublisher struct {
 	resolver *botRuntimeResolver
-	mu       sync.RWMutex
-	clients  map[string]*state.State // botInstanceID -> Arikawa State
 }
 
-// newDualSDKPublisher creates a new dualSDKPublisher for the QOTD service.
-func newDualSDKPublisher(resolver *botRuntimeResolver) *dualSDKPublisher {
-	slog.Info("Architectural state transition: Allocating dual-SDK publisher orchestrator")
-	return &dualSDKPublisher{
+// NewArikawaQOTDPublisher instantiates a purely stateless publisher router.
+func NewArikawaQOTDPublisher(resolver *botRuntimeResolver) *ArikawaQOTDPublisher {
+	slog.Info("Architectural state transition: Allocating stateless native Arikawa publisher orchestrator")
+	return &ArikawaQOTDPublisher{
 		resolver: resolver,
-		clients:  make(map[string]*state.State),
 	}
 }
 
-// Evict forcefully removes a cached Arikawa state to release memory bindings.
-func (p *dualSDKPublisher) Evict(botInstanceID string) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	delete(p.clients, botInstanceID)
-}
-
-// getArikawaPublisher resolves the guild's bot instance and returns a cached Arikawa publisher.
-func (p *dualSDKPublisher) getArikawaPublisher(guildID string) (domain.Publisher, error) {
-	_, botInstanceID, err := p.resolver.runtimeForGuild(guildID, "qotd")
+// getArikawaPublisher resolves the gateway state for the guild directly from the atomic registry.
+func (p *ArikawaQOTDPublisher) getArikawaPublisher(guildID string) (domain.Publisher, error) {
+	state, err := p.resolver.arikawaStateForGuild(guildID, "qotd")
 	if err != nil {
-		errWrap := fmt.Errorf("resolve bot instance for guild %s: %w", guildID, err)
-		log.EmitBlockingError("Blocking structural failure: Orchestrator failed to resolve QOTD runtime capability for target guild", errWrap, log.GenerateRequestID())
-		return nil, errWrap
+		return nil, fmt.Errorf("resolve arikawa state for guild %s: %w", guildID, err)
 	}
 
-	p.mu.RLock()
-	st, ok := p.clients[botInstanceID]
-	p.mu.RUnlock()
-
-	if ok {
-		slog.Debug("Tracking complex conditional branch: Arikawa state publisher resolved from memory cache",
-			slog.String("bot_instance_id", botInstanceID),
-			slog.String("guild_id", guildID),
-		)
-		return qotd.NewArikawaPublisher(st.Session.Client), nil
+	if state == nil || state.Session == nil || state.Session.Client == nil {
+		return nil, fmt.Errorf("arikawa client evaluates to nil for guild %s", guildID)
 	}
 
-	// Fallback to legacy session token extraction to instantiate Arikawa capability wrapper.
-	session, err := p.resolver.sessionForGuild(guildID, "qotd")
-	if err != nil {
-		errWrap := fmt.Errorf("resolve discord session for guild %s: %w", guildID, err)
-		log.EmitBlockingError("Blocking structural failure: Orchestrator failed to resolve Discord session pointer for target guild", errWrap, log.GenerateRequestID())
-		return nil, errWrap
-	}
-
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	if st, ok := p.clients[botInstanceID]; ok {
-		return qotd.NewArikawaPublisher(st.Session.Client), nil
-	}
-
-	token := session.Token
-	if !strings.HasPrefix(token, "Bot ") {
-		token = "Bot " + token
-	}
-
-	slog.Info("Architectural state transition: Materializing new Arikawa state publisher instance",
-		slog.String("bot_instance_id", botInstanceID),
-	)
-
-	st = state.New("Bot " + strings.TrimPrefix(token, "Bot "))
-	p.clients[botInstanceID] = st
-
-	return qotd.NewArikawaPublisher(st.Session.Client), nil
+	return qotd.NewArikawaPublisher(state.Session.Client), nil
 }
 
-// PublishOfficialPost implements domain.Publisher by routing the call to Arikawa.
-func (p *dualSDKPublisher) PublishOfficialPost(ctx context.Context, params domain.PublishOfficialPostParams) (*domain.PublishedOfficialPost, error) {
-	slog.Debug("Granular inspection: Routing PublishOfficialPost payload through dual-SDK gateway",
-		slog.String("guild_id", params.GuildID),
-	)
-
+// PublishOfficialPost routes the execution context to the dynamically resolved Arikawa client.
+func (p *ArikawaQOTDPublisher) PublishOfficialPost(ctx context.Context, params domain.PublishOfficialPostParams) (*domain.PublishedOfficialPost, error) {
 	pub, err := p.getArikawaPublisher(params.GuildID)
 	if err != nil {
-		slog.Error("Blocking structural failure: QOTD publisher resolution aborted",
-			slog.String("guild_id", params.GuildID),
-			slog.String("error", err.Error()),
-		)
 		return nil, err
 	}
-
-	res, err := pub.PublishOfficialPost(ctx, params)
-	if err != nil {
-		slog.Error("Blocking structural failure: QOTD payload rejected by upstream",
-			slog.String("guild_id", params.GuildID),
-			slog.String("error", err.Error()),
-		)
-	}
-	return res, err
+	return pub.PublishOfficialPost(ctx, params)
 }
 
-// DeleteOfficialPost implements domain.Publisher by routing the call to Arikawa.
-func (p *dualSDKPublisher) DeleteOfficialPost(ctx context.Context, params domain.DeleteOfficialPostParams) error {
-	slog.Debug("Granular inspection: Routing DeleteOfficialPost payload through dual-SDK gateway",
-		slog.String("guild_id", params.GuildID),
-	)
-
+// DeleteOfficialPost routes the execution context to the dynamically resolved Arikawa client.
+func (p *ArikawaQOTDPublisher) DeleteOfficialPost(ctx context.Context, params domain.DeleteOfficialPostParams) error {
 	pub, err := p.getArikawaPublisher(params.GuildID)
 	if err != nil {
-		slog.Error("Blocking structural failure: QOTD publisher resolution aborted",
-			slog.String("guild_id", params.GuildID),
-			slog.String("error", err.Error()),
-		)
 		return err
 	}
-	err = pub.DeleteOfficialPost(ctx, params)
-	if err != nil {
-		slog.Error("Blocking structural failure: QOTD deletion rejected by upstream",
-			slog.String("guild_id", params.GuildID),
-			slog.String("error", err.Error()),
-		)
-	}
-	return err
+	return pub.DeleteOfficialPost(ctx, params)
 }
 
 const (

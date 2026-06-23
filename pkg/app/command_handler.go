@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/diamondburned/arikawa/v3/api"
@@ -32,17 +33,20 @@ type CommandHandler struct {
 	botInstanceID       string
 	catalogCapabilities CommandCatalogCapabilities
 	catalogRegistrars   []CommandCatalogRegistrar
-	router              *commands.CommandRouter
-	syncer              *commands.CommandSyncer
-	interactionCancel   func()
-	qotdService         qotdcmd.Service
-	statsService        *stats.StatsService
-	moderationMetrics   moderation.Metrics
-	ticketService       *tickets.Service
-	embedService        *embeds.EmbedService
-	rolePanelService    *roles.RolePanelService
-	partnerService      *partners.PartnerService
-	runtimeApplier      *runtimeapply.Manager
+
+	// Atomic pointers enforce memory safety without mutex contention
+	router atomic.Pointer[commands.CommandRouter]
+	syncer atomic.Pointer[commands.CommandSyncer]
+
+	interactionCancel func()
+	qotdService       qotdcmd.Service
+	statsService      *stats.StatsService
+	moderationMetrics moderation.Metrics
+	ticketService     *tickets.Service
+	embedService      *embeds.EmbedService
+	rolePanelService  *roles.RolePanelService
+	partnerService    *partners.PartnerService
+	runtimeApplier    *runtimeapply.Manager
 
 	mu           sync.RWMutex
 	running      bool
@@ -62,6 +66,9 @@ type CommandHandlerDeps struct {
 	ModerationMetrics   moderation.Metrics
 	TicketService       *tickets.Service
 	RuntimeApplier      *runtimeapply.Manager
+	EmbedService        *embeds.EmbedService
+	RolePanelService    *roles.RolePanelService
+	PartnerService      *partners.PartnerService
 }
 
 // NewCommandHandler creates a new CommandHandler instance
@@ -95,6 +102,9 @@ func NewCommandHandlerForBot(deps CommandHandlerDeps) (*CommandHandler, error) {
 		statsService:        deps.StatsService,
 		moderationMetrics:   deps.ModerationMetrics,
 		ticketService:       deps.TicketService,
+		embedService:        deps.EmbedService,
+		rolePanelService:    deps.RolePanelService,
+		partnerService:      deps.PartnerService,
 		runtimeApplier:      deps.RuntimeApplier,
 	}, nil
 }
@@ -210,7 +220,7 @@ func (ch *CommandHandler) SetupCommands() error {
 	)
 
 	// Re-init safety: avoid duplicated handlers if setup is called more than once.
-	if ch.router != nil {
+	if ch.router.Load() != nil {
 		// Warn: Condition mitigated by compensatory repetition of local state cleanup.
 		slog.Warn("overlapping handler registration; invoking cleanup of previous registrations",
 			slog.String("botInstanceID", ch.botInstanceID),
@@ -222,7 +232,7 @@ func (ch *CommandHandler) SetupCommands() error {
 
 	// Initialize native router and syncer
 	apiClient := api.NewClient(ch.session.Token)
-	ch.router = commands.NewCommandRouter(apiClient, ch.configManager)
+	newRouter := commands.NewCommandRouter(apiClient, ch.configManager)
 
 	if ch.session == nil || ch.session.State == nil || ch.session.State.User == nil {
 		return errors.New("cannot setup commands: session user state is missing")
@@ -235,22 +245,28 @@ func (ch *CommandHandler) SetupCommands() error {
 	if err != nil {
 		return fmt.Errorf("invalid bot app ID: %w", err)
 	}
-	ch.syncer = commands.NewCommandSyncer(apiClient, discord.AppID(appID))
+	newSyncer := commands.NewCommandSyncer(apiClient, discord.AppID(appID))
 
-	ch.embedService = embeds.NewEmbedService(ch.configManager)
-	ch.rolePanelService = roles.NewRolePanelService(ch.configManager)
-	ch.partnerService = partners.NewPartnerService(ch.configManager)
-
-	// Register configuration and feature command catalogs.
-	if err := ch.registerCommandCatalog(); err != nil {
+	// Register configuration and feature command catalogs against the local, unexposed router.
+	if err := ch.registerCommandCatalog(newRouter); err != nil {
 		return fmt.Errorf("failed to register config commands: %w", err)
 	}
+
+	// Safely swap the fully hydrated dependencies into live memory
+	ch.router.Store(newRouter)
+	ch.syncer.Store(newSyncer)
 
 	// Register pure Arikawa listener as the sole boundary
 	ch.interactionCancel = ch.session.AddHandler(func(s *discordgo.Session, rawEvent *discordgo.Event) {
 		if rawEvent.Type != "INTERACTION_CREATE" {
 			return
 		}
+		// Load a safe, immutable snapshot of the router
+		currentRouter := ch.router.Load()
+		if currentRouter == nil {
+			return // Teardown in progress; silently drop the event
+		}
+
 		var arikawaEvent discord.InteractionEvent
 		if err := arikawaEvent.UnmarshalJSON(rawEvent.RawData); err != nil {
 			slog.Error("Failed to unmarshal INTERACTION_CREATE into Arikawa event", slog.Any("error", err))
@@ -277,13 +293,15 @@ func (ch *CommandHandler) SetupCommands() error {
 		}
 
 		// Dispatch purely in Arikawa natively
-		_ = ch.router.HandleEvent(&arikawaEvent)
+		_ = currentRouter.HandleEvent(&arikawaEvent)
 	})
 
 	// Configure commands on Discord
 	// We pass 0 as guildID to mean global commands, or dynamically loop through guilds if necessary.
 	// For architecture parity, we will sync globally.
-	if err := ch.syncer.SyncBulkOverwrite(0, ch.router.Registry()); err != nil {
+	currentRouter := ch.router.Load()
+	currentSyncer := ch.syncer.Load()
+	if err := currentSyncer.SyncBulkOverwrite(0, currentRouter.Registry()); err != nil {
 		if shutdownErr := ch.Shutdown(); shutdownErr != nil {
 			// Error: Blocking structural failure of current operation.
 			slog.Error("fatal failure during command manager registration rollback",
@@ -305,11 +323,10 @@ func (ch *CommandHandler) SetupCommands() error {
 
 // GetRouter returns the command router (for tests or extensions)
 func (ch *CommandHandler) GetRouter() *commands.CommandRouter {
-	return ch.router
+	return ch.router.Load()
 }
 
-func (ch *CommandHandler) registerCommandCatalog() error {
-	router := ch.router
+func (ch *CommandHandler) registerCommandCatalog(router *commands.CommandRouter) error {
 	for _, registrar := range ch.commandCatalogRegistrarsForSetup() {
 		if registrar.RegisterArikawa != nil {
 			registrar.RegisterArikawa(ch, router)
@@ -346,12 +363,8 @@ func (ch *CommandHandler) Shutdown() error {
 		ch.interactionCancel = nil
 	}
 
-	if ch.router != nil {
-		ch.router = nil
-	}
-	if ch.syncer != nil {
-		ch.syncer = nil
-	}
+	ch.router.Store(nil)
+	ch.syncer.Store(nil)
 
 	if len(errs) > 0 {
 		// Error: Blocking structural failure draining dependencies. Triggers aggregation system.
@@ -438,6 +451,50 @@ func (ch *CommandHandler) matchesGuildBotInstance(guildID string, feature string
 	}
 	return resolvedID == ch.botInstanceID
 }
+
 func (ch *CommandHandler) GetSyncer() *commands.CommandSyncer {
-	return ch.syncer
+	return ch.syncer.Load()
+}
+
+// --- RegistrarContext Implementation ---
+// These methods satisfy the read-only boundary required by the CommandCatalogRegistrars
+// without exposing internal synchronization primitives or lifecycle controls.
+
+func (ch *CommandHandler) SessionToken() string {
+	if ch.session != nil {
+		return ch.session.Token
+	}
+	return ""
+}
+
+func (ch *CommandHandler) ConfigManager() *files.ConfigManager {
+	return ch.configManager
+}
+
+func (ch *CommandHandler) RuntimeApplier() *runtimeapply.Manager {
+	return ch.runtimeApplier
+}
+
+func (ch *CommandHandler) PartnerService() *partners.PartnerService {
+	return ch.partnerService
+}
+
+func (ch *CommandHandler) ModerationMetrics() moderation.Metrics {
+	return ch.moderationMetrics
+}
+
+func (ch *CommandHandler) RolePanelService() *roles.RolePanelService {
+	return ch.rolePanelService
+}
+
+func (ch *CommandHandler) EmbedService() *embeds.EmbedService {
+	return ch.embedService
+}
+
+func (ch *CommandHandler) QOTDService() qotdcmd.Service {
+	return ch.qotdService
+}
+
+func (ch *CommandHandler) StatsService() *stats.StatsService {
+	return ch.statsService
 }

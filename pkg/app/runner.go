@@ -14,6 +14,9 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/clock"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
+	"github.com/small-frappuccino/discordcore/pkg/discord/embeds"
+	"github.com/small-frappuccino/discordcore/pkg/discord/partners"
+	"github.com/small-frappuccino/discordcore/pkg/discord/roles"
 	"github.com/small-frappuccino/discordcore/pkg/discord/session"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/idgen"
@@ -26,17 +29,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/storage/postgres"
 	"golang.org/x/sync/errgroup"
-)
-
-var (
-	newCommandHandler       = NewCommandHandler
-	newCommandHandlerForBot = NewCommandHandlerForBot
-	setupCommandHandler     = func(ch *CommandHandler) error { return ch.SetupCommands() }
-	shutdownCommandHandler  = func(ch *CommandHandler) error { return ch.Shutdown() }
-	closeStore              = func(c interface{ Close() error }) error { return c.Close() }
-	closeDiscordSession     = func(c interface{ Close() error }) error { return c.Close() }
-	shutdownDelay           = time.Sleep
-	testShutdownCh          <-chan struct{}
 )
 
 const (
@@ -52,12 +44,58 @@ const (
 	controlTLSKeyFileEnv                          = "DISCORDCORE_CONTROL_TLS_KEY_FILE"
 )
 
+// App encapsulates the state of the initializing application process, providing
+// a testable, instance-based context tree instead of procedural global variables.
+type App struct {
+	appName        string
+	opts           RunOptions
+	serviceManager *service.ServiceManager
+	startupTasks   *StartupTaskOrchestrator
+	logger         *slog.Logger
+
+	store                 *postgres.Store
+	configManager         *files.ConfigManager
+	controlServerRegistry *controlServerHolder
+	botSupervisor         *BotSupervisor
+	runtimeResolver       *botRuntimeResolver
+	runtimeApplier        *runtimeapply.Manager
+
+	qotdService       *qotd.Service
+	moderationMetrics *moderation.InMemoryMetrics
+	membersMetrics    *members.InMemoryMetrics
+	messagesMetrics   *messages.InMemoryMetrics
+
+	cleanupStop chan struct{}
+}
+
+// NewApp allocates the initial structural foundations for a bot runtime pipeline.
+func NewApp(appName string, opts RunOptions) *App {
+	if opts.Logger == nil {
+		opts.Logger = slog.Default()
+	}
+	if opts.StoreCloseHook == nil {
+		opts.StoreCloseHook = func(c interface{ Close() error }) error { return c.Close() }
+	}
+	if opts.DiscordSessionCloseHook == nil {
+		opts.DiscordSessionCloseHook = func(c interface{ Close() error }) error { return c.Close() }
+	}
+	if opts.ShutdownDelay == 0 {
+		opts.ShutdownDelay = 100 * time.Millisecond
+	}
+
+	return &App{
+		appName:        appName,
+		opts:           opts,
+		serviceManager: service.NewServiceManager(opts.Logger),
+		logger:         opts.Logger,
+	}
+}
+
 // Run bootstraps the bot with a unified flow and blocks until shutdown.
 func Run(appName string) error {
 	return RunWithOptions(appName, RunOptions{})
 }
 
-// RunWithOptions bootstraps the bot and allows hosts to override control-plane wiring.
 func RunWithOptions(appName string, opts RunOptions) (err error) {
 	defer func() {
 		log.GlobalLogger.Sync()
@@ -65,49 +103,97 @@ func RunWithOptions(appName string, opts RunOptions) (err error) {
 	}()
 	defer func() {
 		if r := recover(); r != nil {
+			// Unmanaged Panic: Exige interrupção agressiva e dump de memória (Stack Trace)
 			errWrap := fmt.Errorf("panic recovered during runtime: %v", r)
 			log.EmitBlockingError("Critical pipeline failure: Unhandled panic intercepted", errWrap, log.GenerateRequestID())
 			notifyLifecycleEvent("fatal", errWrap.Error())
 			err = errWrap
 		} else if err != nil {
-			log.EmitBlockingError("Critical pipeline failure: Primary routine aborted", err, log.GenerateRequestID())
+			// Managed Error: Falha validada e propagada. Usa O(1) structured logging sem stack trace.
+			slog.Error("Primary execution routine aborted",
+				slog.String("app_name", appName),
+				slog.Any("error", err),
+			)
 			notifyLifecycleEvent("fatal", fmt.Sprintf("startup or runtime error: %v", err))
 		} else {
+			// Desligamento limpo
 			notifyLifecycleEvent("stopping", "")
 		}
 	}()
-	return runWithOptions(appName, opts)
-}
 
-func runWithOptions(appName string, opts RunOptions) error {
-	started := time.Now()
+	app := NewApp(appName, opts)
+	ctx := context.Background()
 
-	if err := idgen.Init(1); err != nil {
-		errWrap := fmt.Errorf("initialize idgen: %w", err)
-		log.EmitBlockingError("Structural dependency failure: ID generator initialization aborted", errWrap, log.GenerateRequestID())
-		return errWrap
+	if bootErr := app.Boot(ctx); bootErr != nil {
+		return app.Teardown(bootErr)
 	}
 
-	logger := opts.Logger
-	if logger == nil {
-		logger = slog.Default()
+	return app.Teardown(app.RunAndListen(ctx))
+}
+
+// Boot executes the application initialization matrix deterministically.
+func (a *App) Boot(ctx context.Context) error {
+	a.logger.Info("Architectural state transition: Executing application boot sequence")
+
+	if err := a.InitializeIO(ctx); err != nil {
+		return err
+	}
+	if err := a.ConstructServices(ctx); err != nil {
+		return err
+	}
+
+	eg, egCtx := errgroup.WithContext(ctx)
+
+	eg.Go(func() error {
+		return a.serviceManager.StartAll()
+	})
+
+	eg.Go(func() error {
+		if err := a.runtimeResolver.waitForReady(egCtx); err != nil {
+			return err
+		}
+
+		controlBearerToken := strings.TrimSpace(files.EnvString(controlBearerTokenEnv, ""))
+		scheduleStartupWebhookEmbedUpdates(a.startupTasks, a.configManager.Config(), func(guildID string) *session.LegacySession {
+			sess, _ := a.runtimeResolver.sessionForGuild(guildID, "")
+			return sess
+		})
+		scheduleControlServerStartup(a.startupTasks, controlStartupTaskOptions{
+			runOptions:            a.opts,
+			configManager:         a.configManager,
+			runtimeApplier:        a.runtimeApplier,
+			controlBearerToken:    controlBearerToken,
+			runtimeResolver:       a.runtimeResolver,
+			store:                 a.store,
+			qotdService:           a.qotdService,
+			moderationMetrics:     a.moderationMetrics,
+			membersMetrics:        a.membersMetrics,
+			messagesMetrics:       a.messagesMetrics,
+			controlServerRegistry: a.controlServerRegistry,
+		})
+		slog.Info("Architectural state transition: Command tree sync complete")
+		return nil
+	})
+
+	return eg.Wait()
+}
+
+// InitializeIO establishes critical state boundaries across filesystems and storage.
+func (a *App) InitializeIO(ctx context.Context) error {
+	if err := idgen.Init(1); err != nil {
+		return fmt.Errorf("initialize idgen: %w", err)
 	}
 
 	notifyLifecycleEvent("starting", "")
 
-	var runtimeApplier *runtimeapply.Manager
-
-	msg := formatStartupMessage(appName, AppVersion(), Version)
+	msg := formatStartupMessage(a.appName, AppVersion(), Version)
 	slog.Info("Architectural state transition: Executing application binary",
 		slog.String("version_info", msg),
 	)
 
-	// Resolve centralized Postgres persistence manifest to configure underlying storage adapter parameters.
 	databaseBootstrap, err := resolveDatabaseBootstrap()
 	if err != nil {
-		errWrap := fmt.Errorf("RunWithOptions resolveDatabaseBootstrap: %w", err)
-		log.EmitBlockingError("Structural dependency failure: Database manifest resolution aborted", errWrap, log.GenerateRequestID())
-		return errWrap
+		return fmt.Errorf("InitializeIO resolveDatabaseBootstrap: %w", err)
 	}
 	slog.Info("Architectural state transition: Database matrix parameters loaded",
 		slog.String("operation", "startup.database.bootstrap"),
@@ -120,37 +206,32 @@ func runWithOptions(appName string, opts RunOptions) error {
 		)
 	}
 	if err := files.EnsureCacheDirs(); err != nil {
-		errWrap := fmt.Errorf("create cache directories: %w", err)
-		log.EmitBlockingError("Structural dependency failure: Block storage provisioning aborted", errWrap, log.GenerateRequestID())
-		return errWrap
+		return fmt.Errorf("create cache directories: %w", err)
 	}
 
 	store, configManager, err := setupStorage(databaseBootstrap)
 	if err != nil {
-		errWrap := fmt.Errorf("RunWithOptions setupStorage: %w", err)
-		log.EmitBlockingError("Structural dependency failure: Storage manifold orchestration aborted", errWrap, log.GenerateRequestID())
-		return errWrap
+		return fmt.Errorf("InitializeIO setupStorage: %w", err)
 	}
-	closeStoreOnReturn := true
-	defer func() { rollbackStoreClose(closeStoreOnReturn, store) }()
+	a.store = store
+	a.configManager = configManager
 
-	// Cascade remote UX parameters into the local process UI theme structure.
-	applyConfiguredTheme(configManager)
+	applyConfiguredTheme(a.configManager)
 
-	cleanupStop := scheduleDBCleanup(store, configManager)
-	defer func() {
-		if cleanupStop != nil {
-			close(cleanupStop)
-		}
-	}()
+	a.cleanupStop = scheduleDBCleanup(a.store, a.configManager)
 
-	runtimeApplier = runtimeapply.New(nil, nil)
-	if cfg := configManager.Config(); cfg != nil {
-		runtimeApplier.SetInitial(cfg.RuntimeConfig)
+	return nil
+}
+
+// ConstructServices assembles the runtime domain logic elements and their dependency graph.
+func (a *App) ConstructServices(ctx context.Context) error {
+	a.runtimeApplier = runtimeapply.New(nil, nil)
+	if cfg := a.configManager.Config(); cfg != nil {
+		a.runtimeApplier.SetInitial(cfg.RuntimeConfig)
 	}
 
 	knownInstances := make(map[string]struct{})
-	if cfg := configManager.Config(); cfg != nil {
+	if cfg := a.configManager.Config(); cfg != nil {
 		for _, guild := range cfg.Guilds {
 			for instanceID, token := range guild.BotInstanceTokens {
 				if string(token) != "" {
@@ -164,20 +245,19 @@ func runWithOptions(appName string, opts RunOptions) error {
 		runtimeCount = 1
 	}
 
-	controlServerRegistry := &controlServerHolder{}
-	startupTasks := NewStartupTaskOrchestrator(runtimeCount)
-	defer shutdownStartupServices(startupTasks, controlServerRegistry, "Startup background tasks did not finish cleanly")
+	a.controlServerRegistry = &controlServerHolder{}
+	a.startupTasks = NewStartupTaskOrchestrator(runtimeCount)
 
 	qotdMetrics := qotd.NopMetrics{}
-	qotdService := qotd.NewServiceWithMetrics(configManager, store, nil, qotdMetrics)
+	qotdService := qotd.NewServiceWithMetrics(a.configManager, a.store, nil, qotdMetrics)
 
 	appClock := clock.NewHTTPClock("https://discord.com")
 	qotdService.SetClock(appClock)
 
-	moderationMetrics := &moderation.InMemoryMetrics{}
-	membersMetrics := members.NewInMemoryMetrics()
-	messagesMetrics := messages.NewInMemoryMetrics()
-	appServiceManager := service.NewServiceManager(logger)
+	a.moderationMetrics = &moderation.InMemoryMetrics{}
+	a.membersMetrics = members.NewInMemoryMetrics()
+	a.messagesMetrics = messages.NewInMemoryMetrics()
+	a.qotdService = qotdService
 
 	storeService := service.NewLegacyServiceWrapper(service.LegacyServiceWrapperSpec{
 		Name:     "postgres-store",
@@ -185,40 +265,51 @@ func runWithOptions(appName string, opts RunOptions) error {
 		Priority: service.PriorityHigh,
 		Start:    func(context.Context) error { return nil },
 		Stop: func(context.Context) error {
-			shutdownDelay(100 * time.Millisecond)
-			return closeStore(store)
+			time.Sleep(a.opts.ShutdownDelay)
+			return a.opts.StoreCloseHook(a.store)
 		},
-		Logger: logger,
+		Logger: a.logger,
 	})
-	if err := appServiceManager.Register(storeService); err != nil {
-		errWrap := fmt.Errorf("register store service: %w", err)
-		log.EmitBlockingError("Structural dependency failure: Subgraph registration aborted", errWrap, log.GenerateRequestID())
-		return errWrap
+	if err := a.serviceManager.Register(storeService); err != nil {
+		return fmt.Errorf("register store service: %w", err)
 	}
+
+	embedService := embeds.NewEmbedService(a.configManager)
+	rolePanelService := roles.NewRolePanelService(a.configManager)
+	partnerService := partners.NewPartnerService(a.configManager)
 
 	botOpts := botRuntimeOptions{
 		runtimeCount:             runtimeCount,
-		configManager:            configManager,
-		store:                    store,
-		commandCatalogRegistrars: opts.CommandCatalogRegistrars,
-		runtimeApplier:           runtimeApplier,
+		configManager:            a.configManager,
+		store:                    a.store,
+		commandCatalogRegistrars: a.opts.CommandCatalogRegistrars,
+		runtimeApplier:           a.runtimeApplier,
 		qotdCommandService:       qotdService,
-		moderationMetrics:        moderationMetrics,
-		membersMetrics:           membersMetrics,
-		messagesMetrics:          messagesMetrics,
-		startupTasks:             startupTasks,
-		profile:                  opts.Profile,
+		moderationMetrics:        a.moderationMetrics,
+		membersMetrics:           a.membersMetrics,
+		messagesMetrics:          a.messagesMetrics,
+		startupTasks:             a.startupTasks,
+		profile:                  a.opts.Profile,
 		appClock:                 appClock,
-		controlServerRegistry:    controlServerRegistry,
-		logger:                   logger,
+		controlServerRegistry:    a.controlServerRegistry,
+		logger:                   a.logger,
+		embedService:             embedService,
+		rolePanelService:         rolePanelService,
+		partnerService:           partnerService,
+		openBotArikawaState:      a.opts.openBotArikawaState,
+		fetchBotArikawaMe:        a.opts.fetchBotArikawaMe,
+		newCommandHandlerForBot:  a.opts.newCommandHandlerForBot,
+		newCommandHandler:        a.opts.newCommandHandler,
+		setupCommandHandler:      a.opts.setupCommandHandler,
+		shutdownCommandHandler:   a.opts.shutdownCommandHandler,
 	}
 
-	botSupervisor := NewBotSupervisor(configManager, botOpts)
-	qotdService.SetPublisher(newDualSDKPublisher(botSupervisor.GetResolver()))
-	configManager.AddSubscriber(botSupervisor.onConfigChanged)
+	a.botSupervisor = NewBotSupervisor(a.configManager, botOpts)
+	qotdService.SetPublisher(NewArikawaQOTDPublisher(a.botSupervisor.GetResolver()))
+	a.configManager.AddSubscriber(a.botSupervisor.onConfigChanged)
 
-	botSupervisor.SetFatalCallback(func(err error) {
-		appServiceManager.Fatal(err)
+	a.botSupervisor.SetFatalCallback(func(err error) {
+		a.serviceManager.Fatal(err)
 	})
 
 	botSupervisorService := service.NewLegacyServiceWrapper(service.LegacyServiceWrapperSpec{
@@ -226,103 +317,59 @@ func runWithOptions(appName string, opts RunOptions) error {
 		Type:     service.TypeMonitoring,
 		Priority: service.PriorityNormal,
 		Start: func(context.Context) error {
-			return botSupervisor.Start()
+			return a.botSupervisor.Start()
 		},
 		Stop: func(ctx context.Context) error {
-			return botSupervisor.Stop(ctx)
+			return a.botSupervisor.Stop(ctx)
 		},
-		Logger: logger,
+		Logger: a.logger,
 	})
 
-	if err := appServiceManager.Register(botSupervisorService); err != nil {
-		errWrap := fmt.Errorf("register bot supervisor service: %w", err)
-		log.EmitBlockingError("Structural dependency failure: Supervisor allocation aborted", errWrap, log.GenerateRequestID())
-		return errWrap
+	if err := a.serviceManager.Register(botSupervisorService); err != nil {
+		return fmt.Errorf("register bot supervisor service: %w", err)
 	}
 
-	runtimeResolver := botSupervisor.GetResolver()
+	a.runtimeResolver = a.botSupervisor.GetResolver()
 
-	attachCtx, attachCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	attachCtx, attachCancel := context.WithTimeout(ctx, 5*time.Second)
 	defer attachCancel()
-	if err := moderationMetrics.Attach(attachCtx); err != nil {
-		errWrap := fmt.Errorf("fatal abort: moderation metrics pipeline failed to attach: %w", err)
-		log.EmitBlockingError("Structural dependency failure: Moderation metrics pipeline desync", errWrap, log.GenerateRequestID())
-		return errWrap
+	if err := a.moderationMetrics.Attach(attachCtx); err != nil {
+		return fmt.Errorf("fatal abort: moderation metrics pipeline failed to attach: %w", err)
 	}
 
-	eg, egCtx := errgroup.WithContext(context.Background())
+	return nil
+}
 
-	eg.Go(func() error {
-		return appServiceManager.StartAll()
-	})
-
-	eg.Go(func() error {
-		if err := runtimeResolver.waitForReady(egCtx); err != nil {
-			return err
-		}
-
-		controlBearerToken := strings.TrimSpace(files.EnvString(controlBearerTokenEnv, ""))
-		scheduleStartupWebhookEmbedUpdates(startupTasks, configManager.Config(), func(guildID string) *session.LegacySession {
-			sess, _ := runtimeResolver.sessionForGuild(guildID, "")
-			return sess
-		})
-		scheduleControlServerStartup(startupTasks, controlStartupTaskOptions{
-			runOptions:            opts,
-			configManager:         configManager,
-			runtimeApplier:        runtimeApplier,
-			controlBearerToken:    controlBearerToken,
-			runtimeResolver:       runtimeResolver,
-			store:                 store,
-			qotdService:           qotdService,
-			moderationMetrics:     moderationMetrics,
-			membersMetrics:        membersMetrics,
-			messagesMetrics:       messagesMetrics,
-			controlServerRegistry: controlServerRegistry,
-		})
-		slog.Info("Architectural state transition: Command tree sync complete")
-		return nil
-	})
-
-	if err := eg.Wait(); err != nil {
-		return err
-	}
-
-	slog.Info("Architectural state transition: Main process operational matrix finalized",
-		slog.String("app_name", appName),
-		slog.Duration("boot_time", time.Since(started).Round(time.Millisecond)),
-	)
-
-	// Attach contextual bindings to standard POSIX interrupt signals for managed daemon shutdown.
-	rootCtx, stopRoot := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stopRoot()
+// RunAndListen hooks context lifecycles to OS events, averting complex goto flow control.
+func (a *App) RunAndListen(ctx context.Context) error {
+	signalCtx, stopSignal := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stopSignal()
 
 	sigHupCh := make(chan os.Signal, 1)
 	signal.Notify(sigHupCh, syscall.SIGHUP)
 
 	fatalErrCh := make(chan error, 1)
 	go func() {
-		fatalErrCh <- appServiceManager.Wait()
+		fatalErrCh <- a.serviceManager.Wait()
 	}()
 
-	var runErr error
 	for {
 		select {
 		case err := <-fatalErrCh:
 			if err != nil {
 				log.EmitBlockingError("Critical pipeline failure: Daemon cluster collapsed", err, log.GenerateRequestID())
-				runErr = err
-				goto shutdown
+				return err
 			}
-			goto shutdown
-
-		case <-rootCtx.Done():
-			slog.Info("Architectural state transition: Process termination signal acknowledged. Initiating graceful teardown.")
-			stopRoot()
-			goto shutdown
-
+			return nil
+		case <-signalCtx.Done():
+			a.logger.Info("Architectural state transition: Process termination signal acknowledged. Initiating graceful teardown.")
+			return nil
+		case <-a.opts.TestShutdownCh:
+			a.logger.Info("Architectural state transition: Test simulated shutdown initiated")
+			return nil
 		case <-sigHupCh:
-			slog.Debug("Dynamic instruction intercepted: Evaluating configuration layer reload via SIGHUP")
-			newCfg, needsSave, err := configManager.LoadConfigFromStore()
+			a.logger.Debug("Dynamic instruction intercepted: Evaluating configuration layer reload via SIGHUP")
+			newCfg, needsSave, err := a.configManager.LoadConfigFromStore()
 			if err != nil {
 				slog.Warn("Mitigated service degradation: Live configuration mutation failed; enforcing active baseline",
 					slog.String("error", err.Error()),
@@ -330,10 +377,10 @@ func runWithOptions(appName string, opts RunOptions) error {
 				continue
 			}
 
-			dupCount := configManager.ApplyConfig(newCfg)
+			dupCount := a.configManager.ApplyConfig(newCfg)
 
 			if dupCount > 0 || needsSave {
-				if saveErr := configManager.SaveConfig(); saveErr != nil {
+				if saveErr := a.configManager.SaveConfig(); saveErr != nil {
 					log.EmitBlockingError("Structural state failure: Volatile configuration drift blocks persistence flush", saveErr, log.GenerateRequestID())
 				} else {
 					slog.Info("Architectural state transition: Configuration topology updated and indexes rebuilt",
@@ -343,34 +390,42 @@ func runWithOptions(appName string, opts RunOptions) error {
 			} else {
 				slog.Info("Architectural state transition: Configuration topology refreshed directly from disk")
 			}
-
-		case <-testShutdownCh:
-			slog.Info("Architectural state transition: Test simulated shutdown initiated")
-			goto shutdown
 		}
 	}
+}
 
-shutdown:
+// Teardown safely shuts down orchestrators and the database subsystem.
+func (a *App) Teardown(originalErr error) error {
+	if a == nil {
+		return originalErr
+	}
+
 	slog.Info("Architectural state transition: Commencing teardown sequence across local orchestrators",
-		slog.String("app_name", appName),
+		slog.String("app_name", a.appName),
 	)
-	log.GlobalLogger.Sync()
 
-	shutdownStartupServices(startupTasks, controlServerRegistry, "Startup background tasks did not finish before shutdown")
-
-	closeStoreOnReturn = false
-	if err := appServiceManager.StopAll(context.Background()); err != nil {
-		errWrap := fmt.Errorf("shutdown: %w", err)
-		log.EmitBlockingError("Structural teardown failure: Zombie sub-processes detected during stop iteration", errWrap, log.GenerateRequestID())
-		if runErr != nil {
-			appServiceManager.Wait()
-			return stdErrors.Join(runErr, errWrap)
-		}
-		appServiceManager.Wait()
-		return errWrap
+	if a.cleanupStop != nil {
+		close(a.cleanupStop)
 	}
-	appServiceManager.Wait()
-	return runErr
+
+	if a.startupTasks != nil {
+		shutdownStartupServices(a.startupTasks, a.controlServerRegistry, "Startup background tasks did not finish before shutdown")
+	}
+
+	if a.serviceManager != nil {
+		if err := a.serviceManager.StopAll(context.Background()); err != nil {
+			errWrap := fmt.Errorf("shutdown: %w", err)
+			log.EmitBlockingError("Structural teardown failure: Zombie sub-processes detected during stop iteration", errWrap, log.GenerateRequestID())
+			a.serviceManager.Wait()
+			if originalErr != nil {
+				return stdErrors.Join(originalErr, errWrap)
+			}
+			return errWrap
+		}
+		a.serviceManager.Wait()
+	}
+
+	return originalErr
 }
 
 func applyConfiguredTheme(configManager *files.ConfigManager) {
@@ -440,26 +495,21 @@ func resolveRuntimeCapabilities(configSnapshot *files.BotConfig, botInstances []
 	return capabilities
 }
 
-func rollbackStoreClose(enabled bool, store *postgres.Store) {
-	if !enabled || store == nil {
-		return
-	}
-	if err := closeStore(store); err != nil {
-		log.EmitBlockingError("Structural rollback failure: Persistence mechanism locked during compensatory teardown", err, log.GenerateRequestID())
-	}
-}
-
 func shutdownStartupServices(startupTasks *StartupTaskOrchestrator, controlServerRegistry *controlServerHolder, tasksWarn string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := controlServerRegistry.Stop(ctx); err != nil {
-		log.EmitBlockingError("Structural teardown failure: Interface server socket release hung", err, log.GenerateRequestID())
+	if controlServerRegistry != nil {
+		if err := controlServerRegistry.Stop(ctx); err != nil {
+			log.EmitBlockingError("Structural teardown failure: Interface server socket release hung", err, log.GenerateRequestID())
+		}
 	}
-	if err := startupTasks.Shutdown(ctx); err != nil && !stdErrors.Is(err, context.DeadlineExceeded) {
-		slog.Warn("Mitigated shutdown degradation: Async orchestrator missed synchronization lock",
-			slog.String("warning_context", tasksWarn),
-			slog.String("error", err.Error()),
-		)
+	if startupTasks != nil {
+		if err := startupTasks.Shutdown(ctx); err != nil && !stdErrors.Is(err, context.DeadlineExceeded) {
+			slog.Warn("Mitigated shutdown degradation: Async orchestrator missed synchronization lock",
+				slog.String("warning_context", tasksWarn),
+				slog.String("error", err.Error()),
+			)
+		}
 	}
 }
 
@@ -492,14 +542,11 @@ func setupStorage(dbb resolvedDatabaseBootstrap) (*postgres.Store, *files.Config
 		PingTimeoutMS:       dbCfg.PingTimeoutMS,
 	}
 
-	// Enforce strict time bounds on initial connection allocation to prevent silent process deadlocks.
 	openCtx, openCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer openCancel()
 	db, err := persistence.Open(openCtx, dbc)
 	if err != nil {
-		errWrap := fmt.Errorf("open postgres database: %w", err)
-		log.EmitBlockingError("Structural dependency failure: Core socket driver rejected host", errWrap, log.GenerateRequestID())
-		return nil, nil, errWrap
+		return nil, nil, fmt.Errorf("open postgres database: %w", err)
 	}
 	slog.Info("Architectural state transition: Remote persistence pipeline materialized",
 		slog.String("operation", "startup.database.open"),
@@ -510,24 +557,19 @@ func setupStorage(dbb resolvedDatabaseBootstrap) (*postgres.Store, *files.Config
 	defer pingCancel()
 	if err := persistence.Ping(pingCtx, db); err != nil {
 		db.Close()
-		errWrap := fmt.Errorf("postgres readiness check failed: %w", err)
-		log.EmitBlockingError("Structural dependency failure: Remote persistence pipeline failed readiness probe", errWrap, log.GenerateRequestID())
-		return nil, nil, errWrap
+		return nil, nil, fmt.Errorf("postgres readiness check failed: %w", err)
 	}
 	slog.Info("Architectural state transition: I/O payload validation complete",
 		slog.String("operation", "startup.database.ping"),
 		slog.String("driver", "postgres"),
 	)
 
-	// Apply atomic relational schema mutations to ensure the canonical structure matches the binary version.
 	migrateCtx, migrateCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer migrateCancel()
 	migrator := persistence.NewPostgresMigrator(db)
 	if err := migrator.Up(migrateCtx); err != nil {
 		db.Close()
-		errWrap := fmt.Errorf("apply postgres migrations: %w", err)
-		log.EmitBlockingError("Structural schema failure: Matrix migration scripts stalled", errWrap, log.GenerateRequestID())
-		return nil, nil, errWrap
+		return nil, nil, fmt.Errorf("apply postgres migrations: %w", err)
 	}
 	slog.Info("Architectural state transition: Schema schema deltas propagated successfully",
 		slog.String("operation", "startup.database.migrate"),
@@ -537,15 +579,11 @@ func setupStorage(dbb resolvedDatabaseBootstrap) (*postgres.Store, *files.Config
 	store, err := postgres.NewStore(db, slog.Default())
 	if err != nil {
 		db.Close()
-		errWrap := fmt.Errorf("create postgres store: %w", err)
-		log.EmitBlockingError("Structural dependency failure: Allocation of I/O buffer blocks aborted", errWrap, log.GenerateRequestID())
-		return nil, nil, errWrap
+		return nil, nil, fmt.Errorf("create postgres store: %w", err)
 	}
 	if err := store.Init(); err != nil {
 		db.Close()
-		errWrap := fmt.Errorf("initialize postgres store: %w", err)
-		log.EmitBlockingError("Structural dependency failure: Internal store map lock aborted", errWrap, log.GenerateRequestID())
-		return nil, nil, errWrap
+		return nil, nil, fmt.Errorf("initialize postgres store: %w", err)
 	}
 	slog.Info("Architectural state transition: Virtual storage layers active",
 		slog.String("operation", "startup.database.store_init"),
@@ -557,14 +595,10 @@ func setupStorage(dbb resolvedDatabaseBootstrap) (*postgres.Store, *files.Config
 
 	slog.Debug("Executing cross-boundary extraction for master configuration tree")
 	if err := configManager.LoadConfig(); err != nil {
-		errWrap := fmt.Errorf("load config from postgres: %w", err)
-		log.EmitBlockingError("Structural dependency failure: Configuration load blocked", errWrap, log.GenerateRequestID())
-		return nil, nil, errWrap
+		return nil, nil, fmt.Errorf("load config from postgres: %w", err)
 	}
 	if err := syncBootstrapDatabaseConfig(configManager, dbCfg); err != nil {
-		errWrap := fmt.Errorf("sync runtime database bootstrap config: %w", err)
-		log.EmitBlockingError("Structural dependency failure: Node manifest drift detected", errWrap, log.GenerateRequestID())
-		return nil, nil, errWrap
+		return nil, nil, fmt.Errorf("sync runtime database bootstrap config: %w", err)
 	}
 
 	return store, configManager, nil

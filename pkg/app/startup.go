@@ -47,12 +47,8 @@ func resolveDatabaseBootstrap() (resolvedDatabaseBootstrap, error) {
 			Source: "env",
 		}, nil
 	}
-	err := fmt.Errorf(
-		"postgres bootstrap config unavailable: set %s before startup",
-		databaseURLEnv,
-	)
-	log.EmitBlockingError("Blocking structural failure: Database bootstrap configuration unavailable", err, log.GenerateRequestID())
-	return resolvedDatabaseBootstrap{}, err
+	// Removido o log.EmitBlockingError e o debug.Stack()
+	return resolvedDatabaseBootstrap{}, fmt.Errorf("postgres bootstrap config unavailable: set %s before startup", databaseURLEnv)
 }
 
 func databaseBootstrapFromEnv() (files.DatabaseRuntimeConfig, bool) {
@@ -93,9 +89,7 @@ func databaseBootstrapFromEnv() (files.DatabaseRuntimeConfig, bool) {
 
 func syncBootstrapDatabaseConfig(configManager *files.ConfigManager, cfg files.DatabaseRuntimeConfig) error {
 	if configManager == nil {
-		err := fmt.Errorf("config manager is nil")
-		log.EmitBlockingError("Blocking structural failure: Config manager pointer evaluates to nil during database synchronization", err, log.GenerateRequestID())
-		return err
+		return fmt.Errorf("config manager is nil")
 	}
 
 	current := configManager.SnapshotConfig().RuntimeConfig.Database
@@ -109,9 +103,8 @@ func syncBootstrapDatabaseConfig(configManager *files.ConfigManager, cfg files.D
 		return nil
 	})
 	if err != nil {
-		errWrap := fmt.Errorf("persist runtime database config: %w", err)
-		log.EmitBlockingError("Blocking structural failure: Unable to persist runtime database configuration", errWrap, log.GenerateRequestID())
-		return errWrap
+		// Retorna o erro puramente envelopado
+		return fmt.Errorf("persist runtime database config: %w", err)
 	}
 
 	slog.Info("Architectural state transition: Database bootstrap configuration synchronized successfully")
@@ -601,20 +594,18 @@ func (o *StartupTaskOrchestrator) Shutdown(ctx context.Context) error {
 	slog.Info("Architectural state transition: Halting startup orchestrator and draining worker pools")
 
 	var errs []error
+	// Error Bubbling Puro: Delegamos o tratamento do erro de encerramento para o caller.
 	if o.light != nil {
-		if err := o.light.Shutdown(ctx); err != nil && !stdErrors.Is(err, context.DeadlineExceeded) {
-			errWrap := fmt.Errorf("shutdown light startup tasks: %w", err)
-			log.EmitBlockingError("Blocking structural failure: Light worker pool failed to terminate cleanly", errWrap, log.GenerateRequestID())
-			errs = append(errs, errWrap)
+		if err := o.light.Shutdown(ctx); err != nil {
+			errs = append(errs, fmt.Errorf("shutdown light startup tasks: %w", err))
 		}
 	}
 	if o.heavy != nil {
-		if err := o.heavy.Shutdown(ctx); err != nil && !stdErrors.Is(err, context.DeadlineExceeded) {
-			errWrap := fmt.Errorf("shutdown heavy startup tasks: %w", err)
-			log.EmitBlockingError("Blocking structural failure: Heavy worker pool failed to terminate cleanly", errWrap, log.GenerateRequestID())
-			errs = append(errs, errWrap)
+		if err := o.heavy.Shutdown(ctx); err != nil {
+			errs = append(errs, fmt.Errorf("shutdown heavy startup tasks: %w", err))
 		}
 	}
+
 	return stdErrors.Join(errs...)
 }
 
@@ -665,11 +656,14 @@ func (w *RuntimeStartupBackgroundWorker) Shutdown(ctx context.Context) error {
 	})
 
 	err := eg.Wait()
-	if err != nil {
-		slog.Warn("Mitigated service degradation: Context deadline exceeded while awaiting worker pool drain",
+
+	// Filtra eventos normais de ciclo de vida (Canceled/DeadlineExceeded) de anomalias estruturais.
+	if err != nil && !stdErrors.Is(err, context.Canceled) && !stdErrors.Is(err, context.DeadlineExceeded) {
+		slog.Warn("Mitigated service degradation: Anomalous failure during worker pool drain",
 			slog.String("error", err.Error()),
 		)
 	}
+
 	return err
 }
 
@@ -680,7 +674,16 @@ func (w *RuntimeStartupBackgroundWorker) dispatch() {
 		select {
 		case <-w.ctx.Done():
 			slog.Debug("Tracking complex conditional branch: Dispatcher loop terminating via context closure")
-			return
+			for {
+				select {
+				case fn := <-w.queue:
+					if fn != nil {
+						_ = fn(w.ctx)
+					}
+				default:
+					return
+				}
+			}
 		case fn := <-w.queue:
 			if fn == nil {
 				continue

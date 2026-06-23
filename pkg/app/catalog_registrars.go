@@ -19,8 +19,28 @@ import (
 	rolescmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/roles"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/runtime"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/stats"
+	"github.com/small-frappuccino/discordcore/pkg/discord/embeds"
 	discordmod "github.com/small-frappuccino/discordcore/pkg/discord/moderation"
+	"github.com/small-frappuccino/discordcore/pkg/discord/partners"
+	"github.com/small-frappuccino/discordcore/pkg/discord/roles"
+	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
+	appstats "github.com/small-frappuccino/discordcore/pkg/stats"
 )
+
+// RegistrarContext defines the strict read-only boundary required by the command registrars.
+// Any orchestrator (like CommandHandler) or test mock only needs to satisfy this surface.
+type RegistrarContext interface {
+	SessionToken() string
+	ConfigManager() *files.ConfigManager
+	RuntimeApplier() *runtimeapply.Manager
+	PartnerService() *partners.PartnerService
+	ModerationMetrics() moderation.Metrics
+	RolePanelService() *roles.RolePanelService
+	EmbedService() *embeds.EmbedService
+	QOTDService() qotdcmd.Service
+	StatsService() *appstats.StatsService
+}
 
 // CommandCatalogCapabilities defines a bitmask for capability requirements.
 type CommandCatalogCapabilities uint64
@@ -76,7 +96,7 @@ func (c CommandCatalogCapabilities) String() string {
 // a command router.
 type CommandCatalogRegistrar struct {
 	RequiredCapabilities CommandCatalogCapabilities
-	RegisterArikawa      func(*CommandHandler, commands.ArikawaRegisterer)
+	RegisterArikawa      func(ctx RegistrarContext, router commands.ArikawaRegisterer)
 }
 
 // DefaultCommandCatalogRegistrars preserves the legacy all-catalog behavior for
@@ -99,12 +119,12 @@ func DefaultCommandCatalogRegistrars() []CommandCatalogRegistrar {
 // RuntimeCommandCatalogRegistrar registers the runtime config slash command surface.
 func RuntimeCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
-		RegisterArikawa: func(ch *CommandHandler, router commands.ArikawaRegisterer) {
-			if ch.runtimeApplier == nil {
+		RegisterArikawa: func(ctx RegistrarContext, router commands.ArikawaRegisterer) {
+			if ctx.RuntimeApplier() == nil {
 				panic("fail-fast violation: runtimeApplier is strictly required for RuntimeCommandCatalogRegistrar")
 			}
-			replier := &arikawaReplierAdapter{client: api.NewClient("Bot " + ch.session.Token)}
-			handler := runtime.NewHandler(replier, ch.configManager, ch.runtimeApplier, slog.Default())
+			replier := &arikawaReplierAdapter{client: api.NewClient("Bot " + ctx.SessionToken())}
+			handler := runtime.NewHandler(replier, ctx.ConfigManager(), ctx.RuntimeApplier(), slog.Default())
 			shim := &runtimeShim{handler: handler}
 			router.Register(shim)
 			router.RegisterComponent("runtime|", shim)
@@ -150,9 +170,9 @@ func (r *arikawaReplierAdapter) EditInteractionResponse(ctx context.Context, app
 // PartnerCommandCatalogRegistrar registers the partner slash command surface.
 func PartnerCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
-		RegisterArikawa: func(ch *CommandHandler, router commands.ArikawaRegisterer) {
+		RegisterArikawa: func(ctx RegistrarContext, router commands.ArikawaRegisterer) {
 			// Domain packages now receive native router directly.
-			partnercmd.NewPartnerCommands(ch.configManager, ch.partnerService).RegisterCommands(router)
+			partnercmd.NewPartnerCommands(ctx.ConfigManager(), ctx.PartnerService()).RegisterCommands(router)
 		},
 	}
 }
@@ -160,27 +180,27 @@ func PartnerCommandCatalogRegistrar() CommandCatalogRegistrar {
 // ModerationCommandCatalogRegistrar registers the moderation slash command surface.
 func ModerationCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
-		RegisterArikawa: func(ch *CommandHandler, router commands.ArikawaRegisterer) {
-			client := api.NewClient("Bot " + ch.session.Token)
+		RegisterArikawa: func(ctx RegistrarContext, router commands.ArikawaRegisterer) {
+			client := api.NewClient("Bot " + ctx.SessionToken())
 			svc := discordmod.NewService(client, slog.Default())
-			router.Register(moderation.NewBanCommand(svc, ch.moderationMetrics, slog.Default()))
-			router.Register(moderation.NewTimeoutCommand(svc, ch.moderationMetrics, slog.Default()))
-			router.Register(moderation.NewMassBanCommand(svc, ch.moderationMetrics, slog.Default()))
-			router.Register(moderation.NewReactionBlockCommand(ch.configManager, ch.moderationMetrics, slog.Default()))
+			router.Register(moderation.NewBanCommand(svc, ctx.ModerationMetrics(), slog.Default()))
+			router.Register(moderation.NewTimeoutCommand(svc, ctx.ModerationMetrics(), slog.Default()))
+			router.Register(moderation.NewMassBanCommand(svc, ctx.ModerationMetrics(), slog.Default()))
+			router.Register(moderation.NewReactionBlockCommand(ctx.ConfigManager(), ctx.ModerationMetrics(), slog.Default()))
 		},
 	}
 }
 
 func CleanCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
-		RegisterArikawa: func(ch *CommandHandler, router commands.ArikawaRegisterer) {
-			client := api.NewClient("Bot " + ch.session.Token)
+		RegisterArikawa: func(ctx RegistrarContext, router commands.ArikawaRegisterer) {
+			client := api.NewClient("Bot " + ctx.SessionToken())
 			var metrics discordclean.Metrics
-			if ch.moderationMetrics != nil {
-				metrics = cleanMetricsAdapter{m: ch.moderationMetrics}
+			if ctx.ModerationMetrics() != nil {
+				metrics = cleanMetricsAdapter{m: ctx.ModerationMetrics()}
 			}
 			svc := discordclean.NewService(client, metrics, nil)
-			router.Register(clean.NewCleanCommand(ch.configManager, svc))
+			router.Register(clean.NewCleanCommand(ctx.ConfigManager(), svc))
 		},
 	}
 }
@@ -199,8 +219,8 @@ func (a cleanMetricsAdapter) RecordCleanAuditLogFailure()                       
 // RolesCommandCatalogRegistrar registers the roles slash command surface.
 func RolesCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
-		RegisterArikawa: func(ch *CommandHandler, router commands.ArikawaRegisterer) {
-			rolescmd.NewRolePanelCommands(ch.configManager, ch.rolePanelService).RegisterCommands(router)
+		RegisterArikawa: func(ctx RegistrarContext, router commands.ArikawaRegisterer) {
+			rolescmd.NewRolePanelCommands(ctx.ConfigManager(), ctx.RolePanelService()).RegisterCommands(router)
 		},
 	}
 }
@@ -208,8 +228,8 @@ func RolesCommandCatalogRegistrar() CommandCatalogRegistrar {
 // EmbedsCommandCatalogRegistrar registers the embeds slash command surface.
 func EmbedsCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
-		RegisterArikawa: func(ch *CommandHandler, router commands.ArikawaRegisterer) {
-			embedscmd.NewEmbedCommands(ch.configManager, ch.embedService).RegisterCommands(router)
+		RegisterArikawa: func(ctx RegistrarContext, router commands.ArikawaRegisterer) {
+			embedscmd.NewEmbedCommands(ctx.ConfigManager(), ctx.EmbedService()).RegisterCommands(router)
 		},
 	}
 }
@@ -217,7 +237,7 @@ func EmbedsCommandCatalogRegistrar() CommandCatalogRegistrar {
 // TicketsCommandCatalogRegistrar registers the tickets interaction routing surface.
 func TicketsCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
-		RegisterArikawa: func(ch *CommandHandler, router commands.ArikawaRegisterer) {
+		RegisterArikawa: func(ctx RegistrarContext, router commands.ArikawaRegisterer) {
 			// tickets natively registered via state handler in pkg/discord/commands/tickets/router.go
 		},
 	}
@@ -226,9 +246,9 @@ func TicketsCommandCatalogRegistrar() CommandCatalogRegistrar {
 // QOTDCommandCatalogRegistrar registers the QOTD domain slash command surfaces.
 func QOTDCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
-		RegisterArikawa: func(ch *CommandHandler, router commands.ArikawaRegisterer) {
-			client := api.NewClient("Bot " + ch.session.Token)
-			handler := qotdcmd.NewCommandHandler(ch.qotdService, client)
+		RegisterArikawa: func(ctx RegistrarContext, router commands.ArikawaRegisterer) {
+			client := api.NewClient("Bot " + ctx.SessionToken())
+			handler := qotdcmd.NewCommandHandler(ctx.QOTDService(), client)
 			shim := &qotdShim{handler: handler}
 			router.Register(shim)
 			router.RegisterComponent("qotd|", shim)
@@ -258,8 +278,8 @@ func (s *qotdShim) HandleComponent(ctx *commands.ArikawaContext) error {
 func StatsCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
 		RequiredCapabilities: CapStats,
-		RegisterArikawa: func(ch *CommandHandler, router commands.ArikawaRegisterer) {
-			stats.NewStatsCommands(ch.configManager, ch.statsService, slog.Default()).RegisterCommands(router)
+		RegisterArikawa: func(ctx RegistrarContext, router commands.ArikawaRegisterer) {
+			stats.NewStatsCommands(ctx.ConfigManager(), ctx.StatsService(), slog.Default()).RegisterCommands(router)
 		},
 	}
 }
@@ -267,8 +287,8 @@ func StatsCommandCatalogRegistrar() CommandCatalogRegistrar {
 // LoggingCommandCatalogRegistrar registers the logging slash command surface.
 func LoggingCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
-		RegisterArikawa: func(ch *CommandHandler, router commands.ArikawaRegisterer) {
-			logging.NewLoggingCommands(ch.configManager).RegisterCommands(router)
+		RegisterArikawa: func(ctx RegistrarContext, router commands.ArikawaRegisterer) {
+			logging.NewLoggingCommands(ctx.ConfigManager()).RegisterCommands(router)
 		},
 	}
 }
