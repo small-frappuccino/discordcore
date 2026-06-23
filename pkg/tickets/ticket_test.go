@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/small-frappuccino/discordcore/pkg/storage/postgres"
 	"github.com/small-frappuccino/discordcore/pkg/testdb"
 )

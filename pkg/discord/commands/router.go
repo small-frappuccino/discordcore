@@ -3,7 +3,6 @@ package commands
 import (
 	"errors"
 	"log/slog"
-	"runtime/debug"
 	"strings"
 
 	"github.com/diamondburned/arikawa/v3/api"
@@ -130,8 +129,6 @@ func (r *CommandRouter) HandleEvent(event *discord.InteractionEvent) error {
 }
 
 func (r *CommandRouter) logHandlerError(kind, name string, event *discord.InteractionEvent, err error) {
-	stack := debug.Stack()
-
 	logger := log.ErrorLoggerRaw()
 	if logger == nil {
 		logger = slog.Default()
@@ -142,7 +139,7 @@ func (r *CommandRouter) logHandlerError(kind, name string, event *discord.Intera
 		slog.String("name", name),
 		slog.String("request_id", event.ID.String()),
 		slog.Any("error", err),
-		slog.String("stack_trace", string(stack)),
+		slog.Any("stack_trace", log.LazyStackTrace{}),
 	)
 }
 

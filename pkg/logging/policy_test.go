@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -8,8 +9,6 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
-	"github.com/diamondburned/arikawa/v3/state"
-	"github.com/diamondburned/arikawa/v3/utils/httputil/httpdriver"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
@@ -386,6 +385,35 @@ func TestValidateLogCapability(t *testing.T) {
 	}
 }
 
+type mockPermEval struct {
+	channels map[discord.ChannelID]*discord.Channel
+	me       *discord.User
+	perms    discord.Permissions
+	permsErr error
+	chErr    error
+}
+
+func (m *mockPermEval) Channel(id discord.ChannelID) (*discord.Channel, error) {
+	if m.chErr != nil {
+		return nil, m.chErr
+	}
+	if ch, ok := m.channels[id]; ok {
+		return ch, nil
+	}
+	return nil, fmt.Errorf("not found")
+}
+
+func (m *mockPermEval) Me() (*discord.User, error) {
+	if m.me == nil {
+		return nil, fmt.Errorf("no me")
+	}
+	return m.me, nil
+}
+
+func (m *mockPermEval) Permissions(channelID discord.ChannelID, userID discord.UserID) (discord.Permissions, error) {
+	return m.perms, m.permsErr
+}
+
 func TestValidateModerationLogChannel(t *testing.T) {
 	// nil state
 	if err := ValidateModerationLogChannel(nil, "111", "222"); err == nil || !strings.Contains(err.Error(), "state is nil") {
@@ -393,86 +421,74 @@ func TestValidateModerationLogChannel(t *testing.T) {
 	}
 
 	// missing guildID
-	st := state.New("token")
-	st.Client.Client.Client = httpdriver.WrapClient(http.Client{Transport: &mockTransport{}})
-	if err := ValidateModerationLogChannel(st, "", "222"); err == nil || !strings.Contains(err.Error(), "missing guildID") {
+	m := &mockPermEval{channels: make(map[discord.ChannelID]*discord.Channel)}
+	if err := ValidateModerationLogChannel(m, "", "222"); err == nil || !strings.Contains(err.Error(), "missing guildID") {
 		t.Errorf("expected error for missing guildID")
 	}
 
 	// invalid channel/guild ID
-	if err := ValidateModerationLogChannel(st, "abc", "222"); err == nil || !strings.Contains(err.Error(), "invalid guild ID") {
+	if err := ValidateModerationLogChannel(m, "abc", "222"); err == nil || !strings.Contains(err.Error(), "invalid guild ID") {
 		t.Errorf("expected error for invalid guild ID")
 	}
-	if err := ValidateModerationLogChannel(st, "111", "abc"); err == nil || !strings.Contains(err.Error(), "invalid channel ID") {
+	if err := ValidateModerationLogChannel(m, "111", "abc"); err == nil || !strings.Contains(err.Error(), "invalid channel ID") {
 		t.Errorf("expected error for invalid channel ID")
 	}
 
 	// channel lookup failed
-	if err := ValidateModerationLogChannel(st, "111", "222"); err == nil || !strings.Contains(err.Error(), "channel lookup failed") {
+	m.chErr = fmt.Errorf("channel lookup failed")
+	if err := ValidateModerationLogChannel(m, "111", "222"); err == nil || !strings.Contains(err.Error(), "channel lookup failed") {
 		t.Errorf("expected error for channel lookup failed")
 	}
+	m.chErr = nil
 
 	// Guild mismatch
 	meID := discord.UserID(123)
 	guildID := discord.GuildID(111)
 	channelID := discord.ChannelID(222)
 
-	_ = st.Cabinet.ChannelStore.ChannelSet(&discord.Channel{
+	m.channels[channelID] = &discord.Channel{
 		ID:      channelID,
 		GuildID: discord.GuildID(999), // mismatch
 		Type:    discord.GuildText,
-	}, false)
-	if err := ValidateModerationLogChannel(st, "111", "222"); err == nil || !strings.Contains(err.Error(), "channel guild mismatch") {
+	}
+	if err := ValidateModerationLogChannel(m, "111", "222"); err == nil || !strings.Contains(err.Error(), "channel guild mismatch") {
 		t.Errorf("expected error for guild mismatch, got %v", err)
 	}
 
 	// Invalid channel type
-	_ = st.Cabinet.ChannelStore.ChannelSet(&discord.Channel{
+	m.channels[channelID] = &discord.Channel{
 		ID:      channelID,
 		GuildID: guildID,
 		Type:    discord.GuildVoice, // invalid
-	}, false)
-	if err := ValidateModerationLogChannel(st, "111", "222"); err == nil || !strings.Contains(err.Error(), "channel is not a guild text channel") {
+	}
+	if err := ValidateModerationLogChannel(m, "111", "222"); err == nil || !strings.Contains(err.Error(), "channel is not a guild text channel") {
 		t.Errorf("expected error for invalid channel type, got %v", err)
 	}
 
 	// Bot identity not available
-	_ = st.Cabinet.ChannelStore.ChannelSet(&discord.Channel{
+	m.channels[channelID] = &discord.Channel{
 		ID:      channelID,
 		GuildID: guildID,
 		Type:    discord.GuildText,
-	}, false)
-	if err := ValidateModerationLogChannel(st, "111", "222"); err == nil || !strings.Contains(err.Error(), "bot identity not available") {
+	}
+	if err := ValidateModerationLogChannel(m, "111", "222"); err == nil || !strings.Contains(err.Error(), "bot identity not available") {
 		t.Errorf("expected error for missing bot identity, got %v", err)
 	}
 
 	// Permission checks - set bot me ID
-	_ = st.Cabinet.MeStore.MyselfSet(discord.User{
-		ID: meID,
-	}, false)
-	// Without guild in store, permission check fails
-	if err := ValidateModerationLogChannel(st, "111", "222"); err == nil || !strings.Contains(err.Error(), "permission check failed") {
+	m.me = &discord.User{ID: meID}
+
+	m.permsErr = fmt.Errorf("permission check failed")
+	if err := ValidateModerationLogChannel(m, "111", "222"); err == nil || !strings.Contains(err.Error(), "permission check failed") {
 		t.Errorf("expected error for missing guild store entry (permission check failed)")
 	}
+	m.permsErr = nil
 
-	// Setup guild where bot is owner (giving it all permissions)
-	_ = st.Cabinet.GuildStore.GuildSet(&discord.Guild{
-		ID:      guildID,
-		OwnerID: meID,
-	}, false)
-	// Setting member is also required by state.Permissions under some calculation branches
-	_ = st.Cabinet.MemberStore.MemberSet(guildID, &discord.Member{
-		User: discord.User{ID: meID},
-	}, false)
-	// Setting roles is required to prevent live API calls during permissions check
-	_ = st.Cabinet.RoleStore.RoleSet(guildID, &discord.Role{
-		ID:          discord.RoleID(guildID),
-		Name:        "@everyone",
-		Permissions: discord.PermissionAll,
-	}, false)
+	// Setup permissions
+	m.perms = discord.PermissionAll
 
 	// Success!
-	if err := ValidateModerationLogChannel(st, "111", "222"); err != nil {
+	if err := ValidateModerationLogChannel(m, "111", "222"); err != nil {
 		t.Errorf("expected success, got %v", err)
 	}
 }

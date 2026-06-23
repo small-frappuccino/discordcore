@@ -172,7 +172,8 @@ func TestPartnerCommands_ConcurrentStateMutation(t *testing.T) {
 						},
 					},
 				},
-				Config: cm,
+				GuildID: discord.GuildID(12345),
+				Config:  cm,
 			}
 
 			_ = addCmd.Handle(actx)
@@ -202,7 +203,8 @@ func TestPartnerCommands_ConcurrentStateMutation(t *testing.T) {
 						},
 					},
 				},
-				Config: cm,
+				GuildID: discord.GuildID(12345),
+				Config:  cm,
 			}
 
 			time.Sleep(2 * time.Millisecond) // Give Add a tiny head start

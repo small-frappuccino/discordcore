@@ -7,6 +7,14 @@ import (
 	"runtime/debug"
 )
 
+// LazyStackTrace implements slog.LogValuer to defer debug.Stack() allocation
+// until the log is actually emitted, preventing O(N) allocations in hot paths.
+type LazyStackTrace struct{}
+
+func (LazyStackTrace) LogValue() slog.Value {
+	return slog.StringValue(string(debug.Stack()))
+}
+
 // GenerateRequestID produces a transient cryptographic identifier correlating logs and pages.
 func GenerateRequestID() string {
 	bytes := make([]byte, 16)
@@ -21,7 +29,7 @@ func EmitBlockingError(msg string, err error, requestID string) {
 	ErrorLoggerRaw().Error(msg,
 		slog.String("request_id", requestID),
 		slog.String("synthetic_code", "500"),
-		slog.String("stack_trace", string(debug.Stack())),
+		slog.Any("stack_trace", LazyStackTrace{}),
 		slog.Any("error", err),
 	)
 }

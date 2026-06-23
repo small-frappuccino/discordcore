@@ -57,11 +57,26 @@ func (m *mockRepository) GetMessage(ctx context.Context, guildID, messageID stri
 	return m.getMsg, m.getMsgErr
 }
 
+func (m *mockRepository) SetGetMsg(rec *Record) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.getMsg = rec
+}
+
 func (m *mockRepository) DeleteMessagesContext(ctx context.Context, keys []DeleteKey) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.deleted = append(m.deleted, keys...)
 	return m.deleteErr
+}
+
+func (m *mockRepository) SetErrors(upsertMessages, delete, insertVersion, incrementDaily error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.upsertMessagesErr = upsertMessages
+	m.deleteErr = delete
+	m.insertVersionErr = insertVersion
+	m.incrementDailyErr = incrementDaily
 }
 
 func (m *mockRepository) InsertMessageVersionsMixedBatchContext(ctx context.Context, versions []Version) error {
@@ -281,10 +296,12 @@ func TestMessageCreateWriter_Basic(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Verify sequential / fallback flows by forcing error
-	repo.upsertMessagesErr = errors.New("upsert messages batch err")
-	repo.deleteErr = errors.New("delete batch err")
-	repo.insertVersionErr = errors.New("insert version batch err")
-	repo.incrementDailyErr = errors.New("increment daily batch err")
+	repo.SetErrors(
+		errors.New("upsert messages batch err"),
+		errors.New("delete batch err"),
+		errors.New("insert version batch err"),
+		errors.New("increment daily batch err"),
+	)
 
 	err = w.Enqueue(rec, &ver, delta)
 	if err != nil {
@@ -923,23 +940,16 @@ func TestLookupCachedMessage_PollingAndCancellation(t *testing.T) {
 
 	// Poll loop returns message after it appears in mock store
 	ctx2 := context.Background()
-	var storeMu sync.Mutex
-	store.getMsgErr = nil
-	store.getMsg = nil
-
-	// We can hook a dynamic response using a custom mock store behavior or goroutine
 	go func() {
 		time.Sleep(300 * time.Millisecond)
-		storeMu.Lock()
-		store.getMsg = &Record{
+		store.SetGetMsg(&Record{
 			MessageID:      "999",
 			GuildID:        "111",
 			ChannelID:      "222",
 			AuthorID:       "123",
 			AuthorUsername: "alice",
 			Content:        "hello",
-		}
-		storeMu.Unlock()
+		})
 	}()
 
 	cached = svc.lookupCachedMessage(ctx2, "111", "999", true)

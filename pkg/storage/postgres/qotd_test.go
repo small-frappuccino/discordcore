@@ -116,8 +116,8 @@ func TestInitResetsQOTDQuestionSequenceWhenTableEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateQOTDQuestion(first) failed: %v", err)
 	}
-	if first.ID != 1 {
-		t.Fatalf("expected fresh isolated database to start question IDs at 1, got %d", first.ID)
+	if first.DisplayID != 1 {
+		t.Fatalf("expected fresh isolated database to start question display IDs at 1, got %d", first.DisplayID)
 	}
 
 	if err := store.DeleteQOTDQuestion(ctx, "g1", first.ID); err != nil {
@@ -136,8 +136,8 @@ func TestInitResetsQOTDQuestionSequenceWhenTableEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateQOTDQuestion(second) failed: %v", err)
 	}
-	if second.ID != 1 {
-		t.Fatalf("expected question ID sequence to reset to 1 after Init() on an empty table, got %d", second.ID)
+	if second.DisplayID != 1 {
+		t.Fatalf("expected question display ID sequence to reset to 1 after Init() on an empty table, got %d", second.DisplayID)
 	}
 }
 
@@ -1441,4 +1441,174 @@ func collectQuestions(t *testing.T, seq iter.Seq2[qotd.QuestionRecord, error]) [
 		res = append(res, q)
 	}
 	return res
+}
+
+func TestQOTDSurfaces(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+
+	// 1. Get non-existent surface
+	surface, err := store.GetQOTDSurfaceByDeck(ctx, "g1", "deck-1")
+	if err != nil {
+		t.Fatalf("GetQOTDSurfaceByDeck failed: %v", err)
+	}
+	if surface != nil {
+		t.Fatalf("expected nil surface, got %+v", surface)
+	}
+
+	// 2. Upsert a surface
+	inserted, err := store.UpsertQOTDSurface(ctx, qotd.SurfaceRecord{
+		GuildID:              "g1",
+		DeckID:               "deck-1",
+		ChannelID:            "channel-1",
+		QuestionListThreadID: "thread-1",
+	})
+	if err != nil {
+		t.Fatalf("UpsertQOTDSurface failed: %v", err)
+	}
+	if inserted.GuildID != "g1" || inserted.DeckID != "deck-1" || inserted.ChannelID != "channel-1" || inserted.QuestionListThreadID != "thread-1" {
+		t.Fatalf("upserted record mismatch: %+v", inserted)
+	}
+
+	// 3. Get the upserted surface
+	retrieved, err := store.GetQOTDSurfaceByDeck(ctx, "g1", "deck-1")
+	if err != nil {
+		t.Fatalf("GetQOTDSurfaceByDeck failed: %v", err)
+	}
+	if retrieved == nil || retrieved.ID != inserted.ID {
+		t.Fatalf("expected retrieved surface with ID %d, got %+v", inserted.ID, retrieved)
+	}
+
+	// 4. Update the surface via Upsert
+	updated, err := store.UpsertQOTDSurface(ctx, qotd.SurfaceRecord{
+		GuildID:              "g1",
+		DeckID:               "deck-1",
+		ChannelID:            "channel-updated",
+		QuestionListThreadID: "thread-updated",
+	})
+	if err != nil {
+		t.Fatalf("UpsertQOTDSurface update failed: %v", err)
+	}
+	if updated.ID != inserted.ID || updated.ChannelID != "channel-updated" || updated.QuestionListThreadID != "thread-updated" {
+		t.Fatalf("updated record mismatch: %+v", updated)
+	}
+
+	// 5. Delete the surface
+	err = store.DeleteQOTDSurfaceByDeck(ctx, "g1", "deck-1")
+	if err != nil {
+		t.Fatalf("DeleteQOTDSurfaceByDeck failed: %v", err)
+	}
+
+	// 6. Verify deletion
+	deleted, err := store.GetQOTDSurfaceByDeck(ctx, "g1", "deck-1")
+	if err != nil {
+		t.Fatalf("GetQOTDSurfaceByDeck after delete failed: %v", err)
+	}
+	if deleted != nil {
+		t.Fatalf("expected nil surface after delete, got %+v", deleted)
+	}
+}
+
+func TestQOTDAnswerMessages(t *testing.T) {
+	store := newTempStore(t)
+	ctx := context.Background()
+
+	// First we need a question and an official post to link answer messages
+	question, err := store.CreateQOTDQuestion(ctx, qotd.QuestionRecord{
+		GuildID: "g1",
+		DeckID:  "default",
+		Body:    "Answer message question",
+		Status:  "ready",
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDQuestion failed: %v", err)
+	}
+
+	publishDate := time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC)
+	post, err := store.CreateQOTDOfficialPostProvisioning(ctx, qotd.OfficialPostRecord{
+		GuildID:              "g1",
+		DeckID:               "default",
+		DeckNameSnapshot:     "Default",
+		QuestionID:           question.ID,
+		PublishMode:          "scheduled",
+		ConsumeAutomaticSlot: true,
+		PublishDateUTC:       publishDate,
+		State:                "provisioning",
+		ChannelID:            "123456789012345678",
+		QuestionTextSnapshot: question.Body,
+		GraceUntil:           publishDate.Add(24 * time.Hour),
+		ArchiveAt:            publishDate.Add(48 * time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDOfficialPostProvisioning failed: %v", err)
+	}
+
+	// 1. Get non-existent answer message
+	msg, err := store.GetQOTDAnswerMessageByOfficialPostAndUser(ctx, post.ID, "user-1")
+	if err != nil {
+		t.Fatalf("GetQOTDAnswerMessageByOfficialPostAndUser failed: %v", err)
+	}
+	if msg != nil {
+		t.Fatalf("expected nil answer message, got %+v", msg)
+	}
+
+	// 2. Create answer message
+	created, err := store.CreateQOTDAnswerMessage(ctx, qotd.AnswerMessageRecord{
+		GuildID:         "g1",
+		OfficialPostID:  post.ID,
+		UserID:          "user-1",
+		State:           "provisioning",
+		AnswerChannelID: "thread-1",
+	})
+	if err != nil {
+		t.Fatalf("CreateQOTDAnswerMessage failed: %v", err)
+	}
+	if created.GuildID != "g1" || created.OfficialPostID != post.ID || created.UserID != "user-1" || created.State != "provisioning" {
+		t.Fatalf("created record mismatch: %+v", created)
+	}
+
+	// 3. Finalize answer message
+	finalized, err := store.FinalizeQOTDAnswerMessage(ctx, created.ID, "msg-1234")
+	if err != nil {
+		t.Fatalf("FinalizeQOTDAnswerMessage failed: %v", err)
+	}
+	if finalized.ID != created.ID || finalized.DiscordMessageID != "msg-1234" {
+		t.Fatalf("finalized record mismatch: %+v", finalized)
+	}
+
+	// 4. Get by post and user
+	retrieved, err := store.GetQOTDAnswerMessageByOfficialPostAndUser(ctx, post.ID, "user-1")
+	if err != nil {
+		t.Fatalf("GetQOTDAnswerMessageByOfficialPostAndUser failed: %v", err)
+	}
+	if retrieved == nil || retrieved.ID != created.ID {
+		t.Fatalf("expected retrieved record, got %+v", retrieved)
+	}
+
+	// 5. Update state
+	closedAt := time.Now().UTC().Truncate(time.Microsecond)
+	archivedAt := time.Now().Add(time.Hour).UTC().Truncate(time.Microsecond)
+	updated, err := store.UpdateQOTDAnswerMessageState(ctx, created.ID, "archived", &closedAt, &archivedAt)
+	if err != nil {
+		t.Fatalf("UpdateQOTDAnswerMessageState failed: %v", err)
+	}
+	if updated.State != "archived" || updated.ClosedAt == nil || !updated.ClosedAt.Equal(closedAt) || updated.ArchivedAt == nil || !updated.ArchivedAt.Equal(archivedAt) {
+		t.Fatalf("updated record mismatch: %+v", updated)
+	}
+
+	// 6. List answer messages by official post
+	listSeq, err := store.ListQOTDAnswerMessagesByOfficialPost(ctx, post.ID)
+	if err != nil {
+		t.Fatalf("ListQOTDAnswerMessagesByOfficialPost failed: %v", err)
+	}
+	var listed []qotd.AnswerMessageRecord
+	for m, err := range listSeq {
+		if err != nil {
+			t.Fatalf("iteration failed: %v", err)
+		}
+		listed = append(listed, m)
+	}
+	if len(listed) != 1 || listed[0].ID != created.ID {
+		t.Fatalf("listed answer messages mismatch: expected 1 with ID %d, got %+v", created.ID, listed)
+	}
 }

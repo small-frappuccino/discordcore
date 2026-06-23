@@ -242,8 +242,8 @@ loop:
 		}
 	}
 
-	// Give a small buffer to let the manager record the last restart internal state
-	time.Sleep(10 * time.Millisecond)
+	// The state is updated deterministically before the 3rd start is sent through the channel,
+	// so no sleep is needed here.
 
 	// Stop everything
 	sm.StopAll(context.Background())

@@ -6,7 +6,6 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
-	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
@@ -297,9 +296,16 @@ func CheckFeatureEnabled(configManager *files.ConfigManager, eventType LogEventT
 	return decision
 }
 
+// PermissionEvaluator defines the state methods needed for permission evaluation.
+type PermissionEvaluator interface {
+	Channel(id discord.ChannelID) (*discord.Channel, error)
+	Me() (*discord.User, error)
+	Permissions(channelID discord.ChannelID, userID discord.UserID) (discord.Permissions, error)
+}
+
 // ValidateLogCapability checks gateway intents and channel permissions.
 // It expects CheckFeatureEnabled to have returned Enabled = true.
-func ValidateLogCapability(state *state.State, currentIntents gateway.Intents, decision EmitDecision, guildID string, configManager *files.ConfigManager) (EmitReason, gateway.Intents, bool) {
+func ValidateLogCapability(state PermissionEvaluator, currentIntents gateway.Intents, decision EmitDecision, guildID string, configManager *files.ConfigManager) (EmitReason, gateway.Intents, bool) {
 	if !decision.Enabled {
 		return decision.Reason, 0, false
 	}
@@ -370,7 +376,7 @@ func evaluateEventToggle(eventType LogEventType, rc files.RuntimeConfig, feature
 }
 
 // validateResolvedLogChannel validates exclusivity and bot permissions for a resolved channel.
-func validateResolvedLogChannel(st *state.State, capability LogEventCapability, channelID string, guildID string, gcfg *files.GuildConfig) (EmitReason, bool) {
+func validateResolvedLogChannel(st PermissionEvaluator, capability LogEventCapability, channelID string, guildID string, gcfg *files.GuildConfig) (EmitReason, bool) {
 	if !capability.ValidateChannelPerms {
 		return EmitReasonEnabled, true
 	}
@@ -461,7 +467,7 @@ func IsSharedModerationChannel(channelID string, gcfg *files.GuildConfig) bool {
 }
 
 // ValidateModerationLogChannel validates moderation log channel.
-func ValidateModerationLogChannel(st *state.State, guildID, channelIDStr string) error {
+func ValidateModerationLogChannel(st PermissionEvaluator, guildID, channelIDStr string) error {
 	if st == nil {
 		return fmt.Errorf("state is nil")
 	}

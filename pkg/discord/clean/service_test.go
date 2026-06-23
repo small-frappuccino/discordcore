@@ -42,6 +42,7 @@ func (m *InMemoryMetrics) RecordCleanDeleteFailure(class string) {
 func (m *InMemoryMetrics) RecordCleanAuditLogFailure() {}
 
 type mockClient struct {
+	mu                 sync.Mutex
 	messagesFunc       func(limit uint) ([]discord.Message, error)
 	messagesBeforeFunc func(before discord.MessageID, limit uint) ([]discord.Message, error)
 	deleteMessagesFunc func(messageIDs []discord.MessageID) error
@@ -74,7 +75,9 @@ func (m *mockClient) DeleteMessage(channelID discord.ChannelID, messageID discor
 	if m.deleteMsgErr != nil {
 		return m.deleteMsgErr
 	}
+	m.mu.Lock()
 	m.deletedMsgs = append(m.deletedMsgs, messageID)
+	m.mu.Unlock()
 	if m.deleteMessageFunc != nil {
 		return m.deleteMessageFunc(messageID)
 	}

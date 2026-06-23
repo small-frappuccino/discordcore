@@ -451,11 +451,6 @@ func (sm *ServiceManager) RestartService(ctx context.Context, name string) error
 	// Wait a bit before restarting
 	time.Sleep(sm.restartDelay)
 
-	sm.mu.Lock()
-	info := sm.services[name]
-	info.RestartCount++
-	sm.mu.Unlock()
-
 	return sm.StartService(name)
 }
 
@@ -602,6 +597,7 @@ func (sm *ServiceManager) checkServiceHealth(info *ServiceInfo) {
 		sm.mu.Lock()
 		info.ErrorCount++
 		if info.RestartCount < sm.maxRestarts {
+			info.RestartCount++ // Increment before spawning to prevent concurrent overlapping restarts
 			sm.mu.Unlock()
 			sm.RunBackground(func(ctx context.Context) {
 				sm.log().Warn("Attempting to restart unhealthy service", "service", info.Service.Name())

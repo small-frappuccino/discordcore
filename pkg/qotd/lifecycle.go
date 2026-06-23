@@ -1,7 +1,6 @@
 package qotd
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -69,49 +68,6 @@ func normalizeClockInput(now time.Time) time.Time {
 	return now.UTC()
 }
 
-// currentSlotState maintains the state of the current slot.
-type currentSlotState struct {
-	ScheduleConfigured bool
-	Schedule           PublishSchedule
-	PublishDateUTC     time.Time
-	PublishAtUTC       time.Time
-	OfficialPost       *OfficialPostRecord
-}
-
-// BoundaryPassed boundarys passed.
-func (st currentSlotState) BoundaryPassed(now time.Time) bool {
-	if !st.ScheduleConfigured || st.PublishAtUTC.IsZero() {
-		return false
-	}
-	now = normalizeClockInput(now)
-	publishAt := st.PublishAtUTC.UTC()
-	return !now.Before(publishAt)
-}
-
-// HasOfficialPostRecord has official post record.
-func (st currentSlotState) HasOfficialPostRecord() bool {
-	return st.OfficialPost != nil
-}
-
-// HasPublishedOfficialPost has published official post.
-func (st currentSlotState) HasPublishedOfficialPost() bool {
-	if st.OfficialPost == nil {
-		return false
-	}
-	return st.OfficialPost.State != string(OfficialPostStateProvisioning) && st.OfficialPost.State != string(OfficialPostStateAbandoned)
-}
-
-// HasProvisioningOfficialPost has provisioning official post.
-func (st currentSlotState) HasProvisioningOfficialPost() bool {
-	if !st.HasOfficialPostRecord() {
-		return false
-	}
-	if st.OfficialPost.State == string(OfficialPostStateAbandoned) {
-		return false
-	}
-	return !st.HasPublishedOfficialPost()
-}
-
 // DetermineOfficialPostLifecycle derives the state and boundaries.
 func DetermineOfficialPostLifecycle(post OfficialPostRecord, schedule files.QOTDPublishScheduleConfig, now time.Time) OfficialPostLifecycle {
 	lc := OfficialPostLifecycle{
@@ -153,23 +109,4 @@ func CalculateNextPublishDelay(cfg files.QOTDConfig, now time.Time) time.Duratio
 		return 0
 	}
 	return delay
-}
-
-// loadDueSlotState loads the slot state.
-func (s *Service) loadDueSlotState(ctx context.Context, guildID string, cfg files.QOTDConfig, now time.Time) (currentSlotState, error) {
-	state := currentSlotState{}
-	schedule, err := resolvePublishSchedule(cfg)
-	if err != nil {
-		return state, nil
-	}
-
-	state.ScheduleConfigured = true
-	state.Schedule = schedule
-	state.PublishDateUTC = NormalizePublishDateUTC(now)
-	state.PublishAtUTC = PublishTimeUTC(schedule, state.PublishDateUTC)
-	state.OfficialPost, err = s.repo.GetQOTDOfficialPostByDate(ctx, guildID, state.PublishDateUTC)
-	if err != nil {
-		return currentSlotState{}, fmt.Errorf("loadDueSlotState: %w", err)
-	}
-	return state, nil
 }
