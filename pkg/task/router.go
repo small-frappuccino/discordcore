@@ -178,7 +178,7 @@ const (
 
 // TaskRouter orchestrates background execution scheduling, concurrency boundaries, and idempotency states.
 type TaskRouter struct {
-	mu        sync.RWMutex
+	mu        sync.Mutex
 	handlers  map[string]TaskHandler
 	groups    map[string]*groupWorker
 	inflight  map[string]time.Time
@@ -462,8 +462,8 @@ type Stats struct {
 
 // Stats aggregates immediate internal counters inside a thread-safe read envelope.
 func (tr *TaskRouter) Stats() Stats {
-	tr.mu.RLock()
-	defer tr.mu.RUnlock()
+	tr.mu.Lock()
+	defer tr.mu.Unlock()
 	return Stats{
 		GroupsCount:          len(tr.groups),
 		InflightCount:        len(tr.inflight),
@@ -736,10 +736,10 @@ func (tr *TaskRouter) groupLoop(gw *groupWorker) {
 			}
 			gw.beginWork(tr.nowNs())
 
-			tr.mu.RLock()
+			tr.mu.Lock()
 			handler := tr.handlers[enq.task.Type]
 			eff := tr.effectiveOptions(enq.task.Options)
-			tr.mu.RUnlock()
+			tr.mu.Unlock()
 
 			if handler == nil {
 				gw.endWork(tr.nowNs())
@@ -1092,7 +1092,9 @@ func (tr *TaskRouter) backgroundLoop() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	tr.wg.Add(1)
 	go func() {
+		defer tr.wg.Done()
 		select {
 		case <-tr.stopCh:
 			cancel()

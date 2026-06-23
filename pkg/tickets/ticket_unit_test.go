@@ -1,9 +1,15 @@
 package tickets
 
 import (
+	"context"
+	"errors"
+	"io"
+	"log/slog"
 	"testing"
 
 	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/pashagolub/pgxmock/v4"
+	"github.com/small-frappuccino/discordcore/pkg/storage/postgres"
 )
 
 func TestPermissionsBitwise(t *testing.T) {
@@ -81,5 +87,67 @@ func TestOpenPermissions(t *testing.T) {
 	}
 	if ComputeOpenRoleAllow() != expected {
 		t.Errorf("ComputeOpenRoleAllow mismatch")
+	}
+}
+
+func TestManager_NewAndNextID(t *testing.T) {
+	mock, err := pgxmock.NewPool()
+	if err != nil {
+		t.Fatalf("failed to create pgxmock pool: %v", err)
+	}
+	defer mock.Close()
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	store, err := postgres.NewStore(mock, logger)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+
+	mgr := NewManager(store, logger)
+	if mgr == nil {
+		t.Fatal("expected NewManager to return non-nil manager")
+	}
+	if mgr.store != store {
+		t.Error("manager store mismatch")
+	}
+	if mgr.logger != logger {
+		t.Error("manager logger mismatch")
+	}
+
+	guildID := "test-guild"
+
+	// 1. NextID Happy Path
+	columns := []string{"last_id"}
+	mock.ExpectQuery(`INSERT INTO ticket_sequences`).
+		WithArgs(guildID).
+		WillReturnRows(pgxmock.NewRows(columns).AddRow(int64(42)))
+
+	id, err := mgr.NextID(context.Background(), guildID)
+	if err != nil {
+		t.Errorf("NextID failed: %v", err)
+	}
+	if id != 42 {
+		t.Errorf("expected NextID to return 42, got %d", id)
+	}
+
+	// 2. NextID Error Path
+	dbErr := errors.New("db connection failure")
+	mock.ExpectQuery(`INSERT INTO ticket_sequences`).
+		WithArgs(guildID).
+		WillReturnError(dbErr)
+
+	id, err = mgr.NextID(context.Background(), guildID)
+	if err == nil {
+		t.Error("expected NextID to return an error, got nil")
+	}
+	if !errors.Is(err, dbErr) {
+		t.Errorf("expected error to wrap '%v', got '%v'", dbErr, err)
+	}
+	if id != 0 {
+		t.Errorf("expected NextID to return 0 on error, got %d", id)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled database expectations: %v", err)
 	}
 }

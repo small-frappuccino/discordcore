@@ -96,8 +96,13 @@ func TestRouter_ExecutionLimiter(t *testing.T) {
 	var active atomic.Int32
 	var maxActive atomic.Int32
 	blockCh := make(chan struct{})
+	startedCh := make(chan struct{}, 10)
+
+	var allWg sync.WaitGroup
+	allWg.Add(50)
 
 	router.RegisterHandler("limiter_test", func(ctx context.Context, payload any) error {
+		defer allWg.Done()
 		v := active.Add(1)
 		for {
 			maxA := maxActive.Load()
@@ -107,6 +112,10 @@ func TestRouter_ExecutionLimiter(t *testing.T) {
 				}
 			}
 			break
+		}
+		select {
+		case startedCh <- struct{}{}:
+		default:
 		}
 		<-blockCh
 		active.Add(-1)
@@ -126,9 +135,11 @@ func TestRouter_ExecutionLimiter(t *testing.T) {
 		}
 	}
 
-	time.Sleep(100 * time.Millisecond) // Allow workers to spawn and block
-	close(blockCh)                     // Unblock all
-	time.Sleep(100 * time.Millisecond)
+	for i := 0; i < 10; i++ {
+		<-startedCh
+	}
+	close(blockCh) // Unblock all
+	allWg.Wait()
 
 	if p := maxActive.Load(); p != 10 {
 		t.Fatalf("Expected max active handlers to be bounded by Limiter (10), got %d", p)
@@ -237,8 +248,12 @@ func TestRouter_CronSchedule(t *testing.T) {
 	defer router.Close()
 
 	var runs atomic.Int32
+	var wg sync.WaitGroup
+	wg.Add(3)
+
 	router.RegisterHandler("cron_task", func(ctx context.Context, payload any) error {
 		runs.Add(1)
+		wg.Done()
 		return nil
 	})
 
@@ -252,12 +267,18 @@ func TestRouter_CronSchedule(t *testing.T) {
 	for i := 0; i < 72; i++ {
 		mockClock.Advance(1 * time.Hour)
 		router.runCronOnce()
-		// Wait slightly to let dispatch process
-		time.Sleep(time.Millisecond)
 	}
 
-	if r := runs.Load(); r != 3 {
-		t.Fatalf("Expected cron to fire exactly 3 times in 72h, got %d", r)
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("Expected cron to fire exactly 3 times in 72h, got %d", runs.Load())
 	}
 }
 

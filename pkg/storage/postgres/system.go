@@ -73,15 +73,6 @@ func (s *Store) getRuntimeTimestamp(ctx context.Context, key string) (time.Time,
 	return ts, true, nil
 }
 
-func runtimeMetaKey(baseKey, botInstanceID string) string {
-	baseKey = strings.TrimSpace(baseKey)
-	botInstanceID = strings.TrimSpace(botInstanceID)
-	if baseKey == "" || botInstanceID == "" {
-		return baseKey
-	}
-	return baseKey + ":" + botInstanceID
-}
-
 // SetHeartbeatForBot records the last-known "bot is running" timestamp for a specific instance.
 func (s *Store) SetHeartbeatForBot(ctx context.Context, instanceID string, t time.Time) error {
 	return s.setRuntimeTimestamp(ctx, "heartbeat_"+instanceID, t)

@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -61,11 +63,15 @@ func (m *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 type mockMembersRepo struct {
 	members.Repository
-	upsertJoinCalled bool
+	upsertJoinCalled atomic.Bool
+	wg               *sync.WaitGroup
 }
 
 func (m *mockMembersRepo) UpsertMemberJoinContext(ctx context.Context, guildID, userID string, joinedAt time.Time) error {
-	m.upsertJoinCalled = true
+	m.upsertJoinCalled.Store(true)
+	if m.wg != nil {
+		m.wg.Done()
+	}
 	return nil
 }
 
@@ -75,17 +81,25 @@ func (m *mockMembersRepo) MemberJoin(ctx context.Context, guildID, userID string
 
 type mockSystemRepo struct {
 	system.Repository
-	joinIncrCalled  bool
-	leaveIncrCalled bool
+	joinIncrCalled  atomic.Bool
+	leaveIncrCalled atomic.Bool
+	joinWg          *sync.WaitGroup
+	leaveWg         *sync.WaitGroup
 }
 
 func (m *mockSystemRepo) IncrementDailyMemberJoinContext(ctx context.Context, guildID, userID string, timestamp time.Time) error {
-	m.joinIncrCalled = true
+	m.joinIncrCalled.Store(true)
+	if m.joinWg != nil {
+		m.joinWg.Done()
+	}
 	return nil
 }
 
 func (m *mockSystemRepo) IncrementDailyMemberLeaveContext(ctx context.Context, guildID, userID string, timestamp time.Time) error {
-	m.leaveIncrCalled = true
+	m.leaveIncrCalled.Store(true)
+	if m.leaveWg != nil {
+		m.leaveWg.Done()
+	}
 	return nil
 }
 
@@ -94,6 +108,7 @@ func (m *mockSystemRepo) SetLastEventForBot(ctx context.Context, instanceID stri
 }
 
 func TestGatewayListener_Lifecycle(t *testing.T) {
+	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	stateVal := state.New("Bot Token")
 	stateVal.PreHandler = handler.New()
@@ -117,8 +132,11 @@ func TestGatewayListener_Lifecycle(t *testing.T) {
 	_ = configMgr.LoadConfig()
 
 	// Member Event Service
-	membersRepo := &mockMembersRepo{}
-	systemRepo := &mockSystemRepo{}
+	var wg sync.WaitGroup
+	wg.Add(3)
+
+	membersRepo := &mockMembersRepo{wg: &wg}
+	systemRepo := &mockSystemRepo{joinWg: &wg, leaveWg: &wg}
 	memberSvc := members.NewMemberEventServiceForBot(members.EventServiceDeps{
 		ConfigManager: configMgr,
 		Sink:          members.NopMemberSink{},
@@ -190,7 +208,7 @@ func TestGatewayListener_Lifecycle(t *testing.T) {
 	})
 
 	// Wait for asynchronous event handlers to process
-	time.Sleep(150 * time.Millisecond)
+	wg.Wait()
 
 	// Stop
 	err = listener.Stop(context.Background())
@@ -202,13 +220,13 @@ func TestGatewayListener_Lifecycle(t *testing.T) {
 	}
 
 	// Check if mock repos were invoked
-	if !membersRepo.upsertJoinCalled {
+	if !membersRepo.upsertJoinCalled.Load() {
 		t.Error("expected membersRepo.UpsertMemberJoinContext to be called")
 	}
-	if !systemRepo.joinIncrCalled {
+	if !systemRepo.joinIncrCalled.Load() {
 		t.Error("expected systemRepo.IncrementDailyMemberJoinContext to be called")
 	}
-	if !systemRepo.leaveIncrCalled {
+	if !systemRepo.leaveIncrCalled.Load() {
 		t.Error("expected systemRepo.IncrementDailyMemberLeaveContext to be called")
 	}
 }
