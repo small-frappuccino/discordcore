@@ -227,8 +227,6 @@ func TestRun_CascadingRollbackFailures(t *testing.T) {
 	}
 	seedRunnerConfig(t, dbCfg, cfg)
 
-	t.Parallel()
-
 	sabotageErr := errors.New("store close failure")
 	storeCloseErr := sabotageErr
 	discordCloseErr := errors.New("discord close failure")
@@ -301,8 +299,6 @@ func TestRun_ResourceCleanupOnBootFailure(t *testing.T) {
 		}},
 	}
 	seedRunnerConfig(t, dbCfg, cfg)
-
-	t.Parallel()
 
 	var storeCloseCalls int32
 	var discordCloseCalls int32

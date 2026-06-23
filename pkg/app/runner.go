@@ -299,6 +299,7 @@ func (a *App) ConstructServices(ctx context.Context) error {
 		partnerService:           partnerService,
 		openBotArikawaState:      a.opts.openBotArikawaState,
 		fetchBotArikawaMe:        a.opts.fetchBotArikawaMe,
+		discordSessionCloseHook:  a.opts.DiscordSessionCloseHook,
 		newCommandHandlerForBot:  a.opts.newCommandHandlerForBot,
 		newCommandHandler:        a.opts.newCommandHandler,
 		setupCommandHandler:      a.opts.setupCommandHandler,

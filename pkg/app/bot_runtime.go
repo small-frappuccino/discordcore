@@ -571,6 +571,7 @@ type botRuntimeOptions struct {
 	partnerService           *partners.PartnerService
 	openBotArikawaState      func(ctx context.Context, s *state.State) error
 	fetchBotArikawaMe        func(s *state.State) (*discord.User, error)
+	discordSessionCloseHook  func(c interface{ Close() error }) error
 	newCommandHandlerForBot  func(deps CommandHandlerDeps) (*CommandHandler, error)
 	newCommandHandler        func(deps CommandHandlerDeps) (*CommandHandler, error)
 	setupCommandHandler      func(ch *CommandHandler) error

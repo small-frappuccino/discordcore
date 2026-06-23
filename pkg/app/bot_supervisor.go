@@ -665,7 +665,12 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token, status str
 		Stop: func(ctx context.Context) error {
 			shutdownBotRuntime(runtime, ctx)
 			if runtime.arikawaState != nil {
-				err := runtime.arikawaState.Close()
+				var err error
+				if s.opts.discordSessionCloseHook != nil {
+					err = s.opts.discordSessionCloseHook(runtime.arikawaState)
+				} else {
+					err = runtime.arikawaState.Close()
+				}
 				if err != nil && strings.Contains(err.Error(), "Session is closed") {
 					return nil
 				}
