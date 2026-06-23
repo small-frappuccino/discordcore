@@ -12,7 +12,6 @@ import (
 // Declared as a var (not const) so tests can override it.
 var fallbackEnvPath = `D:\Users\alice\.local\bin\.env`
 
-
 // LoadEnvWithLocalBinFallback ensures the specified environment variable is present.
 // It always attempts to load a single fallback file located at $HOME/.local/bin/.env
 // to populate any variables that are currently missing from the environment (without

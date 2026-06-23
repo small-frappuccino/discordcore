@@ -1,3 +1,5 @@
+//go:build ignore
+
 package main
 
 import (
@@ -10,7 +12,7 @@ import (
 )
 
 func boolPtr(b bool) *bool { return &b }
-func intPtr(i int) *int { return &i }
+func intPtr(i int) *int    { return &i }
 
 func main() {
 	dbURL := flag.String("db", "", "Postgres database URL to seed")
