@@ -230,8 +230,10 @@ func (a *App) ConstructServices(ctx context.Context) error {
 		a.runtimeApplier.SetInitial(cfg.RuntimeConfig)
 	}
 
-	knownInstances := make(map[string]struct{})
+	// Cômputo achatado e in-line de instâncias ativas
+	runtimeCount := 1 // Default estrito
 	if cfg := a.configManager.Config(); cfg != nil {
+		knownInstances := make(map[string]struct{})
 		for _, guild := range cfg.Guilds {
 			for instanceID, token := range guild.BotInstanceTokens {
 				if string(token) != "" {
@@ -239,10 +241,9 @@ func (a *App) ConstructServices(ctx context.Context) error {
 				}
 			}
 		}
-	}
-	runtimeCount := len(knownInstances)
-	if runtimeCount == 0 {
-		runtimeCount = 1
+		if len(knownInstances) > 0 {
+			runtimeCount = len(knownInstances)
+		}
 	}
 
 	a.controlServerRegistry = &controlServerHolder{}
@@ -379,16 +380,18 @@ func (a *App) RunAndListen(ctx context.Context) error {
 
 			dupCount := a.configManager.ApplyConfig(newCfg)
 
-			if dupCount > 0 || needsSave {
-				if saveErr := a.configManager.SaveConfig(); saveErr != nil {
-					log.EmitBlockingError("Structural state failure: Volatile configuration drift blocks persistence flush", saveErr, log.GenerateRequestID())
-				} else {
-					slog.Info("Architectural state transition: Configuration topology updated and indexes rebuilt",
-						slog.Int("duplicates_purged", dupCount),
-					)
-				}
-			} else {
+			if dupCount == 0 && !needsSave {
 				slog.Info("Architectural state transition: Configuration topology refreshed directly from disk")
+				continue
+			}
+
+			// Fluxo achatado: apenas mutações que exigem persistência
+			if saveErr := a.configManager.SaveConfig(); saveErr != nil {
+				log.EmitBlockingError("Structural state failure: Volatile configuration drift blocks persistence flush", saveErr, log.GenerateRequestID())
+			} else {
+				slog.Info("Architectural state transition: Configuration topology updated and indexes rebuilt",
+					slog.Int("duplicates_purged", dupCount),
+				)
 			}
 		}
 	}
@@ -413,16 +416,17 @@ func (a *App) Teardown(originalErr error) error {
 	}
 
 	if a.serviceManager != nil {
-		if err := a.serviceManager.StopAll(context.Background()); err != nil {
+		err := a.serviceManager.StopAll(context.Background())
+		a.serviceManager.Wait() // Executado incondicionalmente para limpar zumbis
+
+		if err != nil {
 			errWrap := fmt.Errorf("shutdown: %w", err)
 			log.EmitBlockingError("Structural teardown failure: Zombie sub-processes detected during stop iteration", errWrap, log.GenerateRequestID())
-			a.serviceManager.Wait()
 			if originalErr != nil {
 				return stdErrors.Join(originalErr, errWrap)
 			}
 			return errWrap
 		}
-		a.serviceManager.Wait()
 	}
 
 	return originalErr
@@ -453,12 +457,17 @@ func applyConfiguredTheme(configManager *files.ConfigManager) {
 }
 
 func scheduleDBCleanup(store *postgres.Store, configManager *files.ConfigManager) chan struct{} {
-	disableCleanup := false
-	features := (&files.BotConfig{}).ResolveFeatures("")
-	if cfg := configManager.Config(); cfg != nil {
+	cfg := configManager.Config()
+	var features files.ResolvedFeatureToggles
+	var disableCleanup bool
+
+	if cfg != nil {
 		features = cfg.ResolveFeatures("")
 		disableCleanup = cfg.RuntimeConfig.DisableDBCleanup
+	} else {
+		features = (&files.BotConfig{}).ResolveFeatures("")
 	}
+
 	cleanupEnabled := features.Maintenance.DBCleanup
 
 	slog.Debug("Evaluating temporal garbage collection routines",
@@ -466,10 +475,12 @@ func scheduleDBCleanup(store *postgres.Store, configManager *files.ConfigManager
 		slog.Bool("disable_cleanup_flag", disableCleanup),
 	)
 
+	// Avaliação Estrita O(1) de Ativação
 	if cleanupEnabled && !disableCleanup {
 		return cache.SchedulePeriodicCleanup(store, 6*time.Hour)
 	}
 
+	// Avaliação de Logs Desacoplada e Clara
 	if !cleanupEnabled {
 		slog.Info("Architectural state override: Database garbage collection suppressed explicitly by node definition",
 			slog.String("flag", "features.maintenance.db_cleanup"),
@@ -479,6 +490,7 @@ func scheduleDBCleanup(store *postgres.Store, configManager *files.ConfigManager
 			slog.String("flag", "disable_db_cleanup"),
 		)
 	}
+
 	return nil
 }
 

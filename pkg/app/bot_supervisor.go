@@ -241,25 +241,24 @@ func (s *BotSupervisor) onConfigChanged(ctx context.Context, oldCfg, newCfg *fil
 	// 2. ACT PHASE (Unlocked & Concurrent)
 
 	// Dispatch Gateway presence updates explicitly via errgroup
-	if len(gatewayUpdates) > 0 {
-		for _, update := range gatewayUpdates {
-			u := update
-			s.opts.startupTasks.GoHeavy("presence_"+u.instanceID, func(taskCtx context.Context) error {
-				updateCtx, cancel := context.WithTimeout(taskCtx, 5*time.Second)
-				defer cancel()
-				err := u.state.Gateway().Send(updateCtx, &gateway.UpdatePresenceCommand{
-					Status: discord.Status(u.status),
-				})
-				if err != nil {
-					s.log().Warn("Failed to update discord status for instance",
-						slog.String("botInstanceID", u.instanceID),
-						slog.String("mitigation", "operation ignored to protect main flow"),
-						slog.Any("error", err),
-					)
-				}
-				return nil
+	// O for-loop não itera sobre arrays de len==0 naturalmente. Sem "if" aninhado.
+	for _, update := range gatewayUpdates {
+		u := update
+		s.opts.startupTasks.GoHeavy("presence_"+u.instanceID, func(taskCtx context.Context) error {
+			updateCtx, cancel := context.WithTimeout(taskCtx, 5*time.Second)
+			defer cancel()
+			err := u.state.Gateway().Send(updateCtx, &gateway.UpdatePresenceCommand{
+				Status: discord.Status(u.status),
 			})
-		}
+			if err != nil {
+				s.log().Warn("Failed to update discord status for instance",
+					slog.String("botInstanceID", u.instanceID),
+					slog.String("mitigation", "operation ignored to protect main flow"),
+					slog.Any("error", err),
+				)
+			}
+			return nil
+		})
 	}
 
 	// Phase 3: Initiate shutdown sequence for instances whose credentials have been revoked or removed.
@@ -490,12 +489,11 @@ func (s *BotSupervisor) executeStopAndRemove(ctx context.Context, id string, sta
 
 	// Remove from resolver so new events don't route here
 	currentRuntimes := s.resolver.getRuntimes()
-	newRuntimes := make(map[string]*botRuntime)
+	newRuntimes := make(map[string]*botRuntime, len(currentRuntimes))
 	for k, v := range currentRuntimes {
-		if k != id {
-			newRuntimes[k] = v
-		}
+		newRuntimes[k] = v
 	}
+	delete(newRuntimes, id)
 	s.resolver.swapRuntimes(newRuntimes)
 
 	if err != nil && strings.Contains(err.Error(), "not found") {
@@ -544,8 +542,17 @@ func (s *BotSupervisor) awaitStopAndStart(id, token, status string, oldState *bo
 // foi sobrescrito por uma mutação de configuração mais recente.
 func (s *BotSupervisor) isObsolete(instanceID string, state *botInstanceState) bool {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.instances[instanceID] != state
+	isOld := s.instances[instanceID] != state
+	s.mu.Unlock()
+	return isOld
+}
+
+// checkTokenRevocationError validates if an external string strictly matches auth failure invariants.
+func checkTokenRevocationError(errStr string) bool {
+	lowerErr := strings.ToLower(errStr)
+	return strings.Contains(lowerErr, "4004") ||
+		strings.Contains(lowerErr, "authentication failed") ||
+		(strings.Contains(lowerErr, "401") && !strings.Contains(lowerErr, "4014"))
 }
 
 func (s *BotSupervisor) startBotInstanceBackground(instanceID, token, status string, state *botInstanceState) {
@@ -554,12 +561,10 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token, status str
 	var runtime *botRuntime
 	var err error
 
-	baseDelay := 2 * time.Second
-	maxDelay := 30 * time.Second
-	maxRetries := 5
+	baseDelay := float64(2 * time.Second)
+	maxDelayFloat := float64(30 * time.Second)
 
-	for attempt := 0; attempt < maxRetries; attempt++ {
-		// Barreira 1: Aborta antes mesmo de disputar alocação de tempo (Sleep)
+	for attempt := 0; attempt < 5; attempt++ {
 		if s.isObsolete(instanceID, state) {
 			s.log().Debug("Execution pipeline aborted: newer configuration state detected before sleep", slog.String("botInstanceID", instanceID))
 			return
@@ -584,23 +589,16 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token, status str
 			}
 		}
 
-		// Barreira 2: Aborta antes de alocar I/O de rede pesado (Handshake do Discord)
 		if s.isObsolete(instanceID, state) {
 			return
 		}
 
 		runtime, err = openBotRuntimeFn(resolvedBotInstance{ID: instanceID, Token: token, DiscordStatus: status}, capabilities, s.opts)
-
 		if err == nil {
 			break
 		}
 
-		errStr := err.Error()
-		isAuthFail := strings.Contains(errStr, "4004") ||
-			strings.Contains(strings.ToLower(errStr), "authentication failed") ||
-			(strings.Contains(errStr, "401") && !strings.Contains(errStr, "4014"))
-
-		if isAuthFail {
+		if checkTokenRevocationError(err.Error()) {
 			s.log().Warn("Instance authentication compromised, triggering token revocation",
 				slog.String("botInstanceID", instanceID),
 				slog.Any("error", err),
@@ -609,11 +607,12 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token, status str
 			break
 		}
 
-		delay := float64(baseDelay) * float64(uint(1)<<attempt)
-		if delay > float64(maxDelay) {
-			delay = float64(maxDelay)
+		// Achatamento matemático do Backoff
+		delay := baseDelay * float64(uint(1)<<attempt)
+		if delay > maxDelayFloat {
+			delay = maxDelayFloat
 		}
-		sleepTime := time.Duration(delay) + time.Duration(rand.Float64()*delay*0.2)
+		sleepTime := time.Duration(delay + (rand.Float64() * delay * 0.2))
 
 		timer := time.NewTimer(sleepTime)
 		select {

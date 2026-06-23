@@ -17,6 +17,7 @@ func resolveRuntimeTaskRouterWorkers(cfg *files.BotConfig, botInstanceID string,
 	if configured, ok := configuredRuntimeTaskRouterWorkers(cfg, botInstanceID); ok {
 		return configured
 	}
+
 	if runtimeCount > 1 {
 		return defaultMultiRuntimeMaxWorkers
 	}
@@ -28,33 +29,24 @@ func configuredRuntimeTaskRouterWorkers(cfg *files.BotConfig, botInstanceID stri
 		return 0, false
 	}
 
-	selected := 0
-	if cfg.RuntimeConfig.GlobalMaxWorkers > 0 {
-		selected = cfg.RuntimeConfig.GlobalMaxWorkers
-	}
+	maxWorkers := cfg.RuntimeConfig.GlobalMaxWorkers
 
 	// State Bleed Resolved: Determine the maximum required concurrency bound
 	// across all attached guilds to prevent a single restrictive tenant
 	// from starving the entire shared generic bot ecosystem.
 	for _, guild := range cfg.GuildsForBotInstance(botInstanceID) {
-		override := guild.RuntimeConfig.GlobalMaxWorkers
-		if override > selected {
-			selected = override
+		if override := guild.RuntimeConfig.GlobalMaxWorkers; override > maxWorkers {
+			maxWorkers = override
 		}
 	}
 
-	if selected <= 0 {
-		return 0, false
-	}
-	return selected, true
+	// Eliminação visual do bloco if <= 0: avaliação booleana resolvida no retorno O(1)
+	return maxWorkers, maxWorkers > 0
 }
 
 // newRuntimeTaskRouterConfig builds the deterministic routing rules for background execution.
 func newRuntimeTaskRouterConfig(cfg *files.BotConfig, botInstanceID string, runtimeCount int) task.RouterConfig {
 	workers := resolveRuntimeTaskRouterWorkers(cfg, botInstanceID, runtimeCount)
-
-	// Initialize execution limiter to enforce strict concurrency boundaries.
-	limiter := task.NewExecutionLimiter(workers)
 
 	slog.Info("Architectural state transition: Configured background worker budget for task router",
 		slog.String("botInstanceID", botInstanceID),
@@ -63,6 +55,7 @@ func newRuntimeTaskRouterConfig(cfg *files.BotConfig, botInstanceID string, runt
 
 	routerCfg := task.Defaults()
 	routerCfg.GlobalMaxWorkers = workers
-	routerCfg.ExecutionLimiter = limiter
+	routerCfg.ExecutionLimiter = task.NewExecutionLimiter(workers)
+
 	return routerCfg
 }

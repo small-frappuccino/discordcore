@@ -56,8 +56,9 @@ func (a *ArikawaAdapter) Dependencies() []string { return nil }
 // IsRunning safely reports the current execution state of the service.
 func (a *ArikawaAdapter) IsRunning() bool {
 	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.isRunning
+	running := a.isRunning
+	a.mu.Unlock()
+	return running
 }
 
 // HealthCheck reports the operational status of the service.
@@ -72,15 +73,17 @@ func (a *ArikawaAdapter) HealthCheck(ctx context.Context) service.HealthStatus {
 // Stats provides runtime telemetry for the adapter.
 func (a *ArikawaAdapter) Stats() service.ServiceStats {
 	a.mu.Lock()
-	defer a.mu.Unlock()
+	running := a.isRunning
+	start := a.startTime
+	a.mu.Unlock()
 
 	var uptime time.Duration
-	if a.isRunning {
-		uptime = time.Since(a.startTime)
+	if running {
+		uptime = time.Since(start)
 	}
 
 	return service.ServiceStats{
-		StartTime: a.startTime,
+		StartTime: start,
 		Uptime:    uptime,
 		Metrics: []service.ServiceMetric{
 			{Label: "Status", Value: "Running"},
@@ -91,43 +94,37 @@ func (a *ArikawaAdapter) Stats() service.ServiceStats {
 // Start binds the raw WebSocket handler to Arikawa's Session.
 func (a *ArikawaAdapter) Start(ctx context.Context) error {
 	a.mu.Lock()
-	defer a.mu.Unlock()
-
 	if a.isRunning {
+		a.mu.Unlock()
 		return nil
 	}
+
 	a.isRunning = true
 	a.startTime = time.Now()
 
 	if a.state != nil {
-		// Use Session.AddHandler to intercept raw generic payloads (like *ws.Op)
-		// Or AddHandler accepts raw *ws.Op directly?
-		// Note: Arikawa's Handler does not invoke for *ws.Op natively if we use standard typed AddHandler.
-		// However, we can use a generic handler `func(interface{})` to catch everything, OR `func(*ws.Op)`
-		// if we attach to `state.Session`. Wait, `Session.AddHandler(func(v interface{}))` catches ALL parsed events.
-		// But unknown events are discarded before the generic handler.
-		// Actually, `PreHandler` or `Session` might not emit unknown.
-		// Let's hook into the low-level `Session.AddHandler` with `func(*ws.Op)`.
-		// Arikawa's `EventCreator` runs BEFORE `Session` handlers?
-		// No, `state.Session` is `gateway.Session`.
 		a.handlerCancel = a.state.AddHandler(a.handleRawOp)
 	}
+	a.mu.Unlock()
+
 	return nil
 }
 
 // Stop deregisters gateway handlers.
 func (a *ArikawaAdapter) Stop(ctx context.Context) error {
 	a.mu.Lock()
-	defer a.mu.Unlock()
-
 	if !a.isRunning {
+		a.mu.Unlock()
 		return nil
 	}
+
 	if a.handlerCancel != nil {
 		a.handlerCancel()
 		a.handlerCancel = nil
 	}
 	a.isRunning = false
+	a.mu.Unlock()
+
 	return nil
 }
 

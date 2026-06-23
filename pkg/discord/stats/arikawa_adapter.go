@@ -88,22 +88,27 @@ func (g *ArikawaGateway) StreamGuildMembers(ctx context.Context, guildID string)
 				return
 			}
 
+			// Retorno antecipado absoluto: esgotamento da paginação.
 			if len(members) == 0 {
 				return
 			}
 
 			for _, m := range members {
+				// Isolamento da construção do iterador aninhado.
+				roleIter := func(roleYield func(string) bool) {
+					for _, r := range m.RoleIDs {
+						if !roleYield(r.String()) {
+							return
+						}
+					}
+				}
+
 				snap := domain.MemberSnapshot{
 					UserID: m.User.ID.String(),
 					IsBot:  m.User.Bot,
-					Roles: func(yield func(string) bool) {
-						for _, r := range m.RoleIDs {
-							if !yield(r.String()) {
-								return
-							}
-						}
-					},
+					Roles:  roleIter,
 				}
+
 				if !yield(snap, nil) {
 					return
 				}

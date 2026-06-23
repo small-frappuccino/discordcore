@@ -215,22 +215,15 @@ func (ch *CommandHandler) Stop(ctx context.Context) error {
 
 // SetupCommands initializes and registers all bot commands
 func (ch *CommandHandler) SetupCommands() error {
-	slog.Info("Starting command and route coupling",
-		slog.String("botInstanceID", ch.botInstanceID),
-	)
+	slog.Info("Starting command and route coupling", slog.String("botInstanceID", ch.botInstanceID))
 
-	// Re-init safety: avoid duplicated handlers if setup is called more than once.
 	if ch.router.Load() != nil {
-		// Warn: Condition mitigated by compensatory repetition of local state cleanup.
-		slog.Warn("overlapping handler registration; invoking cleanup of previous registrations",
-			slog.String("botInstanceID", ch.botInstanceID),
-		)
+		slog.Warn("overlapping handler registration; invoking cleanup of previous registrations", slog.String("botInstanceID", ch.botInstanceID))
 		if err := ch.Shutdown(); err != nil {
 			return fmt.Errorf("cleanup previous command handlers: %w", err)
 		}
 	}
 
-	// Initialize native router and syncer
 	apiClient := api.NewClient(ch.session.Token)
 	newRouter := commands.NewCommandRouter(apiClient, ch.configManager)
 
@@ -247,78 +240,69 @@ func (ch *CommandHandler) SetupCommands() error {
 	}
 	newSyncer := commands.NewCommandSyncer(apiClient, discord.AppID(appID))
 
-	// Register configuration and feature command catalogs against the local, unexposed router.
 	if err := ch.registerCommandCatalog(newRouter); err != nil {
 		return fmt.Errorf("failed to register config commands: %w", err)
 	}
 
-	// Safely swap the fully hydrated dependencies into live memory
 	ch.router.Store(newRouter)
 	ch.syncer.Store(newSyncer)
 
-	// Register pure Arikawa listener as the sole boundary
-	ch.interactionCancel = ch.session.AddHandler(func(s *discordgo.Session, rawEvent *discordgo.Event) {
-		if rawEvent.Type != "INTERACTION_CREATE" {
-			return
-		}
-		// Load a safe, immutable snapshot of the router
-		currentRouter := ch.router.Load()
-		if currentRouter == nil {
-			return // Teardown in progress; silently drop the event
-		}
+	// Injeção limpa de método estrito, sem ruído de closure inline.
+	ch.interactionCancel = ch.session.AddHandler(ch.handleInteractionCreate)
 
-		var arikawaEvent discord.InteractionEvent
-		if err := arikawaEvent.UnmarshalJSON(rawEvent.RawData); err != nil {
-			slog.Error("Failed to unmarshal INTERACTION_CREATE into Arikawa event", slog.Any("error", err))
-			return
-		}
-
-		// Enforce strict data validation before state mutation
-		var routePath string
-		switch data := arikawaEvent.Data.(type) {
-		case *discord.CommandInteraction:
-			routePath = data.Name
-		case *discord.AutocompleteInteraction:
-			routePath = data.Name
-		case discord.ComponentInteraction:
-			routePath = string(data.ID())
-		case *discord.ModalInteraction:
-			routePath = string(data.CustomID)
-		}
-
-		if routePath != "" && arikawaEvent.GuildID.IsValid() {
-			if !ch.handlesGuildRoute(arikawaEvent.GuildID.String(), commands.InteractionRouteKey{Path: routePath}) {
-				return
-			}
-		}
-
-		// Dispatch purely in Arikawa natively
-		_ = currentRouter.HandleEvent(&arikawaEvent)
-	})
-
-	// Configure commands on Discord
-	// We pass 0 as guildID to mean global commands, or dynamically loop through guilds if necessary.
-	// For architecture parity, we will sync globally.
 	currentRouter := ch.router.Load()
 	currentSyncer := ch.syncer.Load()
 	if err := currentSyncer.SyncBulkOverwrite(0, currentRouter.Registry()); err != nil {
 		if shutdownErr := ch.Shutdown(); shutdownErr != nil {
-			// Error: Blocking structural failure of current operation.
 			slog.Error("fatal failure during command manager registration rollback",
-				slog.Group("metadata",
-					slog.String("botInstanceID", ch.botInstanceID),
-					slog.String("synthetic_fault_code", "500"),
-					slog.String("stack_trace", fmt.Sprintf("%+v", shutdownErr)),
-				),
+				slog.String("botInstanceID", ch.botInstanceID),
+				slog.String("synthetic_fault_code", "500"),
+				slog.String("stack_trace", fmt.Sprintf("%+v", shutdownErr)),
 			)
 		}
 		return fmt.Errorf("failed to setup commands: %w", err)
 	}
 
-	slog.Info("Command architecture successfully established natively",
-		slog.String("botInstanceID", ch.botInstanceID),
-	)
+	slog.Info("Command architecture successfully established natively", slog.String("botInstanceID", ch.botInstanceID))
 	return nil
+}
+
+// Escopo de execução isolado: processamento de runtime fica contido aqui.
+func (ch *CommandHandler) handleInteractionCreate(s *discordgo.Session, rawEvent *discordgo.Event) {
+	if rawEvent.Type != "INTERACTION_CREATE" {
+		return
+	}
+
+	currentRouter := ch.router.Load()
+	if currentRouter == nil {
+		return
+	}
+
+	var arikawaEvent discord.InteractionEvent
+	if err := arikawaEvent.UnmarshalJSON(rawEvent.RawData); err != nil {
+		slog.Error("Failed to unmarshal INTERACTION_CREATE into Arikawa event", slog.Any("error", err))
+		return
+	}
+
+	var routePath string
+	switch data := arikawaEvent.Data.(type) {
+	case *discord.CommandInteraction:
+		routePath = data.Name
+	case *discord.AutocompleteInteraction:
+		routePath = data.Name
+	case discord.ComponentInteraction:
+		routePath = string(data.ID())
+	case *discord.ModalInteraction:
+		routePath = string(data.CustomID)
+	}
+
+	if routePath != "" && arikawaEvent.GuildID.IsValid() {
+		if !ch.handlesGuildRoute(arikawaEvent.GuildID.String(), commands.InteractionRouteKey{Path: routePath}) {
+			return
+		}
+	}
+
+	_ = currentRouter.HandleEvent(&arikawaEvent)
 }
 
 // GetRouter returns the command router (for tests or extensions)
@@ -357,7 +341,6 @@ func (ch *CommandHandler) Shutdown() error {
 		slog.String("botInstanceID", ch.botInstanceID),
 	)
 
-	var errs []error
 	if ch.interactionCancel != nil {
 		ch.interactionCancel()
 		ch.interactionCancel = nil
@@ -366,18 +349,7 @@ func (ch *CommandHandler) Shutdown() error {
 	ch.router.Store(nil)
 	ch.syncer.Store(nil)
 
-	if len(errs) > 0 {
-		// Error: Blocking structural failure draining dependencies. Triggers aggregation system.
-		slog.Error("failures detected during command manager shutdown execution",
-			slog.Group("metadata",
-				slog.String("botInstanceID", ch.botInstanceID),
-				slog.String("synthetic_fault_code", "500"),
-				slog.String("stack_trace", fmt.Sprintf("%+v", errors.Join(errs...))),
-			),
-		)
-	}
-
-	return errors.Join(errs...)
+	return nil
 }
 
 // GetConfigManager returns the configuration manager
@@ -390,7 +362,6 @@ func (ch *CommandHandler) handlesGuild(guildID string) bool {
 }
 
 func (ch *CommandHandler) handlesGuildRoute(guildID string, routeKey commands.InteractionRouteKey) bool {
-	// Debug: Granular tracking of the guild route filter logical flow.
 	slog.Debug("evaluating route authorization for request",
 		slog.String("guildID", guildID),
 		slog.String("routeKeyPath", routeKey.Path),
@@ -407,39 +378,35 @@ func (ch *CommandHandler) handlesGuildRoute(guildID string, routeKey commands.In
 	if cfg == nil {
 		return false
 	}
-	if cfg.ResolveFeatures(strings.TrimSpace(guildID)).Services.Commands {
-		return true
-	}
-	return false
+
+	// Retorno direto do booleano estrutural
+	return cfg.ResolveFeatures(strings.TrimSpace(guildID)).Services.Commands
 }
 
 func (ch *CommandHandler) matchesGuildBotInstance(guildID string, feature string) bool {
-	if ch == nil {
+	if ch == nil || ch.configManager == nil {
 		return false
 	}
+
 	guildID = strings.TrimSpace(guildID)
-	if guildID == "" || ch.configManager == nil {
+	if guildID == "" {
 		return false
 	}
+
 	guild := ch.configManager.GuildConfig(guildID)
 	if guild == nil {
 		return false
 	}
 
-	// Commands feature is universally available to all active bots in the guild.
+	// Consulta em O(1) diretamente no ponteiro, achatando o bloco visualmente
 	if feature == "commands" {
-		for instanceID, tokenEnc := range guild.BotInstanceTokens {
-			if string(tokenEnc) != "" && instanceID == ch.botInstanceID {
-				return true
-			}
-		}
-		return false
+		tokenEnc, ok := guild.BotInstanceTokens[ch.botInstanceID]
+		return ok && string(tokenEnc) != ""
 	}
 
 	resolvedID, _ := guild.ResolveFeatureBotInstanceID(feature)
 	tokenEnc, ok := guild.BotInstanceTokens[resolvedID]
 
-	// Debug: Granular inspection of transient state and structural evaluation for context identification.
 	slog.Debug("resolution of bot execution scope for specific guild",
 		slog.String("resolvedID", resolvedID),
 		slog.String("feature", feature),

@@ -329,28 +329,28 @@ func (r *botRuntimeResolver) swapRuntimes(newMap map[string]*botRuntime) {
 func knownBotInstanceCatalogSeq(runtimes map[string]*botRuntime, additional []string) iter.Seq[string] {
 	return func(yield func(string) bool) {
 		known := make(map[string]struct{})
-		for botInstanceID := range runtimes {
-			normalizedBotInstanceID := files.NormalizeBotInstanceID(botInstanceID)
-			if normalizedBotInstanceID == "" {
-				continue
+
+		// Closure atua como interceptador de filtro stateful
+		tryYield := func(rawID string) bool {
+			normalized := files.NormalizeBotInstanceID(rawID)
+			if normalized == "" {
+				return true
 			}
-			if _, ok := known[normalizedBotInstanceID]; !ok {
-				known[normalizedBotInstanceID] = struct{}{}
-				if !yield(normalizedBotInstanceID) {
-					return
-				}
+			if _, ok := known[normalized]; !ok {
+				known[normalized] = struct{}{}
+				return yield(normalized)
+			}
+			return true
+		}
+
+		for id := range runtimes {
+			if !tryYield(id) {
+				return
 			}
 		}
-		for _, botInstanceID := range additional {
-			normalizedBotInstanceID := files.NormalizeBotInstanceID(botInstanceID)
-			if normalizedBotInstanceID == "" {
-				continue
-			}
-			if _, ok := known[normalizedBotInstanceID]; !ok {
-				known[normalizedBotInstanceID] = struct{}{}
-				if !yield(normalizedBotInstanceID) {
-					return
-				}
+		for _, id := range additional {
+			if !tryYield(id) {
+				return
 			}
 		}
 	}
@@ -391,49 +391,48 @@ func (r *botRuntimeResolver) runtimeForGuild(guildID string, feature string) (*b
 	if r == nil {
 		return nil, "", fmt.Errorf("%w: bot runtime resolver pointer is nil", ErrSessionUnavailable)
 	}
-
-	guildID = strings.TrimSpace(guildID)
 	if r.configManager == nil {
 		return nil, "", fmt.Errorf("%w: config manager is detached from runtime resolver", ErrSessionUnavailable)
 	}
 
+	guildID = strings.TrimSpace(guildID)
 	guild := r.configManager.GuildConfig(guildID)
 	if guild == nil {
 		return nil, "", fmt.Errorf("%w: guild %s is not configured", ErrSessionUnavailable, guildID)
 	}
-
-	if feature == "" {
-		feature = "dashboard"
-	}
-	bestInstanceID, _ := guild.ResolveFeatureBotInstanceID(feature)
 
 	runtimes := r.getRuntimes()
 	if len(runtimes) == 0 {
 		return nil, "", fmt.Errorf("%w: primary runtime vector exhausted or uninitialized for guild %s", ErrSessionUnavailable, guildID)
 	}
 
+	if feature == "" {
+		feature = "dashboard"
+	}
+
+	// 1. Prioridade Estrita: Resolução Específica de Feature
+	bestInstanceID, _ := guild.ResolveFeatureBotInstanceID(feature)
 	if bestInstanceID != "" {
-		tokenEnc, ok := guild.BotInstanceTokens[bestInstanceID]
-		if ok && string(tokenEnc) != "" {
+		if tokenEnc, ok := guild.BotInstanceTokens[bestInstanceID]; ok && string(tokenEnc) != "" {
 			if runtime, ok := runtimes[bestInstanceID]; ok && runtime != nil {
 				return runtime, bestInstanceID, nil
 			}
 		}
 	}
 
-	if len(guild.BotInstanceTokens) > 0 {
-		for id, tokenEnc := range guild.BotInstanceTokens {
-			if string(tokenEnc) == "" {
-				continue
-			}
-			if runtime, ok := runtimes[id]; ok && runtime != nil {
-				return runtime, id, nil
-			}
+	// 2. Degradação Graciosa: Qualquer Instância Ativa na Guild
+	for id, tokenEnc := range guild.BotInstanceTokens {
+		if string(tokenEnc) == "" {
+			continue
 		}
-	} else {
-		if runtime, ok := runtimes[""]; ok && runtime != nil {
-			return runtime, "", nil
+		if runtime, ok := runtimes[id]; ok && runtime != nil {
+			return runtime, id, nil
 		}
+	}
+
+	// 3. Fallback de Último Recurso: Instância Global/Default
+	if runtime, ok := runtimes[""]; ok && runtime != nil {
+		return runtime, "", nil
 	}
 
 	return nil, "", fmt.Errorf("%w: orchestrator failed to couple guild %s to an active port", ErrSessionUnavailable, guildID)
@@ -890,18 +889,29 @@ func shutdownBotRuntime(runtime *botRuntime, ctx context.Context) []error {
 	return errs
 }
 
+// resolveEventLogger centraliza a injeção do sink de logs para serviços de auditoria.
+func resolveEventLogger(runtime *botRuntime, configManager *files.ConfigManager) *logging.Logger {
+	if runtime.arikawaState == nil || runtime.arikawaState.Session == nil {
+		return nil
+	}
+	return logging.NewLogger(
+		runtime.arikawaState.Session.Client,
+		configManager,
+		runtime.arikawaState,
+		gateway.Intents(runtime.capabilities.intents),
+		slog.Default(),
+	)
+}
+
 func buildMessageEventServiceConfigurator(runtime *botRuntime, opts botRuntimeOptions, _ task.RouterConfig) (service.Service, error) {
 	if !runtime.capabilities.messageEventService {
 		return nil, nil
 	}
-	var eventLogger *logging.Logger
-	if runtime.arikawaState != nil && runtime.arikawaState.Session != nil {
-		eventLogger = logging.NewLogger(runtime.arikawaState.Session.Client, opts.configManager, runtime.arikawaState, gateway.Intents(runtime.capabilities.intents), slog.Default())
-	}
+
 	mes := messages.NewMessageEventServiceForBot(messages.EventServiceDeps{
 		ArikawaState:  runtime.arikawaState,
 		ConfigManager: opts.configManager,
-		Sink:          eventLogger,
+		Sink:          resolveEventLogger(runtime, opts.configManager),
 		Store:         opts.store,
 		BotInstanceID: runtime.instanceID,
 		Logger:        slog.Default(),
@@ -914,14 +924,11 @@ func buildMemberEventServiceConfigurator(runtime *botRuntime, opts botRuntimeOpt
 	if !runtime.capabilities.memberEventService {
 		return nil, nil
 	}
-	var eventLogger *logging.Logger
-	if runtime.arikawaState != nil && runtime.arikawaState.Session != nil {
-		eventLogger = logging.NewLogger(runtime.arikawaState.Session.Client, opts.configManager, runtime.arikawaState, gateway.Intents(runtime.capabilities.intents), slog.Default())
-	}
+
 	memSvc := members.NewMemberEventServiceForBot(members.EventServiceDeps{
 		ArikawaState:  runtime.arikawaState,
 		ConfigManager: opts.configManager,
-		Sink:          memberSinkWrapper{logger: eventLogger},
+		Sink:          memberSinkWrapper{logger: resolveEventLogger(runtime, opts.configManager)},
 		MembersRepo:   opts.store,
 		SystemRepo:    opts.store,
 		BotInstanceID: runtime.instanceID,
