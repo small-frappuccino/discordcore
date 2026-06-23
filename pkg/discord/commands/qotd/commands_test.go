@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
@@ -45,11 +44,11 @@ func (s *MockService) ExecuteInGuildActorWithResult(guildID string, fn func() (a
 		panic("forced panic for test")
 	}
 
-	time.Sleep(10 * time.Millisecond)
 	return fn()
 }
 
 func TestCommandHandler_ThunderingHerds(t *testing.T) {
+	t.Parallel()
 	svc := &MockService{}
 	client := api.NewClient("token")
 	client.Client.Client = httpdriver.WrapClient(http.Client{Transport: &mockTransport{}})
@@ -89,6 +88,7 @@ func TestCommandHandler_ThunderingHerds(t *testing.T) {
 }
 
 func TestCommandHandler_PanicRecovery(t *testing.T) {
+	t.Parallel()
 	svc := &MockService{panicOnRun: true}
 	client := api.NewClient("token")
 	client.Client.Client = httpdriver.WrapClient(http.Client{Transport: &mockTransport{}})

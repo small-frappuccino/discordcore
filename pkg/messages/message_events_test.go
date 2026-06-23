@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -241,7 +242,7 @@ func TestMessageCreateWriter_Basic(t *testing.T) {
 	}
 
 	w.flushInterval = 10 * time.Millisecond
-	w.maxBatch = 2
+	w.maxBatch = 3
 	w.Start()
 	defer w.Stop(context.Background())
 
@@ -292,8 +293,10 @@ func TestMessageCreateWriter_Basic(t *testing.T) {
 		t.Fatalf("enqueue version error: %v", err)
 	}
 
-	// Wait for processing
-	time.Sleep(50 * time.Millisecond)
+	// Wait deterministically for immediate flush due to batch=3
+	for metrics.Snapshot().Flush.CyclesTotal < 1 {
+		runtime.Gosched()
+	}
 
 	// Verify sequential / fallback flows by forcing error
 	repo.SetErrors(
@@ -307,7 +310,8 @@ func TestMessageCreateWriter_Basic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("enqueue error: %v", err)
 	}
-	time.Sleep(50 * time.Millisecond)
+	// Stop forces deterministic final flush
+	w.Stop(context.Background())
 }
 
 func TestAuditCacheState(t *testing.T) {
@@ -904,8 +908,16 @@ func TestMessageEventService_TaskRouterAsynchronousHandling(t *testing.T) {
 		ChannelID: 222,
 	})
 
-	// Wait briefly for Task Router workers to process
-	time.Sleep(100 * time.Millisecond)
+	// Wait deterministically for Task Router workers to process
+	for i := 0; i < 1000; i++ {
+		sink.mu.Lock()
+		count := len(sink.updates)
+		sink.mu.Unlock()
+		if count == 1 {
+			break
+		}
+		runtime.Gosched()
+	}
 
 	sink.mu.Lock()
 	defer sink.mu.Unlock()
@@ -941,7 +953,9 @@ func TestLookupCachedMessage_PollingAndCancellation(t *testing.T) {
 	// Poll loop returns message after it appears in mock store
 	ctx2 := context.Background()
 	go func() {
-		time.Sleep(300 * time.Millisecond)
+		for i := 0; i < 10; i++ {
+			runtime.Gosched()
+		}
 		store.SetGetMsg(&Record{
 			MessageID:      "999",
 			GuildID:        "111",

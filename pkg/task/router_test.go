@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -48,8 +49,7 @@ func TestRouter_GroupKeySerialization(t *testing.T) {
 		}
 
 		counter.Add(1)
-		// Yield slightly to encourage race if serialization is broken
-		time.Sleep(time.Microsecond)
+		runtime.Gosched()
 		return nil
 	})
 
@@ -74,8 +74,13 @@ func TestRouter_GroupKeySerialization(t *testing.T) {
 
 	wg.Wait()
 
-	// Flush tasks
-	time.Sleep(200 * time.Millisecond)
+	// Ensure all tasks complete functionally instead of sleeping
+	for {
+		if counter.Load() == int32(numTasks) {
+			break
+		}
+		runtime.Gosched()
+	}
 
 	if c := counter.Load(); c != numTasks {
 		t.Fatalf("Expected %d tasks processed, got %d", numTasks, c)
@@ -319,16 +324,20 @@ func TestRouter_Observability(t *testing.T) {
 	router := NewRouter(cfg)
 	defer router.Close()
 
+	var execWg sync.WaitGroup
+	execWg.Add(1)
+
 	router.RegisterHandler("slow_test", func(ctx context.Context, payload any) error {
 		// Simulate 6s execution
 		mockClock.Advance(6 * time.Second)
+		execWg.Done()
 		return nil
 	})
 
 	_ = router.Dispatch(context.Background(), Task{Type: "slow_test"})
 
-	// Wait for handler to complete
-	time.Sleep(50 * time.Millisecond)
+	// Wait for handler to complete deterministically
+	execWg.Wait()
 
 	// Intercept observability metrics manually since getOrCreate is not strictly exported
 	// We just ensure it doesn't panic and the latency map registers it.
@@ -337,9 +346,9 @@ func TestRouter_Observability(t *testing.T) {
 		t.Errorf("Stats registered types mismatch")
 	}
 
-	router.latencyMu.RLock()
+	router.latencyMu.Lock()
 	s := router.latenciesByType["slow_test"]
-	router.latencyMu.RUnlock()
+	router.latencyMu.Unlock()
 
 	if s == nil {
 		t.Fatalf("Expected latency summary to be created for slow_test")

@@ -7,10 +7,10 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
@@ -121,8 +121,10 @@ func (s *fakeIOStore) Exists() (bool, error) {
 }
 
 func (s *fakeIOStore) Save(cfg *files.BotConfig) error {
-	// Simulate async I/O delay to ensure the caller's synchronization barrier holds
-	time.Sleep(10 * time.Millisecond)
+	// Simulate async I/O delay deterministically
+	for i := 0; i < 1000; i++ {
+		runtime.Gosched()
+	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()

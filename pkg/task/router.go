@@ -208,7 +208,7 @@ type TaskRouter struct {
 	cronDispatchSuccess  int64
 	cronDispatchFailures int64
 
-	latencyMu       sync.RWMutex
+	latencyMu       sync.Mutex
 	latenciesByType map[string]*observability.Summary
 }
 

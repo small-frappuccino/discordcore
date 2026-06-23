@@ -11,11 +11,14 @@ import (
 )
 
 func TestServer_GracefulDegradation(t *testing.T) {
+	t.Parallel()
 	// Terminação de Conexão Degradada
 	srv := NewServer("127.0.0.1:0", nil, nil)
 	mux := http.NewServeMux()
+	started := make(chan struct{})
 	mux.HandleFunc("/long", func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(10 * time.Second) // Purposefully long
+		close(started)
+		<-r.Context().Done() // Block deterministically until shutdown deadline exceeds
 	})
 	srv.httpServer = &http.Server{Handler: mux}
 
@@ -26,16 +29,32 @@ func TestServer_GracefulDegradation(t *testing.T) {
 	defer ts.Close()
 
 	// Hit the long route
-	go http.Get(ts.URL + "/long")
+	reqCtx, cancelReq := context.WithCancel(context.Background())
+	defer cancelReq()
 
-	time.Sleep(100 * time.Millisecond)
+	req, err := http.NewRequestWithContext(reqCtx, "GET", ts.URL+"/long", nil)
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
+	}
+
+	go func() {
+		resp, err := http.DefaultClient.Do(req)
+		if err == nil {
+			resp.Body.Close()
+		}
+	}()
+
+	<-started // Wait deterministically for the request to reach the server
 
 	start := time.Now()
 	// Stop should enforce 5s deadline
-	err := srv.Stop(context.Background())
+	stopErr := srv.Stop(context.Background())
 	duration := time.Since(start)
 
-	if err == nil {
+	// Cancel client request to clean up connection and prevent deadlock in ts.Close()
+	cancelReq()
+
+	if stopErr == nil {
 		t.Fatal("Expected deadline exceeded error from Shutdown")
 	}
 

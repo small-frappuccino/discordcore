@@ -9,6 +9,7 @@ import (
 )
 
 func TestStatsAddPersistsChannelConfig(t *testing.T) {
+	t.Parallel()
 	const (
 		guildID = "123456789"
 		ownerID = "987654321"
@@ -45,6 +46,7 @@ func TestStatsAddPersistsChannelConfig(t *testing.T) {
 }
 
 func TestStatsAddUpdatesExistingChannelConfig(t *testing.T) {
+	t.Parallel()
 	const (
 		guildID = "123456789"
 		ownerID = "987654321"
@@ -79,6 +81,7 @@ func TestStatsAddUpdatesExistingChannelConfig(t *testing.T) {
 }
 
 func TestStatsAddWithRoleFilter(t *testing.T) {
+	t.Parallel()
 	const (
 		guildID = "123456789"
 		ownerID = "987654321"
@@ -107,6 +110,7 @@ func TestStatsAddWithRoleFilter(t *testing.T) {
 }
 
 func TestStatsRemoveDeletesChannelConfig(t *testing.T) {
+	t.Parallel()
 	const (
 		guildID = "123456789"
 		ownerID = "987654321"
@@ -147,6 +151,7 @@ func TestStatsRemoveDeletesChannelConfig(t *testing.T) {
 }
 
 func TestStatsRemoveReportsErrorForUnknownChannel(t *testing.T) {
+	t.Parallel()
 	const (
 		guildID = "123456789"
 		ownerID = "987654321"
@@ -169,6 +174,7 @@ func TestStatsRemoveReportsErrorForUnknownChannel(t *testing.T) {
 }
 
 func TestStatsListShowsConfiguredChannels(t *testing.T) {
+	t.Parallel()
 	const (
 		guildID = "123456789"
 		ownerID = "987654321"
@@ -207,6 +213,7 @@ func TestStatsListShowsConfiguredChannels(t *testing.T) {
 }
 
 func TestStatsListShowsEmptyStateWhenNoChannels(t *testing.T) {
+	t.Parallel()
 	const (
 		guildID = "123456789"
 		ownerID = "987654321"
@@ -227,6 +234,7 @@ func TestStatsListShowsEmptyStateWhenNoChannels(t *testing.T) {
 }
 
 func TestStatsListShowsRoleFilter(t *testing.T) {
+	t.Parallel()
 	const (
 		guildID = "123456789"
 		ownerID = "987654321"

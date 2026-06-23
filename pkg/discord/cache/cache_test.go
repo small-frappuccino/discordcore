@@ -24,9 +24,14 @@ func TestCache_GCEviction(t *testing.T) {
 	// Remove strong reference
 	guild = nil
 	runtime.GC()
-	time.Sleep(10 * time.Millisecond) // Give AddCleanup a chance
+	// Give AddCleanup a chance deterministically
+	for i := 0; i < 1000; i++ {
+		if _, ok = uc.GetGuild("123"); !ok {
+			break
+		}
+		runtime.Gosched()
+	}
 
-	_, ok = uc.GetGuild("123")
 	if ok {
 		t.Fatal("Expected guild to be evicted via GC")
 	}
@@ -70,10 +75,14 @@ func TestCache_ReferenceCycles(t *testing.T) {
 	c = nil
 
 	runtime.GC()
-	time.Sleep(10 * time.Millisecond)
+	for i := 0; i < 1000; i++ {
+		if _, ok := uc.GetMember("1", "1"); !ok {
+			break
+		}
+		runtime.Gosched()
+	}
 
-	_, ok := uc.GetMember("1", "1")
-	if ok {
+	if _, ok := uc.GetMember("1", "1"); ok {
 		t.Fatal("Expected cycle to be collected and member evicted")
 	}
 }

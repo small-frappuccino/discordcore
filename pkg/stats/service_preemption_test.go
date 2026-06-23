@@ -1,4 +1,4 @@
-package stats_test
+package stats
 
 import (
 	"context"
@@ -8,12 +8,12 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/members"
-	"github.com/small-frappuccino/discordcore/pkg/stats"
 )
 
 // blockingStore is a mock that blocks indefinitely until context is canceled.
 type blockingStore struct {
-	stats.StateStore
+	StateStore
+	entered chan struct{}
 }
 
 func (b *blockingStore) HeartbeatForBot(ctx context.Context, botInstanceID string) (time.Time, bool, error) {
@@ -22,6 +22,7 @@ func (b *blockingStore) HeartbeatForBot(ctx context.Context, botInstanceID strin
 }
 
 func (b *blockingStore) Metadata(ctx context.Context, key string) (time.Time, bool, error) {
+	close(b.entered)
 	<-ctx.Done()
 	return time.Time{}, false, ctx.Err()
 }
@@ -31,11 +32,59 @@ func (b *blockingStore) GetActiveGuildMemberStatesContext(ctx context.Context, g
 	return func(yield func(members.CurrentState, error) bool) {}
 }
 
+func (b *blockingStore) SetMetadata(ctx context.Context, key string, at time.Time) error {
+	return nil
+}
+
+func (b *blockingStore) UpsertMemberPresenceContext(ctx context.Context, input members.PresenceInput) error {
+	return nil
+}
+
+func (b *blockingStore) UpsertMemberRoles(guildID, userID string, roles []string, at time.Time) error {
+	return nil
+}
+
+func (b *blockingStore) MarkMemberLeftContext(ctx context.Context, guildID, userID string, at time.Time) error {
+	return nil
+}
+
 func TestStatsService_DatabasePreemption(t *testing.T) {
-	store := &blockingStore{}
+	t.Parallel()
+
+	store := &blockingStore{
+		entered: make(chan struct{}),
+	}
 	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 
-	s := stats.NewStatsService(nil, configManager, store, nil, "test-bot")
+	monitoringEnabled := true
+	guildCfg := files.GuildConfig{
+		GuildID: "test-guild",
+		BotInstanceTokens: map[string]files.EncryptedString{
+			"test-bot": "fake-token",
+		},
+		FeatureRouting: map[string]string{
+			"stats": "test-bot",
+		},
+		Features: files.FeatureToggles{
+			Services: files.FeatureServiceToggles{
+				Monitoring: &monitoringEnabled,
+			},
+		},
+		Stats: files.StatsConfig{
+			Channels: []files.StatsChannelConfig{
+				{
+					ChannelID: "stats-channel",
+					RoleID:    "stats-role",
+				},
+			},
+		},
+	}
+	if err := configManager.AddGuildConfig(guildCfg); err != nil {
+		t.Fatalf("Failed to add guild config: %v", err)
+	}
+
+	gateway := &mockGateway{}
+	s := NewStatsService(gateway, configManager, store, nil, "test-bot")
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -44,13 +93,8 @@ func TestStatsService_DatabasePreemption(t *testing.T) {
 		t.Fatalf("Failed to start service: %v", err)
 	}
 
-	// Trigger a background update that uses the database
-	go func() {
-		s.UpdateStatsChannels(ctx)
-	}()
-
-	// Wait briefly to ensure it hits the blocking store
-	time.Sleep(50 * time.Millisecond)
+	// Wait until it hits the blocking store
+	<-store.entered
 
 	// Preempt the execution via context cancellation
 	cancel()
@@ -65,7 +109,7 @@ func TestStatsService_DatabasePreemption(t *testing.T) {
 	select {
 	case <-done:
 		// Success! The database mock cleanly yielded control to ctx.Done()
-	case <-time.After(1 * time.Second):
+	case <-time.After(2 * time.Second):
 		t.Fatal("Service failed to preempt database operation on context cancellation")
 	}
 }

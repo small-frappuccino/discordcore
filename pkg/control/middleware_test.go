@@ -10,6 +10,7 @@ import (
 )
 
 func TestMiddleware_OOMPrevention(t *testing.T) {
+	t.Parallel()
 	handler := maxBytesMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		_, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -32,6 +33,7 @@ func TestMiddleware_OOMPrevention(t *testing.T) {
 }
 
 func TestMiddleware_TimingAttack(t *testing.T) {
+	t.Parallel()
 	handler := authorizeRequest("secure_token_12345", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -53,6 +55,7 @@ func TestMiddleware_TimingAttack(t *testing.T) {
 }
 
 func TestMiddleware_AdminAccess(t *testing.T) {
+	t.Parallel()
 	handler := requireGuildAdmin(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})

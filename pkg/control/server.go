@@ -10,10 +10,12 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/members"
 	"github.com/small-frappuccino/discordcore/pkg/messages"
+	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordcore/pkg/storage/postgres"
 	"golang.org/x/oauth2"
@@ -49,8 +51,8 @@ type Server struct {
 
 	bearerToken               string
 	knownBotInstanceIDs       []string
-	qotdService               any
-	moderationMetrics         interface{} // Use specific type if known
+	qotdService               *qotd.Service
+	moderationMetrics         moderation.Metrics
 	membersMetricsResolver    func() members.Metrics
 	messagesMetricsResolver   func() messages.Metrics
 	store                     *postgres.Store
@@ -90,10 +92,12 @@ func (s *Server) SetBearerToken(token string) { s.bearerToken = token }
 func (s *Server) SetKnownBotInstanceIDs(ids []string) { s.knownBotInstanceIDs = ids }
 
 // SetQOTDService injects the Question of the Day service interface into the control plane.
-func (s *Server) SetQOTDService(svc any) { s.qotdService = svc }
+func (s *Server) SetQOTDService(svc *qotd.Service) { s.qotdService = svc }
 
 // SetModerationMetrics configures the accessors for exposing real-time moderation telemetry.
-func (s *Server) SetModerationMetrics(metrics interface{}) { s.moderationMetrics = metrics }
+func (s *Server) SetModerationMetrics(metrics moderation.Metrics) {
+	s.moderationMetrics = metrics
+}
 
 // SetMembersMetricsResolver provides the callback function responsible for resolving member telemetry.
 func (s *Server) SetMembersMetricsResolver(resolver func() members.Metrics) {

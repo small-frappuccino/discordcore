@@ -20,7 +20,7 @@ var (
 	gatewayThresholdOnce sync.Once
 	gatewayThreshold     time.Duration
 
-	gatewayMetricsMu sync.RWMutex
+	gatewayMetricsMu sync.Mutex
 	gatewayMetrics   map[string]*observability.Summary
 )
 
@@ -74,8 +74,8 @@ type GatewayMetricsSnapshot map[string]observability.SummarySnapshot
 
 // SnapshotGatewayMetrics returns a snapshot of all gateway event latencies.
 func SnapshotGatewayMetrics() GatewayMetricsSnapshot {
-	gatewayMetricsMu.RLock()
-	defer gatewayMetricsMu.RUnlock()
+	gatewayMetricsMu.Lock()
+	defer gatewayMetricsMu.Unlock()
 	snapshot := make(GatewayMetricsSnapshot, len(gatewayMetrics))
 	for name, summary := range gatewayMetrics {
 		snapshot[name] = summary.Snapshot()

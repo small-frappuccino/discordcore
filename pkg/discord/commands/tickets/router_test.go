@@ -31,8 +31,11 @@ func (t *rewriteTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 }
 
 func TestRouter_DeferBeforeIO(t *testing.T) {
+	t.Parallel()
+
 	deferralReceived := make(chan bool, 1)
 	editReceived := make(chan bool, 1)
+	blockGetChannel := make(chan struct{})
 
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/interactions/") && strings.Contains(r.URL.Path, "/callback") {
@@ -52,8 +55,8 @@ func TestRouter_DeferBeforeIO(t *testing.T) {
 		}
 
 		if r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/channels/") {
-			// Sleep to simulate latência
-			time.Sleep(4 * time.Second)
+			// Wait for the test to signal deferral completion
+			<-blockGetChannel
 			json.NewEncoder(w).Encode(discord.Channel{
 				ID:   discord.ChannelID(2),
 				Name: "ticket-0001",
@@ -95,24 +98,22 @@ func TestRouter_DeferBeforeIO(t *testing.T) {
 		},
 	}
 
-	start := time.Now()
 	go r.HandleInteraction(event)
 
 	select {
 	case <-deferralReceived:
-		if time.Since(start) > 2*time.Second {
-			t.Errorf("deferral took too long: %v", time.Since(start))
-		}
+		// Success: deferral was sent before GET /channels/ returned
 	case <-time.After(2 * time.Second):
 		t.Fatal("timeout waiting for deferred response")
 	}
 
+	// Unblock the GET /channels/ handler
+	close(blockGetChannel)
+
 	select {
 	case <-editReceived:
-		if time.Since(start) < 4*time.Second {
-			t.Errorf("edit received too early: %v", time.Since(start))
-		}
-	case <-time.After(6 * time.Second):
+		// Success: edit webhook completed after unblocking GET /channels/
+	case <-time.After(2 * time.Second):
 		t.Fatal("timeout waiting for edit response")
 	}
 }

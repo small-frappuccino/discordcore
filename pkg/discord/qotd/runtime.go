@@ -81,20 +81,9 @@ func (s *RuntimeService) Stop(ctx context.Context) error {
 	eg := s.eg
 	s.mu.Unlock()
 
-	done := make(chan struct{})
-	go func() {
-		_ = eg.Wait()
-		close(done)
-	}()
-
-	select {
-	case <-done:
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-
+	err := eg.Wait()
 	s.running.Store(false)
-	return nil
+	return err
 }
 
 func (s *RuntimeService) loop(ctx context.Context) {

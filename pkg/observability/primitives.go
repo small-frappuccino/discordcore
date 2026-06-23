@@ -79,16 +79,7 @@ func (s *Summary) Snapshot() SummarySnapshot {
 // Key type is generic so callers can use either a plain string label or a
 // domain newtype (e.g. qotd.PublishMode) without losing type safety at
 // the call site.
-func GetOrCreateLabeledCounter[K comparable](mu *sync.RWMutex, m *map[K]*atomic.Int64, key K) *atomic.Int64 {
-	mu.RLock()
-	if *m != nil {
-		if c, ok := (*m)[key]; ok {
-			mu.RUnlock()
-			return c
-		}
-	}
-	mu.RUnlock()
-
+func GetOrCreateLabeledCounter[K comparable](mu *sync.Mutex, m *map[K]*atomic.Int64, key K) *atomic.Int64 {
 	mu.Lock()
 	defer mu.Unlock()
 	if *m == nil {
@@ -106,16 +97,7 @@ func GetOrCreateLabeledCounter[K comparable](mu *sync.RWMutex, m *map[K]*atomic.
 // metrics implementations that hold labeled summaries (e.g. per-task latencies).
 // The double-checked pattern keeps the hot path on a read lock plus a map lookup;
 // only the first observer of a new key pays for the write lock.
-func GetOrCreateLabeledSummary[K comparable](mu *sync.RWMutex, m *map[K]*Summary, key K) *Summary {
-	mu.RLock()
-	if *m != nil {
-		if s, ok := (*m)[key]; ok {
-			mu.RUnlock()
-			return s
-		}
-	}
-	mu.RUnlock()
-
+func GetOrCreateLabeledSummary[K comparable](mu *sync.Mutex, m *map[K]*Summary, key K) *Summary {
 	mu.Lock()
 	defer mu.Unlock()
 	if *m == nil {

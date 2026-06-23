@@ -6,6 +6,7 @@ import (
 )
 
 func TestDashboard_CompressionNegotiation(t *testing.T) {
+	t.Parallel()
 	handler := newDashboardHandler()
 
 	// Negociação de Compressão no Fallback
@@ -21,6 +22,7 @@ func TestDashboard_CompressionNegotiation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			req := httptest.NewRequest("GET", "/", nil)
 			if tt.acceptEncoding != "" {
 				req.Header.Set("Accept-Encoding", tt.acceptEncoding)

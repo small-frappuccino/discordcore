@@ -2,6 +2,7 @@ package qotd
 
 import (
 	"context"
+	"runtime"
 	"testing"
 	"time"
 
@@ -31,8 +32,10 @@ func TestRuntimeService_GracefulShutdown(t *testing.T) {
 		t.Fatalf("failed to start: %v", err)
 	}
 
-	// Let it spin
-	time.Sleep(50 * time.Millisecond)
+	// Let it spin deterministically
+	for i := 0; i < 100; i++ {
+		runtime.Gosched()
+	}
 
 	// Stop
 	if err := daemon.Stop(ctx); err != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -184,7 +185,9 @@ func TestExecuteClean_Concurrency_Race(t *testing.T) {
 			return msgs, nil
 		},
 		deleteMessageFunc: func(messageID discord.MessageID) error {
-			time.Sleep(1 * time.Millisecond) // simulate IO delay to test race
+			for i := 0; i < 1000; i++ {
+				runtime.Gosched() // simulate IO delay by yielding CPU deterministically
+			}
 			return nil
 		},
 	}

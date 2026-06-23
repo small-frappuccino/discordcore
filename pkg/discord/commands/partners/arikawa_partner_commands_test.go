@@ -10,7 +10,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
@@ -110,7 +109,6 @@ func (s *fakeIOStore) Exists() (bool, error) {
 }
 
 func (s *fakeIOStore) Save(c *files.BotConfig) error {
-	time.Sleep(10 * time.Millisecond)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.writes++
@@ -207,7 +205,6 @@ func TestPartnerCommands_ConcurrentStateMutation(t *testing.T) {
 				Config:  cm,
 			}
 
-			time.Sleep(2 * time.Millisecond) // Give Add a tiny head start
 			_ = removeCmd.Handle(actx)
 		}(i)
 	}
@@ -219,9 +216,6 @@ func TestPartnerCommands_ConcurrentStateMutation(t *testing.T) {
 	if finalCfg == nil {
 		t.Fatal("expected config to be present")
 	}
-
-	// Wait for any trailing async I/O
-	time.Sleep(10 * time.Millisecond)
 
 	store.mu.Lock()
 	defer store.mu.Unlock()

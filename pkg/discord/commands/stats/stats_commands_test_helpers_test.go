@@ -10,7 +10,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
@@ -34,17 +33,9 @@ func (m *mockStatsService) UpdateStatsChannels(ctx context.Context) error {
 func (m *mockStatsService) ForceGuildUpdate(guildID string) {}
 
 func (m *mockStatsService) wasUpdateCalled() bool {
-	deadline := time.Now().Add(time.Second)
-	for time.Now().Before(deadline) {
-		m.mu.Lock()
-		called := m.updateCalled
-		m.mu.Unlock()
-		if called {
-			return true
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	return false
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.updateCalled
 }
 
 type interactionRecorder struct {

@@ -72,10 +72,14 @@ func NewStatsService(
 }
 
 func (s *StatsService) log(guildID string) *slog.Logger {
-	if guildID == "" {
-		return s.logger
+	logger := s.logger
+	if logger == nil {
+		logger = slog.Default()
 	}
-	return s.logger.With(slog.String("guild_id", guildID))
+	if guildID == "" {
+		return logger
+	}
+	return logger.With(slog.String("guild_id", guildID))
 }
 
 // Name names.
@@ -144,7 +148,11 @@ func (s *StatsService) runCron(ctx context.Context) {
 	defer s.wg.Done()
 	defer func() {
 		if r := recover(); r != nil {
-			s.logger.Error("StatsService runCron panic caught", "panic", r, "stack", string(debug.Stack()))
+			logger := s.logger
+			if logger == nil {
+				logger = slog.Default()
+			}
+			logger.Error("StatsService runCron panic caught", "panic", r, "stack", string(debug.Stack()))
 		}
 	}()
 

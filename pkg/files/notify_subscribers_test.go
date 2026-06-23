@@ -28,6 +28,9 @@ func TestNotifySubscribers_ConcurrencyLimitExceeded(t *testing.T) {
 	// Barrier to hold workers until all are ready
 	startBarrier := make(chan struct{})
 
+	// Give errgroup tasks a way to notify they have started running
+	workerStarted := make(chan struct{}, numSubscribers)
+
 	for i := 0; i < numSubscribers; i++ {
 		cfgManager.AddSubscriber(func(ctx context.Context, oldConfig, newConfig *BotConfig) error {
 			defer wg.Done()
@@ -45,6 +48,7 @@ func TestNotifySubscribers_ConcurrencyLimitExceeded(t *testing.T) {
 				}
 			}
 
+			workerStarted <- struct{}{}
 			<-startBarrier
 			atomic.AddInt32(&activeWorkers, -1)
 			return nil
@@ -60,8 +64,10 @@ func TestNotifySubscribers_ConcurrencyLimitExceeded(t *testing.T) {
 		close(notifyDone)
 	}()
 
-	// Give enough time for errgroup to spawn up to its limit
-	time.Sleep(100 * time.Millisecond)
+	// Wait exactly for the errgroup limit (10) of workers to start
+	for i := 0; i < 10; i++ {
+		<-workerStarted
+	}
 
 	// Unblock all workers
 	close(startBarrier)

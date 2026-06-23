@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -29,7 +30,8 @@ func TestDynamicManager(t *testing.T) {
 
 	// Wait for the background Start goroutine to actually mark it running
 	for !wrapper.IsRunning() {
-		time.Sleep(5 * time.Millisecond)
+		// Yield the processor to allow the start goroutine to progress
+		runtime.Gosched()
 	}
 
 	if err := dm.StopAndRemove(context.Background(), "dyn"); err != nil {
@@ -79,6 +81,8 @@ func TestBaseServiceAccessors(t *testing.T) {
 func TestManagedService(t *testing.T) {
 	t.Parallel()
 	sm := NewServiceManager(nil)
+	defer sm.StopAll(context.Background())
+
 	ms := NewManagedService("managed", TypeMonitoring, PriorityNormal, nil, sm, nil)
 	ms.SetAutoRestart(true, 1, time.Millisecond)
 
@@ -86,9 +90,6 @@ func TestManagedService(t *testing.T) {
 	ms.Start(context.Background())
 
 	ms.HandleError(errors.New("simulated error"))
-
-	// wait for async restart attempt
-	time.Sleep(10 * time.Millisecond)
 
 	if ms.Stats().ErrorCount != 1 {
 		t.Errorf("expected 1 error")

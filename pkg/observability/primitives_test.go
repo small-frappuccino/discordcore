@@ -103,7 +103,7 @@ func TestSummaryConcurrency(t *testing.T) {
 type customKey string
 
 func TestGetOrCreateLabeledCounter(t *testing.T) {
-	var mu sync.RWMutex
+	var mu sync.Mutex
 	var m map[customKey]*atomic.Int64
 
 	// First call on nil map
@@ -139,7 +139,7 @@ func TestGetOrCreateLabeledCounter(t *testing.T) {
 }
 
 func TestGetOrCreateLabeledSummary(t *testing.T) {
-	var mu sync.RWMutex
+	var mu sync.Mutex
 	var m map[string]*Summary
 
 	// First call on nil map

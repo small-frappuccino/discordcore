@@ -11,6 +11,7 @@ type mockQOTDHealth struct {
 }
 
 func TestHealth_GenericReflection(t *testing.T) {
+	t.Parallel()
 	// Consolidação de Tipos Genéricos
 	handler := serveHealthRoute(func() mockQOTDHealth {
 		return mockQOTDHealth{Active: true}

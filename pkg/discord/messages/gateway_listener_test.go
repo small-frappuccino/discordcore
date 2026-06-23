@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
@@ -18,23 +17,48 @@ import (
 )
 
 type mockRepository struct {
-	messages.Repository
-	mu       sync.Mutex
-	upserted []messages.Record
-	deleted  []messages.DeleteKey
+	mu           sync.Mutex
+	upserted     []messages.Record
+	deleted      []messages.DeleteKey
+	upsertSignal chan struct{}
+}
+
+func (m *mockRepository) UpsertMessage(rec messages.Record) error {
+	m.mu.Lock()
+	m.upserted = append(m.upserted, rec)
+	m.mu.Unlock()
+	if m.upsertSignal != nil {
+		select {
+		case <-m.upsertSignal:
+		default:
+			close(m.upsertSignal)
+		}
+	}
+	return nil
 }
 
 func (m *mockRepository) UpsertMessagesContext(ctx context.Context, records []messages.Record) error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	m.upserted = append(m.upserted, records...)
+	m.mu.Unlock()
+	if m.upsertSignal != nil {
+		select {
+		case <-m.upsertSignal:
+		default:
+			close(m.upsertSignal)
+		}
+	}
 	return nil
+}
+
+func (m *mockRepository) GetMessage(ctx context.Context, guildID, messageID string) (*messages.Record, error) {
+	return nil, nil
 }
 
 func (m *mockRepository) DeleteMessagesContext(ctx context.Context, keys []messages.DeleteKey) error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	m.deleted = append(m.deleted, keys...)
+	m.mu.Unlock()
 	return nil
 }
 
@@ -42,7 +66,23 @@ func (m *mockRepository) InsertMessageVersionsMixedBatchContext(ctx context.Cont
 	return nil
 }
 
+func (m *mockRepository) CleanupExpiredMessages() error {
+	return nil
+}
+
 func (m *mockRepository) IncrementDailyMessageCountsContext(ctx context.Context, deltas []messages.DailyCountDelta) error {
+	return nil
+}
+
+func (m *mockRepository) DeleteMessage(ctx context.Context, guildID, messageID string) error {
+	return nil
+}
+
+func (m *mockRepository) InsertMessageVersion(ctx context.Context, v messages.Version) error {
+	return nil
+}
+
+func (m *mockRepository) IncrementDailyMessageCount(ctx context.Context, guildID string) error {
 	return nil
 }
 
@@ -68,6 +108,8 @@ func (s *mockMessageSink) OnMessageDeleteBulk(ctx context.Context, guildID disco
 }
 
 func TestGatewayListener_Lifecycle(t *testing.T) {
+	t.Parallel()
+
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	stateVal := state.New("Bot Token")
 	stateVal.PreHandler = handler.New()
@@ -89,7 +131,9 @@ func TestGatewayListener_Lifecycle(t *testing.T) {
 	configMgr := files.NewConfigManagerWithStore(store, logger)
 	_ = configMgr.LoadConfig()
 
-	repo := &mockRepository{}
+	repo := &mockRepository{
+		upsertSignal: make(chan struct{}),
+	}
 	sink := &mockMessageSink{}
 
 	deps := messages.EventServiceDeps{
@@ -161,8 +205,13 @@ func TestGatewayListener_Lifecycle(t *testing.T) {
 		},
 	})
 
-	// Wait for processing
-	time.Sleep(100 * time.Millisecond)
+	// Wait for processing to complete deterministically
+	select {
+	case <-repo.upsertSignal:
+		// Success!
+	case <-t.Context().Done():
+		t.Fatal("test context canceled while waiting for message process")
+	}
 
 	// Stop
 	err = listener.Stop(context.Background())

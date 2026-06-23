@@ -11,6 +11,7 @@ import (
 )
 
 func TestHTTPClock_Success(t *testing.T) {
+	t.Parallel()
 	futureTime := time.Now().Add(5 * time.Minute).UTC().Truncate(time.Second)
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -28,9 +29,10 @@ func TestHTTPClock_Success(t *testing.T) {
 }
 
 func TestHTTPClock_Timeout(t *testing.T) {
+	t.Parallel()
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(6 * time.Second)
-		w.WriteHeader(http.StatusOK)
+		<-r.Context().Done() // Block until client times out deterministically
+		// w.WriteHeader won't be sent since the client has already timed out
 	}))
 	defer ts.Close()
 
@@ -47,6 +49,7 @@ func TestHTTPClock_Timeout(t *testing.T) {
 }
 
 func TestHTTPClock_MalformedHeader(t *testing.T) {
+	t.Parallel()
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Date", "Invalid Date String")
 		w.WriteHeader(http.StatusOK)
@@ -60,6 +63,7 @@ func TestHTTPClock_MalformedHeader(t *testing.T) {
 }
 
 func TestHTTPClock_MissingHeader(t *testing.T) {
+	t.Parallel()
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))

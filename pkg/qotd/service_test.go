@@ -3,6 +3,7 @@ package qotd_test
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -47,12 +48,11 @@ func TestExecuteInGuildActor_Serialization(t *testing.T) {
 
 	const targetGuildID = "guild_01"
 	const workerCount = 100
-	const artificialLatency = 10 * time.Millisecond
 
 	var executedCounter int32
+	var activeCount int32
+	var maxActiveCount int32
 	var wg sync.WaitGroup
-
-	startTime := time.Now()
 
 	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
@@ -60,7 +60,22 @@ func TestExecuteInGuildActor_Serialization(t *testing.T) {
 			defer wg.Done()
 			_, err := svc.ExecuteInGuildActorWithResult(targetGuildID, func() (any, error) {
 				atomic.AddInt32(&executedCounter, 1)
-				time.Sleep(artificialLatency)
+
+				currentActive := atomic.AddInt32(&activeCount, 1)
+				defer atomic.AddInt32(&activeCount, -1)
+
+				// Track maximum concurrent executions inside the same actor
+				for {
+					max := atomic.LoadInt32(&maxActiveCount)
+					if currentActive <= max {
+						break
+					}
+					if atomic.CompareAndSwapInt32(&maxActiveCount, max, currentActive) {
+						break
+					}
+				}
+
+				runtime.Gosched()
 				return nil, nil
 			})
 			if err != nil {
@@ -70,16 +85,14 @@ func TestExecuteInGuildActor_Serialization(t *testing.T) {
 	}
 
 	wg.Wait()
-	elapsedDuration := time.Since(startTime)
-	expectedMinimumDuration := artificialLatency * workerCount
 
 	if atomic.LoadInt32(&executedCounter) != int32(workerCount) {
 		t.Fatalf("Esperado contador escalar em %d, aferido %d", workerCount, executedCounter)
 	}
 
-	// Permite uma pequena margem para overhead (não deve ser estritamente < 1000ms devido ao agendador do Go)
-	if elapsedDuration < expectedMinimumDuration-50*time.Millisecond {
-		t.Fatalf("Condição de corrida temporal detectada em execução intraguilda. Duração aferida %v incompatível com serialização mínima estimada de %v", elapsedDuration, expectedMinimumDuration)
+	// For a serialized actor, the maximum concurrent execution count must be exactly 1
+	if finalMax := atomic.LoadInt32(&maxActiveCount); finalMax != 1 {
+		t.Fatalf("Actor serialization failed: expected max concurrent execution of 1, got %d", finalMax)
 	}
 }
 
@@ -92,10 +105,11 @@ func TestExecuteInGuildActor_Parallelism(t *testing.T) {
 	)
 
 	const workerCount = 100
-	const artificialLatency = 10 * time.Millisecond
 
 	var wg sync.WaitGroup
-	startTime := time.Now()
+	var activeCount int32
+	var maxActiveCount int32
+	gate := make(chan struct{})
 
 	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
@@ -103,17 +117,42 @@ func TestExecuteInGuildActor_Parallelism(t *testing.T) {
 		go func(id string) {
 			defer wg.Done()
 			svc.ExecuteInGuildActor(id, func() {
-				time.Sleep(artificialLatency)
+				currentActive := atomic.AddInt32(&activeCount, 1)
+
+				for {
+					max := atomic.LoadInt32(&maxActiveCount)
+					if currentActive <= max {
+						break
+					}
+					if atomic.CompareAndSwapInt32(&maxActiveCount, max, currentActive) {
+						break
+					}
+				}
+
+				// Wait until all actors have entered to verify parallel execution
+				<-gate
+
+				atomic.AddInt32(&activeCount, -1)
 			})
 		}(guildID)
 	}
 
-	wg.Wait()
-	elapsedDuration := time.Since(startTime)
-	maximumAcceptableDuration := artificialLatency + (250 * time.Millisecond) // Allowance for goroutine scheduling
+	// Spin-wait until all workers are concurrently active in their own actors
+	start := time.Now()
+	for atomic.LoadInt32(&activeCount) < workerCount {
+		if time.Since(start) > 2*time.Second {
+			close(gate)
+			wg.Wait()
+			t.Fatalf("Timeout waiting for parallel actors to enter concurrently: entered %d/%d", atomic.LoadInt32(&activeCount), workerCount)
+		}
+		runtime.Gosched()
+	}
 
-	if elapsedDuration > maximumAcceptableDuration {
-		t.Fatalf("Contenção global de atores detectada. Duração aferida de %v extrapola estimativa limite superior paralela de %v", elapsedDuration, maximumAcceptableDuration)
+	close(gate)
+	wg.Wait()
+
+	if finalMax := atomic.LoadInt32(&maxActiveCount); finalMax != workerCount {
+		t.Fatalf("Actor parallelism failed: expected max concurrent execution of %d, got %d", workerCount, finalMax)
 	}
 }
 

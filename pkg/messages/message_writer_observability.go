@@ -184,7 +184,7 @@ func (NopMessageWriterMetrics) RecordFlushFallback(string, int) {}
 // briefly takes a read lock to copy the maps; the atomic loads happen
 // without locks.
 type InMemoryMessageWriterMetrics struct {
-	mu sync.RWMutex
+	mu sync.Mutex
 
 	enqueueUpserts  atomic.Int64
 	enqueueDeletes  atomic.Int64
@@ -290,8 +290,8 @@ func (m *InMemoryMessageWriterMetrics) RecordFlushFallback(op string, count int)
 // returned MessageWriterMetricsSnapshot is a copy; callers can mutate it
 // without affecting the live counters.
 func (m *InMemoryMessageWriterMetrics) Snapshot() MessageWriterMetricsSnapshot {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	return MessageWriterMetricsSnapshot{
 		Enqueue: MessageWriterEnqueueSnapshot{
