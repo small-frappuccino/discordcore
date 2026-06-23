@@ -233,6 +233,7 @@ func localTLSSANs(profile RunProfile, publicOrigin string) (string, []net.IP, er
 }
 
 func loadControlDiscordOAuthConfigFromEnv(publicOrigin string) (*control.DiscordOAuthConfig, error) {
+	// 1. Extração Estrita de Estado
 	clientID := strings.TrimSpace(files.EnvString(controlDiscordOAuthClientIDEnv, defaultControlDiscordOAuthClientID))
 	clientSecret := strings.TrimSpace(files.EnvString(controlDiscordOAuthClientSecretEnv, ""))
 	redirectURI := strings.TrimSpace(files.EnvString(controlDiscordOAuthRedirectURIEnv, ""))
@@ -243,10 +244,10 @@ func loadControlDiscordOAuthConfigFromEnv(publicOrigin string) (*control.Discord
 		slog.String("client_id", clientID),
 	)
 
+	// 2. Validação de Invariantes (Fail-Fast)
 	if clientSecret == "" && redirectURI == "" && clientID == defaultControlDiscordOAuthClientID {
 		if includeGuildMembersRead {
-			return nil, fmt.Errorf(
-				"%s=true requires %s and %s",
+			return nil, fmt.Errorf("%s=true requires %s and %s",
 				controlDiscordOAuthIncludeGuildMembersReadEnv,
 				controlDiscordOAuthClientSecretEnv,
 				controlDiscordOAuthRedirectURIEnv,
@@ -254,25 +255,27 @@ func loadControlDiscordOAuthConfigFromEnv(publicOrigin string) (*control.Discord
 		}
 		return nil, nil
 	}
-	if clientSecret != "" && redirectURI == "" {
-		redirectURI = strings.TrimSpace(publicOrigin)
-		if redirectURI != "" {
-			redirectURI = strings.TrimRight(redirectURI, "/") + "/auth/discord/callback"
-		}
+
+	// 3. Mutações Condicionais
+	if clientSecret != "" && redirectURI == "" && strings.TrimSpace(publicOrigin) != "" {
+		redirectURI = strings.TrimRight(strings.TrimSpace(publicOrigin), "/") + "/auth/discord/callback"
 	}
 
-	missing := make([]string, 0, 2)
+	if sessionStorePath == "" {
+		sessionStorePath = filepath.Join(files.ApplicationCachesPath, "control", "oauth_sessions.json")
+	}
+
+	// 4. Verificação Final e Retorno
+	var missing []string
 	if clientSecret == "" {
 		missing = append(missing, controlDiscordOAuthClientSecretEnv)
 	}
 	if redirectURI == "" {
 		missing = append(missing, controlDiscordOAuthRedirectURIEnv)
 	}
+
 	if len(missing) > 0 {
 		return nil, fmt.Errorf("incomplete Discord OAuth configuration: missing %s", strings.Join(missing, ", "))
-	}
-	if sessionStorePath == "" {
-		sessionStorePath = filepath.Join(files.ApplicationCachesPath, "control", "oauth_sessions.json")
 	}
 
 	return &control.DiscordOAuthConfig{

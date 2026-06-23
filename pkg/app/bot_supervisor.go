@@ -37,7 +37,6 @@ type botInstanceState struct {
 	Token         string
 	DiscordStatus string
 	Status        InstanceStatus
-	StopWG        *sync.WaitGroup
 }
 
 // BotSupervisor manages the lifecycle, configuration synchronization, and background state of all active Discord bot instances.
@@ -128,7 +127,6 @@ func (s *BotSupervisor) Stop(ctx context.Context) error {
 	for id, state := range s.instances {
 		if state.Status != StatusStopping {
 			state.Status = StatusStopping
-			state.StopWG.Add(1)
 			s.bgWG.Add(1)
 
 			instanceID := id
@@ -271,7 +269,6 @@ func (s *BotSupervisor) onConfigChanged(ctx context.Context, oldCfg, newCfg *fil
 		if exists && state.Status != StatusStopping {
 			s.log().Info("Planned instance shutdown triggered by token removal", slog.String("botInstanceID", id))
 			state.Status = StatusStopping
-			state.StopWG.Add(1)
 			s.bgWG.Add(1)
 			s.mu.Unlock()
 
@@ -304,7 +301,6 @@ func (s *BotSupervisor) onConfigChanged(ctx context.Context, oldCfg, newCfg *fil
 					s.log().Info("Planned instance shutdown triggered by capability change", slog.String("botInstanceID", id))
 				}
 				state.Status = StatusStopping
-				state.StopWG.Add(1)
 				s.bgWG.Add(1)
 				scheduleStop = true
 			}
@@ -471,8 +467,6 @@ func (s *BotSupervisor) onConfigChanged(ctx context.Context, oldCfg, newCfg *fil
 }
 
 func (s *BotSupervisor) executeStopAndRemove(ctx context.Context, id string, state *botInstanceState) error {
-	defer state.StopWG.Done()
-
 	stopCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
@@ -539,7 +533,6 @@ func (s *BotSupervisor) awaitStopAndStart(id, token, status string, oldState *bo
 		Token:         token,
 		DiscordStatus: status,
 		Status:        StatusStarting,
-		StopWG:        &sync.WaitGroup{},
 	}
 	s.instances[id] = newState
 	s.mu.Unlock()
@@ -622,10 +615,12 @@ func (s *BotSupervisor) startBotInstanceBackground(instanceID, token, status str
 		}
 		sleepTime := time.Duration(delay) + time.Duration(rand.Float64()*delay*0.2)
 
+		timer := time.NewTimer(sleepTime)
 		select {
 		case <-s.ctx.Done():
+			timer.Stop()
 			return
-		case <-time.After(sleepTime):
+		case <-timer.C:
 		}
 	}
 

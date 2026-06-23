@@ -5,6 +5,7 @@ import (
 	stdErrors "errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -323,9 +324,7 @@ func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskO
 	}
 	if opts.runtimeResolver != nil {
 		controlServer.SetKnownBotInstanceIDs(
-			knownBotInstanceCatalogSlice(
-				knownBotInstanceCatalog(opts.runtimeResolver.getRuntimes(), nil),
-			),
+			slices.Collect(knownBotInstanceCatalogSeq(opts.runtimeResolver.getRuntimes(), nil)),
 		)
 	}
 	controlServer.SetQOTDService(opts.qotdService)
@@ -426,14 +425,13 @@ var (
 	shutdownBotRuntimeFn   = shutdownBotRuntime
 )
 
-// ResolveRuntimeStartupParallelism calculates the optimal concurrency limit for initial runtime setup based on instance count.
+// ResolveRuntimeStartupParallelism calculates the optimal concurrency limit.
 func ResolveRuntimeStartupParallelism(runtimeCount int) int {
-	switch {
-	case runtimeCount <= 1:
+	if runtimeCount <= 1 {
 		return 1
-	case runtimeCount == 2:
+	} else if runtimeCount == 2 {
 		return 2
-	default:
+	} else {
 		return 3
 	}
 }
@@ -462,12 +460,11 @@ func ResolveStartupLightParallelism(runtimeCount int) int {
 
 // ResolveStartupLightQueueSize determines the maximum queued capacity for light startup operations.
 func ResolveStartupLightQueueSize(runtimeCount int) int {
-	switch {
-	case runtimeCount <= 1:
+	if runtimeCount <= 1 {
 		return 4
-	case runtimeCount == 2:
+	} else if runtimeCount == 2 {
 		return 6
-	default:
+	} else {
 		return runtimeCount * 2
 	}
 }

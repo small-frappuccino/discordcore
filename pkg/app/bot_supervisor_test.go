@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"fmt"
-	"sync"
 	"sync/atomic"
 
 	"github.com/diamondburned/arikawa/v3/discord"
@@ -54,7 +53,7 @@ func TestSupervisorFaultIsolation(t *testing.T) {
 	cfg := files.BotConfig{
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
-				Monitoring: func(b bool) *bool { return &b }(false),
+				Monitoring: new(false),
 			},
 		},
 		Guilds: []files.GuildConfig{
@@ -223,7 +222,7 @@ func TestSupervisorSwarmTopology(t *testing.T) {
 	cfg := files.BotConfig{
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
-				Monitoring: func(b bool) *bool { return &b }(false),
+				Monitoring: new(false),
 			},
 		},
 		Guilds: []files.GuildConfig{
@@ -302,7 +301,7 @@ func TestSupervisorConfigChange(t *testing.T) {
 	cfg := files.BotConfig{
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
-				Monitoring: func(b bool) *bool { return &b }(false),
+				Monitoring: new(false),
 			},
 		},
 		Guilds: []files.GuildConfig{
@@ -534,7 +533,6 @@ func TestBotSupervisor_GracefulShutdownOrchestration(t *testing.T) {
 		Token:         "dead_token",
 		DiscordStatus: "online",
 		Status:        StatusRunning,
-		StopWG:        &sync.WaitGroup{},
 	}
 	supervisor.mu.Unlock()
 
@@ -554,4 +552,27 @@ func TestBotSupervisor_GracefulShutdownOrchestration(t *testing.T) {
 	// We no longer assert that the instance remains in the map, because
 	// executeStopAndRemove is also canceled by the same context and cleans up
 	// concurrently, creating an inherent race condition in the test assertions.
+}
+
+func TestBotSupervisor_StopMemoryBarrier(t *testing.T) {
+	cfgManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	supervisor := NewBotSupervisor(cfgManager, botRuntimeOptions{})
+
+	_ = supervisor.serviceManager.RegisterAndStart("bot-runtime-zombie_instance", &mockBlockingServiceWrapper{done: make(chan struct{})})
+
+	supervisor.mu.Lock()
+	supervisor.instances["zombie_instance"] = &botInstanceState{
+		Status: StatusRunning,
+	}
+	supervisor.mu.Unlock()
+
+	// Injeta um timeout absoluto minúsculo para forçar a avaliação do select
+	// e avaliar se a barreira secundária do errgroup gera vazamento.
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
+	defer cancel()
+
+	err := supervisor.Stop(ctx)
+	if err == nil {
+		t.Fatal("Execution anomaly: Expected context deadline exceeded error due to strict memory barrier blocking")
+	}
 }

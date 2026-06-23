@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"iter"
 	"log/slog"
 	"sort"
 	"strings"
@@ -325,36 +326,34 @@ func (r *botRuntimeResolver) swapRuntimes(newMap map[string]*botRuntime) {
 	r.runtimes.Store(&newMap)
 }
 
-func knownBotInstanceCatalog(runtimes map[string]*botRuntime, additional []string) map[string]struct{} {
-	known := make(map[string]struct{}, len(runtimes)+len(additional))
-	for botInstanceID := range runtimes {
-		normalizedBotInstanceID := files.NormalizeBotInstanceID(botInstanceID)
-		if normalizedBotInstanceID == "" {
-			continue
+func knownBotInstanceCatalogSeq(runtimes map[string]*botRuntime, additional []string) iter.Seq[string] {
+	return func(yield func(string) bool) {
+		known := make(map[string]struct{})
+		for botInstanceID := range runtimes {
+			normalizedBotInstanceID := files.NormalizeBotInstanceID(botInstanceID)
+			if normalizedBotInstanceID == "" {
+				continue
+			}
+			if _, ok := known[normalizedBotInstanceID]; !ok {
+				known[normalizedBotInstanceID] = struct{}{}
+				if !yield(normalizedBotInstanceID) {
+					return
+				}
+			}
 		}
-		known[normalizedBotInstanceID] = struct{}{}
-	}
-	for _, botInstanceID := range additional {
-		normalizedBotInstanceID := files.NormalizeBotInstanceID(botInstanceID)
-		if normalizedBotInstanceID == "" {
-			continue
+		for _, botInstanceID := range additional {
+			normalizedBotInstanceID := files.NormalizeBotInstanceID(botInstanceID)
+			if normalizedBotInstanceID == "" {
+				continue
+			}
+			if _, ok := known[normalizedBotInstanceID]; !ok {
+				known[normalizedBotInstanceID] = struct{}{}
+				if !yield(normalizedBotInstanceID) {
+					return
+				}
+			}
 		}
-		known[normalizedBotInstanceID] = struct{}{}
 	}
-
-	return known
-}
-
-func knownBotInstanceCatalogSlice(catalog map[string]struct{}) []string {
-	if len(catalog) == 0 {
-		return nil
-	}
-	out := make([]string, 0, len(catalog))
-	for botInstanceID := range catalog {
-		out = append(out, botInstanceID)
-	}
-	sort.Strings(out)
-	return out
 }
 
 func newBotRuntimeResolver(configManager *files.ConfigManager, initialRuntimes map[string]*botRuntime) *botRuntimeResolver {

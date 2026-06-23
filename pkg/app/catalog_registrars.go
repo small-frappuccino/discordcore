@@ -71,19 +71,22 @@ func (c CommandCatalogCapabilities) String() string {
 		return "CapNone"
 	}
 
+	// Alinhamento estrito para escaneabilidade e determinismo absoluto
 	var parts []string
-	flags := map[CommandCatalogCapabilities]string{
-		CapStats:          "CapStats",
-		CapBanMembers:     "CapBanMembers",
-		CapKickMembers:    "CapKickMembers",
-		CapManageMessages: "CapManageMessages",
-		CapQOTDAdmin:      "CapQOTDAdmin",
+	if c.Has(CapStats) {
+		parts = append(parts, "CapStats")
 	}
-
-	for flag, name := range flags {
-		if c.Has(flag) {
-			parts = append(parts, name)
-		}
+	if c.Has(CapBanMembers) {
+		parts = append(parts, "CapBanMembers")
+	}
+	if c.Has(CapKickMembers) {
+		parts = append(parts, "CapKickMembers")
+	}
+	if c.Has(CapManageMessages) {
+		parts = append(parts, "CapManageMessages")
+	}
+	if c.Has(CapQOTDAdmin) {
+		parts = append(parts, "CapQOTDAdmin")
 	}
 
 	if len(parts) == 0 {
