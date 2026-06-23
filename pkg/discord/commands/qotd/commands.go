@@ -2,7 +2,6 @@ package qotd
 
 import (
 	"fmt"
-	"runtime/debug"
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
@@ -36,7 +35,7 @@ func (h *CommandHandler) HandleInteraction(ev *gateway.InteractionCreateEvent) {
 	// Defend the gateway from any panics that occur during command handling.
 	defer func() {
 		if r := recover(); r != nil {
-			log.ApplicationLogger().Error("QOTD command handler panic", "panic", r, "stack", string(debug.Stack()))
+			log.ApplicationLogger().Error("QOTD command handler panic", "panic", r, "stack", log.LazyStackTrace{})
 			// Respond with an ephemeral error if possible. We do this best-effort.
 			data := api.InteractionResponse{
 				Type: api.MessageInteractionWithSource,

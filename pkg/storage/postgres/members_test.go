@@ -202,3 +202,212 @@ func TestStore_Members_Idempotency_And_Temporal_Precedence(t *testing.T) {
 		t.Errorf("there were unfulfilled expectations: %s", err)
 	}
 }
+
+func TestStore_Members_UserPreferences(t *testing.T) {
+	t.Run("success GetUserPreferences", func(t *testing.T) {
+		mock, _ := pgxmock.NewPool()
+		defer mock.Close()
+		store, _ := NewStore(mock, nil)
+
+		rows := pgxmock.NewRows([]string{"user_id", "theme", "timezone"}).
+			AddRow("u1", "dark", "EST")
+
+		mock.ExpectQuery(`SELECT user_id, theme, timezone FROM user_preferences`).
+			WithArgs("u1").
+			WillReturnRows(rows)
+
+		prefs, err := store.GetUserPreferences(context.Background(), "u1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if prefs.Theme != "dark" || prefs.Timezone != "EST" {
+			t.Errorf("unexpected preferences: %+v", prefs)
+		}
+	})
+
+	t.Run("defaults when GetUserPreferences ErrNoRows", func(t *testing.T) {
+		mock, _ := pgxmock.NewPool()
+		defer mock.Close()
+		store, _ := NewStore(mock, nil)
+
+		mock.ExpectQuery(`SELECT user_id, theme, timezone FROM user_preferences`).
+			WithArgs("u1").
+			WillReturnError(pgx.ErrNoRows)
+
+		prefs, err := store.GetUserPreferences(context.Background(), "u1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if prefs.Theme != "system" || prefs.Timezone != "UTC" {
+			t.Errorf("unexpected preferences: %+v", prefs)
+		}
+	})
+
+	t.Run("error GetUserPreferences", func(t *testing.T) {
+		mock, _ := pgxmock.NewPool()
+		defer mock.Close()
+		store, _ := NewStore(mock, nil)
+
+		mock.ExpectQuery(`SELECT user_id, theme, timezone FROM user_preferences`).
+			WithArgs("u1").
+			WillReturnError(errors.New("db error"))
+
+		_, err := store.GetUserPreferences(context.Background(), "u1")
+		if err == nil {
+			t.Error("expected error, got nil")
+		}
+	})
+
+	t.Run("success UpdateUserPreferences", func(t *testing.T) {
+		mock, _ := pgxmock.NewPool()
+		defer mock.Close()
+		store, _ := NewStore(mock, nil)
+
+		prefs := &members.UserPreferences{
+			UserID:   "u1",
+			Theme:    "light",
+			Timezone: "PST",
+		}
+
+		mock.ExpectExec(`INSERT INTO user_preferences`).
+			WithArgs("u1", "light", "PST").
+			WillReturnResult(pgxmock.NewResult("INSERT", 1))
+
+		err := store.UpdateUserPreferences(context.Background(), prefs)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+}
+
+func TestStore_Members_UpsertMemberJoinContext(t *testing.T) {
+	t.Run("empty validation", func(t *testing.T) {
+		mock, _ := pgxmock.NewPool()
+		defer mock.Close()
+		store, _ := NewStore(mock, nil)
+
+		err := store.UpsertMemberJoinContext(context.Background(), "", "", time.Now())
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		mock, _ := pgxmock.NewPool()
+		defer mock.Close()
+		store, _ := NewStore(mock, nil)
+
+		now := time.Now()
+		mock.ExpectExec(`INSERT INTO member_joins`).
+			WithArgs("g1", "u1", now.UTC(), pgxmock.AnyArg()).
+			WillReturnResult(pgxmock.NewResult("INSERT", 1))
+
+		err := store.UpsertMemberJoinContext(context.Background(), "g1", "u1", now)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+}
+
+func TestStore_Members_GetActiveGuildMemberStatesContext(t *testing.T) {
+	t.Run("empty validation", func(t *testing.T) {
+		mock, _ := pgxmock.NewPool()
+		defer mock.Close()
+		store, _ := NewStore(mock, nil)
+
+		seq := store.GetActiveGuildMemberStatesContext(context.Background(), "")
+		for range seq {
+			t.Error("expected no output")
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		mock, _ := pgxmock.NewPool()
+		defer mock.Close()
+		store, _ := NewStore(mock, nil)
+
+		now := time.Now()
+		lastSeen := now.Add(time.Minute)
+		isBot := false
+		role1 := "role1"
+		role2 := "role2"
+
+		rows := pgxmock.NewRows([]string{"user_id", "joined_at", "last_seen_at", "is_bot", "role_id"}).
+			AddRow("1", now, &lastSeen, &isBot, &role1).
+			AddRow("1", now, &lastSeen, &isBot, &role2).
+			AddRow("2", now, nil, nil, nil)
+
+		mock.ExpectQuery(`SELECT mj\.user_id`).
+			WithArgs("g1").
+			WillReturnRows(rows)
+
+		seq := store.GetActiveGuildMemberStatesContext(context.Background(), "g1")
+		var results []members.CurrentState
+		for state, err := range seq {
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			results = append(results, state)
+		}
+
+		if len(results) != 2 {
+			t.Fatalf("expected 2 states, got %d", len(results))
+		}
+		if results[0].UserID != "1" || len(results[0].Roles) != 2 || results[0].Roles[0] != "role1" || results[0].Roles[1] != "role2" {
+			t.Errorf("unexpected state 1: %+v", results[0])
+		}
+		if results[1].UserID != "2" || len(results[1].Roles) != 0 || results[1].HasBot {
+			t.Errorf("unexpected state 2: %+v", results[1])
+		}
+	})
+
+	t.Run("query error", func(t *testing.T) {
+		mock, _ := pgxmock.NewPool()
+		defer mock.Close()
+		store, _ := NewStore(mock, nil)
+
+		mock.ExpectQuery(`SELECT mj\.user_id`).
+			WillReturnError(errors.New("db error"))
+
+		seq := store.GetActiveGuildMemberStatesContext(context.Background(), "g1")
+		for _, err := range seq {
+			if err == nil {
+				t.Error("expected error from iterator")
+			}
+		}
+	})
+}
+
+func TestStore_Members_MarkMemberLeftContext(t *testing.T) {
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	store, _ := NewStore(mock, nil)
+
+	now := time.Now()
+	mock.ExpectExec(`UPDATE member_joins SET left_at =`).
+		WithArgs(now, "g1", "u1").
+		WillReturnResult(pgxmock.NewResult("UPDATE", 1))
+
+	err := store.MarkMemberLeftContext(context.Background(), "g1", "u1", now)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestStore_Members_UpsertMemberRoles(t *testing.T) {
+	mock, _ := pgxmock.NewPool()
+	defer mock.Close()
+	store, _ := NewStore(mock, nil)
+
+	now := time.Now()
+	roles := []string{"role1", "role2"}
+
+	mock.ExpectExec(`UPDATE member_current`).
+		WithArgs(roles, now, "g1", "u1").
+		WillReturnResult(pgxmock.NewResult("UPDATE", 1))
+
+	err := store.UpsertMemberRoles("g1", "u1", roles, now)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}

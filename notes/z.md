@@ -3,1565 +3,1558 @@
 ?   	github.com/small-frappuccino/discordcore/cmd/tsgen	[no test files]
 === RUN   TestBotRuntime_InitializationRouting
 === RUN   TestBotRuntime_InitializationRouting/Exhaustive_Mocking:_All_Features_Enabled
-2026/06/23 14:18:06 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
-2026/06/23 14:18:06 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:06 INFO Logging bot runtime capability activated guild_id=g1 bot_instance_id=main intents_mask=2131459
-2026/06/23 14:18:06 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=main concurrency_budget=8
-2026/06/23 14:18:06 INFO Service registered service=messages type=messages priority=5 dependencies=[]
-2026/06/23 14:18:06 INFO Service registered service=member_events_main type=monitoring priority=5 dependencies=[]
-2026/06/23 14:18:06 INFO Service registered service=discord_automod_adapter type=automod priority=5 dependencies=[]
-2026/06/23 14:18:06 INFO Architectural state transition: QOTD runtime initialized botInstanceID=main
-2026/06/23 14:18:06 INFO Service registered service=qotd type=monitoring priority=5 dependencies=[]
-2026/06/23 14:18:06 INFO Registered DiscordGo event handlers for stats
-2026/06/23 14:18:06 INFO Service registered service=stats type=monitoring priority=1 dependencies=[]
-2026/06/23 14:18:06 INFO Service registered service=command-handler type=commands priority=5 dependencies=[]
-2026/06/23 14:18:06 INFO Architectural state transition: Executing planned shutdown across main runtime instances botInstanceID=main
-2026/06/23 14:18:06 INFO Stopping all services...
-2026/06/23 14:18:06 INFO All services stopped successfully
+2026/06/23 15:54:34 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
+2026/06/23 15:54:34 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:34 INFO Logging bot runtime capability activated guild_id=g1 bot_instance_id=main intents_mask=2131459
+2026/06/23 15:54:34 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=main concurrency_budget=8
+2026/06/23 15:54:34 INFO Service registered service=messages type=messages priority=5 dependencies=[]
+2026/06/23 15:54:34 INFO Service registered service=member_events_main type=monitoring priority=5 dependencies=[]
+2026/06/23 15:54:34 INFO Service registered service=discord_automod_adapter type=automod priority=5 dependencies=[]
+2026/06/23 15:54:34 INFO Architectural state transition: QOTD runtime initialized botInstanceID=main
+2026/06/23 15:54:34 INFO Service registered service=qotd type=monitoring priority=5 dependencies=[]
+2026/06/23 15:54:34 INFO Registered DiscordGo event handlers for stats
+2026/06/23 15:54:34 INFO Service registered service=stats type=monitoring priority=1 dependencies=[]
+2026/06/23 15:54:34 INFO Service registered service=command-handler type=commands priority=5 dependencies=[]
+2026/06/23 15:54:34 INFO Architectural state transition: Executing planned shutdown across main runtime instances botInstanceID=main
+2026/06/23 15:54:34 INFO Stopping all services...
+2026/06/23 15:54:34 INFO All services stopped successfully
 === RUN   TestBotRuntime_InitializationRouting/Routing_Disabled_Features_Yields_Idle_Core
-2026/06/23 14:18:06 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
-2026/06/23 14:18:06 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:06 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=main concurrency_budget=8
-2026/06/23 14:18:06 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=main
-2026/06/23 14:18:06 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=main
-2026/06/23 14:18:06 INFO Architectural state transition: Executing planned shutdown across main runtime instances botInstanceID=main
-2026/06/23 14:18:06 INFO Stopping all services...
-2026/06/23 14:18:06 INFO All services stopped successfully
---- PASS: TestBotRuntime_InitializationRouting (0.01s)
-    --- PASS: TestBotRuntime_InitializationRouting/Exhaustive_Mocking:_All_Features_Enabled (0.01s)
+2026/06/23 15:54:34 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
+2026/06/23 15:54:34 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:34 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=main concurrency_budget=8
+2026/06/23 15:54:34 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=main
+2026/06/23 15:54:34 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=main
+2026/06/23 15:54:34 INFO Architectural state transition: Executing planned shutdown across main runtime instances botInstanceID=main
+2026/06/23 15:54:34 INFO Stopping all services...
+2026/06/23 15:54:34 INFO All services stopped successfully
+--- PASS: TestBotRuntime_InitializationRouting (0.00s)
+    --- PASS: TestBotRuntime_InitializationRouting/Exhaustive_Mocking:_All_Features_Enabled (0.00s)
     --- PASS: TestBotRuntime_InitializationRouting/Routing_Disabled_Features_Yields_Idle_Core (0.00s)
 === RUN   TestBotRuntime_CapabilityBitmaskDerivation
 === PAUSE TestBotRuntime_CapabilityBitmaskDerivation
 === RUN   TestBotRuntimeResolver_ConcurrentMemoryRotation
 === PAUSE TestBotRuntimeResolver_ConcurrentMemoryRotation
 === RUN   TestBotRuntimeResolver_WaitBarrierOrchestration
-2026/06/23 14:18:06 INFO Architectural state transition: Initializing memory barrier for bot runtime multiplexing initial_runtimes_count=0
-2026/06/23 14:18:06 INFO Architectural state transition: Initializing memory barrier for bot runtime multiplexing initial_runtimes_count=0
-2026/06/23 14:18:06 INFO Architectural state transition: Runtime resolver marked ready, unlocking dependent initialization pipelines
---- PASS: TestBotRuntimeResolver_WaitBarrierOrchestration (0.10s)
+2026/06/23 15:54:34 INFO Architectural state transition: Initializing memory barrier for bot runtime multiplexing initial_runtimes_count=0
+2026/06/23 15:54:34 INFO Architectural state transition: Initializing memory barrier for bot runtime multiplexing initial_runtimes_count=0
+2026/06/23 15:54:34 INFO Architectural state transition: Runtime resolver marked ready, unlocking dependent initialization pipelines
+--- PASS: TestBotRuntimeResolver_WaitBarrierOrchestration (0.07s)
 === RUN   TestSupervisorFaultIsolation
-2026/06/23 14:18:06 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
-2026/06/23 14:18:06 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:06 INFO Architectural state transition: Startup task orchestrator instantiated runtime_count_heuristic=3
-2026/06/23 14:18:06 INFO Architectural state transition: Background worker pool initialized parallelism_limit=4 queue_capacity=6
-2026/06/23 14:18:06 INFO Architectural state transition: Background worker pool initialized parallelism_limit=2 queue_capacity=3
-2026/06/23 14:18:06 INFO Architectural state transition: Initializing memory barrier for bot runtime multiplexing initial_runtimes_count=0
-2026/06/23 14:18:06 INFO Initializing primary routines of BotSupervisor component=BotSupervisor
-2026/06/23 14:18:06 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=child3
-2026/06/23 14:18:06 WARN Instance authentication compromised, triggering token revocation botInstanceID=child3 error="open discord session for child3: HTTP 401 Unauthorized"
-2026/06/23 14:18:06 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:06 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:06 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=child2
-2026/06/23 14:18:06 INFO Planned instance shutdown triggered by token removal botInstanceID=child3
-2026/06/23 14:18:06 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=child1
-2026/06/23 14:18:06 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=child1 botUser=test#
-2026/06/23 14:18:06 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=child1 concurrency_budget=8
-2026/06/23 14:18:06 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=child1
-2026/06/23 14:18:06 INFO Service registered service=command-handler type=commands priority=5 dependencies=[]
-2026/06/23 14:18:06 INFO Starting service... service=bot-runtime-child1
-2026/06/23 14:18:06 INFO Starting all services...
-2026/06/23 14:18:06 INFO Starting service... service=command-handler
-2026/06/23 14:18:06 INFO Starting primary routine of CommandHandler botInstanceID=""
-2026/06/23 14:18:06 INFO Starting command and route coupling botInstanceID=""
-2026/06/23 14:18:06 WARN command synchronization failed at initialization; operating in degraded state botInstanceID="" err="cannot setup commands: session user state is missing"
-2026/06/23 14:18:06 INFO Service started successfully service=command-handler
-2026/06/23 14:18:06 INFO All services started successfully services_count=1
-2026/06/23 14:18:06 INFO executeStopAndRemove DELETING instance id=child3
-2026/06/23 14:18:06 INFO Triggering planned shutdown of main BotSupervisor instances
-2026/06/23 14:18:06 INFO executeStopAndRemove DELETING instance id=child2
-2026/06/23 14:18:06 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=child1
-2026/06/23 14:18:06 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=child1 botUser=test#
-2026/06/23 14:18:06 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=child1 concurrency_budget=8
-2026/06/23 14:18:06 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=child1
-2026/06/23 14:18:06 INFO Service registered service=command-handler type=commands priority=5 dependencies=[]
-2026/06/23 14:18:06 WARN Service manager memory conflict detected; executing forceful override botInstanceID=child1
-2026/06/23 14:18:06 INFO Service started successfully service=bot-runtime-child1
-2026/06/23 14:18:06 INFO Load summary initialized guilds_count=1
-2026/06/23 14:18:06 INFO executeStopAndRemove SKIPPING deletion: pointer mismatch id=child1
-2026/06/23 14:18:06 INFO Architectural state transition: Runtime resolver marked ready, unlocking dependent initialization pipelines
-2026/06/23 14:18:06 INFO Starting service... service=bot-runtime-child1
-2026/06/23 14:18:06 INFO Starting all services...
-2026/06/23 14:18:06 INFO Starting service... service=command-handler
-2026/06/23 14:18:06 INFO Starting primary routine of CommandHandler botInstanceID=""
-2026/06/23 14:18:06 INFO Starting command and route coupling botInstanceID=""
-2026/06/23 14:18:06 WARN command synchronization failed at initialization; operating in degraded state botInstanceID="" err="cannot setup commands: session user state is missing"
-2026/06/23 14:18:06 INFO Service started successfully service=command-handler
-2026/06/23 14:18:06 INFO All services started successfully services_count=1
-2026/06/23 14:18:06 INFO Load summary initialized guilds_count=1
-2026/06/23 14:18:06 INFO Service started successfully service=bot-runtime-child1
-2026/06/23 14:18:06 INFO Architectural state transition: Halting startup orchestrator and draining worker pools
-2026/06/23 14:18:07 WARN Handshake failure with guild interface reported by central hub guildID=g1
-2026/06/23 14:18:07 WARN Handshake failure with guild interface reported by central hub guildID=g1
---- PASS: TestSupervisorFaultIsolation (1.00s)
+2026/06/23 15:54:34 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
+2026/06/23 15:54:34 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:34 INFO Architectural state transition: Startup task orchestrator instantiated runtime_count_heuristic=3
+2026/06/23 15:54:34 INFO Architectural state transition: Background worker pool initialized parallelism_limit=4 queue_capacity=6
+2026/06/23 15:54:34 INFO Architectural state transition: Background worker pool initialized parallelism_limit=2 queue_capacity=3
+2026/06/23 15:54:34 INFO Architectural state transition: Initializing memory barrier for bot runtime multiplexing initial_runtimes_count=0
+2026/06/23 15:54:34 INFO Initializing primary routines of BotSupervisor component=BotSupervisor
+2026/06/23 15:54:34 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=child1
+2026/06/23 15:54:34 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=child2
+2026/06/23 15:54:34 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=child1 botUser=test#
+2026/06/23 15:54:34 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=child1 concurrency_budget=8
+2026/06/23 15:54:34 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=child1
+2026/06/23 15:54:34 INFO Service registered service=command-handler type=commands priority=5 dependencies=[]
+2026/06/23 15:54:34 INFO Starting service... service=bot-runtime-child1
+2026/06/23 15:54:34 INFO Starting all services...
+2026/06/23 15:54:34 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=child3
+2026/06/23 15:54:34 INFO Starting service... service=command-handler
+2026/06/23 15:54:34 INFO Starting primary routine of CommandHandler botInstanceID=""
+2026/06/23 15:54:34 INFO Starting command and route coupling botInstanceID=""
+2026/06/23 15:54:34 WARN command synchronization failed at initialization; operating in degraded state botInstanceID="" err="cannot setup commands: session user state is missing"
+2026/06/23 15:54:34 WARN Instance authentication compromised, triggering token revocation botInstanceID=child3 error="open discord session for child3: HTTP 401 Unauthorized"
+2026/06/23 15:54:34 INFO Service started successfully service=command-handler
+2026/06/23 15:54:34 INFO All services started successfully services_count=1
+2026/06/23 15:54:34 INFO Service started successfully service=bot-runtime-child1
+2026/06/23 15:54:34 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:34 INFO Load summary initialized guilds_count=1
+2026/06/23 15:54:34 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:34 INFO Planned instance shutdown triggered by token removal botInstanceID=child3
+2026/06/23 15:54:34 INFO Architectural state transition: Runtime resolver marked ready, unlocking dependent initialization pipelines
+2026/06/23 15:54:34 INFO executeStopAndRemove DELETING instance id=child3
+2026/06/23 15:54:34 INFO Triggering planned shutdown of main BotSupervisor instances
+2026/06/23 15:54:34 INFO executeStopAndRemove DELETING instance id=child2
+2026/06/23 15:54:34 INFO Stopping service... service=bot-runtime-child1
+2026/06/23 15:54:34 INFO Architectural state transition: Executing planned shutdown across main runtime instances botInstanceID=child1
+2026/06/23 15:54:34 INFO Stopping all services...
+2026/06/23 15:54:34 INFO Stopping service... service=command-handler
+2026/06/23 15:54:34 INFO Stopping main instances of CommandHandler botInstanceID=""
+2026/06/23 15:54:34 INFO Starting connection drain and shutdown of CommandHandler botInstanceID=""
+2026/06/23 15:54:34 INFO Service stopped successfully service=command-handler
+2026/06/23 15:54:34 INFO All services stopped successfully
+2026/06/23 15:54:34 INFO Service stopped service=bot-runtime-child1
+2026/06/23 15:54:34 INFO executeStopAndRemove DELETING instance id=child1
+2026/06/23 15:54:34 INFO Architectural state transition: Halting startup orchestrator and draining worker pools
+2026/06/23 15:54:42 WARN Handshake failure with guild interface reported by central hub guildID=g1
+--- PASS: TestSupervisorFaultIsolation (8.21s)
 === RUN   TestZeroStateIdling
-2026/06/23 14:18:07 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:07 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:07 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:07 INFO Architectural state transition: Startup task orchestrator instantiated runtime_count_heuristic=1
-2026/06/23 14:18:07 INFO Architectural state transition: Background worker pool initialized parallelism_limit=2 queue_capacity=4
-2026/06/23 14:18:07 INFO Architectural state transition: Background worker pool initialized parallelism_limit=1 queue_capacity=1
-2026/06/23 14:18:07 INFO Architectural state transition: Initializing memory barrier for bot runtime multiplexing initial_runtimes_count=0
-2026/06/23 14:18:07 INFO Initializing primary routines of BotSupervisor component=BotSupervisor
-2026/06/23 14:18:07 INFO Architectural state transition: Runtime resolver marked ready, unlocking dependent initialization pipelines
-2026/06/23 14:18:07 INFO Triggering planned shutdown of main BotSupervisor instances
-2026/06/23 14:18:07 INFO Architectural state transition: Halting startup orchestrator and draining worker pools
+2026/06/23 15:54:42 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:42 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:42 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:42 INFO Architectural state transition: Startup task orchestrator instantiated runtime_count_heuristic=1
+2026/06/23 15:54:42 INFO Architectural state transition: Background worker pool initialized parallelism_limit=2 queue_capacity=4
+2026/06/23 15:54:42 INFO Architectural state transition: Background worker pool initialized parallelism_limit=1 queue_capacity=1
+2026/06/23 15:54:42 INFO Architectural state transition: Initializing memory barrier for bot runtime multiplexing initial_runtimes_count=0
+2026/06/23 15:54:42 INFO Initializing primary routines of BotSupervisor component=BotSupervisor
+2026/06/23 15:54:42 INFO Architectural state transition: Runtime resolver marked ready, unlocking dependent initialization pipelines
+2026/06/23 15:54:42 INFO Triggering planned shutdown of main BotSupervisor instances
+2026/06/23 15:54:42 INFO Architectural state transition: Halting startup orchestrator and draining worker pools
 --- PASS: TestZeroStateIdling (0.06s)
 === RUN   TestSupervisorSwarmTopology
-2026/06/23 14:18:07 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
-2026/06/23 14:18:07 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:07 INFO Architectural state transition: Startup task orchestrator instantiated runtime_count_heuristic=10
-2026/06/23 14:18:07 INFO Architectural state transition: Background worker pool initialized parallelism_limit=4 queue_capacity=20
-2026/06/23 14:18:07 INFO Architectural state transition: Background worker pool initialized parallelism_limit=2 queue_capacity=10
-2026/06/23 14:18:07 INFO Architectural state transition: Initializing memory barrier for bot runtime multiplexing initial_runtimes_count=0
-2026/06/23 14:18:07 INFO Initializing primary routines of BotSupervisor component=BotSupervisor
-2026/06/23 14:18:07 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=childI
-2026/06/23 14:18:07 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=childI botUser=test#
-2026/06/23 14:18:07 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=childI concurrency_budget=8
-2026/06/23 14:18:07 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=childI
-2026/06/23 14:18:07 INFO Service registered service=command-handler type=commands priority=5 dependencies=[]
-2026/06/23 14:18:07 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=childE
-2026/06/23 14:18:07 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=childE botUser=test#
-2026/06/23 14:18:07 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=childE concurrency_budget=8
-2026/06/23 14:18:07 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=childE
-2026/06/23 14:18:07 INFO Service registered service=command-handler type=commands priority=5 dependencies=[]
-2026/06/23 14:18:07 INFO Starting service... service=bot-runtime-childI
-2026/06/23 14:18:07 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=childB
-2026/06/23 14:18:07 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=childB botUser=test#
-2026/06/23 14:18:07 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=childB concurrency_budget=8
-2026/06/23 14:18:07 INFO Starting service... service=bot-runtime-childE
-2026/06/23 14:18:07 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=childB
-2026/06/23 14:18:07 INFO Starting all services...
-2026/06/23 14:18:07 INFO Service registered service=command-handler type=commands priority=5 dependencies=[]
-2026/06/23 14:18:07 INFO Starting service... service=command-handler
-2026/06/23 14:18:07 INFO Starting primary routine of CommandHandler botInstanceID=""
-2026/06/23 14:18:07 INFO Starting command and route coupling botInstanceID=""
-2026/06/23 14:18:07 WARN command synchronization failed at initialization; operating in degraded state botInstanceID="" err="cannot setup commands: session user state is missing"
-2026/06/23 14:18:07 INFO Service started successfully service=command-handler
-2026/06/23 14:18:07 INFO All services started successfully services_count=1
-2026/06/23 14:18:07 INFO Starting all services...
-2026/06/23 14:18:07 INFO Starting service... service=command-handler
-2026/06/23 14:18:07 INFO Starting primary routine of CommandHandler botInstanceID=""
-2026/06/23 14:18:07 INFO Starting command and route coupling botInstanceID=""
-2026/06/23 14:18:07 WARN command synchronization failed at initialization; operating in degraded state botInstanceID="" err="cannot setup commands: session user state is missing"
-2026/06/23 14:18:07 INFO Service started successfully service=command-handler
-2026/06/23 14:18:07 INFO Load summary initialized guilds_count=1
-2026/06/23 14:18:07 INFO Service started successfully service=bot-runtime-childE
-2026/06/23 14:18:07 INFO All services started successfully services_count=1
-2026/06/23 14:18:07 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=childH
-2026/06/23 14:18:07 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=childH botUser=test#
-2026/06/23 14:18:07 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=childH concurrency_budget=8
-2026/06/23 14:18:07 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=childH
-2026/06/23 14:18:07 INFO Service registered service=command-handler type=commands priority=5 dependencies=[]
-2026/06/23 14:18:07 INFO Load summary initialized guilds_count=1
-2026/06/23 14:18:07 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=childD
-2026/06/23 14:18:07 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=childD botUser=test#
-2026/06/23 14:18:07 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=childD concurrency_budget=8
-2026/06/23 14:18:07 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=childD
-2026/06/23 14:18:07 INFO Service registered service=command-handler type=commands priority=5 dependencies=[]
-2026/06/23 14:18:07 INFO Starting service... service=bot-runtime-childH
-2026/06/23 14:18:07 INFO Starting all services...
-2026/06/23 14:18:07 INFO Starting service... service=command-handler
-2026/06/23 14:18:07 INFO Service started successfully service=bot-runtime-childI
-2026/06/23 14:18:07 INFO Starting primary routine of CommandHandler botInstanceID=""
-2026/06/23 14:18:07 INFO Starting service... service=bot-runtime-childD
-2026/06/23 14:18:07 INFO Starting all services...
-2026/06/23 14:18:07 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=childJ
-2026/06/23 14:18:07 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=childJ botUser=test#
-2026/06/23 14:18:07 INFO Starting service... service=command-handler
-2026/06/23 14:18:07 INFO Starting primary routine of CommandHandler botInstanceID=""
-2026/06/23 14:18:07 INFO Starting command and route coupling botInstanceID=""
-2026/06/23 14:18:07 WARN command synchronization failed at initialization; operating in degraded state botInstanceID="" err="cannot setup commands: session user state is missing"
-2026/06/23 14:18:07 INFO Service started successfully service=command-handler
-2026/06/23 14:18:07 INFO All services started successfully services_count=1
-2026/06/23 14:18:07 INFO Service started successfully service=bot-runtime-childD
-2026/06/23 14:18:07 INFO Starting service... service=bot-runtime-childB
-2026/06/23 14:18:07 INFO Starting command and route coupling botInstanceID=""
-2026/06/23 14:18:07 WARN command synchronization failed at initialization; operating in degraded state botInstanceID="" err="cannot setup commands: session user state is missing"
-2026/06/23 14:18:07 INFO Service started successfully service=command-handler
-2026/06/23 14:18:07 INFO All services started successfully services_count=1
-2026/06/23 14:18:07 INFO Load summary initialized guilds_count=1
-2026/06/23 14:18:07 INFO Starting all services...
-2026/06/23 14:18:07 INFO Starting service... service=command-handler
-2026/06/23 14:18:07 INFO Starting primary routine of CommandHandler botInstanceID=""
-2026/06/23 14:18:07 INFO Starting command and route coupling botInstanceID=""
-2026/06/23 14:18:07 WARN command synchronization failed at initialization; operating in degraded state botInstanceID="" err="cannot setup commands: session user state is missing"
-2026/06/23 14:18:07 INFO Service started successfully service=command-handler
-2026/06/23 14:18:07 INFO All services started successfully services_count=1
-2026/06/23 14:18:07 INFO Service started successfully service=bot-runtime-childB
-2026/06/23 14:18:07 INFO Service started successfully service=bot-runtime-childH
-2026/06/23 14:18:07 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=childA
-2026/06/23 14:18:07 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=childA botUser=test#
-2026/06/23 14:18:07 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=childJ concurrency_budget=8
-2026/06/23 14:18:07 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=childJ
-2026/06/23 14:18:07 INFO Service registered service=command-handler type=commands priority=5 dependencies=[]
-2026/06/23 14:18:07 INFO Starting service... service=bot-runtime-childJ
-2026/06/23 14:18:07 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=childG
-2026/06/23 14:18:07 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=childG botUser=test#
-2026/06/23 14:18:07 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=childG concurrency_budget=8
-2026/06/23 14:18:07 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=childG
-2026/06/23 14:18:07 INFO Service registered service=command-handler type=commands priority=5 dependencies=[]
-2026/06/23 14:18:07 INFO Starting all services...
-2026/06/23 14:18:07 INFO Starting service... service=command-handler
-2026/06/23 14:18:07 INFO Starting primary routine of CommandHandler botInstanceID=""
-2026/06/23 14:18:07 INFO Starting command and route coupling botInstanceID=""
-2026/06/23 14:18:07 WARN command synchronization failed at initialization; operating in degraded state botInstanceID="" err="cannot setup commands: session user state is missing"
-2026/06/23 14:18:07 INFO Service started successfully service=command-handler
-2026/06/23 14:18:07 INFO All services started successfully services_count=1
-2026/06/23 14:18:07 INFO Starting service... service=bot-runtime-childG
-2026/06/23 14:18:07 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=childC
-2026/06/23 14:18:07 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=childC botUser=test#
-2026/06/23 14:18:07 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=childC concurrency_budget=8
-2026/06/23 14:18:07 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=childC
-2026/06/23 14:18:07 INFO Service registered service=command-handler type=commands priority=5 dependencies=[]
-2026/06/23 14:18:07 INFO Service started successfully service=bot-runtime-childJ
-2026/06/23 14:18:07 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=childA concurrency_budget=8
-2026/06/23 14:18:07 INFO Starting all services...
-2026/06/23 14:18:07 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=childA
-2026/06/23 14:18:07 INFO Starting service... service=command-handler
-2026/06/23 14:18:07 INFO Starting primary routine of CommandHandler botInstanceID=""
-2026/06/23 14:18:07 INFO Service registered service=command-handler type=commands priority=5 dependencies=[]
-2026/06/23 14:18:07 INFO Starting command and route coupling botInstanceID=""
-2026/06/23 14:18:07 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=childF
-2026/06/23 14:18:07 WARN command synchronization failed at initialization; operating in degraded state botInstanceID="" err="cannot setup commands: session user state is missing"
-2026/06/23 14:18:07 INFO Service started successfully service=command-handler
-2026/06/23 14:18:07 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=childF botUser=test#
-2026/06/23 14:18:07 INFO Starting service... service=bot-runtime-childA
-2026/06/23 14:18:07 INFO All services started successfully services_count=1
-2026/06/23 14:18:07 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=childF concurrency_budget=8
-2026/06/23 14:18:07 INFO Starting all services...
-2026/06/23 14:18:07 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=childF
-2026/06/23 14:18:07 INFO Starting service... service=command-handler
-2026/06/23 14:18:07 INFO Service started successfully service=bot-runtime-childG
-2026/06/23 14:18:07 INFO Service registered service=command-handler type=commands priority=5 dependencies=[]
-2026/06/23 14:18:07 INFO Starting primary routine of CommandHandler botInstanceID=""
-2026/06/23 14:18:07 INFO Starting command and route coupling botInstanceID=""
-2026/06/23 14:18:07 WARN command synchronization failed at initialization; operating in degraded state botInstanceID="" err="cannot setup commands: session user state is missing"
-2026/06/23 14:18:07 INFO Starting service... service=bot-runtime-childF
-2026/06/23 14:18:07 INFO Service started successfully service=command-handler
-2026/06/23 14:18:07 INFO All services started successfully services_count=1
-2026/06/23 14:18:07 INFO Architectural state transition: Runtime resolver marked ready, unlocking dependent initialization pipelines
-2026/06/23 14:18:07 INFO Service started successfully service=bot-runtime-childA
-2026/06/23 14:18:07 INFO Triggering planned shutdown of main BotSupervisor instances
-2026/06/23 14:18:07 WARN Handshake failure with guild interface reported by central hub guildID=g1
-2026/06/23 14:18:07 INFO Load summary initialized guilds_count=1
-2026/06/23 14:18:07 INFO Stopping service... service=bot-runtime-childA
-2026/06/23 14:18:07 INFO Architectural state transition: Executing planned shutdown across main runtime instances botInstanceID=childA
-2026/06/23 14:18:07 INFO Stopping all services...
-2026/06/23 14:18:07 INFO Stopping service... service=bot-runtime-childD
-2026/06/23 14:18:07 INFO Stopping service... service=bot-runtime-childE
-2026/06/23 14:18:07 INFO Architectural state transition: Executing planned shutdown across main runtime instances botInstanceID=childE
-2026/06/23 14:18:07 INFO Stopping service... service=bot-runtime-childH
-2026/06/23 14:18:07 INFO Stopping service... service=command-handler
-2026/06/23 14:18:07 INFO Stopping main instances of CommandHandler botInstanceID=""
-2026/06/23 14:18:07 INFO Starting connection drain and shutdown of CommandHandler botInstanceID=""
-2026/06/23 14:18:07 INFO Service stopped successfully service=command-handler
-2026/06/23 14:18:07 INFO All services stopped successfully
-2026/06/23 14:18:07 INFO Architectural state transition: Executing planned shutdown across main runtime instances botInstanceID=childH
-2026/06/23 14:18:07 INFO Stopping all services...
-2026/06/23 14:18:07 INFO Stopping service... service=command-handler
-2026/06/23 14:18:07 INFO Stopping main instances of CommandHandler botInstanceID=""
-2026/06/23 14:18:07 INFO executeStopAndRemove DELETING instance id=childF
-2026/06/23 14:18:07 INFO Stopping all services...
-2026/06/23 14:18:07 INFO Starting connection drain and shutdown of CommandHandler botInstanceID=""
-2026/06/23 14:18:07 INFO Service stopped successfully service=command-handler
-2026/06/23 14:18:07 INFO All services stopped successfully
-2026/06/23 14:18:07 INFO Stopping service... service=command-handler
-2026/06/23 14:18:07 INFO Load summary initialized guilds_count=1
-2026/06/23 14:18:07 INFO Service stopped service=bot-runtime-childH
-2026/06/23 14:18:07 INFO Stopping service... service=bot-runtime-childG
-2026/06/23 14:18:07 INFO executeStopAndRemove DELETING instance id=childH
-2026/06/23 14:18:07 INFO Service stopped service=bot-runtime-childA
-2026/06/23 14:18:07 INFO Architectural state transition: Executing planned shutdown across main runtime instances botInstanceID=childG
-2026/06/23 14:18:07 INFO Stopping all services...
-2026/06/23 14:18:07 INFO Stopping service... service=command-handler
-2026/06/23 14:18:07 INFO Stopping main instances of CommandHandler botInstanceID=""
-2026/06/23 14:18:07 INFO Starting connection drain and shutdown of CommandHandler botInstanceID=""
-2026/06/23 14:18:07 INFO executeStopAndRemove DELETING instance id=childA
-2026/06/23 14:18:07 INFO Stopping service... service=bot-runtime-childJ
-2026/06/23 14:18:07 INFO Stopping service... service=bot-runtime-childB
-2026/06/23 14:18:07 INFO Starting service... service=bot-runtime-childC
-2026/06/23 14:18:07 INFO Architectural state transition: Executing planned shutdown across main runtime instances botInstanceID=childJ
-2026/06/23 14:18:07 INFO Stopping all services...
-2026/06/23 14:18:07 INFO Architectural state transition: Executing planned shutdown across main runtime instances botInstanceID=childB
-2026/06/23 14:18:07 INFO Stopping all services...
-2026/06/23 14:18:07 INFO executeStopAndRemove DELETING instance id=childC
-2026/06/23 14:18:07 INFO Starting all services...
-2026/06/23 14:18:07 INFO Starting all services...
-2026/06/23 14:18:07 INFO Architectural state transition: Executing planned shutdown across main runtime instances botInstanceID=childD
-2026/06/23 14:18:07 INFO Starting service... service=command-handler
-2026/06/23 14:18:07 INFO Stopping service... service=command-handler
-2026/06/23 14:18:07 INFO Stopping main instances of CommandHandler botInstanceID=""
-2026/06/23 14:18:07 INFO Starting connection drain and shutdown of CommandHandler botInstanceID=""
-2026/06/23 14:18:07 INFO Service stopped successfully service=command-handler
-2026/06/23 14:18:07 INFO All services stopped successfully
-2026/06/23 14:18:07 INFO Starting service... service=command-handler
-2026/06/23 14:18:07 INFO Starting primary routine of CommandHandler botInstanceID=""
-2026/06/23 14:18:07 INFO Starting command and route coupling botInstanceID=""
-2026/06/23 14:18:07 WARN command synchronization failed at initialization; operating in degraded state botInstanceID="" err="cannot setup commands: session user state is missing"
-2026/06/23 14:18:07 INFO Service started successfully service=command-handler
-2026/06/23 14:18:07 INFO All services started successfully services_count=1
-2026/06/23 14:18:07 INFO Service started successfully service=bot-runtime-childF
-2026/06/23 14:18:07 INFO Stopping all services...
-2026/06/23 14:18:07 INFO Stopping service... service=command-handler
-2026/06/23 14:18:07 INFO Stopping main instances of CommandHandler botInstanceID=""
-2026/06/23 14:18:07 INFO Starting connection drain and shutdown of CommandHandler botInstanceID=""
-2026/06/23 14:18:07 INFO Service stopped successfully service=command-handler
-2026/06/23 14:18:07 INFO All services stopped successfully
-2026/06/23 14:18:07 INFO Stopping service... service=bot-runtime-childI
-2026/06/23 14:18:07 INFO Service stopped successfully service=command-handler
-2026/06/23 14:18:07 INFO All services stopped successfully
-2026/06/23 14:18:07 INFO Service stopped service=bot-runtime-childJ
-2026/06/23 14:18:07 INFO Service stopped service=bot-runtime-childG
-2026/06/23 14:18:07 INFO Architectural state transition: Executing planned shutdown across main runtime instances botInstanceID=childI
-2026/06/23 14:18:07 INFO Stopping all services...
-2026/06/23 14:18:07 INFO executeStopAndRemove DELETING instance id=childJ
-2026/06/23 14:18:07 INFO Stopping service... service=command-handler
-2026/06/23 14:18:07 INFO Stopping main instances of CommandHandler botInstanceID=""
-2026/06/23 14:18:07 INFO Starting connection drain and shutdown of CommandHandler botInstanceID=""
-2026/06/23 14:18:07 INFO executeStopAndRemove DELETING instance id=childG
-2026/06/23 14:18:07 INFO Starting primary routine of CommandHandler botInstanceID=""
-2026/06/23 14:18:07 INFO Starting command and route coupling botInstanceID=""
-2026/06/23 14:18:07 WARN command synchronization failed at initialization; operating in degraded state botInstanceID="" err="cannot setup commands: session user state is missing"
-2026/06/23 14:18:07 INFO Service started successfully service=command-handler
-2026/06/23 14:18:07 INFO All services started successfully services_count=1
-2026/06/23 14:18:07 INFO Service stopped service=bot-runtime-childD
-2026/06/23 14:18:07 INFO executeStopAndRemove DELETING instance id=childD
-2026/06/23 14:18:07 INFO Service started successfully service=bot-runtime-childC
-2026/06/23 14:18:07 INFO Stopping service... service=command-handler
-2026/06/23 14:18:07 INFO Stopping main instances of CommandHandler botInstanceID=""
-2026/06/23 14:18:07 INFO Starting connection drain and shutdown of CommandHandler botInstanceID=""
-2026/06/23 14:18:07 INFO Service stopped successfully service=command-handler
-2026/06/23 14:18:07 INFO All services stopped successfully
-2026/06/23 14:18:07 INFO Stopping main instances of CommandHandler botInstanceID=""
-2026/06/23 14:18:07 INFO Starting connection drain and shutdown of CommandHandler botInstanceID=""
-2026/06/23 14:18:07 INFO Service stopped successfully service=command-handler
-2026/06/23 14:18:07 INFO All services stopped successfully
-2026/06/23 14:18:07 INFO Service stopped service=bot-runtime-childB
-2026/06/23 14:18:07 INFO executeStopAndRemove DELETING instance id=childB
-2026/06/23 14:18:07 INFO Service stopped successfully service=command-handler
-2026/06/23 14:18:07 INFO All services stopped successfully
-2026/06/23 14:18:07 INFO Service stopped service=bot-runtime-childE
-2026/06/23 14:18:07 INFO executeStopAndRemove DELETING instance id=childE
-2026/06/23 14:18:07 INFO Service stopped service=bot-runtime-childI
-2026/06/23 14:18:07 INFO executeStopAndRemove DELETING instance id=childI
-2026/06/23 14:18:07 INFO Architectural state transition: Halting startup orchestrator and draining worker pools
-2026/06/23 14:18:07 WARN Handshake failure with guild interface reported by central hub guildID=g1
-2026/06/23 14:18:07 WARN Handshake failure with guild interface reported by central hub guildID=g1
-2026/06/23 14:18:07 INFO Load summary initialized guilds_count=1
-2026/06/23 14:18:07 WARN Handshake failure with guild interface reported by central hub guildID=g1
-2026/06/23 14:18:07 WARN Handshake failure with guild interface reported by central hub guildID=g1
-2026/06/23 14:18:08 WARN Handshake failure with guild interface reported by central hub guildID=g1
-2026/06/23 14:18:08 INFO Load summary initialized guilds_count=1
-2026/06/23 14:18:08 WARN Handshake failure with guild interface reported by central hub guildID=g1
-2026/06/23 14:18:08 INFO Load summary initialized guilds_count=1
-2026/06/23 14:18:08 WARN Handshake failure with guild interface reported by central hub guildID=g1
---- PASS: TestSupervisorSwarmTopology (1.25s)
+2026/06/23 15:54:42 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
+2026/06/23 15:54:42 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:42 INFO Architectural state transition: Startup task orchestrator instantiated runtime_count_heuristic=10
+2026/06/23 15:54:42 INFO Architectural state transition: Background worker pool initialized parallelism_limit=4 queue_capacity=20
+2026/06/23 15:54:42 INFO Architectural state transition: Background worker pool initialized parallelism_limit=2 queue_capacity=10
+2026/06/23 15:54:42 INFO Architectural state transition: Initializing memory barrier for bot runtime multiplexing initial_runtimes_count=0
+2026/06/23 15:54:42 INFO Initializing primary routines of BotSupervisor component=BotSupervisor
+2026/06/23 15:54:42 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=childE
+2026/06/23 15:54:42 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=childE botUser=test#
+2026/06/23 15:54:42 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=childE concurrency_budget=8
+2026/06/23 15:54:42 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=childE
+2026/06/23 15:54:42 INFO Service registered service=command-handler type=commands priority=5 dependencies=[]
+2026/06/23 15:54:42 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=childB
+2026/06/23 15:54:42 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=childB botUser=test#
+2026/06/23 15:54:42 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=childB concurrency_budget=8
+2026/06/23 15:54:42 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=childB
+2026/06/23 15:54:42 INFO Service registered service=command-handler type=commands priority=5 dependencies=[]
+2026/06/23 15:54:42 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=childI
+2026/06/23 15:54:42 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=childI botUser=test#
+2026/06/23 15:54:42 INFO Starting service... service=bot-runtime-childB
+2026/06/23 15:54:42 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=childI concurrency_budget=8
+2026/06/23 15:54:42 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=childI
+2026/06/23 15:54:42 INFO Starting service... service=bot-runtime-childE
+2026/06/23 15:54:42 INFO Starting all services...
+2026/06/23 15:54:42 INFO Starting service... service=command-handler
+2026/06/23 15:54:42 INFO Starting primary routine of CommandHandler botInstanceID=""
+2026/06/23 15:54:42 INFO Starting command and route coupling botInstanceID=""
+2026/06/23 15:54:42 INFO Starting all services...
+2026/06/23 15:54:42 WARN command synchronization failed at initialization; operating in degraded state botInstanceID="" err="cannot setup commands: session user state is missing"
+2026/06/23 15:54:42 INFO Service started successfully service=command-handler
+2026/06/23 15:54:42 INFO Starting service... service=command-handler
+2026/06/23 15:54:42 INFO Starting primary routine of CommandHandler botInstanceID=""
+2026/06/23 15:54:42 INFO All services started successfully services_count=1
+2026/06/23 15:54:42 INFO Starting command and route coupling botInstanceID=""
+2026/06/23 15:54:42 WARN command synchronization failed at initialization; operating in degraded state botInstanceID="" err="cannot setup commands: session user state is missing"
+2026/06/23 15:54:42 INFO Load summary initialized guilds_count=1
+2026/06/23 15:54:42 INFO Service started successfully service=command-handler
+2026/06/23 15:54:42 INFO All services started successfully services_count=1
+2026/06/23 15:54:42 INFO Load summary initialized guilds_count=1
+2026/06/23 15:54:42 INFO Service started successfully service=bot-runtime-childB
+2026/06/23 15:54:42 INFO Service registered service=command-handler type=commands priority=5 dependencies=[]
+2026/06/23 15:54:42 INFO Service started successfully service=bot-runtime-childE
+2026/06/23 15:54:42 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=childH
+2026/06/23 15:54:42 INFO Starting service... service=bot-runtime-childI
+2026/06/23 15:54:42 INFO Starting all services...
+2026/06/23 15:54:42 INFO Starting service... service=command-handler
+2026/06/23 15:54:42 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=childH botUser=test#
+2026/06/23 15:54:42 INFO Starting primary routine of CommandHandler botInstanceID=""
+2026/06/23 15:54:42 INFO Starting command and route coupling botInstanceID=""
+2026/06/23 15:54:42 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=childH concurrency_budget=8
+2026/06/23 15:54:42 WARN command synchronization failed at initialization; operating in degraded state botInstanceID="" err="cannot setup commands: session user state is missing"
+2026/06/23 15:54:42 INFO Service started successfully service=command-handler
+2026/06/23 15:54:42 INFO All services started successfully services_count=1
+2026/06/23 15:54:42 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=childH
+2026/06/23 15:54:42 INFO Service registered service=command-handler type=commands priority=5 dependencies=[]
+2026/06/23 15:54:42 INFO Load summary initialized guilds_count=1
+2026/06/23 15:54:42 INFO Starting service... service=bot-runtime-childH
+2026/06/23 15:54:42 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=childC
+2026/06/23 15:54:42 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=childC botUser=test#
+2026/06/23 15:54:42 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=childC concurrency_budget=8
+2026/06/23 15:54:42 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=childC
+2026/06/23 15:54:42 INFO Service registered service=command-handler type=commands priority=5 dependencies=[]
+2026/06/23 15:54:42 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=childA
+2026/06/23 15:54:42 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=childA botUser=test#
+2026/06/23 15:54:42 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=childA concurrency_budget=8
+2026/06/23 15:54:42 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=childA
+2026/06/23 15:54:42 INFO Service registered service=command-handler type=commands priority=5 dependencies=[]
+2026/06/23 15:54:42 INFO Service started successfully service=bot-runtime-childI
+2026/06/23 15:54:42 INFO Starting service... service=bot-runtime-childC
+2026/06/23 15:54:42 INFO Starting service... service=bot-runtime-childA
+2026/06/23 15:54:42 INFO Starting all services...
+2026/06/23 15:54:42 INFO Starting service... service=command-handler
+2026/06/23 15:54:42 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=childF
+2026/06/23 15:54:42 INFO Starting primary routine of CommandHandler botInstanceID=""
+2026/06/23 15:54:42 INFO Starting command and route coupling botInstanceID=""
+2026/06/23 15:54:42 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=childF botUser=test#
+2026/06/23 15:54:42 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=childF concurrency_budget=8
+2026/06/23 15:54:42 INFO Starting all services...
+2026/06/23 15:54:42 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=childF
+2026/06/23 15:54:42 INFO Service registered service=command-handler type=commands priority=5 dependencies=[]
+2026/06/23 15:54:42 INFO Starting service... service=bot-runtime-childF
+2026/06/23 15:54:42 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=childD
+2026/06/23 15:54:42 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=childD botUser=test#
+2026/06/23 15:54:42 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=childD concurrency_budget=8
+2026/06/23 15:54:42 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=childD
+2026/06/23 15:54:42 INFO Service registered service=command-handler type=commands priority=5 dependencies=[]
+2026/06/23 15:54:42 INFO Starting all services...
+2026/06/23 15:54:42 INFO Starting service... service=command-handler
+2026/06/23 15:54:42 INFO Starting primary routine of CommandHandler botInstanceID=""
+2026/06/23 15:54:42 INFO Starting command and route coupling botInstanceID=""
+2026/06/23 15:54:42 WARN command synchronization failed at initialization; operating in degraded state botInstanceID="" err="cannot setup commands: session user state is missing"
+2026/06/23 15:54:42 INFO Service started successfully service=command-handler
+2026/06/23 15:54:42 INFO All services started successfully services_count=1
+2026/06/23 15:54:42 INFO Service started successfully service=bot-runtime-childF
+2026/06/23 15:54:42 INFO Starting all services...
+2026/06/23 15:54:42 INFO Starting service... service=command-handler
+2026/06/23 15:54:42 INFO Starting primary routine of CommandHandler botInstanceID=""
+2026/06/23 15:54:42 INFO Starting command and route coupling botInstanceID=""
+2026/06/23 15:54:42 WARN command synchronization failed at initialization; operating in degraded state botInstanceID="" err="cannot setup commands: session user state is missing"
+2026/06/23 15:54:42 INFO Service started successfully service=command-handler
+2026/06/23 15:54:42 INFO All services started successfully services_count=1
+2026/06/23 15:54:42 INFO Starting service... service=bot-runtime-childD
+2026/06/23 15:54:42 INFO Starting all services...
+2026/06/23 15:54:42 INFO Service started successfully service=bot-runtime-childA
+2026/06/23 15:54:42 WARN command synchronization failed at initialization; operating in degraded state botInstanceID="" err="cannot setup commands: session user state is missing"
+2026/06/23 15:54:42 INFO Starting service... service=command-handler
+2026/06/23 15:54:42 INFO Service started successfully service=command-handler
+2026/06/23 15:54:42 INFO Starting primary routine of CommandHandler botInstanceID=""
+2026/06/23 15:54:42 INFO Starting command and route coupling botInstanceID=""
+2026/06/23 15:54:42 INFO All services started successfully services_count=1
+2026/06/23 15:54:42 WARN command synchronization failed at initialization; operating in degraded state botInstanceID="" err="cannot setup commands: session user state is missing"
+2026/06/23 15:54:42 INFO Service started successfully service=command-handler
+2026/06/23 15:54:42 INFO Starting service... service=command-handler
+2026/06/23 15:54:42 INFO Starting primary routine of CommandHandler botInstanceID=""
+2026/06/23 15:54:42 INFO Starting command and route coupling botInstanceID=""
+2026/06/23 15:54:42 WARN command synchronization failed at initialization; operating in degraded state botInstanceID="" err="cannot setup commands: session user state is missing"
+2026/06/23 15:54:42 INFO Service started successfully service=command-handler
+2026/06/23 15:54:42 INFO All services started successfully services_count=1
+2026/06/23 15:54:42 INFO Service started successfully service=bot-runtime-childC
+2026/06/23 15:54:42 INFO Service started successfully service=bot-runtime-childH
+2026/06/23 15:54:42 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=childJ
+2026/06/23 15:54:42 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=childJ botUser=test#
+2026/06/23 15:54:42 INFO All services started successfully services_count=1
+2026/06/23 15:54:42 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=childG
+2026/06/23 15:54:42 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=childG botUser=test#
+2026/06/23 15:54:42 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=childG concurrency_budget=8
+2026/06/23 15:54:42 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=childG
+2026/06/23 15:54:42 INFO Service registered service=command-handler type=commands priority=5 dependencies=[]
+2026/06/23 15:54:42 INFO Service started successfully service=bot-runtime-childD
+2026/06/23 15:54:42 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=childJ concurrency_budget=8
+2026/06/23 15:54:42 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=childJ
+2026/06/23 15:54:42 INFO Service registered service=command-handler type=commands priority=5 dependencies=[]
+2026/06/23 15:54:42 INFO Starting service... service=bot-runtime-childJ
+2026/06/23 15:54:42 INFO Starting all services...
+2026/06/23 15:54:42 INFO Starting service... service=command-handler
+2026/06/23 15:54:42 INFO Starting primary routine of CommandHandler botInstanceID=""
+2026/06/23 15:54:42 INFO Starting command and route coupling botInstanceID=""
+2026/06/23 15:54:42 WARN command synchronization failed at initialization; operating in degraded state botInstanceID="" err="cannot setup commands: session user state is missing"
+2026/06/23 15:54:42 INFO Service started successfully service=command-handler
+2026/06/23 15:54:42 INFO All services started successfully services_count=1
+2026/06/23 15:54:42 INFO Triggering planned shutdown of main BotSupervisor instances
+2026/06/23 15:54:42 INFO Stopping service... service=bot-runtime-childD
+2026/06/23 15:54:42 INFO Architectural state transition: Runtime resolver marked ready, unlocking dependent initialization pipelines
+2026/06/23 15:54:42 INFO Stopping service... service=bot-runtime-childE
+2026/06/23 15:54:42 INFO Stopping service... service=bot-runtime-childC
+2026/06/23 15:54:42 INFO executeStopAndRemove DELETING instance id=childJ
+2026/06/23 15:54:42 INFO Starting service... service=bot-runtime-childG
+2026/06/23 15:54:42 INFO Starting all services...
+2026/06/23 15:54:42 INFO Starting service... service=command-handler
+2026/06/23 15:54:42 INFO Starting primary routine of CommandHandler botInstanceID=""
+2026/06/23 15:54:42 INFO Starting command and route coupling botInstanceID=""
+2026/06/23 15:54:42 WARN command synchronization failed at initialization; operating in degraded state botInstanceID="" err="cannot setup commands: session user state is missing"
+2026/06/23 15:54:42 INFO Service started successfully service=command-handler
+2026/06/23 15:54:42 INFO All services started successfully services_count=1
+2026/06/23 15:54:42 INFO Service started successfully service=bot-runtime-childG
+2026/06/23 15:54:42 INFO Service started successfully service=bot-runtime-childJ
+2026/06/23 15:54:42 INFO Architectural state transition: Executing planned shutdown across main runtime instances botInstanceID=childD
+2026/06/23 15:54:42 INFO Stopping all services...
+2026/06/23 15:54:42 INFO Stopping service... service=command-handler
+2026/06/23 15:54:42 INFO Stopping main instances of CommandHandler botInstanceID=""
+2026/06/23 15:54:42 INFO Starting connection drain and shutdown of CommandHandler botInstanceID=""
+2026/06/23 15:54:42 INFO Service stopped successfully service=command-handler
+2026/06/23 15:54:42 INFO All services stopped successfully
+2026/06/23 15:54:42 INFO Stopping service... service=bot-runtime-childB
+2026/06/23 15:54:42 INFO Stopping service... service=bot-runtime-childH
+2026/06/23 15:54:42 INFO Service stopped service=bot-runtime-childD
+2026/06/23 15:54:42 INFO executeStopAndRemove DELETING instance id=childD
+2026/06/23 15:54:42 INFO Stopping service... service=bot-runtime-childA
+2026/06/23 15:54:42 INFO Architectural state transition: Executing planned shutdown across main runtime instances botInstanceID=childB
+2026/06/23 15:54:42 INFO Stopping all services...
+2026/06/23 15:54:42 INFO Stopping service... service=command-handler
+2026/06/23 15:54:42 INFO Stopping main instances of CommandHandler botInstanceID=""
+2026/06/23 15:54:42 INFO Starting connection drain and shutdown of CommandHandler botInstanceID=""
+2026/06/23 15:54:42 INFO Architectural state transition: Executing planned shutdown across main runtime instances botInstanceID=childE
+2026/06/23 15:54:42 INFO Stopping all services...
+2026/06/23 15:54:42 INFO Architectural state transition: Executing planned shutdown across main runtime instances botInstanceID=childA
+2026/06/23 15:54:42 INFO Stopping all services...
+2026/06/23 15:54:42 INFO Stopping service... service=command-handler
+2026/06/23 15:54:42 INFO Stopping service... service=command-handler
+2026/06/23 15:54:42 INFO Stopping main instances of CommandHandler botInstanceID=""
+2026/06/23 15:54:42 INFO Starting connection drain and shutdown of CommandHandler botInstanceID=""
+2026/06/23 15:54:42 INFO Service stopped successfully service=command-handler
+2026/06/23 15:54:42 INFO Load summary initialized guilds_count=1
+2026/06/23 15:54:42 INFO Stopping service... service=bot-runtime-childI
+2026/06/23 15:54:42 INFO Stopping main instances of CommandHandler botInstanceID=""
+2026/06/23 15:54:42 INFO Starting connection drain and shutdown of CommandHandler botInstanceID=""
+2026/06/23 15:54:42 INFO Architectural state transition: Executing planned shutdown across main runtime instances botInstanceID=childI
+2026/06/23 15:54:42 INFO Stopping all services...
+2026/06/23 15:54:42 INFO Stopping service... service=command-handler
+2026/06/23 15:54:42 INFO Stopping main instances of CommandHandler botInstanceID=""
+2026/06/23 15:54:42 INFO Starting connection drain and shutdown of CommandHandler botInstanceID=""
+2026/06/23 15:54:42 INFO Service stopped successfully service=command-handler
+2026/06/23 15:54:42 INFO All services stopped successfully
+2026/06/23 15:54:42 INFO Service stopped service=bot-runtime-childI
+2026/06/23 15:54:42 INFO executeStopAndRemove DELETING instance id=childI
+2026/06/23 15:54:42 INFO Service stopped successfully service=command-handler
+2026/06/23 15:54:42 INFO Stopping service... service=bot-runtime-childG
+2026/06/23 15:54:42 INFO All services stopped successfully
+2026/06/23 15:54:42 INFO All services stopped successfully
+2026/06/23 15:54:42 INFO Service stopped service=bot-runtime-childE
+2026/06/23 15:54:42 INFO executeStopAndRemove DELETING instance id=childE
+2026/06/23 15:54:42 INFO Architectural state transition: Executing planned shutdown across main runtime instances botInstanceID=childH
+2026/06/23 15:54:42 INFO Service stopped service=bot-runtime-childA
+2026/06/23 15:54:42 INFO Service stopped successfully service=command-handler
+2026/06/23 15:54:42 INFO executeStopAndRemove DELETING instance id=childA
+2026/06/23 15:54:42 INFO Architectural state transition: Executing planned shutdown across main runtime instances botInstanceID=childG
+2026/06/23 15:54:42 INFO Stopping all services...
+2026/06/23 15:54:42 INFO Stopping service... service=command-handler
+2026/06/23 15:54:42 INFO Stopping main instances of CommandHandler botInstanceID=""
+2026/06/23 15:54:42 INFO Starting connection drain and shutdown of CommandHandler botInstanceID=""
+2026/06/23 15:54:42 INFO Service stopped successfully service=command-handler
+2026/06/23 15:54:42 INFO All services stopped successfully
+2026/06/23 15:54:42 INFO All services stopped successfully
+2026/06/23 15:54:42 INFO Service stopped service=bot-runtime-childG
+2026/06/23 15:54:42 INFO executeStopAndRemove DELETING instance id=childG
+2026/06/23 15:54:42 INFO Stopping all services...
+2026/06/23 15:54:42 INFO Stopping service... service=command-handler
+2026/06/23 15:54:42 INFO Stopping main instances of CommandHandler botInstanceID=""
+2026/06/23 15:54:42 INFO Starting connection drain and shutdown of CommandHandler botInstanceID=""
+2026/06/23 15:54:42 INFO Service stopped successfully service=command-handler
+2026/06/23 15:54:42 INFO All services stopped successfully
+2026/06/23 15:54:42 INFO Service stopped service=bot-runtime-childH
+2026/06/23 15:54:42 INFO executeStopAndRemove DELETING instance id=childH
+2026/06/23 15:54:42 INFO Service stopped service=bot-runtime-childB
+2026/06/23 15:54:42 INFO executeStopAndRemove DELETING instance id=childB
+2026/06/23 15:54:42 INFO Stopping service... service=bot-runtime-childF
+2026/06/23 15:54:42 INFO Architectural state transition: Executing planned shutdown across main runtime instances botInstanceID=childC
+2026/06/23 15:54:42 INFO Stopping all services...
+2026/06/23 15:54:42 INFO Stopping service... service=command-handler
+2026/06/23 15:54:42 INFO Stopping main instances of CommandHandler botInstanceID=""
+2026/06/23 15:54:42 INFO Starting connection drain and shutdown of CommandHandler botInstanceID=""
+2026/06/23 15:54:42 INFO Service stopped successfully service=command-handler
+2026/06/23 15:54:42 INFO All services stopped successfully
+2026/06/23 15:54:42 INFO Service stopped service=bot-runtime-childC
+2026/06/23 15:54:42 INFO executeStopAndRemove DELETING instance id=childC
+2026/06/23 15:54:42 INFO Architectural state transition: Executing planned shutdown across main runtime instances botInstanceID=childF
+2026/06/23 15:54:42 INFO Stopping all services...
+2026/06/23 15:54:42 INFO Stopping service... service=command-handler
+2026/06/23 15:54:42 INFO Stopping main instances of CommandHandler botInstanceID=""
+2026/06/23 15:54:42 INFO Starting connection drain and shutdown of CommandHandler botInstanceID=""
+2026/06/23 15:54:42 INFO Service stopped successfully service=command-handler
+2026/06/23 15:54:42 INFO All services stopped successfully
+2026/06/23 15:54:42 INFO Service stopped service=bot-runtime-childF
+2026/06/23 15:54:42 INFO executeStopAndRemove DELETING instance id=childF
+2026/06/23 15:54:42 INFO Architectural state transition: Halting startup orchestrator and draining worker pools
+2026/06/23 15:54:42 WARN Handshake failure with guild interface reported by central hub guildID=g1
+2026/06/23 15:54:42 INFO Load summary initialized guilds_count=1
+2026/06/23 15:54:42 WARN Handshake failure with guild interface reported by central hub guildID=g1
+2026/06/23 15:54:42 WARN Handshake failure with guild interface reported by central hub guildID=g1
+2026/06/23 15:54:43 WARN Handshake failure with guild interface reported by central hub guildID=g1
+2026/06/23 15:54:43 WARN Handshake failure with guild interface reported by central hub guildID=g1
+2026/06/23 15:54:43 INFO Load summary initialized guilds_count=1
+2026/06/23 15:54:43 WARN Handshake failure with guild interface reported by central hub guildID=g1
+2026/06/23 15:54:43 INFO Load summary initialized guilds_count=1
+2026/06/23 15:54:43 WARN Handshake failure with guild interface reported by central hub guildID=g1
+2026/06/23 15:54:43 INFO Load summary initialized guilds_count=1
+2026/06/23 15:54:44 WARN Handshake failure with guild interface reported by central hub guildID=g1
+2026/06/23 15:54:44 INFO Load summary initialized guilds_count=1
+2026/06/23 15:54:44 WARN Handshake failure with guild interface reported by central hub guildID=g1
+--- PASS: TestSupervisorSwarmTopology (1.67s)
 === RUN   TestSupervisorConfigChange
-2026/06/23 14:18:08 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
-2026/06/23 14:18:08 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:08 INFO Architectural state transition: Startup task orchestrator instantiated runtime_count_heuristic=1
-2026/06/23 14:18:08 INFO Architectural state transition: Background worker pool initialized parallelism_limit=2 queue_capacity=4
-2026/06/23 14:18:08 INFO Architectural state transition: Background worker pool initialized parallelism_limit=1 queue_capacity=1
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing memory barrier for bot runtime multiplexing initial_runtimes_count=0
-2026/06/23 14:18:08 INFO Initializing primary routines of BotSupervisor component=BotSupervisor
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=child1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=child1 botUser=test#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=child1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=child1
-2026/06/23 14:18:08 INFO Service registered service=command-handler type=commands priority=5 dependencies=[]
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-child1
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO Starting service... service=command-handler
-2026/06/23 14:18:08 INFO Architectural state transition: Runtime resolver marked ready, unlocking dependent initialization pipelines
-2026/06/23 14:18:08 INFO Starting primary routine of CommandHandler botInstanceID=""
-2026/06/23 14:18:08 INFO Starting command and route coupling botInstanceID=""
-2026/06/23 14:18:08 WARN command synchronization failed at initialization; operating in degraded state botInstanceID="" err="cannot setup commands: session user state is missing"
-2026/06/23 14:18:08 INFO Service started successfully service=command-handler
-2026/06/23 14:18:08 INFO All services started successfully services_count=1
-2026/06/23 14:18:08 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
-2026/06/23 14:18:08 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:08 INFO Planned instance shutdown triggered by token update botInstanceID=child1
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-child1
-2026/06/23 14:18:08 INFO Load summary initialized guilds_count=1
-2026/06/23 14:18:08 INFO Stopping service... service=bot-runtime-child1
-2026/06/23 14:18:08 INFO Architectural state transition: Executing planned shutdown across main runtime instances botInstanceID=child1
-2026/06/23 14:18:08 INFO Stopping all services...
-2026/06/23 14:18:08 INFO Stopping service... service=command-handler
-2026/06/23 14:18:08 INFO Stopping main instances of CommandHandler botInstanceID=""
-2026/06/23 14:18:08 INFO Starting connection drain and shutdown of CommandHandler botInstanceID=""
-2026/06/23 14:18:08 INFO Service stopped successfully service=command-handler
-2026/06/23 14:18:08 INFO All services stopped successfully
-2026/06/23 14:18:08 INFO Service stopped service=bot-runtime-child1
-2026/06/23 14:18:08 INFO executeStopAndRemove DELETING instance id=child1
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=child1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=child1 botUser=test#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=child1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=child1
-2026/06/23 14:18:08 INFO Service registered service=command-handler type=commands priority=5 dependencies=[]
-2026/06/23 14:18:08 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:08 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:08 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:08 INFO Planned instance shutdown triggered by token removal botInstanceID=child1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-child1
-2026/06/23 14:18:08 INFO executeStopAndRemove DELETING instance id=child1
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO Starting service... service=command-handler
-2026/06/23 14:18:08 INFO Starting primary routine of CommandHandler botInstanceID=""
-2026/06/23 14:18:08 INFO Starting command and route coupling botInstanceID=""
-2026/06/23 14:18:08 WARN command synchronization failed at initialization; operating in degraded state botInstanceID="" err="cannot setup commands: session user state is missing"
-2026/06/23 14:18:08 INFO Service started successfully service=command-handler
-2026/06/23 14:18:08 INFO Triggering planned shutdown of main BotSupervisor instances
-2026/06/23 14:18:08 INFO Architectural state transition: Halting startup orchestrator and draining worker pools
-2026/06/23 14:18:08 INFO All services started successfully services_count=1
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-child1
-2026/06/23 14:18:08 WARN Handshake failure with guild interface reported by central hub guildID=g1
---- PASS: TestSupervisorConfigChange (0.19s)
+2026/06/23 15:54:44 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
+2026/06/23 15:54:44 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:44 INFO Architectural state transition: Startup task orchestrator instantiated runtime_count_heuristic=1
+2026/06/23 15:54:44 INFO Architectural state transition: Background worker pool initialized parallelism_limit=2 queue_capacity=4
+2026/06/23 15:54:44 INFO Architectural state transition: Background worker pool initialized parallelism_limit=1 queue_capacity=1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing memory barrier for bot runtime multiplexing initial_runtimes_count=0
+2026/06/23 15:54:44 INFO Initializing primary routines of BotSupervisor component=BotSupervisor
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=child1
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=child1 botUser=test#
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=child1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=child1
+2026/06/23 15:54:44 INFO Service registered service=command-handler type=commands priority=5 dependencies=[]
+2026/06/23 15:54:44 INFO Architectural state transition: Runtime resolver marked ready, unlocking dependent initialization pipelines
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-child1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Starting service... service=command-handler
+2026/06/23 15:54:44 INFO Starting primary routine of CommandHandler botInstanceID=""
+2026/06/23 15:54:44 INFO Starting command and route coupling botInstanceID=""
+2026/06/23 15:54:44 WARN command synchronization failed at initialization; operating in degraded state botInstanceID="" err="cannot setup commands: session user state is missing"
+2026/06/23 15:54:44 INFO Service started successfully service=command-handler
+2026/06/23 15:54:44 INFO All services started successfully services_count=1
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-child1
+2026/06/23 15:54:44 INFO Load summary initialized guilds_count=1
+2026/06/23 15:54:44 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
+2026/06/23 15:54:44 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:44 INFO Planned instance shutdown triggered by token update botInstanceID=child1
+2026/06/23 15:54:44 INFO Stopping service... service=bot-runtime-child1
+2026/06/23 15:54:44 INFO Architectural state transition: Executing planned shutdown across main runtime instances botInstanceID=child1
+2026/06/23 15:54:44 INFO Stopping all services...
+2026/06/23 15:54:44 INFO Stopping service... service=command-handler
+2026/06/23 15:54:44 INFO Stopping main instances of CommandHandler botInstanceID=""
+2026/06/23 15:54:44 INFO Starting connection drain and shutdown of CommandHandler botInstanceID=""
+2026/06/23 15:54:44 INFO Service stopped successfully service=command-handler
+2026/06/23 15:54:44 INFO All services stopped successfully
+2026/06/23 15:54:44 INFO Service stopped service=bot-runtime-child1
+2026/06/23 15:54:44 INFO executeStopAndRemove DELETING instance id=child1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=child1
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=child1 botUser=test#
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=child1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=child1
+2026/06/23 15:54:44 INFO Service registered service=command-handler type=commands priority=5 dependencies=[]
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-child1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Starting service... service=command-handler
+2026/06/23 15:54:44 INFO Starting primary routine of CommandHandler botInstanceID=""
+2026/06/23 15:54:44 INFO Starting command and route coupling botInstanceID=""
+2026/06/23 15:54:44 WARN command synchronization failed at initialization; operating in degraded state botInstanceID="" err="cannot setup commands: session user state is missing"
+2026/06/23 15:54:44 INFO Service started successfully service=command-handler
+2026/06/23 15:54:44 INFO All services started successfully services_count=1
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-child1
+2026/06/23 15:54:44 INFO Load summary initialized guilds_count=1
+2026/06/23 15:54:44 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:44 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:44 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:44 INFO Planned instance shutdown triggered by token removal botInstanceID=child1
+2026/06/23 15:54:44 INFO Stopping service... service=bot-runtime-child1
+2026/06/23 15:54:44 INFO Architectural state transition: Executing planned shutdown across main runtime instances botInstanceID=child1
+2026/06/23 15:54:44 INFO Stopping all services...
+2026/06/23 15:54:44 INFO Stopping service... service=command-handler
+2026/06/23 15:54:44 INFO Stopping main instances of CommandHandler botInstanceID=""
+2026/06/23 15:54:44 INFO Starting connection drain and shutdown of CommandHandler botInstanceID=""
+2026/06/23 15:54:44 INFO Service stopped successfully service=command-handler
+2026/06/23 15:54:44 INFO All services stopped successfully
+2026/06/23 15:54:44 INFO Service stopped service=bot-runtime-child1
+2026/06/23 15:54:44 INFO executeStopAndRemove DELETING instance id=child1
+2026/06/23 15:54:44 INFO Triggering planned shutdown of main BotSupervisor instances
+2026/06/23 15:54:44 WARN Handshake failure with guild interface reported by central hub guildID=g1
+2026/06/23 15:54:44 INFO Architectural state transition: Halting startup orchestrator and draining worker pools
+2026/06/23 15:54:44 WARN Handshake failure with guild interface reported by central hub guildID=g1
+--- PASS: TestSupervisorConfigChange (0.33s)
 === RUN   TestBotSupervisor_ConcurrentConfigThrashing
-2026/06/23 14:18:08 INFO Architectural state transition: Startup task orchestrator instantiated runtime_count_heuristic=1
-2026/06/23 14:18:08 INFO Architectural state transition: Background worker pool initialized parallelism_limit=2 queue_capacity=4
-2026/06/23 14:18:08 INFO Architectural state transition: Background worker pool initialized parallelism_limit=1 queue_capacity=1
-2026/06/23 14:18:08 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:08 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:08 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing memory barrier for bot runtime multiplexing initial_runtimes_count=0
-2026/06/23 14:18:08 INFO Initializing primary routines of BotSupervisor component=BotSupervisor
-2026/06/23 14:18:08 INFO Architectural state transition: Runtime resolver marked ready, unlocking dependent initialization pipelines
-2026/06/23 14:18:08 INFO Planned instance shutdown triggered by token update botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Planned instance shutdown triggered by token update botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Planned instance shutdown triggered by token update botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Planned instance shutdown triggered by token update botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Planned instance shutdown triggered by token update botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Planned instance shutdown triggered by token update botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO executeStopAndRemove SKIPPING deletion: pointer mismatch id=instance_1
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO executeStopAndRemove SKIPPING deletion: pointer mismatch id=instance_1
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:08 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:08 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:08 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:08 INFO Starting all services...
-2026/06/23 14:18:08 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:08 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO executeStopAndRemove SKIPPING deletion: pointer mismatch id=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Stopping service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Architectural state transition: Executing planned shutdown across main runtime instances botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Stopping all services...
-2026/06/23 14:18:09 INFO All services stopped successfully
-2026/06/23 14:18:09 INFO Service stopped service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO executeStopAndRemove SKIPPING deletion: pointer mismatch id=instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Stopping service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Architectural state transition: Executing planned shutdown across main runtime instances botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Stopping all services...
-2026/06/23 14:18:09 INFO All services stopped successfully
-2026/06/23 14:18:09 INFO Service stopped service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO executeStopAndRemove SKIPPING deletion: pointer mismatch id=instance_1
-2026/06/23 14:18:09 INFO executeStopAndRemove SKIPPING deletion: pointer mismatch id=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Triggering planned shutdown of main BotSupervisor instances
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO executeStopAndRemove DELETING instance id=instance_1
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
-2026/06/23 14:18:09 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
-2026/06/23 14:18:09 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
-2026/06/23 14:18:09 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
-2026/06/23 14:18:09 WARN Basal threshold reached: Empty guild allocation vector in boot routine
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Starting service... service=bot-runtime-instance_1
-2026/06/23 14:18:09 INFO Architectural state transition: Halting startup orchestrator and draining worker pools
-2026/06/23 14:18:09 INFO Starting all services...
-2026/06/23 14:18:09 INFO All services started successfully services_count=0
-2026/06/23 14:18:09 INFO Service started successfully service=bot-runtime-instance_1
---- PASS: TestBotSupervisor_ConcurrentConfigThrashing (0.89s)
+2026/06/23 15:54:44 INFO Architectural state transition: Startup task orchestrator instantiated runtime_count_heuristic=1
+2026/06/23 15:54:44 INFO Architectural state transition: Background worker pool initialized parallelism_limit=2 queue_capacity=4
+2026/06/23 15:54:44 INFO Architectural state transition: Background worker pool initialized parallelism_limit=1 queue_capacity=1
+2026/06/23 15:54:44 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:44 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:44 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing memory barrier for bot runtime multiplexing initial_runtimes_count=0
+2026/06/23 15:54:44 INFO Initializing primary routines of BotSupervisor component=BotSupervisor
+2026/06/23 15:54:44 INFO Architectural state transition: Runtime resolver marked ready, unlocking dependent initialization pipelines
+2026/06/23 15:54:44 INFO Planned instance shutdown triggered by token update botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Planned instance shutdown triggered by token update botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Planned instance shutdown triggered by token update botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO executeStopAndRemove SKIPPING deletion: pointer mismatch id=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO executeStopAndRemove SKIPPING deletion: pointer mismatch id=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO executeStopAndRemove SKIPPING deletion: pointer mismatch id=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Triggering planned shutdown of main BotSupervisor instances
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO executeStopAndRemove DELETING instance id=instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Executing planned shutdown across main runtime instances botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing primary Discord API routine botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Architectural state transition: Socket bound and API authenticated botInstanceID=instance_1 botUser=stress_test_bot#
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+2026/06/23 15:54:44 WARN Basal threshold reached: Empty guild allocation vector in boot routine
+2026/06/23 15:54:44 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=instance_1 concurrency_budget=8
+2026/06/23 15:54:44 INFO Architectural state bypass: Automod service skipped due to explicit capability flags botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Architectural state bypass: Commands skipped due to empty guild bindings botInstanceID=instance_1
+2026/06/23 15:54:44 WARN Service manager memory conflict detected; executing forceful override botInstanceID=instance_1
+2026/06/23 15:54:44 INFO Starting service... service=bot-runtime-instance_1
+2026/06/23 15:54:44 INFO Architectural state transition: Halting startup orchestrator and draining worker pools
+2026/06/23 15:54:44 INFO Starting all services...
+2026/06/23 15:54:44 INFO All services started successfully services_count=0
+2026/06/23 15:54:44 INFO Service started successfully service=bot-runtime-instance_1
+--- PASS: TestBotSupervisor_ConcurrentConfigThrashing (0.04s)
 === RUN   TestBotSupervisor_GracefulShutdownOrchestration
-2026/06/23 14:18:09 INFO Architectural state transition: Startup task orchestrator instantiated runtime_count_heuristic=1
-2026/06/23 14:18:09 INFO Architectural state transition: Background worker pool initialized parallelism_limit=2 queue_capacity=4
-2026/06/23 14:18:09 INFO Architectural state transition: Background worker pool initialized parallelism_limit=1 queue_capacity=1
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing memory barrier for bot runtime multiplexing initial_runtimes_count=0
-2026/06/23 14:18:09 INFO Triggering planned shutdown of main BotSupervisor instances
-2026/06/23 14:18:09 INFO executeStopAndRemove DELETING instance id=zombie_instance
-2026/06/23 14:18:09 ERROR Failed to purge I/O, escalated to ForceRemove request_id=stop_remove_zombie_instance botInstanceID=zombie_instance error="stop signal failed for bot-runtime-zombie_instance: context deadline exceeded"
-2026/06/23 14:18:09 ERROR BotSupervisor stop timeout exceeded before background task completion request_id=supervisor_shutdown error="context deadline exceeded"
-2026/06/23 14:18:09 INFO Architectural state transition: Halting startup orchestrator and draining worker pools
+2026/06/23 15:54:44 INFO Architectural state transition: Startup task orchestrator instantiated runtime_count_heuristic=1
+2026/06/23 15:54:44 INFO Architectural state transition: Background worker pool initialized parallelism_limit=2 queue_capacity=4
+2026/06/23 15:54:44 INFO Architectural state transition: Background worker pool initialized parallelism_limit=1 queue_capacity=1
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing memory barrier for bot runtime multiplexing initial_runtimes_count=0
+2026/06/23 15:54:44 INFO Triggering planned shutdown of main BotSupervisor instances
+2026/06/23 15:54:44 INFO executeStopAndRemove DELETING instance id=zombie_instance
+2026/06/23 15:54:44 ERROR BotSupervisor stop timeout exceeded before background task completion request_id=supervisor_shutdown error="context deadline exceeded"
+2026/06/23 15:54:44 ERROR Failed to purge I/O, escalated to ForceRemove request_id=stop_remove_zombie_instance botInstanceID=zombie_instance error="stop signal failed for bot-runtime-zombie_instance: context deadline exceeded"
+2026/06/23 15:54:44 INFO Architectural state transition: Halting startup orchestrator and draining worker pools
 --- PASS: TestBotSupervisor_GracefulShutdownOrchestration (0.05s)
 === RUN   TestBotSupervisor_StopMemoryBarrier
-2026/06/23 14:18:09 INFO Architectural state transition: Initializing memory barrier for bot runtime multiplexing initial_runtimes_count=0
-2026/06/23 14:18:09 INFO Triggering planned shutdown of main BotSupervisor instances
-2026/06/23 14:18:09 ERROR BotSupervisor stop timeout exceeded before background task completion request_id=supervisor_shutdown error="context deadline exceeded"
+2026/06/23 15:54:44 INFO Architectural state transition: Initializing memory barrier for bot runtime multiplexing initial_runtimes_count=0
+2026/06/23 15:54:44 INFO Triggering planned shutdown of main BotSupervisor instances
+2026/06/23 15:54:44 ERROR BotSupervisor stop timeout exceeded before background task completion request_id=supervisor_shutdown error="context deadline exceeded"
+2026/06/23 15:54:44 INFO executeStopAndRemove DELETING instance id=zombie_instance
 --- PASS: TestBotSupervisor_StopMemoryBarrier (0.00s)
+2026/06/23 15:54:44 ERROR Failed to purge I/O, escalated to ForceRemove request_id=stop_remove_zombie_instance botInstanceID=zombie_instance error="stop signal failed for bot-runtime-zombie_instance: context deadline exceeded"
 === RUN   TestCatalogRegistrars_RegisterArikawa
-2026/06/23 14:18:09 INFO executeStopAndRemove DELETING instance id=zombie_instance
-2026/06/23 14:18:09 ERROR Failed to purge I/O, escalated to ForceRemove request_id=stop_remove_zombie_instance botInstanceID=zombie_instance error="stop signal failed for bot-runtime-zombie_instance: context deadline exceeded"
 === PAUSE TestCatalogRegistrars_RegisterArikawa
 === RUN   TestCatalogRegistrars_DIFailures
 === PAUSE TestCatalogRegistrars_DIFailures
@@ -1572,57 +1565,57 @@
 === RUN   TestRuntimeCommandCatalogRegistrar_FailFastBarrier
 === PAUSE TestRuntimeCommandCatalogRegistrar_FailFastBarrier
 === RUN   TestCommandHandlerSetupAndShutdownLifecycle
-2026/06/23 14:18:09 INFO Starting command and route coupling botInstanceID=""
-2026/06/23 14:18:09 INFO Architectural state transition: Registering native command command_name=runtime
-2026/06/23 14:18:09 INFO Architectural state transition: Primary routines initialization component=PartnerCommands
-2026/06/23 14:18:09 INFO Architectural state transition: Registering native command command_name=partner
-2026/06/23 14:18:09 INFO Architectural state transition: Registering native command command_name=ban
-2026/06/23 14:18:09 INFO Architectural state transition: Registering native command command_name=timeout
-2026/06/23 14:18:09 INFO Architectural state transition: Registering native command command_name=massban
-2026/06/23 14:18:09 INFO Architectural state transition: Registering native command command_name=reaction_block
-2026/06/23 14:18:09 INFO Architectural state transition: Registering native command command_name=clean
-2026/06/23 14:18:09 INFO Architectural state transition: Primary routines initialization component=RolePanelCommands
-2026/06/23 14:18:09 INFO Architectural state transition: Registering native command command_name=roles
-2026/06/23 14:18:09 INFO Architectural state transition: Primary routines initialization component=EmbedCommands
-2026/06/23 14:18:09 INFO Architectural state transition: Registering native command command_name=embed
-2026/06/23 14:18:09 INFO Architectural state transition: Registering native command command_name=qotd
-2026/06/23 14:18:09 INFO Architectural state transition: Registering native command command_name=logging
-2026/06/23 14:18:09 INFO Command catalog fragments coupled to the native Arikawa router
-2026/06/23 14:18:10 INFO Successfully synchronized commands via BulkOverwrite guild_id="" total_commands=11
-2026/06/23 14:18:10 INFO Command architecture successfully established natively botInstanceID=""
-2026/06/23 14:18:10 INFO Starting command and route coupling botInstanceID=""
-2026/06/23 14:18:10 WARN overlapping handler registration; invoking cleanup of previous registrations botInstanceID=""
-2026/06/23 14:18:10 INFO Starting connection drain and shutdown of CommandHandler botInstanceID=""
-2026/06/23 14:18:10 INFO Architectural state transition: Registering native command command_name=runtime
-2026/06/23 14:18:10 INFO Architectural state transition: Primary routines initialization component=PartnerCommands
-2026/06/23 14:18:10 INFO Architectural state transition: Registering native command command_name=partner
-2026/06/23 14:18:10 INFO Architectural state transition: Registering native command command_name=ban
-2026/06/23 14:18:10 INFO Architectural state transition: Registering native command command_name=timeout
-2026/06/23 14:18:10 INFO Architectural state transition: Registering native command command_name=massban
-2026/06/23 14:18:10 INFO Architectural state transition: Registering native command command_name=reaction_block
-2026/06/23 14:18:10 INFO Architectural state transition: Registering native command command_name=clean
-2026/06/23 14:18:10 INFO Architectural state transition: Primary routines initialization component=RolePanelCommands
-2026/06/23 14:18:10 INFO Architectural state transition: Registering native command command_name=roles
-2026/06/23 14:18:10 INFO Architectural state transition: Primary routines initialization component=EmbedCommands
-2026/06/23 14:18:10 INFO Architectural state transition: Registering native command command_name=embed
-2026/06/23 14:18:10 INFO Architectural state transition: Registering native command command_name=qotd
-2026/06/23 14:18:10 INFO Architectural state transition: Registering native command command_name=logging
-2026/06/23 14:18:10 INFO Command catalog fragments coupled to the native Arikawa router
-2026/06/23 14:18:10 INFO Successfully synchronized commands via BulkOverwrite guild_id="" total_commands=11
-2026/06/23 14:18:10 INFO Command architecture successfully established natively botInstanceID=""
-2026/06/23 14:18:10 INFO Starting connection drain and shutdown of CommandHandler botInstanceID=""
-2026/06/23 14:18:10 INFO Starting connection drain and shutdown of CommandHandler botInstanceID=""
---- PASS: TestCommandHandlerSetupAndShutdownLifecycle (0.51s)
+2026/06/23 15:54:44 INFO Starting command and route coupling botInstanceID=""
+2026/06/23 15:54:44 INFO Architectural state transition: Registering native command command_name=runtime
+2026/06/23 15:54:44 INFO Architectural state transition: Primary routines initialization component=PartnerCommands
+2026/06/23 15:54:44 INFO Architectural state transition: Registering native command command_name=partner
+2026/06/23 15:54:44 INFO Architectural state transition: Registering native command command_name=ban
+2026/06/23 15:54:44 INFO Architectural state transition: Registering native command command_name=timeout
+2026/06/23 15:54:44 INFO Architectural state transition: Registering native command command_name=massban
+2026/06/23 15:54:44 INFO Architectural state transition: Registering native command command_name=reaction_block
+2026/06/23 15:54:44 INFO Architectural state transition: Registering native command command_name=clean
+2026/06/23 15:54:44 INFO Architectural state transition: Primary routines initialization component=RolePanelCommands
+2026/06/23 15:54:44 INFO Architectural state transition: Registering native command command_name=roles
+2026/06/23 15:54:44 INFO Architectural state transition: Primary routines initialization component=EmbedCommands
+2026/06/23 15:54:44 INFO Architectural state transition: Registering native command command_name=embed
+2026/06/23 15:54:44 INFO Architectural state transition: Registering native command command_name=qotd
+2026/06/23 15:54:44 INFO Architectural state transition: Registering native command command_name=logging
+2026/06/23 15:54:44 INFO Command catalog fragments coupled to the native Arikawa router
+2026/06/23 15:54:44 INFO Successfully synchronized commands via BulkOverwrite guild_id="" total_commands=11
+2026/06/23 15:54:44 INFO Command architecture successfully established natively botInstanceID=""
+2026/06/23 15:54:44 INFO Starting command and route coupling botInstanceID=""
+2026/06/23 15:54:44 WARN overlapping handler registration; invoking cleanup of previous registrations botInstanceID=""
+2026/06/23 15:54:44 INFO Starting connection drain and shutdown of CommandHandler botInstanceID=""
+2026/06/23 15:54:44 INFO Architectural state transition: Registering native command command_name=runtime
+2026/06/23 15:54:44 INFO Architectural state transition: Primary routines initialization component=PartnerCommands
+2026/06/23 15:54:44 INFO Architectural state transition: Registering native command command_name=partner
+2026/06/23 15:54:44 INFO Architectural state transition: Registering native command command_name=ban
+2026/06/23 15:54:44 INFO Architectural state transition: Registering native command command_name=timeout
+2026/06/23 15:54:44 INFO Architectural state transition: Registering native command command_name=massban
+2026/06/23 15:54:44 INFO Architectural state transition: Registering native command command_name=reaction_block
+2026/06/23 15:54:44 INFO Architectural state transition: Registering native command command_name=clean
+2026/06/23 15:54:44 INFO Architectural state transition: Primary routines initialization component=RolePanelCommands
+2026/06/23 15:54:44 INFO Architectural state transition: Registering native command command_name=roles
+2026/06/23 15:54:44 INFO Architectural state transition: Primary routines initialization component=EmbedCommands
+2026/06/23 15:54:44 INFO Architectural state transition: Registering native command command_name=embed
+2026/06/23 15:54:44 INFO Architectural state transition: Registering native command command_name=qotd
+2026/06/23 15:54:44 INFO Architectural state transition: Registering native command command_name=logging
+2026/06/23 15:54:44 INFO Command catalog fragments coupled to the native Arikawa router
+2026/06/23 15:54:44 INFO Successfully synchronized commands via BulkOverwrite guild_id="" total_commands=11
+2026/06/23 15:54:44 INFO Command architecture successfully established natively botInstanceID=""
+2026/06/23 15:54:44 INFO Starting connection drain and shutdown of CommandHandler botInstanceID=""
+2026/06/23 15:54:44 INFO Starting connection drain and shutdown of CommandHandler botInstanceID=""
+--- PASS: TestCommandHandlerSetupAndShutdownLifecycle (0.08s)
 === RUN   TestCommandHandlerSetupRollbackOnManagerFailure
-2026/06/23 14:18:10 INFO Starting command and route coupling botInstanceID=""
+2026/06/23 15:54:44 INFO Starting command and route coupling botInstanceID=""
 --- PASS: TestCommandHandlerSetupRollbackOnManagerFailure (0.00s)
 === RUN   TestCommandHandlerSkipsGuildWithoutCommandsFeature
-2026/06/23 14:18:10 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:10 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:44 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:44 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 --- PASS: TestCommandHandlerSkipsGuildWithoutCommandsFeature (0.00s)
 === RUN   TestCommandHandlerRoutesFeaturesToCorrectBotInstance
-2026/06/23 14:18:10 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:10 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:44 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:44 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 === RUN   TestCommandHandlerRoutesFeaturesToCorrectBotInstance/Roles_command_goes_to_generic
 === RUN   TestCommandHandlerRoutesFeaturesToCorrectBotInstance/Moderation_command_goes_to_generic
 === RUN   TestCommandHandlerRoutesFeaturesToCorrectBotInstance/Base_command_goes_to_generic
@@ -1639,7 +1632,7 @@
 === RUN   TestLoadControlDiscordOAuthConfigFromEnv/missing_redirect_without_public_origin_fails
 === RUN   TestLoadControlDiscordOAuthConfigFromEnv/missing_redirect_derives_from_public_origin
 === RUN   TestLoadControlDiscordOAuthConfigFromEnv/explicit_client_id_overrides_repo_default
---- PASS: TestLoadControlDiscordOAuthConfigFromEnv (0.01s)
+--- PASS: TestLoadControlDiscordOAuthConfigFromEnv (0.00s)
     --- PASS: TestLoadControlDiscordOAuthConfigFromEnv/default_empty_is_nil (0.00s)
     --- PASS: TestLoadControlDiscordOAuthConfigFromEnv/incomplete_config_fails (0.00s)
     --- PASS: TestLoadControlDiscordOAuthConfigFromEnv/complete_config (0.00s)
@@ -1655,12 +1648,12 @@
     --- PASS: TestLoadControlTLSFilesFromEnv/incomplete_config_fails (0.00s)
     --- PASS: TestLoadControlTLSFilesFromEnv/complete_config (0.00s)
 === RUN   TestResolveControlRuntimeUsesManagedLocalHTTPS
-2026/06/23 14:18:10 INFO Architectural state transition: Instantiating resolution pipeline for control plane bindings
-2026/06/23 14:18:10 INFO Architectural state transition: Initiating ad-hoc generation of local TLS credentials for control plane binding
---- PASS: TestResolveControlRuntimeUsesManagedLocalHTTPS (1.31s)
+2026/06/23 15:54:45 INFO Architectural state transition: Instantiating resolution pipeline for control plane bindings
+2026/06/23 15:54:45 INFO Architectural state transition: Initiating ad-hoc generation of local TLS credentials for control plane binding
+--- PASS: TestResolveControlRuntimeUsesManagedLocalHTTPS (1.94s)
 === RUN   TestResolveControlRuntimeDerivesOAuthRedirectFromPublicOrigin
-2026/06/23 14:18:11 INFO Architectural state transition: Instantiating resolution pipeline for control plane bindings
---- PASS: TestResolveControlRuntimeDerivesOAuthRedirectFromPublicOrigin (0.01s)
+2026/06/23 15:54:46 INFO Architectural state transition: Instantiating resolution pipeline for control plane bindings
+--- PASS: TestResolveControlRuntimeDerivesOAuthRedirectFromPublicOrigin (0.02s)
 === RUN   TestArikawaQOTDPublisher_GetArikawaPublisher
 === PAUSE TestArikawaQOTDPublisher_GetArikawaPublisher
 === RUN   TestArikawaQOTDPublisher_PublishOfficialPost
@@ -1668,63 +1661,63 @@
 === RUN   TestArikawaQOTDPublisher_DeleteOfficialPost
 === PAUSE TestArikawaQOTDPublisher_DeleteOfficialPost
 === RUN   TestNotifyLifecycleEventSendsWebhook
-2026/06/23 14:18:11 INFO Architectural state transition: Initiating out-of-band lifecycle notification sequence reason=starting
-2026/06/23 14:18:11 INFO Architectural state transition: Lifecycle webhook notification transmitted successfully reason=starting
-2026/06/23 14:18:11 INFO Architectural state transition: Initiating out-of-band lifecycle notification sequence reason=fatal
-2026/06/23 14:18:11 INFO Architectural state transition: Lifecycle webhook notification transmitted successfully reason=fatal
---- PASS: TestNotifyLifecycleEventSendsWebhook (0.08s)
+2026/06/23 15:54:46 INFO Architectural state transition: Initiating out-of-band lifecycle notification sequence reason=starting
+2026/06/23 15:54:46 INFO Architectural state transition: Lifecycle webhook notification transmitted successfully reason=starting
+2026/06/23 15:54:46 INFO Architectural state transition: Initiating out-of-band lifecycle notification sequence reason=fatal
+2026/06/23 15:54:46 INFO Architectural state transition: Lifecycle webhook notification transmitted successfully reason=fatal
+--- PASS: TestNotifyLifecycleEventSendsWebhook (0.01s)
 === RUN   TestBuildLifecycleContentFormat
 --- PASS: TestBuildLifecycleContentFormat (0.00s)
 === RUN   TestBuildLifecycleContentFallsBackWhenIdentityUnset
 --- PASS: TestBuildLifecycleContentFallsBackWhenIdentityUnset (0.00s)
 === RUN   TestNotifyLifecycleEventHandles5xx
-2026/06/23 14:18:11 INFO Architectural state transition: Initiating out-of-band lifecycle notification sequence reason=fatal
-2026/06/23 14:18:11 WARN Mitigated service degradation: Discord upstream rejected lifecycle webhook payload operation=lifecycle.webhook reason=fatal status_code=500 retry_after=0
---- PASS: TestNotifyLifecycleEventHandles5xx (0.02s)
+2026/06/23 15:54:46 INFO Architectural state transition: Initiating out-of-band lifecycle notification sequence reason=fatal
+2026/06/23 15:54:46 WARN Mitigated service degradation: Discord upstream rejected lifecycle webhook payload operation=lifecycle.webhook reason=fatal status_code=500 retry_after=0
+--- PASS: TestNotifyLifecycleEventHandles5xx (0.00s)
 === RUN   TestNotifyLifecycleEventTimeoutContext
-2026/06/23 14:18:11 INFO Architectural state transition: Initiating out-of-band lifecycle notification sequence reason=stopping
-2026/06/23 14:18:14 WARN Mitigated service degradation: External webhook endpoint unreachable; timeout or DNS failure operation=lifecycle.webhook reason=stopping error="Post \"http://127.0.0.1:65182\": context deadline exceeded"
+2026/06/23 15:54:46 INFO Architectural state transition: Initiating out-of-band lifecycle notification sequence reason=stopping
+2026/06/23 15:54:49 WARN Mitigated service degradation: External webhook endpoint unreachable; timeout or DNS failure operation=lifecycle.webhook reason=stopping error="Post \"http://127.0.0.1:50163\": context deadline exceeded"
 --- PASS: TestNotifyLifecycleEventTimeoutContext (5.01s)
 === RUN   TestCollectStartupWebhookEmbedUpdatesGlobalAndGuild
 === PAUSE TestCollectStartupWebhookEmbedUpdatesGlobalAndGuild
 === RUN   TestCollectStartupWebhookEmbedUpdatesNilConfig
 === PAUSE TestCollectStartupWebhookEmbedUpdatesNilConfig
 === RUN   TestRun_MissingDatabaseURL
-2026/06/23 14:18:16 INFO Architectural state transition: Executing application boot sequence
-2026/06/23 14:18:16 INFO Architectural state transition: Executing application binary version_info="🚀 Starting testapp (discordcore v0.843.0)..."
-2026/06/23 14:18:16 INFO Architectural state transition: Commencing teardown sequence across local orchestrators app_name=testapp
-2026/06/23 14:18:16 INFO Stopping all services...
-2026/06/23 14:18:16 INFO All services stopped successfully
-2026/06/23 14:18:16 ERROR Primary execution routine aborted app_name=testapp error="InitializeIO resolveDatabaseBootstrap: postgres bootstrap config unavailable: set DISCORDCORE_DATABASE_URL before startup"
+2026/06/23 15:54:51 INFO Architectural state transition: Executing application boot sequence
+2026/06/23 15:54:51 INFO Architectural state transition: Executing application binary version_info="🚀 Starting testapp (discordcore v0.845.0-rc.1)..."
+2026/06/23 15:54:51 INFO Architectural state transition: Commencing teardown sequence across local orchestrators app_name=testapp
+2026/06/23 15:54:51 INFO Stopping all services...
+2026/06/23 15:54:51 INFO All services stopped successfully
+2026/06/23 15:54:51 ERROR Primary execution routine aborted app_name=testapp error="InitializeIO resolveDatabaseBootstrap: postgres bootstrap config unavailable: set DISCORDCORE_DATABASE_URL before startup"
 --- PASS: TestRun_MissingDatabaseURL (0.00s)
 === RUN   TestRunWithOptions_MissingDatabaseURL
-2026/06/23 14:18:16 INFO Architectural state transition: Executing application boot sequence
-2026/06/23 14:18:16 INFO Architectural state transition: Executing application binary version_info="🚀 Starting testapp (discordcore v0.843.0)..."
-2026/06/23 14:18:16 INFO Architectural state transition: Commencing teardown sequence across local orchestrators app_name=testapp
-2026/06/23 14:18:16 INFO Stopping all services...
-2026/06/23 14:18:16 INFO All services stopped successfully
-2026/06/23 14:18:16 ERROR Primary execution routine aborted app_name=testapp error="InitializeIO resolveDatabaseBootstrap: postgres bootstrap config unavailable: set DISCORDCORE_DATABASE_URL before startup"
+2026/06/23 15:54:51 INFO Architectural state transition: Executing application boot sequence
+2026/06/23 15:54:51 INFO Architectural state transition: Executing application binary version_info="🚀 Starting testapp (discordcore v0.845.0-rc.1)..."
+2026/06/23 15:54:51 INFO Architectural state transition: Commencing teardown sequence across local orchestrators app_name=testapp
+2026/06/23 15:54:51 INFO Stopping all services...
+2026/06/23 15:54:51 INFO All services stopped successfully
+2026/06/23 15:54:51 ERROR Primary execution routine aborted app_name=testapp error="InitializeIO resolveDatabaseBootstrap: postgres bootstrap config unavailable: set DISCORDCORE_DATABASE_URL before startup"
 --- PASS: TestRunWithOptions_MissingDatabaseURL (0.00s)
 === RUN   TestSetupStorage
---- PASS: TestSetupStorage (0.04s)
+--- PASS: TestSetupStorage (1.06s)
 === RUN   TestRunner_ShutdownStartupServices
 --- PASS: TestRunner_ShutdownStartupServices (0.00s)
 === RUN   TestRunner_ResolveRuntimeCapabilities
 --- PASS: TestRunner_ResolveRuntimeCapabilities (0.00s)
 === RUN   TestRunner_ApplyConfiguredTheme
-2026/06/23 14:18:16 INFO Architectural state transition: Standard UI theme locked
+2026/06/23 15:54:52 INFO Architectural state transition: Standard UI theme locked
 --- PASS: TestRunner_ApplyConfiguredTheme (0.00s)
 === RUN   TestRunner_ScheduleDBCleanup
-2026/06/23 14:18:16 INFO Architectural state transition: Initializing persistent cache garbage collector
+2026/06/23 15:54:52 INFO Architectural state transition: Initializing persistent cache garbage collector
 --- PASS: TestRunner_ScheduleDBCleanup (0.00s)
 === RUN   TestFormatStartupMessage
 === PAUSE TestFormatStartupMessage
 === RUN   TestRun_CascadingRollbackFailures
     runner_test.go:158: Skipping test: database URL not configured
---- SKIP: TestRun_CascadingRollbackFailures (0.01s)
+--- SKIP: TestRun_CascadingRollbackFailures (0.03s)
 === RUN   TestRun_ResourceCleanupOnBootFailure
     runner_test.go:158: Skipping test: database URL not configured
---- SKIP: TestRun_ResourceCleanupOnBootFailure (0.01s)
+--- SKIP: TestRun_ResourceCleanupOnBootFailure (0.02s)
 === RUN   TestResolveDatabaseBootstrapFromEnv
 --- PASS: TestResolveDatabaseBootstrapFromEnv (0.00s)
 === RUN   TestResolveDatabaseBootstrapRequiresEnv
@@ -1757,169 +1750,169 @@
 === PAUSE TestNewRuntimeTaskRouterConfigBuildsSharedLimiter
 === RUN   TestAppVersion
 --- PASS: TestAppVersion (0.00s)
-=== CONT  TestBotRuntime_CapabilityBitmaskDerivation
-=== RUN   TestBotRuntime_CapabilityBitmaskDerivation/Commands_and_Moderation_Escalation
-=== CONT  TestNewRuntimeTaskRouterConfigBuildsSharedLimiter
-2026/06/23 14:18:16 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=default concurrency_budget=5
---- PASS: TestNewRuntimeTaskRouterConfigBuildsSharedLimiter (0.00s)
-=== CONT  TestResolveRuntimeTaskRouterWorkersUsesLargestRuntimeOverride
-=== CONT  TestStartupTaskOrchestrator_GoLight
-2026/06/23 14:18:16 INFO Architectural state transition: Startup task orchestrator instantiated runtime_count_heuristic=1
---- PASS: TestResolveRuntimeTaskRouterWorkersUsesLargestRuntimeOverride (0.00s)
-=== CONT  TestCollectStartupWebhookEmbedUpdatesGlobalAndGuild
-2026/06/23 14:18:16 INFO Architectural state transition: Background worker pool initialized parallelism_limit=2 queue_capacity=4
-2026/06/23 14:18:16 INFO Architectural state transition: Background worker pool initialized parallelism_limit=1 queue_capacity=1
---- PASS: TestCollectStartupWebhookEmbedUpdatesGlobalAndGuild (0.00s)
-=== CONT  TestArikawaQOTDPublisher_DeleteOfficialPost
-2026/06/23 14:18:16 INFO Architectural state transition: Halting startup orchestrator and draining worker pools
-=== CONT  TestResolveRuntimeTaskRouterWorkersUsesAutoBudgets
-2026/06/23 14:18:16 INFO Architectural state transition: Initializing memory barrier for bot runtime multiplexing initial_runtimes_count=0
---- PASS: TestResolveRuntimeTaskRouterWorkersUsesAutoBudgets (0.00s)
-2026/06/23 14:18:16 INFO Architectural state transition: Allocating stateless native Arikawa publisher orchestrator
-=== CONT  TestStartupTaskOrchestrator_GoNil
-2026/06/23 14:18:16 INFO Architectural state transition: Startup task orchestrator instantiated runtime_count_heuristic=1
---- PASS: TestArikawaQOTDPublisher_DeleteOfficialPost (0.00s)
-2026/06/23 14:18:16 INFO Architectural state transition: Background worker pool initialized parallelism_limit=2 queue_capacity=4
-=== CONT  TestStartupTaskOrchestrator_ShutdownTaskErrorSwallowed
---- PASS: TestStartupTaskOrchestrator_GoLight (0.00s)
-=== CONT  TestStartupTaskOrchestrator_ShutdownWithContextCancellation
-=== CONT  TestStartControlServerStartupTask
-2026/06/23 14:18:16 INFO Architectural state transition: Background worker pool initialized parallelism_limit=1 queue_capacity=1
-2026/06/23 14:18:16 INFO Architectural state transition: Initializing memory barrier for bot runtime multiplexing initial_runtimes_count=0
---- PASS: TestStartupTaskOrchestrator_GoNil (0.00s)
-=== CONT  TestStartupTaskOrchestrator_GoHeavy
-2026/06/23 14:18:16 INFO Architectural state transition: Instantiating resolution pipeline for control plane bindings
-2026/06/23 14:18:16 INFO Architectural state transition: Startup task orchestrator instantiated runtime_count_heuristic=2
-2026/06/23 14:18:16 INFO Architectural state transition: Background worker pool initialized parallelism_limit=3 queue_capacity=6
-2026/06/23 14:18:16 INFO Architectural transition: Binding control server socket address=127.0.0.1:0
-2026/06/23 14:18:16 INFO Architectural state transition: Background worker pool initialized parallelism_limit=2 queue_capacity=2
-2026/06/23 14:18:16 INFO Architectural state transition: Initializing primary HTTP control plane bind_addr=127.0.0.1:0
-2026/06/23 14:18:16 INFO Architectural state transition: Startup task orchestrator instantiated runtime_count_heuristic=1
-2026/06/23 14:18:16 INFO Architectural state transition: Background worker pool initialized parallelism_limit=2 queue_capacity=4
-2026/06/23 14:18:16 INFO Architectural state transition: Background worker pool initialized parallelism_limit=1 queue_capacity=1
-2026/06/23 14:18:16 INFO Architectural state transition: Startup task orchestrator instantiated runtime_count_heuristic=1
-2026/06/23 14:18:16 INFO Architectural state transition: Background worker pool initialized parallelism_limit=2 queue_capacity=4
-2026/06/23 14:18:16 INFO Architectural state transition: Background worker pool initialized parallelism_limit=1 queue_capacity=1
-2026/06/23 14:18:16 INFO Architectural state transition: Halting startup orchestrator and draining worker pools
-=== PAUSE TestBotRuntime_CapabilityBitmaskDerivation/Commands_and_Moderation_Escalation
-=== CONT  TestScheduleControlServerStartup
-=== CONT  TestControlServerHolder_SetAndStop
-=== CONT  TestScheduleStartupWebhookEmbedUpdates
 === CONT  TestResolveParallelism
-=== CONT  TestArikawaQOTDPublisher_PublishOfficialPost
---- PASS: TestStartupTaskOrchestrator_GoHeavy (0.03s)
-=== CONT  TestFormatStartupMessage
+=== CONT  TestStartupTaskOrchestrator_GoHeavy
 === RUN   TestResolveParallelism/RuntimeStartup
-=== RUN   TestFormatStartupMessage/no_app_version_includes_discordcore
-=== PAUSE TestFormatStartupMessage/no_app_version_includes_discordcore
-=== CONT  TestCollectStartupWebhookEmbedUpdatesNilConfig
---- PASS: TestControlServerHolder_SetAndStop (0.00s)
-=== CONT  TestArikawaQOTDPublisher_GetArikawaPublisher
-2026/06/23 14:18:16 WARN Mitigated service degradation: Background startup task encountered an error and aborted task=error_task kind=heavy error="simulated task error"
-=== RUN   TestFormatStartupMessage/different_versions_include_both
-2026/06/23 14:18:16 INFO Architectural state transition: Halting startup orchestrator and draining worker pools
---- PASS: TestScheduleStartupWebhookEmbedUpdates (0.00s)
-=== PAUSE TestFormatStartupMessage/different_versions_include_both
---- PASS: TestCollectStartupWebhookEmbedUpdatesNilConfig (0.00s)
-2026/06/23 14:18:16 INFO Architectural state transition: Halting startup orchestrator and draining worker pools
+2026/06/23 15:54:52 INFO Architectural state transition: Startup task orchestrator instantiated runtime_count_heuristic=2
+=== CONT  TestBotRuntime_CapabilityBitmaskDerivation
+2026/06/23 15:54:52 INFO Architectural state transition: Background worker pool initialized parallelism_limit=3 queue_capacity=6
+=== RUN   TestBotRuntime_CapabilityBitmaskDerivation/Commands_and_Moderation_Escalation
+=== CONT  TestStartupTaskOrchestrator_GoNil
+=== CONT  TestStartupTaskOrchestrator_ShutdownTaskErrorSwallowed
+=== CONT  TestResolveRuntimeTaskRouterWorkersUsesLargestRuntimeOverride
 === RUN   TestResolveParallelism/RuntimeBackground
-=== RUN   TestFormatStartupMessage/same_versions_omit_discordcore_suffix
-=== PAUSE TestFormatStartupMessage/same_versions_omit_discordcore_suffix
---- PASS: TestStartupTaskOrchestrator_ShutdownWithContextCancellation (0.03s)
 === RUN   TestResolveParallelism/StartupLight
-=== CONT  TestRuntimeCommandCatalogRegistrar_FailFastBarrier
-=== RUN   TestFormatStartupMessage/trims_spaces
-=== PAUSE TestFormatStartupMessage/trims_spaces
-=== CONT  TestCommandCatalogCapabilities_BitmaskIntegrity
-=== CONT  TestCatalogRegistrars_Capabilities
-=== RUN   TestCatalogRegistrars_Capabilities/Moderation_Capabilities
---- PASS: TestRuntimeCommandCatalogRegistrar_FailFastBarrier (0.00s)
-=== RUN   TestCommandCatalogCapabilities_BitmaskIntegrity/CapNone_evaluates_as_true_against_any_base_mask
+--- PASS: TestResolveRuntimeTaskRouterWorkersUsesLargestRuntimeOverride (0.00s)
+=== CONT  TestArikawaQOTDPublisher_GetArikawaPublisher
 === RUN   TestResolveParallelism/StartupLightQueue
-=== PAUSE TestCatalogRegistrars_Capabilities/Moderation_Capabilities
-2026/06/23 14:18:16 INFO Architectural transition: Control server startup bypassed via explicit run options
-2026/06/23 14:18:16 INFO Architectural state transition: Initializing memory barrier for bot runtime multiplexing initial_runtimes_count=0
-=== CONT  TestCatalogRegistrars_RegisterArikawa
-2026/06/23 14:18:16 INFO Architectural state transition: Allocating stateless native Arikawa publisher orchestrator
-2026/06/23 14:18:16 INFO Architectural state transition: Instantiating resolution pipeline for control plane bindings
-=== PAUSE TestCommandCatalogCapabilities_BitmaskIntegrity/CapNone_evaluates_as_true_against_any_base_mask
-2026/06/23 14:18:16 INFO Architectural state transition: Initializing memory barrier for bot runtime multiplexing initial_runtimes_count=0
-=== CONT  TestCatalogRegistrars_DIFailures
-=== RUN   TestCatalogRegistrars_DIFailures/StatsRegistrar_Requires_ConfigManager
-=== RUN   TestCommandCatalogCapabilities_BitmaskIntegrity/Empty_mask_rejects_any_specific_capability
-=== PAUSE TestCatalogRegistrars_DIFailures/StatsRegistrar_Requires_ConfigManager
-2026/06/23 14:18:16 INFO Architectural transition: Control server initializing without authentication middleware addr=127.0.0.1:8376 dashboard_only=true
-2026/06/23 14:18:16 INFO Architectural transition: Binding control server socket address=127.0.0.1:8376
-=== CONT  TestBotRuntimeResolver_ConcurrentMemoryRotation
-=== PAUSE TestCommandCatalogCapabilities_BitmaskIntegrity/Empty_mask_rejects_any_specific_capability
-=== RUN   TestCommandCatalogCapabilities_BitmaskIntegrity/Composite_mask_contains_singular_target
---- PASS: TestStartupTaskOrchestrator_ShutdownTaskErrorSwallowed (0.03s)
-=== PAUSE TestCommandCatalogCapabilities_BitmaskIntegrity/Composite_mask_contains_singular_target
---- PASS: TestArikawaQOTDPublisher_PublishOfficialPost (0.01s)
-=== RUN   TestCatalogRegistrars_Capabilities/Stats_Capabilities
-=== RUN   TestCommandCatalogCapabilities_BitmaskIntegrity/Composite_mask_does_not_contain_missing_target
-2026/06/23 14:18:16 INFO Architectural state transition: Initializing primary HTTP control plane bind_addr=127.0.0.1:8376
-=== PAUSE TestCommandCatalogCapabilities_BitmaskIntegrity/Composite_mask_does_not_contain_missing_target
-=== PAUSE TestCatalogRegistrars_Capabilities/Stats_Capabilities
---- PASS: TestResolveParallelism (0.01s)
+=== CONT  TestStartupTaskOrchestrator_GoLight
+=== PAUSE TestBotRuntime_CapabilityBitmaskDerivation/Commands_and_Moderation_Escalation
+=== CONT  TestStartupTaskOrchestrator_ShutdownWithContextCancellation
+=== CONT  TestCollectStartupWebhookEmbedUpdatesNilConfig
+--- PASS: TestCollectStartupWebhookEmbedUpdatesNilConfig (0.00s)
+=== CONT  TestCollectStartupWebhookEmbedUpdatesGlobalAndGuild
+--- PASS: TestResolveParallelism (0.00s)
     --- PASS: TestResolveParallelism/RuntimeStartup (0.00s)
     --- PASS: TestResolveParallelism/RuntimeBackground (0.00s)
     --- PASS: TestResolveParallelism/StartupLight (0.00s)
     --- PASS: TestResolveParallelism/StartupLightQueue (0.00s)
-2026/06/23 14:18:16 INFO Architectural state transition: Allocating stateless native Arikawa publisher orchestrator
-2026/06/23 14:18:16 INFO Architectural state transition: Initializing memory barrier for bot runtime multiplexing initial_runtimes_count=1
+=== CONT  TestFormatStartupMessage
+--- PASS: TestCollectStartupWebhookEmbedUpdatesGlobalAndGuild (0.00s)
+=== CONT  TestArikawaQOTDPublisher_DeleteOfficialPost
+=== RUN   TestFormatStartupMessage/no_app_version_includes_discordcore
+=== PAUSE TestFormatStartupMessage/no_app_version_includes_discordcore
+=== RUN   TestFormatStartupMessage/different_versions_include_both
+=== PAUSE TestFormatStartupMessage/different_versions_include_both
+=== RUN   TestFormatStartupMessage/same_versions_omit_discordcore_suffix
+=== PAUSE TestFormatStartupMessage/same_versions_omit_discordcore_suffix
+=== RUN   TestFormatStartupMessage/trims_spaces
+=== PAUSE TestFormatStartupMessage/trims_spaces
+=== CONT  TestArikawaQOTDPublisher_PublishOfficialPost
+2026/06/23 15:54:52 INFO Architectural state transition: Background worker pool initialized parallelism_limit=2 queue_capacity=2
+2026/06/23 15:54:52 INFO Architectural state transition: Startup task orchestrator instantiated runtime_count_heuristic=1
+2026/06/23 15:54:52 INFO Architectural state transition: Background worker pool initialized parallelism_limit=2 queue_capacity=4
+2026/06/23 15:54:52 INFO Architectural state transition: Halting startup orchestrator and draining worker pools
+2026/06/23 15:54:52 INFO Architectural state transition: Background worker pool initialized parallelism_limit=1 queue_capacity=1
+--- PASS: TestStartupTaskOrchestrator_GoNil (0.01s)
+2026/06/23 15:54:52 INFO Architectural state transition: Initializing memory barrier for bot runtime multiplexing initial_runtimes_count=0
+2026/06/23 15:54:52 INFO Architectural state transition: Allocating stateless native Arikawa publisher orchestrator
 --- PASS: TestArikawaQOTDPublisher_GetArikawaPublisher (0.01s)
-=== CONT  TestBotRuntime_CapabilityBitmaskDerivation/Commands_and_Moderation_Escalation
-=== RUN   TestCatalogRegistrars_RegisterArikawa/Moderation_Catalog_Wiring
-=== CONT  TestFormatStartupMessage/no_app_version_includes_discordcore
+=== CONT  TestNewRuntimeTaskRouterConfigBuildsSharedLimiter
+2026/06/23 15:54:52 INFO Architectural state transition: Configured background worker budget for task router botInstanceID=default concurrency_budget=5
+--- PASS: TestNewRuntimeTaskRouterConfigBuildsSharedLimiter (0.00s)
+=== CONT  TestResolveRuntimeTaskRouterWorkersUsesAutoBudgets
+--- PASS: TestResolveRuntimeTaskRouterWorkersUsesAutoBudgets (0.00s)
+=== CONT  TestScheduleStartupWebhookEmbedUpdates
+--- PASS: TestScheduleStartupWebhookEmbedUpdates (0.00s)
+2026/06/23 15:54:52 INFO Architectural state transition: Startup task orchestrator instantiated runtime_count_heuristic=1
+2026/06/23 15:54:52 INFO Architectural state transition: Background worker pool initialized parallelism_limit=2 queue_capacity=4
+2026/06/23 15:54:52 INFO Architectural state transition: Initializing memory barrier for bot runtime multiplexing initial_runtimes_count=0
+2026/06/23 15:54:52 INFO Architectural state transition: Allocating stateless native Arikawa publisher orchestrator
+2026/06/23 15:54:52 INFO Architectural state transition: Startup task orchestrator instantiated runtime_count_heuristic=1
+2026/06/23 15:54:52 INFO Architectural state transition: Background worker pool initialized parallelism_limit=1 queue_capacity=1
+=== CONT  TestCatalogRegistrars_DIFailures
+2026/06/23 15:54:52 INFO Architectural state transition: Startup task orchestrator instantiated runtime_count_heuristic=1
+2026/06/23 15:54:52 INFO Architectural state transition: Background worker pool initialized parallelism_limit=2 queue_capacity=4
+=== RUN   TestCatalogRegistrars_DIFailures/StatsRegistrar_Requires_ConfigManager
+2026/06/23 15:54:52 INFO Architectural state transition: Background worker pool initialized parallelism_limit=1 queue_capacity=1
+=== CONT  TestRuntimeCommandCatalogRegistrar_FailFastBarrier
+2026/06/23 15:54:52 INFO Architectural state transition: Halting startup orchestrator and draining worker pools
+2026/06/23 15:54:52 INFO Architectural state transition: Background worker pool initialized parallelism_limit=2 queue_capacity=4
+=== CONT  TestBotRuntimeResolver_ConcurrentMemoryRotation
+2026/06/23 15:54:52 INFO Architectural state transition: Initializing memory barrier for bot runtime multiplexing initial_runtimes_count=0
+2026/06/23 15:54:52 WARN Mitigated service degradation: Background startup task encountered an error and aborted task=error_task kind=heavy error="simulated task error"
+2026/06/23 15:54:52 INFO Architectural state transition: Halting startup orchestrator and draining worker pools
+2026/06/23 15:54:52 INFO Architectural state transition: Allocating stateless native Arikawa publisher orchestrator
+=== CONT  TestCatalogRegistrars_Capabilities
+=== RUN   TestCatalogRegistrars_Capabilities/Moderation_Capabilities
+2026/06/23 15:54:52 INFO Architectural state transition: Initializing memory barrier for bot runtime multiplexing initial_runtimes_count=1
+=== PAUSE TestCatalogRegistrars_Capabilities/Moderation_Capabilities
+=== PAUSE TestCatalogRegistrars_DIFailures/StatsRegistrar_Requires_ConfigManager
+=== CONT  TestCommandCatalogCapabilities_BitmaskIntegrity
+=== CONT  TestStartControlServerStartupTask
+--- PASS: TestArikawaQOTDPublisher_PublishOfficialPost (0.00s)
+=== CONT  TestControlServerHolder_SetAndStop
+=== CONT  TestScheduleControlServerStartup
+2026/06/23 15:54:52 INFO Architectural state transition: Initializing memory barrier for bot runtime multiplexing initial_runtimes_count=0
+=== RUN   TestCatalogRegistrars_Capabilities/Stats_Capabilities
+2026/06/23 15:54:52 INFO Architectural state transition: Instantiating resolution pipeline for control plane bindings
+2026/06/23 15:54:52 INFO Architectural transition: Control server startup bypassed via explicit run options
+2026/06/23 15:54:52 INFO Architectural state transition: Instantiating resolution pipeline for control plane bindings
+2026/06/23 15:54:52 INFO Architectural transition: Binding control server socket address=127.0.0.1:0
+2026/06/23 15:54:52 INFO Architectural state transition: Initializing primary HTTP control plane bind_addr=127.0.0.1:0
+2026/06/23 15:54:52 INFO Architectural transition: Control server initializing without authentication middleware addr=127.0.0.1:8376 dashboard_only=true
+2026/06/23 15:54:52 INFO Architectural transition: Binding control server socket address=127.0.0.1:8376
+2026/06/23 15:54:52 INFO Architectural state transition: Initializing primary HTTP control plane bind_addr=127.0.0.1:8376
+2026/06/23 15:54:52 INFO Architectural state transition: Background worker pool initialized parallelism_limit=1 queue_capacity=1
+=== PAUSE TestCatalogRegistrars_Capabilities/Stats_Capabilities
+=== CONT  TestCatalogRegistrars_RegisterArikawa
 === CONT  TestFormatStartupMessage/trims_spaces
+=== RUN   TestCommandCatalogCapabilities_BitmaskIntegrity/CapNone_evaluates_as_true_against_any_base_mask
+--- PASS: TestStartupTaskOrchestrator_GoHeavy (0.01s)
+=== CONT  TestBotRuntime_CapabilityBitmaskDerivation/Commands_and_Moderation_Escalation
+=== PAUSE TestCommandCatalogCapabilities_BitmaskIntegrity/CapNone_evaluates_as_true_against_any_base_mask
+=== RUN   TestCommandCatalogCapabilities_BitmaskIntegrity/Empty_mask_rejects_any_specific_capability
+=== PAUSE TestCommandCatalogCapabilities_BitmaskIntegrity/Empty_mask_rejects_any_specific_capability
+=== RUN   TestCommandCatalogCapabilities_BitmaskIntegrity/Composite_mask_contains_singular_target
+2026/06/23 15:54:52 INFO Architectural state transition: Halting startup orchestrator and draining worker pools
+=== PAUSE TestCommandCatalogCapabilities_BitmaskIntegrity/Composite_mask_contains_singular_target
+=== RUN   TestCommandCatalogCapabilities_BitmaskIntegrity/Composite_mask_does_not_contain_missing_target
+=== CONT  TestFormatStartupMessage/no_app_version_includes_discordcore
+=== PAUSE TestCommandCatalogCapabilities_BitmaskIntegrity/Composite_mask_does_not_contain_missing_target
+=== RUN   TestCatalogRegistrars_RegisterArikawa/Moderation_Catalog_Wiring
+=== RUN   TestCommandCatalogCapabilities_BitmaskIntegrity/Composite_mask_contains_exact_multiple_targets
 === CONT  TestFormatStartupMessage/same_versions_omit_discordcore_suffix
-=== CONT  TestFormatStartupMessage/different_versions_include_both
-=== CONT  TestCatalogRegistrars_DIFailures/StatsRegistrar_Requires_ConfigManager
+--- PASS: TestRuntimeCommandCatalogRegistrar_FailFastBarrier (0.00s)
+--- PASS: TestArikawaQOTDPublisher_DeleteOfficialPost (0.01s)
+--- PASS: TestStartupTaskOrchestrator_ShutdownTaskErrorSwallowed (0.01s)
+--- PASS: TestStartupTaskOrchestrator_GoLight (0.01s)
 === CONT  TestCatalogRegistrars_Capabilities/Moderation_Capabilities
 === CONT  TestCatalogRegistrars_Capabilities/Stats_Capabilities
---- PASS: TestFormatStartupMessage (0.00s)
-    --- PASS: TestFormatStartupMessage/no_app_version_includes_discordcore (0.00s)
-    --- PASS: TestFormatStartupMessage/different_versions_include_both (0.00s)
-    --- PASS: TestFormatStartupMessage/same_versions_omit_discordcore_suffix (0.00s)
-    --- PASS: TestFormatStartupMessage/trims_spaces (0.00s)
-=== PAUSE TestCatalogRegistrars_RegisterArikawa/Moderation_Catalog_Wiring
---- PASS: TestCatalogRegistrars_DIFailures (0.00s)
-    --- PASS: TestCatalogRegistrars_DIFailures/StatsRegistrar_Requires_ConfigManager (0.00s)
---- PASS: TestCatalogRegistrars_Capabilities (0.01s)
+=== CONT  TestFormatStartupMessage/different_versions_include_both
+--- PASS: TestControlServerHolder_SetAndStop (0.00s)
+--- PASS: TestCatalogRegistrars_Capabilities (0.00s)
     --- PASS: TestCatalogRegistrars_Capabilities/Moderation_Capabilities (0.00s)
     --- PASS: TestCatalogRegistrars_Capabilities/Stats_Capabilities (0.00s)
+=== CONT  TestCatalogRegistrars_DIFailures/StatsRegistrar_Requires_ConfigManager
+--- PASS: TestCatalogRegistrars_DIFailures (0.00s)
+    --- PASS: TestCatalogRegistrars_DIFailures/StatsRegistrar_Requires_ConfigManager (0.00s)
+--- PASS: TestStartupTaskOrchestrator_ShutdownWithContextCancellation (0.02s)
+=== PAUSE TestCommandCatalogCapabilities_BitmaskIntegrity/Composite_mask_contains_exact_multiple_targets
+=== CONT  TestCommandCatalogCapabilities_BitmaskIntegrity/CapNone_evaluates_as_true_against_any_base_mask
+=== PAUSE TestCatalogRegistrars_RegisterArikawa/Moderation_Catalog_Wiring
+=== CONT  TestCommandCatalogCapabilities_BitmaskIntegrity/Composite_mask_contains_exact_multiple_targets
+=== CONT  TestCommandCatalogCapabilities_BitmaskIntegrity/Composite_mask_does_not_contain_missing_target
+=== CONT  TestCommandCatalogCapabilities_BitmaskIntegrity/Empty_mask_rejects_any_specific_capability
+=== CONT  TestCommandCatalogCapabilities_BitmaskIntegrity/Composite_mask_contains_singular_target
+--- PASS: TestCommandCatalogCapabilities_BitmaskIntegrity (0.03s)
+    --- PASS: TestCommandCatalogCapabilities_BitmaskIntegrity/CapNone_evaluates_as_true_against_any_base_mask (0.00s)
+    --- PASS: TestCommandCatalogCapabilities_BitmaskIntegrity/Composite_mask_contains_exact_multiple_targets (0.00s)
+    --- PASS: TestCommandCatalogCapabilities_BitmaskIntegrity/Composite_mask_does_not_contain_missing_target (0.00s)
+    --- PASS: TestCommandCatalogCapabilities_BitmaskIntegrity/Empty_mask_rejects_any_specific_capability (0.00s)
+    --- PASS: TestCommandCatalogCapabilities_BitmaskIntegrity/Composite_mask_contains_singular_target (0.00s)
+--- PASS: TestBotRuntime_CapabilityBitmaskDerivation (0.00s)
+    --- PASS: TestBotRuntime_CapabilityBitmaskDerivation/Commands_and_Moderation_Escalation (0.02s)
 === RUN   TestCatalogRegistrars_RegisterArikawa/Stats_Catalog_Wiring
 === PAUSE TestCatalogRegistrars_RegisterArikawa/Stats_Catalog_Wiring
+--- PASS: TestFormatStartupMessage (0.00s)
+    --- PASS: TestFormatStartupMessage/trims_spaces (0.00s)
+    --- PASS: TestFormatStartupMessage/no_app_version_includes_discordcore (0.00s)
+    --- PASS: TestFormatStartupMessage/same_versions_omit_discordcore_suffix (0.00s)
+    --- PASS: TestFormatStartupMessage/different_versions_include_both (0.00s)
 === CONT  TestCatalogRegistrars_RegisterArikawa/Stats_Catalog_Wiring
 === CONT  TestCatalogRegistrars_RegisterArikawa/Moderation_Catalog_Wiring
---- PASS: TestCatalogRegistrars_RegisterArikawa (0.01s)
-    --- PASS: TestCatalogRegistrars_RegisterArikawa/Moderation_Catalog_Wiring (0.00s)
+--- PASS: TestCatalogRegistrars_RegisterArikawa (0.03s)
     --- PASS: TestCatalogRegistrars_RegisterArikawa/Stats_Catalog_Wiring (0.00s)
-=== RUN   TestCommandCatalogCapabilities_BitmaskIntegrity/Composite_mask_contains_exact_multiple_targets
-=== PAUSE TestCommandCatalogCapabilities_BitmaskIntegrity/Composite_mask_contains_exact_multiple_targets
-=== CONT  TestCommandCatalogCapabilities_BitmaskIntegrity/Composite_mask_contains_singular_target
---- PASS: TestBotRuntime_CapabilityBitmaskDerivation (0.04s)
-    --- PASS: TestBotRuntime_CapabilityBitmaskDerivation/Commands_and_Moderation_Escalation (0.00s)
-=== CONT  TestCommandCatalogCapabilities_BitmaskIntegrity/Empty_mask_rejects_any_specific_capability
-=== CONT  TestCommandCatalogCapabilities_BitmaskIntegrity/Composite_mask_does_not_contain_missing_target
-=== CONT  TestCommandCatalogCapabilities_BitmaskIntegrity/Composite_mask_contains_exact_multiple_targets
-=== CONT  TestCommandCatalogCapabilities_BitmaskIntegrity/CapNone_evaluates_as_true_against_any_base_mask
---- PASS: TestStartControlServerStartupTask (0.05s)
+    --- PASS: TestCatalogRegistrars_RegisterArikawa/Moderation_Catalog_Wiring (0.00s)
 --- PASS: TestScheduleControlServerStartup (0.03s)
---- PASS: TestCommandCatalogCapabilities_BitmaskIntegrity (0.02s)
-    --- PASS: TestCommandCatalogCapabilities_BitmaskIntegrity/Composite_mask_contains_singular_target (0.00s)
-    --- PASS: TestCommandCatalogCapabilities_BitmaskIntegrity/Empty_mask_rejects_any_specific_capability (0.00s)
-    --- PASS: TestCommandCatalogCapabilities_BitmaskIntegrity/Composite_mask_does_not_contain_missing_target (0.00s)
-    --- PASS: TestCommandCatalogCapabilities_BitmaskIntegrity/Composite_mask_contains_exact_multiple_targets (0.00s)
-    --- PASS: TestCommandCatalogCapabilities_BitmaskIntegrity/CapNone_evaluates_as_true_against_any_base_mask (0.00s)
---- PASS: TestBotRuntimeResolver_ConcurrentMemoryRotation (0.51s)
+--- PASS: TestStartControlServerStartupTask (0.04s)
+--- PASS: TestBotRuntimeResolver_ConcurrentMemoryRotation (0.50s)
 PASS
-ok  	github.com/small-frappuccino/discordcore/pkg/app	(cached)
+ok  	github.com/small-frappuccino/discordcore/pkg/app	23.151s
 === RUN   TestRunUsesMainProfileOptions
---- PASS: TestRunUsesMainProfileOptions (0.01s)
+--- PASS: TestRunUsesMainProfileOptions (0.37s)
 PASS
-ok  	github.com/small-frappuccino/discordcore/pkg/app/runtimecmd	(cached)
+ok  	github.com/small-frappuccino/discordcore/pkg/app/runtimecmd	5.003s
 === RUN   TestExecutionEvent_Golden_Unmarshal
 --- PASS: TestExecutionEvent_Golden_Unmarshal (0.07s)
 === RUN   TestExecutionEvent_RoundTrip
@@ -1997,84 +1990,84 @@ ok  	github.com/small-frappuccino/discordcore/pkg/clock	(cached)
 === RUN   TestDashboard_CompressionNegotiation/Gzip_supported
 === RUN   TestDashboard_CompressionNegotiation/Brotli_fallback_to_gzip
 === RUN   TestDashboard_CompressionNegotiation/No_compression
---- PASS: TestDashboard_CompressionNegotiation (0.03s)
+--- PASS: TestDashboard_CompressionNegotiation (0.01s)
     --- PASS: TestDashboard_CompressionNegotiation/Gzip_supported (0.00s)
     --- PASS: TestDashboard_CompressionNegotiation/Brotli_fallback_to_gzip (0.00s)
     --- PASS: TestDashboard_CompressionNegotiation/No_compression (0.00s)
 === RUN   TestFeaturesSettings_RaceConditions
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
-2026/06/23 14:18:15 INFO Architectural state transition: Runtime configuration updated via control plane
---- PASS: TestFeaturesSettings_RaceConditions (0.07s)
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+2026/06/23 15:54:43 INFO Architectural state transition: Runtime configuration updated via control plane
+--- PASS: TestFeaturesSettings_RaceConditions (0.02s)
 === RUN   TestGuilds_SimpleGet
---- PASS: TestGuilds_SimpleGet (0.02s)
+--- PASS: TestGuilds_SimpleGet (0.00s)
 === RUN   TestHealth_GenericReflection
 --- PASS: TestHealth_GenericReflection (0.00s)
 === RUN   TestMiddleware_OOMPrevention
---- PASS: TestMiddleware_OOMPrevention (0.68s)
+--- PASS: TestMiddleware_OOMPrevention (0.16s)
 === RUN   TestMiddleware_TimingAttack
-2026/06/23 14:18:16 WARN Mitigated service degradation: Invalid Authorization token provided
+2026/06/23 15:54:43 WARN Mitigated service degradation: Invalid Authorization token provided
 --- PASS: TestMiddleware_TimingAttack (0.00s)
 === RUN   TestMiddleware_AdminAccess
-2026/06/23 14:18:16 WARN Mitigated service degradation: Forbidden access attempt by non-admin identity
+2026/06/23 15:54:43 WARN Mitigated service degradation: Forbidden access attempt by non-admin identity
 --- PASS: TestMiddleware_AdminAccess (0.00s)
 === RUN   TestOAuth_CSRFPurge
-2026/06/23 14:18:16 WARN Mitigated service degradation: OAuth state CSRF validation failed received_state=forged_state
---- PASS: TestOAuth_CSRFPurge (0.01s)
+2026/06/23 15:54:43 WARN Mitigated service degradation: OAuth state CSRF validation failed received_state=forged_state
+--- PASS: TestOAuth_CSRFPurge (0.00s)
 === RUN   TestRouter_Go122MethodMultiplexing
---- PASS: TestRouter_Go122MethodMultiplexing (0.01s)
+--- PASS: TestRouter_Go122MethodMultiplexing (0.00s)
 === RUN   TestServer_GracefulDegradation
-2026/06/23 14:18:16 INFO Architectural state transition: Commencing graceful shutdown of HTTP control plane
---- PASS: TestServer_GracefulDegradation (10.02s)
+2026/06/23 15:54:43 INFO Architectural state transition: Commencing graceful shutdown of HTTP control plane
+--- PASS: TestServer_GracefulDegradation (10.01s)
 PASS
-ok  	github.com/small-frappuccino/discordcore/pkg/control	(cached)
+ok  	github.com/small-frappuccino/discordcore/pkg/control	11.623s
 === RUN   TestEnsureReadyCreatesMaterialsAndTrusts
 --- PASS: TestEnsureReadyCreatesMaterialsAndTrusts (0.19s)
 === RUN   TestEnsureReadyReusesExistingMaterials
@@ -2088,41 +2081,41 @@ ok  	github.com/small-frappuccino/discordcore/pkg/control/localtls	(cached)
 ?   	github.com/small-frappuccino/discordcore/pkg/discord	[no test files]
 ?   	github.com/small-frappuccino/discordcore/pkg/discord/automod	[no test files]
 === RUN   TestCache_GCEviction
-2026/06/23 14:18:16 INFO Architectural state transition: Initializing UnifiedCache member_ttl=0s guild_ttl=1m0s
---- PASS: TestCache_GCEviction (0.07s)
+2026/06/23 15:54:53 INFO Architectural state transition: Initializing UnifiedCache member_ttl=0s guild_ttl=1m0s
+--- PASS: TestCache_GCEviction (0.04s)
 === RUN   TestCache_StaleReads
-2026/06/23 14:18:16 INFO Architectural state transition: Initializing UnifiedCache member_ttl=0s guild_ttl=1m0s
-2026/06/23 14:18:16 WARN Mitigated service degradation: Stale read detected, weak pointer collected before explicit invalidation key=456
---- PASS: TestCache_StaleReads (0.01s)
+2026/06/23 15:54:53 INFO Architectural state transition: Initializing UnifiedCache member_ttl=0s guild_ttl=1m0s
+2026/06/23 15:54:53 WARN Mitigated service degradation: Stale read detected, weak pointer collected before explicit invalidation key=456
+--- PASS: TestCache_StaleReads (0.00s)
 === RUN   TestCache_ReferenceCycles
-2026/06/23 14:18:16 INFO Architectural state transition: Initializing UnifiedCache member_ttl=1m0s guild_ttl=0s
---- PASS: TestCache_ReferenceCycles (0.02s)
+2026/06/23 15:54:53 INFO Architectural state transition: Initializing UnifiedCache member_ttl=1m0s guild_ttl=0s
+--- PASS: TestCache_ReferenceCycles (0.01s)
 === RUN   TestCache_AsyncIO
-2026/06/23 14:18:16 INFO Architectural state transition: Initializing UnifiedCache member_ttl=0s guild_ttl=1m0s
---- PASS: TestCache_AsyncIO (0.01s)
+2026/06/23 15:54:53 INFO Architectural state transition: Initializing UnifiedCache member_ttl=0s guild_ttl=1m0s
+--- PASS: TestCache_AsyncIO (0.00s)
 === RUN   TestCache_CorruptRecovery
-2026/06/23 14:18:16 INFO Architectural state transition: Initializing UnifiedCache member_ttl=0s guild_ttl=0s
+2026/06/23 15:54:53 INFO Architectural state transition: Initializing UnifiedCache member_ttl=0s guild_ttl=0s
 --- PASS: TestCache_CorruptRecovery (0.00s)
 === RUN   TestSession_SingleflightLoad
-2026/06/23 14:18:16 INFO Architectural state transition: Initializing UnifiedCache member_ttl=0s guild_ttl=1m0s
-2026/06/23 14:18:16 INFO Architectural state transition: Initializing CachedSession wrapper
---- PASS: TestSession_SingleflightLoad (0.13s)
+2026/06/23 15:54:53 INFO Architectural state transition: Initializing UnifiedCache member_ttl=0s guild_ttl=1m0s
+2026/06/23 15:54:53 INFO Architectural state transition: Initializing CachedSession wrapper
+--- PASS: TestSession_SingleflightLoad (0.07s)
 === RUN   TestSession_SingleflightError
-2026/06/23 14:18:16 INFO Architectural state transition: Initializing UnifiedCache member_ttl=0s guild_ttl=1m0s
-2026/06/23 14:18:16 INFO Architectural state transition: Initializing CachedSession wrapper
+2026/06/23 15:54:53 INFO Architectural state transition: Initializing UnifiedCache member_ttl=0s guild_ttl=1m0s
+2026/06/23 15:54:53 INFO Architectural state transition: Initializing CachedSession wrapper
 --- PASS: TestSession_SingleflightError (0.01s)
 === RUN   TestSession_PartialInvalidation
-2026/06/23 14:18:16 INFO Architectural state transition: Initializing UnifiedCache member_ttl=0s guild_ttl=0s
-2026/06/23 14:18:16 INFO Architectural state transition: Initializing CachedSession wrapper
-2026/06/23 14:18:16 INFO Architectural state transition: Partial Invalidation via Gateway event=GuildRoleDelete
+2026/06/23 15:54:53 INFO Architectural state transition: Initializing UnifiedCache member_ttl=0s guild_ttl=0s
+2026/06/23 15:54:53 INFO Architectural state transition: Initializing CachedSession wrapper
+2026/06/23 15:54:53 INFO Architectural state transition: Partial Invalidation via Gateway event=GuildRoleDelete
 --- PASS: TestSession_PartialInvalidation (0.00s)
 === RUN   TestSession_RaceUpdate
-2026/06/23 14:18:16 INFO Architectural state transition: Initializing UnifiedCache member_ttl=1m0s guild_ttl=0s
-2026/06/23 14:18:16 INFO Architectural state transition: Initializing CachedSession wrapper
-2026/06/23 14:18:16 INFO Architectural state transition: Invalidation via Gateway event=GuildMemberUpdate
+2026/06/23 15:54:53 INFO Architectural state transition: Initializing UnifiedCache member_ttl=1m0s guild_ttl=0s
+2026/06/23 15:54:53 INFO Architectural state transition: Initializing CachedSession wrapper
+2026/06/23 15:54:53 INFO Architectural state transition: Invalidation via Gateway event=GuildMemberUpdate
 --- PASS: TestSession_RaceUpdate (0.00s)
 PASS
-ok  	github.com/small-frappuccino/discordcore/pkg/discord/cache	(cached)
+ok  	github.com/small-frappuccino/discordcore/pkg/discord/cache	7.942s
 === RUN   TestExecuteClean_Pagination
 === PAUSE TestExecuteClean_Pagination
 === RUN   TestExecuteClean_Degradation_50034
@@ -2157,18 +2150,18 @@ ok  	github.com/small-frappuccino/discordcore/pkg/discord/clean	(cached)
 === RUN   TestGetArikawaSubCommandOptions/Level_1_Subcommand
 === RUN   TestGetArikawaSubCommandOptions/Level_2_Subcommand_Group
 === RUN   TestGetArikawaSubCommandOptions/Nil_Interaction
---- PASS: TestGetArikawaSubCommandOptions (0.00s)
+--- PASS: TestGetArikawaSubCommandOptions (0.03s)
     --- PASS: TestGetArikawaSubCommandOptions/Invalid_Type_Assertion_(Ping_Interaction) (0.00s)
     --- PASS: TestGetArikawaSubCommandOptions/Flat_Command_(No_Subcommands) (0.00s)
     --- PASS: TestGetArikawaSubCommandOptions/Level_1_Subcommand (0.00s)
     --- PASS: TestGetArikawaSubCommandOptions/Level_2_Subcommand_Group (0.00s)
-    --- PASS: TestGetArikawaSubCommandOptions/Nil_Interaction (0.00s)
+    --- PASS: TestGetArikawaSubCommandOptions/Nil_Interaction (0.01s)
 === RUN   TestArikawaOptionList_String
 === RUN   TestArikawaOptionList_String/Happy_Path
 === RUN   TestArikawaOptionList_String/Missing_Key
 === RUN   TestArikawaOptionList_String/Nil_Value
---- PASS: TestArikawaOptionList_String (0.00s)
-    --- PASS: TestArikawaOptionList_String/Happy_Path (0.00s)
+--- PASS: TestArikawaOptionList_String (0.05s)
+    --- PASS: TestArikawaOptionList_String/Happy_Path (0.05s)
     --- PASS: TestArikawaOptionList_String/Missing_Key (0.00s)
     --- PASS: TestArikawaOptionList_String/Nil_Value (0.00s)
 === RUN   TestArikawaOptionList_Int
@@ -2206,8 +2199,8 @@ ok  	github.com/small-frappuccino/discordcore/pkg/discord/clean	(cached)
 === RUN   TestArikawaOptionList_ChannelID/Missing_Key
 === RUN   TestArikawaOptionList_ChannelID/Type_Mismatch
 === RUN   TestArikawaOptionList_ChannelID/Nil_Value
---- PASS: TestArikawaOptionList_ChannelID (0.00s)
-    --- PASS: TestArikawaOptionList_ChannelID/Happy_Path (0.00s)
+--- PASS: TestArikawaOptionList_ChannelID (0.01s)
+    --- PASS: TestArikawaOptionList_ChannelID/Happy_Path (0.01s)
     --- PASS: TestArikawaOptionList_ChannelID/Missing_Key (0.00s)
     --- PASS: TestArikawaOptionList_ChannelID/Type_Mismatch (0.00s)
     --- PASS: TestArikawaOptionList_ChannelID/Nil_Value (0.00s)
@@ -2260,9 +2253,9 @@ ok  	github.com/small-frappuccino/discordcore/pkg/discord/clean	(cached)
 === RUN   TestCommandSyncer_SyncBulkOverwrite_TelemetryAndErrors
 === RUN   TestCommandSyncer_SyncBulkOverwrite_TelemetryAndErrors/Cenário_de_Sucesso
 === RUN   TestCommandSyncer_SyncBulkOverwrite_TelemetryAndErrors/Cenário_de_Falha
---- PASS: TestCommandSyncer_SyncBulkOverwrite_TelemetryAndErrors (0.00s)
-    --- PASS: TestCommandSyncer_SyncBulkOverwrite_TelemetryAndErrors/Cenário_de_Sucesso (0.00s)
-    --- PASS: TestCommandSyncer_SyncBulkOverwrite_TelemetryAndErrors/Cenário_de_Falha (0.00s)
+--- PASS: TestCommandSyncer_SyncBulkOverwrite_TelemetryAndErrors (0.05s)
+    --- PASS: TestCommandSyncer_SyncBulkOverwrite_TelemetryAndErrors/Cenário_de_Sucesso (0.02s)
+    --- PASS: TestCommandSyncer_SyncBulkOverwrite_TelemetryAndErrors/Cenário_de_Falha (0.02s)
 === RUN   TestCommandSyncer_Diff
 === PAUSE TestCommandSyncer_Diff
 === RUN   TestNewArikawaMissingConfigErrorData
@@ -2281,135 +2274,135 @@ ok  	github.com/small-frappuccino/discordcore/pkg/discord/clean	(cached)
 === PAUSE TestRouteRegistry_Diff
 === RUN   TestCommandRouter_RouteInteraction
 === PAUSE TestCommandRouter_RouteInteraction
-=== CONT  TestArikawaGroupCommand_Handle
-=== CONT  TestNewArikawaMissingConfigErrorData
-=== CONT  TestArikawaGroupCommand_Invariants
-=== RUN   TestArikawaGroupCommand_Invariants/memory_initialization
-=== CONT  TestRouteRegistry_BulkOverwrite
-=== PAUSE TestArikawaGroupCommand_Invariants/memory_initialization
+=== CONT  TestCommandSyncer_BuildCreateData
+=== RUN   TestCommandSyncer_BuildCreateData/Cenário_B_(Fallback/Omissão)
+=== PAUSE TestCommandSyncer_BuildCreateData/Cenário_B_(Fallback/Omissão)
+=== CONT  TestRouteRegistry_Diff
+=== CONT  TestCommandSyncer_Diff
 === CONT  TestCommandSyncer_SyncBulkOverwrite_Routing
+=== RUN   TestCommandSyncer_BuildCreateData/Cenário_A_(Implementação_Completa)
 === RUN   TestCommandSyncer_SyncBulkOverwrite_Routing/Global_Sync
---- PASS: TestRouteRegistry_BulkOverwrite (0.00s)
+=== PAUSE TestCommandSyncer_BuildCreateData/Cenário_A_(Implementação_Completa)
 === PAUSE TestCommandSyncer_SyncBulkOverwrite_Routing/Global_Sync
 === RUN   TestCommandSyncer_SyncBulkOverwrite_Routing/Guild_Sync_Dinâmico
-=== RUN   TestNewArikawaMissingConfigErrorData/standard_feature_missing
-=== PAUSE TestNewArikawaMissingConfigErrorData/standard_feature_missing
-=== RUN   TestNewArikawaMissingConfigErrorData/ignored_parameters_do_not_mutate_output
-=== PAUSE TestNewArikawaMissingConfigErrorData/ignored_parameters_do_not_mutate_output
-=== CONT  TestCommandRegistry_ConcurrentSafety
-=== PAUSE TestCommandSyncer_SyncBulkOverwrite_Routing/Guild_Sync_Dinâmico
-=== RUN   TestArikawaGroupCommand_Invariants/overwriting_protection
-=== RUN   TestNewArikawaMissingConfigErrorData/empty_feature_string_edge_case
-=== CONT  TestRouteRegistry_Diff
-=== PAUSE TestArikawaGroupCommand_Invariants/overwriting_protection
 --- PASS: TestRouteRegistry_Diff (0.00s)
+=== PAUSE TestCommandSyncer_SyncBulkOverwrite_Routing/Guild_Sync_Dinâmico
+=== CONT  TestNewArikawaMissingConfigErrorData
+=== RUN   TestNewArikawaMissingConfigErrorData/standard_feature_missing
+=== CONT  TestCommandRouter_RouteInteraction
+=== CONT  TestArikawaGroupCommand_Options
+=== PAUSE TestNewArikawaMissingConfigErrorData/standard_feature_missing
+=== CONT  TestArikawaGroupCommand_Handle
+=== RUN   TestArikawaGroupCommand_Handle/fails_on_invalid_type_assertion
+=== RUN   TestArikawaGroupCommand_Options/empty_state
+=== PAUSE TestArikawaGroupCommand_Handle/fails_on_invalid_type_assertion
+=== CONT  TestCommandRegistry_ConcurrentSafety
+=== CONT  TestRouteRegistry_BulkOverwrite
+--- PASS: TestRouteRegistry_BulkOverwrite (0.00s)
+=== RUN   TestNewArikawaMissingConfigErrorData/ignored_parameters_do_not_mutate_output
+=== RUN   TestArikawaGroupCommand_Handle/delegates_to_correct_subcommand
+=== PAUSE TestNewArikawaMissingConfigErrorData/ignored_parameters_do_not_mutate_output
+=== CONT  TestNewArikawaContext_InitializationAndFailFast
+=== PAUSE TestArikawaGroupCommand_Handle/delegates_to_correct_subcommand
+=== RUN   TestNewArikawaMissingConfigErrorData/empty_feature_string_edge_case
+=== PAUSE TestArikawaGroupCommand_Options/empty_state
+=== CONT  TestArikawaGroupCommand_Invariants
+=== PAUSE TestNewArikawaMissingConfigErrorData/empty_feature_string_edge_case
+=== RUN   TestArikawaGroupCommand_Handle/returns_error_on_unknown_subcommand
+=== RUN   TestArikawaGroupCommand_Options/flat_resolution
+=== PAUSE TestArikawaGroupCommand_Handle/returns_error_on_unknown_subcommand
+=== PAUSE TestArikawaGroupCommand_Options/flat_resolution
+=== RUN   TestArikawaGroupCommand_Handle/fails_on_empty_options
+=== RUN   TestArikawaGroupCommand_Options/nested_group_resolution
+=== PAUSE TestArikawaGroupCommand_Handle/fails_on_empty_options
+=== RUN   TestArikawaGroupCommand_Invariants/memory_initialization
+=== RUN   TestNewArikawaMissingConfigErrorData/special_characters_in_feature
+=== PAUSE TestArikawaGroupCommand_Invariants/memory_initialization
+=== PAUSE TestArikawaGroupCommand_Options/nested_group_resolution
+=== CONT  TestArikawaContext_APIWrappers_DefensiveChecks
+=== PAUSE TestNewArikawaMissingConfigErrorData/special_characters_in_feature
+=== RUN   TestArikawaGroupCommand_Invariants/overwriting_protection
+=== CONT  TestArikawaContext_ContextResolution
+=== RUN   TestArikawaContext_APIWrappers_DefensiveChecks/Respond_triggers_error_on_nil_Interaction
+=== CONT  TestCommandSyncer_BuildCreateData/Cenário_A_(Implementação_Completa)
+--- PASS: TestArikawaContext_ContextResolution (0.00s)
+=== CONT  TestCommandSyncer_BuildCreateData/Cenário_B_(Fallback/Omissão)
+=== PAUSE TestArikawaGroupCommand_Invariants/overwriting_protection
+=== RUN   TestArikawaContext_APIWrappers_DefensiveChecks/Defer_triggers_error_on_nil_Client
 === RUN   TestArikawaGroupCommand_Invariants/load-bearing_invariants
 === PAUSE TestArikawaGroupCommand_Invariants/load-bearing_invariants
-=== CONT  TestNewArikawaContext_InitializationAndFailFast
-=== RUN   TestNewArikawaContext_InitializationAndFailFast/Valid_Interaction
-=== PAUSE TestNewArikawaMissingConfigErrorData/empty_feature_string_edge_case
-=== PAUSE TestNewArikawaContext_InitializationAndFailFast/Valid_Interaction
-=== CONT  TestCommandSyncer_Diff
-=== RUN   TestNewArikawaContext_InitializationAndFailFast/Invalid_Event_Data_-_SenderID_0
-=== PAUSE TestNewArikawaContext_InitializationAndFailFast/Invalid_Event_Data_-_SenderID_0
-=== CONT  TestArikawaGroupCommand_Options
-=== CONT  TestCommandRouter_RouteInteraction
-=== RUN   TestArikawaGroupCommand_Handle/fails_on_invalid_type_assertion
-=== CONT  TestCommandSyncer_BuildCreateData
-=== RUN   TestNewArikawaMissingConfigErrorData/special_characters_in_feature
-=== PAUSE TestArikawaGroupCommand_Handle/fails_on_invalid_type_assertion
-=== RUN   TestArikawaGroupCommand_Handle/delegates_to_correct_subcommand
-=== RUN   TestCommandRouter_RouteInteraction/Valid_Slash_Command_Routing
-=== PAUSE TestArikawaGroupCommand_Handle/delegates_to_correct_subcommand
-=== PAUSE TestNewArikawaMissingConfigErrorData/special_characters_in_feature
-=== RUN   TestArikawaGroupCommand_Handle/returns_error_on_unknown_subcommand
-=== CONT  TestArikawaContext_ContextResolution
---- PASS: TestArikawaContext_ContextResolution (0.00s)
 === CONT  TestCommandSyncer_SyncBulkOverwrite_Routing/Global_Sync
-=== CONT  TestArikawaContext_APIWrappers_DefensiveChecks
-=== RUN   TestArikawaContext_APIWrappers_DefensiveChecks/Respond_triggers_error_on_nil_Interaction
-=== RUN   TestArikawaContext_APIWrappers_DefensiveChecks/Defer_triggers_error_on_nil_Client
---- PASS: TestCommandSyncer_Diff (0.00s)
-=== PAUSE TestArikawaGroupCommand_Handle/returns_error_on_unknown_subcommand
-=== CONT  TestCommandSyncer_SyncBulkOverwrite_Routing/Guild_Sync_Dinâmico
-=== RUN   TestArikawaGroupCommand_Handle/fails_on_empty_options
-=== PAUSE TestArikawaGroupCommand_Handle/fails_on_empty_options
-=== CONT  TestArikawaGroupCommand_Invariants/load-bearing_invariants
-=== CONT  TestArikawaGroupCommand_Invariants/overwriting_protection
-=== RUN   TestArikawaGroupCommand_Options/empty_state
-=== PAUSE TestCommandRouter_RouteInteraction/Valid_Slash_Command_Routing
-=== RUN   TestCommandRouter_RouteInteraction/Unregistered_Command_Fallback
-=== PAUSE TestCommandRouter_RouteInteraction/Unregistered_Command_Fallback
 --- PASS: TestArikawaContext_APIWrappers_DefensiveChecks (0.00s)
     --- PASS: TestArikawaContext_APIWrappers_DefensiveChecks/Respond_triggers_error_on_nil_Interaction (0.00s)
     --- PASS: TestArikawaContext_APIWrappers_DefensiveChecks/Defer_triggers_error_on_nil_Client (0.00s)
+=== CONT  TestArikawaGroupCommand_Handle/delegates_to_correct_subcommand
+--- PASS: TestCommandSyncer_BuildCreateData (0.00s)
+    --- PASS: TestCommandSyncer_BuildCreateData/Cenário_A_(Implementação_Completa) (0.00s)
+    --- PASS: TestCommandSyncer_BuildCreateData/Cenário_B_(Fallback/Omissão) (0.00s)
+=== CONT  TestArikawaGroupCommand_Handle/returns_error_on_unknown_subcommand
+=== CONT  TestCommandSyncer_SyncBulkOverwrite_Routing/Guild_Sync_Dinâmico
+=== CONT  TestArikawaGroupCommand_Handle/fails_on_empty_options
+=== CONT  TestArikawaGroupCommand_Handle/fails_on_invalid_type_assertion
+=== CONT  TestArikawaGroupCommand_Options/flat_resolution
+=== RUN   TestCommandRouter_RouteInteraction/Valid_Slash_Command_Routing
+=== PAUSE TestCommandRouter_RouteInteraction/Valid_Slash_Command_Routing
+=== RUN   TestCommandRouter_RouteInteraction/Unregistered_Command_Fallback
+=== PAUSE TestCommandRouter_RouteInteraction/Unregistered_Command_Fallback
 === RUN   TestCommandRouter_RouteInteraction/Nil_Interaction_Protection
 === PAUSE TestCommandRouter_RouteInteraction/Nil_Interaction_Protection
-=== CONT  TestArikawaGroupCommand_Invariants/memory_initialization
-=== RUN   TestCommandSyncer_BuildCreateData/Cenário_B_(Fallback/Omissão)
-=== CONT  TestNewArikawaContext_InitializationAndFailFast/Valid_Interaction
-=== PAUSE TestArikawaGroupCommand_Options/empty_state
-=== RUN   TestArikawaGroupCommand_Options/flat_resolution
-=== PAUSE TestArikawaGroupCommand_Options/flat_resolution
-=== RUN   TestArikawaGroupCommand_Options/nested_group_resolution
-=== PAUSE TestArikawaGroupCommand_Options/nested_group_resolution
-=== CONT  TestNewArikawaContext_InitializationAndFailFast/Invalid_Event_Data_-_SenderID_0
-=== CONT  TestNewArikawaMissingConfigErrorData/special_characters_in_feature
-=== CONT  TestArikawaGroupCommand_Handle/returns_error_on_unknown_subcommand
-=== CONT  TestNewArikawaMissingConfigErrorData/standard_feature_missing
-=== CONT  TestArikawaGroupCommand_Handle/delegates_to_correct_subcommand
-=== CONT  TestNewArikawaMissingConfigErrorData/ignored_parameters_do_not_mutate_output
-=== CONT  TestCommandRouter_RouteInteraction/Unregistered_Command_Fallback
-=== CONT  TestCommandRouter_RouteInteraction/Nil_Interaction_Protection
-=== CONT  TestArikawaGroupCommand_Handle/fails_on_empty_options
+=== RUN   TestNewArikawaContext_InitializationAndFailFast/Valid_Interaction
+=== PAUSE TestNewArikawaContext_InitializationAndFailFast/Valid_Interaction
 === CONT  TestArikawaGroupCommand_Options/nested_group_resolution
-=== CONT  TestCommandRouter_RouteInteraction/Valid_Slash_Command_Routing
+=== RUN   TestNewArikawaContext_InitializationAndFailFast/Invalid_Event_Data_-_SenderID_0
+=== PAUSE TestNewArikawaContext_InitializationAndFailFast/Invalid_Event_Data_-_SenderID_0
 === CONT  TestArikawaGroupCommand_Options/empty_state
-=== CONT  TestArikawaGroupCommand_Options/flat_resolution
+=== CONT  TestNewArikawaMissingConfigErrorData/ignored_parameters_do_not_mutate_output
+=== CONT  TestNewArikawaMissingConfigErrorData/special_characters_in_feature
 === CONT  TestNewArikawaMissingConfigErrorData/empty_feature_string_edge_case
-=== PAUSE TestCommandSyncer_BuildCreateData/Cenário_B_(Fallback/Omissão)
-=== CONT  TestArikawaGroupCommand_Handle/fails_on_invalid_type_assertion
+=== CONT  TestNewArikawaMissingConfigErrorData/standard_feature_missing
+--- PASS: TestNewArikawaMissingConfigErrorData (0.00s)
+    --- PASS: TestNewArikawaMissingConfigErrorData/ignored_parameters_do_not_mutate_output (0.00s)
+    --- PASS: TestNewArikawaMissingConfigErrorData/special_characters_in_feature (0.00s)
+    --- PASS: TestNewArikawaMissingConfigErrorData/empty_feature_string_edge_case (0.00s)
+    --- PASS: TestNewArikawaMissingConfigErrorData/standard_feature_missing (0.00s)
+=== CONT  TestArikawaGroupCommand_Invariants/load-bearing_invariants
+=== CONT  TestCommandRouter_RouteInteraction/Nil_Interaction_Protection
+=== CONT  TestCommandRouter_RouteInteraction/Unregistered_Command_Fallback
+=== CONT  TestArikawaGroupCommand_Invariants/memory_initialization
 --- PASS: TestCommandSyncer_SyncBulkOverwrite_Routing (0.00s)
-    --- PASS: TestCommandSyncer_SyncBulkOverwrite_Routing/Global_Sync (0.00s)
-    --- PASS: TestCommandSyncer_SyncBulkOverwrite_Routing/Guild_Sync_Dinâmico (0.00s)
-=== RUN   TestCommandSyncer_BuildCreateData/Cenário_A_(Implementação_Completa)
---- PASS: TestArikawaGroupCommand_Invariants (0.00s)
-    --- PASS: TestArikawaGroupCommand_Invariants/load-bearing_invariants (0.00s)
-    --- PASS: TestArikawaGroupCommand_Invariants/overwriting_protection (0.00s)
-    --- PASS: TestArikawaGroupCommand_Invariants/memory_initialization (0.00s)
-=== PAUSE TestCommandSyncer_BuildCreateData/Cenário_A_(Implementação_Completa)
-=== CONT  TestCommandSyncer_BuildCreateData/Cenário_B_(Fallback/Omissão)
-=== CONT  TestCommandSyncer_BuildCreateData/Cenário_A_(Implementação_Completa)
+    --- PASS: TestCommandSyncer_SyncBulkOverwrite_Routing/Global_Sync (0.01s)
+    --- PASS: TestCommandSyncer_SyncBulkOverwrite_Routing/Guild_Sync_Dinâmico (0.01s)
+=== CONT  TestCommandRouter_RouteInteraction/Valid_Slash_Command_Routing
+=== CONT  TestNewArikawaContext_InitializationAndFailFast/Invalid_Event_Data_-_SenderID_0
 --- PASS: TestCommandRouter_RouteInteraction (0.01s)
     --- PASS: TestCommandRouter_RouteInteraction/Nil_Interaction_Protection (0.00s)
     --- PASS: TestCommandRouter_RouteInteraction/Unregistered_Command_Fallback (0.00s)
     --- PASS: TestCommandRouter_RouteInteraction/Valid_Slash_Command_Routing (0.00s)
---- PASS: TestNewArikawaMissingConfigErrorData (0.01s)
-    --- PASS: TestNewArikawaMissingConfigErrorData/special_characters_in_feature (0.00s)
-    --- PASS: TestNewArikawaMissingConfigErrorData/standard_feature_missing (0.00s)
-    --- PASS: TestNewArikawaMissingConfigErrorData/ignored_parameters_do_not_mutate_output (0.00s)
-    --- PASS: TestNewArikawaMissingConfigErrorData/empty_feature_string_edge_case (0.00s)
---- PASS: TestArikawaGroupCommand_Options (0.01s)
+=== CONT  TestArikawaGroupCommand_Invariants/overwriting_protection
+=== CONT  TestNewArikawaContext_InitializationAndFailFast/Valid_Interaction
+--- PASS: TestArikawaGroupCommand_Invariants (0.00s)
+    --- PASS: TestArikawaGroupCommand_Invariants/load-bearing_invariants (0.00s)
+    --- PASS: TestArikawaGroupCommand_Invariants/memory_initialization (0.00s)
+    --- PASS: TestArikawaGroupCommand_Invariants/overwriting_protection (0.03s)
+--- PASS: TestArikawaGroupCommand_Options (0.00s)
     --- PASS: TestArikawaGroupCommand_Options/empty_state (0.00s)
-    --- PASS: TestArikawaGroupCommand_Options/nested_group_resolution (0.00s)
-    --- PASS: TestArikawaGroupCommand_Options/flat_resolution (0.00s)
---- PASS: TestCommandSyncer_BuildCreateData (0.02s)
-    --- PASS: TestCommandSyncer_BuildCreateData/Cenário_A_(Implementação_Completa) (0.00s)
-    --- PASS: TestCommandSyncer_BuildCreateData/Cenário_B_(Fallback/Omissão) (0.00s)
+    --- PASS: TestArikawaGroupCommand_Options/nested_group_resolution (0.04s)
+    --- PASS: TestArikawaGroupCommand_Options/flat_resolution (0.05s)
+--- PASS: TestNewArikawaContext_InitializationAndFailFast (0.01s)
+    --- PASS: TestNewArikawaContext_InitializationAndFailFast/Valid_Interaction (0.00s)
+    --- PASS: TestNewArikawaContext_InitializationAndFailFast/Invalid_Event_Data_-_SenderID_0 (0.04s)
+--- PASS: TestCommandSyncer_Diff (0.05s)
 --- PASS: TestArikawaGroupCommand_Handle (0.01s)
     --- PASS: TestArikawaGroupCommand_Handle/returns_error_on_unknown_subcommand (0.00s)
-    --- PASS: TestArikawaGroupCommand_Handle/delegates_to_correct_subcommand (0.00s)
     --- PASS: TestArikawaGroupCommand_Handle/fails_on_empty_options (0.00s)
     --- PASS: TestArikawaGroupCommand_Handle/fails_on_invalid_type_assertion (0.00s)
---- PASS: TestNewArikawaContext_InitializationAndFailFast (0.00s)
-    --- PASS: TestNewArikawaContext_InitializationAndFailFast/Invalid_Event_Data_-_SenderID_0 (0.00s)
-    --- PASS: TestNewArikawaContext_InitializationAndFailFast/Valid_Interaction (0.02s)
---- PASS: TestCommandRegistry_ConcurrentSafety (0.16s)
+    --- PASS: TestArikawaGroupCommand_Handle/delegates_to_correct_subcommand (0.06s)
+--- PASS: TestCommandRegistry_ConcurrentSafety (0.12s)
 === RUN   FuzzArikawaOptionList_String
 === RUN   FuzzArikawaOptionList_String/seed#0
 === RUN   FuzzArikawaOptionList_String/seed#1
 === RUN   FuzzArikawaOptionList_String/seed#2
---- PASS: FuzzArikawaOptionList_String (0.00s)
+--- PASS: FuzzArikawaOptionList_String (0.04s)
     --- PASS: FuzzArikawaOptionList_String/seed#0 (0.00s)
     --- PASS: FuzzArikawaOptionList_String/seed#1 (0.00s)
     --- PASS: FuzzArikawaOptionList_String/seed#2 (0.00s)
@@ -2450,15 +2443,15 @@ ok  	github.com/small-frappuccino/discordcore/pkg/discord/clean	(cached)
     --- PASS: FuzzContextBuilder_PayloadResilience/seed#1 (0.00s)
     --- PASS: FuzzContextBuilder_PayloadResilience/seed#2 (0.00s)
 PASS
-ok  	github.com/small-frappuccino/discordcore/pkg/discord/commands	(cached)
+ok  	github.com/small-frappuccino/discordcore/pkg/discord/commands	2.699s
 === RUN   TestArikawaCleanCommand_SyntheticPayloadInjection
-2026/06/23 14:18:17 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
-2026/06/23 14:18:17 INFO Configuration state transition completed duplicates_removed=0
---- PASS: TestArikawaCleanCommand_SyntheticPayloadInjection (0.00s)
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
+2026/06/23 15:54:53 INFO Configuration state transition completed duplicates_removed=0
+--- PASS: TestArikawaCleanCommand_SyntheticPayloadInjection (0.01s)
 === RUN   TestArikawaCleanCommand_StatelessExecution
 --- PASS: TestArikawaCleanCommand_StatelessExecution (0.00s)
 PASS
-ok  	github.com/small-frappuccino/discordcore/pkg/discord/commands/clean	(cached)
+ok  	github.com/small-frappuccino/discordcore/pkg/discord/commands/clean	1.726s
 === RUN   TestContext_StringOption
 --- PASS: TestContext_StringOption (0.03s)
 === RUN   TestContext_HasRole
@@ -6492,232 +6485,236 @@ ok  	github.com/small-frappuccino/discordcore/pkg/discord/commands/clean	(cached
 PASS
 ok  	github.com/small-frappuccino/discordcore/pkg/discord/commands/core	(cached)
 === RUN   TestEmbedCommands_ConcurrentMutation
-2026/06/23 14:18:17 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:17 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:17 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:17 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:17 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:17 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:17 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:17 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:17 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:17 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:17 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:17 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:17 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:17 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:17 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:17 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:17 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:17 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:17 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:17 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:17 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:17 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:17 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:17 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
---- PASS: TestEmbedCommands_ConcurrentMutation (0.54s)
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:53 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:53 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:53 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:53 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:53 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:53 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:53 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:53 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:53 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:53 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:53 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:53 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:53 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:53 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+--- PASS: TestEmbedCommands_ConcurrentMutation (0.68s)
 === RUN   TestEmbedCommands_ObservabilityStructuralFaults
-2026/06/23 14:18:18 INFO Architectural state transition: Primary routines initialization component=EmbedCommands
-2026/06/23 14:18:18 INFO Architectural state transition: Registering native command command_name=embed
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
---- PASS: TestEmbedCommands_ObservabilityStructuralFaults (0.01s)
+2026/06/23 15:54:54 INFO Architectural state transition: Primary routines initialization component=EmbedCommands
+2026/06/23 15:54:54 INFO Architectural state transition: Registering native command command_name=embed
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+--- PASS: TestEmbedCommands_ObservabilityStructuralFaults (0.06s)
 === RUN   TestEmbedCommands_RegisterCommands
-2026/06/23 14:18:18 INFO Architectural state transition: Primary routines initialization component=EmbedCommands
+2026/06/23 15:54:54 INFO Architectural state transition: Primary routines initialization component=EmbedCommands
 --- PASS: TestEmbedCommands_RegisterCommands (0.00s)
 === RUN   TestEmbedCommands_Post
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
---- PASS: TestEmbedCommands_Post (0.02s)
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+--- PASS: TestEmbedCommands_Post (0.05s)
 === RUN   TestEmbedCommands_Preview
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
---- PASS: TestEmbedCommands_Preview (0.01s)
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+--- PASS: TestEmbedCommands_Preview (0.00s)
 === RUN   TestEmbedCommands_Set
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 --- PASS: TestEmbedCommands_Set (0.00s)
 === RUN   TestEmbedCommands_Delete
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 --- PASS: TestEmbedCommands_Delete (0.00s)
 === RUN   TestEmbedCommands_List
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 --- PASS: TestEmbedCommands_List (0.00s)
 === RUN   TestEmbedCommands_Refresh
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 --- PASS: TestEmbedCommands_Refresh (0.01s)
 === RUN   TestEmbedCommands_Unpost
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
---- PASS: TestEmbedCommands_Unpost (0.02s)
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+--- PASS: TestEmbedCommands_Unpost (0.00s)
 === RUN   TestEmbedCommands_Fields
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 --- PASS: TestEmbedCommands_Fields (0.00s)
 === RUN   TestEmbedCommands_ImportExport
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
---- PASS: TestEmbedCommands_ImportExport (0.00s)
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+--- PASS: TestEmbedCommands_ImportExport (0.01s)
 === RUN   TestEmbedCommands_ErrorAndEdgeCases
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
---- PASS: TestEmbedCommands_ErrorAndEdgeCases (0.01s)
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+--- PASS: TestEmbedCommands_ErrorAndEdgeCases (0.00s)
 PASS
-ok  	github.com/small-frappuccino/discordcore/pkg/discord/commands/embeds	(cached)
+ok  	github.com/small-frappuccino/discordcore/pkg/discord/commands/embeds	2.611s
 === RUN   TestLoggingCommands_RegisterCommands
---- PASS: TestLoggingCommands_RegisterCommands (0.00s)
+--- PASS: TestLoggingCommands_RegisterCommands (0.01s)
 === RUN   TestLoggingRootCommand_HandleSafety
---- PASS: TestLoggingRootCommand_HandleSafety (0.00s)
+--- PASS: TestLoggingRootCommand_HandleSafety (0.03s)
 === RUN   TestLoggingRootCommand_Avatar
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:18 INFO Operational telemetry: Logging channel updated channel_id=11111
---- PASS: TestLoggingRootCommand_Avatar (0.01s)
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:53 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:53 INFO Operational telemetry: Logging channel updated channel_id=11111
+--- PASS: TestLoggingRootCommand_Avatar (0.09s)
 === RUN   TestLoggingRootCommand_RoleUpdate
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:18 INFO Operational telemetry: Logging channel updated channel_id=22222
---- PASS: TestLoggingRootCommand_RoleUpdate (0.00s)
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:53 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:53 INFO Operational telemetry: Logging channel updated channel_id=22222
+--- PASS: TestLoggingRootCommand_RoleUpdate (0.02s)
 === RUN   TestLoggingRootCommand_Messages
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:18 INFO Operational telemetry: Logging channel updated channel_id=33333
---- PASS: TestLoggingRootCommand_Messages (0.00s)
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:53 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:53 INFO Operational telemetry: Logging channel updated channel_id=33333
+--- PASS: TestLoggingRootCommand_Messages (0.01s)
 === RUN   TestLoggingRootCommand_EntryExit
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:18 INFO Operational telemetry: Logging channel updated channel_id=44444
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:18 INFO Operational telemetry: Logging channel updated channel_id=55555
---- PASS: TestLoggingRootCommand_EntryExit (0.01s)
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:53 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:53 INFO Operational telemetry: Logging channel updated channel_id=44444
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:53 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:53 INFO Operational telemetry: Logging channel updated channel_id=55555
+--- PASS: TestLoggingRootCommand_EntryExit (0.00s)
 === RUN   TestLoggingRootCommand_Warnings
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:18 INFO Operational telemetry: Logging channel updated channel_id=66666
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:53 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:53 INFO Operational telemetry: Logging channel updated channel_id=66666
 --- PASS: TestLoggingRootCommand_Warnings (0.00s)
 === RUN   TestLoggingRootCommand_AutomodNoRule
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:18 INFO Operational telemetry: Logging channel updated channel_id=77777
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:18 INFO Operational telemetry: Logging channel updated channel_id=77777
---- PASS: TestLoggingRootCommand_AutomodNoRule (0.00s)
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:53 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:53 INFO Operational telemetry: Logging channel updated channel_id=77777
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:53 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:53 INFO Operational telemetry: Logging channel updated channel_id=77777
+--- PASS: TestLoggingRootCommand_AutomodNoRule (0.01s)
 === RUN   TestLoggingRootCommand_AutomodWithRule
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:18 INFO Operational telemetry: Logging channel updated channel_id=77777
-2026/06/23 14:18:18 INFO Operational telemetry: Logging channel updated channel_id=77777
-2026/06/23 14:18:18 INFO Operational telemetry: Logging channel updated channel_id=77777
---- PASS: TestLoggingRootCommand_AutomodWithRule (0.01s)
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:53 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:53 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:53 INFO Operational telemetry: Logging channel updated channel_id=77777
+2026/06/23 15:54:53 INFO Operational telemetry: Logging channel updated channel_id=77777
+2026/06/23 15:54:53 INFO Operational telemetry: Logging channel updated channel_id=77777
+--- PASS: TestLoggingRootCommand_AutomodWithRule (0.02s)
 PASS
-ok  	github.com/small-frappuccino/discordcore/pkg/discord/commands/logging	(cached)
+ok  	github.com/small-frappuccino/discordcore/pkg/discord/commands/logging	1.932s
 === RUN   TestCommands_StatelessExecution
 --- PASS: TestCommands_StatelessExecution (0.00s)
 === RUN   TestMassBanCommand_Parity
@@ -6725,117 +6722,249 @@ ok  	github.com/small-frappuccino/discordcore/pkg/discord/commands/logging	(cach
 === RUN   TestReactionBlockCommand_Parity
 --- PASS: TestReactionBlockCommand_Parity (0.00s)
 PASS
-ok  	github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation	(cached)
+ok  	github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation	1.700s
 === RUN   TestPartnerCommands_ConcurrentStateMutation
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 33 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc000489f48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc00016a2c0})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc000489f48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x6)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 49 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc000461f48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000428380})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc000461f48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0xe)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 47 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc00051ff48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000428460})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc00051ff48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0xd)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 55 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc00052ff48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc0004284e0})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc00052ff48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x11)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 51 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc00053bf48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000428560})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc00053bf48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0xf)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 61 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc0003d1f48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc0003a00e0})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc0003d1f48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x14)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 53 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc000545f48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc0004285e0})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc000545f48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x10)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 43 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc000309f48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000180920})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc000309f48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0xb)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 83 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc00070ff48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc0003a02e0})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc00070ff48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x1f)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 122 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc0004e3f48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc00016a4c0})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc0004e3f48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x31)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 75 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc00043ff48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000072e60})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc00043ff48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x1b)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 71 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc000567f48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000428660})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc000567f48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x19)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 65 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc000453f48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000282100})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc000453f48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x16)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 118 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc0006a7f48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000072ca0})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc0006a7f48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x2f)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 57 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc000573f48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000428680})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc000573f48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x12)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 73 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc0006bbf48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000072cc0})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc0006bbf48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x1a)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 31 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc00057ff48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc0004286a0})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc00057ff48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x5)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 39 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc0006cbf48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000072ce0})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc0006cbf48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x9)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 81 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc00012df48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000072d00})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc00012df48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x1e)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 93 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc000643f48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc0001809a0})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc000643f48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x24)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 110 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc000141f48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc0004286c0})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc000141f48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x2b)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 106 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc000219f48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000072d20})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc000219f48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x29)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 67 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc000651f48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc0004286e0})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc000651f48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x17)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 85 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc00065bf48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000428700})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc00065bf48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x20)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 100 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc000675f48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000072de0})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc000675f48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x26)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 69 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc000669f48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000282000})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc000669f48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x18)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 59 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc00067ff48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000072e00})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc00067ff48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x13)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 102 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc000333f48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000072e20})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc000333f48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x27)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 27 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc000313f48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000282020})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc000313f48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x3)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 104 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc000421f48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000072e40})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc000421f48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x28)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 116 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc000437f48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc0003a03c0})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc000437f48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x2e)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 79 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc000461f48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000282200})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc000461f48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x1d)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 114 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc0005d7f48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000282220})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc0005d7f48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x2d)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 45 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc0004abf48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc0003a03e0})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc0004abf48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0xc)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 98 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc0003d1f48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000282260})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc0003d1f48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x25)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 41 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc00043ff48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc0001809c0})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc00043ff48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0xa)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 21 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc000507f48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc0002821e0})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc000507f48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x0)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 108 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc00061bf48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000428000})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc00061bf48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x2a)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 112 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc0004f5f48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000180640})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc0004f5f48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x2c)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 37 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc0004fdf48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc0001806c0})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc0004fdf48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x8)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 35 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc000127f48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000428140})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc000127f48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x7)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 120 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc000117f48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc0004281c0})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc000117f48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x30)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 77 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc00013bf48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000180800})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc00013bf48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x1c)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 63 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc00012ff48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000072820})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc00012ff48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x15)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 25 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc000207f48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc0005a8380})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc000207f48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x2)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 29 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc0001a7f48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000180820})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc0001a7f48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x4)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 23 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc00020ff48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc0005a83a0})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc00020ff48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x1)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 89 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc000725f48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000282040})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc000725f48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x22)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 87 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc000731f48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000282060})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc000731f48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x21)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id="" stack_trace="goroutine 91 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc00073df48, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000072840})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc0001942c0, 0xc00073df48)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation.func2(0x23)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:209 +0x605\ncreated by github.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerCommands_ConcurrentStateMutation in goroutine 19\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:182 +0x645\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: guild not found in config"
---- PASS: TestPartnerCommands_ConcurrentStateMutation (0.15s)
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:56 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:56 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:56 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:56 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:56 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:56 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:56 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:56 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:56 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:56 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:56 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:56 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:56 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:56 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:56 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:56 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:56 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:56 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:56 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:56 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:56 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+--- PASS: TestPartnerCommands_ConcurrentStateMutation (1.27s)
 === RUN   TestPartnerAddSubCommand
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
---- PASS: TestPartnerAddSubCommand (0.02s)
+2026/06/23 15:54:56 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:56 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:56 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+--- PASS: TestPartnerAddSubCommand (0.01s)
 === RUN   TestPartnerRemoveSubCommand
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id=12345 stack_trace="goroutine 281 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc000414d20, {0x14080e3a3, 0x18}, {0x140834f40, 0xc000428720})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRemoveSubCommand).Handle(0xc000207850, 0xc000414d20)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:292 +0x61d\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerRemoveSubCommand(0xc00022c200)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:393 +0xa75\ntesting.tRunner(0xc00022c200, 0x14082d7e8)\n\tD:/Users/alice/scoop/apps/go/current/src/testing/testing.go:2036 +0x1cb\ncreated by testing.(*T).Run in goroutine 1\n\tD:/Users/alice/scoop/apps/go/current/src/testing/testing.go:2101 +0xb2b\n" fail_id=500 error="Failed to remove partner: ConfigManager.UpdateConfig: partner not found"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
---- PASS: TestPartnerRemoveSubCommand (0.02s)
+2026/06/23 15:54:56 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:56 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:56 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+--- PASS: TestPartnerRemoveSubCommand (0.01s)
 === RUN   TestPartnerLinkSubCommand
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id=12345 stack_trace="goroutine 267 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc0001c3590, {0x140812326, 0x1d}, {0x140834f40, 0xc000180cc0})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerLinkSubCommand).Handle(0xc0002e5840, 0xc0001c3590)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:353 +0x7e5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerLinkSubCommand(0xc0001f4600)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:557 +0x18e5\ntesting.tRunner(0xc0001f4600, 0x14082d7c8)\n\tD:/Users/alice/scoop/apps/go/current/src/testing/testing.go:2036 +0x1cb\ncreated by testing.(*T).Run in goroutine 1\n\tD:/Users/alice/scoop/apps/go/current/src/testing/testing.go:2101 +0xb2b\n" fail_id=500 error="Failed to update partner link: ConfigManager.UpdateConfig: partner not found"
---- PASS: TestPartnerLinkSubCommand (0.02s)
+2026/06/23 15:54:56 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:56 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:56 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+--- PASS: TestPartnerLinkSubCommand (0.01s)
 === RUN   TestPartnerRenameSubCommand
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id=12345 stack_trace="goroutine 270 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc0001c3b80, {0x14080e3bb, 0x18}, {0x140834f40, 0xc000180e60})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRenameSubCommand).Handle(0xc00032b7f0, 0xc0001c3b80)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:454 +0xafd\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerRenameSubCommand(0xc0001f4800)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:664 +0x2585\ntesting.tRunner(0xc0001f4800, 0x14082d7f0)\n\tD:/Users/alice/scoop/apps/go/current/src/testing/testing.go:2036 +0x1cb\ncreated by testing.(*T).Run in goroutine 1\n\tD:/Users/alice/scoop/apps/go/current/src/testing/testing.go:2101 +0xb2b\n" fail_id=500 error="Failed to rename partner: ConfigManager.UpdateConfig: a partner with the new name already exists"
-2026/06/23 14:18:18 ERROR Blocking structural failure restricted to operational scope req_id=12345 stack_trace="goroutine 270 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.partnerStructuralError(0xc0001c3d10, {0x14080e3bb, 0x18}, {0x140834f40, 0xc000180f00})\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:109 +0xb5\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.(*partnerRenameSubCommand).Handle(0xc00032b7f0, 0xc0001c3d10)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands.go:454 +0xafd\ngithub.com/small-frappuccino/discordcore/pkg/discord/commands/partners.TestPartnerRenameSubCommand(0xc0001f4800)\n\tD:/Users/alice/git/discordcore/pkg/discord/commands/partners/arikawa_partner_commands_test.go:689 +0x2ba5\ntesting.tRunner(0xc0001f4800, 0x14082d7f0)\n\tD:/Users/alice/scoop/apps/go/current/src/testing/testing.go:2036 +0x1cb\ncreated by testing.(*T).Run in goroutine 1\n\tD:/Users/alice/scoop/apps/go/current/src/testing/testing.go:2101 +0xb2b\n" fail_id=500 error="Failed to rename partner: ConfigManager.UpdateConfig: partner not found"
---- PASS: TestPartnerRenameSubCommand (0.02s)
+2026/06/23 15:54:56 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:56 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:56 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+--- PASS: TestPartnerRenameSubCommand (0.01s)
 === RUN   TestPartnerListSubCommand
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
---- PASS: TestPartnerListSubCommand (0.02s)
+2026/06/23 15:54:56 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:56 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:56 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+--- PASS: TestPartnerListSubCommand (0.01s)
 === RUN   TestPartnerPostSubCommand
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
---- PASS: TestPartnerPostSubCommand (0.04s)
+2026/06/23 15:54:56 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:56 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:56 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:56 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:56 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+--- PASS: TestPartnerPostSubCommand (0.03s)
 === RUN   TestPartnerUnpostSubCommand
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
---- PASS: TestPartnerUnpostSubCommand (0.04s)
+2026/06/23 15:54:56 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:56 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:56 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:56 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:56 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+--- PASS: TestPartnerUnpostSubCommand (0.03s)
 === RUN   TestPartnerRefreshSubCommand
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:56 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
 --- PASS: TestPartnerRefreshSubCommand (0.00s)
 === RUN   TestPartnerTemplates
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:56 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:56 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:56 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:56 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:56 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
+2026/06/23 15:54:56 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:56 INFO I/O state transition: Configuration successfully persisted path="Fake IO Intercepted Store"
 --- PASS: TestPartnerTemplates (0.06s)
 PASS
-ok  	github.com/small-frappuccino/discordcore/pkg/discord/commands/partners	(cached)
+ok  	github.com/small-frappuccino/discordcore/pkg/discord/commands/partners	2.953s
 === RUN   TestCommandHandler_ThunderingHerds
 --- PASS: TestCommandHandler_ThunderingHerds (0.42s)
 === RUN   TestCommandHandler_PanicRecovery
@@ -6844,126 +6973,126 @@ ok  	github.com/small-frappuccino/discordcore/pkg/discord/commands/partners	(cac
 PASS
 ok  	github.com/small-frappuccino/discordcore/pkg/discord/commands/qotd	(cached)
 === RUN   TestRolePanelCommands_Registration
-2026/06/23 14:18:18 INFO Architectural state transition: Primary routines initialization component=RolePanelCommands
-2026/06/23 14:18:18 INFO Architectural state transition: Registering native command command_name=roles
+2026/06/23 15:54:54 INFO Architectural state transition: Primary routines initialization component=RolePanelCommands
+2026/06/23 15:54:54 INFO Architectural state transition: Registering native command command_name=roles
 --- PASS: TestRolePanelCommands_Registration (0.00s)
 === RUN   TestRolePanelCommands_ConvertPanelToArikawa
 --- PASS: TestRolePanelCommands_ConvertPanelToArikawa (0.00s)
 === RUN   TestRolePanelCommands_SubCommands
 === RUN   TestRolePanelCommands_SubCommands/post
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 === RUN   TestRolePanelCommands_SubCommands/preview
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 === RUN   TestRolePanelCommands_SubCommands/set
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 === RUN   TestRolePanelCommands_SubCommands/delete
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 === RUN   TestRolePanelCommands_SubCommands/list
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 === RUN   TestRolePanelCommands_SubCommands/placeholders
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 === RUN   TestRolePanelCommands_SubCommands/buttons
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 === RUN   TestRolePanelCommands_SubCommands/fields
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
---- PASS: TestRolePanelCommands_SubCommands (0.06s)
-    --- PASS: TestRolePanelCommands_SubCommands/post (0.03s)
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+--- PASS: TestRolePanelCommands_SubCommands (0.02s)
+    --- PASS: TestRolePanelCommands_SubCommands/post (0.01s)
     --- PASS: TestRolePanelCommands_SubCommands/preview (0.00s)
-    --- PASS: TestRolePanelCommands_SubCommands/set (0.01s)
+    --- PASS: TestRolePanelCommands_SubCommands/set (0.00s)
     --- PASS: TestRolePanelCommands_SubCommands/delete (0.00s)
     --- PASS: TestRolePanelCommands_SubCommands/list (0.00s)
     --- PASS: TestRolePanelCommands_SubCommands/placeholders (0.00s)
-    --- PASS: TestRolePanelCommands_SubCommands/buttons (0.01s)
+    --- PASS: TestRolePanelCommands_SubCommands/buttons (0.00s)
     --- PASS: TestRolePanelCommands_SubCommands/fields (0.00s)
 === RUN   TestRolePanelCommands_ErrorsAndEdgeCases
 === RUN   TestRolePanelCommands_ErrorsAndEdgeCases/disabled_feature
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 === RUN   TestRolePanelCommands_ErrorsAndEdgeCases/post_without_buttons
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 === RUN   TestRolePanelCommands_ErrorsAndEdgeCases/webhook_url_unsupported
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 === RUN   TestRolePanelCommands_ErrorsAndEdgeCases/non-existent_panel_on_set
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 === RUN   TestRolePanelCommands_ErrorsAndEdgeCases/non-existent_panel_on_delete
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 === RUN   TestRolePanelCommands_ErrorsAndEdgeCases/empty_panel_key
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 === RUN   TestRolePanelCommands_ErrorsAndEdgeCases/missing_button_options
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 === RUN   TestRolePanelCommands_ErrorsAndEdgeCases/missing_button_remove_options
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 === RUN   TestRolePanelCommands_ErrorsAndEdgeCases/list_empty_buttons_panel
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 === RUN   TestRolePanelCommands_ErrorsAndEdgeCases/list_empty_panels_list
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 === RUN   TestRolePanelCommands_ErrorsAndEdgeCases/respondStructuralError
-2026/06/23 14:18:18 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:18 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 === RUN   TestRolePanelCommands_ErrorsAndEdgeCases/refreshRolePanelPostingsBestEffort_nil_safety
 === RUN   TestRolePanelCommands_ErrorsAndEdgeCases/post_failure
 === RUN   TestRolePanelCommands_ErrorsAndEdgeCases/delete_with_postings_success
 === RUN   TestRolePanelCommands_ErrorsAndEdgeCases/delete_with_postings_sync_failure
 === RUN   TestRolePanelCommands_ErrorsAndEdgeCases/button_add_limit_reached
 === RUN   TestRolePanelCommands_ErrorsAndEdgeCases/button_remove_non-existent
---- PASS: TestRolePanelCommands_ErrorsAndEdgeCases (0.10s)
+--- PASS: TestRolePanelCommands_ErrorsAndEdgeCases (0.05s)
     --- PASS: TestRolePanelCommands_ErrorsAndEdgeCases/disabled_feature (0.00s)
     --- PASS: TestRolePanelCommands_ErrorsAndEdgeCases/post_without_buttons (0.00s)
     --- PASS: TestRolePanelCommands_ErrorsAndEdgeCases/webhook_url_unsupported (0.00s)
-    --- PASS: TestRolePanelCommands_ErrorsAndEdgeCases/non-existent_panel_on_set (0.01s)
-    --- PASS: TestRolePanelCommands_ErrorsAndEdgeCases/non-existent_panel_on_delete (0.01s)
+    --- PASS: TestRolePanelCommands_ErrorsAndEdgeCases/non-existent_panel_on_set (0.00s)
+    --- PASS: TestRolePanelCommands_ErrorsAndEdgeCases/non-existent_panel_on_delete (0.00s)
     --- PASS: TestRolePanelCommands_ErrorsAndEdgeCases/empty_panel_key (0.00s)
-    --- PASS: TestRolePanelCommands_ErrorsAndEdgeCases/missing_button_options (0.01s)
+    --- PASS: TestRolePanelCommands_ErrorsAndEdgeCases/missing_button_options (0.00s)
     --- PASS: TestRolePanelCommands_ErrorsAndEdgeCases/missing_button_remove_options (0.00s)
     --- PASS: TestRolePanelCommands_ErrorsAndEdgeCases/list_empty_buttons_panel (0.00s)
     --- PASS: TestRolePanelCommands_ErrorsAndEdgeCases/list_empty_panels_list (0.00s)
-    --- PASS: TestRolePanelCommands_ErrorsAndEdgeCases/respondStructuralError (0.01s)
+    --- PASS: TestRolePanelCommands_ErrorsAndEdgeCases/respondStructuralError (0.00s)
     --- PASS: TestRolePanelCommands_ErrorsAndEdgeCases/refreshRolePanelPostingsBestEffort_nil_safety (0.00s)
     --- PASS: TestRolePanelCommands_ErrorsAndEdgeCases/post_failure (0.01s)
-    --- PASS: TestRolePanelCommands_ErrorsAndEdgeCases/delete_with_postings_success (0.01s)
-    --- PASS: TestRolePanelCommands_ErrorsAndEdgeCases/delete_with_postings_sync_failure (0.01s)
-    --- PASS: TestRolePanelCommands_ErrorsAndEdgeCases/button_add_limit_reached (0.02s)
-    --- PASS: TestRolePanelCommands_ErrorsAndEdgeCases/button_remove_non-existent (0.01s)
+    --- PASS: TestRolePanelCommands_ErrorsAndEdgeCases/delete_with_postings_success (0.00s)
+    --- PASS: TestRolePanelCommands_ErrorsAndEdgeCases/delete_with_postings_sync_failure (0.00s)
+    --- PASS: TestRolePanelCommands_ErrorsAndEdgeCases/button_add_limit_reached (0.01s)
+    --- PASS: TestRolePanelCommands_ErrorsAndEdgeCases/button_remove_non-existent (0.00s)
 === RUN   TestRolePanelComponentHandler_InjectionAndRouting
 === RUN   TestRolePanelComponentHandler_InjectionAndRouting/valid_assignment
 === RUN   TestRolePanelComponentHandler_InjectionAndRouting/valid_removal
 === RUN   TestRolePanelComponentHandler_InjectionAndRouting/malformed_custom_id
 === RUN   TestRolePanelComponentHandler_InjectionAndRouting/unknown_role_(not_in_config)
 === RUN   TestRolePanelComponentHandler_InjectionAndRouting/lookup_error
---- PASS: TestRolePanelComponentHandler_InjectionAndRouting (0.02s)
+--- PASS: TestRolePanelComponentHandler_InjectionAndRouting (0.00s)
     --- PASS: TestRolePanelComponentHandler_InjectionAndRouting/valid_assignment (0.00s)
     --- PASS: TestRolePanelComponentHandler_InjectionAndRouting/valid_removal (0.00s)
     --- PASS: TestRolePanelComponentHandler_InjectionAndRouting/malformed_custom_id (0.00s)
@@ -6975,56 +7104,56 @@ ok  	github.com/small-frappuccino/discordcore/pkg/discord/commands/qotd	(cached)
 --- PASS: TestConstants (0.00s)
 === RUN   TestParseRolePanelButtonEmoji
 === PAUSE TestParseRolePanelButtonEmoji
+=== CONT  TestParseRolePanelButtonEmoji
 === CONT  TestBuildRolePanelToggleResponseArikawa_VisibilityFlags
 === RUN   TestBuildRolePanelToggleResponseArikawa_VisibilityFlags/Degradation:_Nil_Context_forces_Ephemeral_fallback
-=== CONT  TestParseRolePanelButtonEmoji
-=== RUN   TestParseRolePanelButtonEmoji/empty_returns_blanks
-=== PAUSE TestParseRolePanelButtonEmoji/empty_returns_blanks
 === PAUSE TestBuildRolePanelToggleResponseArikawa_VisibilityFlags/Degradation:_Nil_Context_forces_Ephemeral_fallback
+=== RUN   TestParseRolePanelButtonEmoji/empty_returns_blanks
 === RUN   TestBuildRolePanelToggleResponseArikawa_VisibilityFlags/Degradation:_Nil_GuildConfig_forces_Ephemeral_fallback
+=== PAUSE TestParseRolePanelButtonEmoji/empty_returns_blanks
 === RUN   TestParseRolePanelButtonEmoji/trims_whitespace
-=== PAUSE TestBuildRolePanelToggleResponseArikawa_VisibilityFlags/Degradation:_Nil_GuildConfig_forces_Ephemeral_fallback
-=== RUN   TestBuildRolePanelToggleResponseArikawa_VisibilityFlags/Feature:_DisableInteractiveEphemeral_is_false_(Default_Ephemeral)
-=== PAUSE TestBuildRolePanelToggleResponseArikawa_VisibilityFlags/Feature:_DisableInteractiveEphemeral_is_false_(Default_Ephemeral)
-=== RUN   TestBuildRolePanelToggleResponseArikawa_VisibilityFlags/Feature:_DisableInteractiveEphemeral_is_true_(Public_Response)
 === PAUSE TestParseRolePanelButtonEmoji/trims_whitespace
-=== PAUSE TestBuildRolePanelToggleResponseArikawa_VisibilityFlags/Feature:_DisableInteractiveEphemeral_is_true_(Public_Response)
 === RUN   TestParseRolePanelButtonEmoji/unicode_glyph
-=== RUN   TestBuildRolePanelToggleResponseArikawa_VisibilityFlags/State_Isolation:_Global_config_does_not_leak_into_missing_GuildConfig
-=== PAUSE TestBuildRolePanelToggleResponseArikawa_VisibilityFlags/State_Isolation:_Global_config_does_not_leak_into_missing_GuildConfig
-=== CONT  TestBuildRolePanelToggleResponseArikawa_VisibilityFlags/Degradation:_Nil_Context_forces_Ephemeral_fallback
-=== CONT  TestBuildRolePanelToggleResponseArikawa_VisibilityFlags/State_Isolation:_Global_config_does_not_leak_into_missing_GuildConfig
 === PAUSE TestParseRolePanelButtonEmoji/unicode_glyph
+=== PAUSE TestBuildRolePanelToggleResponseArikawa_VisibilityFlags/Degradation:_Nil_GuildConfig_forces_Ephemeral_fallback
 === RUN   TestParseRolePanelButtonEmoji/custom_static_emoji
-=== CONT  TestBuildRolePanelToggleResponseArikawa_VisibilityFlags/Feature:_DisableInteractiveEphemeral_is_true_(Public_Response)
 === PAUSE TestParseRolePanelButtonEmoji/custom_static_emoji
+=== RUN   TestBuildRolePanelToggleResponseArikawa_VisibilityFlags/Feature:_DisableInteractiveEphemeral_is_false_(Default_Ephemeral)
 === RUN   TestParseRolePanelButtonEmoji/custom_animated_emoji
 === PAUSE TestParseRolePanelButtonEmoji/custom_animated_emoji
 === RUN   TestParseRolePanelButtonEmoji/malformed_bracketed_input
+=== PAUSE TestBuildRolePanelToggleResponseArikawa_VisibilityFlags/Feature:_DisableInteractiveEphemeral_is_false_(Default_Ephemeral)
+=== RUN   TestBuildRolePanelToggleResponseArikawa_VisibilityFlags/Feature:_DisableInteractiveEphemeral_is_true_(Public_Response)
+=== PAUSE TestBuildRolePanelToggleResponseArikawa_VisibilityFlags/Feature:_DisableInteractiveEphemeral_is_true_(Public_Response)
 === PAUSE TestParseRolePanelButtonEmoji/malformed_bracketed_input
-=== CONT  TestParseRolePanelButtonEmoji/custom_static_emoji
-=== CONT  TestParseRolePanelButtonEmoji/malformed_bracketed_input
-=== CONT  TestParseRolePanelButtonEmoji/custom_animated_emoji
+=== RUN   TestBuildRolePanelToggleResponseArikawa_VisibilityFlags/State_Isolation:_Global_config_does_not_leak_into_missing_GuildConfig
 === CONT  TestParseRolePanelButtonEmoji/unicode_glyph
-=== CONT  TestParseRolePanelButtonEmoji/trims_whitespace
 === CONT  TestParseRolePanelButtonEmoji/empty_returns_blanks
---- PASS: TestParseRolePanelButtonEmoji (0.01s)
-    --- PASS: TestParseRolePanelButtonEmoji/custom_static_emoji (0.00s)
-    --- PASS: TestParseRolePanelButtonEmoji/malformed_bracketed_input (0.00s)
-    --- PASS: TestParseRolePanelButtonEmoji/custom_animated_emoji (0.00s)
-    --- PASS: TestParseRolePanelButtonEmoji/unicode_glyph (0.00s)
-    --- PASS: TestParseRolePanelButtonEmoji/trims_whitespace (0.00s)
+=== CONT  TestParseRolePanelButtonEmoji/malformed_bracketed_input
+=== CONT  TestParseRolePanelButtonEmoji/custom_static_emoji
+=== PAUSE TestBuildRolePanelToggleResponseArikawa_VisibilityFlags/State_Isolation:_Global_config_does_not_leak_into_missing_GuildConfig
+=== CONT  TestParseRolePanelButtonEmoji/custom_animated_emoji
+=== CONT  TestParseRolePanelButtonEmoji/trims_whitespace
+=== CONT  TestBuildRolePanelToggleResponseArikawa_VisibilityFlags/Feature:_DisableInteractiveEphemeral_is_true_(Public_Response)
+--- PASS: TestParseRolePanelButtonEmoji (0.00s)
     --- PASS: TestParseRolePanelButtonEmoji/empty_returns_blanks (0.00s)
+    --- PASS: TestParseRolePanelButtonEmoji/unicode_glyph (0.00s)
+    --- PASS: TestParseRolePanelButtonEmoji/malformed_bracketed_input (0.00s)
+    --- PASS: TestParseRolePanelButtonEmoji/custom_static_emoji (0.00s)
+    --- PASS: TestParseRolePanelButtonEmoji/custom_animated_emoji (0.00s)
+    --- PASS: TestParseRolePanelButtonEmoji/trims_whitespace (0.00s)
+=== CONT  TestBuildRolePanelToggleResponseArikawa_VisibilityFlags/State_Isolation:_Global_config_does_not_leak_into_missing_GuildConfig
 === CONT  TestBuildRolePanelToggleResponseArikawa_VisibilityFlags/Feature:_DisableInteractiveEphemeral_is_false_(Default_Ephemeral)
 === CONT  TestBuildRolePanelToggleResponseArikawa_VisibilityFlags/Degradation:_Nil_GuildConfig_forces_Ephemeral_fallback
+=== CONT  TestBuildRolePanelToggleResponseArikawa_VisibilityFlags/Degradation:_Nil_Context_forces_Ephemeral_fallback
 --- PASS: TestBuildRolePanelToggleResponseArikawa_VisibilityFlags (0.00s)
-    --- PASS: TestBuildRolePanelToggleResponseArikawa_VisibilityFlags/Degradation:_Nil_Context_forces_Ephemeral_fallback (0.00s)
-    --- PASS: TestBuildRolePanelToggleResponseArikawa_VisibilityFlags/State_Isolation:_Global_config_does_not_leak_into_missing_GuildConfig (0.00s)
     --- PASS: TestBuildRolePanelToggleResponseArikawa_VisibilityFlags/Feature:_DisableInteractiveEphemeral_is_true_(Public_Response) (0.00s)
+    --- PASS: TestBuildRolePanelToggleResponseArikawa_VisibilityFlags/State_Isolation:_Global_config_does_not_leak_into_missing_GuildConfig (0.00s)
     --- PASS: TestBuildRolePanelToggleResponseArikawa_VisibilityFlags/Feature:_DisableInteractiveEphemeral_is_false_(Default_Ephemeral) (0.00s)
     --- PASS: TestBuildRolePanelToggleResponseArikawa_VisibilityFlags/Degradation:_Nil_GuildConfig_forces_Ephemeral_fallback (0.00s)
+    --- PASS: TestBuildRolePanelToggleResponseArikawa_VisibilityFlags/Degradation:_Nil_Context_forces_Ephemeral_fallback (0.00s)
 PASS
-ok  	github.com/small-frappuccino/discordcore/pkg/discord/commands/roles	(cached)
+ok  	github.com/small-frappuccino/discordcore/pkg/discord/commands/roles	1.203s
 === RUN   TestHandler_HandleSlash_EphemeralValidation
 === PAUSE TestHandler_HandleSlash_EphemeralValidation
 === RUN   TestSaveRuntimeConfig_RaceDetection
@@ -7037,11 +7166,14 @@ ok  	github.com/small-frappuccino/discordcore/pkg/discord/commands/roles	(cached
 === PAUSE TestFieldsForLines_BoundaryLimits
 === RUN   TestFieldsForLines_MultibyteSanity
 === PAUSE TestFieldsForLines_MultibyteSanity
+=== CONT  TestRuntimeInteractionAuthToken
+--- PASS: TestRuntimeInteractionAuthToken (0.00s)
 === CONT  TestSaveRuntimeConfig_RaceDetection
 === CONT  TestFieldsForLines_BoundaryLimits
 === RUN   TestFieldsForLines_BoundaryLimits/Empty_input_should_fallback_safely
 === CONT  TestFieldsForLines_MultibyteSanity
 --- PASS: TestFieldsForLines_MultibyteSanity (0.00s)
+=== CONT  TestHandler_HandleSlash_EphemeralValidation
 === RUN   TestFieldsForLines_BoundaryLimits/Exact_1024_bytes_fits_cleanly_into_one_field
 === RUN   TestFieldsForLines_BoundaryLimits/1025_bytes_partitions_into_two_fields
 === RUN   TestFieldsForLines_BoundaryLimits/Multibyte_UTF-8_boundary_slicing_does_not_fragment_runes
@@ -7050,284 +7182,284 @@ ok  	github.com/small-frappuccino/discordcore/pkg/discord/commands/roles	(cached
     --- PASS: TestFieldsForLines_BoundaryLimits/Exact_1024_bytes_fits_cleanly_into_one_field (0.00s)
     --- PASS: TestFieldsForLines_BoundaryLimits/1025_bytes_partitions_into_two_fields (0.00s)
     --- PASS: TestFieldsForLines_BoundaryLimits/Multibyte_UTF-8_boundary_slicing_does_not_fragment_runes (0.00s)
-=== CONT  TestRuntimeInteractionAuthToken
---- PASS: TestRuntimeInteractionAuthToken (0.00s)
-=== CONT  TestHandler_HandleSlash_EphemeralValidation
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Initialized in clean state: primary file not detected path=memory://bot_config_state
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Initialized in clean state: primary file not detected path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Initialized in clean state: primary file not detected path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Initialized in clean state: primary file not detected path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Interaction routed to runtime configuration slash command guild_id="" request_id=12345
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
---- PASS: TestHandler_HandleSlash_EphemeralValidation (0.05s)
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:41 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:41 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:42 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:18:42 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:42 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:18:42 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:18:42 INFO Configuration state transition completed duplicates_removed=0
---- PASS: TestSaveRuntimeConfig_RaceDetection (0.17s)
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Initialized in clean state: primary file not detected path=memory://bot_config_state
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Initialized in clean state: primary file not detected path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Initialized in clean state: primary file not detected path=memory://bot_config_state
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Initialized in clean state: primary file not detected path=memory://bot_config_state
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Initialized in clean state: primary file not detected path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Interaction routed to runtime configuration slash command guild_id="" request_id=12345
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Initialized in clean state: primary file not detected path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Initialized in clean state: primary file not detected path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+--- PASS: TestHandler_HandleSlash_EphemeralValidation (0.01s)
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:54:54 INFO Configuration state transition completed duplicates_removed=0
+--- PASS: TestSaveRuntimeConfig_RaceDetection (0.04s)
 === RUN   FuzzDecodeState
 === RUN   FuzzDecodeState/seed#0
 === RUN   FuzzDecodeState/seed#1
 === RUN   FuzzDecodeState/seed#2
 === RUN   FuzzDecodeState/seed#3
---- PASS: FuzzDecodeState (0.06s)
+--- PASS: FuzzDecodeState (0.00s)
     --- PASS: FuzzDecodeState/seed#0 (0.00s)
     --- PASS: FuzzDecodeState/seed#1 (0.00s)
     --- PASS: FuzzDecodeState/seed#2 (0.00s)
@@ -7343,53 +7475,53 @@ ok  	github.com/small-frappuccino/discordcore/pkg/discord/commands/roles	(cached
     --- PASS: FuzzDecodeRuntimeModalState/seed#2 (0.00s)
     --- PASS: FuzzDecodeRuntimeModalState/seed#3 (0.00s)
 PASS
-ok  	github.com/small-frappuccino/discordcore/pkg/discord/commands/runtime	(cached)
+ok  	github.com/small-frappuccino/discordcore/pkg/discord/commands/runtime	1.138s
 === RUN   TestStatsAddPersistsChannelConfig
-2026/06/23 14:18:42 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:42 INFO Architectural state transition: Registering native command command_name=stats
-2026/06/23 14:18:42 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:42 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
---- PASS: TestStatsAddPersistsChannelConfig (0.01s)
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:54 INFO Architectural state transition: Registering native command command_name=stats
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+--- PASS: TestStatsAddPersistsChannelConfig (0.00s)
 === RUN   TestStatsAddUpdatesExistingChannelConfig
-2026/06/23 14:18:42 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:42 INFO Architectural state transition: Registering native command command_name=stats
-2026/06/23 14:18:42 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:42 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
---- PASS: TestStatsAddUpdatesExistingChannelConfig (0.01s)
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:54 INFO Architectural state transition: Registering native command command_name=stats
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+--- PASS: TestStatsAddUpdatesExistingChannelConfig (0.00s)
 === RUN   TestStatsAddWithRoleFilter
-2026/06/23 14:18:42 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:42 INFO Architectural state transition: Registering native command command_name=stats
-2026/06/23 14:18:42 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:42 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:54 INFO Architectural state transition: Registering native command command_name=stats
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 --- PASS: TestStatsAddWithRoleFilter (0.00s)
 === RUN   TestStatsRemoveDeletesChannelConfig
-2026/06/23 14:18:42 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:42 INFO Architectural state transition: Registering native command command_name=stats
-2026/06/23 14:18:42 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:42 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
---- PASS: TestStatsRemoveDeletesChannelConfig (0.01s)
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:54 INFO Architectural state transition: Registering native command command_name=stats
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:54 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+--- PASS: TestStatsRemoveDeletesChannelConfig (0.00s)
 === RUN   TestStatsRemoveReportsErrorForUnknownChannel
-2026/06/23 14:18:42 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:42 INFO Architectural state transition: Registering native command command_name=stats
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:54 INFO Architectural state transition: Registering native command command_name=stats
 --- PASS: TestStatsRemoveReportsErrorForUnknownChannel (0.00s)
 === RUN   TestStatsListShowsConfiguredChannels
-2026/06/23 14:18:42 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:42 INFO Architectural state transition: Registering native command command_name=stats
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:54 INFO Architectural state transition: Registering native command command_name=stats
 --- PASS: TestStatsListShowsConfiguredChannels (0.00s)
 === RUN   TestStatsListShowsEmptyStateWhenNoChannels
-2026/06/23 14:18:42 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:42 INFO Architectural state transition: Registering native command command_name=stats
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:54 INFO Architectural state transition: Registering native command command_name=stats
 --- PASS: TestStatsListShowsEmptyStateWhenNoChannels (0.00s)
 === RUN   TestStatsListShowsRoleFilter
-2026/06/23 14:18:42 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:42 INFO Architectural state transition: Registering native command command_name=stats
+2026/06/23 15:54:54 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:54 INFO Architectural state transition: Registering native command command_name=stats
 --- PASS: TestStatsListShowsRoleFilter (0.00s)
 PASS
-ok  	github.com/small-frappuccino/discordcore/pkg/discord/commands/stats	(cached)
+ok  	github.com/small-frappuccino/discordcore/pkg/discord/commands/stats	1.104s
 === RUN   TestRouter_DeferBeforeIO
---- PASS: TestRouter_DeferBeforeIO (4.18s)
+--- PASS: TestRouter_DeferBeforeIO (4.02s)
 PASS
-ok  	github.com/small-frappuccino/discordcore/pkg/discord/commands/tickets	(cached)
+ok  	github.com/small-frappuccino/discordcore/pkg/discord/commands/tickets	5.116s
 === RUN   TestRenderCustomEmbed
 === PAUSE TestRenderCustomEmbed
 === RUN   TestCustomEmbedPostingSyncer
@@ -7397,18 +7529,18 @@ ok  	github.com/small-frappuccino/discordcore/pkg/discord/commands/tickets	(cach
 === CONT  TestCustomEmbedPostingSyncer
 === CONT  TestRenderCustomEmbed
 --- PASS: TestRenderCustomEmbed (0.00s)
-2026/06/23 14:18:43 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:43 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:43 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:43 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:43 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:43 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:43 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:43 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:43 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
---- PASS: TestCustomEmbedPostingSyncer (0.01s)
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+--- PASS: TestCustomEmbedPostingSyncer (0.00s)
 PASS
-ok  	github.com/small-frappuccino/discordcore/pkg/discord/embeds	(cached)
+ok  	github.com/small-frappuccino/discordcore/pkg/discord/embeds	1.074s
 ?   	github.com/small-frappuccino/discordcore/pkg/discord/logging	[no test files]
 ?   	github.com/small-frappuccino/discordcore/pkg/discord/members	[no test files]
 ?   	github.com/small-frappuccino/discordcore/pkg/discord/messages	[no test files]
@@ -7427,44 +7559,44 @@ ok  	github.com/small-frappuccino/discordcore/pkg/discord/moderation	(cached)
 === RUN   TestPartnerService_Render
 --- PASS: TestPartnerService_Render (0.00s)
 PASS
-ok  	github.com/small-frappuccino/discordcore/pkg/discord/partners	(cached)
+ok  	github.com/small-frappuccino/discordcore/pkg/discord/partners	1.067s
 ?   	github.com/small-frappuccino/discordcore/pkg/discord/perf	[no test files]
 === RUN   TestArikawaPublisher_Errors
 === RUN   TestArikawaPublisher_Errors/404_Unknown_Channel
 === RUN   TestArikawaPublisher_Errors/403_Missing_Access
 === RUN   TestArikawaPublisher_Errors/429_Too_Many_Requests
---- PASS: TestArikawaPublisher_Errors (0.07s)
-    --- PASS: TestArikawaPublisher_Errors/404_Unknown_Channel (0.02s)
-    --- PASS: TestArikawaPublisher_Errors/403_Missing_Access (0.01s)
-    --- PASS: TestArikawaPublisher_Errors/429_Too_Many_Requests (0.03s)
+--- PASS: TestArikawaPublisher_Errors (0.02s)
+    --- PASS: TestArikawaPublisher_Errors/404_Unknown_Channel (0.01s)
+    --- PASS: TestArikawaPublisher_Errors/403_Missing_Access (0.00s)
+    --- PASS: TestArikawaPublisher_Errors/429_Too_Many_Requests (0.01s)
 === RUN   TestRuntimeService_GracefulShutdown
 --- PASS: TestRuntimeService_GracefulShutdown (0.05s)
 PASS
-ok  	github.com/small-frappuccino/discordcore/pkg/discord/qotd	(cached)
+ok  	github.com/small-frappuccino/discordcore/pkg/discord/qotd	1.300s
 === RUN   TestRolePanelSyncEditsEachPosting
-2026/06/23 14:18:45 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:45 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:45 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:45 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:45 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:45 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:45 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 --- PASS: TestRolePanelSyncEditsEachPosting (0.00s)
 === RUN   TestRolePanelSyncDropsMissingPostings
-2026/06/23 14:18:45 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:18:45 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:45 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:45 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:45 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:45 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:45 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:45 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:45 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:18:45 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:18:45 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:54:55 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:54:55 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 --- PASS: TestRolePanelSyncDropsMissingPostings (0.00s)
 PASS
-ok  	github.com/small-frappuccino/discordcore/pkg/discord/roles	(cached)
+ok  	github.com/small-frappuccino/discordcore/pkg/discord/roles	1.116s
 === RUN   TestNewDiscordSessionEmptyToken
 2026/06/23 14:18:46 ERROR Discord bot token is empty. Please set the token before starting the bot.
 --- PASS: TestNewDiscordSessionEmptyToken (0.01s)
@@ -7497,14 +7629,14 @@ ok  	github.com/small-frappuccino/discordcore/pkg/discord/session	(cached)
 === RUN   TestArikawaGateway/GetChannel
 === RUN   TestArikawaGateway/StreamGuildMembers
 === RUN   TestArikawaGateway/StreamGuildMembers_ContextCancel
---- PASS: TestArikawaGateway (0.04s)
-    --- PASS: TestArikawaGateway/UpdateChannelName (0.01s)
-    --- PASS: TestArikawaGateway/GetChannel (0.02s)
+--- PASS: TestArikawaGateway (0.00s)
+    --- PASS: TestArikawaGateway/UpdateChannelName (0.00s)
+    --- PASS: TestArikawaGateway/GetChannel (0.00s)
     --- PASS: TestArikawaGateway/StreamGuildMembers (0.00s)
     --- PASS: TestArikawaGateway/StreamGuildMembers_ContextCancel (0.00s)
 === RUN   TestRegisterArikawaEventHandlers
-2026/06/23 14:18:50 INFO Registered Arikawa event handlers for stats
---- PASS: TestRegisterArikawaEventHandlers (0.00s)
+2026/06/23 15:54:56 INFO Registered Arikawa event handlers for stats
+--- PASS: TestRegisterArikawaEventHandlers (0.01s)
 === RUN   TestHandleArikawaGuildMemberAdd
     events_arikawa_test.go:101: skipping db tests
 --- SKIP: TestHandleArikawaGuildMemberAdd (0.00s)
@@ -7515,7 +7647,7 @@ ok  	github.com/small-frappuccino/discordcore/pkg/discord/session	(cached)
     events_arikawa_test.go:169: skipping db tests
 --- SKIP: TestHandleArikawaGuildMemberUpdate (0.00s)
 === RUN   TestRegisterDiscordGoEventHandlers
-2026/06/23 14:18:50 INFO Registered DiscordGo event handlers for stats
+2026/06/23 15:54:56 INFO Registered DiscordGo event handlers for stats
 --- PASS: TestRegisterDiscordGoEventHandlers (0.00s)
 === RUN   TestHandleDiscordGoGuildMemberAdd
     events_discordgo_test.go:28: skipping db tests
@@ -7527,13 +7659,13 @@ ok  	github.com/small-frappuccino/discordcore/pkg/discord/session	(cached)
     events_discordgo_test.go:96: skipping db tests
 --- SKIP: TestHandleDiscordGoGuildMemberUpdate (0.00s)
 PASS
-ok  	github.com/small-frappuccino/discordcore/pkg/discord/stats	(cached)
+ok  	github.com/small-frappuccino/discordcore/pkg/discord/stats	1.300s
 === RUN   TestService_GenerateAndUploadTranscript_Success
---- PASS: TestService_GenerateAndUploadTranscript_Success (0.54s)
+--- PASS: TestService_GenerateAndUploadTranscript_Success (0.08s)
 === RUN   TestService_GenerateAndUploadTranscript_Deadlock
---- PASS: TestService_GenerateAndUploadTranscript_Deadlock (0.29s)
+--- PASS: TestService_GenerateAndUploadTranscript_Deadlock (0.04s)
 PASS
-ok  	github.com/small-frappuccino/discordcore/pkg/discord/tickets	(cached)
+ok  	github.com/small-frappuccino/discordcore/pkg/discord/tickets	1.317s
 === RUN   TestValidateMessageTarget_NetworkLifecycle
 --- PASS: TestValidateMessageTarget_NetworkLifecycle (0.00s)
 === RUN   TestValidateMessageTarget_ErrorAssertions
@@ -7550,118 +7682,118 @@ ok  	github.com/small-frappuccino/discordcore/pkg/discord/tickets	(cached)
 === RUN   TestArikawaAPI_ServerInjection_TableDriven/Valid_Target
 === RUN   TestArikawaAPI_ServerInjection_TableDriven/Invalid_Webhook_ID
 === RUN   TestArikawaAPI_ServerInjection_TableDriven/Invalid_Message_ID
---- PASS: TestArikawaAPI_ServerInjection_TableDriven (0.13s)
+--- PASS: TestArikawaAPI_ServerInjection_TableDriven (0.06s)
     --- PASS: TestArikawaAPI_ServerInjection_TableDriven/Valid_Target (0.02s)
-    --- PASS: TestArikawaAPI_ServerInjection_TableDriven/Invalid_Webhook_ID (0.02s)
-    --- PASS: TestArikawaAPI_ServerInjection_TableDriven/Invalid_Message_ID (0.07s)
+    --- PASS: TestArikawaAPI_ServerInjection_TableDriven/Invalid_Webhook_ID (0.00s)
+    --- PASS: TestArikawaAPI_ServerInjection_TableDriven/Invalid_Message_ID (0.01s)
 === RUN   TestWebhookConcurrentExecution
-2026/06/23 14:19:03 INFO Architectural state transition: Startup task orchestrator instantiated runtime_count_heuristic=10
-2026/06/23 14:19:03 INFO Architectural state transition: Background worker pool initialized parallelism_limit=4 queue_capacity=20
-2026/06/23 14:19:03 INFO Architectural state transition: Background worker pool initialized parallelism_limit=2 queue_capacity=10
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
-2026/06/23 14:19:03 INFO Architectural state transition: Halting startup orchestrator and draining worker pools
---- PASS: TestWebhookConcurrentExecution (0.03s)
+2026/06/23 15:55:02 INFO Architectural state transition: Startup task orchestrator instantiated runtime_count_heuristic=10
+2026/06/23 15:55:02 INFO Architectural state transition: Background worker pool initialized parallelism_limit=4 queue_capacity=20
+2026/06/23 15:55:02 INFO Architectural state transition: Background worker pool initialized parallelism_limit=2 queue_capacity=10
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Baseline operational telemetry: Webhook message target successfully validated message_id=456 webhook_id=123
+2026/06/23 15:55:02 INFO Architectural state transition: Halting startup orchestrator and draining worker pools
+--- PASS: TestWebhookConcurrentExecution (0.01s)
 PASS
-ok  	github.com/small-frappuccino/discordcore/pkg/discord/webhook	(cached)
+ok  	github.com/small-frappuccino/discordcore/pkg/discord/webhook	1.483s
 === RUN   TestNormalizeAutoAssignmentRoleOrderBackfillsBoosterRole
 --- PASS: TestNormalizeAutoAssignmentRoleOrderBackfillsBoosterRole (0.00s)
 === RUN   TestValidateBotConfigRejectsAutoAssignmentOrderMismatch
@@ -7669,69 +7801,69 @@ ok  	github.com/small-frappuccino/discordcore/pkg/discord/webhook	(cached)
 === RUN   TestValidateBotConfigRejectsInvalidRequiredRolesLength
 --- PASS: TestValidateBotConfigRejectsInvalidRequiredRolesLength (0.00s)
 === RUN   TestConfigManagerLoadConfigMigratesAutoAssignmentBoosterRole
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
-2026/06/23 14:19:03 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Configuration re-persisted after runtime normalization path=memory://bot_config_state duplicates=0 autoRoleOrderMigrated=true
+2026/06/23 15:55:10 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
+2026/06/23 15:55:10 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:10 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:55:10 INFO Configuration re-persisted after runtime normalization path=memory://bot_config_state duplicates=0 autoRoleOrderMigrated=true
 --- PASS: TestConfigManagerLoadConfigMigratesAutoAssignmentBoosterRole (0.00s)
 === RUN   TestConfigManagerSaveConfigRejectsInvalidAutoAssignmentOrder
-2026/06/23 14:19:03 ERROR Blocking global persistence failure request_id=13bf1633f621d3c2a4c935025c1808a3 synthetic_code=500 stack_trace="goroutine 22 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/files.EmitBlockingError(0xc00004a230, {0x140aaa7dc, 0x23}, {0x140ad6da0, 0xc000188580}, {0xc000181320, 0x20})\n\tD:/Users/alice/git/discordcore/pkg/files/preferences.go:34 +0x11e\ngithub.com/small-frappuccino/discordcore/pkg/files.(*ConfigManager).SaveConfig(0xc00019c640)\n\tD:/Users/alice/git/discordcore/pkg/files/preferences.go:169 +0x245\ngithub.com/small-frappuccino/discordcore/pkg/files.TestConfigManagerSaveConfigRejectsInvalidAutoAssignmentOrder(0xc000208a00)\n\tD:/Users/alice/git/discordcore/pkg/files/auto_assignment_validation_test.go:151 +0x2ba\ntesting.tRunner(0xc000208a00, 0x140ace928)\n\tD:/Users/alice/scoop/apps/go/current/src/testing/testing.go:2036 +0x1cb\ncreated by testing.(*T).Run in goroutine 1\n\tD:/Users/alice/scoop/apps/go/current/src/testing/testing.go:2101 +0xb2b\n" error="ConfigManager.SaveConfig: validation failed: validateBotConfig: validation failed for field 'guilds[0].roles.auto_assignment.required_roles': required_roles[1] must match roles.booster_role (booster-role)"
+2026/06/23 15:55:10 ERROR Blocking global persistence failure request_id=3bafe4eb173515fe6e63a55525dcb123 synthetic_code=500 stack_trace="goroutine 12 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/files.EmitBlockingError(0xc000048230, {0x140aaa7dc, 0x23}, {0x140ad6da0, 0xc000082f20}, {0xc000037700, 0x20})\n\tD:/Users/alice/git/discordcore/pkg/files/preferences.go:34 +0x11e\ngithub.com/small-frappuccino/discordcore/pkg/files.(*ConfigManager).SaveConfig(0xc000098e60)\n\tD:/Users/alice/git/discordcore/pkg/files/preferences.go:169 +0x245\ngithub.com/small-frappuccino/discordcore/pkg/files.TestConfigManagerSaveConfigRejectsInvalidAutoAssignmentOrder(0xc000002c00)\n\tD:/Users/alice/git/discordcore/pkg/files/auto_assignment_validation_test.go:151 +0x2ba\ntesting.tRunner(0xc000002c00, 0x140ace928)\n\tD:/Users/alice/scoop/apps/go/current/src/testing/testing.go:2036 +0x1cb\ncreated by testing.(*T).Run in goroutine 1\n\tD:/Users/alice/scoop/apps/go/current/src/testing/testing.go:2101 +0xb2b\n" error="ConfigManager.SaveConfig: validation failed: validateBotConfig: validation failed for field 'guilds[0].roles.auto_assignment.required_roles': required_roles[1] must match roles.booster_role (booster-role)"
 --- PASS: TestConfigManagerSaveConfigRejectsInvalidAutoAssignmentOrder (0.00s)
 === RUN   TestChannelsConfigUnmarshalStrictSchema
 === PAUSE TestChannelsConfigUnmarshalStrictSchema
 === RUN   TestChannelsConfigHelpersStrict
 === PAUSE TestChannelsConfigHelpersStrict
 === RUN   TestGuildConfigIndexHit
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=test guilds_count=2
+2026/06/23 15:55:10 INFO Structural state transition completed: Guild index rebuilt reason=test guilds_count=2
 --- PASS: TestGuildConfigIndexHit (0.00s)
 === RUN   TestGuildConfigIndexMiss
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=test guilds_count=1
+2026/06/23 15:55:10 INFO Structural state transition completed: Guild index rebuilt reason=test guilds_count=1
 --- PASS: TestGuildConfigIndexMiss (0.00s)
 === RUN   TestGuildConfigIndexUpdate
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=test guilds_count=1
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=2
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=remove guilds_count=1
+2026/06/23 15:55:10 INFO Structural state transition completed: Guild index rebuilt reason=test guilds_count=1
+2026/06/23 15:55:10 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=2
+2026/06/23 15:55:10 INFO Structural state transition completed: Guild index rebuilt reason=remove guilds_count=1
 --- PASS: TestGuildConfigIndexUpdate (0.00s)
 === RUN   TestSnapshotConfigReturnsDefensiveCopy
 --- PASS: TestSnapshotConfigReturnsDefensiveCopy (0.00s)
 === RUN   TestPublishedConfigReadsReuseSnapshot
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=test guilds_count=1
---- PASS: TestPublishedConfigReadsReuseSnapshot (0.01s)
+2026/06/23 15:55:10 INFO Structural state transition completed: Guild index rebuilt reason=test guilds_count=1
+--- PASS: TestPublishedConfigReadsReuseSnapshot (0.00s)
 === RUN   TestGuildConfigIndexDuplicateFix
-2026/06/23 14:19:03 WARN Structural integrity corrected locally: duplicate guilds purged from vector reason=test duplicates=1 remaining=2
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=test guilds_count=2
+2026/06/23 15:55:10 WARN Structural integrity corrected locally: duplicate guilds purged from vector reason=test duplicates=1 remaining=2
+2026/06/23 15:55:10 INFO Structural state transition completed: Guild index rebuilt reason=test guilds_count=2
 --- PASS: TestGuildConfigIndexDuplicateFix (0.00s)
 === RUN   TestGuildConfigIndexDedupePersistsOnLoad
-2026/06/23 14:19:03 WARN Structural integrity corrected locally: duplicate guilds purged from vector reason=apply duplicates=1 remaining=2
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=2
-2026/06/23 14:19:03 WARN Mitigated degradation in index rebuilding error="removed 1 duplicate guild configurations" path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Configuration state transition completed duplicates_removed=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Configuration re-persisted after runtime normalization path=memory://bot_config_state duplicates=1 autoRoleOrderMigrated=false
+2026/06/23 15:55:10 WARN Structural integrity corrected locally: duplicate guilds purged from vector reason=apply duplicates=1 remaining=2
+2026/06/23 15:55:10 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=2
+2026/06/23 15:55:10 WARN Mitigated degradation in index rebuilding error="removed 1 duplicate guild configurations" path=memory://bot_config_state
+2026/06/23 15:55:10 INFO Configuration state transition completed duplicates_removed=1
+2026/06/23 15:55:10 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:55:10 INFO Configuration re-persisted after runtime normalization path=memory://bot_config_state duplicates=1 autoRoleOrderMigrated=false
 --- PASS: TestGuildConfigIndexDedupePersistsOnLoad (0.00s)
 === RUN   TestGuildConfigIndexConcurrency
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=test guilds_count=1
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=2
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=3
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=4
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=5
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=6
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=7
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=8
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=9
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=10
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=11
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=12
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=13
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=14
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=15
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=16
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=17
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=18
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=19
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=20
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=21
---- PASS: TestGuildConfigIndexConcurrency (0.15s)
+2026/06/23 15:55:10 INFO Structural state transition completed: Guild index rebuilt reason=test guilds_count=1
+2026/06/23 15:55:10 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=2
+2026/06/23 15:55:10 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=3
+2026/06/23 15:55:10 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=4
+2026/06/23 15:55:10 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=5
+2026/06/23 15:55:10 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=6
+2026/06/23 15:55:10 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=7
+2026/06/23 15:55:10 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=8
+2026/06/23 15:55:10 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=9
+2026/06/23 15:55:10 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=10
+2026/06/23 15:55:10 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=11
+2026/06/23 15:55:10 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=12
+2026/06/23 15:55:10 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=13
+2026/06/23 15:55:10 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=14
+2026/06/23 15:55:10 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=15
+2026/06/23 15:55:10 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=16
+2026/06/23 15:55:10 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=17
+2026/06/23 15:55:10 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=18
+2026/06/23 15:55:10 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=19
+2026/06/23 15:55:10 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=20
+2026/06/23 15:55:10 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=21
+--- PASS: TestGuildConfigIndexConcurrency (0.02s)
 === RUN   TestCloneFeatureTogglesRoundtripAllTrue
 === PAUSE TestCloneFeatureTogglesRoundtripAllTrue
 === RUN   TestCloneFeatureTogglesRoundtripAllFalse
@@ -7758,7 +7890,7 @@ ok  	github.com/small-frappuccino/discordcore/pkg/discord/webhook	(cached)
 === RUN   TestEncryptedStringUnmarshalFallback
 --- PASS: TestEncryptedStringUnmarshalFallback (0.00s)
 === RUN   TestLoadEnvWithLocalBinFallbackUsesHomeFile
---- PASS: TestLoadEnvWithLocalBinFallbackUsesHomeFile (0.07s)
+--- PASS: TestLoadEnvWithLocalBinFallbackUsesHomeFile (0.09s)
 === RUN   TestEnvHelpers
 --- PASS: TestEnvHelpers (0.00s)
 === RUN   TestFeatureRegistryIDsAreUnique
@@ -7789,11 +7921,11 @@ ok  	github.com/small-frappuccino/discordcore/pkg/discord/webhook	(cached)
 === RUN   TestBotConfigRoundTripDropsLegacyModerationFields
 === PAUSE TestBotConfigRoundTripDropsLegacyModerationFields
 === RUN   TestNotifySubscribers_ConcurrencyLimitExceeded
---- PASS: TestNotifySubscribers_ConcurrencyLimitExceeded (0.12s)
+--- PASS: TestNotifySubscribers_ConcurrencyLimitExceeded (0.10s)
 === RUN   TestNotifySubscribers_PanicRecovery
---- PASS: TestNotifySubscribers_PanicRecovery (0.09s)
+--- PASS: TestNotifySubscribers_PanicRecovery (0.00s)
 === RUN   TestNotifySubscribers_ContextTimeoutPreemption
---- PASS: TestNotifySubscribers_ContextTimeoutPreemption (0.08s)
+--- PASS: TestNotifySubscribers_ContextTimeoutPreemption (0.05s)
 === RUN   TestPartnersCRUDAndDeterministicOrder
 === PAUSE TestPartnersCRUDAndDeterministicOrder
 === RUN   TestPartnersValidationAndDedup
@@ -7894,455 +8026,455 @@ ok  	github.com/small-frappuccino/discordcore/pkg/discord/webhook	(cached)
 === PAUSE TestWebhookEmbedUpdatesUpdateDeleteNotFound
 === RUN   TestIsValidationErrorMatchesWrappedValidation
 === PAUSE TestIsValidationErrorMatchesWrappedValidation
-=== CONT  TestChannelsConfigUnmarshalStrictSchema
---- PASS: TestChannelsConfigUnmarshalStrictSchema (0.00s)
-=== CONT  TestIsValidationErrorMatchesWrappedValidation
---- PASS: TestIsValidationErrorMatchesWrappedValidation (0.00s)
-=== CONT  TestWebhookEmbedUpdatesLegacyFallbackMigration
-=== CONT  TestQOTDConfigUnmarshalPrefersNewListWhenBothFieldsPresent
---- PASS: TestQOTDConfigUnmarshalPrefersNewListWhenBothFieldsPresent (0.00s)
-=== CONT  TestWebhookEmbedUpdatesUpdateDeleteNotFound
---- PASS: TestWebhookEmbedUpdatesUpdateDeleteNotFound (0.00s)
-=== CONT  TestWebhookEmbedUpdatesCRUDGuildScope
-=== CONT  TestQOTDConfigUnmarshalMigratesLegacySingleSuppressionField
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
---- PASS: TestQOTDConfigUnmarshalMigratesLegacySingleSuppressionField (0.00s)
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-=== CONT  TestNormalizeQOTDConfigDedupesAndSortsSuppressionList
---- PASS: TestNormalizeQOTDConfigDedupesAndSortsSuppressionList (0.00s)
+=== CONT  TestCloneFeatureTogglesRoundtripAllTrue
 === CONT  TestNormalizeReactionBlockConfigMergesPairsAndDedupesEmojis
---- PASS: TestWebhookEmbedUpdatesCRUDGuildScope (0.00s)
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
---- PASS: TestNormalizeReactionBlockConfigMergesPairsAndDedupesEmojis (0.00s)
-=== CONT  TestNormalizeQOTDConfigNormalizesSuppressedScheduledPublishDate
---- PASS: TestWebhookEmbedUpdatesLegacyFallbackMigration (0.01s)
---- PASS: TestNormalizeQOTDConfigNormalizesSuppressedScheduledPublishDate (0.00s)
-=== CONT  TestResolveRuntimeConfigAdoptsEveryGuildField
-=== CONT  TestNormalizeQOTDConfigRequiresScheduleWhenEnabled
---- PASS: TestNormalizeQOTDConfigRequiresScheduleWhenEnabled (0.00s)
-=== CONT  TestNormalizeQOTDConfigRequiresDeliveryTargetsWhenEnabled
-=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/Database.Driver
---- PASS: TestNormalizeQOTDConfigRequiresDeliveryTargetsWhenEnabled (0.00s)
-=== CONT  TestNormalizeQOTDConfigPreservesSelectionStrategy
---- PASS: TestNormalizeQOTDConfigPreservesSelectionStrategy (0.00s)
-=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/Database.DatabaseURL
-=== CONT  TestWebhookEmbedUpdatesCRUDGlobal
-=== CONT  TestWebhookEmbedUpdatesCreateValidationAndDuplicates
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-=== CONT  TestNormalizeQOTDConfigAllowsPartialScheduleWhileDisabled
-=== CONT  TestRuntimeConfigWebhookEmbedValidationDefaultsAndNormalization
-=== CONT  TestResolveRuntimeConfigWebhookEmbedUpdatesMerge
-=== CONT  TestNormalizeRuntimeConfigRejectsNegativeGlobalMaxWorkers
-=== CONT  TestRuntimeConfigModerationLoggingEnabled
-=== CONT  TestFindRolePanelPostingSearchesAcrossPanels
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-=== CONT  TestRuntimeConfigUnmarshalMigratesLegacyWebhookEmbedUpdate
 === CONT  TestRolePanelPostingsCRUD
-=== CONT  TestRolePanelMutationsAreSnapshotIsolated
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-=== CONT  TestRuntimeConfigUnmarshalMigratesLegacyModerationLogMode
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+=== CONT  TestFindRolePanelPostingSearchesAcrossPanels
+--- PASS: TestNormalizeReactionBlockConfigMergesPairsAndDedupesEmojis (0.00s)
+=== CONT  TestResolveRuntimeConfigModerationLoggingMerge
+--- PASS: TestCloneFeatureTogglesRoundtripAllTrue (0.00s)
+=== CONT  TestWebhookEmbedUpdatesCRUDGuildScope
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+=== CONT  TestIsValidationErrorMatchesWrappedValidation
 === CONT  TestRolePanelPostingValidation
-=== RUN   TestRolePanelPostingValidation/valid
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+=== CONT  TestWebhookEmbedUpdatesCreateValidationAndDuplicates
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+=== CONT  TestWebhookEmbedUpdatesUpdateDeleteNotFound
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+=== CONT  TestWebhookEmbedUpdatesLegacyFallbackMigration
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+=== CONT  TestResolveRuntimeConfigAdoptsEveryGuildField
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/Database.Driver
 === CONT  TestRolePanelButtonByRoleIDFindsAcrossPanels
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-=== CONT  TestRolePanelFieldCRUD
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+--- PASS: TestResolveRuntimeConfigModerationLoggingMerge (0.00s)
+=== RUN   TestRolePanelPostingValidation/valid
+--- PASS: TestIsValidationErrorMatchesWrappedValidation (0.00s)
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 === PAUSE TestRolePanelPostingValidation/valid
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+=== CONT  TestRolePanelMutationsAreSnapshotIsolated
+=== CONT  TestNormalizeRuntimeConfigRejectsNegativeGlobalMaxWorkers
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 === RUN   TestRolePanelPostingValidation/missing_channel
+=== CONT  TestRolePanelButtonCapEnforced
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
 === PAUSE TestRolePanelPostingValidation/missing_channel
 === RUN   TestRolePanelPostingValidation/non-numeric_channel
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 === PAUSE TestRolePanelPostingValidation/non-numeric_channel
 === RUN   TestRolePanelPostingValidation/missing_message
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
 === PAUSE TestRolePanelPostingValidation/missing_message
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
 === RUN   TestRolePanelPostingValidation/non-numeric_message
 === PAUSE TestRolePanelPostingValidation/non-numeric_message
-=== CONT  TestRolePanelEmbedFieldValidation
-=== CONT  TestRolePanelButtonCapEnforced
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-=== CONT  TestRuntimeConfigNormalizedWebhookEmbedUpdates
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/Database.MaxOpenConns
-=== CONT  TestRolePanelButtonValidation
-=== RUN   TestRolePanelButtonValidation/valid_custom_emoji
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+--- PASS: TestWebhookEmbedUpdatesUpdateDeleteNotFound (0.00s)
+=== CONT  TestRolePanelFieldCRUD
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+--- PASS: TestFindRolePanelPostingSearchesAcrossPanels (0.00s)
 === CONT  TestResolveRuntimeConfigWebhookEmbedValidationMerge
-=== CONT  TestSetReactionBlockConfigRollsBackOnSaveError
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-=== PAUSE TestRolePanelButtonValidation/valid_custom_emoji
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=test guilds_count=1
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-=== RUN   TestRolePanelButtonValidation/valid_unicode_emoji
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-=== PAUSE TestRolePanelButtonValidation/valid_unicode_emoji
-=== RUN   TestRolePanelButtonValidation/valid_no_emoji
-=== PAUSE TestRolePanelButtonValidation/valid_no_emoji
-=== CONT  TestSetReactionBlockConfigCanonicalizesAndReadsBack
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=test guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-=== RUN   TestRolePanelButtonValidation/missing_role
-=== CONT  TestResolveRuntimeConfigModerationLoggingMerge
+=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/Database.DatabaseURL
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
 --- PASS: TestWebhookEmbedUpdatesCreateValidationAndDuplicates (0.00s)
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
 === CONT  TestRolePanelCRUDLifecycle
-=== CONT  TestResolveRuntimeConfigGlobalMaxWorkersMerge
-=== CONT  TestRolePanelKeyValidation
-=== PAUSE TestRolePanelButtonValidation/missing_role
-=== RUN   TestRolePanelKeyValidation/trims_and_lowercases
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-=== CONT  TestQOTDConfigLegacyJSONTableMappings
-=== RUN   TestQOTDConfigLegacyJSONTableMappings/legacy_question_channel_id_maps_to_default_deck_channel_id
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=transactional-test-store
-=== PAUSE TestQOTDConfigLegacyJSONTableMappings/legacy_question_channel_id_maps_to_default_deck_channel_id
-=== CONT  TestQOTDConfigUnmarshalMigratesLegacyChannelFields
-=== RUN   TestRolePanelButtonValidation/non-numeric_role
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-=== CONT  TestSetQOTDConfigRollsBackOnSaveError
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-=== RUN   TestQOTDConfigLegacyJSONTableMappings/legacy_forum_channel_id_maps_to_default_deck_forum_channel_id
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=test guilds_count=1
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-=== CONT  TestSetQOTDConfigCanonicalizesMessageChannelFields
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=test guilds_count=1
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=transactional-test-store
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-=== CONT  TestNormalizeQOTDConfigRejectsInvalidSuppressedScheduledPublishDate
-=== PAUSE TestRolePanelKeyValidation/trims_and_lowercases
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
---- PASS: TestWebhookEmbedUpdatesCRUDGlobal (0.01s)
-=== RUN   TestRolePanelKeyValidation/keeps_digits_and_dashes
-=== PAUSE TestRolePanelButtonValidation/non-numeric_role
-=== PAUSE TestQOTDConfigLegacyJSONTableMappings/legacy_forum_channel_id_maps_to_default_deck_forum_channel_id
-=== CONT  TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue
-=== CONT  TestNormalizeQOTDConfigDropsUnknownSelectionStrategy
-=== CONT  TestPartnersValidationAndDedup
-=== CONT  TestHasAnyOverrideDetectsEachToggle
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=test guilds_count=1
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
---- PASS: TestNormalizeQOTDConfigAllowsPartialScheduleWhileDisabled (0.00s)
-=== PAUSE TestRolePanelKeyValidation/keeps_digits_and_dashes
-=== RUN   TestRolePanelButtonValidation/missing_label
-=== RUN   TestQOTDConfigLegacyJSONTableMappings/legacy_qotd_time_hour_utc_and_minute_maps_to_Schedule
-=== RUN   TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/empty_falls_back_to_queue
-=== CONT  TestPartnersUpdateDeleteNotFound
-=== CONT  TestPartnersCRUDAndDeterministicOrder
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=test guilds_count=1
-=== CONT  TestGuildConfigLegacyMigration
-=== RUN   TestRolePanelKeyValidation/rejects_empty
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=test guilds_count=1
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+--- PASS: TestNormalizeRuntimeConfigRejectsNegativeGlobalMaxWorkers (0.00s)
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+--- PASS: TestRolePanelMutationsAreSnapshotIsolated (0.00s)
+=== CONT  TestRuntimeConfigWebhookEmbedValidationDefaultsAndNormalization
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
 --- PASS: TestRuntimeConfigWebhookEmbedValidationDefaultsAndNormalization (0.00s)
-=== PAUSE TestQOTDConfigLegacyJSONTableMappings/legacy_qotd_time_hour_utc_and_minute_maps_to_Schedule
-=== PAUSE TestRolePanelButtonValidation/missing_label
-=== CONT  TestJSONManagerSaveWritesAtomically
-=== CONT  TestResolveFeaturesDefaultsModerationCommandsEnabledWhenUnset
-=== PAUSE TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/empty_falls_back_to_queue
-=== RUN   TestGuildConfigLegacyMigration/migrates_bot_instance_id
---- PASS: TestResolveRuntimeConfigWebhookEmbedUpdatesMerge (0.00s)
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+=== CONT  TestWebhookEmbedUpdatesCRUDGlobal
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+--- PASS: TestRolePanelButtonByRoleIDFindsAcrossPanels (0.00s)
+=== CONT  TestRolePanelEmbedFieldValidation
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+--- PASS: TestWebhookEmbedUpdatesCRUDGuildScope (0.00s)
+--- PASS: TestResolveRuntimeConfigWebhookEmbedValidationMerge (0.00s)
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+--- PASS: TestRolePanelEmbedFieldValidation (0.00s)
+=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/Database.MaxOpenConns
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+=== CONT  TestRuntimeConfigNormalizedWebhookEmbedUpdates
+--- PASS: TestRuntimeConfigNormalizedWebhookEmbedUpdates (0.00s)
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+=== CONT  TestRolePanelKeyValidation
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/Database.MaxIdleConns
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+=== RUN   TestRolePanelKeyValidation/trims_and_lowercases
+=== PAUSE TestRolePanelKeyValidation/trims_and_lowercases
+=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/Database.ConnMaxLifetimeSecs
+=== RUN   TestRolePanelKeyValidation/keeps_digits_and_dashes
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+=== PAUSE TestRolePanelKeyValidation/keeps_digits_and_dashes
+=== RUN   TestRolePanelKeyValidation/rejects_empty
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/Database.ConnMaxIdleTimeSecs
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
 === PAUSE TestRolePanelKeyValidation/rejects_empty
-=== RUN   TestQOTDConfigLegacyJSONTableMappings/legacy_publish_hour_utc_and_minute_maps_to_Schedule
-=== PAUSE TestQOTDConfigLegacyJSONTableMappings/legacy_publish_hour_utc_and_minute_maps_to_Schedule
-=== CONT  TestLookupToggleRoundTrip
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 === RUN   TestRolePanelKeyValidation/rejects_whitespace_inside
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/Database.PingTimeoutMS
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+--- PASS: TestWebhookEmbedUpdatesCRUDGlobal (0.00s)
+=== CONT  TestRuntimeConfigUnmarshalMigratesLegacyModerationLogMode
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 === PAUSE TestRolePanelKeyValidation/rejects_whitespace_inside
-=== RUN   TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/explicit_queue_stays_queue
-=== CONT  TestBotConfigRoundTripDropsLegacyModerationFields
-=== RUN   TestQOTDConfigLegacyJSONTableMappings/legacy_suppress_scheduled_publish_date_utc_maps_to_list
-=== PAUSE TestQOTDConfigLegacyJSONTableMappings/legacy_suppress_scheduled_publish_date_utc_maps_to_list
-=== RUN   TestQOTDConfigLegacyJSONTableMappings/canonical_schedule_shadows_legacy
-=== PAUSE TestQOTDConfigLegacyJSONTableMappings/canonical_schedule_shadows_legacy
-=== CONT  TestFeatureRegistryIDsAreUnique
-=== CONT  TestCreateWebhookEmbedUpdateRollsBackOnSaveError
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=test guilds_count=0
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-=== CONT  TestEnsureMinimalGuildConfigPersistsDormantGuild
-2026/06/23 14:19:03 INFO Architectural state transition: Dormant guild node appended to global configuration tree guild_id=guild-new
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/BotTheme
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
 === RUN   TestRolePanelKeyValidation/rejects_punctuation
 === PAUSE TestRolePanelKeyValidation/rejects_punctuation
 === RUN   TestRolePanelKeyValidation/rejects_unicode_letters
-=== CONT  TestNewMinimalGuildConfigDisablesAllFeatures
-=== CONT  TestFeatureRegistryDefaultsMatchLegacyResolveFeatures
-=== RUN   TestRolePanelButtonValidation/emoji_id_without_name
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
 === PAUSE TestRolePanelKeyValidation/rejects_unicode_letters
-=== CONT  TestFeatureTogglesJSONRoundTrip
-=== CONT  TestMemoryConfigStoreReturnsDefensiveCopies
-=== PAUSE TestRolePanelButtonValidation/emoji_id_without_name
-=== CONT  TestChannelsConfigHelpersStrict
-=== CONT  TestUpdateRuntimeConfigRollsBackOnSaveError
-=== CONT  TestMemoryConfigStoreRoundTrip
---- PASS: TestNormalizeRuntimeConfigRejectsNegativeGlobalMaxWorkers (0.00s)
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=test guilds_count=0
+=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/DisableDBCleanup
+=== CONT  TestSetReactionBlockConfigRollsBackOnSaveError
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/DisableMessageLogs
+--- PASS: TestRolePanelFieldCRUD (0.00s)
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+=== CONT  TestRuntimeConfigModerationLoggingEnabled
+=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/DisableEntryExitLogs
 --- PASS: TestRuntimeConfigModerationLoggingEnabled (0.00s)
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
-=== PAUSE TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/explicit_queue_stays_queue
---- PASS: TestRuntimeConfigUnmarshalMigratesLegacyWebhookEmbedUpdate (0.00s)
-=== CONT  TestCloneFeatureTogglesIsolatesMutation
-=== RUN   TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/random_is_honored
-=== CONT  TestCloneFeatureTogglesRoundtripAllNil
-2026/06/23 14:19:03 ERROR Mutational failure in runtime configuration request_id=cb89a2a46d3bd7f7a86431c5f346f1f1 synthetic_code=500 stack_trace="goroutine 61 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/files.EmitBlockingError(0xc00004a230, {0x140ab1108, 0x2b}, {0x140ad6da0, 0xc0006980e0}, {0xc000180060, 0x20})\n\tD:/Users/alice/git/discordcore/pkg/files/preferences.go:34 +0x11e\ngithub.com/small-frappuccino/discordcore/pkg/files.(*ConfigManager).UpdateRuntimeConfig(_, _)\n\tD:/Users/alice/git/discordcore/pkg/files/preferences.go:223 +0x385\ngithub.com/small-frappuccino/discordcore/pkg/files.TestUpdateRuntimeConfigRollsBackOnSaveError(0xc000003200)\n\tD:/Users/alice/git/discordcore/pkg/files/config_transaction_test.go:67 +0x16f\ntesting.tRunner(0xc000003200, 0x140aceba0)\n\tD:/Users/alice/scoop/apps/go/current/src/testing/testing.go:2036 +0x1cb\ncreated by testing.(*T).Run in goroutine 1\n\tD:/Users/alice/scoop/apps/go/current/src/testing/testing.go:2101 +0xb2b\n" error="ConfigManager.UpdateRuntimeConfig: ConfigManager.UpdateConfig: save configuration for transactional-test-store: save failed"
-=== CONT  TestCloneFeatureTogglesRoundtripAllTrue
---- PASS: TestFindRolePanelPostingSearchesAcrossPanels (0.01s)
---- PASS: TestRolePanelMutationsAreSnapshotIsolated (0.00s)
---- PASS: TestRuntimeConfigUnmarshalMigratesLegacyModerationLogMode (0.00s)
---- PASS: TestCloneFeatureTogglesRoundtripAllTrue (0.00s)
-=== CONT  TestEnsureMinimalGuildConfigPreservesDomainOverridesOnExistingGuild
---- PASS: TestRolePanelPostingsCRUD (0.02s)
-=== PAUSE TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/random_is_honored
-=== RUN   TestRolePanelButtonValidation/label_too_long
-=== CONT  TestCloneFeatureTogglesRoundtripAllFalse
-=== PAUSE TestGuildConfigLegacyMigration/migrates_bot_instance_id
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-=== CONT  TestRolePanelPostingValidation/valid
-=== RUN   TestGuildConfigLegacyMigration/migrates_domain_bot_instance_ids
-=== PAUSE TestGuildConfigLegacyMigration/migrates_domain_bot_instance_ids
---- PASS: TestRolePanelButtonByRoleIDFindsAcrossPanels (0.01s)
---- PASS: TestRolePanelEmbedFieldValidation (0.00s)
---- PASS: TestRuntimeConfigNormalizedWebhookEmbedUpdates (0.00s)
-=== RUN   TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/case-insensitive_random
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
---- PASS: TestResolveRuntimeConfigWebhookEmbedValidationMerge (0.00s)
-2026/06/23 14:19:03 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:03 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-=== PAUSE TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/case-insensitive_random
-=== RUN   TestGuildConfigLegacyMigration/combines_both_legacy_fields
-=== RUN   TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/whitespace_tolerated
-=== PAUSE TestRolePanelButtonValidation/label_too_long
-=== CONT  TestRolePanelPostingValidation/non-numeric_message
-=== CONT  TestRolePanelPostingValidation/non-numeric_channel
-=== CONT  TestRolePanelPostingValidation/missing_channel
---- PASS: TestRolePanelFieldCRUD (0.04s)
-=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/Database.MaxIdleConns
-=== PAUSE TestGuildConfigLegacyMigration/combines_both_legacy_fields
-=== PAUSE TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/whitespace_tolerated
-=== CONT  TestRolePanelPostingValidation/missing_message
-=== RUN   TestGuildConfigLegacyMigration/normalizes_legacy_names
-=== CONT  TestQOTDConfigLegacyJSONTableMappings/canonical_schedule_shadows_legacy
-=== RUN   TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/unknown_values_fall_back_to_queue
-=== CONT  TestQOTDConfigLegacyJSONTableMappings/legacy_forum_channel_id_maps_to_default_deck_forum_channel_id
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=test guilds_count=1
+=== CONT  TestSetReactionBlockConfigCanonicalizesAndReadsBack
+=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/DisableReactionLogs
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+--- PASS: TestRolePanelPostingsCRUD (0.00s)
+=== CONT  TestResolveRuntimeConfigWebhookEmbedUpdatesMerge
+=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/DisableUserLogs
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+--- PASS: TestResolveRuntimeConfigWebhookEmbedUpdatesMerge (0.00s)
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=test guilds_count=1
+=== CONT  TestRolePanelButtonValidation
+=== CONT  TestQOTDConfigUnmarshalMigratesLegacyChannelFields
+--- PASS: TestRolePanelCRUDLifecycle (0.00s)
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/DisableCleanLog
+=== RUN   TestRolePanelButtonValidation/valid_custom_emoji
+=== CONT  TestSetQOTDConfigRollsBackOnSaveError
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=transactional-test-store
 --- PASS: TestSetReactionBlockConfigRollsBackOnSaveError (0.00s)
-=== CONT  TestQOTDConfigLegacyJSONTableMappings/legacy_suppress_scheduled_publish_date_utc_maps_to_list
-=== CONT  TestQOTDConfigLegacyJSONTableMappings/legacy_publish_hour_utc_and_minute_maps_to_Schedule
-=== CONT  TestQOTDConfigLegacyJSONTableMappings/legacy_qotd_time_hour_utc_and_minute_maps_to_Schedule
-=== CONT  TestRolePanelKeyValidation/trims_and_lowercases
-=== CONT  TestQOTDConfigLegacyJSONTableMappings/legacy_question_channel_id_maps_to_default_deck_channel_id
-=== PAUSE TestGuildConfigLegacyMigration/normalizes_legacy_names
-=== PAUSE TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/unknown_values_fall_back_to_queue
---- PASS: TestResolveRuntimeConfigModerationLoggingMerge (0.00s)
-=== CONT  TestRolePanelKeyValidation/rejects_punctuation
-=== CONT  TestRolePanelKeyValidation/rejects_unicode_letters
-=== CONT  TestRolePanelKeyValidation/rejects_whitespace_inside
-=== CONT  TestRolePanelKeyValidation/rejects_empty
-=== RUN   TestGuildConfigLegacyMigration/ignores_empty_fields
---- PASS: TestResolveRuntimeConfigGlobalMaxWorkersMerge (0.00s)
-=== CONT  TestRolePanelKeyValidation/keeps_digits_and_dashes
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+--- PASS: TestRuntimeConfigUnmarshalMigratesLegacyModerationLogMode (0.00s)
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=test guilds_count=1
+=== CONT  TestResolveRuntimeConfigGlobalMaxWorkersMerge
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+=== PAUSE TestRolePanelButtonValidation/valid_custom_emoji
+=== CONT  TestRuntimeConfigUnmarshalMigratesLegacyWebhookEmbedUpdate
 --- PASS: TestSetReactionBlockConfigCanonicalizesAndReadsBack (0.00s)
-=== CONT  TestRolePanelButtonValidation/valid_custom_emoji
-=== CONT  TestRolePanelButtonValidation/missing_label
+=== CONT  TestSetQOTDConfigCanonicalizesMessageChannelFields
+=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/LogModerationScope
+=== CONT  TestQOTDConfigLegacyJSONTableMappings
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+=== RUN   TestRolePanelButtonValidation/valid_unicode_emoji
+=== RUN   TestQOTDConfigLegacyJSONTableMappings/legacy_question_channel_id_maps_to_default_deck_channel_id
+=== PAUSE TestRolePanelButtonValidation/valid_unicode_emoji
+=== PAUSE TestQOTDConfigLegacyJSONTableMappings/legacy_question_channel_id_maps_to_default_deck_channel_id
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=test guilds_count=1
+=== CONT  TestResolveFeaturesDefaultsModerationCommandsEnabledWhenUnset
 --- PASS: TestQOTDConfigUnmarshalMigratesLegacyChannelFields (0.00s)
+=== CONT  TestCreateWebhookEmbedUpdateRollsBackOnSaveError
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+=== CONT  TestQOTDConfigUnmarshalPrefersNewListWhenBothFieldsPresent
+=== RUN   TestRolePanelButtonValidation/valid_no_emoji
+=== RUN   TestQOTDConfigLegacyJSONTableMappings/legacy_forum_channel_id_maps_to_default_deck_forum_channel_id
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=transactional-test-store
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=test guilds_count=0
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+--- PASS: TestResolveRuntimeConfigGlobalMaxWorkersMerge (0.00s)
+=== CONT  TestCloneFeatureTogglesIsolatesMutation
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+--- PASS: TestWebhookEmbedUpdatesLegacyFallbackMigration (0.01s)
+=== PAUSE TestRolePanelButtonValidation/valid_no_emoji
+=== CONT  TestQOTDConfigUnmarshalMigratesLegacySingleSuppressionField
+=== PAUSE TestQOTDConfigLegacyJSONTableMappings/legacy_forum_channel_id_maps_to_default_deck_forum_channel_id
+=== CONT  TestEnsureMinimalGuildConfigPreservesDomainOverridesOnExistingGuild
 --- PASS: TestSetQOTDConfigRollsBackOnSaveError (0.00s)
-=== CONT  TestRolePanelButtonValidation/emoji_id_without_name
-=== CONT  TestRolePanelButtonValidation/non-numeric_role
-=== PAUSE TestGuildConfigLegacyMigration/ignores_empty_fields
-=== CONT  TestRolePanelButtonValidation/missing_role
-=== CONT  TestRolePanelButtonValidation/label_too_long
-=== CONT  TestRolePanelButtonValidation/valid_unicode_emoji
-=== CONT  TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/whitespace_tolerated
-=== CONT  TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/unknown_values_fall_back_to_queue
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+=== CONT  TestNewMinimalGuildConfigDisablesAllFeatures
+--- PASS: TestQOTDConfigUnmarshalMigratesLegacySingleSuppressionField (0.00s)
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+=== RUN   TestRolePanelButtonValidation/missing_role
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+=== CONT  TestNormalizeQOTDConfigDedupesAndSortsSuppressionList
+=== CONT  TestMemoryConfigStoreReturnsDefensiveCopies
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+=== RUN   TestQOTDConfigLegacyJSONTableMappings/legacy_qotd_time_hour_utc_and_minute_maps_to_Schedule
+=== CONT  TestUpdateRuntimeConfigRollsBackOnSaveError
+--- PASS: TestRuntimeConfigUnmarshalMigratesLegacyWebhookEmbedUpdate (0.00s)
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/PresenceWatchUserID
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+=== PAUSE TestRolePanelButtonValidation/missing_role
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=test guilds_count=0
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+=== CONT  TestFeatureTogglesJSONRoundTrip
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=0
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+=== PAUSE TestQOTDConfigLegacyJSONTableMappings/legacy_qotd_time_hour_utc_and_minute_maps_to_Schedule
+=== CONT  TestNormalizeQOTDConfigRejectsInvalidSuppressedScheduledPublishDate
+--- PASS: TestResolveFeaturesDefaultsModerationCommandsEnabledWhenUnset (0.00s)
 --- PASS: TestNormalizeQOTDConfigRejectsInvalidSuppressedScheduledPublishDate (0.00s)
-=== CONT  TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/random_is_honored
+=== CONT  TestLookupToggleRoundTrip
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+=== RUN   TestRolePanelButtonValidation/non-numeric_role
+2026/06/23 15:55:11 ERROR Mutational failure in runtime configuration request_id=879635d9d0bd130fd1bb61d98d4872f7 synthetic_code=500 stack_trace="goroutine 57 [running]:\nruntime/debug.Stack()\n\tD:/Users/alice/scoop/apps/go/current/src/runtime/debug/stack.go:26 +0x68\ngithub.com/small-frappuccino/discordcore/pkg/files.EmitBlockingError(0xc000048230, {0x140ab1108, 0x2b}, {0x140ad6da0, 0xc000286300}, {0xc0001900c0, 0x20})\n\tD:/Users/alice/git/discordcore/pkg/files/preferences.go:34 +0x11e\ngithub.com/small-frappuccino/discordcore/pkg/files.(*ConfigManager).UpdateRuntimeConfig(_, _)\n\tD:/Users/alice/git/discordcore/pkg/files/preferences.go:223 +0x385\ngithub.com/small-frappuccino/discordcore/pkg/files.TestUpdateRuntimeConfigRollsBackOnSaveError(0xc000253200)\n\tD:/Users/alice/git/discordcore/pkg/files/config_transaction_test.go:67 +0x16f\ntesting.tRunner(0xc000253200, 0x140aceba0)\n\tD:/Users/alice/scoop/apps/go/current/src/testing/testing.go:2036 +0x1cb\ncreated by testing.(*T).Run in goroutine 1\n\tD:/Users/alice/scoop/apps/go/current/src/testing/testing.go:2101 +0xb2b\n" error="ConfigManager.UpdateRuntimeConfig: ConfigManager.UpdateConfig: save configuration for transactional-test-store: save failed"
+=== RUN   TestQOTDConfigLegacyJSONTableMappings/legacy_publish_hour_utc_and_minute_maps_to_Schedule
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+=== PAUSE TestRolePanelButtonValidation/non-numeric_role
+--- PASS: TestQOTDConfigUnmarshalPrefersNewListWhenBothFieldsPresent (0.00s)
+=== CONT  TestNormalizeQOTDConfigAllowsPartialScheduleWhileDisabled
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+=== PAUSE TestQOTDConfigLegacyJSONTableMappings/legacy_publish_hour_utc_and_minute_maps_to_Schedule
+=== CONT  TestFeatureRegistryIDsAreUnique
+=== RUN   TestQOTDConfigLegacyJSONTableMappings/legacy_suppress_scheduled_publish_date_utc_maps_to_list
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+=== CONT  TestEnsureMinimalGuildConfigPersistsDormantGuild
+=== CONT  TestFeatureRegistryDefaultsMatchLegacyResolveFeatures
+=== CONT  TestNormalizeQOTDConfigNormalizesSuppressedScheduledPublishDate
+=== RUN   TestRolePanelButtonValidation/missing_label
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:55:11 INFO Architectural state transition: Dormant guild node appended to global configuration tree guild_id=guild-new
+--- PASS: TestSetQOTDConfigCanonicalizesMessageChannelFields (0.00s)
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+=== CONT  TestNormalizeQOTDConfigRequiresScheduleWhenEnabled
+=== PAUSE TestQOTDConfigLegacyJSONTableMappings/legacy_suppress_scheduled_publish_date_utc_maps_to_list
+=== CONT  TestHasAnyOverrideDetectsEachToggle
+=== CONT  TestPartnersCRUDAndDeterministicOrder
+=== PAUSE TestRolePanelButtonValidation/missing_label
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+--- PASS: TestCloneFeatureTogglesIsolatesMutation (0.00s)
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=test guilds_count=1
+=== RUN   TestRolePanelButtonValidation/emoji_id_without_name
+=== CONT  TestCloneFeatureTogglesRoundtripAllNil
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+=== RUN   TestQOTDConfigLegacyJSONTableMappings/canonical_schedule_shadows_legacy
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+--- PASS: TestCreateWebhookEmbedUpdateRollsBackOnSaveError (0.00s)
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+=== PAUSE TestQOTDConfigLegacyJSONTableMappings/canonical_schedule_shadows_legacy
+--- PASS: TestNewMinimalGuildConfigDisablesAllFeatures (0.00s)
+=== CONT  TestNormalizeQOTDConfigDropsUnknownSelectionStrategy
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+=== PAUSE TestRolePanelButtonValidation/emoji_id_without_name
+=== CONT  TestPartnersUpdateDeleteNotFound
+=== RUN   TestRolePanelButtonValidation/label_too_long
+=== CONT  TestMemoryConfigStoreRoundTrip
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=test guilds_count=1
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+--- PASS: TestNormalizeQOTDConfigDedupesAndSortsSuppressionList (0.00s)
+=== CONT  TestCloneFeatureTogglesRoundtripAllFalse
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+=== PAUSE TestRolePanelButtonValidation/label_too_long
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+=== CONT  TestNormalizeQOTDConfigRequiresDeliveryTargetsWhenEnabled
+--- PASS: TestMemoryConfigStoreReturnsDefensiveCopies (0.00s)
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+=== CONT  TestBotConfigRoundTripDropsLegacyModerationFields
+=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/PresenceWatchBot
+=== CONT  TestGuildConfigLegacyMigration
+--- PASS: TestPartnersUpdateDeleteNotFound (0.00s)
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+=== CONT  TestChannelsConfigUnmarshalStrictSchema
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+=== CONT  TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue
+=== CONT  TestJSONManagerSaveWritesAtomically
+=== RUN   TestGuildConfigLegacyMigration/migrates_bot_instance_id
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+--- PASS: TestNormalizeQOTDConfigRequiresDeliveryTargetsWhenEnabled (0.00s)
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+--- PASS: TestUpdateRuntimeConfigRollsBackOnSaveError (0.00s)
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+--- PASS: TestLookupToggleRoundTrip (0.00s)
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+=== RUN   TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/empty_falls_back_to_queue
+=== PAUSE TestGuildConfigLegacyMigration/migrates_bot_instance_id
+=== CONT  TestChannelsConfigHelpersStrict
+--- PASS: TestNormalizeQOTDConfigAllowsPartialScheduleWhileDisabled (0.00s)
+=== PAUSE TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/empty_falls_back_to_queue
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+=== RUN   TestGuildConfigLegacyMigration/migrates_domain_bot_instance_ids
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+=== CONT  TestPartnersValidationAndDedup
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+--- PASS: TestFeatureRegistryIDsAreUnique (0.00s)
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=test guilds_count=1
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+--- PASS: TestFeatureTogglesJSONRoundTrip (0.00s)
+=== RUN   TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/explicit_queue_stays_queue
+=== CONT  TestNormalizeQOTDConfigPreservesSelectionStrategy
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+=== PAUSE TestGuildConfigLegacyMigration/migrates_domain_bot_instance_ids
+=== CONT  TestRolePanelPostingValidation/non-numeric_channel
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+=== RUN   TestGuildConfigLegacyMigration/combines_both_legacy_fields
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+=== CONT  TestRolePanelPostingValidation/non-numeric_message
+--- PASS: TestFeatureRegistryDefaultsMatchLegacyResolveFeatures (0.00s)
+=== PAUSE TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/explicit_queue_stays_queue
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+=== CONT  TestRolePanelPostingValidation/missing_message
+=== RUN   TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/random_is_honored
+=== PAUSE TestGuildConfigLegacyMigration/combines_both_legacy_fields
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+--- PASS: TestNormalizeQOTDConfigNormalizesSuppressedScheduledPublishDate (0.00s)
+=== CONT  TestRolePanelPostingValidation/missing_channel
+=== PAUSE TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/random_is_honored
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+=== CONT  TestRolePanelPostingValidation/valid
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+=== CONT  TestRolePanelKeyValidation/rejects_unicode_letters
+=== RUN   TestGuildConfigLegacyMigration/normalizes_legacy_names
+--- PASS: TestNormalizeQOTDConfigRequiresScheduleWhenEnabled (0.00s)
+=== CONT  TestRolePanelKeyValidation/rejects_empty
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+=== CONT  TestRolePanelKeyValidation/trims_and_lowercases
+=== CONT  TestRolePanelKeyValidation/rejects_whitespace_inside
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+=== CONT  TestRolePanelKeyValidation/keeps_digits_and_dashes
+=== CONT  TestQOTDConfigLegacyJSONTableMappings/legacy_question_channel_id_maps_to_default_deck_channel_id
+=== RUN   TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/case-insensitive_random
+=== CONT  TestRolePanelKeyValidation/rejects_punctuation
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+=== PAUSE TestGuildConfigLegacyMigration/normalizes_legacy_names
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+--- PASS: TestHasAnyOverrideDetectsEachToggle (0.00s)
+=== CONT  TestQOTDConfigLegacyJSONTableMappings/legacy_qotd_time_hour_utc_and_minute_maps_to_Schedule
+=== PAUSE TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/case-insensitive_random
+=== RUN   TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/whitespace_tolerated
+=== CONT  TestQOTDConfigLegacyJSONTableMappings/legacy_publish_hour_utc_and_minute_maps_to_Schedule
+2026/06/23 15:55:11 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+=== RUN   TestGuildConfigLegacyMigration/ignores_empty_fields
+=== CONT  TestQOTDConfigLegacyJSONTableMappings/legacy_forum_channel_id_maps_to_default_deck_forum_channel_id
+2026/06/23 15:55:11 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+--- PASS: TestCloneFeatureTogglesRoundtripAllNil (0.00s)
+--- PASS: TestNormalizeQOTDConfigDropsUnknownSelectionStrategy (0.00s)
+--- PASS: TestEnsureMinimalGuildConfigPersistsDormantGuild (0.00s)
+=== CONT  TestQOTDConfigLegacyJSONTableMappings/legacy_suppress_scheduled_publish_date_utc_maps_to_list
+=== PAUSE TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/whitespace_tolerated
+=== PAUSE TestGuildConfigLegacyMigration/ignores_empty_fields
+=== CONT  TestQOTDConfigLegacyJSONTableMappings/canonical_schedule_shadows_legacy
+=== CONT  TestRolePanelButtonValidation/valid_unicode_emoji
+--- PASS: TestMemoryConfigStoreRoundTrip (0.00s)
+=== CONT  TestRolePanelButtonValidation/emoji_id_without_name
+--- PASS: TestCloneFeatureTogglesRoundtripAllFalse (0.00s)
+=== CONT  TestRolePanelButtonValidation/label_too_long
 === CONT  TestRolePanelButtonValidation/valid_no_emoji
 === RUN   TestGuildConfigLegacyMigration/does_not_overwrite_existing_canonical_tokens
-=== CONT  TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/case-insensitive_random
+=== RUN   TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/unknown_values_fall_back_to_queue
+=== CONT  TestRolePanelButtonValidation/valid_custom_emoji
+=== CONT  TestRolePanelButtonValidation/non-numeric_role
+=== CONT  TestRolePanelButtonValidation/missing_role
+--- PASS: TestEnsureMinimalGuildConfigPreservesDomainOverridesOnExistingGuild (0.00s)
+=== PAUSE TestGuildConfigLegacyMigration/does_not_overwrite_existing_canonical_tokens
+=== CONT  TestRolePanelButtonValidation/missing_label
+=== CONT  TestGuildConfigLegacyMigration/combines_both_legacy_fields
+=== CONT  TestGuildConfigLegacyMigration/normalizes_legacy_names
+--- PASS: TestChannelsConfigUnmarshalStrictSchema (0.00s)
+=== CONT  TestGuildConfigLegacyMigration/does_not_overwrite_existing_canonical_tokens
+=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/MessageCacheTTLHours
+=== PAUSE TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/unknown_values_fall_back_to_queue
+=== CONT  TestGuildConfigLegacyMigration/ignores_empty_fields
+=== CONT  TestGuildConfigLegacyMigration/migrates_bot_instance_id
 === CONT  TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/empty_falls_back_to_queue
 === CONT  TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/explicit_queue_stays_queue
---- PASS: TestRolePanelButtonCapEnforced (0.16s)
-=== PAUSE TestGuildConfigLegacyMigration/does_not_overwrite_existing_canonical_tokens
---- PASS: TestSetQOTDConfigCanonicalizesMessageChannelFields (0.12s)
---- PASS: TestRolePanelCRUDLifecycle (0.14s)
-=== CONT  TestGuildConfigLegacyMigration/does_not_overwrite_existing_canonical_tokens
---- PASS: TestNormalizeQOTDConfigDropsUnknownSelectionStrategy (0.00s)
---- PASS: TestPartnersValidationAndDedup (0.01s)
-=== CONT  TestGuildConfigLegacyMigration/ignores_empty_fields
-=== CONT  TestGuildConfigLegacyMigration/normalizes_legacy_names
-=== CONT  TestGuildConfigLegacyMigration/combines_both_legacy_fields
 === CONT  TestGuildConfigLegacyMigration/migrates_domain_bot_instance_ids
-=== CONT  TestGuildConfigLegacyMigration/migrates_bot_instance_id
---- PASS: TestHasAnyOverrideDetectsEachToggle (0.00s)
---- PASS: TestPartnersUpdateDeleteNotFound (0.00s)
---- PASS: TestPartnersCRUDAndDeterministicOrder (0.01s)
---- PASS: TestResolveFeaturesDefaultsModerationCommandsEnabledWhenUnset (0.00s)
---- PASS: TestLookupToggleRoundTrip (0.00s)
---- PASS: TestBotConfigRoundTripDropsLegacyModerationFields (0.00s)
---- PASS: TestFeatureRegistryIDsAreUnique (0.00s)
---- PASS: TestCreateWebhookEmbedUpdateRollsBackOnSaveError (0.00s)
---- PASS: TestEnsureMinimalGuildConfigPersistsDormantGuild (0.00s)
---- PASS: TestNewMinimalGuildConfigDisablesAllFeatures (0.00s)
---- PASS: TestFeatureRegistryDefaultsMatchLegacyResolveFeatures (0.00s)
---- PASS: TestFeatureTogglesJSONRoundTrip (0.00s)
---- PASS: TestMemoryConfigStoreReturnsDefensiveCopies (0.00s)
 --- PASS: TestChannelsConfigHelpersStrict (0.00s)
---- PASS: TestMemoryConfigStoreRoundTrip (0.00s)
---- PASS: TestCloneFeatureTogglesIsolatesMutation (0.00s)
---- PASS: TestCloneFeatureTogglesRoundtripAllNil (0.00s)
---- PASS: TestUpdateRuntimeConfigRollsBackOnSaveError (0.00s)
---- PASS: TestCloneFeatureTogglesRoundtripAllFalse (0.00s)
---- PASS: TestEnsureMinimalGuildConfigPreservesDomainOverridesOnExistingGuild (0.01s)
-=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/Database.ConnMaxLifetimeSecs
---- PASS: TestRolePanelPostingValidation (0.02s)
-    --- PASS: TestRolePanelPostingValidation/valid (0.00s)
+--- PASS: TestBotConfigRoundTripDropsLegacyModerationFields (0.00s)
+=== CONT  TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/random_is_honored
+=== CONT  TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/unknown_values_fall_back_to_queue
+=== CONT  TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/whitespace_tolerated
+--- PASS: TestNormalizeQOTDConfigPreservesSelectionStrategy (0.00s)
+=== CONT  TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/case-insensitive_random
+--- PASS: TestPartnersCRUDAndDeterministicOrder (0.00s)
+--- PASS: TestPartnersValidationAndDedup (0.00s)
+--- PASS: TestRolePanelPostingValidation (0.00s)
     --- PASS: TestRolePanelPostingValidation/non-numeric_channel (0.00s)
     --- PASS: TestRolePanelPostingValidation/non-numeric_message (0.00s)
-    --- PASS: TestRolePanelPostingValidation/missing_channel (0.00s)
     --- PASS: TestRolePanelPostingValidation/missing_message (0.00s)
-=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/Database.ConnMaxIdleTimeSecs
---- PASS: TestQOTDConfigLegacyJSONTableMappings (0.16s)
-    --- PASS: TestQOTDConfigLegacyJSONTableMappings/canonical_schedule_shadows_legacy (0.00s)
+    --- PASS: TestRolePanelPostingValidation/missing_channel (0.00s)
+    --- PASS: TestRolePanelPostingValidation/valid (0.00s)
+--- PASS: TestRolePanelButtonCapEnforced (0.01s)
+=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/MessageDeleteOnLog
+--- PASS: TestQOTDConfigLegacyJSONTableMappings (0.00s)
+    --- PASS: TestQOTDConfigLegacyJSONTableMappings/legacy_question_channel_id_maps_to_default_deck_channel_id (0.00s)
+    --- PASS: TestQOTDConfigLegacyJSONTableMappings/legacy_qotd_time_hour_utc_and_minute_maps_to_Schedule (0.00s)
+    --- PASS: TestQOTDConfigLegacyJSONTableMappings/legacy_publish_hour_utc_and_minute_maps_to_Schedule (0.00s)
     --- PASS: TestQOTDConfigLegacyJSONTableMappings/legacy_forum_channel_id_maps_to_default_deck_forum_channel_id (0.00s)
     --- PASS: TestQOTDConfigLegacyJSONTableMappings/legacy_suppress_scheduled_publish_date_utc_maps_to_list (0.00s)
-    --- PASS: TestQOTDConfigLegacyJSONTableMappings/legacy_publish_hour_utc_and_minute_maps_to_Schedule (0.00s)
-    --- PASS: TestQOTDConfigLegacyJSONTableMappings/legacy_qotd_time_hour_utc_and_minute_maps_to_Schedule (0.00s)
-    --- PASS: TestQOTDConfigLegacyJSONTableMappings/legacy_question_channel_id_maps_to_default_deck_channel_id (0.00s)
---- PASS: TestRolePanelKeyValidation (0.16s)
-    --- PASS: TestRolePanelKeyValidation/trims_and_lowercases (0.00s)
-    --- PASS: TestRolePanelKeyValidation/rejects_punctuation (0.00s)
-    --- PASS: TestRolePanelKeyValidation/rejects_unicode_letters (0.00s)
-    --- PASS: TestRolePanelKeyValidation/rejects_whitespace_inside (0.00s)
-    --- PASS: TestRolePanelKeyValidation/rejects_empty (0.00s)
-    --- PASS: TestRolePanelKeyValidation/keeps_digits_and_dashes (0.00s)
---- PASS: TestRolePanelButtonValidation (0.18s)
-    --- PASS: TestRolePanelButtonValidation/valid_custom_emoji (0.00s)
-    --- PASS: TestRolePanelButtonValidation/missing_label (0.00s)
-    --- PASS: TestRolePanelButtonValidation/emoji_id_without_name (0.00s)
-    --- PASS: TestRolePanelButtonValidation/non-numeric_role (0.00s)
-    --- PASS: TestRolePanelButtonValidation/missing_role (0.00s)
+    --- PASS: TestQOTDConfigLegacyJSONTableMappings/canonical_schedule_shadows_legacy (0.00s)
+--- PASS: TestRolePanelButtonValidation (0.00s)
     --- PASS: TestRolePanelButtonValidation/valid_unicode_emoji (0.00s)
+    --- PASS: TestRolePanelButtonValidation/emoji_id_without_name (0.00s)
     --- PASS: TestRolePanelButtonValidation/label_too_long (0.00s)
     --- PASS: TestRolePanelButtonValidation/valid_no_emoji (0.00s)
---- PASS: TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue (0.06s)
-    --- PASS: TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/whitespace_tolerated (0.00s)
-    --- PASS: TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/unknown_values_fall_back_to_queue (0.00s)
-    --- PASS: TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/random_is_honored (0.00s)
-    --- PASS: TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/case-insensitive_random (0.00s)
+    --- PASS: TestRolePanelButtonValidation/valid_custom_emoji (0.00s)
+    --- PASS: TestRolePanelButtonValidation/non-numeric_role (0.00s)
+    --- PASS: TestRolePanelButtonValidation/missing_role (0.00s)
+    --- PASS: TestRolePanelButtonValidation/missing_label (0.00s)
+=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/MessageCacheCleanup
+--- PASS: TestRolePanelKeyValidation (0.00s)
+    --- PASS: TestRolePanelKeyValidation/rejects_unicode_letters (0.00s)
+    --- PASS: TestRolePanelKeyValidation/rejects_empty (0.00s)
+    --- PASS: TestRolePanelKeyValidation/trims_and_lowercases (0.00s)
+    --- PASS: TestRolePanelKeyValidation/rejects_whitespace_inside (0.00s)
+    --- PASS: TestRolePanelKeyValidation/keeps_digits_and_dashes (0.00s)
+    --- PASS: TestRolePanelKeyValidation/rejects_punctuation (0.00s)
+--- PASS: TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue (0.00s)
     --- PASS: TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/empty_falls_back_to_queue (0.00s)
     --- PASS: TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/explicit_queue_stays_queue (0.00s)
---- PASS: TestGuildConfigLegacyMigration (0.05s)
+    --- PASS: TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/random_is_honored (0.00s)
+    --- PASS: TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/unknown_values_fall_back_to_queue (0.00s)
+    --- PASS: TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/whitespace_tolerated (0.00s)
+    --- PASS: TestQOTDDeckConfigEffectiveSelectionStrategyDefaultsToQueue/case-insensitive_random (0.00s)
+--- PASS: TestGuildConfigLegacyMigration (0.00s)
     --- PASS: TestGuildConfigLegacyMigration/ignores_empty_fields (0.00s)
-    --- PASS: TestGuildConfigLegacyMigration/does_not_overwrite_existing_canonical_tokens (0.00s)
     --- PASS: TestGuildConfigLegacyMigration/combines_both_legacy_fields (0.00s)
     --- PASS: TestGuildConfigLegacyMigration/normalizes_legacy_names (0.00s)
+    --- PASS: TestGuildConfigLegacyMigration/does_not_overwrite_existing_canonical_tokens (0.00s)
     --- PASS: TestGuildConfigLegacyMigration/migrates_bot_instance_id (0.00s)
     --- PASS: TestGuildConfigLegacyMigration/migrates_domain_bot_instance_ids (0.00s)
-=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/Database.PingTimeoutMS
-=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/BotTheme
-=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/DisableDBCleanup
-=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/DisableMessageLogs
-=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/DisableEntryExitLogs
-=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/DisableReactionLogs
-=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/DisableUserLogs
-=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/DisableCleanLog
-=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/LogModerationScope
-=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/PresenceWatchUserID
-=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/PresenceWatchBot
-=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/MessageCacheTTLHours
-=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/MessageDeleteOnLog
-=== RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/MessageCacheCleanup
 === RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/GlobalMaxWorkers
 === RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/BackfillChannelID
 === RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/BackfillStartDay
@@ -8357,7 +8489,7 @@ ok  	github.com/small-frappuccino/discordcore/pkg/discord/webhook	(cached)
 === RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/BackfillInitialDate
 === RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/WebhookEmbedUpdates
 === RUN   TestResolveRuntimeConfigAdoptsEveryGuildField/PastebinGlobalOnly
---- PASS: TestResolveRuntimeConfigAdoptsEveryGuildField (0.31s)
+--- PASS: TestResolveRuntimeConfigAdoptsEveryGuildField (0.01s)
     --- PASS: TestResolveRuntimeConfigAdoptsEveryGuildField/Database.Driver (0.00s)
     --- PASS: TestResolveRuntimeConfigAdoptsEveryGuildField/Database.DatabaseURL (0.00s)
     --- PASS: TestResolveRuntimeConfigAdoptsEveryGuildField/Database.MaxOpenConns (0.00s)
@@ -8392,9 +8524,9 @@ ok  	github.com/small-frappuccino/discordcore/pkg/discord/webhook	(cached)
     --- PASS: TestResolveRuntimeConfigAdoptsEveryGuildField/BackfillInitialDate (0.00s)
     --- PASS: TestResolveRuntimeConfigAdoptsEveryGuildField/WebhookEmbedUpdates (0.00s)
     --- PASS: TestResolveRuntimeConfigAdoptsEveryGuildField/PastebinGlobalOnly (0.00s)
---- PASS: TestJSONManagerSaveWritesAtomically (0.15s)
+--- PASS: TestJSONManagerSaveWritesAtomically (2.56s)
 PASS
-ok  	github.com/small-frappuccino/discordcore/pkg/files	(cached)
+ok  	github.com/small-frappuccino/discordcore/pkg/files	8.942s
 === RUN   TestGenerator
 --- PASS: TestGenerator (0.00s)
 === RUN   TestHostNameParsing
@@ -8455,52 +8587,52 @@ ok  	github.com/small-frappuccino/discordcore/pkg/log	(cached)
 === RUN   TestLogEventCapabilities
 --- PASS: TestLogEventCapabilities (0.00s)
 === RUN   TestResolveLogChannel
-2026/06/23 14:19:05 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
-2026/06/23 14:19:05 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:08 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
+2026/06/23 15:55:08 INFO Configuration state transition completed duplicates_removed=0
 --- PASS: TestResolveLogChannel (0.00s)
 === RUN   TestCheckFeatureEnabled_Errors
-2026/06/23 14:19:05 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
-2026/06/23 14:19:05 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:19:05 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:19:05 INFO Initialized in clean state: primary file not detected path=memory://bot_config_state
-2026/06/23 14:19:05 INFO Structural state transition completed: Guild index rebuilt reason=lookup_miss guilds_count=0
+2026/06/23 15:55:08 WARN Applied configuration does not contain active guilds. Running in basal mode. path=memory://bot_config_state
+2026/06/23 15:55:08 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:55:08 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:08 INFO Initialized in clean state: primary file not detected path=memory://bot_config_state
+2026/06/23 15:55:08 INFO Structural state transition completed: Guild index rebuilt reason=lookup_miss guilds_count=0
 --- PASS: TestCheckFeatureEnabled_Errors (0.00s)
 === RUN   TestCheckFeatureEnabled_Toggles
-2026/06/23 14:19:05 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
-2026/06/23 14:19:05 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:19:05 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
-2026/06/23 14:19:05 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:19:05 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
-2026/06/23 14:19:05 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:19:05 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
-2026/06/23 14:19:05 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:19:05 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
-2026/06/23 14:19:05 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:19:05 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
-2026/06/23 14:19:05 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:19:05 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
-2026/06/23 14:19:05 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:19:05 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
-2026/06/23 14:19:05 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:19:05 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
-2026/06/23 14:19:05 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:19:05 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
-2026/06/23 14:19:05 INFO Configuration state transition completed duplicates_removed=0
---- PASS: TestCheckFeatureEnabled_Toggles (0.01s)
+2026/06/23 15:55:08 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
+2026/06/23 15:55:08 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:08 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
+2026/06/23 15:55:08 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:08 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
+2026/06/23 15:55:08 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:08 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
+2026/06/23 15:55:08 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:08 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
+2026/06/23 15:55:08 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:08 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
+2026/06/23 15:55:08 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:08 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
+2026/06/23 15:55:08 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:08 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
+2026/06/23 15:55:08 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:08 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
+2026/06/23 15:55:08 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:08 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
+2026/06/23 15:55:08 INFO Configuration state transition completed duplicates_removed=0
+--- PASS: TestCheckFeatureEnabled_Toggles (0.00s)
 === RUN   TestCheckFeatureEnabled_NoChannelConfigured
-2026/06/23 14:19:05 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
-2026/06/23 14:19:05 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:08 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
+2026/06/23 15:55:08 INFO Configuration state transition completed duplicates_removed=0
 --- PASS: TestCheckFeatureEnabled_NoChannelConfigured (0.00s)
 === RUN   TestValidateLogCapability
-2026/06/23 14:19:05 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
-2026/06/23 14:19:05 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:08 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
+2026/06/23 15:55:08 INFO Configuration state transition completed duplicates_removed=0
 --- PASS: TestValidateLogCapability (0.00s)
 === RUN   TestValidateModerationLogChannel
 --- PASS: TestValidateModerationLogChannel (0.00s)
 === RUN   TestIsSharedModerationChannel
 --- PASS: TestIsSharedModerationChannel (0.00s)
 PASS
-ok  	github.com/small-frappuccino/discordcore/pkg/logging	(cached)
+ok  	github.com/small-frappuccino/discordcore/pkg/logging	4.161s
 === RUN   TestHasRoleID
 --- PASS: TestHasRoleID (0.00s)
 === RUN   TestMemberHasRole
@@ -8516,40 +8648,40 @@ ok  	github.com/small-frappuccino/discordcore/pkg/logging	(cached)
     --- PASS: TestEvaluateAutoRoleDecision/noop_when_member_already_has_target_and_still_has_role_A (0.00s)
     --- PASS: TestEvaluateAutoRoleDecision/noop_when_only_role_A_is_present (0.00s)
 === RUN   TestMemberEventService_LifeCycle
-2026/06/23 14:19:05 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
-2026/06/23 14:19:05 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:19:05 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:05 INFO Configuration re-persisted after runtime normalization path=memory://bot_config_state duplicates=0 autoRoleOrderMigrated=true
---- PASS: TestMemberEventService_LifeCycle (0.01s)
+2026/06/23 15:55:09 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
+2026/06/23 15:55:09 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:09 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:55:09 INFO Configuration re-persisted after runtime normalization path=memory://bot_config_state duplicates=0 autoRoleOrderMigrated=true
+--- PASS: TestMemberEventService_LifeCycle (0.00s)
 === RUN   TestMemberEventService_IngestGuildMemberAdd
-2026/06/23 14:19:05 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
-2026/06/23 14:19:05 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:19:05 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:05 INFO Configuration re-persisted after runtime normalization path=memory://bot_config_state duplicates=0 autoRoleOrderMigrated=true
+2026/06/23 15:55:09 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
+2026/06/23 15:55:09 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:09 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:55:09 INFO Configuration re-persisted after runtime normalization path=memory://bot_config_state duplicates=0 autoRoleOrderMigrated=true
 --- PASS: TestMemberEventService_IngestGuildMemberAdd (0.00s)
 === RUN   TestMemberEventService_IngestGuildMemberRemove
-2026/06/23 14:19:05 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
-2026/06/23 14:19:05 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:19:05 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:05 INFO Configuration re-persisted after runtime normalization path=memory://bot_config_state duplicates=0 autoRoleOrderMigrated=true
---- PASS: TestMemberEventService_IngestGuildMemberRemove (0.01s)
+2026/06/23 15:55:09 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
+2026/06/23 15:55:09 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:09 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:55:09 INFO Configuration re-persisted after runtime normalization path=memory://bot_config_state duplicates=0 autoRoleOrderMigrated=true
+--- PASS: TestMemberEventService_IngestGuildMemberRemove (0.00s)
 === RUN   TestMemberEventService_IngestGuildMemberRemove_StoreFallback
-2026/06/23 14:19:05 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
-2026/06/23 14:19:05 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:19:05 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:05 INFO Configuration re-persisted after runtime normalization path=memory://bot_config_state duplicates=0 autoRoleOrderMigrated=true
+2026/06/23 15:55:09 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
+2026/06/23 15:55:09 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:09 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:55:09 INFO Configuration re-persisted after runtime normalization path=memory://bot_config_state duplicates=0 autoRoleOrderMigrated=true
 --- PASS: TestMemberEventService_IngestGuildMemberRemove_StoreFallback (0.00s)
 === RUN   TestMemberEventService_IngestGuildMemberUpdate
-2026/06/23 14:19:05 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
-2026/06/23 14:19:05 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:19:05 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:05 INFO Configuration re-persisted after runtime normalization path=memory://bot_config_state duplicates=0 autoRoleOrderMigrated=true
+2026/06/23 15:55:09 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
+2026/06/23 15:55:09 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:09 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:55:09 INFO Configuration re-persisted after runtime normalization path=memory://bot_config_state duplicates=0 autoRoleOrderMigrated=true
 --- PASS: TestMemberEventService_IngestGuildMemberUpdate (0.00s)
 === RUN   TestMemberEventService_CleanupJoinTimes
-2026/06/23 14:19:05 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
-2026/06/23 14:19:05 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:19:05 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:05 INFO Configuration re-persisted after runtime normalization path=memory://bot_config_state duplicates=0 autoRoleOrderMigrated=true
+2026/06/23 15:55:09 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
+2026/06/23 15:55:09 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:09 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:55:09 INFO Configuration re-persisted after runtime normalization path=memory://bot_config_state duplicates=0 autoRoleOrderMigrated=true
 --- PASS: TestMemberEventService_CleanupJoinTimes (0.00s)
 === RUN   TestInMemoryMetrics
 --- PASS: TestInMemoryMetrics (0.00s)
@@ -8558,93 +8690,94 @@ ok  	github.com/small-frappuccino/discordcore/pkg/logging	(cached)
 === RUN   TestNopMetrics
 --- PASS: TestNopMetrics (0.00s)
 === RUN   TestMemberEventService_HandlesGuild
-2026/06/23 14:19:05 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
-2026/06/23 14:19:05 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:19:05 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:05 INFO Configuration re-persisted after runtime normalization path=memory://bot_config_state duplicates=0 autoRoleOrderMigrated=true
-2026/06/23 14:19:05 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
-2026/06/23 14:19:05 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:19:05 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
-2026/06/23 14:19:05 INFO Configuration re-persisted after runtime normalization path=memory://bot_config_state duplicates=0 autoRoleOrderMigrated=true
-2026/06/23 14:19:05 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=4
-2026/06/23 14:19:05 INFO Configuration state transition completed duplicates_removed=0
---- PASS: TestMemberEventService_HandlesGuild (0.06s)
+2026/06/23 15:55:09 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
+2026/06/23 15:55:09 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:09 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:55:09 INFO Configuration re-persisted after runtime normalization path=memory://bot_config_state duplicates=0 autoRoleOrderMigrated=true
+2026/06/23 15:55:09 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
+2026/06/23 15:55:09 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:09 INFO I/O state transition: Configuration successfully persisted path=memory://bot_config_state
+2026/06/23 15:55:09 INFO Configuration re-persisted after runtime normalization path=memory://bot_config_state duplicates=0 autoRoleOrderMigrated=true
+2026/06/23 15:55:09 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=4
+2026/06/23 15:55:09 INFO Configuration state transition completed duplicates_removed=0
+--- PASS: TestMemberEventService_HandlesGuild (0.00s)
 PASS
-ok  	github.com/small-frappuccino/discordcore/pkg/members	(cached)
+ok  	github.com/small-frappuccino/discordcore/pkg/members	4.765s
 === RUN   TestInMemoryMetrics
 --- PASS: TestInMemoryMetrics (0.00s)
 === RUN   TestMessageWriterMetrics
 --- PASS: TestMessageWriterMetrics (0.00s)
 === RUN   TestMessageCreateWriter_Basic
-2026/06/23 14:19:06 WARN MessageCreate writer: batch message upsert failed; falling back to sequential writes operation=message_create_writer.flush_messages messages=1 error="upsert messages batch err"
-2026/06/23 14:19:06 WARN MessageCreate writer: batch history insert failed; falling back to sequential writes operation=message_create_writer.flush_versions versions=1 error="insert version batch err"
-2026/06/23 14:19:06 WARN MessageCreate writer: sequential history insert failed operation=message_create_writer.flush_versions_fallback guildID=111 channelID="" messageID=222 userID="" eventType=create error="insert version batch err"
-2026/06/23 14:19:06 WARN MessageCreate writer: batch daily metric flush failed; falling back to sequential increments operation=message_create_writer.flush_metrics buckets=1 error="increment daily batch err"
-2026/06/23 14:19:06 WARN MessageCreate writer: sequential daily metric increment failed operation=message_create_writer.flush_metrics_fallback guildID=111 channelID=333 userID=444 error="increment daily batch err"
---- PASS: TestMessageCreateWriter_Basic (0.11s)
+2026/06/23 15:55:11 WARN MessageCreate writer: batch message upsert failed; falling back to sequential writes operation=message_create_writer.flush_messages messages=1 error="upsert messages batch err"
+2026/06/23 15:55:11 WARN MessageCreate writer: batch history insert failed; falling back to sequential writes operation=message_create_writer.flush_versions versions=1 error="insert version batch err"
+2026/06/23 15:55:11 WARN MessageCreate writer: sequential history insert failed operation=message_create_writer.flush_versions_fallback guildID=111 channelID="" messageID=222 userID="" eventType=create error="insert version batch err"
+2026/06/23 15:55:11 WARN MessageCreate writer: batch daily metric flush failed; falling back to sequential increments operation=message_create_writer.flush_metrics buckets=1 error="increment daily batch err"
+2026/06/23 15:55:11 WARN MessageCreate writer: sequential daily metric increment failed operation=message_create_writer.flush_metrics_fallback guildID=111 channelID=333 userID=444 error="increment daily batch err"
+--- PASS: TestMessageCreateWriter_Basic (0.10s)
 === RUN   TestAuditCacheState
 --- PASS: TestAuditCacheState (0.00s)
 === RUN   TestMessageEventService_LifecycleAndMetadata
-2026/06/23 14:19:06 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:19:06 INFO Message event service started
-2026/06/23 14:19:06 INFO Message event service stopped
---- PASS: TestMessageEventService_LifecycleAndMetadata (0.01s)
+2026/06/23 15:55:12 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:55:12 INFO Message event service started
+2026/06/23 15:55:12 INFO Message event service stopped
+--- PASS: TestMessageEventService_LifecycleAndMetadata (0.00s)
 === RUN   TestMessageEventService_IngestMessageCreate
-2026/06/23 14:19:06 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:19:06 INFO Message event service started
-2026/06/23 14:19:07 WARN slow gateway event handler event=message_create duration=891.6025ms duration_ms=891 guildID="" channelID=444 messageID=999 userID=123
-2026/06/23 14:19:07 INFO Message event service stopped
---- PASS: TestMessageEventService_IngestMessageCreate (0.90s)
+2026/06/23 15:55:12 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:55:12 INFO Message event service started
+2026/06/23 15:55:12 WARN slow gateway event handler event=message_create duration=822.9399ms duration_ms=822 guildID="" channelID=444 messageID=999 userID=123
+2026/06/23 15:55:12 INFO Message event service stopped
+--- PASS: TestMessageEventService_IngestMessageCreate (0.83s)
 === RUN   TestMessageEventService_IngestMessageUpdate_And_Delete
-2026/06/23 14:19:07 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:19:07 INFO Message event service started
-2026/06/23 14:19:07 INFO MessageUpdate received messageID=999 userID=123 guildID=111 channelID=222
-2026/06/23 14:19:07 INFO MessageUpdate received messageID=999 userID=123 guildID=111 channelID=222
-2026/06/23 14:19:07 INFO MessageUpdate received messageID=999 userID=123 guildID=111 channelID=222
-2026/06/23 14:19:07 INFO MessageUpdate received messageID=999 userID=123 guildID=111 channelID=222
-2026/06/23 14:19:07 INFO Message event service stopped
+2026/06/23 15:55:12 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:55:12 INFO Message event service started
+2026/06/23 15:55:12 INFO MessageUpdate received messageID=999 userID=123 guildID=111 channelID=222
+2026/06/23 15:55:12 INFO MessageUpdate received messageID=999 userID=123 guildID=111 channelID=222
+2026/06/23 15:55:12 INFO MessageUpdate received messageID=999 userID=123 guildID=111 channelID=222
+2026/06/23 15:55:12 INFO MessageUpdate received messageID=999 userID=123 guildID=111 channelID=222
+2026/06/23 15:55:12 INFO Message event service stopped
 --- PASS: TestMessageEventService_IngestMessageUpdate_And_Delete (0.00s)
 === RUN   TestMessageEventService_ActiveBotInstanceRouting
-2026/06/23 14:19:07 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:19:07 INFO Message event service started
-2026/06/23 14:19:07 INFO MessageUpdate received messageID=999 userID=123 guildID=111 channelID=222
-2026/06/23 14:19:07 INFO Message edit detected guildID=111 channelID=222 messageID=999 userID=123 username=alice
-2026/06/23 14:19:07 INFO MessageUpdate: store updated with new content guildID=111 channelID=222 messageID=999
-2026/06/23 14:19:07 INFO Message delete detected guildID=111 channelID=222 messageID=999 userID=123 username=alice
-2026/06/23 14:19:08 INFO Message event service stopped
---- PASS: TestMessageEventService_ActiveBotInstanceRouting (0.44s)
+2026/06/23 15:55:12 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:55:12 INFO Message event service started
+2026/06/23 15:55:12 INFO MessageUpdate received messageID=999 userID=123 guildID=111 channelID=222
+2026/06/23 15:55:12 INFO Message edit detected guildID=111 channelID=222 messageID=999 userID=123 username=alice
+2026/06/23 15:55:12 INFO MessageUpdate: store updated with new content guildID=111 channelID=222 messageID=999
+2026/06/23 15:55:12 INFO Message delete detected guildID=111 channelID=222 messageID=999 userID=123 username=alice
+2026/06/23 15:55:13 WARN slow gateway event handler event=message_delete duration=277.0326ms duration_ms=277 guildID=111 channelID=222 messageID=999
+2026/06/23 15:55:13 INFO Message event service stopped
+--- PASS: TestMessageEventService_ActiveBotInstanceRouting (0.45s)
 === RUN   TestMessageEventService_TaskRouterAsynchronousHandling
-2026/06/23 14:19:08 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:19:08 INFO Message event service started
-2026/06/23 14:19:08 INFO MessageUpdate received messageID=999 userID=123 guildID=111 channelID=222
-2026/06/23 14:19:08 INFO Message edit detected guildID=111 channelID=222 messageID=999 userID=123 username=alice
-2026/06/23 14:19:08 INFO MessageUpdate: store updated with new content guildID=111 channelID=222 messageID=999
-2026/06/23 14:19:08 INFO Message delete detected guildID=111 channelID=222 messageID=999 userID=123 username=alice
-2026/06/23 14:19:08 INFO Message event service stopped
---- PASS: TestMessageEventService_TaskRouterAsynchronousHandling (0.17s)
+2026/06/23 15:55:13 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:55:13 INFO Message event service started
+2026/06/23 15:55:13 INFO MessageUpdate received messageID=999 userID=123 guildID=111 channelID=222
+2026/06/23 15:55:13 INFO Message edit detected guildID=111 channelID=222 messageID=999 userID=123 username=alice
+2026/06/23 15:55:13 INFO MessageUpdate: store updated with new content guildID=111 channelID=222 messageID=999
+2026/06/23 15:55:13 INFO Message delete detected guildID=111 channelID=222 messageID=999 userID=123 username=alice
+2026/06/23 15:55:13 INFO Message event service stopped
+--- PASS: TestMessageEventService_TaskRouterAsynchronousHandling (0.15s)
 === RUN   TestLookupCachedMessage_PollingAndCancellation
---- PASS: TestLookupCachedMessage_PollingAndCancellation (0.60s)
+--- PASS: TestLookupCachedMessage_PollingAndCancellation (0.63s)
 === RUN   TestMessageEventService_PersistFallbacks
-2026/06/23 14:19:09 WARN MessageCreate: failed to persist message cache entry guildID=111 channelID=222 messageID=999 userID=123 error="sync upsert err"
-2026/06/23 14:19:09 WARN MessageCreate: failed to persist message version guildID=111 channelID=222 messageID=999 userID=123 error="sync insert version err"
-2026/06/23 14:19:09 WARN MessageCreate: failed to increment daily message metric guildID=111 channelID=222 messageID=999 userID=123 error="sync increment daily err"
-2026/06/23 14:19:09 WARN MessageUpdate: failed to persist updated message cache entry guildID=111 channelID=222 messageID=999 userID=123 error="sync upsert err"
-2026/06/23 14:19:09 WARN MessageUpdate: failed to persist message edit version guildID=111 channelID=222 messageID=999 userID=123 error="sync insert version err"
-2026/06/23 14:19:09 WARN MessageDelete: failed to persist message delete version guildID=111 channelID=222 messageID=999 userID=123 error="sync insert version err"
-2026/06/23 14:19:09 WARN MessageDelete: failed to delete message cache entry operation=op guildID=111 channelID=222 messageID=999 error="sync delete err"
+2026/06/23 15:55:14 WARN MessageCreate: failed to persist message cache entry guildID=111 channelID=222 messageID=999 userID=123 error="sync upsert err"
+2026/06/23 15:55:14 WARN MessageCreate: failed to persist message version guildID=111 channelID=222 messageID=999 userID=123 error="sync insert version err"
+2026/06/23 15:55:14 WARN MessageCreate: failed to increment daily message metric guildID=111 channelID=222 messageID=999 userID=123 error="sync increment daily err"
+2026/06/23 15:55:14 WARN MessageUpdate: failed to persist updated message cache entry guildID=111 channelID=222 messageID=999 userID=123 error="sync upsert err"
+2026/06/23 15:55:14 WARN MessageUpdate: failed to persist message edit version guildID=111 channelID=222 messageID=999 userID=123 error="sync insert version err"
+2026/06/23 15:55:14 WARN MessageDelete: failed to persist message delete version guildID=111 channelID=222 messageID=999 userID=123 error="sync insert version err"
+2026/06/23 15:55:14 WARN MessageDelete: failed to delete message cache entry operation=op guildID=111 channelID=222 messageID=999 error="sync delete err"
 --- PASS: TestMessageEventService_PersistFallbacks (0.00s)
 === RUN   TestAuditLogFetchFailureFallback
---- PASS: TestAuditLogFetchFailureFallback (0.19s)
+--- PASS: TestAuditLogFetchFailureFallback (0.26s)
 === RUN   TestMessageEventService_SummarizeMessageContent
 --- PASS: TestMessageEventService_SummarizeMessageContent (0.00s)
 === RUN   TestNewerAuditEntry
 --- PASS: TestNewerAuditEntry (0.00s)
 === RUN   TestDeleteOnLogEnabled
-2026/06/23 14:19:09 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
-2026/06/23 14:19:09 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=2
+2026/06/23 15:55:14 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=1
+2026/06/23 15:55:14 INFO Structural state transition completed: Guild index rebuilt reason=add guilds_count=2
 --- PASS: TestDeleteOnLogEnabled (0.00s)
 PASS
-ok  	github.com/small-frappuccino/discordcore/pkg/messages	(cached)
+ok  	github.com/small-frappuccino/discordcore/pkg/messages	6.832s
 === RUN   TestHasPermission
 === RUN   TestHasPermission/Member_with_specific_permission
 === RUN   TestHasPermission/Member_without_specific_permission
@@ -9707,6 +9840,10 @@ ok  	github.com/small-frappuccino/discordcore/pkg/observability	(cached)
 --- PASS: TestOpen_InvalidDSN (0.00s)
 PASS
 ok  	github.com/small-frappuccino/discordcore/pkg/persistence	(cached)
+=== RUN   TestUncoveredLifecycleAndService
+2026/06/23 15:55:13 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=1
+2026/06/23 15:55:13 INFO Configuration state transition completed duplicates_removed=0
+--- PASS: TestUncoveredLifecycleAndService (0.00s)
 === RUN   TestExecuteInGuildActor_Serialization
 === PAUSE TestExecuteInGuildActor_Serialization
 === RUN   TestExecuteInGuildActor_Parallelism
@@ -9717,22 +9854,22 @@ ok  	github.com/small-frappuccino/discordcore/pkg/persistence	(cached)
 === PAUSE TestReconcileGuild_SystemicFailureIsolation
 === RUN   TestService_SchedulingEdges
 === PAUSE TestService_SchedulingEdges
-=== CONT  TestExecuteInGuildActor_Serialization
-=== CONT  TestReconcileGuild_SystemicFailureIsolation
---- PASS: TestReconcileGuild_SystemicFailureIsolation (0.00s)
-=== CONT  TestPublishScheduledIfDue_ContextExpiration
 === CONT  TestExecuteInGuildActor_Parallelism
 === CONT  TestService_SchedulingEdges
 === RUN   TestService_SchedulingEdges/Ano_Bissexto_-_Dia_29_de_Fevereiro
+=== CONT  TestExecuteInGuildActor_Serialization
 === RUN   TestService_SchedulingEdges/Virada_de_Ciclo_Solar_-_Reveillon
 === RUN   TestService_SchedulingEdges/Mesmo_dia_após_o_horário
 --- PASS: TestService_SchedulingEdges (0.00s)
     --- PASS: TestService_SchedulingEdges/Ano_Bissexto_-_Dia_29_de_Fevereiro (0.00s)
     --- PASS: TestService_SchedulingEdges/Virada_de_Ciclo_Solar_-_Reveillon (0.00s)
     --- PASS: TestService_SchedulingEdges/Mesmo_dia_após_o_horário (0.00s)
---- PASS: TestExecuteInGuildActor_Parallelism (0.03s)
+=== CONT  TestPublishScheduledIfDue_ContextExpiration
+=== CONT  TestReconcileGuild_SystemicFailureIsolation
+--- PASS: TestReconcileGuild_SystemicFailureIsolation (0.00s)
+--- PASS: TestExecuteInGuildActor_Parallelism (0.01s)
 --- PASS: TestPublishScheduledIfDue_ContextExpiration (0.05s)
---- PASS: TestExecuteInGuildActor_Serialization (1.19s)
+--- PASS: TestExecuteInGuildActor_Serialization (1.11s)
 === RUN   FuzzCalculateNextPublishDelay
 === RUN   FuzzCalculateNextPublishDelay/seed#0
 === RUN   FuzzCalculateNextPublishDelay/seed#1
@@ -9750,7 +9887,7 @@ ok  	github.com/small-frappuccino/discordcore/pkg/persistence	(cached)
     --- PASS: FuzzDetermineOfficialPostLifecycle/seed#0 (0.00s)
     --- PASS: FuzzDetermineOfficialPostLifecycle/seed#1 (0.00s)
 PASS
-ok  	github.com/small-frappuccino/discordcore/pkg/qotd	(cached)
+ok  	github.com/small-frappuccino/discordcore/pkg/qotd	4.446s
 === RUN   TestManager
 --- PASS: TestManager (0.00s)
 === RUN   TestMonitoringTogglesChanged
@@ -9770,7 +9907,7 @@ ok  	github.com/small-frappuccino/discordcore/pkg/qotd	(cached)
     --- PASS: TestMonitoringTogglesChanged/DisableBotRolePermMirror (0.00s)
     --- PASS: TestMonitoringTogglesChanged/BotRolePermMirrorActorRoleID (0.00s)
 PASS
-ok  	github.com/small-frappuccino/discordcore/pkg/runtimeapply	(cached)
+ok  	github.com/small-frappuccino/discordcore/pkg/runtimeapply	3.350s
 === RUN   TestBaseServiceStopReturnsErrorAndKeepsErrorState
 2026/06/23 14:19:11 INFO Starting service... service=test
 2026/06/23 14:19:11 INFO Service started successfully service=test
@@ -9916,42 +10053,42 @@ ok  	github.com/small-frappuccino/discordcore/pkg/runtimeapply	(cached)
 PASS
 ok  	github.com/small-frappuccino/discordcore/pkg/service	(cached)
 === RUN   TestApplyMemberAdd
-2026/06/23 14:19:13 WARN Applied configuration does not contain active guilds. Running in basal mode. path=mock
-2026/06/23 14:19:13 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:19:13 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:19:13 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:13 INFO I/O state transition: Configuration successfully persisted path=mock
---- PASS: TestApplyMemberAdd (0.01s)
+2026/06/23 15:55:15 WARN Applied configuration does not contain active guilds. Running in basal mode. path=mock
+2026/06/23 15:55:15 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:55:15 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:15 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:55:15 INFO I/O state transition: Configuration successfully persisted path=mock
+--- PASS: TestApplyMemberAdd (0.00s)
 === RUN   TestApplyMemberRemove
-2026/06/23 14:19:13 WARN Applied configuration does not contain active guilds. Running in basal mode. path=mock
-2026/06/23 14:19:13 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:19:13 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:19:13 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:13 INFO I/O state transition: Configuration successfully persisted path=mock
+2026/06/23 15:55:15 WARN Applied configuration does not contain active guilds. Running in basal mode. path=mock
+2026/06/23 15:55:15 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:55:15 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:15 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:55:15 INFO I/O state transition: Configuration successfully persisted path=mock
 --- PASS: TestApplyMemberRemove (0.00s)
 === RUN   TestApplyStatsMemberUpdate
-2026/06/23 14:19:13 WARN Applied configuration does not contain active guilds. Running in basal mode. path=mock
-2026/06/23 14:19:13 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:19:13 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:19:13 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:13 INFO I/O state transition: Configuration successfully persisted path=mock
+2026/06/23 15:55:15 WARN Applied configuration does not contain active guilds. Running in basal mode. path=mock
+2026/06/23 15:55:15 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:55:15 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:15 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:55:15 INFO I/O state transition: Configuration successfully persisted path=mock
 --- PASS: TestApplyStatsMemberUpdate (0.00s)
 === RUN   TestHandlesGuild
-2026/06/23 14:19:13 WARN Applied configuration does not contain active guilds. Running in basal mode. path=mock
-2026/06/23 14:19:13 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:19:13 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:19:13 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=2
-2026/06/23 14:19:13 INFO I/O state transition: Configuration successfully persisted path=mock
+2026/06/23 15:55:15 WARN Applied configuration does not contain active guilds. Running in basal mode. path=mock
+2026/06/23 15:55:15 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:55:15 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:15 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=2
+2026/06/23 15:55:15 INFO I/O state transition: Configuration successfully persisted path=mock
 --- PASS: TestHandlesGuild (0.00s)
 === RUN   TestStatsServiceMethods
-2026/06/23 14:19:13 WARN Applied configuration does not contain active guilds. Running in basal mode. path=mock
-2026/06/23 14:19:13 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:19:13 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:15 WARN Applied configuration does not contain active guilds. Running in basal mode. path=mock
+2026/06/23 15:55:15 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:55:15 INFO Configuration state transition completed duplicates_removed=0
 --- PASS: TestStatsServiceMethods (0.00s)
 === RUN   TestShouldRunStatsUpdate
-2026/06/23 14:19:13 WARN Applied configuration does not contain active guilds. Running in basal mode. path=mock
-2026/06/23 14:19:13 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:19:13 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:15 WARN Applied configuration does not contain active guilds. Running in basal mode. path=mock
+2026/06/23 15:55:15 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:55:15 INFO Configuration state transition completed duplicates_removed=0
 --- PASS: TestShouldRunStatsUpdate (0.00s)
 === RUN   TestStatsTrackedRoles
 --- PASS: TestStatsTrackedRoles (0.00s)
@@ -9968,49 +10105,49 @@ ok  	github.com/small-frappuccino/discordcore/pkg/service	(cached)
 === RUN   TestStatsIntervalHelpers
 --- PASS: TestStatsIntervalHelpers (0.00s)
 === RUN   TestStatsStateAndStoreHelpers
-2026/06/23 14:19:13 WARN Applied configuration does not contain active guilds. Running in basal mode. path=mock
-2026/06/23 14:19:13 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:19:13 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:15 WARN Applied configuration does not contain active guilds. Running in basal mode. path=mock
+2026/06/23 15:55:15 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:55:15 INFO Configuration state transition completed duplicates_removed=0
 --- PASS: TestStatsStateAndStoreHelpers (0.00s)
 === RUN   TestStatsGuildStateMemoryHelpers
-2026/06/23 14:19:13 WARN Applied configuration does not contain active guilds. Running in basal mode. path=mock
-2026/06/23 14:19:13 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:19:13 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:15 WARN Applied configuration does not contain active guilds. Running in basal mode. path=mock
+2026/06/23 15:55:15 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:55:15 INFO Configuration state transition completed duplicates_removed=0
 --- PASS: TestStatsGuildStateMemoryHelpers (0.00s)
 === RUN   TestStatsReconcileInterval
-2026/06/23 14:19:13 WARN Applied configuration does not contain active guilds. Running in basal mode. path=mock
-2026/06/23 14:19:13 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:19:13 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:19:13 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:13 INFO I/O state transition: Configuration successfully persisted path=mock
+2026/06/23 15:55:15 WARN Applied configuration does not contain active guilds. Running in basal mode. path=mock
+2026/06/23 15:55:15 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:55:15 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:15 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:55:15 INFO I/O state transition: Configuration successfully persisted path=mock
 --- PASS: TestStatsReconcileInterval (0.00s)
 === RUN   TestReconcileGuild
-2026/06/23 14:19:13 WARN Applied configuration does not contain active guilds. Running in basal mode. path=mock
-2026/06/23 14:19:13 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:19:13 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:19:13 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:13 INFO I/O state transition: Configuration successfully persisted path=mock
-2026/06/23 14:19:13 INFO Reconciled stats counters guild_id=guild-stats-main operation=monitoring.stats.reconcile members=2 trackedRoles=0
+2026/06/23 15:55:15 WARN Applied configuration does not contain active guilds. Running in basal mode. path=mock
+2026/06/23 15:55:15 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:55:15 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:15 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:55:15 INFO I/O state transition: Configuration successfully persisted path=mock
+2026/06/23 15:55:15 INFO Reconciled stats counters guild_id=guild-stats-main operation=monitoring.stats.reconcile members=2 trackedRoles=0
 --- PASS: TestReconcileGuild (0.00s)
 === RUN   TestReconcileAllGuilds
-2026/06/23 14:19:13 WARN Applied configuration does not contain active guilds. Running in basal mode. path=mock
-2026/06/23 14:19:13 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:19:13 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:19:13 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
-2026/06/23 14:19:13 INFO I/O state transition: Configuration successfully persisted path=mock
-2026/06/23 14:19:13 INFO Updated stats channel name guild_id=guild-stats-main operation=monitoring.stats.publish_channel channelID=c1 count=0 name=test0
+2026/06/23 15:55:15 WARN Applied configuration does not contain active guilds. Running in basal mode. path=mock
+2026/06/23 15:55:15 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:55:15 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:15 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=1
+2026/06/23 15:55:15 INFO I/O state transition: Configuration successfully persisted path=mock
+2026/06/23 15:55:15 INFO Updated stats channel name guild_id=guild-stats-main operation=monitoring.stats.publish_channel channelID=c1 count=0 name=test0
 --- PASS: TestReconcileAllGuilds (0.00s)
 === RUN   TestStatsServiceLifecycle
-2026/06/23 14:19:13 WARN Applied configuration does not contain active guilds. Running in basal mode. path=mock
-2026/06/23 14:19:13 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:19:13 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:15 WARN Applied configuration does not contain active guilds. Running in basal mode. path=mock
+2026/06/23 15:55:15 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:55:15 INFO Configuration state transition completed duplicates_removed=0
 --- PASS: TestStatsServiceLifecycle (0.00s)
 === RUN   TestStatsServiceHandlesGuild
-2026/06/23 14:19:13 WARN Applied configuration does not contain active guilds. Running in basal mode. path=mock
-2026/06/23 14:19:13 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
-2026/06/23 14:19:13 INFO Configuration state transition completed duplicates_removed=0
-2026/06/23 14:19:13 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=3
-2026/06/23 14:19:13 INFO I/O state transition: Configuration successfully persisted path=mock
+2026/06/23 15:55:15 WARN Applied configuration does not contain active guilds. Running in basal mode. path=mock
+2026/06/23 15:55:15 INFO Structural state transition completed: Guild index rebuilt reason=apply guilds_count=0
+2026/06/23 15:55:15 INFO Configuration state transition completed duplicates_removed=0
+2026/06/23 15:55:15 INFO Structural state transition completed: Guild index rebuilt reason=update guilds_count=3
+2026/06/23 15:55:15 INFO I/O state transition: Configuration successfully persisted path=mock
 --- PASS: TestStatsServiceHandlesGuild (0.00s)
 === RUN   TestNormalizeMemberType
 --- PASS: TestNormalizeMemberType (0.00s)
@@ -10019,19 +10156,19 @@ ok  	github.com/small-frappuccino/discordcore/pkg/service	(cached)
 === RUN   TestRenderStatsChannelName
 --- PASS: TestRenderStatsChannelName (0.00s)
 === RUN   TestStatsService_DatabasePreemption
---- PASS: TestStatsService_DatabasePreemption (0.07s)
+--- PASS: TestStatsService_DatabasePreemption (0.05s)
 PASS
-ok  	github.com/small-frappuccino/discordcore/pkg/stats	(cached)
+ok  	github.com/small-frappuccino/discordcore/pkg/stats	1.828s
 === RUN   TestStore_Iterators_EarlyExitCursorClosure
 --- PASS: TestStore_Iterators_EarlyExitCursorClosure (0.00s)
 === RUN   TestStore_Context_ExecutionBoundaryTimeout
---- PASS: TestStore_Context_ExecutionBoundaryTimeout (0.01s)
+--- PASS: TestStore_Context_ExecutionBoundaryTimeout (0.00s)
 === RUN   TestStore_Context_StructuralMisalignment
 --- PASS: TestStore_Context_StructuralMisalignment (0.00s)
 === RUN   TestStore_Context_UnaryMissingState
 --- PASS: TestStore_Context_UnaryMissingState (0.00s)
 === RUN   TestStore_Members_Idempotency_And_Temporal_Precedence
---- PASS: TestStore_Members_Idempotency_And_Temporal_Precedence (0.00s)
+--- PASS: TestStore_Members_Idempotency_And_Temporal_Precedence (0.01s)
 === RUN   TestStore_Messages_UpsertMessagesContext
 --- PASS: TestStore_Messages_UpsertMessagesContext (0.00s)
 === RUN   TestStore_Messages_GetMessage_ErrNoRows
@@ -10041,9 +10178,9 @@ ok  	github.com/small-frappuccino/discordcore/pkg/stats	(cached)
 === RUN   TestStore_Moderation_GetGuildOwnerID_ErrNoRows
 --- PASS: TestStore_Moderation_GetGuildOwnerID_ErrNoRows (0.00s)
 === RUN   TestStore_Moderation_CreateWarning
---- PASS: TestStore_Moderation_CreateWarning (0.01s)
+--- PASS: TestStore_Moderation_CreateWarning (0.00s)
 === RUN   TestStorageQueriesUsePositionalPlaceholders
---- PASS: TestStorageQueriesUsePositionalPlaceholders (0.15s)
+--- PASS: TestStorageQueriesUsePositionalPlaceholders (0.06s)
 === RUN   TestStore_Schema_ParametricDeletion
     schema_test.go:152: skipping testcontainers-go tests on local windows environment due to rootless docker limitation
 --- SKIP: TestStore_Schema_ParametricDeletion (0.00s)
@@ -10053,7 +10190,7 @@ ok  	github.com/small-frappuccino/discordcore/pkg/stats	(cached)
 === RUN   TestStore_TransactionalLifecycle_CommitValidation
 --- PASS: TestStore_TransactionalLifecycle_CommitValidation (0.00s)
 === RUN   TestStore_TransactionalLifecycle_HybridRollbackFailures
---- PASS: TestStore_TransactionalLifecycle_HybridRollbackFailures (0.01s)
+--- PASS: TestStore_TransactionalLifecycle_HybridRollbackFailures (0.00s)
 === RUN   TestStore_System_NextTicketID
 --- PASS: TestStore_System_NextTicketID (0.00s)
 === RUN   TestStore_System_BotSince_ErrNoRows
@@ -10063,16 +10200,16 @@ ok  	github.com/small-frappuccino/discordcore/pkg/stats	(cached)
 === RUN   TestStore_System_GetCacheEntry_Expired
 --- PASS: TestStore_System_GetCacheEntry_Expired (0.00s)
 PASS
-ok  	github.com/small-frappuccino/discordcore/pkg/storage/postgres	(cached)
+ok  	github.com/small-frappuccino/discordcore/pkg/storage/postgres	4.403s
 === RUN   TestFailingStore
 err = failed to connect to `user=postgres database=postgres`:
 	[::1]:5432 (localhost): dial error: storagetest: connector always fails
 	127.0.0.1:5432 (localhost): dial error: storagetest: connector always fails
 	[::1]:5432 (localhost): dial error: storagetest: connector always fails
 	127.0.0.1:5432 (localhost): dial error: storagetest: connector always fails
---- PASS: TestFailingStore (0.11s)
+--- PASS: TestFailingStore (0.10s)
 PASS
-ok  	github.com/small-frappuccino/discordcore/pkg/storage/postgres/storagetest	(cached)
+ok  	github.com/small-frappuccino/discordcore/pkg/storage/postgres/storagetest	4.200s
 ?   	github.com/small-frappuccino/discordcore/pkg/system	[no test files]
 === RUN   TestAdapters_TransactionalFallback
 === PAUSE TestAdapters_TransactionalFallback
@@ -10092,20 +10229,20 @@ ok  	github.com/small-frappuccino/discordcore/pkg/storage/postgres/storagetest	(
 === PAUSE TestRouter_Observability
 === CONT  TestRouter_ExecutionLimiter
 === CONT  TestRouter_IdempotencyTTL
-=== CONT  TestRouter_GroupKeySerialization
-=== CONT  TestRouter_ContextCancel
-=== CONT  TestRouter_Observability
 === CONT  TestRouter_CronSchedule
+=== CONT  TestRouter_Observability
+=== CONT  TestRouter_ContextCancel
 === CONT  TestRouter_RetryHeap
 --- PASS: TestRouter_IdempotencyTTL (0.00s)
+=== CONT  TestRouter_GroupKeySerialization
 === CONT  TestAdapters_TransactionalFallback
 --- PASS: TestRouter_RetryHeap (0.00s)
---- PASS: TestRouter_ContextCancel (0.00s)
 --- PASS: TestAdapters_TransactionalFallback (0.00s)
+--- PASS: TestRouter_ContextCancel (0.00s)
 --- PASS: TestRouter_Observability (0.05s)
---- PASS: TestRouter_CronSchedule (0.11s)
---- PASS: TestRouter_ExecutionLimiter (0.21s)
---- PASS: TestRouter_GroupKeySerialization (7.11s)
+--- PASS: TestRouter_CronSchedule (0.09s)
+--- PASS: TestRouter_ExecutionLimiter (0.20s)
+--- PASS: TestRouter_GroupKeySerialization (6.53s)
 === RUN   FuzzRouter_QueueMutation
 === RUN   FuzzRouter_QueueMutation/seed#0
 === RUN   FuzzRouter_QueueMutation/seed#1
@@ -10123,7 +10260,7 @@ ok  	github.com/small-frappuccino/discordcore/pkg/storage/postgres/storagetest	(
     --- PASS: FuzzRouter_HeapLimits/seed#1 (0.00s)
     --- PASS: FuzzRouter_HeapLimits/seed#2 (0.00s)
 PASS
-ok  	github.com/small-frappuccino/discordcore/pkg/task	(cached)
+ok  	github.com/small-frappuccino/discordcore/pkg/task	10.570s
 === RUN   TestOpenIsolatedDatabase
     postgres_test.go:14: skipping test due to missing database url
 --- SKIP: TestOpenIsolatedDatabase (0.00s)
@@ -10156,7 +10293,7 @@ ok  	github.com/small-frappuccino/discordcore/pkg/theme	(cached)
 === RUN   TestOpenPermissions
 --- PASS: TestOpenPermissions (0.00s)
 PASS
-ok  	github.com/small-frappuccino/discordcore/pkg/tickets	(cached)
+ok  	github.com/small-frappuccino/discordcore/pkg/tickets	3.918s
 === RUN   TestDistFSIncludesPlaceholderIndex
 --- PASS: TestDistFSIncludesPlaceholderIndex (0.00s)
 === RUN   TestTrackedEmbedIndexMatchesTemplate

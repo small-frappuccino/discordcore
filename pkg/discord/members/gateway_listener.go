@@ -103,7 +103,7 @@ func (l *GatewayListener) Priority() service.ServicePriority { return service.Pr
 func (l *GatewayListener) Dependencies() []string { return []string{"members"} }
 
 // IsRunning returns whether the service is running.
-func (l *GatewayListener) IsRunning() bool { return l.cancels != nil }
+func (l *GatewayListener) IsRunning() bool { return len(l.cancels) > 0 }
 
 // HealthCheck returns the health status of the service.
 func (l *GatewayListener) HealthCheck(ctx context.Context) service.HealthStatus {

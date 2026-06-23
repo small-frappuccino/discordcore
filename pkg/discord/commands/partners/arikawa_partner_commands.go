@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"runtime/debug"
 	"strings"
 
 	"github.com/diamondburned/arikawa/v3/api"
@@ -16,6 +15,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	partnersvc "github.com/small-frappuccino/discordcore/pkg/discord/partners"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
 
@@ -111,7 +111,7 @@ func partnerDetailedCommandError(ctx *commands.ArikawaContext, message string) e
 func partnerStructuralError(ctx *commands.ArikawaContext, action string, err error) error {
 	slog.Error("Blocking structural failure restricted to operational scope",
 		slog.String("req_id", ctx.GuildID.String()),
-		slog.String("stack_trace", string(debug.Stack())),
+		slog.Any("stack_trace", log.LazyStackTrace{}),
 		slog.Int("fail_id", 500),
 		slog.String("error", fmt.Sprintf("%s: %v", action, err)),
 	)

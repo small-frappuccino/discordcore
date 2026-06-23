@@ -202,6 +202,7 @@ flowchart TD
     CommandsPartners --> Commands
     CommandsPartners --> Discord
     CommandsPartners --> Files
+    CommandsPartners --> Log
     CommandsPartners --> Theme
     CommandsQotd --> Arikawa
     CommandsQotd --> Log

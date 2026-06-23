@@ -95,3 +95,13 @@ func TestStore_TransactionalLifecycle_HybridRollbackFailures(t *testing.T) {
 		t.Errorf("there were unfulfilled expectations: %s", err)
 	}
 }
+
+func TestNewStore_NilDB(t *testing.T) {
+	s, err := NewStore(nil, nil)
+	if err == nil {
+		t.Error("expected error when passing nil DB, got nil")
+	}
+	if s != nil {
+		t.Error("expected store to be nil when DB is nil")
+	}
+}
