@@ -57,6 +57,9 @@ func (t *Theme) Clone() *Theme {
 func (t *Theme) ensureDefaults() {
 	// If some fields are unset (zero), inherit from related roles.
 
+	if t.Primary == 0 {
+		t.Primary = 0x5865F2 // Default Primary (blurple)
+	}
 	if t.Accent == 0 {
 		t.Accent = t.Primary
 	}
