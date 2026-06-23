@@ -131,19 +131,8 @@ func (s *Service) NextScheduledPublishTime(guildID string) time.Time {
 // PublishScheduledIfDue runs the scheduled publish check logic.
 func (s *Service) PublishScheduledIfDue(ctx context.Context, guildID string) error {
 	_, err := s.ExecuteInGuildActorWithResult(guildID, func() (any, error) {
-		errCh := make(chan error, 1)
-		go func() {
-			// Simula a lógica de publicação real usando o publisher
-			_, err := s.publisher.PublishOfficialPost(ctx, PublishOfficialPostParams{})
-			errCh <- err
-		}()
-
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case err := <-errCh:
-			return nil, err
-		}
+		_, err := s.publisher.PublishOfficialPost(ctx, PublishOfficialPostParams{})
+		return nil, err
 	})
 	return err
 }

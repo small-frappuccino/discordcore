@@ -4,6 +4,7 @@ import (
 	"context"
 	"runtime/debug"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/log"
@@ -23,12 +24,12 @@ type RuntimeService struct {
 	cfg Config
 	svc *domain.Service
 
-	running   bool
+	running   atomic.Bool
 	startTime time.Time
 	stopCh    chan struct{}
 	stopOnce  sync.Once
 	wg        sync.WaitGroup
-	mu        sync.RWMutex
+	mu        sync.Mutex
 }
 
 // NewRuntimeService creates a new runtime daemon.
@@ -43,18 +44,21 @@ func NewRuntimeService(cfg Config, svc *domain.Service) *RuntimeService {
 // Start begins the daemon.
 func (s *RuntimeService) Start(ctx context.Context) error {
 	s.mu.Lock()
-	if s.running {
+	if s.running.Load() {
 		s.mu.Unlock()
 		return nil
 	}
-	s.running = true
+	s.running.Store(true)
 	s.startTime = time.Now()
 	s.stopCh = make(chan struct{})
 	s.stopOnce = sync.Once{}
 	s.mu.Unlock()
 
 	s.wg.Add(1)
-	go s.loop()
+	go func() {
+		defer s.wg.Done()
+		s.loop()
+	}()
 	return nil
 }
 
@@ -75,7 +79,7 @@ func (s *RuntimeService) Stop(ctx context.Context) error {
 	}
 
 	s.mu.Lock()
-	s.running = false
+	s.running.Store(false)
 	s.mu.Unlock()
 	return nil
 }
@@ -106,10 +110,8 @@ func (s *RuntimeService) loop() {
 
 // HealthCheck returns health status.
 func (s *RuntimeService) HealthCheck(ctx context.Context) service.HealthStatus {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
 	return service.HealthStatus{
-		Healthy:   s.running,
+		Healthy:   s.running.Load(),
 		Message:   "QOTD daemon",
 		LastCheck: time.Now(),
 	}
@@ -126,9 +128,7 @@ func (s *RuntimeService) Dependencies() []string { return nil }
 
 // IsRunning returns whether the service is currently running.
 func (s *RuntimeService) IsRunning() bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.running
+	return s.running.Load()
 }
 
 // Priority returns the service startup priority.

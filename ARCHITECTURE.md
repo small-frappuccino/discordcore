@@ -15,7 +15,6 @@ flowchart TD
     Arikawa(("Arikawa SDK"))
 
     %% Nodes
-    Github.comSmall-frappuccinoDiscordcore["github.com/small-frappuccino/discordcore"]
     CmdClean-config["cmd/clean-config"]
     CmdDiscordcore["cmd/discordcore"]
     CmdTsgen["cmd/tsgen"]
@@ -288,7 +287,7 @@ flowchart TD
     class App,AppRuntimecmd,Files,Persistence,Runtimeapply,StoragePostgres,StoragePostgresStoragetest core;
     class Discord,AdapterAutomod,AdapterCache,AdapterClean,Commands,CommandsClean,CommandsCore,CommandsEmbeds,CommandsLogging,CommandsModeration,CommandsPartners,CommandsQotd,CommandsRoles,CommandsRuntime,CommandsStats,CommandsTickets,AdapterEmbeds,AdapterLogging,AdapterMembers,AdapterMessages,AdapterModeration,AdapterPartners,AdapterPerf,AdapterQotd,AdapterRoles,AdapterSession,AdapterStats,AdapterTickets,AdapterWebhook adapter;
     class Automod,Clean,Control,ControlLocaltls,Logging,Members,Messages,Moderation,Qotd,Stats,Task,Tickets feature;
-    class Github.comSmall-frappuccinoDiscordcore,AutomodAutomodmocks,Clock,Idgen,Log,Observability,Service,System,Testdb,Theme infra;
+    class AutomodAutomodmocks,Clock,Idgen,Log,Observability,Service,System,Testdb,Theme infra;
     class DiscordGo,Arikawa,DiscordAPI,DiscordGateway external;
     class CmdClean-config,CmdDiscordcore,CmdTsgen,UI ui;
 ```

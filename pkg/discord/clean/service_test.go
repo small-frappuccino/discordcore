@@ -89,6 +89,7 @@ func (m *mockClient) SendMessageComplex(channelID discord.ChannelID, data api.Se
 }
 
 func TestExecuteClean_Pagination(t *testing.T) {
+	t.Parallel()
 	mockClock := time.Now()
 
 	client := &mockClient{
@@ -134,6 +135,7 @@ func TestExecuteClean_Pagination(t *testing.T) {
 }
 
 func TestExecuteClean_Degradation_50034(t *testing.T) {
+	t.Parallel()
 	mockClock := time.Now()
 
 	client := &mockClient{
@@ -167,6 +169,7 @@ func TestExecuteClean_Degradation_50034(t *testing.T) {
 }
 
 func TestExecuteClean_Concurrency_Race(t *testing.T) {
+	t.Parallel()
 	mockClock := time.Now().Add(-20 * 24 * time.Hour) // force single deletes
 
 	client := &mockClient{
@@ -207,6 +210,7 @@ func TestExecuteClean_Concurrency_Race(t *testing.T) {
 }
 
 func TestExecuteClean_AuditDispatch(t *testing.T) {
+	t.Parallel()
 	mockClock := time.Now()
 	var auditLogged atomic.Bool
 
@@ -238,7 +242,7 @@ func TestExecuteClean_AuditDispatch(t *testing.T) {
 		t.Errorf("expected 1 deleted, got %d", deleted)
 	}
 
-	time.Sleep(10 * time.Millisecond) // audit log is dispatched in a goroutine
+	svc.Close() // Gracefully waits for audit log dispatch
 	if !auditLogged.Load() {
 		t.Errorf("audit log was not dispatched")
 	}

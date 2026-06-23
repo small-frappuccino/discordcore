@@ -13,6 +13,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/httputil"
 	"github.com/small-frappuccino/discordcore/pkg/clean"
+	"golang.org/x/sync/errgroup"
 )
 
 // Metrics defines the observability surface for Discord-facing cleanup operations.
@@ -48,6 +49,7 @@ type Service struct {
 	metrics Metrics
 	logger  *slog.Logger
 	now     func() time.Time
+	wg      sync.WaitGroup
 }
 
 // NewService initializes a Clean service bounded by the provided client and metrics adapters.
@@ -64,6 +66,12 @@ func NewService(client Client, metrics Metrics, logger *slog.Logger) *Service {
 		logger:  logger,
 		now:     time.Now,
 	}
+}
+
+// Close gracefully waits for all pending async operations (like audit logging) to finish.
+func (s *Service) Close() error {
+	s.wg.Wait()
+	return nil
 }
 
 // ExecuteClean computes and enacts the deletion payload. It guarantees that a failure during the deletion phase does not panic or infinitely block.
@@ -113,29 +121,24 @@ func (s *Service) ExecuteClean(ctx context.Context, channelID discord.ChannelID,
 	}
 
 	if len(categorized.SingleIDs) > 0 {
-		var wg sync.WaitGroup
-		// Operational annotation: Restrict outbound single-delete requests to 10 concurrent routines.
-		// This minimizes instantaneous thread starvation and avoids aggressive rate-limiting spikes.
-		semaphore := make(chan struct{}, 10)
+		eg, _ := errgroup.WithContext(ctx)
+		eg.SetLimit(10)
 
 		for _, idStr := range categorized.SingleIDs {
-			wg.Add(1)
-			semaphore <- struct{}{}
-			go func(id string) {
-				defer wg.Done()
-				defer func() { <-semaphore }()
-
-				parsed, _ := discord.ParseSnowflake(id)
+			idStr := idStr
+			eg.Go(func() error {
+				parsed, _ := discord.ParseSnowflake(idStr)
 				err := s.client.DeleteMessage(channelID, discord.MessageID(parsed), "")
 				if err != nil {
 					s.metrics.RecordCleanDeleteFailure("single_error")
-					s.logger.Warn("Single delete failed", "error", err, "message_id", id)
+					s.logger.Warn("Single delete failed", "error", err, "message_id", idStr)
 				} else {
 					atomic.AddInt32(&deletedCount, 1)
 				}
-			}(idStr)
+				return nil
+			})
 		}
-		wg.Wait()
+		_ = eg.Wait()
 	}
 
 	finalDeleted := int(atomic.LoadInt32(&deletedCount))
@@ -145,7 +148,11 @@ func (s *Service) ExecuteClean(ctx context.Context, channelID discord.ChannelID,
 	if auditChannelID.IsValid() && finalDeleted > 0 {
 		// Operational annotation: Audit logging is intentionally asynchronous. A failure here is non-fatal
 		// and must not impact the primary execution loop's success report.
-		go s.dispatchAuditLog(auditChannelID, channelID, finalDeleted, filter, requestedBy)
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			s.dispatchAuditLog(auditChannelID, channelID, finalDeleted, filter, requestedBy)
+		}()
 	}
 
 	return finalDeleted, nil
