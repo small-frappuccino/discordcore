@@ -2625,7 +2625,7 @@ type MockRegistrarContext struct {
 	statsService      *appstats.StatsService
 }
 
-func (m MockRegistrarContext) SessionToken() string                      { return m.sessionToken }
+func (m MockRegistrarContext) SessionToken() string { return m.sessionToken }
 func (m MockRegistrarContext) ConfigProvider() config.Provider {
 	if m.configManager == nil {
 		return nil

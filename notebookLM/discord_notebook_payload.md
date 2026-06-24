@@ -17658,7 +17658,6 @@ func defaultCustomEmbedEditMessage(client *api.Client, channelID discord.Channel
 	return err
 }
 
-
 ```
 
 // === FILE: pkg/discord/embeds/service_test.go ===
@@ -18440,15 +18439,20 @@ import (
 type GatewayListener struct {
 	state         *state.State
 	memberService *members.MemberEventService
-	cancels       []func()
+	ctx           context.Context
+
+	cancelMemberAdd    func()
+	cancelMemberRemove func()
+	cancelMemberUpdate func()
 
 	updateQueue chan memberUpdatePayload
 	wg          sync.WaitGroup
 }
 
 type memberUpdatePayload struct {
-	e         *gateway.GuildMemberUpdateEvent
-	oldMember *discord.Member
+	e            *gateway.GuildMemberUpdateEvent
+	oldMember    discord.Member
+	hasOldMember bool
 }
 
 // NewGatewayListener creates a new listener.
@@ -18456,54 +18460,16 @@ func NewGatewayListener(s *state.State, memberSvc *members.MemberEventService) *
 	return &GatewayListener{
 		state:         s,
 		memberService: memberSvc,
-		cancels:       make([]func(), 0, 3),
+		ctx:           context.Background(),
 		updateQueue:   make(chan memberUpdatePayload, 1024),
 	}
 }
 
 // Start registers the Arikawa event handlers.
 func (l *GatewayListener) Start(ctx context.Context) error {
-	l.cancels = append(l.cancels,
-		l.state.AddHandler(func(e *gateway.GuildMemberAddEvent) {
-			roles := make([]string, len(e.RoleIDs))
-			for i, r := range e.RoleIDs {
-				roles[i] = r.String()
-			}
-			intent := members.MemberJoinIntent{
-				GuildID:    e.GuildID.String(),
-				UserID:     e.User.ID.String(),
-				Username:   e.User.Username,
-				Bot:        e.User.Bot,
-				AvatarHash: e.User.Avatar,
-				RoleIDs:    roles,
-				JoinedAt:   e.Joined.Time(),
-			}
-			l.memberService.IngestGuildMemberAdd(context.Background(), intent)
-		}),
-		l.state.AddHandler(func(e *gateway.GuildMemberRemoveEvent) {
-			intent := members.MemberLeaveIntent{
-				GuildID:    e.GuildID.String(),
-				UserID:     e.User.ID.String(),
-				Username:   e.User.Username,
-				Bot:        e.User.Bot,
-				AvatarHash: e.User.Avatar,
-			}
-			l.memberService.IngestGuildMemberRemove(context.Background(), intent)
-		}),
-		l.state.PreHandler.AddSyncHandler(func(e *gateway.GuildMemberUpdateEvent) {
-			oldMember, _ := l.state.Cabinet.Member(e.GuildID, e.User.ID)
-			var oldMemberCopy *discord.Member
-			if oldMember != nil {
-				copied := *oldMember
-				oldMemberCopy = &copied
-			}
-			select {
-			case l.updateQueue <- memberUpdatePayload{e: e, oldMember: oldMemberCopy}:
-			default:
-				// If queue is full, we drop the event to avoid blocking gateway
-			}
-		}),
-	)
+	l.cancelMemberAdd = l.state.AddHandler(l.handleMemberAdd)
+	l.cancelMemberRemove = l.state.AddHandler(l.handleMemberRemove)
+	l.cancelMemberUpdate = l.state.PreHandler.AddSyncHandler(l.handleMemberUpdate)
 
 	l.wg.Add(1)
 	go l.worker()
@@ -18511,11 +18477,61 @@ func (l *GatewayListener) Start(ctx context.Context) error {
 	return nil
 }
 
+func (l *GatewayListener) handleMemberAdd(e *gateway.GuildMemberAddEvent) {
+	if !e.GuildID.IsValid() || !e.User.ID.IsValid() {
+		return
+	}
+	roles := make([]string, len(e.RoleIDs))
+	for i, r := range e.RoleIDs {
+		roles[i] = r.String()
+	}
+	intent := members.MemberJoinIntent{
+		GuildID:    e.GuildID.String(),
+		UserID:     e.User.ID.String(),
+		Username:   e.User.Username,
+		Bot:        e.User.Bot,
+		AvatarHash: e.User.Avatar,
+		RoleIDs:    roles,
+		JoinedAt:   e.Joined.Time(),
+	}
+	l.memberService.IngestGuildMemberAdd(l.ctx, intent)
+}
+
+func (l *GatewayListener) handleMemberRemove(e *gateway.GuildMemberRemoveEvent) {
+	if !e.GuildID.IsValid() || !e.User.ID.IsValid() {
+		return
+	}
+	intent := members.MemberLeaveIntent{
+		GuildID:    e.GuildID.String(),
+		UserID:     e.User.ID.String(),
+		Username:   e.User.Username,
+		Bot:        e.User.Bot,
+		AvatarHash: e.User.Avatar,
+	}
+	l.memberService.IngestGuildMemberRemove(l.ctx, intent)
+}
+
+func (l *GatewayListener) handleMemberUpdate(e *gateway.GuildMemberUpdateEvent) {
+	if !e.GuildID.IsValid() || !e.User.ID.IsValid() {
+		return
+	}
+	oldMember, _ := l.state.Cabinet.Member(e.GuildID, e.User.ID)
+	payload := memberUpdatePayload{e: e}
+	if oldMember != nil {
+		payload.oldMember = *oldMember
+		payload.hasOldMember = true
+	}
+	select {
+	case l.updateQueue <- payload:
+	default:
+		// If queue is full, we drop the event to avoid blocking gateway
+	}
+}
+
 func (l *GatewayListener) worker() {
 	defer l.wg.Done()
 	for payload := range l.updateQueue {
 		e := payload.e
-		oldMember := payload.oldMember
 
 		roles := make([]string, len(e.RoleIDs))
 		for i, r := range e.RoleIDs {
@@ -18531,7 +18547,8 @@ func (l *GatewayListener) worker() {
 			AvatarHash: e.User.Avatar,
 		}
 
-		if oldMember != nil {
+		if payload.hasOldMember {
+			oldMember := &payload.oldMember
 			oldRoles := make([]string, len(oldMember.RoleIDs))
 			for i, r := range oldMember.RoleIDs {
 				oldRoles[i] = r.String()
@@ -18540,18 +18557,21 @@ func (l *GatewayListener) worker() {
 			intent.OldAvatar = oldMember.User.Avatar
 		}
 
-		l.memberService.IngestGuildMemberUpdate(context.Background(), intent)
+		l.memberService.IngestGuildMemberUpdate(l.ctx, intent)
 	}
 }
 
 // Stop unregisters the handlers.
 func (l *GatewayListener) Stop(ctx context.Context) error {
-	for _, cancel := range l.cancels {
-		if cancel != nil {
-			cancel()
-		}
+	if l.cancelMemberAdd != nil {
+		l.cancelMemberAdd()
 	}
-	l.cancels = nil
+	if l.cancelMemberRemove != nil {
+		l.cancelMemberRemove()
+	}
+	if l.cancelMemberUpdate != nil {
+		l.cancelMemberUpdate()
+	}
 
 	if l.updateQueue != nil {
 		close(l.updateQueue)
@@ -18574,7 +18594,7 @@ func (l *GatewayListener) Priority() service.ServicePriority { return service.Pr
 func (l *GatewayListener) Dependencies() []string { return []string{"members"} }
 
 // IsRunning returns whether the service is running.
-func (l *GatewayListener) IsRunning() bool { return len(l.cancels) > 0 }
+func (l *GatewayListener) IsRunning() bool { return l.cancelMemberAdd != nil }
 
 // HealthCheck returns the health status of the service.
 func (l *GatewayListener) HealthCheck(ctx context.Context) service.HealthStatus {
@@ -18957,7 +18977,11 @@ import (
 type GatewayListener struct {
 	state          *state.State
 	messageService *messages.MessageEventService
-	cancels        []func()
+	ctx            context.Context
+
+	cancelCreate func()
+	cancelUpdate func()
+	cancelDelete func()
 }
 
 // NewGatewayListener creates a new listener.
@@ -18965,55 +18989,71 @@ func NewGatewayListener(s *state.State, msgSvc *messages.MessageEventService) *G
 	return &GatewayListener{
 		state:          s,
 		messageService: msgSvc,
-		cancels:        make([]func(), 0, 3),
+		ctx:            context.Background(),
 	}
 }
 
 // Start registers the Arikawa event handlers.
 func (l *GatewayListener) Start(ctx context.Context) error {
-	l.cancels = append(l.cancels,
-		l.state.AddHandler(func(e *gateway.MessageCreateEvent) {
-			intent := messages.MessageCreateIntent{
-				MessageID:      e.ID.String(),
-				GuildID:        e.GuildID.String(),
-				ChannelID:      e.ChannelID.String(),
-				AuthorID:       e.Author.ID.String(),
-				AuthorUsername: e.Author.Username,
-				AuthorBot:      e.Author.Bot,
-				Content:        e.Content,
-				Timestamp:      e.Timestamp.Time(),
-			}
-			l.messageService.IngestMessageCreate(context.Background(), intent)
-		}),
-		l.state.AddHandler(func(e *gateway.MessageUpdateEvent) {
-			intent := messages.MessageUpdateIntent{
-				MessageID: e.ID.String(),
-				GuildID:   e.GuildID.String(),
-				ChannelID: e.ChannelID.String(),
-				Content:   e.Content,
-			}
-			l.messageService.IngestMessageUpdate(context.Background(), intent)
-		}),
-		l.state.AddHandler(func(e *gateway.MessageDeleteEvent) {
-			intent := messages.MessageDeleteIntent{
-				MessageID: e.ID.String(),
-				GuildID:   e.GuildID.String(),
-				ChannelID: e.ChannelID.String(),
-			}
-			l.messageService.IngestMessageDelete(context.Background(), intent)
-		}),
-	)
+	l.cancelCreate = l.state.AddHandler(l.handleMessageCreate)
+	l.cancelUpdate = l.state.AddHandler(l.handleMessageUpdate)
+	l.cancelDelete = l.state.AddHandler(l.handleMessageDelete)
 	return nil
+}
+
+func (l *GatewayListener) handleMessageCreate(e *gateway.MessageCreateEvent) {
+	if !e.ID.IsValid() || !e.GuildID.IsValid() || !e.ChannelID.IsValid() || !e.Author.ID.IsValid() {
+		return
+	}
+	intent := messages.MessageCreateIntent{
+		MessageID:      e.ID.String(),
+		GuildID:        e.GuildID.String(),
+		ChannelID:      e.ChannelID.String(),
+		AuthorID:       e.Author.ID.String(),
+		AuthorUsername: e.Author.Username,
+		AuthorBot:      e.Author.Bot,
+		Content:        e.Content,
+		Timestamp:      e.Timestamp.Time(),
+	}
+	l.messageService.IngestMessageCreate(l.ctx, intent)
+}
+
+func (l *GatewayListener) handleMessageUpdate(e *gateway.MessageUpdateEvent) {
+	if !e.ID.IsValid() || !e.GuildID.IsValid() || !e.ChannelID.IsValid() {
+		return
+	}
+	intent := messages.MessageUpdateIntent{
+		MessageID: e.ID.String(),
+		GuildID:   e.GuildID.String(),
+		ChannelID: e.ChannelID.String(),
+		Content:   e.Content,
+	}
+	l.messageService.IngestMessageUpdate(l.ctx, intent)
+}
+
+func (l *GatewayListener) handleMessageDelete(e *gateway.MessageDeleteEvent) {
+	if !e.ID.IsValid() || !e.GuildID.IsValid() || !e.ChannelID.IsValid() {
+		return
+	}
+	intent := messages.MessageDeleteIntent{
+		MessageID: e.ID.String(),
+		GuildID:   e.GuildID.String(),
+		ChannelID: e.ChannelID.String(),
+	}
+	l.messageService.IngestMessageDelete(l.ctx, intent)
 }
 
 // Stop unregisters the handlers.
 func (l *GatewayListener) Stop(ctx context.Context) error {
-	for _, cancel := range l.cancels {
-		if cancel != nil {
-			cancel()
-		}
+	if l.cancelCreate != nil {
+		l.cancelCreate()
 	}
-	l.cancels = nil
+	if l.cancelUpdate != nil {
+		l.cancelUpdate()
+	}
+	if l.cancelDelete != nil {
+		l.cancelDelete()
+	}
 	return nil
 }
 
@@ -19030,7 +19070,7 @@ func (l *GatewayListener) Priority() service.ServicePriority { return service.Pr
 func (l *GatewayListener) Dependencies() []string { return []string{"messages"} }
 
 // IsRunning returns whether the service is running.
-func (l *GatewayListener) IsRunning() bool { return len(l.cancels) > 0 }
+func (l *GatewayListener) IsRunning() bool { return l.cancelCreate != nil }
 
 // HealthCheck returns the health status of the service.
 func (l *GatewayListener) HealthCheck(ctx context.Context) service.HealthStatus {

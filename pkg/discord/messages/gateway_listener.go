@@ -13,7 +13,11 @@ import (
 type GatewayListener struct {
 	state          *state.State
 	messageService *messages.MessageEventService
-	cancels        []func()
+	ctx            context.Context
+
+	cancelCreate func()
+	cancelUpdate func()
+	cancelDelete func()
 }
 
 // NewGatewayListener creates a new listener.
@@ -21,55 +25,71 @@ func NewGatewayListener(s *state.State, msgSvc *messages.MessageEventService) *G
 	return &GatewayListener{
 		state:          s,
 		messageService: msgSvc,
-		cancels:        make([]func(), 0, 3),
+		ctx:            context.Background(),
 	}
 }
 
 // Start registers the Arikawa event handlers.
 func (l *GatewayListener) Start(ctx context.Context) error {
-	l.cancels = append(l.cancels,
-		l.state.AddHandler(func(e *gateway.MessageCreateEvent) {
-			intent := messages.MessageCreateIntent{
-				MessageID:      e.ID.String(),
-				GuildID:        e.GuildID.String(),
-				ChannelID:      e.ChannelID.String(),
-				AuthorID:       e.Author.ID.String(),
-				AuthorUsername: e.Author.Username,
-				AuthorBot:      e.Author.Bot,
-				Content:        e.Content,
-				Timestamp:      e.Timestamp.Time(),
-			}
-			l.messageService.IngestMessageCreate(context.Background(), intent)
-		}),
-		l.state.AddHandler(func(e *gateway.MessageUpdateEvent) {
-			intent := messages.MessageUpdateIntent{
-				MessageID: e.ID.String(),
-				GuildID:   e.GuildID.String(),
-				ChannelID: e.ChannelID.String(),
-				Content:   e.Content,
-			}
-			l.messageService.IngestMessageUpdate(context.Background(), intent)
-		}),
-		l.state.AddHandler(func(e *gateway.MessageDeleteEvent) {
-			intent := messages.MessageDeleteIntent{
-				MessageID: e.ID.String(),
-				GuildID:   e.GuildID.String(),
-				ChannelID: e.ChannelID.String(),
-			}
-			l.messageService.IngestMessageDelete(context.Background(), intent)
-		}),
-	)
+	l.cancelCreate = l.state.AddHandler(l.handleMessageCreate)
+	l.cancelUpdate = l.state.AddHandler(l.handleMessageUpdate)
+	l.cancelDelete = l.state.AddHandler(l.handleMessageDelete)
 	return nil
+}
+
+func (l *GatewayListener) handleMessageCreate(e *gateway.MessageCreateEvent) {
+	if !e.ID.IsValid() || !e.GuildID.IsValid() || !e.ChannelID.IsValid() || !e.Author.ID.IsValid() {
+		return
+	}
+	intent := messages.MessageCreateIntent{
+		MessageID:      e.ID.String(),
+		GuildID:        e.GuildID.String(),
+		ChannelID:      e.ChannelID.String(),
+		AuthorID:       e.Author.ID.String(),
+		AuthorUsername: e.Author.Username,
+		AuthorBot:      e.Author.Bot,
+		Content:        e.Content,
+		Timestamp:      e.Timestamp.Time(),
+	}
+	l.messageService.IngestMessageCreate(l.ctx, intent)
+}
+
+func (l *GatewayListener) handleMessageUpdate(e *gateway.MessageUpdateEvent) {
+	if !e.ID.IsValid() || !e.GuildID.IsValid() || !e.ChannelID.IsValid() {
+		return
+	}
+	intent := messages.MessageUpdateIntent{
+		MessageID: e.ID.String(),
+		GuildID:   e.GuildID.String(),
+		ChannelID: e.ChannelID.String(),
+		Content:   e.Content,
+	}
+	l.messageService.IngestMessageUpdate(l.ctx, intent)
+}
+
+func (l *GatewayListener) handleMessageDelete(e *gateway.MessageDeleteEvent) {
+	if !e.ID.IsValid() || !e.GuildID.IsValid() || !e.ChannelID.IsValid() {
+		return
+	}
+	intent := messages.MessageDeleteIntent{
+		MessageID: e.ID.String(),
+		GuildID:   e.GuildID.String(),
+		ChannelID: e.ChannelID.String(),
+	}
+	l.messageService.IngestMessageDelete(l.ctx, intent)
 }
 
 // Stop unregisters the handlers.
 func (l *GatewayListener) Stop(ctx context.Context) error {
-	for _, cancel := range l.cancels {
-		if cancel != nil {
-			cancel()
-		}
+	if l.cancelCreate != nil {
+		l.cancelCreate()
 	}
-	l.cancels = nil
+	if l.cancelUpdate != nil {
+		l.cancelUpdate()
+	}
+	if l.cancelDelete != nil {
+		l.cancelDelete()
+	}
 	return nil
 }
 
@@ -86,7 +106,7 @@ func (l *GatewayListener) Priority() service.ServicePriority { return service.Pr
 func (l *GatewayListener) Dependencies() []string { return []string{"messages"} }
 
 // IsRunning returns whether the service is running.
-func (l *GatewayListener) IsRunning() bool { return len(l.cancels) > 0 }
+func (l *GatewayListener) IsRunning() bool { return l.cancelCreate != nil }
 
 // HealthCheck returns the health status of the service.
 func (l *GatewayListener) HealthCheck(ctx context.Context) service.HealthStatus {
