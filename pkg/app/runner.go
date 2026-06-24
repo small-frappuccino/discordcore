@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -361,6 +362,20 @@ func (a *App) RunAndListen(ctx context.Context) error {
 		fatalErrCh <- a.serviceManager.Wait()
 	}()
 
+	var mutationWg sync.WaitGroup
+	defer func() {
+		waitCh := make(chan struct{})
+		go func() {
+			mutationWg.Wait()
+			close(waitCh)
+		}()
+		select {
+		case <-waitCh:
+		case <-time.After(2 * time.Second):
+			a.logger.Warn("Mitigated teardown latency: Asynchronous I/O mutations forcefully detached")
+		}
+	}()
+
 	for {
 		select {
 		case err := <-fatalErrCh:
@@ -376,30 +391,46 @@ func (a *App) RunAndListen(ctx context.Context) error {
 			a.logger.Info("Architectural state transition: Test simulated shutdown initiated")
 			return nil
 		case <-sigHupCh:
-			a.logger.Debug("Dynamic instruction intercepted: Evaluating configuration layer reload via SIGHUP")
-			newCfg, needsSave, err := a.configManager.LoadConfigFromStore()
-			if err != nil {
-				slog.Warn("Mitigated service degradation: Live configuration mutation failed; enforcing active baseline",
-					slog.String("error", err.Error()),
-				)
-				continue
-			}
+			a.logger.Debug("Dynamic instruction intercepted: Emitting non-blocking intent trigger for configuration layer reload")
 
-			dupCount := a.configManager.ApplyConfig(newCfg)
+			mutationWg.Add(1)
+			go func() {
+				defer mutationWg.Done()
 
-			if dupCount == 0 && !needsSave {
-				slog.Info("Architectural state transition: Configuration topology refreshed directly from disk")
-				continue
-			}
+				mutCtx, mutCancel := context.WithTimeout(signalCtx, 30*time.Second)
+				defer mutCancel()
 
-			// Fluxo achatado: apenas mutações que exigem persistência
-			if saveErr := a.configManager.SaveConfig(); saveErr != nil {
-				log.EmitBlockingError("Structural state failure: Volatile configuration drift blocks persistence flush", saveErr, log.GenerateRequestID())
-			} else {
-				slog.Info("Architectural state transition: Configuration topology updated and indexes rebuilt",
-					slog.Int("duplicates_purged", dupCount),
-				)
-			}
+				if mutCtx.Err() != nil {
+					return
+				}
+
+				newCfg, needsSave, err := a.configManager.LoadConfigFromStore()
+				if err != nil {
+					slog.Warn("Mitigated service degradation: Live configuration mutation failed; enforcing active baseline",
+						slog.String("error", err.Error()),
+					)
+					return
+				}
+
+				if mutCtx.Err() != nil {
+					return
+				}
+
+				dupCount := a.configManager.ApplyConfig(newCfg)
+
+				if dupCount == 0 && !needsSave {
+					slog.Info("Architectural state transition: Configuration topology refreshed directly from disk")
+					return
+				}
+
+				if saveErr := a.configManager.SaveConfig(); saveErr != nil {
+					log.EmitBlockingError("Structural state failure: Volatile configuration drift blocks persistence flush", saveErr, log.GenerateRequestID())
+				} else {
+					slog.Info("Architectural state transition: Configuration topology updated and indexes rebuilt",
+						slog.Int("duplicates_purged", dupCount),
+					)
+				}
+			}()
 		}
 	}
 }
