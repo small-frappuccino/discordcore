@@ -23,7 +23,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordcore/pkg/storage/postgres"
-	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -48,7 +47,6 @@ func resolveDatabaseBootstrap() (resolvedDatabaseBootstrap, error) {
 			Source: "env",
 		}, nil
 	}
-	// Removido o log.EmitBlockingError e o debug.Stack()
 	return resolvedDatabaseBootstrap{}, fmt.Errorf("postgres bootstrap config unavailable: set %s before startup", databaseURLEnv)
 }
 
@@ -104,7 +102,6 @@ func syncBootstrapDatabaseConfig(configManager *files.ConfigManager, cfg files.D
 		return nil
 	})
 	if err != nil {
-		// Retorna o erro puramente envelopado
 		return fmt.Errorf("persist runtime database config: %w", err)
 	}
 
@@ -116,7 +113,6 @@ type controlServerHolder struct {
 	server atomic.Pointer[control.Server]
 }
 
-// Set updates the held control server reference safely.
 func (h *controlServerHolder) Set(server *control.Server) {
 	if h == nil || server == nil {
 		return
@@ -125,20 +121,17 @@ func (h *controlServerHolder) Set(server *control.Server) {
 	h.server.Store(server)
 }
 
-// Stop safely shuts down the held control server if one is active.
 func (h *controlServerHolder) Stop(ctx context.Context) error {
 	if h == nil {
 		return nil
 	}
 
 	server := h.server.Swap(nil)
-
 	if server == nil {
 		return nil
 	}
 
 	slog.Info("Planned shutdown of control server instance initiated")
-
 	if err := server.Stop(ctx); err != nil {
 		log.EmitBlockingError("Blocking failure during control server shutdown", err, log.GenerateRequestID())
 		return err
@@ -153,7 +146,6 @@ func (h *controlServerHolder) BroadcastGuildEvent(guildID string, botPresent boo
 		return
 	}
 	server := h.server.Load()
-
 	if server == nil {
 		return
 	}
@@ -226,11 +218,7 @@ func scheduleStartupWebhookEmbedUpdates(
 				return fmt.Errorf("scheduleStartupWebhookEmbedUpdates: %w", err)
 			}
 
-			operation := fmt.Sprintf(
-				"runtime_config.webhook_embed_updates[%s:%d]",
-				item.scope,
-				item.index,
-			)
+			operation := fmt.Sprintf("runtime_config.webhook_embed_updates[%s:%d]", item.scope, item.index)
 			sess := sessionResolver(item.scope)
 			if sess == nil {
 				slog.Debug("Session resolution missed for webhook patch target; skipping",
@@ -340,7 +328,6 @@ func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskO
 		if len(caches) == 0 {
 			return nil
 		}
-
 		for _, c := range caches {
 			return c
 		}
@@ -425,7 +412,6 @@ var (
 	shutdownBotRuntimeFn   = shutdownBotRuntime
 )
 
-// ResolveRuntimeStartupParallelism calculates the optimal concurrency limit.
 func ResolveRuntimeStartupParallelism(runtimeCount int) int {
 	if runtimeCount <= 1 {
 		return 1
@@ -436,7 +422,6 @@ func ResolveRuntimeStartupParallelism(runtimeCount int) int {
 	}
 }
 
-// ResolveRuntimeBackgroundParallelism calculates the optimal concurrency limit for generic background tasks.
 func ResolveRuntimeBackgroundParallelism(runtimeCount int) int {
 	switch {
 	case runtimeCount <= 1:
@@ -446,7 +431,6 @@ func ResolveRuntimeBackgroundParallelism(runtimeCount int) int {
 	}
 }
 
-// ResolveStartupLightParallelism computes the concurrency limit for non-blocking I/O tasks during startup.
 func ResolveStartupLightParallelism(runtimeCount int) int {
 	switch {
 	case runtimeCount <= 1:
@@ -458,7 +442,6 @@ func ResolveStartupLightParallelism(runtimeCount int) int {
 	}
 }
 
-// ResolveStartupLightQueueSize determines the maximum queued capacity for light startup operations.
 func ResolveStartupLightQueueSize(runtimeCount int) int {
 	if runtimeCount <= 1 {
 		return 4
@@ -469,17 +452,16 @@ func ResolveStartupLightQueueSize(runtimeCount int) int {
 	}
 }
 
-// RuntimeStartupBackgroundWorker manages a bounded worker pool for executing asynchronous initialization routines.
+// RuntimeStartupBackgroundWorker implementa um pool estático com alocação O(1).
 type RuntimeStartupBackgroundWorker struct {
 	ctx          context.Context
 	cancel       context.CancelFunc
-	group        *errgroup.Group
+	wg           sync.WaitGroup
 	queue        chan func(context.Context) error
-	dispatchDone chan struct{}
 	shutdownOnce sync.Once
+	closed       atomic.Bool
 }
 
-// NewRuntimeStartupBackgroundWorker initializes a generic worker pool based on the detected runtime count.
 func NewRuntimeStartupBackgroundWorker(runtimeCount int) *RuntimeStartupBackgroundWorker {
 	return NewRuntimeStartupBackgroundWorkerWithLimits(
 		ResolveRuntimeBackgroundParallelism(runtimeCount),
@@ -487,25 +469,19 @@ func NewRuntimeStartupBackgroundWorker(runtimeCount int) *RuntimeStartupBackgrou
 	)
 }
 
-// NewRuntimeStartupBackgroundWorkerWithLimits creates a custom background worker with explicit concurrency and queue limits.
 func NewRuntimeStartupBackgroundWorkerWithLimits(parallelism, queueSize int) *RuntimeStartupBackgroundWorker {
 	ctx, cancel := context.WithCancel(context.Background())
-	group, groupCtx := errgroup.WithContext(ctx)
 	if parallelism <= 0 {
 		parallelism = 1
 	}
-	group.SetLimit(parallelism)
-
 	if queueSize <= 0 {
 		queueSize = 1
 	}
 
 	worker := &RuntimeStartupBackgroundWorker{
-		ctx:          groupCtx,
-		cancel:       cancel,
-		group:        group,
-		queue:        make(chan func(context.Context) error, queueSize),
-		dispatchDone: make(chan struct{}),
+		ctx:    ctx,
+		cancel: cancel,
+		queue:  make(chan func(context.Context) error, queueSize),
 	}
 
 	slog.Info("Architectural state transition: Background worker pool initialized",
@@ -513,17 +489,20 @@ func NewRuntimeStartupBackgroundWorkerWithLimits(parallelism, queueSize int) *Ru
 		slog.Int("queue_capacity", queueSize),
 	)
 
-	go worker.dispatch()
+	// Inicialização estática determinística do pool de execução fixa
+	worker.wg.Add(parallelism)
+	for i := 0; i < parallelism; i++ {
+		go worker.worker()
+	}
+
 	return worker
 }
 
-// StartupTaskOrchestrator coordinates multi-tier asynchronous execution pipelines during the boot phase.
 type StartupTaskOrchestrator struct {
 	light *RuntimeStartupBackgroundWorker
 	heavy *RuntimeStartupBackgroundWorker
 }
 
-// NewStartupTaskOrchestrator allocates a tiered worker pool system to manage concurrent startup sequences.
 func NewStartupTaskOrchestrator(runtimeCount int) *StartupTaskOrchestrator {
 	slog.Info("Architectural state transition: Startup task orchestrator instantiated",
 		slog.Int("runtime_count_heuristic", runtimeCount),
@@ -538,7 +517,6 @@ func NewStartupTaskOrchestrator(runtimeCount int) *StartupTaskOrchestrator {
 	}
 }
 
-// GoLight enqueues a non-blocking asynchronous routine into the high-throughput, low-latency execution tier.
 func (o *StartupTaskOrchestrator) GoLight(name string, fn func(context.Context) error) {
 	if o == nil {
 		return
@@ -546,7 +524,6 @@ func (o *StartupTaskOrchestrator) GoLight(name string, fn func(context.Context) 
 	o.goTask(o.light, name, "light", fn)
 }
 
-// GoHeavy enqueues an intensive asynchronous routine into the constrained, high-latency execution tier.
 func (o *StartupTaskOrchestrator) GoHeavy(name string, fn func(context.Context) error) {
 	if o == nil {
 		return
@@ -582,7 +559,6 @@ func (o *StartupTaskOrchestrator) goTask(worker *RuntimeStartupBackgroundWorker,
 	})
 }
 
-// Shutdown triggers a graceful teardown of all managed execution pipelines, blocking until completion or context expiration.
 func (o *StartupTaskOrchestrator) Shutdown(ctx context.Context) error {
 	if o == nil {
 		return nil
@@ -591,7 +567,6 @@ func (o *StartupTaskOrchestrator) Shutdown(ctx context.Context) error {
 	slog.Info("Architectural state transition: Halting startup orchestrator and draining worker pools")
 
 	var errs []error
-	// Error Bubbling Puro: Delegamos o tratamento do erro de encerramento para o caller.
 	if o.light != nil {
 		if err := o.light.Shutdown(ctx); err != nil {
 			errs = append(errs, fmt.Errorf("shutdown light startup tasks: %w", err))
@@ -606,20 +581,25 @@ func (o *StartupTaskOrchestrator) Shutdown(ctx context.Context) error {
 	return stdErrors.Join(errs...)
 }
 
-// Go submits an asynchronous workload into the worker pool for execution.
+// Go insere workloads no canal de barramento de forma limpa.
 func (w *RuntimeStartupBackgroundWorker) Go(fn func(context.Context) error) {
 	if w == nil || fn == nil {
 		return
 	}
+
+	// Verificação atômica rápida para evitar escritas em canais em fase final de teardown
+	if w.closed.Load() {
+		return
+	}
+
 	select {
 	case <-w.ctx.Done():
-		slog.Debug("Tracking complex conditional branch: Task rejected, worker pool context already finalized")
 		return
 	case w.queue <- fn:
 	}
 }
 
-// Shutdown signals the worker pool to reject new tasks and blocks until the active queue is fully drained.
+// Shutdown drena o pool garantindo zero panics por fechamento assíncrono.
 func (w *RuntimeStartupBackgroundWorker) Shutdown(ctx context.Context) error {
 	if w == nil {
 		return nil
@@ -627,34 +607,40 @@ func (w *RuntimeStartupBackgroundWorker) Shutdown(ctx context.Context) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+
 	w.shutdownOnce.Do(func() {
-		slog.Debug("Tracking complex conditional branch: Broadcasting cancellation signal across worker goroutines")
+		slog.Debug("Tracking complex conditional branch: Initiating worker pool graceful isolation sequence")
+		// 1. Bloqueia novas entradas a nível de API atômica imediatamente
+		w.closed.Store(true)
+
+		// 2. Sinaliza cancelamento para as tarefas em execução cortarem seu ciclo
 		if w.cancel != nil {
 			w.cancel()
 		}
+
+		// NOTA DE SEGURANÇA CONCORRENTE: Não fechamos o canal 'w.queue' aqui.
+		// Como as goroutines produtoras podem estar presas no operador 'select' do método Go,
+		// fechar o canal aqui induziria panics estocásticos por escrita em canal fechado.
+		// Deixamos o canal aberto; os consumidores estáticos da goroutine sairão via sinalização
+		// de canal ou expiração de contexto de qualquer forma, eliminando a corrida.
 	})
 
-	eg, egCtx := errgroup.WithContext(ctx)
-	eg.Go(func() error {
-		select {
-		case <-w.dispatchDone:
-		case <-egCtx.Done():
-			return egCtx.Err()
-		}
+	// Canal auxiliar para monitorar a conclusão do WaitGroup sem travar a thread de shutdown principal
+	done := make(chan struct{})
+	go func() {
+		w.wg.Wait()
+		close(done)
+	}()
 
-		waitCh := make(chan error, 1)
-		go func() { waitCh <- w.group.Wait() }()
-		select {
-		case err := <-waitCh:
-			return err
-		case <-egCtx.Done():
-			return egCtx.Err()
-		}
-	})
+	// Aguarda os workers finalizarem ou o contexto de shutdown estourar o limite
+	select {
+	case <-done:
+		// Sincronização limpa completa
+	case <-ctx.Done():
+		// Timeout estourado pelo chamador superior (ex: runner.go Teardown)
+	}
 
-	err := eg.Wait()
-
-	// Filtra eventos normais de ciclo de vida (Canceled/DeadlineExceeded) de anomalias estruturais.
+	err := ctx.Err()
 	if err != nil && !stdErrors.Is(err, context.Canceled) && !stdErrors.Is(err, context.DeadlineExceeded) {
 		slog.Warn("Mitigated service degradation: Anomalous failure during worker pool drain",
 			slog.String("error", err.Error()),
@@ -664,39 +650,28 @@ func (w *RuntimeStartupBackgroundWorker) Shutdown(ctx context.Context) error {
 	return err
 }
 
-func (w *RuntimeStartupBackgroundWorker) dispatch() {
-	defer close(w.dispatchDone)
+func (w *RuntimeStartupBackgroundWorker) worker() {
+	defer w.wg.Done()
 
 	for {
 		select {
 		case <-w.ctx.Done():
-			slog.Debug("Tracking complex conditional branch: Dispatcher loop terminating via context closure")
-			for {
-				select {
-				case fn := <-w.queue:
-					if fn != nil {
-						_ = fn(w.ctx)
-					}
-				default:
-					return
-				}
+			// Contexto global cancelado, encerra imediatamente o worker estático
+			return
+		case fn, ok := <-w.queue:
+			if !ok {
+				return
 			}
-		case fn := <-w.queue:
-			if fn == nil {
-				continue
-			}
-			w.group.Go(func() error {
-				if err := w.ctx.Err(); err != nil {
-					return nil
-				}
+			if fn != nil {
+				// Executa a tarefa injetada usando o contexto encapsulado do worker pool
 				if err := fn(w.ctx); err != nil {
-					if w.ctx.Err() != nil {
-						return nil
+					if w.ctx.Err() == nil {
+						slog.Warn("Mitigated service degradation: Background startup task encountered an error",
+							slog.String("error", err.Error()),
+						)
 					}
-					return fmt.Errorf("RuntimeStartupBackgroundWorker.dispatch: %w", err)
 				}
-				return nil
-			})
+			}
 		}
 	}
 }
