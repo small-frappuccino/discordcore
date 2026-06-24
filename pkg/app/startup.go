@@ -282,6 +282,7 @@ func startControlServerStartupTask(ctx context.Context, controlRuntime resolvedC
 	return nil
 }
 
+// ResolveRuntimeStartupParallelism determines the optimal parallel execution bound for startup tasks.
 func ResolveRuntimeStartupParallelism(runtimeCount int) int {
 	if runtimeCount <= 1 {
 		return 1
@@ -299,6 +300,7 @@ type StartupTaskOrchestrator struct {
 	ctx context.Context
 }
 
+// NewStartupTaskOrchestrator instantiates a bounded concurrency manager.
 func NewStartupTaskOrchestrator(ctx context.Context, runtimeCount int) *StartupTaskOrchestrator {
 	eg, egCtx := errgroup.WithContext(ctx)
 

@@ -57,7 +57,7 @@ type botRuntimeCapabilities struct {
 	memberEventService  bool
 }
 
-// hasCommands reports whether any command catalog should be installed.
+// HasCommands reports whether any command catalog should be installed.
 func (c botRuntimeCapabilities) HasCommands() bool { return c.hasCommands }
 
 func resolveBotRuntimeCapabilities(
@@ -226,10 +226,10 @@ func botRuntimeNeedsBotPermMirror(runtimeConfig files.RuntimeConfig) bool {
 	return !runtimeConfig.DisableBotRolePermMirror && strings.TrimSpace(runtimeConfig.BotRolePermMirrorActorRoleID) != ""
 }
 
-// ErrNoBotTokensConfigured defines err no bot tokens configured.
+// ErrNoBotTokensConfigured indicates that no bot instances have a configured token.
 var ErrNoBotTokensConfigured = errors.New("no bot instances have a configured token")
 
-// ErrSessionUnavailable defines err when a bot session is not available for a guild or globally.
+// ErrSessionUnavailable indicates that a bot session is not available for a guild or globally.
 var ErrSessionUnavailable = errors.New("discord session is unavailable")
 
 // TelemetryState represents the lifecycle phase of a bot runtime.
@@ -344,7 +344,7 @@ func knownBotInstanceCatalogSeq(runtimes iter.Seq2[string, *botRuntime], additio
 	return func(yield func(string) bool) {
 		known := make(map[string]struct{})
 
-		// Closure atua como interceptador de filtro stateful
+		// Stateful filter interceptor ensures unique runtime configuration streams without heap allocation.
 		tryYield := func(rawID string) bool {
 			normalized := files.NormalizeBotInstanceID(rawID)
 			if normalized == "" {
@@ -404,7 +404,7 @@ func (r *botRuntimeResolver) aggregateUnifiedCaches() map[string]*cache.UnifiedC
 	return caches
 }
 
-// runtimeForGuild enforces a strict O(1) determinism for feature allocation.
+// runtimeForGuild enforces consistent and predictable feature allocation.
 // The previous stochastic routing heuristic was eliminated in favor of a binary lookup
 // via ResolveFeatureBotInstanceID. If a feature is unmapped or explicitly deactivated,
 // it instantly yields ErrSessionUnavailable without falling back to other active tokens.
@@ -468,7 +468,7 @@ func (r *botRuntimeResolver) arikawaStateForGuild(guildID string, feature string
 func (r *botRuntimeResolver) sessionForGuild(guildID string, feature string) (*session.LegacySession, error) {
 	runtime, botInstanceID, err := r.runtimeForGuild(guildID, feature)
 	if err != nil {
-		return nil, err // O erro já encapsula ErrSessionUnavailable
+		return nil, err // ErrSessionUnavailable is already encapsulated in the error payload.
 	}
 	if runtime.legacySession == nil {
 		guildID = strings.TrimSpace(guildID)
@@ -940,7 +940,7 @@ func runtimeWarmupPhases() (cache.WarmupConfig, cache.WarmupConfig) {
 
 // shutdownBotRuntime removed as teardown is now handled natively by Run via Context cancellation
 
-// resolveEventLogger centraliza a injeção do sink de logs para serviços de auditoria.
+// resolveEventLogger centralizes log sink injection for audit services.
 func resolveEventLogger(runtime *botRuntime, configManager *files.ConfigManager) *logging.Logger {
 	if runtime.arikawaState == nil || runtime.arikawaState.Session == nil {
 		return nil

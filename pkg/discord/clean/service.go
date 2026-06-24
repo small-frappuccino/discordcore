@@ -151,9 +151,6 @@ func (s *Service) ExecuteClean(ctx context.Context, channelID discord.ChannelID,
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
-			if ctx.Err() != nil {
-				return
-			}
 			s.dispatchAuditLog(auditChannelID, channelID, finalDeleted, filter, requestedBy)
 		}()
 	}

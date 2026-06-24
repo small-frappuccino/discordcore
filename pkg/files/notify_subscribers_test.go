@@ -133,11 +133,12 @@ func TestNotifySubscribers_ContextTimeoutPreemption(t *testing.T) {
 
 	cfgManager := NewConfigManagerWithStore(nil, nil)
 
+	neverChan := make(chan struct{})
 	cfgManager.AddSubscriber(func(ctx context.Context, oldCfg, newCfg *BotConfig) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(5 * time.Second):
+		case <-neverChan:
 			return nil
 		}
 	})

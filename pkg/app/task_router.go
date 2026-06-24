@@ -40,11 +40,11 @@ func configuredRuntimeTaskRouterWorkers(cfg *files.BotConfig, botInstanceID stri
 		}
 	}
 
-	// Eliminação visual do bloco if <= 0: avaliação booleana resolvida no retorno O(1)
+	// Direct boolean evaluation resolves boundary limits efficiently to avoid conditional branching.
 	return maxWorkers, maxWorkers > 0
 }
 
-// newRuntimeTaskRouterConfig builds the deterministic routing rules for background execution.
+// newRuntimeTaskRouterConfig builds the reliable routing rules for background execution.
 func newRuntimeTaskRouterConfig(cfg *files.BotConfig, botInstanceID string, runtimeCount int) task.RouterConfig {
 	workers := resolveRuntimeTaskRouterWorkers(cfg, botInstanceID, runtimeCount)
 

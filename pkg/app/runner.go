@@ -106,20 +106,20 @@ func RunWithOptions(appName string, opts RunOptions) (err error) {
 	}()
 	defer func() {
 		if r := recover(); r != nil {
-			// Unmanaged Panic: Exige interrupção agressiva e dump de memória (Stack Trace)
+			// Unmanaged panic requires aggressive interruption and memory dump.
 			errWrap := fmt.Errorf("panic recovered during runtime: %v", r)
 			log.EmitBlockingError("Critical pipeline failure: Unhandled panic intercepted", errWrap, log.GenerateRequestID())
 			notifyLifecycleEvent("fatal", errWrap.Error())
 			err = errWrap
 		} else if err != nil {
-			// Managed Error: Falha validada e propagada. Usa O(1) structured logging sem stack trace.
+			// Managed error propagates validated failure using highly efficient structured logging without stack traces.
 			slog.Error("Primary execution routine aborted",
 				slog.String("app_name", appName),
 				slog.Any("error", err),
 			)
 			notifyLifecycleEvent("fatal", fmt.Sprintf("startup or runtime error: %v", err))
 		} else {
-			// Desligamento limpo
+			// Clean shutdown sequence.
 			notifyLifecycleEvent("stopping", "")
 		}
 	}()
@@ -134,7 +134,7 @@ func RunWithOptions(appName string, opts RunOptions) (err error) {
 	return app.Teardown(app.RunAndListen(ctx))
 }
 
-// Boot executes the application initialization matrix deterministically.
+// Boot executes the application initialization matrix reliably.
 func (a *App) Boot(ctx context.Context) error {
 	a.logger.Info("Architectural state transition: Executing application boot sequence")
 
@@ -303,8 +303,8 @@ func (a *App) ConstructServices(ctx context.Context) error {
 		a.runtimeApplier.SetInitial(cfg.RuntimeConfig)
 	}
 
-	// Cômputo achatado e in-line de instâncias ativas
-	runtimeCount := 1 // Default estrito
+	// Flattened inline computation of active instances avoids unnecessary allocation.
+	runtimeCount := 1 // Strict default
 	if cfg := a.configManager.Config(); cfg != nil {
 		knownInstances := make(map[string]struct{})
 		for _, guild := range cfg.Guilds {
@@ -434,7 +434,7 @@ func (a *App) RunAndListen(ctx context.Context) error {
 	eg, egCtx := errgroup.WithContext(rootCtx)
 
 	// Phase 2: SIGHUP Valve & Serialized Mutation Pipeline
-	// Dedicated resident worker executing continuous state routing with O(1) thermodynamic footprint.
+	// Dedicated resident worker executing continuous state routing with highly efficient resource utilization.
 	eg.Go(func() error {
 		for {
 			select {
@@ -443,7 +443,7 @@ func (a *App) RunAndListen(ctx context.Context) error {
 			case <-sigHupCh:
 				a.logger.Debug("Dynamic instruction intercepted: Emitting non-blocking intent trigger for configuration layer reload")
 
-				// Mutação serializada governada por CSP e limitação de timeout (Phase 2)
+				// Serialized mutation governed by CSP and bounded by strict timeout.
 				mutCtx, mutCancel := context.WithTimeout(egCtx, 30*time.Second)
 
 				newCfg, needsSave, err := a.configManager.LoadConfigFromStore()
@@ -492,7 +492,7 @@ func (a *App) RunAndListen(ctx context.Context) error {
 		return nil
 	})
 
-	// Phase 3: Central router block for deterministic lifecycle observation
+	// Phase 3: Central router block for consistent lifecycle observation
 	eg.Go(func() error {
 		select {
 		case <-signalCtx.Done():
@@ -543,7 +543,7 @@ func (a *App) Teardown(originalErr error) error {
 
 	if a.serviceManager != nil {
 		err := a.serviceManager.StopAll(context.Background())
-		a.serviceManager.Wait() // Executado incondicionalmente para limpar zumbis
+		a.serviceManager.Wait() // Unconditional execution guarantees cleanup of zombie processes.
 
 		if err != nil {
 			errWrap := fmt.Errorf("shutdown: %w", err)
@@ -601,13 +601,13 @@ func scheduleDBCleanup(ctx context.Context, store *postgres.Store, configManager
 		slog.Bool("disable_cleanup_flag", disableCleanup),
 	)
 
-	// Avaliação Estrita O(1) de Ativação
+	// Strict and predictable conditional evaluation for temporal garbage collection.
 	if cleanupEnabled && !disableCleanup {
 		cache.SchedulePeriodicCleanup(ctx, store, 6*time.Hour)
 		return
 	}
 
-	// Avaliação de Logs Desacoplada e Clara
+	// Decoupled evaluation provides strict clarity for operational logs.
 	if !cleanupEnabled {
 		slog.Info("Architectural state override: Database garbage collection suppressed explicitly by node definition",
 			slog.String("flag", "features.maintenance.db_cleanup"),

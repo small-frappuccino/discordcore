@@ -18,7 +18,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// managedInstance retém a fronteira de isolamento de ciclo de vida de uma goroutine ativa.
+// managedInstance maintains the lifecycle isolation boundary of an active goroutine.
 type managedInstance struct {
 	CancelContext context.CancelFunc
 	Token         string
@@ -198,7 +198,7 @@ func (s *BotSupervisor) handleTopologyDelta(cmd TopologyDelta) {
 		s.opts.startupTasks.Go("presence_update", taskFn)
 	}
 
-	// Fase 1: Expurgar instâncias removidas ou alteradas
+	// Phase 1: Purge removed or modified instances to maintain valid architectural state.
 	for id, current := range s.trackedInstances {
 		newToken, exists := desiredTokens[id]
 		newCaps := desiredCaps[id]
@@ -212,7 +212,7 @@ func (s *BotSupervisor) handleTopologyDelta(cmd TopologyDelta) {
 		}
 	}
 
-	// Fase 2: Inicializar novas vias de execução
+	// Phase 2: Initialize new execution pipelines.
 	isReady := false
 	if s.resolver != nil {
 		select {
@@ -269,7 +269,7 @@ func (s *BotSupervisor) handleTopologyDelta(cmd TopologyDelta) {
 		go s.resolver.markReady()
 	}
 
-	// Fase 3: Sync Commands
+	// Phase 3: Synchronize command catalogs.
 	if len(cmd.SyncTasks) > 0 {
 		s.opts.startupTasks.Go("catalog_sync", func(ctx context.Context) error {
 			eg, egCtx := errgroup.WithContext(ctx)

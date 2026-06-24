@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"iter"
 	"log/slog"
 	"sync"
 )
@@ -54,13 +55,16 @@ func (r *CommandRegistry) Len() int {
 	return len(r.commands)
 }
 
-// GetAllCommands exports a snapshot of all registered commands.
-func (r *CommandRegistry) GetAllCommands() map[string]ArikawaCommand {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	snapshot := make(map[string]ArikawaCommand, len(r.commands))
-	for name, cmd := range r.commands {
-		snapshot[name] = cmd
+// All returns an iterator over all registered commands.
+// It acquires a read lock for each iteration step.
+func (r *CommandRegistry) All() iter.Seq2[string, ArikawaCommand] {
+	return func(yield func(string, ArikawaCommand) bool) {
+		r.mu.RLock()
+		defer r.mu.RUnlock()
+		for name, cmd := range r.commands {
+			if !yield(name, cmd) {
+				return
+			}
+		}
 	}
-	return snapshot
 }

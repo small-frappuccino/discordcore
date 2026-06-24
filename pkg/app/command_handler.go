@@ -26,7 +26,7 @@ import (
 	"github.com/small-frappuccino/discordgo"
 )
 
-// CommandHandler manages bot command setup and handling
+// CommandHandler manages bot command setup and handling.
 type CommandHandler struct {
 	session             *discordgo.Session
 	configManager       *files.ConfigManager
@@ -213,7 +213,7 @@ func (ch *CommandHandler) Stop(ctx context.Context) error {
 	return ch.Shutdown()
 }
 
-// SetupCommands initializes and registers all bot commands
+// SetupCommands initializes and registers all bot commands.
 func (ch *CommandHandler) SetupCommands() error {
 	slog.Info("Starting command and route coupling", slog.String("botInstanceID", ch.botInstanceID))
 
@@ -247,7 +247,7 @@ func (ch *CommandHandler) SetupCommands() error {
 	ch.router.Store(newRouter)
 	ch.syncer.Store(newSyncer)
 
-	// Injeção limpa de método estrito, sem ruído de closure inline.
+	// Direct method injection strictly avoids inline closure allocation overhead.
 	ch.interactionCancel = ch.session.AddHandler(ch.handleInteractionCreate)
 
 	currentRouter := ch.router.Load()
@@ -267,7 +267,7 @@ func (ch *CommandHandler) SetupCommands() error {
 	return nil
 }
 
-// Escopo de execução isolado: processamento de runtime fica contido aqui.
+// handleInteractionCreate executes isolated runtime processing.
 func (ch *CommandHandler) handleInteractionCreate(s *discordgo.Session, rawEvent *discordgo.Event) {
 	if rawEvent.Type != "INTERACTION_CREATE" {
 		return
@@ -305,7 +305,7 @@ func (ch *CommandHandler) handleInteractionCreate(s *discordgo.Session, rawEvent
 	_ = currentRouter.HandleEvent(&arikawaEvent)
 }
 
-// GetRouter returns the command router (for tests or extensions)
+// GetRouter returns the command router (for tests or extensions).
 func (ch *CommandHandler) GetRouter() *commands.CommandRouter {
 	return ch.router.Load()
 }
@@ -335,7 +335,7 @@ func (ch *CommandHandler) supportsCatalogCapabilities(required CommandCatalogCap
 	return ch.catalogCapabilities.Has(required)
 }
 
-// Shutdown performs cleanup for the command handler resources
+// Shutdown performs cleanup for the command handler resources.
 func (ch *CommandHandler) Shutdown() error {
 	slog.Info("Starting connection drain and shutdown of CommandHandler",
 		slog.String("botInstanceID", ch.botInstanceID),
@@ -352,7 +352,7 @@ func (ch *CommandHandler) Shutdown() error {
 	return nil
 }
 
-// GetConfigManager returns the configuration manager
+// GetConfigManager returns the configuration manager.
 func (ch *CommandHandler) GetConfigManager() *files.ConfigManager {
 	return ch.configManager
 }
@@ -379,13 +379,13 @@ func (ch *CommandHandler) handlesGuildRoute(guildID string, routeKey commands.In
 		return false
 	}
 
-	// Retorno direto do booleano estrutural
+	// Immediate return of the structural boolean flag avoids intermediate states.
 	return cfg.ResolveFeatures(strings.TrimSpace(guildID)).Services.Commands
 }
 
 // matchesGuildBotInstance enforces strict binary command authorization.
 // If ResolveFeatureBotInstanceID yields an unmapped or deactivated target,
-// it instantly returns false. It strictly rejects non-deterministic generic routing
+// it instantly returns false. It strictly rejects unpredictable generic routing
 // and refuses to authorize a command simply because a generic bot happens to be online.
 func (ch *CommandHandler) matchesGuildBotInstance(guildID string, feature string) bool {
 	if ch == nil || ch.configManager == nil {

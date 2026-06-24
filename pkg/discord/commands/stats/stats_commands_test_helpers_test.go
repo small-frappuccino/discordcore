@@ -130,7 +130,7 @@ func handleRawStatsInteraction(t *testing.T, router *commands.CommandRouter, cm 
 	t.Helper()
 
 	cmdData := ic.Data.(*discord.CommandInteraction)
-	cmd := router.Registry().GetAllCommands()[cmdData.Name]
+	cmd, _ := router.Registry().GetCommand(cmdData.Name)
 	if cmd == nil {
 		t.Fatalf("command %s not found", cmdData.Name)
 	}

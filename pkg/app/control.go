@@ -233,7 +233,7 @@ func localTLSSANs(profile RunProfile, publicOrigin string) (string, []net.IP, er
 }
 
 func loadControlDiscordOAuthConfigFromEnv(publicOrigin string) (*control.DiscordOAuthConfig, error) {
-	// 1. Extração Estrita de Estado
+	// 1. Strict State Extraction
 	clientID := strings.TrimSpace(files.EnvString(controlDiscordOAuthClientIDEnv, defaultControlDiscordOAuthClientID))
 	clientSecret := strings.TrimSpace(files.EnvString(controlDiscordOAuthClientSecretEnv, ""))
 	redirectURI := strings.TrimSpace(files.EnvString(controlDiscordOAuthRedirectURIEnv, ""))
@@ -244,7 +244,7 @@ func loadControlDiscordOAuthConfigFromEnv(publicOrigin string) (*control.Discord
 		slog.String("client_id", clientID),
 	)
 
-	// 2. Validação de Invariantes (Fail-Fast)
+	// 2. Invariant Validation (Fail-Fast)
 	if clientSecret == "" && redirectURI == "" && clientID == defaultControlDiscordOAuthClientID {
 		if includeGuildMembersRead {
 			return nil, fmt.Errorf("%s=true requires %s and %s",
@@ -256,7 +256,7 @@ func loadControlDiscordOAuthConfigFromEnv(publicOrigin string) (*control.Discord
 		return nil, nil
 	}
 
-	// 3. Mutações Condicionais
+	// 3. Conditional Mutations
 	if clientSecret != "" && redirectURI == "" && strings.TrimSpace(publicOrigin) != "" {
 		redirectURI = strings.TrimRight(strings.TrimSpace(publicOrigin), "/") + "/auth/discord/callback"
 	}
@@ -265,7 +265,7 @@ func loadControlDiscordOAuthConfigFromEnv(publicOrigin string) (*control.Discord
 		sessionStorePath = filepath.Join(files.ApplicationCachesPath, "control", "oauth_sessions.json")
 	}
 
-	// 4. Verificação Final e Retorno
+	// 4. Final Verification and Return
 	var missing []string
 	if clientSecret == "" {
 		missing = append(missing, controlDiscordOAuthClientSecretEnv)

@@ -40,10 +40,9 @@ func (s *CommandSyncer) log() *slog.Logger {
 // BuildCreateData maps internal ArikawaCommand interfaces into the exact
 // payload structure demanded by Discord's Bulk Overwrite endpoint.
 func (s *CommandSyncer) BuildCreateData(registry *CommandRegistry) []api.CreateCommandData {
-	commands := registry.GetAllCommands()
-	data := make([]api.CreateCommandData, 0, len(commands))
+	data := make([]api.CreateCommandData, 0, registry.Len())
 
-	for _, cmd := range commands {
+	for _, cmd := range registry.All() {
 		createData := api.CreateCommandData{
 			Name:        cmd.Name(),
 			Description: cmd.Description(),
@@ -109,9 +108,7 @@ func (s *CommandSyncer) Diff(ctx context.Context, guildID discord.GuildID, regis
 		remoteMap[cmd.Name] = cmd
 	}
 
-	localCmds := registry.GetAllCommands()
-
-	for name := range localCmds {
+	for name := range registry.All() {
 		if _, exists := remoteMap[name]; !exists {
 			added++
 		} else {
@@ -123,7 +120,7 @@ func (s *CommandSyncer) Diff(ctx context.Context, guildID discord.GuildID, regis
 	}
 
 	for name := range remoteMap {
-		if _, exists := localCmds[name]; !exists {
+		if _, exists := registry.GetCommand(name); !exists {
 			deleted++
 		}
 	}

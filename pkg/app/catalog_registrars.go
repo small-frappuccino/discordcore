@@ -71,7 +71,7 @@ func (c CommandCatalogCapabilities) String() string {
 		return "CapNone"
 	}
 
-	// Alinhamento estrito para escaneabilidade e determinismo absoluto
+	// Strict alignment ensures readability and highly predictable iteration.
 	var parts []string
 	if c.Has(CapStats) {
 		parts = append(parts, "CapStats")
@@ -208,7 +208,7 @@ func CleanCommandCatalogRegistrar() CommandCatalogRegistrar {
 	}
 }
 
-// We need to implement cleanMetricsAdapter over moderation.Metrics
+// cleanMetricsAdapter adapts the moderation metrics surface for the clean subsystem.
 type cleanMetricsAdapter struct {
 	m moderation.Metrics
 }

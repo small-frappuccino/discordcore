@@ -186,12 +186,12 @@ func TestRolePanelCommands_Registration(t *testing.T) {
 	router := commands.NewCommandRouter(api.NewClient("dummy"), cm)
 	rc.RegisterCommands(router)
 
-	cmds := router.Registry().GetAllCommands()
-	if len(cmds) == 0 {
+	reg := router.Registry()
+	if reg.Len() == 0 {
 		t.Errorf("expected commands to be registered, got none")
 	}
 
-	if _, ok := cmds[rolePanelCommandName]; !ok {
+	if _, ok := reg.GetCommand(rolePanelCommandName); !ok {
 		t.Errorf("expected command %s to be registered", rolePanelCommandName)
 	}
 }
