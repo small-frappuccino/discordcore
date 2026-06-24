@@ -138,13 +138,13 @@ func TestGatewayListener_Lifecycle(t *testing.T) {
 	membersRepo := &mockMembersRepo{wg: &wg}
 	systemRepo := &mockSystemRepo{joinWg: &wg, leaveWg: &wg}
 	memberSvc := members.NewMemberEventServiceForBot(members.EventServiceDeps{
-		ConfigManager: configMgr,
-		Sink:          members.NopMemberSink{},
-		MembersRepo:   membersRepo,
-		SystemRepo:    systemRepo,
-		BotInstanceID: "",
-		Logger:        logger,
-		ArikawaState:  stateVal,
+		ConfigManager:  configMgr,
+		Sink:           members.NopMemberSink{},
+		MembersRepo:    membersRepo,
+		SystemRepo:     systemRepo,
+		BotInstanceID:  "",
+		Logger:         logger,
+		DiscordAdapter: NewArikawaAdapter(stateVal),
 	})
 
 	_ = memberSvc.Start(context.Background())

@@ -2,8 +2,6 @@ package members
 
 import (
 	"testing"
-
-	"github.com/diamondburned/arikawa/v3/discord"
 )
 
 func TestHasRoleID(t *testing.T) {
@@ -19,20 +17,6 @@ func TestHasRoleID(t *testing.T) {
 	}
 	if hasRoleID([]string{"r1", "r2"}, "r3") {
 		t.Fatalf("expected false when role does not exist")
-	}
-}
-
-func TestMemberHasRole(t *testing.T) {
-	t.Parallel()
-	if memberHasRole(nil, "r1") {
-		t.Fatalf("expected false for nil member")
-	}
-	member := &discord.Member{RoleIDs: []discord.RoleID{discord.RoleID(1), discord.RoleID(2)}}
-	if !memberHasRole(member, "1") {
-		t.Fatalf("expected true for existing role")
-	}
-	if memberHasRole(member, "z") {
-		t.Fatalf("expected false for missing role")
 	}
 }
 

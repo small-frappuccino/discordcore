@@ -1,7 +1,5 @@
 package members
 
-import "github.com/diamondburned/arikawa/v3/discord"
-
 type autoRoleDecision int
 
 const (
@@ -55,17 +53,4 @@ func EvaluateAutoRoleDecision(memberRoles []string, targetRoleID string, require
 		return AutoRoleAddTarget
 	}
 	return autoRoleNoop
-}
-
-// memberHasRole checks if a member has a role ID.
-func memberHasRole(member *discord.Member, roleID string) bool {
-	if member == nil {
-		return false
-	}
-	for _, rid := range member.RoleIDs {
-		if rid.String() == roleID {
-			return true
-		}
-	}
-	return false
 }

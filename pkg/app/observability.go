@@ -4,76 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"github.com/small-frappuccino/discordcore/pkg/discord/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	domain "github.com/small-frappuccino/discordcore/pkg/qotd"
 	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 )
-
-// ArikawaQOTDPublisher routes domain publishing requests directly to the
-// active Arikawa gateway state, eliminating dual-SDK translation locks and local caching.
-type ArikawaQOTDPublisher struct {
-	resolver *botRuntimeResolver
-}
-
-// NewArikawaQOTDPublisher instantiates a purely stateless publisher router.
-func NewArikawaQOTDPublisher(resolver *botRuntimeResolver) *ArikawaQOTDPublisher {
-	slog.Info("Architectural state transition: Allocating stateless native Arikawa publisher orchestrator")
-	return &ArikawaQOTDPublisher{
-		resolver: resolver,
-	}
-}
-
-// getArikawaPublisher resolves the gateway state for the guild directly from the atomic registry.
-func (p *ArikawaQOTDPublisher) getArikawaPublisher(guildID string) (domain.Publisher, error) {
-	state, err := p.resolver.arikawaStateForGuild(guildID, "qotd")
-	if err != nil {
-		return nil, fmt.Errorf("resolve arikawa state for guild %s: %w", guildID, err)
-	}
-
-	if state == nil || state.Session == nil || state.Session.Client == nil {
-		return nil, fmt.Errorf("arikawa client evaluates to nil for guild %s", guildID)
-	}
-
-	return qotd.NewArikawaPublisher(state.Session.Client), nil
-}
-
-// PublishOfficialPost routes the execution context to the dynamically resolved Arikawa client.
-// It explicitly intercepts ErrSessionUnavailable to silently and efficiently drop execution loops
-// for guilds where the feature is explicitly disabled, treating the lack of a mapped session
-// as a valid architectural state rather than a fatal pipeline anomaly.
-func (p *ArikawaQOTDPublisher) PublishOfficialPost(ctx context.Context, params domain.PublishOfficialPostParams) (*domain.PublishedOfficialPost, error) {
-	pub, err := p.getArikawaPublisher(params.GuildID)
-	if err != nil {
-		if errors.Is(err, ErrSessionUnavailable) {
-			slog.Debug("QOTD publish execution dropped: explicitly disabled for guild", slog.String("guildID", params.GuildID))
-			return nil, nil
-		}
-		return nil, err
-	}
-	return pub.PublishOfficialPost(ctx, params)
-}
-
-// DeleteOfficialPost routes the execution context to the dynamically resolved Arikawa client.
-// It explicitly intercepts ErrSessionUnavailable to silently and efficiently drop execution loops
-// for guilds where the feature is explicitly disabled, treating the lack of a mapped session
-// as a valid architectural state rather than a fatal pipeline anomaly.
-func (p *ArikawaQOTDPublisher) DeleteOfficialPost(ctx context.Context, params domain.DeleteOfficialPostParams) error {
-	pub, err := p.getArikawaPublisher(params.GuildID)
-	if err != nil {
-		if errors.Is(err, ErrSessionUnavailable) {
-			slog.Debug("QOTD delete execution dropped: explicitly disabled for guild", slog.String("guildID", params.GuildID))
-			return nil
-		}
-		return err
-	}
-	return pub.DeleteOfficialPost(ctx, params)
-}
 
 const (
 	// lifecycleWebhookEnv is the env var operators set to receive

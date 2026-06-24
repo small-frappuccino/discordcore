@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordcore/pkg/clock"
 	"github.com/small-frappuccino/discordcore/pkg/control"
@@ -19,8 +20,8 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	"github.com/small-frappuccino/discordcore/pkg/discord/embeds"
 	"github.com/small-frappuccino/discordcore/pkg/discord/partners"
+	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/discord/roles"
-	"github.com/small-frappuccino/discordcore/pkg/discord/session"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/idgen"
 	"github.com/small-frappuccino/discordcore/pkg/log"
@@ -157,10 +158,7 @@ func (a *App) Boot(ctx context.Context) error {
 		}
 
 		controlBearerToken := strings.TrimSpace(files.EnvString(controlBearerTokenEnv, ""))
-		scheduleStartupWebhookEmbedUpdates(a.startupTasks, a.configManager.Config(), func(guildID string) *session.LegacySession {
-			sess, _ := a.runtimeResolver.sessionForGuild(guildID, "")
-			return sess
-		})
+		scheduleStartupWebhookEmbedUpdates(a.startupTasks, a.configManager.Config(), a.runtimeResolver)
 		if !a.opts.DisableControl {
 			controlRuntime, err := resolveControlRuntime(egCtx, a.opts)
 			if err != nil {
@@ -377,7 +375,7 @@ func (a *App) ConstructServices(ctx context.Context) error {
 	}
 
 	a.botSupervisor = NewBotSupervisor(a.configManager, botOpts)
-	qotdService.SetPublisher(NewArikawaQOTDPublisher(a.botSupervisor.GetResolver()))
+	qotdService.SetPublisher(discordqotd.NewPublisherRouter(qotdClientResolver{resolver: a.botSupervisor.GetResolver()}))
 	a.configManager.AddSubscriber(a.botSupervisor.onConfigChanged)
 
 	a.botSupervisor.SetFatalCallback(func(err error) {
@@ -740,4 +738,24 @@ func setupStorage(dbb resolvedDatabaseBootstrap) (*postgres.Store, *files.Config
 	}
 
 	return store, configManager, nil
+}
+
+type qotdClientResolver struct {
+	resolver *botRuntimeResolver
+}
+
+func (r qotdClientResolver) ArikawaClientForGuild(guildID string) (*api.Client, error) {
+	state, err := r.resolver.arikawaStateForGuild(guildID, "qotd")
+	if err != nil {
+		if stdErrors.Is(err, ErrSessionUnavailable) {
+			return nil, discordqotd.ErrSessionUnavailable
+		}
+		return nil, fmt.Errorf("resolve arikawa state for guild %s: %w", guildID, err)
+	}
+
+	if state == nil || state.Session == nil || state.Session.Client == nil {
+		return nil, fmt.Errorf("arikawa client evaluates to nil for guild %s", guildID)
+	}
+
+	return state.Session.Client, nil
 }

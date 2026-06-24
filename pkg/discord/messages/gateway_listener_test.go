@@ -88,23 +88,23 @@ func (m *mockRepository) IncrementDailyMessageCount(ctx context.Context, guildID
 
 type mockMessageSink struct {
 	mu      sync.Mutex
-	deletes []*gateway.MessageDeleteEvent
-	updates []*gateway.MessageUpdateEvent
+	deletes []messages.MessageDeleteIntent
+	updates []messages.MessageUpdateIntent
 }
 
-func (s *mockMessageSink) OnMessageDelete(ctx context.Context, m *gateway.MessageDeleteEvent, cachedMessage *discord.Message, executor *discord.User) {
+func (s *mockMessageSink) OnMessageDelete(ctx context.Context, m messages.MessageDeleteIntent, cachedMessage *messages.CachedMessageData) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.deletes = append(s.deletes, m)
 }
 
-func (s *mockMessageSink) OnMessageUpdate(ctx context.Context, m *gateway.MessageUpdateEvent, cachedMessage *discord.Message) {
+func (s *mockMessageSink) OnMessageUpdate(ctx context.Context, m messages.MessageUpdateIntent, cachedMessage *messages.CachedMessageData) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.updates = append(s.updates, m)
 }
 
-func (s *mockMessageSink) OnMessageDeleteBulk(ctx context.Context, guildID discord.GuildID, channelID discord.ChannelID, messages []string) {
+func (s *mockMessageSink) OnMessageDeleteBulk(ctx context.Context, intent messages.MessageDeleteBulkIntent) {
 }
 
 func TestGatewayListener_Lifecycle(t *testing.T) {
@@ -137,13 +137,13 @@ func TestGatewayListener_Lifecycle(t *testing.T) {
 	sink := &mockMessageSink{}
 
 	deps := messages.EventServiceDeps{
-		ConfigManager: configMgr,
-		Sink:          sink,
-		Store:         repo,
-		SystemRepo:    nil,
-		BotInstanceID: "",
-		Logger:        logger,
-		ArikawaState:  stateVal,
+		ConfigManager:  configMgr,
+		Sink:           sink,
+		Store:          repo,
+		SystemRepo:     nil,
+		BotInstanceID:  "",
+		Logger:         logger,
+		DiscordAdapter: NewArikawaAdapter(stateVal),
 	}
 
 	msgSvc := messages.NewMessageEventServiceForBot(deps)

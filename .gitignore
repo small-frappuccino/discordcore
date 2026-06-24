@@ -34,3 +34,4 @@ tmp/
 /package.json
 /package-lock.json
 /scratch
+!notebookLM.py

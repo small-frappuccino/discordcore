@@ -29,13 +29,34 @@ func NewGatewayListener(s *state.State, msgSvc *messages.MessageEventService) *G
 func (l *GatewayListener) Start(ctx context.Context) error {
 	l.cancels = append(l.cancels,
 		l.state.AddHandler(func(e *gateway.MessageCreateEvent) {
-			l.messageService.IngestMessageCreate(context.Background(), e)
+			intent := messages.MessageCreateIntent{
+				MessageID:      e.ID.String(),
+				GuildID:        e.GuildID.String(),
+				ChannelID:      e.ChannelID.String(),
+				AuthorID:       e.Author.ID.String(),
+				AuthorUsername: e.Author.Username,
+				AuthorBot:      e.Author.Bot,
+				Content:        e.Content,
+				Timestamp:      e.Timestamp.Time(),
+			}
+			l.messageService.IngestMessageCreate(context.Background(), intent)
 		}),
 		l.state.AddHandler(func(e *gateway.MessageUpdateEvent) {
-			l.messageService.IngestMessageUpdate(context.Background(), e)
+			intent := messages.MessageUpdateIntent{
+				MessageID: e.ID.String(),
+				GuildID:   e.GuildID.String(),
+				ChannelID: e.ChannelID.String(),
+				Content:   e.Content,
+			}
+			l.messageService.IngestMessageUpdate(context.Background(), intent)
 		}),
 		l.state.AddHandler(func(e *gateway.MessageDeleteEvent) {
-			l.messageService.IngestMessageDelete(context.Background(), e)
+			intent := messages.MessageDeleteIntent{
+				MessageID: e.ID.String(),
+				GuildID:   e.GuildID.String(),
+				ChannelID: e.ChannelID.String(),
+			}
+			l.messageService.IngestMessageDelete(context.Background(), intent)
 		}),
 	)
 	return nil

@@ -512,3 +512,15 @@ func ValidateModerationLogChannel(st PermissionEvaluator, guildID, channelIDStr 
 	}
 	return nil
 }
+
+// FormatAvatarURL builds the CDN URL for an avatar hash
+func FormatAvatarURL(userID, avatarHash string) string {
+	if avatarHash == "" {
+		return ""
+	}
+	ext := ".png"
+	if strings.HasPrefix(avatarHash, "a_") {
+		ext = ".gif"
+	}
+	return fmt.Sprintf("https://cdn.discordapp.com/avatars/%s/%s%s", userID, avatarHash, ext)
+}

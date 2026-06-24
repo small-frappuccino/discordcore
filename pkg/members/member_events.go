@@ -10,11 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/diamondburned/arikawa/v3/api"
-	"github.com/diamondburned/arikawa/v3/discord"
-	"github.com/diamondburned/arikawa/v3/gateway"
-	"github.com/diamondburned/arikawa/v3/state"
-
 	"github.com/small-frappuccino/discordcore/pkg/discord/perf"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/logging"
@@ -24,6 +19,15 @@ import (
 
 // Hardcoded IDs for automatic role assignment
 const unknownServerTimeSentinel time.Duration = -1
+
+// DiscordAdapter provides a pure domain interface for Discord API operations
+// without leaking the underlying gateway or state SDK types.
+type DiscordAdapter interface {
+	Me() (string, error)
+	MemberJoinedAt(ctx context.Context, guildID, userID string) (time.Time, error)
+	AddRole(ctx context.Context, guildID, userID, roleID string) error
+	RemoveRole(ctx context.Context, guildID, userID, roleID string) error
+}
 
 // MemberEventService manages member join/leave events
 type MemberEventService struct {
@@ -41,31 +45,31 @@ type MemberEventService struct {
 	membersRepo Repository
 	systemRepo  system.Repository
 
-	arikawaState *state.State
+	discordAdapter DiscordAdapter
 }
 
 // EventServiceDeps bundles the shared dependencies for the bot-scoped logging
 // event services. BotInstanceID is normalized by the
 // constructors via files.NormalizeBotInstanceID.
 type EventServiceDeps struct {
-	ConfigManager *files.ConfigManager
-	Sink          MemberSink
-	MembersRepo   Repository
-	SystemRepo    system.Repository
-	BotInstanceID string
-	Logger        *slog.Logger
-	ArikawaState  *state.State
+	ConfigManager  *files.ConfigManager
+	Sink           MemberSink
+	MembersRepo    Repository
+	SystemRepo     system.Repository
+	BotInstanceID  string
+	Logger         *slog.Logger
+	DiscordAdapter DiscordAdapter
 }
 
 // NewMemberEventService creates a new instance of the member events service
 func NewMemberEventService(configManager *files.ConfigManager, sink MemberSink, membersRepo Repository, systemRepo system.Repository, logger *slog.Logger) *MemberEventService {
 	return NewMemberEventServiceForBot(EventServiceDeps{
-		ConfigManager: configManager,
-		Sink:          sink,
-		MembersRepo:   membersRepo,
-		SystemRepo:    systemRepo,
-		Logger:        logger,
-		ArikawaState:  nil, // Fallback if no arikawa state
+		ConfigManager:  configManager,
+		Sink:           sink,
+		MembersRepo:    membersRepo,
+		SystemRepo:     systemRepo,
+		Logger:         logger,
+		DiscordAdapter: nil, // Fallback if no discord adapter
 	})
 }
 
@@ -84,8 +88,8 @@ func NewMemberEventServiceForBot(deps EventServiceDeps) *MemberEventService {
 			BotInstanceID: files.NormalizeBotInstanceID(deps.BotInstanceID),
 			Logger:        deps.Logger,
 		}),
-		lifecycle:    service.NewBaseLifecycle("member event service"),
-		arikawaState: deps.ArikawaState,
+		lifecycle:      service.NewBaseLifecycle("member event service"),
+		discordAdapter: deps.DiscordAdapter,
 	}
 }
 
@@ -166,9 +170,9 @@ func (mes *MemberEventService) Stats() service.ServiceStats {
 	return service.ServiceStats{}
 }
 
-// handleGuildMemberAdd processes when a user joins the server
-func (mes *MemberEventService) IngestGuildMemberAdd(ctx context.Context, m *gateway.GuildMemberAddEvent) {
-	if m == nil || m.User.Bot {
+// IngestGuildMemberAdd processes when a user joins the server
+func (mes *MemberEventService) IngestGuildMemberAdd(ctx context.Context, m MemberJoinIntent) {
+	if m.UserID == "" || m.Bot {
 		return
 	}
 	if err := ctx.Err(); err != nil {
@@ -177,8 +181,8 @@ func (mes *MemberEventService) IngestGuildMemberAdd(ctx context.Context, m *gate
 
 	done := perf.StartGatewayEvent(
 		"guild_member_add",
-		slog.String("guildID", m.GuildID.String()),
-		slog.String("userID", m.User.ID.String()),
+		slog.String("guildID", m.GuildID),
+		slog.String("userID", m.UserID),
 	)
 	defer done()
 
@@ -186,64 +190,60 @@ func (mes *MemberEventService) IngestGuildMemberAdd(ctx context.Context, m *gate
 	if mes.configManager == nil {
 		return
 	}
-	if !mes.handlesGuild(m.GuildID.String()) {
+	if !mes.handlesGuild(m.GuildID) {
 		return
 	}
 	cfg := mes.configManager.Config()
 	if cfg == nil {
 		return
 	}
-	guildConfig := mes.configManager.GuildConfig(m.GuildID.String())
+	guildConfig := mes.configManager.GuildConfig(m.GuildID)
 	if guildConfig == nil {
 		return
 	}
 
 	// Composite automatic role assignment (per-guild config).
-	if mes.arikawaState != nil && guildConfig.Roles.AutoAssignment.Enabled {
+	if mes.discordAdapter != nil && guildConfig.Roles.AutoAssignment.Enabled {
 		targetRoleID := guildConfig.Roles.AutoAssignment.TargetRoleID
 		required := guildConfig.Roles.AutoAssignment.RequiredRoles
 		if targetRoleID != "" && len(required) >= 2 {
-			roles := make([]string, len(m.RoleIDs))
-			for i, r := range m.RoleIDs {
-				roles[i] = r.String()
-			}
-			if EvaluateAutoRoleDecision(roles, targetRoleID, required) == AutoRoleAddTarget {
-				if err := mes.guildMemberRoleAdd(ctx, m.GuildID.String(), m.User.ID.String(), targetRoleID); err != nil {
-					mes.logger.Error("Failed to grant target role on join", "guildID", m.GuildID, "userID", m.User.ID, "roleID", targetRoleID, "error", err)
+			if EvaluateAutoRoleDecision(m.RoleIDs, targetRoleID, required) == AutoRoleAddTarget {
+				if err := mes.guildMemberRoleAdd(ctx, m.GuildID, m.UserID, targetRoleID); err != nil {
+					mes.logger.Error("Failed to grant target role on join", "guildID", m.GuildID, "userID", m.UserID, "roleID", targetRoleID, "error", err)
 				} else {
-					mes.logger.Info("Granted target role on join", "guildID", m.GuildID, "userID", m.User.ID, "roleID", targetRoleID)
+					mes.logger.Info("Granted target role on join", "guildID", m.GuildID, "userID", m.UserID, "roleID", targetRoleID)
 				}
 			}
 		}
 	}
 
 	// Logging is now delegated to Sink
-	emit := logging.CheckFeatureEnabled(mes.configManager, logging.LogEventMemberJoin, m.GuildID.String())
+	emit := logging.CheckFeatureEnabled(mes.configManager, logging.LogEventMemberJoin, m.GuildID)
 	if !emit.Enabled {
 		if emit.Reason == logging.EmitReasonNoChannelConfigured {
-			mes.logger.Info("User entry/leave channel not configured for guild, member join notification not sent", "guildID", m.GuildID, "userID", m.User.ID)
+			mes.logger.Info("User entry/leave channel not configured for guild, member join notification not sent", "guildID", m.GuildID, "userID", m.UserID)
 		} else {
-			mes.logger.Debug("Member join notification suppressed by policy", "guildID", m.GuildID, "userID", m.User.ID, "reason", emit.Reason)
+			mes.logger.Debug("Member join notification suppressed by policy", "guildID", m.GuildID, "userID", m.UserID, "reason", emit.Reason)
 		}
 		return
 	}
 
 	// Calculate how long the account has existed
-	accountAge := mes.calculateAccountAge(m.User.ID.String())
+	accountAge := mes.calculateAccountAge(m.UserID)
 
-	joinedAt := m.Joined.Time()
+	joinedAt := m.JoinedAt
 
 	// Persist absolute join time to Postgres store (best effort)
 	if mes.membersRepo != nil && mes.systemRepo != nil && !joinedAt.IsZero() {
 		if err := service.RunErrWithTimeoutContext(ctx, service.DependencyTimeout, func(runCtx context.Context) error {
-			return mes.membersRepo.UpsertMemberJoinContext(runCtx, m.GuildID.String(), m.User.ID.String(), joinedAt)
+			return mes.membersRepo.UpsertMemberJoinContext(runCtx, m.GuildID, m.UserID, joinedAt)
 		}); err != nil {
-			mes.logger.Warn("Failed to persist member join timestamp", "guildID", m.GuildID, "userID", m.User.ID, "joinedAt", joinedAt, "error", err)
+			mes.logger.Warn("Failed to persist member join timestamp", "guildID", m.GuildID, "userID", m.UserID, "joinedAt", joinedAt, "error", err)
 		}
 		if err := service.RunErrWithTimeoutContext(ctx, service.DependencyTimeout, func(runCtx context.Context) error {
-			return mes.systemRepo.IncrementDailyMemberJoinContext(runCtx, m.GuildID.String(), m.User.ID.String(), joinedAt)
+			return mes.systemRepo.IncrementDailyMemberJoinContext(runCtx, m.GuildID, m.UserID, joinedAt)
 		}); err != nil {
-			mes.logger.Warn("Failed to increment daily member join metric", "guildID", m.GuildID, "userID", m.User.ID, "joinedAt", joinedAt, "error", err)
+			mes.logger.Warn("Failed to increment daily member join metric", "guildID", m.GuildID, "userID", m.UserID, "joinedAt", joinedAt, "error", err)
 		}
 	}
 
@@ -253,11 +253,11 @@ func (mes *MemberEventService) IngestGuildMemberAdd(ctx context.Context, m *gate
 		if mes.joinTimes == nil {
 			mes.joinTimes = make(map[string]time.Time)
 		}
-		mes.joinTimes[m.GuildID.String()+":"+m.User.ID.String()] = joinedAt
+		mes.joinTimes[m.GuildID+":"+m.UserID] = joinedAt
 		mes.joinMu.Unlock()
 	}
 
-	mes.logger.Info("Member joined guild", "guildID", m.GuildID, "userID", m.User.ID, "username", m.User.Username, "accountAge", accountAge.String())
+	mes.logger.Info("Member joined guild", "guildID", m.GuildID, "userID", m.UserID, "username", m.Username, "accountAge", accountAge.String())
 
 	if mes.sink != nil {
 		mes.sink.OnMemberJoin(ctx, m, accountAge)
@@ -266,8 +266,8 @@ func (mes *MemberEventService) IngestGuildMemberAdd(ctx context.Context, m *gate
 }
 
 // handleGuildMemberRemove processes when a user leaves the server
-func (mes *MemberEventService) IngestGuildMemberRemove(ctx context.Context, m *gateway.GuildMemberRemoveEvent) {
-	if m == nil || m.User.Bot {
+func (mes *MemberEventService) IngestGuildMemberRemove(ctx context.Context, m MemberLeaveIntent) {
+	if m.UserID == "" || m.Bot {
 		return
 	}
 	if err := ctx.Err(); err != nil {
@@ -276,8 +276,8 @@ func (mes *MemberEventService) IngestGuildMemberRemove(ctx context.Context, m *g
 
 	done := perf.StartGatewayEvent(
 		"guild_member_remove",
-		slog.String("guildID", m.GuildID.String()),
-		slog.String("userID", m.User.ID.String()),
+		slog.String("guildID", m.GuildID),
+		slog.String("userID", m.UserID),
 	)
 	defer done()
 
@@ -285,7 +285,7 @@ func (mes *MemberEventService) IngestGuildMemberRemove(ctx context.Context, m *g
 	if mes.configManager == nil {
 		return
 	}
-	if !mes.handlesGuild(m.GuildID.String()) {
+	if !mes.handlesGuild(m.GuildID) {
 		return
 	}
 	cfg := mes.configManager.Config()
@@ -294,7 +294,7 @@ func (mes *MemberEventService) IngestGuildMemberRemove(ctx context.Context, m *g
 	}
 
 	// Calculate how long they were in the server
-	serverTime, hasServerTime, serverTimeErr := mes.calculateServerTime(ctx, m.GuildID.String(), m.User.ID.String())
+	serverTime, hasServerTime, serverTimeErr := mes.calculateServerTime(ctx, m.GuildID, m.UserID)
 	serverTimeForNotification := serverTime
 	serverTimeForLog := "N/A"
 	if serverTimeErr != nil {
@@ -305,18 +305,18 @@ func (mes *MemberEventService) IngestGuildMemberRemove(ctx context.Context, m *g
 		serverTimeForLog = "unknown"
 	}
 
-	botTime := mes.getBotTimeOnServer(ctx, m.GuildID.String())
+	botTime := mes.getBotTimeOnServer(ctx, m.GuildID)
 
 	// Increment daily member leave metric
 	if mes.systemRepo != nil {
 		if err := service.RunErrWithTimeoutContext(ctx, service.DependencyTimeout, func(runCtx context.Context) error {
-			return mes.systemRepo.IncrementDailyMemberLeaveContext(runCtx, m.GuildID.String(), m.User.ID.String(), time.Now().UTC())
+			return mes.systemRepo.IncrementDailyMemberLeaveContext(runCtx, m.GuildID, m.UserID, time.Now().UTC())
 		}); err != nil {
-			mes.logger.Warn("Failed to increment daily member leave metric", "guildID", m.GuildID, "userID", m.User.ID, "error", err)
+			mes.logger.Warn("Failed to increment daily member leave metric", "guildID", m.GuildID, "userID", m.UserID, "error", err)
 		}
 	}
 
-	mes.logger.Info("Member left guild", "guildID", m.GuildID, "userID", m.User.ID, "username", m.User.Username, "serverTime", serverTimeForLog, "botTime", botTime.String())
+	mes.logger.Info("Member left guild", "guildID", m.GuildID, "userID", m.UserID, "username", m.Username, "serverTime", serverTimeForLog, "botTime", botTime.String())
 
 	if mes.sink != nil {
 		mes.sink.OnMemberLeave(ctx, m, serverTimeForNotification, botTime)
@@ -327,8 +327,8 @@ func (mes *MemberEventService) IngestGuildMemberRemove(ctx context.Context, m *g
 // - If the user loses role A, remove the target role.
 // - If the user has both A and B, grant the target role (if not already present).
 // It also tracks role changes and avatar updates to dispatch to MemberSink.
-func (mes *MemberEventService) IngestGuildMemberUpdate(ctx context.Context, m *gateway.GuildMemberUpdateEvent, oldMember *discord.Member) {
-	if m == nil || m.User.Bot {
+func (mes *MemberEventService) IngestGuildMemberUpdate(ctx context.Context, m MemberUpdateIntent) {
+	if m.UserID == "" || m.Bot {
 		return
 	}
 	if err := ctx.Err(); err != nil {
@@ -337,22 +337,22 @@ func (mes *MemberEventService) IngestGuildMemberUpdate(ctx context.Context, m *g
 
 	done := perf.StartGatewayEvent(
 		"guild_member_update",
-		slog.String("guildID", m.GuildID.String()),
-		slog.String("userID", m.User.ID.String()),
+		slog.String("guildID", m.GuildID),
+		slog.String("userID", m.UserID),
 	)
 	defer done()
 
 	if mes.configManager == nil {
 		return
 	}
-	if !mes.handlesGuild(m.GuildID.String()) {
+	if !mes.handlesGuild(m.GuildID) {
 		return
 	}
 	cfg := mes.configManager.Config()
 	if cfg == nil {
 		return
 	}
-	guildConfig := mes.configManager.GuildConfig(m.GuildID.String())
+	guildConfig := mes.configManager.GuildConfig(m.GuildID)
 	if guildConfig == nil || !guildConfig.Roles.AutoAssignment.Enabled {
 		return
 	}
@@ -363,34 +363,29 @@ func (mes *MemberEventService) IngestGuildMemberUpdate(ctx context.Context, m *g
 		return
 	}
 
-	roles := make([]string, len(m.RoleIDs))
-	for i, r := range m.RoleIDs {
-		roles[i] = r.String()
-	}
-
-	switch EvaluateAutoRoleDecision(roles, targetRoleID, required) {
+	switch EvaluateAutoRoleDecision(m.RoleIDs, targetRoleID, required) {
 	case AutoRoleRemoveTarget:
-		if err := mes.guildMemberRoleRemove(ctx, m.GuildID.String(), m.User.ID.String(), targetRoleID); err != nil {
-			mes.logger.Error("Failed to remove target role on update", "guildID", m.GuildID, "userID", m.User.ID, "roleID", targetRoleID, "error", err)
+		if err := mes.guildMemberRoleRemove(ctx, m.GuildID, m.UserID, targetRoleID); err != nil {
+			mes.logger.Error("Failed to remove target role on update", "guildID", m.GuildID, "userID", m.UserID, "roleID", targetRoleID, "error", err)
 		} else {
-			mes.logger.Info("Removed target role on update", "guildID", m.GuildID, "userID", m.User.ID, "roleID", targetRoleID)
+			mes.logger.Info("Removed target role on update", "guildID", m.GuildID, "userID", m.UserID, "roleID", targetRoleID)
 		}
 	case AutoRoleAddTarget:
-		if err := mes.guildMemberRoleAdd(ctx, m.GuildID.String(), m.User.ID.String(), targetRoleID); err != nil {
-			mes.logger.Error("Failed to grant target role on update", "guildID", m.GuildID, "userID", m.User.ID, "roleID", targetRoleID, "error", err)
+		if err := mes.guildMemberRoleAdd(ctx, m.GuildID, m.UserID, targetRoleID); err != nil {
+			mes.logger.Error("Failed to grant target role on update", "guildID", m.GuildID, "userID", m.UserID, "roleID", targetRoleID, "error", err)
 		} else {
-			mes.logger.Info("Granted target role on update", "guildID", m.GuildID, "userID", m.User.ID, "roleID", targetRoleID)
+			mes.logger.Info("Granted target role on update", "guildID", m.GuildID, "userID", m.UserID, "roleID", targetRoleID)
 		}
 	}
 
-	if mes.sink != nil && oldMember != nil {
+	if mes.sink != nil {
 		// Compare roles
-		var addedRoles, removedRoles []discord.RoleID
-		oldRolesMap := make(map[discord.RoleID]bool, len(oldMember.RoleIDs))
-		for _, r := range oldMember.RoleIDs {
+		var addedRoles, removedRoles []string
+		oldRolesMap := make(map[string]bool, len(m.OldRoleIDs))
+		for _, r := range m.OldRoleIDs {
 			oldRolesMap[r] = true
 		}
-		newRolesMap := make(map[discord.RoleID]bool, len(m.RoleIDs))
+		newRolesMap := make(map[string]bool, len(m.RoleIDs))
 		for _, r := range m.RoleIDs {
 			newRolesMap[r] = true
 			if !oldRolesMap[r] {
@@ -404,19 +399,26 @@ func (mes *MemberEventService) IngestGuildMemberUpdate(ctx context.Context, m *g
 		}
 
 		if len(addedRoles) > 0 || len(removedRoles) > 0 {
-			mes.sink.OnRoleUpdate(ctx, m.GuildID.String(), m.User, addedRoles, removedRoles)
+			mes.sink.OnRoleUpdate(ctx, RoleUpdateIntent{
+				GuildID:      m.GuildID,
+				UserID:       m.UserID,
+				Username:     m.Username,
+				Bot:          m.Bot,
+				AddedRoles:   addedRoles,
+				RemovedRoles: removedRoles,
+			})
 		}
 
 		// Compare avatar
-		var oldAvatarHash, newAvatarHash string
-		if oldMember.User.Avatar != "" {
-			oldAvatarHash = string(oldMember.User.Avatar)
-		}
-		if m.User.Avatar != "" {
-			newAvatarHash = string(m.User.Avatar)
-		}
-		if oldAvatarHash != newAvatarHash {
-			mes.sink.OnAvatarUpdate(ctx, m.GuildID.String(), m.User, oldAvatarHash, newAvatarHash)
+		if m.OldAvatar != m.AvatarHash {
+			mes.sink.OnAvatarUpdate(ctx, AvatarUpdateIntent{
+				GuildID:       m.GuildID,
+				UserID:        m.UserID,
+				Username:      m.Username,
+				Bot:           m.Bot,
+				OldAvatarHash: m.OldAvatar,
+				NewAvatarHash: m.AvatarHash,
+			})
 		}
 	}
 }
@@ -534,59 +536,44 @@ func (mes *MemberEventService) markEvent(ctx context.Context) {
 
 // NEW: calculates how long the bot has been in the guild (real-time Discord query)
 func (mes *MemberEventService) getBotTimeOnServer(ctx context.Context, guildID string) time.Duration {
-	if mes.arikawaState == nil {
+	if mes.discordAdapter == nil {
 		return 0
 	}
-	u, err := mes.arikawaState.Me()
-	if err != nil || u == nil {
+	botID, err := mes.discordAdapter.Me()
+	if err != nil || botID == "" {
 		return 0
 	}
-	botID := u.ID.String()
-	member, err := mes.getGuildMember(ctx, guildID, botID)
-	if err != nil || member == nil || member.Joined.Time().IsZero() {
+	joinedAt, err := mes.getGuildMemberJoinedAt(ctx, guildID, botID)
+	if err != nil || joinedAt.IsZero() {
 		return 0
 	}
-	return time.Since(member.Joined.Time())
+	return time.Since(joinedAt)
 }
 
-func (mes *MemberEventService) getGuildMember(ctx context.Context, guildID, userID string) (*discord.Member, error) {
-	if mes.arikawaState == nil {
-		return nil, fmt.Errorf("arikawa state is nil")
+func (mes *MemberEventService) getGuildMemberJoinedAt(ctx context.Context, guildID, userID string) (time.Time, error) {
+	if mes.discordAdapter == nil {
+		return time.Time{}, fmt.Errorf("discord adapter is nil")
 	}
-	gID, err := discord.ParseSnowflake(guildID)
-	if err != nil {
-		return nil, err
-	}
-	uID, err := discord.ParseSnowflake(userID)
-	if err != nil {
-		return nil, err
-	}
-	return service.RunWithTimeoutContext(ctx, service.DependencyTimeout, func(runCtx context.Context) (*discord.Member, error) {
-		return mes.arikawaState.WithContext(runCtx).Member(discord.GuildID(gID), discord.UserID(uID))
+	return service.RunWithTimeoutContext(ctx, service.DependencyTimeout, func(runCtx context.Context) (time.Time, error) {
+		return mes.discordAdapter.MemberJoinedAt(runCtx, guildID, userID)
 	})
 }
 
 func (mes *MemberEventService) guildMemberRoleAdd(ctx context.Context, guildID, userID, roleID string) error {
-	if mes.arikawaState == nil {
-		return fmt.Errorf("arikawa state is nil")
+	if mes.discordAdapter == nil {
+		return fmt.Errorf("discord adapter is nil")
 	}
-	gID, _ := discord.ParseSnowflake(guildID)
-	uID, _ := discord.ParseSnowflake(userID)
-	rID, _ := discord.ParseSnowflake(roleID)
 	return service.RunErrWithTimeoutContext(ctx, service.DependencyTimeout, func(runCtx context.Context) error {
-		return mes.arikawaState.WithContext(runCtx).Client.AddRole(discord.GuildID(gID), discord.UserID(uID), discord.RoleID(rID), api.AddRoleData{})
+		return mes.discordAdapter.AddRole(runCtx, guildID, userID, roleID)
 	})
 }
 
 func (mes *MemberEventService) guildMemberRoleRemove(ctx context.Context, guildID, userID, roleID string) error {
-	if mes.arikawaState == nil {
-		return fmt.Errorf("arikawa state is nil")
+	if mes.discordAdapter == nil {
+		return fmt.Errorf("discord adapter is nil")
 	}
-	gID, _ := discord.ParseSnowflake(guildID)
-	uID, _ := discord.ParseSnowflake(userID)
-	rID, _ := discord.ParseSnowflake(roleID)
 	return service.RunErrWithTimeoutContext(ctx, service.DependencyTimeout, func(runCtx context.Context) error {
-		return mes.arikawaState.WithContext(runCtx).Client.RemoveRole(discord.GuildID(gID), discord.UserID(uID), discord.RoleID(rID), "")
+		return mes.discordAdapter.RemoveRole(runCtx, guildID, userID, roleID)
 	})
 }
 

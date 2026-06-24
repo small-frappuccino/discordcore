@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -77,9 +78,18 @@ func databaseBootstrapFromEnv() (files.DatabaseRuntimeConfig, bool) {
 	}, true
 }
 
+type databaseConfigUpdater struct {
+	cfg files.DatabaseRuntimeConfig
+}
+
+func (u databaseConfigUpdater) apply(rc *files.RuntimeConfig) error {
+	rc.Database = u.cfg
+	return nil
+}
+
 func syncBootstrapDatabaseConfig(configManager *files.ConfigManager, cfg files.DatabaseRuntimeConfig) error {
 	if configManager == nil {
-		return fmt.Errorf("config manager is nil")
+		return errors.New("cannot sync config without configManager")
 	}
 
 	current := configManager.SnapshotConfig().RuntimeConfig.Database
@@ -88,10 +98,8 @@ func syncBootstrapDatabaseConfig(configManager *files.ConfigManager, cfg files.D
 		return nil
 	}
 
-	_, err := configManager.UpdateRuntimeConfig(func(rc *files.RuntimeConfig) error {
-		rc.Database = cfg
-		return nil
-	})
+	updater := databaseConfigUpdater{cfg: cfg}
+	_, err := configManager.UpdateRuntimeConfig(updater.apply)
 	if err != nil {
 		return fmt.Errorf("persist runtime database config: %w", err)
 	}
@@ -148,6 +156,29 @@ func (h *controlServerHolder) BroadcastGuildEvent(guildID string, botPresent boo
 	server.BroadcastGuildEvent(guildID, botPresent)
 }
 
+type RuntimeConfiguredGuildLoggingTask struct {
+	runtime       *botRuntime
+	configManager *files.ConfigManager
+}
+
+func (t RuntimeConfiguredGuildLoggingTask) Execute(taskCtx context.Context) error {
+	if taskCtx.Err() != nil {
+		return nil
+	}
+	err := files.LogConfiguredGuildsForBot(t.configManager, t.runtime.legacySession, t.runtime.instanceID)
+	if err != nil {
+		slog.Warn("Mitigated degradation: Some configured guilds could not be accessed during runtime logging",
+			slog.String("botInstanceID", t.runtime.instanceID),
+			slog.String("error", err.Error()),
+		)
+	}
+	return nil
+}
+
+func (t RuntimeConfiguredGuildLoggingTask) Name() string {
+	return "log_configured_guilds:" + t.runtime.instanceID
+}
+
 func scheduleRuntimeConfiguredGuildLogging(
 	ctx context.Context,
 	runtime *botRuntime,
@@ -163,24 +194,67 @@ func scheduleRuntimeConfiguredGuildLogging(
 		panic("hardware-aligned validation failure: startupTasks cannot be nil during scheduleRuntimeConfiguredGuildLogging")
 	}
 
-	startupTasks.Go("log_configured_guilds:"+runtime.instanceID, func(taskCtx context.Context) error {
-		if taskCtx.Err() != nil {
-			return nil
-		}
-		err := files.LogConfiguredGuildsForBot(configManager, runtime.legacySession, runtime.instanceID)
-		if err != nil {
-			slog.Warn("Mitigated degradation: Some configured guilds could not be accessed during runtime logging",
-				slog.String("botInstanceID", runtime.instanceID),
-				slog.String("error", err.Error()),
-			)
-		}
-		return nil
+	startupTasks.Go(RuntimeConfiguredGuildLoggingTask{
+		runtime:       runtime,
+		configManager: configManager,
 	})
 }
+
+type WebhookSessionResolver interface {
+	SessionForGuild(guildID string, feature string) (*session.LegacySession, error)
+}
+
+type StartupWebhookEmbedUpdatesTask struct {
+	cfg             *files.BotConfig
+	sessionResolver WebhookSessionResolver
+}
+
+func (t StartupWebhookEmbedUpdatesTask) Execute(taskCtx context.Context) error {
+	for _, item := range collectStartupWebhookEmbedUpdates(t.cfg) {
+		if err := taskCtx.Err(); err != nil {
+			return fmt.Errorf("scheduleStartupWebhookEmbedUpdates: %w", err)
+		}
+
+		operation := fmt.Sprintf("runtime_config.webhook_embed_updates[%s:%d]", item.scope, item.index)
+		sess, err := t.sessionResolver.SessionForGuild(item.scope, "webhook")
+		if err != nil || sess == nil {
+			slog.Debug("Session resolution missed for webhook patch target; skipping",
+				slog.String("operation", operation),
+				slog.String("scope", item.scope),
+			)
+			continue
+		}
+
+		if err := webhook.PatchMessageEmbed(taskCtx, &webhook.ArikawaAPI{}, webhook.MessageEmbedPatch{
+			MessageID:  item.update.MessageID,
+			WebhookURL: item.update.WebhookURL,
+			Embed:      item.update.Embed,
+		}); err != nil {
+			slog.Warn("Compensatory action required: Webhook embed patch payload rejected",
+				slog.String("operation", operation),
+				slog.String("scope", item.scope),
+				slog.String("message_id", strings.TrimSpace(item.update.MessageID)),
+				slog.String("error", err.Error()),
+			)
+		} else {
+			slog.Debug("Webhook embed patch applied successfully to target",
+				slog.String("operation", operation),
+				slog.String("scope", item.scope),
+				slog.String("message_id", strings.TrimSpace(item.update.MessageID)),
+			)
+		}
+	}
+	return nil
+}
+
+func (t StartupWebhookEmbedUpdatesTask) Name() string {
+	return "startup_webhook_embed_updates"
+}
+
 func scheduleStartupWebhookEmbedUpdates(
 	startupTasks *StartupTaskOrchestrator,
 	cfg *files.BotConfig,
-	sessionResolver func(guildID string) *session.LegacySession,
+	sessionResolver WebhookSessionResolver,
 ) {
 	if cfg == nil || sessionResolver == nil {
 		return
@@ -191,52 +265,40 @@ func scheduleStartupWebhookEmbedUpdates(
 		panic("hardware-aligned validation failure: startupTasks cannot be nil during scheduleStartupWebhookEmbedUpdates")
 	}
 
-	startupTasks.Go("startup_webhook_embed_updates", func(taskCtx context.Context) error {
-		for _, item := range collectStartupWebhookEmbedUpdates(cfg) {
-			if err := taskCtx.Err(); err != nil {
-				return fmt.Errorf("scheduleStartupWebhookEmbedUpdates: %w", err)
-			}
-
-			operation := fmt.Sprintf("runtime_config.webhook_embed_updates[%s:%d]", item.scope, item.index)
-			sess := sessionResolver(item.scope)
-			if sess == nil {
-				slog.Debug("Session resolution missed for webhook patch target; skipping",
-					slog.String("operation", operation),
-					slog.String("scope", item.scope),
-				)
-				continue
-			}
-
-			if err := webhook.PatchMessageEmbed(taskCtx, &webhook.ArikawaAPI{}, webhook.MessageEmbedPatch{
-				MessageID:  item.update.MessageID,
-				WebhookURL: item.update.WebhookURL,
-				Embed:      item.update.Embed,
-			}); err != nil {
-				slog.Warn("Compensatory action required: Webhook embed patch payload rejected",
-					slog.String("operation", operation),
-					slog.String("scope", item.scope),
-					slog.String("message_id", strings.TrimSpace(item.update.MessageID)),
-					slog.String("error", err.Error()),
-				)
-			} else {
-				slog.Debug("Webhook embed patch applied successfully to target",
-					slog.String("operation", operation),
-					slog.String("scope", item.scope),
-					slog.String("message_id", strings.TrimSpace(item.update.MessageID)),
-				)
-			}
-		}
-		return nil
+	startupTasks.Go(StartupWebhookEmbedUpdatesTask{
+		cfg:             cfg,
+		sessionResolver: sessionResolver,
 	})
 }
+
+type ControlServerStartupTask struct {
+	controlRuntime        resolvedControlRuntime
+	configManager         *files.ConfigManager
+	runtimeApplier        *runtimeapply.Manager
+	controlServerRegistry *controlServerHolder
+	serverOpts            []control.ServerOption
+}
+
+func (t ControlServerStartupTask) Execute(taskCtx context.Context) error {
+	return startControlServerStartupTask(taskCtx, t.controlRuntime, t.configManager, t.runtimeApplier, t.controlServerRegistry, t.serverOpts...)
+}
+
+func (t ControlServerStartupTask) Name() string {
+	return "control_server"
+}
+
 func scheduleControlServerStartup(startupTasks *StartupTaskOrchestrator, controlRuntime resolvedControlRuntime, configManager *files.ConfigManager, runtimeApplier *runtimeapply.Manager, controlServerRegistry *controlServerHolder, serverOpts ...control.ServerOption) {
 	if startupTasks == nil {
 		slog.Error("Blocking structural failure: startupTasks orchestrator is nil")
 		panic("hardware-aligned validation failure: startupTasks cannot be nil during scheduleControlServerStartup")
 	}
 
-	startupTasks.Go("control_server", func(taskCtx context.Context) error {
-		return startControlServerStartupTask(taskCtx, controlRuntime, configManager, runtimeApplier, controlServerRegistry, serverOpts...)
+	startupTasks.Go(ControlServerStartupTask{
+		controlRuntime:        controlRuntime,
+		configManager:         configManager,
+		runtimeApplier:        runtimeApplier,
+		controlServerRegistry: controlServerRegistry,
+		serverOpts:            serverOpts,
 	})
 }
 
@@ -320,10 +382,17 @@ func NewStartupTaskOrchestrator(ctx context.Context, runtimeCount int) *StartupT
 	}
 }
 
-func (o *StartupTaskOrchestrator) Go(name string, t func(context.Context) error) {
-	if o == nil || o.eg == nil || t == nil {
+type BootstrapTask interface {
+	Execute(context.Context) error
+	Name() string
+}
+
+func (o *StartupTaskOrchestrator) Go(task BootstrapTask) {
+	if o == nil || o.eg == nil || task == nil {
 		return
 	}
+
+	name := task.Name()
 
 	if err := o.ctx.Err(); err != nil {
 		slog.Warn("Architectural state transition: Startup orchestrator rejecting task due to context cancellation",
@@ -338,7 +407,7 @@ func (o *StartupTaskOrchestrator) Go(name string, t func(context.Context) error)
 	)
 
 	o.eg.Go(func() error {
-		if err := t(o.ctx); err != nil {
+		if err := task.Execute(o.ctx); err != nil {
 			if o.ctx.Err() != nil {
 				slog.Debug("Tracking complex conditional branch: Task execution halted via context cancellation",
 					slog.String("task_name", name),

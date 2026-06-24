@@ -10,8 +10,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/diamondburned/arikawa/v3/discord"
 )
 
 const (
@@ -265,16 +263,15 @@ func (w *messageCreateWriter) Lookup(guildID, messageID string) *CachedMessage {
 
 	record := pending.record
 	return &CachedMessage{
-		ID:      record.MessageID,
-		Content: record.Content,
-		Author: &discord.User{
-			ID:       discord.UserID(mustParseSnowflake(record.AuthorID)),
-			Username: record.AuthorUsername,
-			Avatar:   discord.Hash(record.AuthorAvatar),
-		},
-		ChannelID: record.ChannelID,
-		GuildID:   record.GuildID,
-		Timestamp: record.CachedAt,
+		ID:             record.MessageID,
+		Content:        record.Content,
+		AuthorID:       record.AuthorID,
+		AuthorUsername: record.AuthorUsername,
+		AuthorAvatar:   record.AuthorAvatar,
+		AuthorBot:      false, // Assume false since bot messages aren't cached normally
+		ChannelID:      record.ChannelID,
+		GuildID:        record.GuildID,
+		Timestamp:      record.CachedAt,
 	}
 }
 
@@ -535,9 +532,4 @@ func messageCreatePendingKey(guildID, messageID string) string {
 		return ""
 	}
 	return guildID + ":" + messageID
-}
-
-func mustParseSnowflake(id string) discord.Snowflake {
-	sf, _ := discord.ParseSnowflake(id)
-	return sf
 }

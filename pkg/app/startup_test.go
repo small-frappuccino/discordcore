@@ -63,6 +63,20 @@ func TestResolveDatabaseBootstrapRequiresEnv(t *testing.T) {
 	resolveDatabaseBootstrap()
 }
 
+type MockTask struct {
+	name string
+	exec func(context.Context) error
+}
+
+func (m MockTask) Name() string { return m.name }
+
+func (m MockTask) Execute(ctx context.Context) error {
+	if m.exec != nil {
+		return m.exec(ctx)
+	}
+	return nil
+}
+
 func TestStartupTaskOrchestrator_Go(t *testing.T) {
 	t.Parallel()
 	orchestrator := NewStartupTaskOrchestrator(context.Background(), 2)
@@ -72,10 +86,13 @@ func TestStartupTaskOrchestrator_Go(t *testing.T) {
 	wg.Add(2)
 
 	for i := 0; i < 2; i++ {
-		orchestrator.Go("test_task", func(ctx context.Context) error {
-			atomic.AddInt32(&executed, 1)
-			wg.Done()
-			return nil
+		orchestrator.Go(MockTask{
+			name: "test_task",
+			exec: func(ctx context.Context) error {
+				atomic.AddInt32(&executed, 1)
+				wg.Done()
+				return nil
+			},
 		})
 	}
 
@@ -97,10 +114,13 @@ func TestStartupTaskOrchestrator_ShutdownWithContextCancellation(t *testing.T) {
 	taskStarted := make(chan struct{})
 	unblockTask := make(chan struct{})
 
-	orchestrator.Go("blocking_task", func(ctx context.Context) error {
-		close(taskStarted)
-		<-unblockTask
-		return nil
+	orchestrator.Go(MockTask{
+		name: "blocking_task",
+		exec: func(ctx context.Context) error {
+			close(taskStarted)
+			<-unblockTask
+			return nil
+		},
 	})
 
 	<-taskStarted
@@ -122,9 +142,12 @@ func TestStartupTaskOrchestrator_ShutdownTaskErrorPropagates(t *testing.T) {
 
 	expectedErr := errors.New("simulated task error")
 
-	orchestrator.Go("error_task", func(ctx context.Context) error {
-		defer wg.Done()
-		return expectedErr
+	orchestrator.Go(MockTask{
+		name: "error_task",
+		exec: func(ctx context.Context) error {
+			defer wg.Done()
+			return expectedErr
+		},
 	})
 
 	wg.Wait()
@@ -140,10 +163,10 @@ func TestStartupTaskOrchestrator_ShutdownTaskErrorPropagates(t *testing.T) {
 func TestStartupTaskOrchestrator_GoNil(t *testing.T) {
 	t.Parallel()
 	orchestrator := NewStartupTaskOrchestrator(context.Background(), 1)
-	orchestrator.Go("nil_task", nil)
+	orchestrator.Go(MockTask{name: "nil_task", exec: nil})
 
 	var nilOrchestrator *StartupTaskOrchestrator
-	nilOrchestrator.Go("nil_task", func(ctx context.Context) error { return nil })
+	nilOrchestrator.Go(MockTask{name: "nil_task", exec: func(ctx context.Context) error { return nil }})
 	err := nilOrchestrator.Shutdown(context.Background())
 	if err != nil {
 		t.Errorf("Expected nil error for nil orchestrator shutdown")
@@ -202,6 +225,12 @@ func TestScheduleControlServerStartup(t *testing.T) {
 	scheduleControlServerStartup(nil, resolvedControlRuntime{}, nil, nil, nil)
 }
 
+type mockSessionResolver struct{}
+
+func (m mockSessionResolver) SessionForGuild(guildID string, feature string) (*session.LegacySession, error) {
+	return nil, nil
+}
+
 func TestScheduleStartupWebhookEmbedUpdates(t *testing.T) {
 	t.Parallel()
 	defer func() {
@@ -209,7 +238,7 @@ func TestScheduleStartupWebhookEmbedUpdates(t *testing.T) {
 			t.Fatal("expected scheduleStartupWebhookEmbedUpdates to panic with nil startupTasks")
 		}
 	}()
-	scheduleStartupWebhookEmbedUpdates(nil, &files.BotConfig{}, func(g string) *session.LegacySession { return nil })
+	scheduleStartupWebhookEmbedUpdates(nil, &files.BotConfig{}, mockSessionResolver{})
 }
 
 func TestStartControlServerStartupTask(t *testing.T) {

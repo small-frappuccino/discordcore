@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/diamondburned/arikawa/v3/api"
@@ -14,6 +13,8 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/embeds"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/logging"
+	"github.com/small-frappuccino/discordcore/pkg/members"
+	"github.com/small-frappuccino/discordcore/pkg/messages"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
 
@@ -78,21 +79,18 @@ func (l *Logger) sendEmbed(ctx context.Context, channelID discord.ChannelID, emb
 }
 
 // OnMemberJoin handles member join events.
-func (l *Logger) OnMemberJoin(ctx context.Context, guildID string, member discord.Member) {
-	decision, ok := l.checkPolicy(logging.LogEventMemberJoin, guildID)
+func (l *Logger) OnMemberJoin(ctx context.Context, intent members.MemberJoinIntent, accountAge time.Duration) {
+	decision, ok := l.checkPolicy(logging.LogEventMemberJoin, intent.GuildID)
 	if !ok {
 		return
 	}
 
 	channelID, err := discord.ParseSnowflake(decision.ChannelID)
 	if err != nil {
-		l.logger.Error("Failed to parse Snowflake ID for MemberJoin log channel", "guild_id", guildID, "channel_id", decision.ChannelID, "error", err)
+		l.logger.Error("Failed to parse Snowflake ID for MemberJoin log channel", "guild_id", intent.GuildID, "channel_id", decision.ChannelID, "error", err)
 		return
 	}
 
-	// Calculate account age (basic heuristic for illustration, full logic depends on snowflake parsing)
-	createdAt := member.User.CreatedAt()
-	accountAge := time.Since(createdAt)
 	joinAgeText := logging.FormatDurationSmart(accountAge)
 	if joinAgeText == "" {
 		joinAgeText = "- ago"
@@ -102,9 +100,9 @@ func (l *Logger) OnMemberJoin(ctx context.Context, guildID string, member discor
 
 	ce := files.CustomEmbedConfig{
 		Title:        "Member Joined",
-		Description:  logging.FormatUserLabel(member.User.Username, member.User.ID.String()),
+		Description:  logging.FormatUserLabel(intent.Username, intent.UserID),
 		Color:        theme.MemberJoin(),
-		ThumbnailURL: member.User.AvatarURL(),
+		ThumbnailURL: logging.FormatAvatarURL(intent.UserID, intent.AvatarHash),
 		Fields: []files.CustomEmbedFieldConfig{
 			{
 				Name:   "Account Created",
@@ -119,8 +117,8 @@ func (l *Logger) OnMemberJoin(ctx context.Context, guildID string, member discor
 }
 
 // OnMemberLeave handles member leave events.
-func (l *Logger) OnMemberLeave(ctx context.Context, guildID string, user discord.User) {
-	decision, ok := l.checkPolicy(logging.LogEventMemberLeave, guildID)
+func (l *Logger) OnMemberLeave(ctx context.Context, intent members.MemberLeaveIntent, serverTime time.Duration, botTime time.Duration) {
+	decision, ok := l.checkPolicy(logging.LogEventMemberLeave, intent.GuildID)
 	if !ok {
 		return
 	}
@@ -132,9 +130,9 @@ func (l *Logger) OnMemberLeave(ctx context.Context, guildID string, user discord
 
 	ce := files.CustomEmbedConfig{
 		Title:        "Member Left",
-		Description:  logging.FormatUserLabel(user.Username, user.ID.String()),
+		Description:  logging.FormatUserLabel(intent.Username, intent.UserID),
 		Color:        theme.MemberLeave(),
-		ThumbnailURL: user.AvatarURL(),
+		ThumbnailURL: logging.FormatAvatarURL(intent.UserID, intent.AvatarHash),
 		Fields: []files.CustomEmbedFieldConfig{
 			{
 				Name:   "Time on Server",
@@ -149,12 +147,12 @@ func (l *Logger) OnMemberLeave(ctx context.Context, guildID string, user discord
 }
 
 // OnRoleUpdate handles role updates for a member.
-func (l *Logger) OnRoleUpdate(ctx context.Context, guildID string, user discord.User, addedRoles, removedRoles []discord.RoleID) {
-	if len(addedRoles) == 0 && len(removedRoles) == 0 {
+func (l *Logger) OnRoleUpdate(ctx context.Context, intent members.RoleUpdateIntent) {
+	if len(intent.AddedRoles) == 0 && len(intent.RemovedRoles) == 0 {
 		return
 	}
 
-	decision, ok := l.checkPolicy(logging.LogEventRoleChange, guildID)
+	decision, ok := l.checkPolicy(logging.LogEventRoleChange, intent.GuildID)
 	if !ok {
 		return
 	}
@@ -164,7 +162,7 @@ func (l *Logger) OnRoleUpdate(ctx context.Context, guildID string, user discord.
 		return
 	}
 
-	targetLabel := logging.FormatUserLabel(user.Username, user.ID.String())
+	targetLabel := logging.FormatUserLabel(intent.Username, intent.UserID)
 	ce := files.CustomEmbedConfig{
 		Title:       "Role Updated",
 		Description: targetLabel,
@@ -172,10 +170,10 @@ func (l *Logger) OnRoleUpdate(ctx context.Context, guildID string, user discord.
 	}
 
 	var fields []files.CustomEmbedFieldConfig
-	for _, r := range addedRoles {
+	for _, r := range intent.AddedRoles {
 		fields = append(fields, files.CustomEmbedFieldConfig{
 			Name:   "Role",
-			Value:  logging.FormatRoleLabel(r.String(), ""),
+			Value:  logging.FormatRoleLabel(r, ""),
 			Inline: true,
 		})
 		fields = append(fields, files.CustomEmbedFieldConfig{
@@ -184,10 +182,10 @@ func (l *Logger) OnRoleUpdate(ctx context.Context, guildID string, user discord.
 			Inline: true,
 		})
 	}
-	for _, r := range removedRoles {
+	for _, r := range intent.RemovedRoles {
 		fields = append(fields, files.CustomEmbedFieldConfig{
 			Name:   "Role",
-			Value:  logging.FormatRoleLabel(r.String(), ""),
+			Value:  logging.FormatRoleLabel(r, ""),
 			Inline: true,
 		})
 		fields = append(fields, files.CustomEmbedFieldConfig{
@@ -203,9 +201,17 @@ func (l *Logger) OnRoleUpdate(ctx context.Context, guildID string, user discord.
 	l.sendEmbed(ctx, discord.ChannelID(channelID), embed, logging.LogEventRoleChange)
 }
 
-// OnMessageEdit handles message edit events.
-func (l *Logger) OnMessageEdit(ctx context.Context, guildID string, channelID discord.ChannelID, oldMessage, newMessage discord.Message) {
-	decision, ok := l.checkPolicy(logging.LogEventMessageEdit, guildID)
+// OnMessageUpdate handles message update events to satisfy messages.MessageSink.
+func (l *Logger) OnMessageUpdate(ctx context.Context, intent messages.MessageUpdateIntent, cachedMessage *messages.CachedMessageData) {
+	if cachedMessage == nil {
+		slog.Warn("Message update event dropped by event logger: no cached content available",
+			slog.String("guild_id", intent.GuildID),
+			slog.String("message_id", intent.MessageID),
+		)
+		return
+	}
+
+	decision, ok := l.checkPolicy(logging.LogEventMessageEdit, intent.GuildID)
 	if !ok {
 		return
 	}
@@ -215,27 +221,26 @@ func (l *Logger) OnMessageEdit(ctx context.Context, guildID string, channelID di
 		return
 	}
 
-	jumpURL := fmt.Sprintf("https://discord.com/channels/%s/%s/%s", guildID, channelID.String(), newMessage.ID.String())
+	jumpURL := fmt.Sprintf("https://discord.com/channels/%s/%s/%s", intent.GuildID, intent.ChannelID, intent.MessageID)
 	desc := "[Jump to message](" + jumpURL + ")"
 
-	userField := logging.FormatUserLabel(newMessage.Author.Username, newMessage.Author.ID.String())
-	channelField := logging.FormatChannelLabel(channelID.String())
-	messageTime := newMessage.Timestamp.Time().Format("January 2, 2006 at 3:04 PM")
+	userField := logging.FormatUserLabel(cachedMessage.AuthorUsername, cachedMessage.AuthorID)
+	channelField := logging.FormatChannelLabel(intent.ChannelID)
+	messageTime := cachedMessage.Timestamp.Format("January 2, 2006 at 3:04 PM")
 
 	ce := files.CustomEmbedConfig{
-		Title:         "Message Edited",
-		Description:   desc,
-		Color:         theme.MessageEdit(),
-		AuthorName:    "Message Edited",
-		AuthorIconURL: newMessage.Author.AvatarURL(),
+		Title:       "Message Edited",
+		Description: desc,
+		Color:       theme.MessageEdit(),
+		AuthorName:  "Message Edited",
 		Fields: []files.CustomEmbedFieldConfig{
 			{Name: "User", Value: userField, Inline: true},
 			{Name: "Channel", Value: channelField, Inline: true},
 			{Name: "Message Timestamp", Value: messageTime, Inline: true},
-			{Name: "Before", Value: logging.TruncateString(oldMessage.Content, 1000), Inline: false},
-			{Name: "After", Value: logging.TruncateString(newMessage.Content, 1000), Inline: false},
+			{Name: "Before", Value: logging.TruncateString(cachedMessage.Content, 1000), Inline: false},
+			{Name: "After", Value: logging.TruncateString(intent.Content, 1000), Inline: false},
 		},
-		FooterText: fmt.Sprintf("Message ID: %s", newMessage.ID.String()),
+		FooterText: fmt.Sprintf("Message ID: %s", intent.MessageID),
 	}
 
 	embed := embeds.Render(ce)
@@ -243,33 +248,17 @@ func (l *Logger) OnMessageEdit(ctx context.Context, guildID string, channelID di
 	l.sendEmbed(ctx, discord.ChannelID(logChannelID), embed, logging.LogEventMessageEdit)
 }
 
-// OnMessageUpdate handles message update events to satisfy messages.MessageSink.
-func (l *Logger) OnMessageUpdate(ctx context.Context, m *gateway.MessageUpdateEvent, cachedMessage *discord.Message) {
-	if cachedMessage == nil {
-		slog.Warn("Message update event dropped by event logger: no cached content available",
-			slog.String("guild_id", m.GuildID.String()),
-			slog.String("message_id", m.ID.String()),
-		)
-		return
-	}
-	newMessage := *cachedMessage
-	if m.Content != "" {
-		newMessage.Content = m.Content
-	}
-	l.OnMessageEdit(ctx, m.GuildID.String(), m.ChannelID, *cachedMessage, newMessage)
-}
-
 // OnMessageDelete handles message delete events to satisfy messages.MessageSink.
-func (l *Logger) OnMessageDelete(ctx context.Context, m *gateway.MessageDeleteEvent, cachedMessage *discord.Message, executor *discord.User) {
+func (l *Logger) OnMessageDelete(ctx context.Context, intent messages.MessageDeleteIntent, cachedMessage *messages.CachedMessageData) {
 	if cachedMessage == nil {
 		slog.Warn("Message delete event dropped by event logger: no cached content available",
-			slog.String("guild_id", m.GuildID.String()),
-			slog.String("message_id", m.ID.String()),
+			slog.String("guild_id", intent.GuildID),
+			slog.String("message_id", intent.MessageID),
 		)
 		return
 	}
 
-	decision, ok := l.checkPolicy(logging.LogEventMessageDelete, m.GuildID.String())
+	decision, ok := l.checkPolicy(logging.LogEventMessageDelete, intent.GuildID)
 	if !ok {
 		return
 	}
@@ -279,26 +268,25 @@ func (l *Logger) OnMessageDelete(ctx context.Context, m *gateway.MessageDeleteEv
 		return
 	}
 
-	userField := logging.FormatUserLabel(cachedMessage.Author.Username, cachedMessage.Author.ID.String())
-	channelField := logging.FormatChannelLabel(m.ChannelID.String())
-	messageTime := cachedMessage.Timestamp.Time().Format("January 2, 2006 at 3:04 PM")
+	userField := logging.FormatUserLabel(cachedMessage.AuthorUsername, cachedMessage.AuthorID)
+	channelField := logging.FormatChannelLabel(intent.ChannelID)
+	messageTime := cachedMessage.Timestamp.Format("January 2, 2006 at 3:04 PM")
 
 	ce := files.CustomEmbedConfig{
-		Title:         "Message Deleted",
-		Color:         theme.MessageDelete(),
-		AuthorName:    "Message Deleted",
-		AuthorIconURL: cachedMessage.Author.AvatarURL(),
+		Title:      "Message Deleted",
+		Color:      theme.MessageDelete(),
+		AuthorName: "Message Deleted",
 		Fields: []files.CustomEmbedFieldConfig{
 			{Name: "User", Value: userField, Inline: true},
 			{Name: "Channel", Value: channelField, Inline: true},
 			{Name: "Message Timestamp", Value: messageTime, Inline: true},
 			{Name: "Message", Value: logging.TruncateString(cachedMessage.Content, 1000), Inline: false},
 		},
-		FooterText: fmt.Sprintf("Message ID: %s", cachedMessage.ID.String()),
+		FooterText: fmt.Sprintf("Message ID: %s", intent.MessageID),
 	}
 
-	if executor != nil {
-		ce.Description += fmt.Sprintf("\n**Deleted By:** <@%s>", executor.ID.String())
+	if intent.ExecutorID != "" {
+		ce.Description += fmt.Sprintf("\n**Deleted By:** <@%s>", intent.ExecutorID)
 	}
 
 	embed := embeds.Render(ce)
@@ -308,16 +296,16 @@ func (l *Logger) OnMessageDelete(ctx context.Context, m *gateway.MessageDeleteEv
 }
 
 // OnMessageDeleteBulk handles bulk message deletions to satisfy messages.MessageSink.
-func (l *Logger) OnMessageDeleteBulk(ctx context.Context, guildID discord.GuildID, channelID discord.ChannelID, messageIDs []string) {
+func (l *Logger) OnMessageDeleteBulk(ctx context.Context, intent messages.MessageDeleteBulkIntent) {
 	slog.Info("Bulk delete event received but not fully forwarded to eventlog",
-		slog.String("guild_id", guildID.String()),
-		slog.Int("count", len(messageIDs)),
+		slog.String("guild_id", intent.GuildID),
+		slog.Int("count", len(intent.MessageIDs)),
 	)
 }
 
 // OnModerationAction handles moderation actions (from our bot or external).
-func (l *Logger) OnModerationAction(ctx context.Context, guildID string, actionType string, targetUser discord.User, reason string, moderator discord.User) {
-	decision, ok := l.checkPolicy(logging.LogEventModerationCase, guildID)
+func (l *Logger) OnModerationAction(ctx context.Context, intent members.ModerationActionIntent) {
+	decision, ok := l.checkPolicy(logging.LogEventModerationCase, intent.GuildID)
 	if !ok {
 		return
 	}
@@ -327,18 +315,19 @@ func (l *Logger) OnModerationAction(ctx context.Context, guildID string, actionT
 		return
 	}
 
+	reason := intent.Reason
 	if reason == "" {
 		reason = "No reason provided."
 	}
 
 	ce := files.CustomEmbedConfig{
-		Title: fmt.Sprintf("Moderation Action: %s", actionType),
+		Title: fmt.Sprintf("Moderation Action: %s", intent.ActionType),
 		Color: theme.Danger(),
 		Description: fmt.Sprintf("**Target:** %s\n**Moderator:** %s\n**Reason:** %s",
-			logging.FormatUserRef(targetUser.ID.String()),
-			logging.FormatUserRef(moderator.ID.String()),
+			logging.FormatUserRef(intent.TargetUserID),
+			logging.FormatUserRef(intent.ModeratorID),
 			reason),
-		FooterText: fmt.Sprintf("Target ID: %s", targetUser.ID.String()),
+		FooterText: fmt.Sprintf("Target ID: %s", intent.TargetUserID),
 	}
 	embed := embeds.Render(ce)
 	embed.Timestamp = discord.NowTimestamp()
@@ -346,8 +335,8 @@ func (l *Logger) OnModerationAction(ctx context.Context, guildID string, actionT
 }
 
 // OnAvatarUpdate handles user avatar change events.
-func (l *Logger) OnAvatarUpdate(ctx context.Context, guildID string, user discord.User, oldAvatarHash, newAvatarHash string) {
-	decision, ok := l.checkPolicy(logging.LogEventAvatarChange, guildID)
+func (l *Logger) OnAvatarUpdate(ctx context.Context, intent members.AvatarUpdateIntent) {
+	decision, ok := l.checkPolicy(logging.LogEventAvatarChange, intent.GuildID)
 	if !ok {
 		return
 	}
@@ -360,21 +349,17 @@ func (l *Logger) OnAvatarUpdate(ctx context.Context, guildID string, user discor
 	ce := files.CustomEmbedConfig{
 		Title:        "Avatar Updated",
 		Color:        theme.AvatarChange(),
-		ThumbnailURL: user.AvatarURL(),
+		ThumbnailURL: logging.FormatAvatarURL(intent.UserID, intent.NewAvatarHash),
 		Fields: []files.CustomEmbedFieldConfig{
-			{Name: "User", Value: logging.FormatUserLabel(user.Username, user.ID.String()), Inline: true},
+			{Name: "User", Value: logging.FormatUserLabel(intent.Username, intent.UserID), Inline: true},
 		},
-		FooterText: fmt.Sprintf("User ID: %s", user.ID.String()),
+		FooterText: fmt.Sprintf("User ID: %s", intent.UserID),
 	}
 
-	if oldAvatarHash != "" {
-		oldUrl := fmt.Sprintf("https://cdn.discordapp.com/avatars/%s/%s.png", user.ID.String(), oldAvatarHash)
-		if strings.HasPrefix(oldAvatarHash, "a_") {
-			oldUrl = fmt.Sprintf("https://cdn.discordapp.com/avatars/%s/%s.gif", user.ID.String(), oldAvatarHash)
-		}
+	if intent.OldAvatarHash != "" {
 		ce.Fields = append(ce.Fields, files.CustomEmbedFieldConfig{
 			Name:   "Previous Avatar",
-			Value:  "[See previous avatar](" + oldUrl + ")",
+			Value:  "[See previous avatar](" + logging.FormatAvatarURL(intent.UserID, intent.OldAvatarHash) + ")",
 			Inline: true,
 		})
 	}

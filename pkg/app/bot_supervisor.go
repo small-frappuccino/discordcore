@@ -186,9 +186,9 @@ func (s *BotSupervisor) handleTopologyDelta(cmd TopologyDelta) {
 	desiredCaps := cmd.Capabilities
 
 	for _, intent := range cmd.GatewayUpdates {
-		localIntent := intent
-		s.opts.startupTasks.Go("presence_update_"+localIntent.InstanceID, func(ctx context.Context) error {
-			return s.executeGatewayUpdate(ctx, localIntent)
+		s.opts.startupTasks.Go(SupervisorGatewayUpdateTask{
+			Supervisor: s,
+			Intent:     intent,
 		})
 	}
 
@@ -265,18 +265,45 @@ func (s *BotSupervisor) handleTopologyDelta(cmd TopologyDelta) {
 
 	// Phase 3: Synchronize command catalogs.
 	if len(cmd.SyncTasks) > 0 {
-		s.opts.startupTasks.Go("catalog_sync", func(ctx context.Context) error {
-			eg, egCtx := errgroup.WithContext(ctx)
-			eg.SetLimit(10)
-			for _, intent := range cmd.SyncTasks {
-				localIntent := intent
-				eg.Go(func() error {
-					return s.executeSyncTask(egCtx, localIntent)
-				})
-			}
-			return eg.Wait()
+		s.opts.startupTasks.Go(SupervisorCatalogSyncTask{
+			Supervisor: s,
+			SyncTasks:  cmd.SyncTasks,
 		})
 	}
+}
+
+type SupervisorGatewayUpdateTask struct {
+	Supervisor *BotSupervisor
+	Intent     GatewayUpdateIntent
+}
+
+func (t SupervisorGatewayUpdateTask) Execute(ctx context.Context) error {
+	return t.Supervisor.executeGatewayUpdate(ctx, t.Intent)
+}
+
+func (t SupervisorGatewayUpdateTask) Name() string {
+	return "presence_update_" + t.Intent.InstanceID
+}
+
+type SupervisorCatalogSyncTask struct {
+	Supervisor *BotSupervisor
+	SyncTasks  []SyncTaskIntent
+}
+
+func (t SupervisorCatalogSyncTask) Execute(ctx context.Context) error {
+	eg, egCtx := errgroup.WithContext(ctx)
+	eg.SetLimit(10)
+	for _, intent := range t.SyncTasks {
+		localIntent := intent
+		eg.Go(func() error {
+			return t.Supervisor.executeSyncTask(egCtx, localIntent)
+		})
+	}
+	return eg.Wait()
+}
+
+func (t SupervisorCatalogSyncTask) Name() string {
+	return "catalog_sync"
 }
 
 func (s *BotSupervisor) onConfigChanged(ctx context.Context, oldCfg, newCfg *files.BotConfig) error {

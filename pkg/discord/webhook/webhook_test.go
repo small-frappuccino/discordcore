@@ -241,6 +241,20 @@ func TestArikawaAPI_ServerInjection_TableDriven(t *testing.T) {
 	}
 }
 
+type MockTask struct {
+	name string
+	exec func(context.Context) error
+}
+
+func (m MockTask) Name() string { return m.name }
+
+func (m MockTask) Execute(ctx context.Context) error {
+	if m.exec != nil {
+		return m.exec(ctx)
+	}
+	return nil
+}
+
 func TestWebhookConcurrentExecution(t *testing.T) {
 	t.Parallel()
 	orchestrator := app.NewStartupTaskOrchestrator(context.Background(), 10)
@@ -258,13 +272,16 @@ func TestWebhookConcurrentExecution(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := 0; i < 100; i++ {
 		wg.Add(1)
-		orchestrator.Go("webhook_test", func(ctx context.Context) error {
-			defer wg.Done()
-			validation := webhookPkg.MessageTargetValidation{
-				MessageID:  "456",
-				WebhookURL: "https://discord.com/api/webhooks/123/token",
-			}
-			return webhookPkg.ValidateMessageTarget(ctx, mock, validation)
+		orchestrator.Go(MockTask{
+			name: "webhook_test",
+			exec: func(ctx context.Context) error {
+				defer wg.Done()
+				validation := webhookPkg.MessageTargetValidation{
+					MessageID:  "456",
+					WebhookURL: "https://discord.com/api/webhooks/123/token",
+				}
+				return webhookPkg.ValidateMessageTarget(ctx, mock, validation)
+			},
 		})
 	}
 	wg.Wait()

@@ -40,10 +40,30 @@ func NewGatewayListener(s *state.State, memberSvc *members.MemberEventService) *
 func (l *GatewayListener) Start(ctx context.Context) error {
 	l.cancels = append(l.cancels,
 		l.state.AddHandler(func(e *gateway.GuildMemberAddEvent) {
-			l.memberService.IngestGuildMemberAdd(context.Background(), e)
+			roles := make([]string, len(e.RoleIDs))
+			for i, r := range e.RoleIDs {
+				roles[i] = r.String()
+			}
+			intent := members.MemberJoinIntent{
+				GuildID:    e.GuildID.String(),
+				UserID:     e.User.ID.String(),
+				Username:   e.User.Username,
+				Bot:        e.User.Bot,
+				AvatarHash: e.User.Avatar,
+				RoleIDs:    roles,
+				JoinedAt:   e.Joined.Time(),
+			}
+			l.memberService.IngestGuildMemberAdd(context.Background(), intent)
 		}),
 		l.state.AddHandler(func(e *gateway.GuildMemberRemoveEvent) {
-			l.memberService.IngestGuildMemberRemove(context.Background(), e)
+			intent := members.MemberLeaveIntent{
+				GuildID:    e.GuildID.String(),
+				UserID:     e.User.ID.String(),
+				Username:   e.User.Username,
+				Bot:        e.User.Bot,
+				AvatarHash: e.User.Avatar,
+			}
+			l.memberService.IngestGuildMemberRemove(context.Background(), intent)
 		}),
 		l.state.PreHandler.AddSyncHandler(func(e *gateway.GuildMemberUpdateEvent) {
 			oldMember, _ := l.state.Cabinet.Member(e.GuildID, e.User.ID)
@@ -69,7 +89,33 @@ func (l *GatewayListener) Start(ctx context.Context) error {
 func (l *GatewayListener) worker() {
 	defer l.wg.Done()
 	for payload := range l.updateQueue {
-		l.memberService.IngestGuildMemberUpdate(context.Background(), payload.e, payload.oldMember)
+		e := payload.e
+		oldMember := payload.oldMember
+
+		roles := make([]string, len(e.RoleIDs))
+		for i, r := range e.RoleIDs {
+			roles[i] = r.String()
+		}
+
+		intent := members.MemberUpdateIntent{
+			GuildID:    e.GuildID.String(),
+			UserID:     e.User.ID.String(),
+			Username:   e.User.Username,
+			Bot:        e.User.Bot,
+			RoleIDs:    roles,
+			AvatarHash: e.User.Avatar,
+		}
+
+		if oldMember != nil {
+			oldRoles := make([]string, len(oldMember.RoleIDs))
+			for i, r := range oldMember.RoleIDs {
+				oldRoles[i] = r.String()
+			}
+			intent.OldRoleIDs = oldRoles
+			intent.OldAvatar = oldMember.User.Avatar
+		}
+
+		l.memberService.IngestGuildMemberUpdate(context.Background(), intent)
 	}
 }
 

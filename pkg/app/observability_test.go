@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -12,52 +11,7 @@ import (
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/qotd"
 )
-
-// The arikawa_qotd_publisher_test.go logic:
-func TestArikawaQOTDPublisher_GetArikawaPublisher(t *testing.T) {
-	t.Parallel()
-	resolver := newBotRuntimeResolver(nil, nil)
-	publisher := NewArikawaQOTDPublisher(resolver)
-
-	// Will error because guild has no runtime
-	_, err := publisher.getArikawaPublisher("missing_guild")
-	if err == nil {
-		t.Fatal("expected structural isolation error for missing guild runtime")
-	}
-}
-
-func TestArikawaQOTDPublisher_PublishOfficialPost(t *testing.T) {
-	t.Parallel()
-	resolver := newBotRuntimeResolver(nil, nil)
-	publisher := NewArikawaQOTDPublisher(resolver)
-
-	_, err := publisher.PublishOfficialPost(context.Background(), qotd.PublishOfficialPostParams{
-		GuildID:                  "guild1",
-		ChannelID:                "channel1",
-		OfficialThreadID:         "author1",
-		OfficialStarterMessageID: "content",
-	})
-	if err != nil {
-		t.Fatalf("expected silent drop for missing guild gateway binding, got error: %v", err)
-	}
-}
-
-func TestArikawaQOTDPublisher_DeleteOfficialPost(t *testing.T) {
-	t.Parallel()
-	resolver := newBotRuntimeResolver(nil, nil)
-	publisher := NewArikawaQOTDPublisher(resolver)
-
-	err := publisher.DeleteOfficialPost(context.Background(), qotd.DeleteOfficialPostParams{
-		GuildID:                 "guild1",
-		ChannelID:               "channel1",
-		DiscordStarterMessageID: "message1",
-	})
-	if err != nil {
-		t.Fatalf("expected silent drop for missing guild gateway binding, got error: %v", err)
-	}
-}
 
 // The lifecycle_webhook_test.go logic:
 func TestNotifyLifecycleEventSendsWebhook(t *testing.T) {

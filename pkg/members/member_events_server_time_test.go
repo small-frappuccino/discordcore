@@ -4,16 +4,10 @@ import (
 	"context"
 	"io"
 	"log/slog"
-	"net/http"
-	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/diamondburned/arikawa/v3/discord"
-	"github.com/diamondburned/arikawa/v3/gateway"
-	"github.com/diamondburned/arikawa/v3/state"
-	"github.com/diamondburned/arikawa/v3/utils/httputil/httpdriver"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/system"
@@ -84,53 +78,52 @@ func (m *mockSystemRepo) SetHeartbeatForBot(ctx context.Context, instanceID stri
 
 type mockMemberSink struct {
 	mu                  sync.Mutex
-	joinEvents          []*gateway.GuildMemberAddEvent
-	leaveEvents         []*gateway.GuildMemberRemoveEvent
+	joinEvents          []MemberJoinIntent
+	leaveEvents         []MemberLeaveIntent
 	roleUpdateGuildID   string
-	roleUpdateUser      discord.User
-	addedRoles          []discord.RoleID
-	removedRoles        []discord.RoleID
+	roleUpdateUser      string
+	addedRoles          []string
+	removedRoles        []string
 	avatarUpdateGuildID string
-	avatarUpdateUser    discord.User
+	avatarUpdateUser    string
 	oldAvatar           string
 	newAvatar           string
 }
 
-func (m *mockMemberSink) OnMemberJoin(ctx context.Context, e *gateway.GuildMemberAddEvent, accountAge time.Duration) {
+func (m *mockMemberSink) OnMemberJoin(ctx context.Context, intent MemberJoinIntent, accountAge time.Duration) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.joinEvents = append(m.joinEvents, e)
+	m.joinEvents = append(m.joinEvents, intent)
 }
 
-func (m *mockMemberSink) OnMemberLeave(ctx context.Context, e *gateway.GuildMemberRemoveEvent, serverTime time.Duration, botTime time.Duration) {
+func (m *mockMemberSink) OnMemberLeave(ctx context.Context, intent MemberLeaveIntent, serverTime time.Duration, botTime time.Duration) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.leaveEvents = append(m.leaveEvents, e)
+	m.leaveEvents = append(m.leaveEvents, intent)
 }
 
-func (m *mockMemberSink) OnRoleUpdate(ctx context.Context, guildID string, user discord.User, addedRoles, removedRoles []discord.RoleID) {
+func (m *mockMemberSink) OnRoleUpdate(ctx context.Context, intent RoleUpdateIntent) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.roleUpdateGuildID = guildID
-	m.roleUpdateUser = user
-	m.addedRoles = addedRoles
-	m.removedRoles = removedRoles
+	m.roleUpdateGuildID = intent.GuildID
+	m.roleUpdateUser = intent.UserID
+	m.addedRoles = intent.AddedRoles
+	m.removedRoles = intent.RemovedRoles
 }
 
-func (m *mockMemberSink) OnAvatarUpdate(ctx context.Context, guildID string, user discord.User, oldAvatarHash, newAvatarHash string) {
+func (m *mockMemberSink) OnAvatarUpdate(ctx context.Context, intent AvatarUpdateIntent) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.avatarUpdateGuildID = guildID
-	m.avatarUpdateUser = user
-	m.oldAvatar = oldAvatarHash
-	m.newAvatar = newAvatarHash
+	m.avatarUpdateGuildID = intent.GuildID
+	m.avatarUpdateUser = intent.UserID
+	m.oldAvatar = intent.OldAvatarHash
+	m.newAvatar = intent.NewAvatarHash
 }
 
-func (m *mockMemberSink) OnModerationAction(ctx context.Context, guildID string, actionType string, targetUser discord.User, reason string, moderator discord.User) {
+func (m *mockMemberSink) OnModerationAction(ctx context.Context, intent ModerationActionIntent) {
 }
 
-// Mock RoundTripper
-type mockTransport struct {
+type mockDiscordAdapter struct {
 	mu              sync.Mutex
 	addRoleCalls    int
 	removeRoleCalls int
@@ -138,65 +131,35 @@ type mockTransport struct {
 	meCalls         int
 }
 
-func (m *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+func (m *mockDiscordAdapter) Me() (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-
-	path := req.URL.Path
-	if req.Method == "PUT" && strings.Contains(path, "/roles/") {
-		m.addRoleCalls++
-		return &http.Response{
-			StatusCode: http.StatusNoContent,
-			Body:       io.NopCloser(strings.NewReader("")),
-			Header:     make(http.Header),
-		}, nil
-	}
-	if req.Method == "DELETE" && strings.Contains(path, "/roles/") {
-		m.removeRoleCalls++
-		return &http.Response{
-			StatusCode: http.StatusNoContent,
-			Body:       io.NopCloser(strings.NewReader("")),
-			Header:     make(http.Header),
-		}, nil
-	}
-	if req.Method == "GET" && strings.Contains(path, "/members/") {
-		m.memberCalls++
-		memberJSON := `{
-			"user": {
-				"id": "12345",
-				"username": "testuser",
-				"bot": false
-			},
-			"roles": [],
-			"joined_at": "2026-06-23T00:00:00Z"
-		}`
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(memberJSON)),
-			Header:     http.Header{"Content-Type": []string{"application/json"}},
-		}, nil
-	}
-	if req.Method == "GET" && strings.Contains(path, "/users/@me") {
-		m.meCalls++
-		meJSON := `{
-			"id": "99999",
-			"username": "botname",
-			"bot": true
-		}`
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(meJSON)),
-			Header:     http.Header{"Content-Type": []string{"application/json"}},
-		}, nil
-	}
-	return &http.Response{
-		StatusCode: http.StatusNotFound,
-		Body:       io.NopCloser(strings.NewReader("")),
-		Header:     make(http.Header),
-	}, nil
+	m.meCalls++
+	return "99999", nil
 }
 
-func setupTestService(t *testing.T) (*MemberEventService, *mockMembersRepo, *mockSystemRepo, *mockMemberSink, *mockTransport) {
+func (m *mockDiscordAdapter) MemberJoinedAt(ctx context.Context, guildID, userID string) (time.Time, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.memberCalls++
+	return time.Date(2026, 6, 23, 0, 0, 0, 0, time.UTC), nil
+}
+
+func (m *mockDiscordAdapter) AddRole(ctx context.Context, guildID, userID, roleID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.addRoleCalls++
+	return nil
+}
+
+func (m *mockDiscordAdapter) RemoveRole(ctx context.Context, guildID, userID, roleID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.removeRoleCalls++
+	return nil
+}
+
+func setupTestService(t *testing.T) (*MemberEventService, *mockMembersRepo, *mockSystemRepo, *mockMemberSink, *mockDiscordAdapter) {
 	t.Helper()
 	store := &files.MemoryConfigStore{}
 	_ = store.Save(&files.BotConfig{
@@ -227,25 +190,22 @@ func setupTestService(t *testing.T) (*MemberEventService, *mockMembersRepo, *moc
 	sink := &mockMemberSink{}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	transport := &mockTransport{}
-	st := state.New("Bot test")
-	st.Client.Client.Client = httpdriver.WrapClient(http.Client{Transport: transport})
+	adapter := &mockDiscordAdapter{}
 
 	deps := EventServiceDeps{
-		ConfigManager: mgr,
-		Sink:          sink,
-		MembersRepo:   mRepo,
-		SystemRepo:    sRepo,
-		BotInstanceID: "",
-		Logger:        logger,
-		ArikawaState:  st,
+		ConfigManager:  mgr,
+		Sink:           sink,
+		MembersRepo:    mRepo,
+		SystemRepo:     sRepo,
+		BotInstanceID:  "",
+		Logger:         logger,
+		DiscordAdapter: adapter,
 	}
 
 	svc := NewMemberEventServiceForBot(deps)
-	// We also test the alternative constructor
 	_ = NewMemberEventService(mgr, sink, mRepo, sRepo, logger)
 
-	return svc, mRepo, sRepo, sink, transport
+	return svc, mRepo, sRepo, sink, adapter
 }
 
 func TestMemberEventService_LifeCycle(t *testing.T) {
@@ -301,16 +261,14 @@ func TestMemberEventService_LifeCycle(t *testing.T) {
 
 func TestMemberEventService_IngestGuildMemberAdd(t *testing.T) {
 	t.Parallel()
-	svc, mRepo, sRepo, sink, transport := setupTestService(t)
+	svc, mRepo, sRepo, sink, adapter := setupTestService(t)
 	_ = svc.Start(context.Background())
 	defer func() { _ = svc.Stop(context.Background()) }()
 
 	// Test nil and bot filters
-	svc.IngestGuildMemberAdd(context.Background(), nil)
-	svc.IngestGuildMemberAdd(context.Background(), &gateway.GuildMemberAddEvent{
-		Member: discord.Member{
-			User: discord.User{Bot: true},
-		},
+	svc.IngestGuildMemberAdd(context.Background(), MemberJoinIntent{})
+	svc.IngestGuildMemberAdd(context.Background(), MemberJoinIntent{
+		Bot: true,
 	})
 	if len(sink.joinEvents) != 0 {
 		t.Errorf("expected no events forwarded for nil or bot joins")
@@ -319,28 +277,23 @@ func TestMemberEventService_IngestGuildMemberAdd(t *testing.T) {
 	// Canceled context
 	ctxCancel, cancel := context.WithCancel(context.Background())
 	cancel()
-	svc.IngestGuildMemberAdd(ctxCancel, &gateway.GuildMemberAddEvent{
-		Member: discord.Member{
-			User: discord.User{ID: discord.UserID(12345), Bot: false},
-		},
+	svc.IngestGuildMemberAdd(ctxCancel, MemberJoinIntent{
+		UserID: "12345",
+		Bot:    false,
 	})
 	if len(sink.joinEvents) != 0 {
 		t.Errorf("expected no events when context is canceled")
 	}
 
-	// Normal member join (should save in store and trigger role assignment evaluation)
+	// Normal member join
 	joinTime := time.Now().Add(-10 * time.Minute)
-	e := &gateway.GuildMemberAddEvent{
-		Member: discord.Member{
-			User: discord.User{
-				ID:  discord.UserID(12345),
-				Bot: false,
-			},
-			RoleIDs: []discord.RoleID{discord.RoleID(333), discord.RoleID(443)}, // Both required roles present
-			Joined:  discord.Timestamp(joinTime),
-		},
+	e := MemberJoinIntent{
+		GuildID:  "111",
+		UserID:   "12345",
+		Bot:      false,
+		RoleIDs:  []string{"333", "443"},
+		JoinedAt: joinTime,
 	}
-	e.GuildID = discord.GuildID(111)
 
 	svc.IngestGuildMemberAdd(context.Background(), e)
 
@@ -361,17 +314,17 @@ func TestMemberEventService_IngestGuildMemberAdd(t *testing.T) {
 	}
 	sRepo.mu.Unlock()
 
-	// Verify target role added via Arikawa Client
-	transport.mu.Lock()
-	if transport.addRoleCalls != 1 {
-		t.Errorf("expected 1 call to AddRole, got %d", transport.addRoleCalls)
+	// Verify target role added
+	adapter.mu.Lock()
+	if adapter.addRoleCalls != 1 {
+		t.Errorf("expected 1 call to AddRole, got %d", adapter.addRoleCalls)
 	}
-	transport.mu.Unlock()
+	adapter.mu.Unlock()
 }
 
 func TestMemberEventService_IngestGuildMemberRemove(t *testing.T) {
 	t.Parallel()
-	svc, _, sRepo, sink, transport := setupTestService(t)
+	svc, _, sRepo, sink, adapter := setupTestService(t)
 	_ = svc.Start(context.Background())
 	defer func() { _ = svc.Stop(context.Background()) }()
 
@@ -380,13 +333,11 @@ func TestMemberEventService_IngestGuildMemberRemove(t *testing.T) {
 	svc.joinTimes["111:12345"] = time.Now().Add(-2 * time.Hour)
 	svc.joinMu.Unlock()
 
-	e := &gateway.GuildMemberRemoveEvent{
-		User: discord.User{
-			ID:  discord.UserID(12345),
-			Bot: false,
-		},
+	e := MemberLeaveIntent{
+		GuildID: "111",
+		UserID:  "12345",
+		Bot:     false,
 	}
-	e.GuildID = discord.GuildID(111)
 
 	svc.IngestGuildMemberRemove(context.Background(), e)
 
@@ -400,11 +351,11 @@ func TestMemberEventService_IngestGuildMemberRemove(t *testing.T) {
 	}
 	sRepo.mu.Unlock()
 
-	transport.mu.Lock()
-	if transport.meCalls != 1 || transport.memberCalls != 1 {
-		t.Errorf("expected bot time calls (meCalls=%d, memberCalls=%d)", transport.meCalls, transport.memberCalls)
+	adapter.mu.Lock()
+	if adapter.meCalls != 1 || adapter.memberCalls != 1 {
+		t.Errorf("expected bot time calls (meCalls=%d, memberCalls=%d)", adapter.meCalls, adapter.memberCalls)
 	}
-	transport.mu.Unlock()
+	adapter.mu.Unlock()
 }
 
 func TestMemberEventService_IngestGuildMemberRemove_StoreFallback(t *testing.T) {
@@ -419,13 +370,11 @@ func TestMemberEventService_IngestGuildMemberRemove_StoreFallback(t *testing.T) 
 	mRepo.memberJoinOk = true
 	mRepo.mu.Unlock()
 
-	e := &gateway.GuildMemberRemoveEvent{
-		User: discord.User{
-			ID:  discord.UserID(99999),
-			Bot: false,
-		},
+	e := MemberLeaveIntent{
+		GuildID: "111",
+		UserID:  "99999",
+		Bot:     false,
 	}
-	e.GuildID = discord.GuildID(111)
 
 	svc.IngestGuildMemberRemove(context.Background(), e)
 
@@ -442,74 +391,55 @@ func TestMemberEventService_IngestGuildMemberRemove_StoreFallback(t *testing.T) 
 
 func TestMemberEventService_IngestGuildMemberUpdate(t *testing.T) {
 	t.Parallel()
-	svc, _, _, sink, transport := setupTestService(t)
+	svc, _, _, sink, adapter := setupTestService(t)
 	_ = svc.Start(context.Background())
 	defer func() { _ = svc.Stop(context.Background()) }()
 
-	// Old member state
-	oldMember := &discord.Member{
-		User: discord.User{
-			ID:     discord.UserID(12345),
-			Bot:    false,
-			Avatar: "old_avatar_hash",
-		},
-		RoleIDs: []discord.RoleID{discord.RoleID(333)}, // has roleA but not roleB
-	}
-
 	// New member state
-	e := &gateway.GuildMemberUpdateEvent{
-		User: discord.User{
-			ID:     discord.UserID(12345),
-			Bot:    false,
-			Avatar: "new_avatar_hash",
-		},
-		RoleIDs: []discord.RoleID{discord.RoleID(333), discord.RoleID(443)}, // Gained roleB, should add target role
+	e := MemberUpdateIntent{
+		GuildID:    "111",
+		UserID:     "12345",
+		Bot:        false,
+		AvatarHash: "new_avatar_hash",
+		RoleIDs:    []string{"333", "443"}, // Gained roleB, should add target role
+		OldRoleIDs: []string{"333"},        // has roleA but not roleB
+		OldAvatar:  "old_avatar_hash",
 	}
-	e.GuildID = discord.GuildID(111)
 
-	svc.IngestGuildMemberUpdate(context.Background(), e, oldMember)
+	svc.IngestGuildMemberUpdate(context.Background(), e)
 
 	// Verify avatar update and role update sinks called
 	sink.mu.Lock()
 	if sink.avatarUpdateGuildID != "111" || sink.oldAvatar != "old_avatar_hash" || sink.newAvatar != "new_avatar_hash" {
 		t.Errorf("avatar update sink not called correctly")
 	}
-	if sink.roleUpdateGuildID != "111" || len(sink.addedRoles) != 1 || sink.addedRoles[0] != discord.RoleID(443) {
+	if sink.roleUpdateGuildID != "111" || len(sink.addedRoles) != 1 || sink.addedRoles[0] != "443" {
 		t.Errorf("role update sink not called correctly")
 	}
 	sink.mu.Unlock()
 
-	transport.mu.Lock()
-	if transport.addRoleCalls != 1 {
-		t.Errorf("expected 1 AddRole call, got %d", transport.addRoleCalls)
+	adapter.mu.Lock()
+	if adapter.addRoleCalls != 1 {
+		t.Errorf("expected 1 AddRole call, got %d", adapter.addRoleCalls)
 	}
-	transport.mu.Unlock()
+	adapter.mu.Unlock()
 
 	// Now let's trigger role removal
-	oldMember = &discord.Member{
-		User: discord.User{
-			ID:  discord.UserID(12345),
-			Bot: false,
-		},
-		RoleIDs: []discord.RoleID{discord.RoleID(333), discord.RoleID(443), discord.RoleID(999)}, // has target role
+	e = MemberUpdateIntent{
+		GuildID:    "111",
+		UserID:     "12345",
+		Bot:        false,
+		RoleIDs:    []string{"443", "999"},        // Lost roleA, should remove target role
+		OldRoleIDs: []string{"333", "443", "999"}, // has target role
 	}
 
-	e = &gateway.GuildMemberUpdateEvent{
-		User: discord.User{
-			ID:  discord.UserID(12345),
-			Bot: false,
-		},
-		RoleIDs: []discord.RoleID{discord.RoleID(443), discord.RoleID(999)}, // Lost roleA, should remove target role
-	}
-	e.GuildID = discord.GuildID(111)
+	svc.IngestGuildMemberUpdate(context.Background(), e)
 
-	svc.IngestGuildMemberUpdate(context.Background(), e, oldMember)
-
-	transport.mu.Lock()
-	if transport.removeRoleCalls != 1 {
-		t.Errorf("expected 1 RemoveRole call, got %d", transport.removeRoleCalls)
+	adapter.mu.Lock()
+	if adapter.removeRoleCalls != 1 {
+		t.Errorf("expected 1 RemoveRole call, got %d", adapter.removeRoleCalls)
 	}
-	transport.mu.Unlock()
+	adapter.mu.Unlock()
 }
 
 func TestMemberEventService_CleanupJoinTimes(t *testing.T) {
@@ -551,11 +481,11 @@ func TestNopMemberSink(t *testing.T) {
 	t.Parallel()
 	sink := NopMemberSink{}
 	// None should panic
-	sink.OnMemberJoin(context.Background(), nil, 0)
-	sink.OnMemberLeave(context.Background(), nil, 0, 0)
-	sink.OnRoleUpdate(context.Background(), "", discord.User{}, nil, nil)
-	sink.OnAvatarUpdate(context.Background(), "", discord.User{}, "", "")
-	sink.OnModerationAction(context.Background(), "", "", discord.User{}, "", discord.User{})
+	sink.OnMemberJoin(context.Background(), MemberJoinIntent{}, 0)
+	sink.OnMemberLeave(context.Background(), MemberLeaveIntent{}, 0, 0)
+	sink.OnRoleUpdate(context.Background(), RoleUpdateIntent{})
+	sink.OnAvatarUpdate(context.Background(), AvatarUpdateIntent{})
+	sink.OnModerationAction(context.Background(), ModerationActionIntent{})
 }
 
 func TestNopMetrics(t *testing.T) {

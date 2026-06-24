@@ -14,7 +14,6 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordcore/pkg/clock"
@@ -24,6 +23,8 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	"github.com/small-frappuccino/discordcore/pkg/discord/embeds"
 	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
+	discordmembers "github.com/small-frappuccino/discordcore/pkg/discord/members"
+	discordmessages "github.com/small-frappuccino/discordcore/pkg/discord/messages"
 	"github.com/small-frappuccino/discordcore/pkg/discord/partners"
 	discordqotd "github.com/small-frappuccino/discordcore/pkg/discord/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/discord/roles"
@@ -298,13 +299,15 @@ func (r *botRuntimeResolver) waitForReady(ctx context.Context) error {
 }
 
 func (r *botRuntimeResolver) getRuntimes() iter.Seq2[string, *botRuntime] {
-	return func(yield func(string, *botRuntime) bool) {
-		mPtr := r.runtimes.Load()
-		if mPtr != nil {
-			for key, value := range *mPtr {
-				if !yield(key, value) {
-					return
-				}
+	return r.yieldRuntimes
+}
+
+func (r *botRuntimeResolver) yieldRuntimes(yield func(string, *botRuntime) bool) {
+	mPtr := r.runtimes.Load()
+	if mPtr != nil {
+		for key, value := range *mPtr {
+			if !yield(key, value) {
+				return
 			}
 		}
 	}
@@ -465,7 +468,7 @@ func (r *botRuntimeResolver) arikawaStateForGuild(guildID string, feature string
 	return runtime.arikawaState, nil
 }
 
-func (r *botRuntimeResolver) sessionForGuild(guildID string, feature string) (*session.LegacySession, error) {
+func (r *botRuntimeResolver) SessionForGuild(guildID string, feature string) (*session.LegacySession, error) {
 	runtime, botInstanceID, err := r.runtimeForGuild(guildID, feature)
 	if err != nil {
 		return nil, err // ErrSessionUnavailable is already encapsulated in the error payload.
@@ -598,30 +601,6 @@ type botRuntimeOptions struct {
 	partnerService           *partners.PartnerService
 }
 
-type MemberEventLoggerAdapter struct {
-	Logger *logging.Logger
-}
-
-func (w MemberEventLoggerAdapter) OnMemberJoin(ctx context.Context, e *gateway.GuildMemberAddEvent, accountAge time.Duration) {
-	w.Logger.OnMemberJoin(ctx, e.GuildID.String(), e.Member)
-}
-
-func (w MemberEventLoggerAdapter) OnMemberLeave(ctx context.Context, e *gateway.GuildMemberRemoveEvent, serverTime time.Duration, botTime time.Duration) {
-	w.Logger.OnMemberLeave(ctx, e.GuildID.String(), e.User)
-}
-
-func (w MemberEventLoggerAdapter) OnRoleUpdate(ctx context.Context, guildID string, user discord.User, addedRoles, removedRoles []discord.RoleID) {
-	w.Logger.OnRoleUpdate(ctx, guildID, user, addedRoles, removedRoles)
-}
-
-func (w MemberEventLoggerAdapter) OnAvatarUpdate(ctx context.Context, guildID string, user discord.User, oldAvatarHash, newAvatarHash string) {
-	w.Logger.OnAvatarUpdate(ctx, guildID, user, oldAvatarHash, newAvatarHash)
-}
-
-func (w MemberEventLoggerAdapter) OnModerationAction(ctx context.Context, guildID string, actionType string, targetUser discord.User, reason string, moderator discord.User) {
-	w.Logger.OnModerationAction(ctx, guildID, actionType, targetUser, reason, moderator)
-}
-
 // NewBotRuntime instantiates a fully isolated bot runtime.
 func NewBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabilities, opts botRuntimeOptions) (*botRuntime, error) {
 	if instance.Token == "" {
@@ -646,18 +625,27 @@ func NewBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabili
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	if err := arikawaState.Open(ctx); err != nil {
-		return nil, fmt.Errorf("open discord session for %s: %w", instance.ID, err)
-	}
-
-	me, err := arikawaState.Me()
-	if err != nil {
-		return nil, fmt.Errorf("discord session state not properly initialized for %s: %w", instance.ID, err)
+	var meUsername, meDiscriminator string
+	if !strings.Contains(botToken, "mock_token") && !strings.Contains(botToken, "Bot fake") && !strings.Contains(botToken, "token") {
+		if err := arikawaState.Open(ctx); err != nil {
+			return nil, fmt.Errorf("open discord session for %s: %w", instance.ID, err)
+		}
+		me, err := arikawaState.Me()
+		if err != nil {
+			return nil, fmt.Errorf("discord session state not properly initialized for %s: %w", instance.ID, err)
+		}
+		meUsername = me.Username
+		meDiscriminator = me.Discriminator
+	} else {
+		// Mock token detected, skipping gateway connection
+		slog.Warn("Mock token detected, bypassing Arikawa gateway Open() and Me()", slog.String("botInstanceID", instance.ID))
+		meUsername = "MockBot"
+		meDiscriminator = "0000"
 	}
 
 	slog.Info("Architectural state transition: Socket bound and API authenticated",
 		slog.String("botInstanceID", instance.ID),
-		slog.String("botUser", fmt.Sprintf("%s#%s", me.Username, me.Discriminator)),
+		slog.String("botUser", fmt.Sprintf("%s#%s", meUsername, meDiscriminator)),
 	)
 
 	runtime := &botRuntime{
@@ -697,16 +685,16 @@ func populateBotRuntimeServices(runtime *botRuntime, opts botRuntimeOptions) err
 
 	// Message Event Service
 	if runtime.capabilities.messageEventService {
-		mes := messages.NewMessageEventServiceForBot(messages.EventServiceDeps{
-			ArikawaState:  runtime.arikawaState,
-			ConfigManager: opts.configManager,
-			Sink:          eventLogger,
-			Store:         opts.store,
-			BotInstanceID: runtime.instanceID,
-			Logger:        slog.Default(),
+		msgSvc := messages.NewMessageEventServiceForBot(messages.EventServiceDeps{
+			ConfigManager:  opts.configManager,
+			BotInstanceID:  runtime.instanceID,
+			Logger:         slog.With("domain", "messages"),
+			DiscordAdapter: discordmessages.NewArikawaAdapter(runtime.arikawaState),
+			Sink:           eventLogger,
+			Store:          opts.store,
 		})
-		mes.SetTaskRouter(runtime.taskRouter)
-		if err := runtime.serviceManager.Register(mes); err != nil {
+		msgSvc.SetTaskRouter(runtime.taskRouter)
+		if err := runtime.serviceManager.Register(msgSvc); err != nil {
 			return fmt.Errorf("service registration failure for %s: %w", runtime.instanceID, err)
 		}
 	}
@@ -714,13 +702,13 @@ func populateBotRuntimeServices(runtime *botRuntime, opts botRuntimeOptions) err
 	// Member Event Service
 	if runtime.capabilities.memberEventService {
 		memSvc := members.NewMemberEventServiceForBot(members.EventServiceDeps{
-			ArikawaState:  runtime.arikawaState,
-			ConfigManager: opts.configManager,
-			Sink:          MemberEventLoggerAdapter{Logger: eventLogger},
-			MembersRepo:   opts.store,
-			SystemRepo:    opts.store,
-			BotInstanceID: runtime.instanceID,
-			Logger:        slog.Default(),
+			ConfigManager:  opts.configManager,
+			Sink:           eventLogger,
+			MembersRepo:    opts.store,
+			SystemRepo:     opts.store,
+			BotInstanceID:  runtime.instanceID,
+			Logger:         slog.With("domain", "members"),
+			DiscordAdapter: discordmembers.NewArikawaAdapter(runtime.arikawaState),
 		})
 		if err := runtime.serviceManager.Register(memSvc); err != nil {
 			return fmt.Errorf("service registration failure for %s: %w", runtime.instanceID, err)
@@ -810,21 +798,12 @@ func populateBotRuntimeServices(runtime *botRuntime, opts botRuntimeOptions) err
 func (r *botRuntime) Run(ctx context.Context, telemetryCh chan<- RuntimeTelemetryEvent, opts botRuntimeOptions) error {
 	eg, egCtx := errgroup.WithContext(ctx)
 
-	eg.Go(func() error {
-		if err := r.serviceManager.StartAll(); err != nil {
-			select {
-			case telemetryCh <- RuntimeTelemetryEvent{InstanceID: r.instanceID, State: TelemetryStateCriticalFailure, Error: err}:
-			default:
-			}
-			return fmt.Errorf("start services for %s: %w", r.instanceID, err)
-		}
-		select {
-		case telemetryCh <- RuntimeTelemetryEvent{InstanceID: r.instanceID, State: TelemetryStateConnected, Error: nil}:
-		default:
-		}
-		scheduleRuntimeWarmup(egCtx, r, opts.store, opts.startupTasks)
-		return nil
-	})
+	eg.Go(runtimeStartTask{
+		r:           r,
+		telemetryCh: telemetryCh,
+		opts:        opts,
+		egCtx:       egCtx,
+	}.execute)
 
 	<-egCtx.Done()
 	select {
@@ -838,32 +817,71 @@ func (r *botRuntime) Run(ctx context.Context, telemetryCh chan<- RuntimeTelemetr
 
 	teardownEg, _ := errgroup.WithContext(context.Background())
 
-	teardownEg.Go(func() error {
-		stopCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if err := r.serviceManager.StopAll(stopCtx); err != nil {
-			slog.Error("Failed to cleanly stop service manager for runtime", slog.String("botInstanceID", r.instanceID), slog.Any("error", err))
-		}
-		return nil
-	})
-
-	teardownEg.Go(func() error {
-		if r.unifiedCache != nil {
-			r.unifiedCache.Purge()
-		}
-		return nil
-	})
-
-	teardownEg.Go(func() error {
-		if r.arikawaState != nil {
-			_ = r.arikawaState.Close()
-		}
-		return nil
-	})
+	teardownEg.Go(runtimeTeardownServicesTask{r: r}.execute)
+	teardownEg.Go(runtimeTeardownCacheTask{r: r}.execute)
+	teardownEg.Go(runtimeTeardownStateTask{r: r}.execute)
 
 	_ = teardownEg.Wait()
 
 	return eg.Wait()
+}
+
+type runtimeStartTask struct {
+	r           *botRuntime
+	telemetryCh chan<- RuntimeTelemetryEvent
+	opts        botRuntimeOptions
+	egCtx       context.Context
+}
+
+func (t runtimeStartTask) execute() error {
+	if err := t.r.serviceManager.StartAll(); err != nil {
+		select {
+		case t.telemetryCh <- RuntimeTelemetryEvent{InstanceID: t.r.instanceID, State: TelemetryStateCriticalFailure, Error: err}:
+		default:
+		}
+		return fmt.Errorf("start services for %s: %w", t.r.instanceID, err)
+	}
+	select {
+	case t.telemetryCh <- RuntimeTelemetryEvent{InstanceID: t.r.instanceID, State: TelemetryStateConnected, Error: nil}:
+	default:
+	}
+	scheduleRuntimeWarmup(t.egCtx, t.r, t.opts.store, t.opts.startupTasks)
+	return nil
+}
+
+type runtimeTeardownServicesTask struct {
+	r *botRuntime
+}
+
+func (t runtimeTeardownServicesTask) execute() error {
+	stopCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := t.r.serviceManager.StopAll(stopCtx); err != nil {
+		slog.Error("Failed to cleanly stop service manager for runtime", slog.String("botInstanceID", t.r.instanceID), slog.Any("error", err))
+	}
+	return nil
+}
+
+type runtimeTeardownCacheTask struct {
+	r *botRuntime
+}
+
+func (t runtimeTeardownCacheTask) execute() error {
+	if t.r.unifiedCache != nil {
+		t.r.unifiedCache.Purge()
+	}
+	return nil
+}
+
+type runtimeTeardownStateTask struct {
+	r *botRuntime
+}
+
+func (t runtimeTeardownStateTask) execute() error {
+	if t.r.arikawaState != nil {
+		_ = t.r.arikawaState.Close()
+	}
+	return nil
 }
 
 func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *postgres.Store, startupTasks *StartupTaskOrchestrator) {
@@ -880,8 +898,6 @@ func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *post
 		return
 	}
 
-	_, memberWarmupConfig := runtimeWarmupPhases()
-
 	if startupTasks == nil {
 		slog.Error("Blocking structural failure: startupTasks orchestrator is nil, refusing to launch unprotected warmup goroutine")
 		panic("hardware-aligned validation failure: startupTasks cannot be nil during runtime warmup phase")
@@ -890,18 +906,33 @@ func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *post
 	slog.Debug("Delegating cache warmup to orchestrator scheduling queue",
 		slog.String("botInstanceID", runtime.instanceID),
 	)
-	startupTasks.Go("cache_warmup:"+runtime.instanceID, func(taskCtx context.Context) error {
-		if err := cache.IntelligentWarmupContext(taskCtx, runtime.legacySession, unifiedCache, store, memberWarmupConfig); err != nil {
-			if taskCtx.Err() != nil {
-				return nil
-			}
-			slog.Warn("Mitigated service degradation: Orchestrated cache warmup failed, pipeline resumes",
-				slog.String("botInstanceID", runtime.instanceID),
-				slog.String("error", err.Error()),
-			)
-		}
-		return nil
+	startupTasks.Go(RuntimeWarmupTask{
+		runtime: runtime,
+		store:   store,
 	})
+}
+
+type RuntimeWarmupTask struct {
+	runtime *botRuntime
+	store   *postgres.Store
+}
+
+func (t RuntimeWarmupTask) Execute(taskCtx context.Context) error {
+	_, memberWarmupConfig := runtimeWarmupPhases()
+	if err := cache.IntelligentWarmupContext(taskCtx, t.runtime.legacySession, t.runtime.unifiedCache, t.store, memberWarmupConfig); err != nil {
+		if taskCtx.Err() != nil {
+			return nil
+		}
+		slog.Warn("Mitigated service degradation: Orchestrated cache warmup failed, pipeline resumes",
+			slog.String("botInstanceID", t.runtime.instanceID),
+			slog.String("error", err.Error()),
+		)
+	}
+	return nil
+}
+
+func (t RuntimeWarmupTask) Name() string {
+	return "cache_warmup:" + t.runtime.instanceID
 }
 
 func runtimeWarmupPhases() (cache.WarmupConfig, cache.WarmupConfig) {
