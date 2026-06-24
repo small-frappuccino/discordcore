@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -268,7 +269,8 @@ type botRuntime struct {
 
 type botRuntimeResolver struct {
 	configManager *files.ConfigManager
-	runtimes      sync.Map // key: string, value: *botRuntime
+	runtimes      atomic.Pointer[map[string]*botRuntime]
+	writeMu       sync.Mutex
 	readyCh       chan struct{}
 	readyOnce     sync.Once
 }
@@ -297,18 +299,45 @@ func (r *botRuntimeResolver) waitForReady(ctx context.Context) error {
 
 func (r *botRuntimeResolver) getRuntimes() iter.Seq2[string, *botRuntime] {
 	return func(yield func(string, *botRuntime) bool) {
-		r.runtimes.Range(func(key, value any) bool {
-			return yield(key.(string), value.(*botRuntime))
-		})
+		mPtr := r.runtimes.Load()
+		if mPtr != nil {
+			for key, value := range *mPtr {
+				if !yield(key, value) {
+					return
+				}
+			}
+		}
 	}
 }
 
 func (r *botRuntimeResolver) addRuntime(id string, runtime *botRuntime) {
-	r.runtimes.Store(id, runtime)
+	r.writeMu.Lock()
+	defer r.writeMu.Unlock()
+	oldMapPtr := r.runtimes.Load()
+	newMap := make(map[string]*botRuntime)
+	if oldMapPtr != nil {
+		for k, v := range *oldMapPtr {
+			newMap[k] = v
+		}
+	}
+	newMap[id] = runtime
+	r.runtimes.Store(&newMap)
 }
 
 func (r *botRuntimeResolver) removeRuntime(id string) {
-	r.runtimes.Delete(id)
+	r.writeMu.Lock()
+	defer r.writeMu.Unlock()
+	oldMapPtr := r.runtimes.Load()
+	if oldMapPtr == nil {
+		return
+	}
+	newMap := make(map[string]*botRuntime)
+	for k, v := range *oldMapPtr {
+		if k != id {
+			newMap[k] = v
+		}
+	}
+	r.runtimes.Store(&newMap)
 }
 
 func knownBotInstanceCatalogSeq(runtimes iter.Seq2[string, *botRuntime], additional []string) iter.Seq[string] {
@@ -349,9 +378,11 @@ func newBotRuntimeResolver(configManager *files.ConfigManager, initialRuntimes m
 		configManager: configManager,
 		readyCh:       make(chan struct{}),
 	}
+	newMap := make(map[string]*botRuntime)
 	for k, v := range initialRuntimes {
-		resolver.runtimes.Store(k, v)
+		newMap[k] = v
 	}
+	resolver.runtimes.Store(&newMap)
 	return resolver
 }
 
@@ -388,7 +419,14 @@ func (r *botRuntimeResolver) runtimeForGuild(guildID string, feature string) (*b
 	}
 
 	hasAny := false
-	r.runtimes.Range(func(_, _ any) bool { hasAny = true; return false })
+	mPtr := r.runtimes.Load()
+	var runtimesMap map[string]*botRuntime
+	if mPtr != nil {
+		runtimesMap = *mPtr
+		if len(runtimesMap) > 0 {
+			hasAny = true
+		}
+	}
 	if !hasAny {
 		return nil, "", fmt.Errorf("%w: primary runtime vector exhausted or uninitialized for guild %s", ErrSessionUnavailable, guildID)
 	}
@@ -401,10 +439,8 @@ func (r *botRuntimeResolver) runtimeForGuild(guildID string, feature string) (*b
 	bestInstanceID, _ := guild.ResolveFeatureBotInstanceID(feature)
 	if bestInstanceID != "" {
 		if tokenEnc, ok := guild.BotInstanceTokens[bestInstanceID]; ok && string(tokenEnc) != "" {
-			if val, ok := r.runtimes.Load(bestInstanceID); ok {
-				if runtime := val.(*botRuntime); runtime != nil {
-					return runtime, bestInstanceID, nil
-				}
+			if runtime, ok := runtimesMap[bestInstanceID]; ok && runtime != nil {
+				return runtime, bestInstanceID, nil
 			}
 		}
 	}
@@ -414,18 +450,14 @@ func (r *botRuntimeResolver) runtimeForGuild(guildID string, feature string) (*b
 		if string(tokenEnc) == "" {
 			continue
 		}
-		if val, ok := r.runtimes.Load(id); ok {
-			if runtime := val.(*botRuntime); runtime != nil {
-				return runtime, id, nil
-			}
+		if runtime, ok := runtimesMap[id]; ok && runtime != nil {
+			return runtime, id, nil
 		}
 	}
 
 	// 3. Fallback de Último Recurso: Instância Global/Default
-	if val, ok := r.runtimes.Load(""); ok {
-		if runtime := val.(*botRuntime); runtime != nil {
-			return runtime, "", nil
-		}
+	if runtime, ok := runtimesMap[""]; ok && runtime != nil {
+		return runtime, "", nil
 	}
 
 	return nil, "", fmt.Errorf("%w: orchestrator failed to couple guild %s to an active port", ErrSessionUnavailable, guildID)
@@ -476,7 +508,14 @@ func (r *botRuntimeResolver) guildBindings(context.Context) ([]control.BotGuildB
 	}
 
 	hasAny := false
-	r.runtimes.Range(func(_, _ any) bool { hasAny = true; return false })
+	mPtr := r.runtimes.Load()
+	var runtimesMap map[string]*botRuntime
+	if mPtr != nil {
+		runtimesMap = *mPtr
+		if len(runtimesMap) > 0 {
+			hasAny = true
+		}
+	}
 	if !hasAny {
 		return nil, nil
 	}
@@ -491,12 +530,8 @@ func (r *botRuntimeResolver) guildBindings(context.Context) ([]control.BotGuildB
 			if token == "" {
 				continue
 			}
-			val, ok := r.runtimes.Load(botInstanceID)
-			if !ok {
-				continue
-			}
-			runtime := val.(*botRuntime)
-			if runtime == nil || runtime.legacySession == nil {
+			runtime, ok := runtimesMap[botInstanceID]
+			if !ok || runtime == nil || runtime.legacySession == nil {
 				continue
 			}
 
@@ -614,6 +649,9 @@ func (w memberSinkWrapper) OnModerationAction(ctx context.Context, guildID strin
 func NewBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabilities, opts botRuntimeOptions) (*botRuntime, error) {
 	if instance.Token == "" {
 		return nil, errors.New("hardware-aligned validation failure: bot token is missing prior to socket coupling")
+	}
+	if opts.configManager == nil || opts.startupTasks == nil {
+		return nil, errors.New("hardware-aligned validation failure: mandatory dependency pointers are nil (configManager, startupTasks)")
 	}
 	slog.Info("Architectural state transition: Initializing primary Discord API routine",
 		slog.String("botInstanceID", instance.ID),
@@ -816,24 +854,40 @@ func (r *botRuntime) Run(ctx context.Context, telemetryCh chan<- RuntimeTelemetr
 	default:
 	}
 
-	slog.Info("Architectural state transition: Executing localized teardown for runtime instance",
+	slog.Info("Architectural state transition: Executing localized parallel teardown for runtime instance",
 		slog.String("botInstanceID", r.instanceID),
 	)
 
-	stopCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	teardownEg, _ := errgroup.WithContext(context.Background())
 
-	if err := r.serviceManager.StopAll(stopCtx); err != nil {
-		slog.Error("Failed to cleanly stop service manager for runtime", slog.String("botInstanceID", r.instanceID), slog.Any("error", err))
-	}
-
-	if r.arikawaState != nil {
-		if opts.discordSessionCloseHook != nil {
-			_ = opts.discordSessionCloseHook(r.arikawaState)
-		} else {
-			_ = r.arikawaState.Close()
+	teardownEg.Go(func() error {
+		stopCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := r.serviceManager.StopAll(stopCtx); err != nil {
+			slog.Error("Failed to cleanly stop service manager for runtime", slog.String("botInstanceID", r.instanceID), slog.Any("error", err))
 		}
-	}
+		return nil
+	})
+
+	teardownEg.Go(func() error {
+		if r.unifiedCache != nil {
+			r.unifiedCache.Purge()
+		}
+		return nil
+	})
+
+	teardownEg.Go(func() error {
+		if r.arikawaState != nil {
+			if opts.discordSessionCloseHook != nil {
+				_ = opts.discordSessionCloseHook(r.arikawaState)
+			} else {
+				_ = r.arikawaState.Close()
+			}
+		}
+		return nil
+	})
+
+	_ = teardownEg.Wait()
 
 	return eg.Wait()
 }

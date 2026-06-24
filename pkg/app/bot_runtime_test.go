@@ -131,6 +131,7 @@ func TestBotRuntime_InitializationRouting(t *testing.T) {
 				openBotArikawaState:     openBotArikawaStateHook,
 				newCommandHandlerForBot: newCommandHandlerForBotHook,
 				setupCommandHandler:     setupCommandHandlerHook,
+				startupTasks:            NewStartupTaskOrchestrator(context.Background(), 1),
 			}
 
 			rt, err := NewBotRuntime(resolvedBotInstance{ID: "main", Token: "Bot fake"}, caps, opts)

@@ -116,6 +116,17 @@ func (s *Segment[T]) Invalidate(key string) {
 	delete(shard.data, key)
 }
 
+// Purge forcefully reallocates the underlying shards, instantly releasing all memory references
+// to the Garbage Collector without granular key iteration.
+func (s *Segment[T]) Purge() {
+	for i := 0; i < 16; i++ {
+		shard := s.shards[i]
+		shard.mu.Lock()
+		shard.data = make(map[string]WeakRef[T])
+		shard.mu.Unlock()
+	}
+}
+
 // Snapshot aggregates and returns all currently active, non-expired cache entries across all shards.
 // This operation is computationally expensive and acquires read locks sequentially across the segment.
 func (s *Segment[T]) Snapshot() map[string]*T {
@@ -165,6 +176,14 @@ func NewUnifiedCache(cfg CacheConfig) *UnifiedCache {
 		channels: NewSegment[discord.Channel](cfg.ChannelTTL),
 		store:    cfg.Store,
 	}
+}
+
+// Purge performs an instantaneous memory recycle across all entity segments.
+func (uc *UnifiedCache) Purge() {
+	uc.members.Purge()
+	uc.guilds.Purge()
+	uc.roles.Purge()
+	uc.channels.Purge()
 }
 
 // Accessors
