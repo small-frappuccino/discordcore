@@ -7,11 +7,14 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordcore/pkg/clock"
+	"github.com/small-frappuccino/discordcore/pkg/control"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	"github.com/small-frappuccino/discordcore/pkg/discord/embeds"
@@ -158,19 +161,87 @@ func (a *App) Boot(ctx context.Context) error {
 			sess, _ := a.runtimeResolver.sessionForGuild(guildID, "")
 			return sess
 		})
-		scheduleControlServerStartup(a.startupTasks, controlStartupTaskOptions{
-			runOptions:            a.opts,
-			configManager:         a.configManager,
-			runtimeApplier:        a.runtimeApplier,
-			controlBearerToken:    controlBearerToken,
-			runtimeResolver:       a.runtimeResolver,
-			store:                 a.store,
-			qotdService:           a.qotdService,
-			moderationMetrics:     a.moderationMetrics,
-			membersMetrics:        a.membersMetrics,
-			messagesMetrics:       a.messagesMetrics,
-			controlServerRegistry: a.controlServerRegistry,
-		})
+		if !a.opts.DisableControl {
+			controlRuntime, err := resolveControlRuntime(egCtx, a.opts)
+			if err != nil {
+				if stdErrors.Is(err, errControlLocalTLSUnavailable) {
+					slog.Warn("Local TLS parameters unavailable; fallback to insecure local execution state activated", slog.String("error", err.Error()))
+				} else {
+					return fmt.Errorf("resolve control runtime: %w", err)
+				}
+			} else {
+				var serverOpts []control.ServerOption
+				if controlBearerToken == "" && controlRuntime.oauthConfig == nil {
+					slog.Info("Architectural transition: Control server initializing without authentication middleware",
+						slog.String("addr", controlRuntime.bindAddr),
+						slog.Bool("dashboard_only", true),
+					)
+				}
+				if controlBearerToken != "" {
+					serverOpts = append(serverOpts, func(s *control.Server) error {
+						s.SetBearerToken(controlBearerToken)
+						return nil
+					})
+				}
+				if a.runtimeResolver != nil {
+					serverOpts = append(serverOpts, func(s *control.Server) error {
+						s.SetKnownBotInstanceIDs(slices.Collect(knownBotInstanceCatalogSeq(a.runtimeResolver.getRuntimes(), nil)))
+						s.SetArikawaStateResolver(func(guildID string) (*state.State, error) {
+							return a.runtimeResolver.arikawaStateForGuild(guildID, "dashboard")
+						})
+						s.SetBotGuildBindingsProvider(func(ctx context.Context) ([]control.BotGuildBinding, error) {
+							return a.runtimeResolver.guildBindings(ctx)
+						})
+						s.SetGuildRegistrationResolver(func(ctx context.Context, guildID string) error {
+							return a.runtimeResolver.registerGuild(ctx, guildID)
+						})
+						return nil
+					})
+				}
+				serverOpts = append(serverOpts, func(s *control.Server) error {
+					s.SetQOTDService(a.qotdService)
+					s.SetModerationMetrics(a.moderationMetrics)
+					s.SetMembersMetricsResolver(func() members.Metrics { return a.membersMetrics })
+					s.SetMessagesMetricsResolver(func() messages.Metrics { return a.messagesMetrics })
+					s.SetStorage(a.store)
+					s.SetCacheObservability(func() *cache.UnifiedCache {
+						if a.runtimeResolver == nil {
+							return nil
+						}
+						caches := a.runtimeResolver.aggregateUnifiedCaches()
+						if len(caches) == 0 {
+							return nil
+						}
+						for _, c := range caches {
+							return c
+						}
+						return nil
+					}, a.store)
+					if err := s.SetPublicOrigin(controlRuntime.publicOrigin); err != nil {
+						return fmt.Errorf("configure control public origin: %w", err)
+					}
+					if controlRuntime.tlsCertFile != "" || controlRuntime.tlsKeyFile != "" {
+						if err := s.SetTLSCertificates(controlRuntime.tlsCertFile, controlRuntime.tlsKeyFile); err != nil {
+							return fmt.Errorf("configure control tls certificates: %w", err)
+						}
+					}
+					if controlRuntime.oauthConfig != nil {
+						if err := s.SetDiscordOAuthConfig(*controlRuntime.oauthConfig); err != nil {
+							return fmt.Errorf("configure control discord oauth: %w", err)
+						}
+						slog.Info("Architectural transition: Discord OAuth constraints applied to control interface",
+							slog.String("scopes", strings.Join(control.DiscordOAuthScopes(controlRuntime.oauthConfig.IncludeGuildsMembersRead), " ")),
+						)
+						if controlRuntime.tlsCertFile == "" || controlRuntime.tlsKeyFile == "" {
+							slog.Warn("Misconfigured deployment topology: OAuth enforced without local TLS termination; secure cookies risk clearance drop")
+						}
+					}
+					return nil
+				})
+
+				scheduleControlServerStartup(a.startupTasks, controlRuntime, a.configManager, a.runtimeApplier, a.controlServerRegistry, serverOpts...)
+			}
+		}
 		slog.Info("Architectural state transition: Command tree sync complete")
 		return nil
 	})
@@ -459,7 +530,15 @@ func (a *App) Teardown(originalErr error) error {
 	}
 
 	if a.startupTasks != nil {
-		shutdownStartupServices(a.startupTasks, a.controlServerRegistry, "Startup background tasks did not finish before shutdown")
+		if err := shutdownStartupServices(a.startupTasks, a.controlServerRegistry, "Startup background tasks did not finish before shutdown"); err != nil {
+			errWrap := fmt.Errorf("startup services shutdown: %w", err)
+			log.EmitBlockingError("Structural teardown failure: Network socket lifecycle release hung", errWrap, log.GenerateRequestID())
+			if originalErr != nil {
+				originalErr = stdErrors.Join(originalErr, errWrap)
+			} else {
+				originalErr = errWrap
+			}
+		}
 	}
 
 	if a.serviceManager != nil {
@@ -553,12 +632,14 @@ func resolveRuntimeCapabilities(configSnapshot *files.BotConfig, botInstances []
 	return capabilities
 }
 
-func shutdownStartupServices(startupTasks *StartupTaskOrchestrator, controlServerRegistry *controlServerHolder, tasksWarn string) {
+func shutdownStartupServices(startupTasks *StartupTaskOrchestrator, controlServerRegistry *controlServerHolder, tasksWarn string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	var finalErr error
 	if controlServerRegistry != nil {
 		if err := controlServerRegistry.Stop(ctx); err != nil {
 			log.EmitBlockingError("Structural teardown failure: Interface server socket release hung", err, log.GenerateRequestID())
+			finalErr = err
 		}
 	}
 	if startupTasks != nil {
@@ -567,8 +648,14 @@ func shutdownStartupServices(startupTasks *StartupTaskOrchestrator, controlServe
 				slog.String("warning_context", tasksWarn),
 				slog.String("error", err.Error()),
 			)
+			if finalErr != nil {
+				finalErr = stdErrors.Join(finalErr, err)
+			} else {
+				finalErr = err
+			}
 		}
 	}
+	return finalErr
 }
 
 func formatStartupMessage(appName, appVersion, coreVersion string) string {

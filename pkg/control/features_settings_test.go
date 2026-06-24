@@ -11,7 +11,7 @@ import (
 
 func TestFeaturesSettings_RaceConditions(t *testing.T) {
 	t.Parallel()
-	srv := NewServer("127.0.0.1:0", nil, nil)
+	srv, _ := NewServer("127.0.0.1:0", nil, nil)
 	mux := http.NewServeMux()
 	srv.registerRoutes(mux)
 

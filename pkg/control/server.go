@@ -3,7 +3,9 @@ package control
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"time"
 
@@ -22,6 +24,9 @@ import (
 
 // ErrControlServerBind indicates a fatal failure to bind the HTTP control plane to its configured network interface.
 var ErrControlServerBind = errors.New("control server bind failed")
+
+// ServerOption defines a functional option for configuring the control server.
+type ServerOption func(*Server) error
 
 // BotGuildBinding couples a Discord guild identifier with its authoritative bot instance execution context.
 type BotGuildBinding struct {
@@ -72,15 +77,23 @@ type Server struct {
 //
 // It assigns the network bind address and explicitly injects the required configuration and runtime dependencies
 // prior to route registration and lifecycle commencement.
-func NewServer(addr string, configManager *files.ConfigManager, runtimeApplier *runtimeapply.Manager) *Server {
+func NewServer(addr string, configManager *files.ConfigManager, runtimeApplier *runtimeapply.Manager, opts ...ServerOption) (*Server, error) {
 	if addr == "" {
-		return nil
+		return nil, errors.New("empty bind address")
 	}
-	return &Server{
+	s := &Server{
 		bindAddr:       addr,
 		configManager:  configManager,
 		runtimeApplier: runtimeApplier,
 	}
+
+	for _, opt := range opts {
+		if err := opt(s); err != nil {
+			return nil, err
+		}
+	}
+
+	return s, nil
 }
 
 // SetBearerToken injects the authorization token required for secured administrative route access.
@@ -158,7 +171,7 @@ func (s *Server) SetDiscordOAuthConfig(config DiscordOAuthConfig) error {
 	return nil
 }
 
-// Start binds the HTTP listener to the configured address and commences non-blocking request serving.
+// Start binds the HTTP listener to the configured address synchronously and commences non-blocking request serving.
 //
 // It triggers a fatal runtime abort if the primary bind fails synchronously, and emits blocking errors
 // for asynchronous failures that compromise the main data flow.
@@ -173,14 +186,19 @@ func (s *Server) Start() error {
 		Handler: mux,
 	}
 
+	listener, err := net.Listen("tcp", s.bindAddr)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrControlServerBind, err)
+	}
+
 	go func() {
 		// Isolate the blocking HTTP listener in an asynchronous goroutine to prevent
 		// stalling the primary boot pipeline. The main event loop remains responsive.
 		var err error
 		if s.tlsCertFile != "" && s.tlsKeyFile != "" {
-			err = s.httpServer.ListenAndServeTLS(s.tlsCertFile, s.tlsKeyFile)
+			err = s.httpServer.ServeTLS(listener, s.tlsCertFile, s.tlsKeyFile)
 		} else {
-			err = s.httpServer.ListenAndServe()
+			err = s.httpServer.Serve(listener)
 		}
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			// Explicitly filter http.ErrServerClosed to prevent false positive blocking errors
@@ -208,7 +226,16 @@ func (s *Server) Stop(ctx context.Context) error {
 	shutdownCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	return s.httpServer.Shutdown(shutdownCtx)
+	err := s.httpServer.Shutdown(shutdownCtx)
+	if err != nil {
+		slog.Warn("Graceful shutdown failed or timed out, forcing immediate socket closure", slog.String("error", err.Error()))
+		closeErr := s.httpServer.Close()
+		if closeErr != nil {
+			return fmt.Errorf("shutdown error: %v, force close error: %v", err, closeErr)
+		}
+		return err
+	}
+	return nil
 }
 
 // BroadcastGuildEvent propagates a transient presence update across the control plane.

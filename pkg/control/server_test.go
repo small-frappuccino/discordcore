@@ -14,7 +14,7 @@ import (
 func TestServer_GracefulDegradation(t *testing.T) {
 	t.Parallel()
 	// Terminação de Conexão Degradada
-	srv := NewServer("127.0.0.1:0", nil, nil)
+	srv, _ := NewServer("127.0.0.1:0", nil, nil)
 	mux := http.NewServeMux()
 	started := make(chan struct{})
 	mux.HandleFunc("/long", func(w http.ResponseWriter, r *http.Request) {

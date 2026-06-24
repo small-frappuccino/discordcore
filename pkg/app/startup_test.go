@@ -114,7 +114,7 @@ func TestStartupTaskOrchestrator_ShutdownWithContextCancellation(t *testing.T) {
 	}
 }
 
-func TestStartupTaskOrchestrator_ShutdownTaskErrorSwallowed(t *testing.T) {
+func TestStartupTaskOrchestrator_ShutdownTaskErrorPropagates(t *testing.T) {
 	t.Parallel()
 	orchestrator := NewStartupTaskOrchestrator(context.Background(), 1)
 	var wg sync.WaitGroup
@@ -130,8 +130,10 @@ func TestStartupTaskOrchestrator_ShutdownTaskErrorSwallowed(t *testing.T) {
 	wg.Wait()
 
 	err := orchestrator.Shutdown(context.Background())
-	if err != nil {
-		t.Errorf("Expected nil error because task errors are swallowed, got '%v'", err)
+	if err == nil {
+		t.Errorf("Expected an error because task errors are propagated, got nil")
+	} else if !errors.Is(err, expectedErr) {
+		t.Errorf("Expected simulated task error, got: %v", err)
 	}
 }
 
@@ -191,20 +193,13 @@ func TestControlServerHolder_SetAndStop(t *testing.T) {
 
 func TestScheduleControlServerStartup(t *testing.T) {
 	t.Parallel()
-	opts := controlStartupTaskOptions{
-		runOptions: RunOptions{
-			DisableControl: true,
-		},
-	}
-	scheduleControlServerStartup(nil, opts)
 
-	opts.runOptions.DisableControl = false
 	defer func() {
 		if r := recover(); r == nil {
 			t.Fatal("expected scheduleControlServerStartup to panic with nil startupTasks")
 		}
 	}()
-	scheduleControlServerStartup(nil, opts)
+	scheduleControlServerStartup(nil, resolvedControlRuntime{}, nil, nil, nil)
 }
 
 func TestScheduleStartupWebhookEmbedUpdates(t *testing.T) {
@@ -219,21 +214,12 @@ func TestScheduleStartupWebhookEmbedUpdates(t *testing.T) {
 
 func TestStartControlServerStartupTask(t *testing.T) {
 	t.Parallel()
-	runtimes := make(map[string]*botRuntime)
 	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
-	resolver := newBotRuntimeResolver(cfgMgr, runtimes)
-	opts := controlStartupTaskOptions{
-		runOptions: RunOptions{
-			DisableControl: false,
-			Control: ControlOptions{
-				BindAddr: "127.0.0.1:0",
-			},
-		},
-		configManager:      cfgMgr,
-		runtimeResolver:    resolver,
-		controlBearerToken: "test",
+	controlRuntime := resolvedControlRuntime{
+		bindAddr: "127.0.0.1:0",
 	}
-	err := startControlServerStartupTask(context.Background(), opts)
+
+	err := startControlServerStartupTask(context.Background(), controlRuntime, cfgMgr, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

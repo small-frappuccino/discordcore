@@ -2,26 +2,17 @@ package app
 
 import (
 	"context"
-	stdErrors "errors"
 	"fmt"
 	"log/slog"
-	"slices"
 	"strings"
 	"sync/atomic"
 
-	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordcore/pkg/control"
-	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
-	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	"github.com/small-frappuccino/discordcore/pkg/discord/session"
 	"github.com/small-frappuccino/discordcore/pkg/discord/webhook"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
-	"github.com/small-frappuccino/discordcore/pkg/members"
-	"github.com/small-frappuccino/discordcore/pkg/messages"
-	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
-	"github.com/small-frappuccino/discordcore/pkg/storage/postgres"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -157,20 +148,6 @@ func (h *controlServerHolder) BroadcastGuildEvent(guildID string, botPresent boo
 	server.BroadcastGuildEvent(guildID, botPresent)
 }
 
-type controlStartupTaskOptions struct {
-	runOptions            RunOptions
-	configManager         *files.ConfigManager
-	runtimeApplier        *runtimeapply.Manager
-	controlBearerToken    string
-	runtimeResolver       *botRuntimeResolver
-	store                 *postgres.Store
-	qotdService           *qotd.Service
-	moderationMetrics     moderation.Metrics
-	membersMetrics        members.Metrics
-	messagesMetrics       messages.Metrics
-	controlServerRegistry *controlServerHolder
-}
-
 func scheduleRuntimeConfiguredGuildLogging(
 	ctx context.Context,
 	runtime *botRuntime,
@@ -252,107 +229,27 @@ func scheduleStartupWebhookEmbedUpdates(
 		return nil
 	})
 }
-func scheduleControlServerStartup(startupTasks *StartupTaskOrchestrator, opts controlStartupTaskOptions) {
-	if opts.runOptions.DisableControl {
-		slog.Info("Architectural transition: Control server startup bypassed via explicit run options")
-		return
-	}
-
+func scheduleControlServerStartup(startupTasks *StartupTaskOrchestrator, controlRuntime resolvedControlRuntime, configManager *files.ConfigManager, runtimeApplier *runtimeapply.Manager, controlServerRegistry *controlServerHolder, serverOpts ...control.ServerOption) {
 	if startupTasks == nil {
 		slog.Error("Blocking structural failure: startupTasks orchestrator is nil")
 		panic("hardware-aligned validation failure: startupTasks cannot be nil during scheduleControlServerStartup")
 	}
 
 	startupTasks.Go("control_server", func(taskCtx context.Context) error {
-		return startControlServerStartupTask(taskCtx, opts)
+		return startControlServerStartupTask(taskCtx, controlRuntime, configManager, runtimeApplier, controlServerRegistry, serverOpts...)
 	})
 }
 
-func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskOptions) error {
-	controlRuntime, err := resolveControlRuntime(ctx, opts.runOptions)
-	if err != nil && stdErrors.Is(err, errControlLocalTLSUnavailable) {
-		slog.Warn("Local TLS parameters unavailable; fallback to insecure local execution state activated",
-			slog.String("error", err.Error()),
-		)
-		return nil
-	} else if err != nil {
-		errWrap := fmt.Errorf("resolve control runtime: %w", err)
-		log.EmitBlockingError("Blocking failure during control runtime resolution", errWrap, log.GenerateRequestID())
+func startControlServerStartupTask(ctx context.Context, controlRuntime resolvedControlRuntime, configManager *files.ConfigManager, runtimeApplier *runtimeapply.Manager, controlServerRegistry *controlServerHolder, serverOpts ...control.ServerOption) error {
+	controlServer, err := control.NewServer(controlRuntime.bindAddr, configManager, runtimeApplier, serverOpts...)
+	if err != nil {
+		errWrap := fmt.Errorf("create control server: %w", err)
+		log.EmitBlockingError("Blocking failure during control server allocation", errWrap, log.GenerateRequestID())
 		return errWrap
 	}
-
-	controlServer := control.NewServer(controlRuntime.bindAddr, opts.configManager, opts.runtimeApplier)
 	if controlServer == nil {
 		slog.Warn("Control server allocation yielded nil structure; execution branching aborted")
 		return nil
-	}
-
-	if opts.controlBearerToken == "" && controlRuntime.oauthConfig == nil {
-		slog.Info("Architectural transition: Control server initializing without authentication middleware",
-			slog.String("addr", controlRuntime.bindAddr),
-			slog.Bool("dashboard_only", true),
-		)
-	}
-	if opts.controlBearerToken != "" {
-		controlServer.SetBearerToken(opts.controlBearerToken)
-	}
-	if opts.runtimeResolver != nil {
-		controlServer.SetKnownBotInstanceIDs(
-			slices.Collect(knownBotInstanceCatalogSeq(opts.runtimeResolver.getRuntimes(), nil)),
-		)
-	}
-	controlServer.SetQOTDService(opts.qotdService)
-	controlServer.SetModerationMetrics(opts.moderationMetrics)
-	controlServer.SetMembersMetricsResolver(func() members.Metrics { return opts.membersMetrics })
-	controlServer.SetMessagesMetricsResolver(func() messages.Metrics { return opts.messagesMetrics })
-	controlServer.SetStorage(opts.store)
-	controlServer.SetCacheObservability(func() *cache.UnifiedCache {
-		if opts.runtimeResolver == nil {
-			return nil
-		}
-		caches := opts.runtimeResolver.aggregateUnifiedCaches()
-		if len(caches) == 0 {
-			return nil
-		}
-		for _, c := range caches {
-			return c
-		}
-		return nil
-	}, opts.store)
-
-	controlServer.SetArikawaStateResolver(func(guildID string) (*state.State, error) {
-		return opts.runtimeResolver.arikawaStateForGuild(guildID, "dashboard")
-	})
-	controlServer.SetBotGuildBindingsProvider(func(ctx context.Context) ([]control.BotGuildBinding, error) {
-		return opts.runtimeResolver.guildBindings(ctx)
-	})
-	controlServer.SetGuildRegistrationResolver(func(ctx context.Context, guildID string) error {
-		return opts.runtimeResolver.registerGuild(ctx, guildID)
-	})
-	if err := controlServer.SetPublicOrigin(controlRuntime.publicOrigin); err != nil {
-		errWrap := fmt.Errorf("configure control public origin: %w", err)
-		log.EmitBlockingError("Failed to lock public origin for control server", errWrap, log.GenerateRequestID())
-		return errWrap
-	}
-	if controlRuntime.tlsCertFile != "" || controlRuntime.tlsKeyFile != "" {
-		if err := controlServer.SetTLSCertificates(controlRuntime.tlsCertFile, controlRuntime.tlsKeyFile); err != nil {
-			errWrap := fmt.Errorf("configure control tls certificates: %w", err)
-			log.EmitBlockingError("Failed to bind TLS material to control server listener", errWrap, log.GenerateRequestID())
-			return errWrap
-		}
-	}
-	if controlRuntime.oauthConfig != nil {
-		if err := controlServer.SetDiscordOAuthConfig(*controlRuntime.oauthConfig); err != nil {
-			errWrap := fmt.Errorf("configure control discord oauth: %w", err)
-			log.EmitBlockingError("Failed to inject OAuth configuration into control server", errWrap, log.GenerateRequestID())
-			return errWrap
-		}
-		slog.Info("Architectural transition: Discord OAuth constraints applied to control interface",
-			slog.String("scopes", strings.Join(control.DiscordOAuthScopes(controlRuntime.oauthConfig.IncludeGuildsMembersRead), " ")),
-		)
-		if controlRuntime.tlsCertFile == "" || controlRuntime.tlsKeyFile == "" {
-			slog.Warn("Misconfigured deployment topology: OAuth enforced without local TLS termination; secure cookies risk clearance drop")
-		}
 	}
 
 	if err := ctx.Err(); err != nil {
@@ -364,13 +261,6 @@ func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskO
 	)
 
 	if err := controlServer.Start(); err != nil {
-		if stdErrors.Is(err, control.ErrControlServerBind) {
-			slog.Warn("Port allocation collision detected; control server bypassing listener initialization",
-				slog.String("addr", controlRuntime.bindAddr),
-				slog.String("error", err.Error()),
-			)
-			return nil
-		}
 		errWrap := fmt.Errorf("start control server: %w", err)
 		log.EmitBlockingError("Critical failure during control server socket bind operation", errWrap, log.GenerateRequestID())
 		return errWrap
@@ -386,8 +276,8 @@ func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskO
 		return fmt.Errorf("startControlServerStartupTask: %w", err)
 	}
 
-	if opts.controlServerRegistry != nil {
-		opts.controlServerRegistry.Set(controlServer)
+	if controlServerRegistry != nil {
+		controlServerRegistry.Set(controlServer)
 	}
 	return nil
 }
@@ -433,6 +323,14 @@ func (o *StartupTaskOrchestrator) Go(name string, t func(context.Context) error)
 		return
 	}
 
+	if err := o.ctx.Err(); err != nil {
+		slog.Warn("Architectural state transition: Startup orchestrator rejecting task due to context cancellation",
+			slog.String("task_name", name),
+			slog.String("error", err.Error()),
+		)
+		return
+	}
+
 	slog.Debug("Tracking complex conditional branch: Injecting closure into orchestrator",
 		slog.String("task_name", name),
 	)
@@ -443,12 +341,13 @@ func (o *StartupTaskOrchestrator) Go(name string, t func(context.Context) error)
 				slog.Debug("Tracking complex conditional branch: Task execution halted via context cancellation",
 					slog.String("task_name", name),
 				)
-				return nil
+				return err
 			}
 			slog.Warn("Mitigated service degradation: Background startup task encountered an error and aborted",
 				slog.String("task", name),
 				slog.String("error", err.Error()),
 			)
+			return err
 		}
 		return nil
 	})
