@@ -2,8 +2,41 @@ package theme
 
 import (
 	"strings"
+	"sync"
 	"testing"
 )
+
+var testMu sync.Mutex
+
+func setupThemeTest(t *testing.T) {
+	testMu.Lock()
+
+	// Backup registry
+	mu.Lock()
+	origRegistry := make(map[string]*Theme, len(registry))
+	for k, v := range registry {
+		origRegistry[k] = v
+	}
+	mu.Unlock()
+
+	// Backup activeTheme
+	origActive := activeTheme.Load()
+
+	t.Cleanup(func() {
+		// Restore activeTheme
+		activeTheme.Store(origActive)
+
+		// Restore registry
+		mu.Lock()
+		registry = make(map[string]*Theme, len(origRegistry))
+		for k, v := range origRegistry {
+			registry[k] = v
+		}
+		mu.Unlock()
+
+		testMu.Unlock()
+	})
+}
 
 func TestTheme_Default(t *testing.T) {
 	t.Parallel()
@@ -22,6 +55,7 @@ func TestTheme_Default(t *testing.T) {
 
 func TestTheme_Register(t *testing.T) {
 	t.Parallel()
+	setupThemeTest(t)
 
 	// Test nil registration
 	err := Register(nil)
@@ -53,6 +87,8 @@ func TestTheme_Register(t *testing.T) {
 }
 
 func TestTheme_SetCurrent(t *testing.T) {
+	t.Parallel()
+	setupThemeTest(t)
 
 	// Register a new theme to switch to
 	custom := &Theme{
@@ -96,6 +132,8 @@ func TestTheme_SetCurrent(t *testing.T) {
 }
 
 func TestTheme_GettersAndDefaults(t *testing.T) {
+	t.Parallel()
+	setupThemeTest(t)
 
 	testTheme := &Theme{
 		Name:    "getter_test",
@@ -107,11 +145,6 @@ func TestTheme_GettersAndDefaults(t *testing.T) {
 	if err := SetCurrent("getter_test"); err != nil {
 		t.Fatalf("failed to set: %v", err)
 	}
-
-	// Reset to default at the end of the test
-	t.Cleanup(func() {
-		_ = SetCurrent("")
-	})
 
 	// Test value propagation and fallback logic in ensureDefaults()
 	if Primary() != 0x111111 {
@@ -183,10 +216,8 @@ func TestTheme_GettersAndDefaults(t *testing.T) {
 }
 
 func TestTheme_HalloweenTheme(t *testing.T) {
-
-	t.Cleanup(func() {
-		_ = SetCurrent("")
-	})
+	t.Parallel()
+	setupThemeTest(t)
 
 	err := SetCurrent("halloween")
 	if err != nil {

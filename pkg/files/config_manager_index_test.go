@@ -2,6 +2,7 @@ package files
 
 import (
 	"fmt"
+	"runtime"
 	"sync"
 	"testing"
 )
@@ -89,6 +90,7 @@ func TestSnapshotConfigReturnsDefensiveCopy(t *testing.T) {
 }
 
 func TestPublishedConfigReadsReuseSnapshot(t *testing.T) {
+	t.Parallel()
 	mgr := newTestConfigManager([]GuildConfig{
 		{
 			GuildID: "g1",
@@ -119,12 +121,18 @@ func TestPublishedConfigReadsReuseSnapshot(t *testing.T) {
 		t.Fatal("expected GuildConfig() to reuse the published snapshot")
 	}
 
-	allocs := testing.AllocsPerRun(1000, func() {
-		mgr.Config()
-		mgr.GuildConfig("g1")
-	})
-	if allocs != 0 {
-		t.Fatalf("expected zero allocations for published config reads, got %f", allocs)
+	var memStats1, memStats2 runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&memStats1)
+	const runs = 10000
+	for i := 0; i < runs; i++ {
+		_ = mgr.Config()
+		_ = mgr.GuildConfig("g1")
+	}
+	runtime.ReadMemStats(&memStats2)
+	avgAllocs := float64(memStats2.Mallocs-memStats1.Mallocs) / float64(runs)
+	if avgAllocs >= 0.5 {
+		t.Fatalf("expected zero allocations for published config reads, got average %f (total mallocs: %d)", avgAllocs, memStats2.Mallocs-memStats1.Mallocs)
 	}
 }
 
