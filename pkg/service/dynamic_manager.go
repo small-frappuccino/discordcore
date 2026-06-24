@@ -88,3 +88,23 @@ func (m *Manager) ForceRemove(name string) {
 		state.cancelFunc()
 	}
 }
+
+func (m *Manager) StopAll(ctx context.Context) error {
+	m.mu.Lock()
+	var names []string
+	for name := range m.services {
+		names = append(names, name)
+	}
+	m.mu.Unlock()
+
+	var errs []error
+	for _, name := range names {
+		if err := m.StopAndRemove(ctx, name); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("failed to stop some services: %v", errs)
+	}
+	return nil
+}

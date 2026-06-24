@@ -29,7 +29,7 @@ func platformLogDir(appName string) string {
 }
 
 func windowsAppDataBase() string {
-	if v := strings.TrimSpace(os.Getenv("APPDATA")); v != "" {
+	if v := strings.TrimSpace(getEnv("APPDATA")); v != "" {
 		return v
 	}
 

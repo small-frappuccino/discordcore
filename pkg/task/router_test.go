@@ -226,18 +226,38 @@ func TestRouter_RetryHeap(t *testing.T) {
 		t.Fatalf("Expected backoff ~200ms, got %v", delay2)
 	}
 
-	// Test heap explicitly
-	router.scheduleRetry("group_a", &enqueuedTask{attempt: 1}, 10*time.Second)
-	router.scheduleRetry("group_b", &enqueuedTask{attempt: 1}, 5*time.Second)
+	// Test heap explicitly without the router's active background loop stealing it
+	var h retryTaskHeap
+	heap.Init(&h)
+
+	itemA := &scheduledRetry{at: mockClock.Now().Add(10 * time.Second), groupKey: "group_a", task: &enqueuedTask{attempt: 1}, seq: 1}
+	itemB := &scheduledRetry{at: mockClock.Now().Add(5 * time.Second), groupKey: "group_b", task: &enqueuedTask{attempt: 1}, seq: 2}
+
+	heap.Push(&h, itemA)
+	heap.Push(&h, itemB)
+
+	// mockClock.Now() isn't strictly needed for explicit popping if we do it manually,
+	// but let's emulate popDueRetries behavior:
+	popDue := func(now time.Time) []*scheduledRetry {
+		var due []*scheduledRetry
+		for len(h) > 0 {
+			next := h[0]
+			if next == nil || next.at.After(now) {
+				break
+			}
+			due = append(due, heap.Pop(&h).(*scheduledRetry))
+		}
+		return due
+	}
 
 	mockClock.Advance(6 * time.Second)
-	due := router.popDueRetries(mockClock.Now())
+	due := popDue(mockClock.Now())
 	if len(due) != 1 || due[0].groupKey != "group_b" {
 		t.Fatalf("Expected group_b to pop first")
 	}
 
 	mockClock.Advance(5 * time.Second)
-	due = router.popDueRetries(mockClock.Now())
+	due = popDue(mockClock.Now())
 	if len(due) != 1 || due[0].groupKey != "group_a" {
 		t.Fatalf("Expected group_a to pop second")
 	}

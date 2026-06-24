@@ -7,7 +7,6 @@ import (
 )
 
 func TestEncryptionSymmetric(t *testing.T) {
-	t.Parallel()
 	os.Setenv("PASTEBIN_ENCRYPTION_KEY", "my-test-super-secret-key-12345")
 	defer os.Unsetenv("PASTEBIN_ENCRYPTION_KEY")
 
@@ -36,7 +35,6 @@ type testConfigContainer struct {
 }
 
 func TestEncryptedStringJSON(t *testing.T) {
-	t.Parallel()
 	os.Setenv("PASTEBIN_ENCRYPTION_KEY", "json-test-key")
 	defer os.Unsetenv("PASTEBIN_ENCRYPTION_KEY")
 
@@ -66,7 +64,6 @@ func TestEncryptedStringJSON(t *testing.T) {
 }
 
 func TestEncryptedStringUnmarshalFallback(t *testing.T) {
-	t.Parallel()
 	// If unmarshalling raw, unencrypted json, it should fallback to raw value.
 	rawJSON := `{"secret": "plain-text-legacy.key"}`
 	var decoded testConfigContainer

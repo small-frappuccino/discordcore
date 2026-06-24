@@ -12,6 +12,7 @@ import (
 )
 
 func TestLoggerSetupAndClose(t *testing.T) {
+	t.Parallel()
 	// Create a temp directory for logs
 	tmpDir, err := os.MkdirTemp("", "discordcore-logs-test")
 	if err != nil {
@@ -90,15 +91,9 @@ func TestLoggerSetupAndClose(t *testing.T) {
 }
 
 func TestNilGlobalLoggerFallbacks(t *testing.T) {
-	// Temporarily clear global logger
-	oldGlobal := globalLogger
-	oldGlobalExport := GlobalLogger
-	globalLogger = nil
-	GlobalLogger = nil
-	defer func() {
-		globalLogger = oldGlobal
-		GlobalLogger = oldGlobalExport
-	}()
+	t.Parallel()
+	testNilOverrides.Store("TestNilGlobalLoggerFallbacks", true)
+	defer testNilOverrides.Delete("TestNilGlobalLoggerFallbacks")
 
 	// Verify fallback return values
 	if ApplicationLogger() != slog.Default() {
@@ -138,6 +133,7 @@ func TestNilGlobalLoggerFallbacks(t *testing.T) {
 }
 
 func TestHelpers(t *testing.T) {
+	t.Parallel()
 	reqID := GenerateRequestID()
 	if len(reqID) != 32 {
 		t.Errorf("expected 32-char hex request ID, got: %s", reqID)
@@ -153,6 +149,7 @@ func TestHelpers(t *testing.T) {
 }
 
 func TestEmitBlockingError(t *testing.T) {
+	t.Parallel()
 	// Set up a custom logger to capture output
 	var buf strings.Builder
 	h := slog.NewTextHandler(&buf, nil)
@@ -179,6 +176,7 @@ func TestEmitBlockingError(t *testing.T) {
 }
 
 func TestFatalf(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("BE_FATAL") == "1" {
 		// Set up logger and trigger Fatalf
 		tmpDir, err := os.MkdirTemp("", "discordcore-fatal-test")
@@ -209,6 +207,7 @@ func TestFatalf(t *testing.T) {
 }
 
 func TestFatalfNilLogger(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("BE_FATAL_NIL") == "1" {
 		// Make sure global logger is nil
 		globalLogger = nil

@@ -284,6 +284,7 @@ type botRuntime struct {
 type botRuntimeResolver struct {
 	configManager *files.ConfigManager
 	runtimes      atomic.Pointer[map[string]*botRuntime]
+	mu            sync.Mutex
 	readyCh       chan struct{}
 	readyOnce     sync.Once
 }
@@ -324,6 +325,31 @@ func (r *botRuntimeResolver) swapRuntimes(newMap map[string]*botRuntime) {
 	)
 
 	r.runtimes.Store(&newMap)
+}
+
+func (r *botRuntimeResolver) addRuntime(id string, runtime *botRuntime) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	current := r.getRuntimes()
+	newMap := make(map[string]*botRuntime, len(current)+1)
+	for k, v := range current {
+		newMap[k] = v
+	}
+	newMap[id] = runtime
+	r.swapRuntimes(newMap)
+}
+
+func (r *botRuntimeResolver) removeRuntime(id string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	current := r.getRuntimes()
+	newMap := make(map[string]*botRuntime, len(current))
+	for k, v := range current {
+		if k != id {
+			newMap[k] = v
+		}
+	}
+	r.swapRuntimes(newMap)
 }
 
 func knownBotInstanceCatalogSeq(runtimes map[string]*botRuntime, additional []string) iter.Seq[string] {

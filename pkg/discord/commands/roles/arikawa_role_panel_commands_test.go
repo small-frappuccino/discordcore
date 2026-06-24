@@ -178,6 +178,7 @@ func setupConfigManagerWithPanel(t *testing.T) (*files.ConfigManager, *rolesvc.R
 }
 
 func TestRolePanelCommands_Registration(t *testing.T) {
+	t.Parallel()
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	svc := rolesvc.NewRolePanelService(cm)
 	rc := NewRolePanelCommands(cm, svc)
@@ -196,6 +197,7 @@ func TestRolePanelCommands_Registration(t *testing.T) {
 }
 
 func TestRolePanelCommands_ConvertPanelToArikawa(t *testing.T) {
+	t.Parallel()
 	panel := files.RolePanelConfig{
 		Key:           "test-panel",
 		Title:         "Test Title",
@@ -256,7 +258,9 @@ func TestRolePanelCommands_ConvertPanelToArikawa(t *testing.T) {
 }
 
 func TestRolePanelCommands_SubCommands(t *testing.T) {
+	t.Parallel()
 	t.Run("post", func(t *testing.T) {
+		t.Parallel()
 		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 		cmd := newRolePanelPostSubCommand(cm, svc)
@@ -282,6 +286,7 @@ func TestRolePanelCommands_SubCommands(t *testing.T) {
 	})
 
 	t.Run("preview", func(t *testing.T) {
+		t.Parallel()
 		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 		cmd := newRolePanelPreviewSubCommand(cm, svc)
@@ -299,6 +304,7 @@ func TestRolePanelCommands_SubCommands(t *testing.T) {
 	})
 
 	t.Run("set", func(t *testing.T) {
+		t.Parallel()
 		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 		cmd := newRolePanelSetSubCommand(cm, svc)
@@ -323,6 +329,7 @@ func TestRolePanelCommands_SubCommands(t *testing.T) {
 	})
 
 	t.Run("delete", func(t *testing.T) {
+		t.Parallel()
 		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 		cmd := newRolePanelDeleteSubCommand(cm, svc)
@@ -344,6 +351,7 @@ func TestRolePanelCommands_SubCommands(t *testing.T) {
 	})
 
 	t.Run("list", func(t *testing.T) {
+		t.Parallel()
 		resetMockHTTP(t)
 		cm, _ := setupConfigManagerWithPanel(t)
 		cmd := newRolePanelListSubCommand(cm)
@@ -358,6 +366,7 @@ func TestRolePanelCommands_SubCommands(t *testing.T) {
 	})
 
 	t.Run("placeholders", func(t *testing.T) {
+		t.Parallel()
 		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 
@@ -416,6 +425,7 @@ func TestRolePanelCommands_SubCommands(t *testing.T) {
 	})
 
 	t.Run("buttons", func(t *testing.T) {
+		t.Parallel()
 		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 
@@ -477,6 +487,7 @@ func TestRolePanelCommands_SubCommands(t *testing.T) {
 	})
 
 	t.Run("fields", func(t *testing.T) {
+		t.Parallel()
 		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 
@@ -519,7 +530,9 @@ func TestRolePanelCommands_SubCommands(t *testing.T) {
 }
 
 func TestRolePanelCommands_ErrorsAndEdgeCases(t *testing.T) {
+	t.Parallel()
 	t.Run("disabled feature", func(t *testing.T) {
+		t.Parallel()
 		resetMockHTTP(t)
 		cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 		disabled := false
@@ -550,6 +563,7 @@ func TestRolePanelCommands_ErrorsAndEdgeCases(t *testing.T) {
 	})
 
 	t.Run("post without buttons", func(t *testing.T) {
+		t.Parallel()
 		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 		_ = cm.DeleteRolePanelButton("12345", "test-key", "987654321")
@@ -566,6 +580,7 @@ func TestRolePanelCommands_ErrorsAndEdgeCases(t *testing.T) {
 	})
 
 	t.Run("webhook url unsupported", func(t *testing.T) {
+		t.Parallel()
 		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 		cmd := newRolePanelPostSubCommand(cm, svc)
@@ -581,6 +596,7 @@ func TestRolePanelCommands_ErrorsAndEdgeCases(t *testing.T) {
 	})
 
 	t.Run("non-existent panel on set", func(t *testing.T) {
+		t.Parallel()
 		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 		cmd := newRolePanelSetSubCommand(cm, svc)
@@ -596,6 +612,7 @@ func TestRolePanelCommands_ErrorsAndEdgeCases(t *testing.T) {
 	})
 
 	t.Run("non-existent panel on delete", func(t *testing.T) {
+		t.Parallel()
 		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 		cmd := newRolePanelDeleteSubCommand(cm, svc)
@@ -610,6 +627,7 @@ func TestRolePanelCommands_ErrorsAndEdgeCases(t *testing.T) {
 	})
 
 	t.Run("empty panel key", func(t *testing.T) {
+		t.Parallel()
 		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 		cmd := newRolePanelPostSubCommand(cm, svc)
@@ -624,6 +642,7 @@ func TestRolePanelCommands_ErrorsAndEdgeCases(t *testing.T) {
 	})
 
 	t.Run("missing button options", func(t *testing.T) {
+		t.Parallel()
 		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 		cmd := newRolePanelButtonAddSubCommand(cm, svc)
@@ -650,6 +669,7 @@ func TestRolePanelCommands_ErrorsAndEdgeCases(t *testing.T) {
 	})
 
 	t.Run("missing button remove options", func(t *testing.T) {
+		t.Parallel()
 		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 		cmd := newRolePanelButtonRemoveSubCommand(cm, svc)
@@ -664,6 +684,7 @@ func TestRolePanelCommands_ErrorsAndEdgeCases(t *testing.T) {
 	})
 
 	t.Run("list empty buttons panel", func(t *testing.T) {
+		t.Parallel()
 		resetMockHTTP(t)
 		cm, _ := setupConfigManagerWithPanel(t)
 		_ = cm.DeleteRolePanelButton("12345", "test-key", "987654321")
@@ -680,6 +701,7 @@ func TestRolePanelCommands_ErrorsAndEdgeCases(t *testing.T) {
 	})
 
 	t.Run("list empty panels list", func(t *testing.T) {
+		t.Parallel()
 		resetMockHTTP(t)
 		cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 		enabled := true
@@ -696,6 +718,7 @@ func TestRolePanelCommands_ErrorsAndEdgeCases(t *testing.T) {
 	})
 
 	t.Run("respondStructuralError", func(t *testing.T) {
+		t.Parallel()
 		resetMockHTTP(t)
 		cm, _ := setupConfigManagerWithPanel(t)
 
@@ -721,6 +744,7 @@ func TestRolePanelCommands_ErrorsAndEdgeCases(t *testing.T) {
 	})
 
 	t.Run("refreshRolePanelPostingsBestEffort nil safety", func(t *testing.T) {
+		t.Parallel()
 		res := refreshRolePanelPostingsBestEffort(nil, nil, nil, "")
 		if res != "" {
 			t.Errorf("expected empty string for nil parameters, got %q", res)
@@ -728,6 +752,7 @@ func TestRolePanelCommands_ErrorsAndEdgeCases(t *testing.T) {
 	})
 
 	t.Run("post failure", func(t *testing.T) {
+		t.Parallel()
 		resetMockHTTP(t)
 		setMockStatusAndBody(t, http.StatusInternalServerError, []byte(`{"message": "Internal Server Error", "code": 0}`))
 
@@ -744,6 +769,7 @@ func TestRolePanelCommands_ErrorsAndEdgeCases(t *testing.T) {
 	})
 
 	t.Run("delete with postings success", func(t *testing.T) {
+		t.Parallel()
 		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 		_ = cm.AddRolePanelPosting("12345", "test-key", files.RolePanelPostingConfig{
@@ -766,6 +792,7 @@ func TestRolePanelCommands_ErrorsAndEdgeCases(t *testing.T) {
 	})
 
 	t.Run("delete with postings sync failure", func(t *testing.T) {
+		t.Parallel()
 		resetMockHTTP(t)
 		setMockStatusAndBody(t, http.StatusInternalServerError, []byte(`{"message": "Internal error", "code": 50001}`))
 
@@ -790,6 +817,7 @@ func TestRolePanelCommands_ErrorsAndEdgeCases(t *testing.T) {
 	})
 
 	t.Run("button add limit reached", func(t *testing.T) {
+		t.Parallel()
 		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 		for i := 1; i <= 25; i++ {
@@ -816,6 +844,7 @@ func TestRolePanelCommands_ErrorsAndEdgeCases(t *testing.T) {
 	})
 
 	t.Run("button remove non-existent", func(t *testing.T) {
+		t.Parallel()
 		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 		cmd := newRolePanelButtonRemoveSubCommand(cm, svc)

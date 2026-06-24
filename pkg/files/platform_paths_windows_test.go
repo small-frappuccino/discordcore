@@ -8,7 +8,10 @@ import (
 )
 
 func TestPlatformPathsWindows(t *testing.T) {
-	t.Setenv("APPDATA", `C:\\AppData\\Roaming`)
+	t.Parallel()
+	setTestEnv(t, map[string]string{
+		"APPDATA": `C:\AppData\Roaming`,
+	})
 	expectedCfg := filepath.Join(`C:\AppData\Roaming`, "Alice-Bot")
 	if cfg := platformConfigDir("Alice:Bot "); cfg != expectedCfg {
 		t.Fatalf("unexpected config dir: %q", cfg)

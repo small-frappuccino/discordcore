@@ -6,7 +6,7 @@ import (
 )
 
 func TestTheme_Default(t *testing.T) {
-	t.Parallel()
+
 	th := Default()
 	if th == nil {
 		t.Fatalf("Default() returned nil")
@@ -20,7 +20,7 @@ func TestTheme_Default(t *testing.T) {
 }
 
 func TestTheme_Register(t *testing.T) {
-	t.Parallel()
+
 	// Test nil registration
 	err := Register(nil)
 	if err == nil || !strings.Contains(err.Error(), "cannot register nil theme") {
@@ -51,7 +51,7 @@ func TestTheme_Register(t *testing.T) {
 }
 
 func TestTheme_SetCurrent(t *testing.T) {
-	t.Parallel()
+
 	// Register a new theme to switch to
 	custom := &Theme{
 		Name:    "switch_theme",
@@ -94,7 +94,7 @@ func TestTheme_SetCurrent(t *testing.T) {
 }
 
 func TestTheme_GettersAndDefaults(t *testing.T) {
-	t.Parallel()
+
 	testTheme := &Theme{
 		Name:    "getter_test",
 		Primary: 0x111111,
@@ -181,7 +181,7 @@ func TestTheme_GettersAndDefaults(t *testing.T) {
 }
 
 func TestTheme_HalloweenTheme(t *testing.T) {
-	t.Parallel()
+
 	t.Cleanup(func() {
 		_ = SetCurrent("")
 	})

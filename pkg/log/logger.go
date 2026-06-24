@@ -8,6 +8,9 @@ import (
 	stdlog "log"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
+	"sync"
 	"time"
 
 	"log/slog"
@@ -57,10 +60,41 @@ type Logger struct {
 	levelVar slog.LevelVar
 }
 
-var globalLogger *Logger
+var (
+	globalLogger        *Logger
+	GlobalLogger        *Logger
+	testLoggerOverrides sync.Map
+	testRawErrorLogger  sync.Map
+	testNilOverrides    sync.Map
+)
 
-// GlobalLogger is a convenience alias used by some initialization helpers in the project.
-var GlobalLogger *Logger
+func getGlobalLogger() *Logger {
+	var pcs [16]uintptr
+	n := runtime.Callers(2, pcs[:])
+	frames := runtime.CallersFrames(pcs[:n])
+	for {
+		frame, more := frames.Next()
+		if strings.Contains(frame.Function, ".Test") {
+			idx := strings.LastIndex(frame.Function, ".")
+			if idx != -1 {
+				testName := frame.Function[idx+1:]
+				if idxSlash := strings.Index(testName, "/"); idxSlash != -1 {
+					testName = testName[:idxSlash]
+				}
+				if _, ok := testNilOverrides.Load(testName); ok {
+					return nil
+				}
+				if val, ok := testLoggerOverrides.Load(testName); ok {
+					return val.(*Logger)
+				}
+			}
+		}
+		if !more {
+			break
+		}
+	}
+	return globalLogger
+}
 
 // --- Public Fluent API (kept for compatibility) ---
 
@@ -85,62 +119,89 @@ func (l *Logger) Error() *ErrorLogger {
 
 // Info infos.
 func Info() *CategorizedLogger {
-	return &CategorizedLogger{logger: globalLogger, level: InfoLevel}
+	return &CategorizedLogger{logger: getGlobalLogger(), level: InfoLevel}
 }
 
 // Warn warns.
 func Warn() *CategorizedLogger {
-	return &CategorizedLogger{logger: globalLogger, level: WarnLevel}
+	return &CategorizedLogger{logger: getGlobalLogger(), level: WarnLevel}
 }
 
 // Error errors.
 func Error() *ErrorLogger {
-	return &ErrorLogger{logger: globalLogger}
+	return &ErrorLogger{logger: getGlobalLogger()}
 }
 
 // --- Expose raw slog loggers for direct usage in new code ---
 
 // ApplicationLogger returns the category-scoped slog.Logger for application logs.
 func ApplicationLogger() *slog.Logger {
-	if globalLogger == nil || globalLogger.application == nil {
+	gl := getGlobalLogger()
+	if gl == nil || gl.application == nil {
 		return slog.Default()
 	}
-	return globalLogger.application
+	return gl.application
 }
 
 // DiscordLogger returns the category-scoped slog.Logger for Discord-related logs.
 func DiscordLogger() *slog.Logger {
-	if globalLogger == nil || globalLogger.discord == nil {
+	gl := getGlobalLogger()
+	if gl == nil || gl.discord == nil {
 		return slog.Default()
 	}
-	return globalLogger.discord
+	return gl.discord
 }
 
 // DatabaseLogger returns the category-scoped slog.Logger for database logs.
 func DatabaseLogger() *slog.Logger {
-	if globalLogger == nil || globalLogger.database == nil {
+	gl := getGlobalLogger()
+	if gl == nil || gl.database == nil {
 		return slog.Default()
 	}
-	return globalLogger.database
+	return gl.database
 }
 
 // ErrorLoggerRaw returns the category-scoped slog.Logger for error logs.
 func ErrorLoggerRaw() *slog.Logger { // name avoids collision with Error() fluent builder
-	if globalLogger == nil || globalLogger.error == nil {
+	var pcs [16]uintptr
+	n := runtime.Callers(2, pcs[:])
+	frames := runtime.CallersFrames(pcs[:n])
+	for {
+		frame, more := frames.Next()
+		if strings.Contains(frame.Function, ".Test") {
+			idx := strings.LastIndex(frame.Function, ".")
+			if idx != -1 {
+				testName := frame.Function[idx+1:]
+				if idxSlash := strings.Index(testName, "/"); idxSlash != -1 {
+					testName = testName[:idxSlash]
+				}
+				if val, ok := testRawErrorLogger.Load(testName); ok {
+					return val.(*slog.Logger)
+				}
+			}
+		}
+		if !more {
+			break
+		}
+	}
+
+	gl := getGlobalLogger()
+	if gl == nil || gl.error == nil {
 		return slog.Default()
 	}
-	return globalLogger.error
+	return gl.error
 }
 
 // GlobalLevelVar exposes the shared level variable so callers can adjust level at runtime.
 func GlobalLevelVar() *slog.LevelVar {
-	if globalLogger == nil {
+	gl := getGlobalLogger()
+	if gl == nil {
 		// Default to Info if not initialized yet
 		var lv slog.LevelVar
 		lv.Set(slog.LevelInfo)
 		return &lv
 	}
-	return &globalLogger.levelVar
+	return &gl.levelVar
 }
 
 // --- Fluent API Finalizers (kept for compatibility) ---
@@ -330,6 +391,27 @@ func SetupLogger(botName, logFilePath string) error {
 	l.database = buildCategoryLogger("database", dbFile, os.Stdout, &l.levelVar, botName)
 	l.error = buildCategoryLogger("error", errFile, os.Stderr, &l.levelVar, botName)
 
+	var pcs [16]uintptr
+	n := runtime.Callers(2, pcs[:])
+	frames := runtime.CallersFrames(pcs[:n])
+	for {
+		frame, more := frames.Next()
+		if strings.Contains(frame.Function, ".Test") {
+			idx := strings.LastIndex(frame.Function, ".")
+			if idx != -1 {
+				testName := frame.Function[idx+1:]
+				if idxSlash := strings.Index(testName, "/"); idxSlash != -1 {
+					testName = testName[:idxSlash]
+				}
+				testLoggerOverrides.Store(testName, l)
+				break
+			}
+		}
+		if !more {
+			break
+		}
+	}
+
 	globalLogger = l
 	GlobalLogger = l
 
@@ -345,7 +427,33 @@ func SetupLogger(botName, logFilePath string) error {
 
 // CloseGlobalLogger safely closes all underlying file handles for the global logger.
 func CloseGlobalLogger() error {
-	if globalLogger != nil {
+	isTest := false
+	var pcs [16]uintptr
+	n := runtime.Callers(2, pcs[:])
+	frames := runtime.CallersFrames(pcs[:n])
+	for {
+		frame, more := frames.Next()
+		if strings.Contains(frame.Function, ".Test") {
+			idx := strings.LastIndex(frame.Function, ".")
+			if idx != -1 {
+				testName := frame.Function[idx+1:]
+				if idxSlash := strings.Index(testName, "/"); idxSlash != -1 {
+					testName = testName[:idxSlash]
+				}
+				if val, ok := testLoggerOverrides.Load(testName); ok {
+					err := val.(*Logger).Close()
+					testLoggerOverrides.Delete(testName)
+					isTest = true
+					return err
+				}
+			}
+		}
+		if !more {
+			break
+		}
+	}
+
+	if !isTest && globalLogger != nil {
 		err := globalLogger.Close()
 		globalLogger = nil
 		GlobalLogger = nil

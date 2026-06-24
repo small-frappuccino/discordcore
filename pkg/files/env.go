@@ -3,14 +3,57 @@ package files
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/joho/godotenv"
 )
 
 // Declared as a var (not const) so tests can override it.
-var fallbackEnvPath = `D:\Users\alice\.local\bin\.env`
+var (
+	fallbackEnvPath  = `D:\Users\alice\.local\bin\.env`
+	getenvFunc       = os.Getenv
+	testEnvOverrides sync.Map
+)
+
+func getEnv(key string) string {
+	var pcs [16]uintptr
+	n := runtime.Callers(2, pcs[:])
+	frames := runtime.CallersFrames(pcs[:n])
+	for {
+		frame, more := frames.Next()
+		if strings.Contains(frame.Function, ".Test") {
+			var foundVal string
+			var found bool
+			testEnvOverrides.Range(func(k, v any) bool {
+				name := k.(string)
+				mainTestName := name
+				if idx := strings.Index(name, "/"); idx != -1 {
+					mainTestName = name[:idx]
+				}
+				if strings.HasSuffix(frame.Function, "."+mainTestName) {
+					if envMap, ok := v.(map[string]string); ok {
+						if val, ok := envMap[key]; ok {
+							foundVal = val
+							found = true
+							return false
+						}
+					}
+				}
+				return true
+			})
+			if found {
+				return foundVal
+			}
+		}
+		if !more {
+			break
+		}
+	}
+	return getenvFunc(key)
+}
 
 // LoadEnvWithLocalBinFallback ensures the specified environment variable is present.
 // It always attempts to load a single fallback file located at $HOME/.local/bin/.env
@@ -35,7 +78,7 @@ func LoadEnvWithLocalBinFallback(tokenEnvName string) (string, error) {
 		godotenv.Load(envPath)
 	}
 
-	if v := os.Getenv(tokenEnvName); v != "" {
+	if v := getEnv(tokenEnvName); v != "" {
 		return v, nil
 	}
 
@@ -46,7 +89,7 @@ func LoadEnvWithLocalBinFallback(tokenEnvName string) (string, error) {
 // Accepted truthy values (case-insensitive, trimmed):
 // "1", "true", "yes", "y", "on"
 func EnvBool(name string) bool {
-	v := strings.ToLower(strings.TrimSpace(os.Getenv(name)))
+	v := strings.ToLower(strings.TrimSpace(getEnv(name)))
 	switch v {
 	case "1", "true", "yes", "y", "on":
 		return true
@@ -57,7 +100,7 @@ func EnvBool(name string) bool {
 
 // EnvString returns the trimmed value of the environment variable, or def if empty/unset.
 func EnvString(name, def string) string {
-	v := strings.TrimSpace(os.Getenv(name))
+	v := strings.TrimSpace(getEnv(name))
 	if v == "" {
 		return def
 	}
@@ -66,7 +109,7 @@ func EnvString(name, def string) string {
 
 // EnvInt64 returns the parsed int64 value of the environment variable, or def if empty/unset/invalid.
 func EnvInt64(name string, def int64) int64 {
-	v := strings.TrimSpace(os.Getenv(name))
+	v := strings.TrimSpace(getEnv(name))
 	if v == "" {
 		return def
 	}

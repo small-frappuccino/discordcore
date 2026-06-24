@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/small-frappuccino/discordcore/pkg/log"
 	"github.com/small-frappuccino/discordgo"
@@ -14,11 +15,22 @@ import (
 type LegacySession = discordgo.Session
 
 // Injectable seams to allow testing without real network calls.
+// Context keys for session testing stubs.
+type sessionContextKey string
+
+const (
+	openSessionKey    sessionContextKey = "openSession"
+	closeSessionKey   sessionContextKey = "closeSession"
+	addHandlerOnceKey sessionContextKey = "addHandlerOnce"
+)
+
+// Injectable seams to allow testing without real network calls.
 var (
-	newSession     = discordgo.New
-	openSession    = func(s *discordgo.Session) error { return s.Open() }
-	closeSession   = func(s *discordgo.Session) error { return s.Close() }
-	addHandlerOnce = func(s *discordgo.Session, h interface{}) func() { return s.AddHandlerOnce(h) }
+	newSession          = discordgo.New
+	newSessionOverrides sync.Map
+	openSession         = func(s *discordgo.Session) error { return s.Open() }
+	closeSession        = func(s *discordgo.Session) error { return s.Close() }
+	addHandlerOnce      = func(s *discordgo.Session, h interface{}) func() { return s.AddHandlerOnce(h) }
 )
 
 // OpenSession formally connects the discordgo.Session to the gateway,
@@ -28,12 +40,27 @@ func OpenSession(ctx context.Context, s *discordgo.Session) error {
 		return fmt.Errorf("session is nil")
 	}
 
+	openFn := openSession
+	if val := ctx.Value(openSessionKey); val != nil {
+		openFn = val.(func(*discordgo.Session) error)
+	}
+
+	closeFn := closeSession
+	if val := ctx.Value(closeSessionKey); val != nil {
+		closeFn = val.(func(*discordgo.Session) error)
+	}
+
+	addHandlerFn := addHandlerOnce
+	if val := ctx.Value(addHandlerOnceKey); val != nil {
+		addHandlerFn = val.(func(*discordgo.Session, interface{}) func())
+	}
+
 	readyCh := make(chan struct{})
-	removeHandler := addHandlerOnce(s, func(s *discordgo.Session, r *discordgo.Ready) {
+	removeHandler := addHandlerFn(s, func(s *discordgo.Session, r *discordgo.Ready) {
 		close(readyCh)
 	})
 
-	if err := openSession(s); err != nil {
+	if err := openFn(s); err != nil {
 		removeHandler()
 		return fmt.Errorf(ErrSessionConnectionFailed, err)
 	}
@@ -41,7 +68,7 @@ func OpenSession(ctx context.Context, s *discordgo.Session) error {
 	select {
 	case <-ctx.Done():
 		removeHandler()
-		closeSession(s)
+		closeFn(s)
 		return fmt.Errorf("handshake timed out or canceled: %w", ctx.Err())
 	case <-readyCh:
 		return nil
@@ -66,7 +93,12 @@ const (
 // downstream struct constructors that still expect *discordgo.Session without
 // initiating any gateway or REST connections.
 func NewEmptySessionForCompat(token string) *LegacySession {
-	s, _ := newSession(token)
+	var s *discordgo.Session
+	if val, ok := newSessionOverrides.Load(token); ok {
+		s, _ = val.(func(string) (*discordgo.Session, error))(token)
+	} else {
+		s, _ = newSession(token)
+	}
 	if s != nil {
 		s.StateEnabled = false
 	}
@@ -97,7 +129,12 @@ func NewDiscordSessionWithIntents(token string, intents discordgo.Intent) (*disc
 		tokenStr = strings.TrimSpace(tokenStr[4:])
 	}
 
-	s, err := newSession("Bot " + tokenStr)
+	var err error
+	if val, ok := newSessionOverrides.Load("Bot " + tokenStr); ok {
+		s, err = val.(func(string) (*discordgo.Session, error))("Bot " + tokenStr)
+	} else {
+		s, err = newSession("Bot " + tokenStr)
+	}
 	if err != nil {
 		log.ErrorLoggerRaw().Error(fmt.Sprintf("Failed to create Discord session: %v", err))
 		return nil, fmt.Errorf(ErrSessionCreationFailed, err)

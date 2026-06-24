@@ -6,7 +6,15 @@ import (
 	"testing"
 )
 
+func setTestEnv(t *testing.T, env map[string]string) {
+	testEnvOverrides.Store(t.Name(), env)
+	t.Cleanup(func() {
+		testEnvOverrides.Delete(t.Name())
+	})
+}
+
 func TestLoadEnvWithLocalBinFallbackUsesHomeFile(t *testing.T) {
+	t.Parallel()
 	tmp := t.TempDir()
 	fakeHome := filepath.Join(tmp, "home")
 	if err := os.MkdirAll(filepath.Join(fakeHome, ".local", "bin"), 0o755); err != nil {
@@ -20,7 +28,8 @@ func TestLoadEnvWithLocalBinFallbackUsesHomeFile(t *testing.T) {
 	orig := fallbackEnvPath
 	fallbackEnvPath = envPath
 	t.Cleanup(func() { fallbackEnvPath = orig })
-	os.Unsetenv("TOKEN")
+
+	setTestEnv(t, map[string]string{})
 
 	got, err := LoadEnvWithLocalBinFallback("TOKEN")
 	if err != nil {
@@ -31,7 +40,9 @@ func TestLoadEnvWithLocalBinFallbackUsesHomeFile(t *testing.T) {
 	}
 
 	// When env already set, file should not override.
-	t.Setenv("TOKEN", "envwins")
+	setTestEnv(t, map[string]string{
+		"TOKEN": "envwins",
+	})
 	got, err = LoadEnvWithLocalBinFallback("TOKEN")
 	if err != nil || got != "envwins" {
 		t.Fatalf("expected existing env to win, got %q err=%v", got, err)
@@ -39,8 +50,15 @@ func TestLoadEnvWithLocalBinFallbackUsesHomeFile(t *testing.T) {
 }
 
 func TestEnvHelpers(t *testing.T) {
-	t.Setenv("BOOL_TRUE", "YeS")
-	t.Setenv("BOOL_FALSE", "0")
+	t.Parallel()
+	setTestEnv(t, map[string]string{
+		"BOOL_TRUE":  "YeS",
+		"BOOL_FALSE": "0",
+		"STR_EMPTY":  "  ",
+		"INT_OK":     "42",
+		"INT_BAD":    "oops",
+	})
+
 	if !EnvBool("BOOL_TRUE") {
 		t.Fatalf("expected truthy value")
 	}
@@ -48,13 +66,10 @@ func TestEnvHelpers(t *testing.T) {
 		t.Fatalf("expected falsy value")
 	}
 
-	t.Setenv("STR_EMPTY", "  ")
 	if got := EnvString("STR_EMPTY", "default"); got != "default" {
 		t.Fatalf("expected default, got %q", got)
 	}
 
-	t.Setenv("INT_OK", "42")
-	t.Setenv("INT_BAD", "oops")
 	if got := EnvInt64("INT_OK", 1); got != 42 {
 		t.Fatalf("expected 42, got %d", got)
 	}
