@@ -849,9 +849,6 @@ func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *post
 	}
 
 	_, memberWarmupConfig := runtimeWarmupPhases()
-	runWarmup := func(ctx context.Context, config cache.WarmupConfig) error {
-		return intelligentWarmupFn(ctx, runtime.legacySession, unifiedCache, store, config)
-	}
 
 	if startupTasks == nil {
 		slog.Error("Blocking structural failure: startupTasks orchestrator is nil, refusing to launch unprotected warmup goroutine")
@@ -861,18 +858,32 @@ func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *post
 	slog.Debug("Delegating cache warmup to orchestrator scheduling queue",
 		slog.String("botInstanceID", runtime.instanceID),
 	)
-	startupTasks.GoHeavy("cache_warmup:"+runtime.instanceID, func(taskCtx context.Context) error {
-		if err := runWarmup(taskCtx, memberWarmupConfig); err != nil {
-			if taskCtx.Err() != nil {
-				return nil
-			}
-			slog.Warn("Mitigated service degradation: Orchestrated cache warmup failed, pipeline resumes",
-				slog.String("botInstanceID", runtime.instanceID),
-				slog.String("error", err.Error()),
-			)
-		}
-		return nil
+	startupTasks.GoHeavy("cache_warmup:"+runtime.instanceID, &RuntimeWarmupTask{
+		Runtime:      runtime,
+		UnifiedCache: unifiedCache,
+		Store:        store,
+		WarmupConfig: memberWarmupConfig,
 	})
+}
+
+type RuntimeWarmupTask struct {
+	Runtime      *botRuntime
+	UnifiedCache *cache.UnifiedCache
+	Store        *postgres.Store
+	WarmupConfig cache.WarmupConfig
+}
+
+func (t *RuntimeWarmupTask) Execute(ctx context.Context) error {
+	if err := intelligentWarmupFn(ctx, t.Runtime.legacySession, t.UnifiedCache, t.Store, t.WarmupConfig); err != nil {
+		if ctx.Err() != nil {
+			return nil
+		}
+		slog.Warn("Mitigated service degradation: Orchestrated cache warmup failed, pipeline resumes",
+			slog.String("botInstanceID", t.Runtime.instanceID),
+			slog.String("error", err.Error()),
+		)
+	}
+	return nil
 }
 
 func runtimeWarmupPhases() (cache.WarmupConfig, cache.WarmupConfig) {

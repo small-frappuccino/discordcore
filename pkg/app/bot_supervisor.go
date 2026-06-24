@@ -415,10 +415,7 @@ func (s *BotSupervisor) reconcileTopology(parentCtx context.Context, cmd topolog
 	desiredCaps := cmd.Capabilities
 
 	for _, task := range cmd.GatewayUpdates {
-		t := task
-		s.opts.startupTasks.GoHeavy("presence_update", func(heavyCtx context.Context) error {
-			return t.Execute(heavyCtx)
-		})
+		s.opts.startupTasks.GoHeavy("presence_update", task)
 	}
 
 	// Fase 1: Expurgar instâncias removidas ou alteradas
@@ -532,20 +529,29 @@ func (s *BotSupervisor) reconcileTopology(parentCtx context.Context, cmd topolog
 
 	// Fase 3: Sync Commands
 	if len(cmd.SyncTasks) > 0 {
-		s.opts.startupTasks.GoHeavy("catalog_sync", func(heavyCtx context.Context) error {
-			eg, egCtx := errgroup.WithContext(heavyCtx)
-			eg.SetLimit(10)
-			for _, taskFn := range cmd.SyncTasks {
-				tFn := taskFn
-				eg.Go(func() error {
-					return tFn.Execute(egCtx)
-				})
-			}
-			return eg.Wait()
+		s.opts.startupTasks.GoHeavy("catalog_sync", &CatalogSyncGroupTask{
+			SyncTasks: cmd.SyncTasks,
 		})
 	}
 
 	return nil
+}
+
+// CatalogSyncGroupTask agrupa e executa tarefas de sincronização em concorrência limitada.
+type CatalogSyncGroupTask struct {
+	SyncTasks []Task
+}
+
+func (t *CatalogSyncGroupTask) Execute(ctx context.Context) error {
+	eg, egCtx := errgroup.WithContext(ctx)
+	eg.SetLimit(10)
+	for _, taskFn := range t.SyncTasks {
+		tFn := taskFn
+		eg.Go(func() error {
+			return tFn.Execute(egCtx)
+		})
+	}
+	return eg.Wait()
 }
 
 func (s *BotSupervisor) onConfigChanged(ctx context.Context, oldCfg, newCfg *files.BotConfig) error {

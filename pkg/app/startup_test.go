@@ -63,6 +63,15 @@ func TestResolveDatabaseBootstrapRequiresEnv(t *testing.T) {
 	resolveDatabaseBootstrap()
 }
 
+type mockFuncTask func(context.Context) error
+
+func (f mockFuncTask) Execute(ctx context.Context) error {
+	if f == nil {
+		return nil
+	}
+	return f(ctx)
+}
+
 func TestStartupTaskOrchestrator_GoLight(t *testing.T) {
 	t.Parallel()
 	orchestrator := NewStartupTaskOrchestrator(1)
@@ -71,11 +80,11 @@ func TestStartupTaskOrchestrator_GoLight(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	orchestrator.GoLight("test_light", func(ctx context.Context) error {
+	orchestrator.GoLight("test_light", mockFuncTask(func(ctx context.Context) error {
 		atomic.AddInt32(&executed, 1)
 		wg.Done()
 		return nil
-	})
+	}))
 
 	wg.Wait()
 
@@ -97,11 +106,11 @@ func TestStartupTaskOrchestrator_GoHeavy(t *testing.T) {
 	wg.Add(2)
 
 	for i := 0; i < 2; i++ {
-		orchestrator.GoHeavy("test_heavy", func(ctx context.Context) error {
+		orchestrator.GoHeavy("test_heavy", mockFuncTask(func(ctx context.Context) error {
 			atomic.AddInt32(&executed, 1)
 			wg.Done()
 			return nil
-		})
+		}))
 	}
 
 	wg.Wait()
@@ -122,11 +131,11 @@ func TestStartupTaskOrchestrator_ShutdownWithContextCancellation(t *testing.T) {
 	taskStarted := make(chan struct{})
 	unblockTask := make(chan struct{})
 
-	orchestrator.GoLight("blocking_task", func(ctx context.Context) error {
+	orchestrator.GoLight("blocking_task", mockFuncTask(func(ctx context.Context) error {
 		close(taskStarted)
 		<-unblockTask
 		return nil
-	})
+	}))
 
 	<-taskStarted
 
@@ -147,10 +156,10 @@ func TestStartupTaskOrchestrator_ShutdownTaskErrorSwallowed(t *testing.T) {
 
 	expectedErr := errors.New("simulated task error")
 
-	orchestrator.GoHeavy("error_task", func(ctx context.Context) error {
+	orchestrator.GoHeavy("error_task", mockFuncTask(func(ctx context.Context) error {
 		defer wg.Done()
 		return expectedErr
-	})
+	}))
 
 	wg.Wait()
 
@@ -167,7 +176,7 @@ func TestStartupTaskOrchestrator_GoNil(t *testing.T) {
 	orchestrator.GoHeavy("nil_task", nil)
 
 	var nilOrchestrator *StartupTaskOrchestrator
-	nilOrchestrator.GoLight("nil_task", func(ctx context.Context) error { return nil })
+	nilOrchestrator.GoLight("nil_task", mockFuncTask(func(ctx context.Context) error { return nil }))
 	err := nilOrchestrator.Shutdown(context.Background())
 	if err != nil {
 		t.Errorf("Expected nil error for nil orchestrator shutdown")
