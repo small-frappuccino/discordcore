@@ -62,6 +62,7 @@ func (m *MockAPI) WebhookMessage(ctx context.Context, webhookID discord.WebhookI
 var _ webhookPkg.API = (*MockAPI)(nil)
 
 func TestValidateMessageTarget_NetworkLifecycle(t *testing.T) {
+	t.Parallel()
 	mock := &MockAPI{
 		WebhookWithTokenFn: func(ctx context.Context, webhookID discord.WebhookID, webhookToken string) (*discord.Webhook, error) {
 			select {
@@ -98,6 +99,7 @@ func TestValidateMessageTarget_NetworkLifecycle(t *testing.T) {
 }
 
 func TestValidateMessageTarget_ErrorAssertions(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		httpStatus int
@@ -141,6 +143,7 @@ func TestValidateMessageTarget_ErrorAssertions(t *testing.T) {
 }
 
 func TestDecodeEmbeds_Fuzzing(t *testing.T) {
+	t.Parallel()
 	payloads := []string{
 		`{"title":"single"}`,
 		`[{"title":"array_one"}]`,
@@ -172,6 +175,7 @@ func BenchmarkDecodeEmbeds_Allocs(b *testing.B) {
 }
 
 func TestArikawaAPI_ServerInjection_TableDriven(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
@@ -238,6 +242,7 @@ func TestArikawaAPI_ServerInjection_TableDriven(t *testing.T) {
 }
 
 func TestWebhookConcurrentExecution(t *testing.T) {
+	t.Parallel()
 	orchestrator := app.NewStartupTaskOrchestrator(10)
 	defer orchestrator.Shutdown(context.Background())
 

@@ -88,6 +88,7 @@ flowchart TD
     AdapterAutomod --> Arikawa
     AdapterAutomod --> Automod
     AdapterAutomod --> Service
+    AdapterCache --> AdapterSession
     AdapterCache --> Arikawa
     AdapterCache --> StoragePostgres
     AdapterClean --> Arikawa

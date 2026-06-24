@@ -6,6 +6,7 @@ import "testing"
 // It verifies standard permission evaluation, the Administrator flag override,
 // and the scenario where a member lacks all roles.
 func TestHasPermission(t *testing.T) {
+	t.Parallel()
 	const (
 		guildID  = "guild_123"
 		permKick = int64(0x00000002)
@@ -70,6 +71,7 @@ func TestHasPermission(t *testing.T) {
 // TestCanModerate evaluates structural boundary anomalies such as actor and target
 // possessing privileges on the exact same layer.
 func TestCanModerate(t *testing.T) {
+	t.Parallel()
 	const guildID = "guild_123"
 
 	roles := map[string]Role{

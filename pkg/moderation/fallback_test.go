@@ -9,6 +9,7 @@ import (
 // under high concurrency to validate the sync.Mutex boundaries and ensure
 // strictly monotonically increasing numbers without deadlocks.
 func TestNextFallbackCaseNumber_Race(t *testing.T) {
+	t.Parallel()
 	const (
 		concurrency = 1000
 		guildID     = "123456789012345"

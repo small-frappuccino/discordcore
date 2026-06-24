@@ -13,6 +13,7 @@ import (
 )
 
 func TestArikawaPublisher_Errors(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name          string
 		statusCode    int

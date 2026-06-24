@@ -5,6 +5,7 @@ import (
 )
 
 func TestEncodeDecodeState(t *testing.T) {
+	t.Parallel()
 	st := panelState{
 		Mode:  pageDetail,
 		Group: "LOGGING",

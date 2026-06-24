@@ -15,6 +15,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestMockClock_Concurrency(t *testing.T) {
+	t.Parallel()
 	c := clock.NewMockClock(time.Now())
 	var wg sync.WaitGroup
 
@@ -44,6 +45,7 @@ func TestMockClock_Concurrency(t *testing.T) {
 }
 
 func TestMockClock_TimersAndTickers(t *testing.T) {
+	t.Parallel()
 	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	c := clock.NewMockClock(start)
 
@@ -89,6 +91,7 @@ func TestMockClock_TimersAndTickers(t *testing.T) {
 }
 
 func TestMockClock_NonBlockingDispatch(t *testing.T) {
+	t.Parallel()
 	// Verify that if a channel isn't read, Advance still proceeds.
 	c := clock.NewMockClock(time.Now())
 	timer := c.NewTimer(1 * time.Second)

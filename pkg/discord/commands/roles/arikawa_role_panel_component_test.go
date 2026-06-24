@@ -14,6 +14,7 @@ import (
 )
 
 func TestRolePanelComponentHandler_InjectionAndRouting(t *testing.T) {
+	t.Parallel()
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 
 	// Pre-configure a panel and button

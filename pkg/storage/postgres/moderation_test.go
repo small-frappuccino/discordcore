@@ -13,6 +13,7 @@ import (
 )
 
 func TestStore_Moderation_NextModerationCaseNumber(t *testing.T) {
+	t.Parallel()
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()
 	store, _ := NewStore(mock, nil)
@@ -23,6 +24,7 @@ func TestStore_Moderation_NextModerationCaseNumber(t *testing.T) {
 }
 
 func TestStore_Moderation_GetGuildOwnerID_ErrNoRows(t *testing.T) {
+	t.Parallel()
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()
 	store, _ := NewStore(mock, nil)
@@ -33,6 +35,7 @@ func TestStore_Moderation_GetGuildOwnerID_ErrNoRows(t *testing.T) {
 }
 
 func TestStore_Moderation_CreateWarning(t *testing.T) {
+	t.Parallel()
 	idgen.Init(1)
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()
@@ -48,6 +51,7 @@ func TestStore_Moderation_CreateWarning(t *testing.T) {
 }
 
 func TestStore_Moderation_NextModerationCaseNumber_Errors(t *testing.T) {
+	t.Parallel()
 	t.Run("empty guildID", func(t *testing.T) {
 		mock, _ := pgxmock.NewPool()
 		defer mock.Close()
@@ -75,6 +79,7 @@ func TestStore_Moderation_NextModerationCaseNumber_Errors(t *testing.T) {
 }
 
 func TestStore_Moderation_CreateWarning_Errors(t *testing.T) {
+	t.Parallel()
 	t.Run("missing fields", func(t *testing.T) {
 		mock, _ := pgxmock.NewPool()
 		defer mock.Close()
@@ -118,6 +123,7 @@ func TestStore_Moderation_CreateWarning_Errors(t *testing.T) {
 }
 
 func TestStore_Moderation_ListModerationWarnings(t *testing.T) {
+	t.Parallel()
 	t.Run("empty inputs", func(t *testing.T) {
 		mock, _ := pgxmock.NewPool()
 		defer mock.Close()
@@ -174,6 +180,7 @@ func TestStore_Moderation_ListModerationWarnings(t *testing.T) {
 }
 
 func TestStore_Moderation_GuildOwner(t *testing.T) {
+	t.Parallel()
 	t.Run("empty inputs", func(t *testing.T) {
 		mock, _ := pgxmock.NewPool()
 		defer mock.Close()

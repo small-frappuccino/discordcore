@@ -115,6 +115,7 @@ func TestEnsureMinimalGuildConfigPreservesDomainOverridesOnExistingGuild(t *test
 }
 
 func TestEnsureMinimalGuildConfigPersistsDormantGuildToPostgres(t *testing.T) {
+	t.Parallel()
 	store := openIsolatedPostgresConfigStore(t)
 	mgr := NewConfigManagerWithStore(store, nil)
 

@@ -10,6 +10,7 @@ import (
 )
 
 func TestFailingStore(t *testing.T) {
+	t.Parallel()
 	store := NewFailingStore()
 	err := store.UpsertCacheEntriesContext(context.Background(), []system.CacheEntryRecord{
 		{

@@ -23,6 +23,7 @@ func (m mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 func TestArikawaGateway(t *testing.T) {
+	t.Parallel()
 	s := state.New("Bot token")
 	s.Client.Client.Client = httpdriver.WrapClient(http.Client{
 		Transport: mockTransport{

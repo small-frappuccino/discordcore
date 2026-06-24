@@ -9,6 +9,7 @@ import (
 )
 
 func TestPing(t *testing.T) {
+	t.Parallel()
 	if err := persistence.Ping(context.Background(), nil); err == nil {
 		t.Errorf("expected error when pinging nil database handle")
 	}

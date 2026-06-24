@@ -24,6 +24,7 @@ func FuzzSnowflake(f *testing.F) {
 }
 
 func TestCategorizeMessages(t *testing.T) {
+	t.Parallel()
 	mockClock := time.Date(2026, 6, 20, 12, 0, 0, 0, time.UTC)
 	nowFunc := func() time.Time { return mockClock }
 
@@ -81,6 +82,7 @@ func TestCategorizeMessages(t *testing.T) {
 }
 
 func TestApplyFilter(t *testing.T) {
+	t.Parallel()
 	messages := make([]Message, 200)
 	for i := 0; i < 200; i++ {
 		messages[i] = Message{

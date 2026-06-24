@@ -12,6 +12,7 @@ import (
 )
 
 func TestStore_System_NextTicketID(t *testing.T) {
+	t.Parallel()
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()
 	store, _ := NewStore(mock, nil)
@@ -22,6 +23,7 @@ func TestStore_System_NextTicketID(t *testing.T) {
 }
 
 func TestStore_System_BotSince_ErrNoRows(t *testing.T) {
+	t.Parallel()
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()
 	store, _ := NewStore(mock, nil)
@@ -32,6 +34,7 @@ func TestStore_System_BotSince_ErrNoRows(t *testing.T) {
 }
 
 func TestStore_System_GetCacheEntry_ErrNoRows(t *testing.T) {
+	t.Parallel()
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()
 	store, _ := NewStore(mock, nil)
@@ -42,6 +45,7 @@ func TestStore_System_GetCacheEntry_ErrNoRows(t *testing.T) {
 }
 
 func TestStore_System_GetCacheEntry_Expired(t *testing.T) {
+	t.Parallel()
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()
 	store, _ := NewStore(mock, nil)
@@ -54,6 +58,7 @@ func TestStore_System_GetCacheEntry_Expired(t *testing.T) {
 }
 
 func TestStore_System_BotSince(t *testing.T) {
+	t.Parallel()
 	t.Run("success", func(t *testing.T) {
 		mock, _ := pgxmock.NewPool()
 		defer mock.Close()
@@ -92,6 +97,7 @@ func TestStore_System_BotSince(t *testing.T) {
 }
 
 func TestStore_System_RuntimeMeta(t *testing.T) {
+	t.Parallel()
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()
 	store, _ := NewStore(mock, nil)
@@ -163,6 +169,7 @@ func TestStore_System_RuntimeMeta(t *testing.T) {
 }
 
 func TestStore_System_UpsertCacheEntriesContext(t *testing.T) {
+	t.Parallel()
 	t.Run("empty entries", func(t *testing.T) {
 		mock, _ := pgxmock.NewPool()
 		defer mock.Close()
@@ -221,6 +228,7 @@ func TestStore_System_UpsertCacheEntriesContext(t *testing.T) {
 }
 
 func TestStore_System_GetCacheEntriesByType(t *testing.T) {
+	t.Parallel()
 	t.Run("success", func(t *testing.T) {
 		mock, _ := pgxmock.NewPool()
 		defer mock.Close()
@@ -283,6 +291,7 @@ func TestStore_System_GetCacheEntriesByType(t *testing.T) {
 }
 
 func TestStore_System_CleanupExpiredCacheEntries(t *testing.T) {
+	t.Parallel()
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()
 	store, _ := NewStore(mock, nil)
@@ -298,6 +307,7 @@ func TestStore_System_CleanupExpiredCacheEntries(t *testing.T) {
 }
 
 func TestStore_System_GetCacheStatsContext(t *testing.T) {
+	t.Parallel()
 	t.Run("success", func(t *testing.T) {
 		mock, _ := pgxmock.NewPool()
 		defer mock.Close()
@@ -336,6 +346,7 @@ func TestStore_System_GetCacheStatsContext(t *testing.T) {
 }
 
 func TestStore_System_PurgeGuildModerationData(t *testing.T) {
+	t.Parallel()
 	t.Run("success", func(t *testing.T) {
 		mock, _ := pgxmock.NewPool()
 		defer mock.Close()
@@ -375,6 +386,7 @@ func TestStore_System_PurgeGuildModerationData(t *testing.T) {
 }
 
 func TestStore_System_IncrementDailyMemberEvents(t *testing.T) {
+	t.Parallel()
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()
 	store, _ := NewStore(mock, nil)

@@ -8,6 +8,7 @@ import (
 )
 
 func TestContext_StringOption(t *testing.T) {
+	t.Parallel()
 	rawOption := `{"name":"test_opt","type":3,"value":"test_value"}`
 	var opt discord.CommandInteractionOption
 	err := json.Unmarshal([]byte(rawOption), &opt)
@@ -26,6 +27,7 @@ func TestContext_StringOption(t *testing.T) {
 }
 
 func TestContext_HasRole(t *testing.T) {
+	t.Parallel()
 	ctx := &InteractionContext{
 		Event: &discord.InteractionEvent{
 			Member: &discord.Member{

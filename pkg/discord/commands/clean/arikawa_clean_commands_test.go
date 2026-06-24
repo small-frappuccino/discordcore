@@ -23,6 +23,7 @@ func (m *mockExecutor) ExecuteClean(ctx context.Context, channelID discord.Chann
 // TestArikawaCleanCommand_SyntheticPayloadInjection verifies structural typing anomalies
 // are gracefully handled without panicking or passing corrupted states.
 func TestArikawaCleanCommand_SyntheticPayloadInjection(t *testing.T) {
+	t.Parallel()
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	enabled := true
 	cfg := &files.BotConfig{
@@ -83,6 +84,7 @@ func TestArikawaCleanCommand_SyntheticPayloadInjection(t *testing.T) {
 
 // TestArikawaCleanCommand_StatelessExecution verifies isolated metrics runs.
 func TestArikawaCleanCommand_StatelessExecution(t *testing.T) {
+	t.Parallel()
 	// NopMetrics natively prevents cross-pollination.
 	// We instantiate multiple handlers simultaneously simulating high traffic
 	// and ensure state is inherently local to Handle stack.

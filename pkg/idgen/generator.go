@@ -5,12 +5,13 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/bwmarrin/snowflake"
 )
 
 var (
-	globalNode *snowflake.Node
+	globalNode atomic.Pointer[snowflake.Node]
 )
 
 // Init initializes the global snowflake generator node.
@@ -39,35 +40,38 @@ func Init(fallbackNodeID int64) error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize snowflake node: %w", err)
 	}
-	globalNode = node
+	globalNode.Store(node)
 	return nil
 }
 
 // GenerateID returns a new distributed 64-bit integer ID.
 // Init must have been called prior.
 func GenerateID() int64 {
-	if globalNode == nil {
+	node := globalNode.Load()
+	if node == nil {
 		panic("idgen: GenerateID called before Init")
 	}
-	return globalNode.Generate().Int64()
+	return node.Generate().Int64()
 }
 
 // GenerateString returns a Base58 encoded version of the Snowflake ID.
 // This is ideal for short, URL-safe configuration IDs.
 func GenerateString() string {
-	if globalNode == nil {
+	node := globalNode.Load()
+	if node == nil {
 		panic("idgen: GenerateString called before Init")
 	}
 	// snowflake.ID.Base58() uses standard Base58 encoding
-	return globalNode.Generate().Base58()
+	return node.Generate().Base58()
 }
 
 // GenerateHex returns a Hex encoded version of the Snowflake ID.
 func GenerateHex() string {
-	if globalNode == nil {
+	node := globalNode.Load()
+	if node == nil {
 		panic("idgen: GenerateHex called before Init")
 	}
-	return globalNode.Generate().Base36() // Base36 is standard for Snowflakes
+	return node.Generate().Base36() // Base36 is standard for Snowflakes
 }
 
 // ParseID parses a Base58 string back into a standard Snowflake integer.

@@ -64,6 +64,11 @@ func (c *ArikawaContext) Context() context.Context {
 	return c.ctx
 }
 
+// WithContext updates the underlying execution context.
+func (c *ArikawaContext) WithContext(ctx context.Context) {
+	c.ctx = ctx
+}
+
 // Respond responds to the interaction with the given message data.
 func (c *ArikawaContext) Respond(data api.InteractionResponseData) error {
 	if c.Client == nil || c.Interaction == nil {

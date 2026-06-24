@@ -136,25 +136,35 @@ type mockMessageSink struct {
 		ChannelID discord.ChannelID
 		Messages  []string
 	}
+	onDelete func()
+	onUpdate func()
 }
 
 func (s *mockMessageSink) OnMessageDelete(ctx context.Context, m *gateway.MessageDeleteEvent, cachedMessage *discord.Message, executor *discord.User) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.deletes = append(s.deletes, struct {
 		M        *gateway.MessageDeleteEvent
 		Cached   *discord.Message
 		Executor *discord.User
 	}{m, cachedMessage, executor})
+	cb := s.onDelete
+	s.mu.Unlock()
+	if cb != nil {
+		cb()
+	}
 }
 
 func (s *mockMessageSink) OnMessageUpdate(ctx context.Context, m *gateway.MessageUpdateEvent, cachedMessage *discord.Message) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.updates = append(s.updates, struct {
 		M      *gateway.MessageUpdateEvent
 		Cached *discord.Message
 	}{m, cachedMessage})
+	cb := s.onUpdate
+	s.mu.Unlock()
+	if cb != nil {
+		cb()
+	}
 }
 
 func (s *mockMessageSink) OnMessageDeleteBulk(ctx context.Context, guildID discord.GuildID, channelID discord.ChannelID, messages []string) {
@@ -168,6 +178,7 @@ func (s *mockMessageSink) OnMessageDeleteBulk(ctx context.Context, guildID disco
 }
 
 func TestInMemoryMetrics(t *testing.T) {
+	t.Parallel()
 	m := NewInMemoryMetrics()
 	m.RecordMessageSent()
 	snap := m.Snapshot()
@@ -180,6 +191,7 @@ func TestInMemoryMetrics(t *testing.T) {
 }
 
 func TestMessageWriterMetrics(t *testing.T) {
+	t.Parallel()
 	m := NewInMemoryMessageWriterMetrics()
 	m.RecordEnqueueUpsert(true, true)
 	m.RecordEnqueueDelete(true)
@@ -232,6 +244,7 @@ func TestMessageWriterMetrics(t *testing.T) {
 }
 
 func TestMessageCreateWriter_Basic(t *testing.T) {
+	t.Parallel()
 	repo := &mockRepository{}
 	metrics := NewInMemoryMessageWriterMetrics()
 	logger := slog.Default()
@@ -315,6 +328,7 @@ func TestMessageCreateWriter_Basic(t *testing.T) {
 }
 
 func TestAuditCacheState(t *testing.T) {
+	t.Parallel()
 	s := newAuditCacheState(10*time.Millisecond, 20*time.Millisecond)
 	if _, ok := s.get("111"); ok {
 		t.Errorf("expected miss")
@@ -371,6 +385,7 @@ func TestAuditCacheState(t *testing.T) {
 }
 
 func TestMessageEventService_LifecycleAndMetadata(t *testing.T) {
+	t.Parallel()
 	st := state.New("token")
 	store := &mockRepository{}
 	store.cleanupErr = errors.New("cleanup failed") // coverage for cleanup failure warning
@@ -435,6 +450,7 @@ func TestMessageEventService_LifecycleAndMetadata(t *testing.T) {
 }
 
 func TestMessageEventService_IngestMessageCreate(t *testing.T) {
+	t.Parallel()
 	st := state.New("token")
 	store := &mockRepository{}
 	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
@@ -575,6 +591,7 @@ func TestMessageEventService_IngestMessageCreate(t *testing.T) {
 }
 
 func TestMessageEventService_IngestMessageUpdate_And_Delete(t *testing.T) {
+	t.Parallel()
 	st := state.New("token")
 	store := &mockRepository{}
 	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
@@ -737,6 +754,7 @@ func TestMessageEventService_IngestMessageUpdate_And_Delete(t *testing.T) {
 }
 
 func TestMessageEventService_ActiveBotInstanceRouting(t *testing.T) {
+	t.Parallel()
 	st := state.New("token")
 	store := &mockRepository{
 		getMsg: &Record{
@@ -844,6 +862,7 @@ func TestMessageEventService_ActiveBotInstanceRouting(t *testing.T) {
 }
 
 func TestMessageEventService_TaskRouterAsynchronousHandling(t *testing.T) {
+	t.Parallel()
 	st := state.New("token")
 	store := &mockRepository{
 		getMsg: &Record{
@@ -871,7 +890,12 @@ func TestMessageEventService_TaskRouterAsynchronousHandling(t *testing.T) {
 		},
 	})
 
-	sink := &mockMessageSink{}
+	var wg sync.WaitGroup
+	wg.Add(2)
+	sink := &mockMessageSink{
+		onUpdate: func() { wg.Done() },
+		onDelete: func() { wg.Done() },
+	}
 	deps := EventServiceDeps{
 		ConfigManager: cfgMgr,
 		Sink:          sink,
@@ -887,8 +911,6 @@ func TestMessageEventService_TaskRouterAsynchronousHandling(t *testing.T) {
 	svc.SetTaskRouter(tr)
 	_ = svc.Start(context.Background())
 	defer svc.Stop(context.Background())
-	defer tr.Close()
-
 	// Ingest via Task Router
 	svc.IngestMessageUpdate(context.Background(), &gateway.MessageUpdateEvent{
 		Message: discord.Message{
@@ -909,15 +931,19 @@ func TestMessageEventService_TaskRouterAsynchronousHandling(t *testing.T) {
 	})
 
 	// Wait deterministically for Task Router workers to process
-	for i := 0; i < 1000; i++ {
-		sink.mu.Lock()
-		count := len(sink.updates)
-		sink.mu.Unlock()
-		if count == 1 {
-			break
-		}
-		runtime.Gosched()
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Timeout waiting for task router to process messages")
 	}
+
+	tr.Close()
 
 	sink.mu.Lock()
 	defer sink.mu.Unlock()
@@ -927,6 +953,7 @@ func TestMessageEventService_TaskRouterAsynchronousHandling(t *testing.T) {
 }
 
 func TestLookupCachedMessage_PollingAndCancellation(t *testing.T) {
+	t.Parallel()
 	st := state.New("token")
 	store := &mockRepository{}
 	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
@@ -973,6 +1000,7 @@ func TestLookupCachedMessage_PollingAndCancellation(t *testing.T) {
 }
 
 func TestMessageEventService_PersistFallbacks(t *testing.T) {
+	t.Parallel()
 	st := state.New("token")
 	store := &mockRepository{
 		upsertErr:         errors.New("sync upsert err"),
@@ -1032,6 +1060,7 @@ func TestMessageEventService_PersistFallbacks(t *testing.T) {
 }
 
 func TestAuditLogFetchFailureFallback(t *testing.T) {
+	t.Parallel()
 	st := state.New("token")
 	// Make State Client call mockable, or at least fail gracefully.
 	// Since Client.AuditLog will make actual HTTP calls and fail because of invalid token, it returns error.
@@ -1065,6 +1094,7 @@ func TestAuditLogFetchFailureFallback(t *testing.T) {
 }
 
 func TestMessageEventService_SummarizeMessageContent(t *testing.T) {
+	t.Parallel()
 	deps := EventServiceDeps{
 		Logger: slog.Default(),
 	}
@@ -1086,6 +1116,7 @@ func TestMessageEventService_SummarizeMessageContent(t *testing.T) {
 }
 
 func TestNewerAuditEntry(t *testing.T) {
+	t.Parallel()
 	t1 := time.Now()
 	t2 := t1.Add(time.Second)
 
@@ -1121,6 +1152,7 @@ func TestNewerAuditEntry(t *testing.T) {
 }
 
 func TestDeleteOnLogEnabled(t *testing.T) {
+	t.Parallel()
 	// mes.deleteOnLog == false
 	svc := &MessageEventService{deleteOnLog: false}
 	if svc.deleteOnLogEnabled("111") {

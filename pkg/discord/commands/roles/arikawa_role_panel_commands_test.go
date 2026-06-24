@@ -14,90 +14,101 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/utils/httputil/httpdriver"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	rolesvc "github.com/small-frappuccino/discordcore/pkg/discord/roles"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 var (
-	mockHTTPStatus    = http.StatusOK
-	mockHTTPBody      = []byte(`{}`)
-	mockHTTPReqs      []*http.Request
-	mockHTTPReqBodies [][]byte
-	mockHTTPMu        sync.Mutex
+	testMocks sync.Map // map[string]*testHTTPMock
 )
 
-type mockRoundTripper struct {
-	roundTrip func(req *http.Request) (*http.Response, error)
+type testHTTPMock struct {
+	mu        sync.Mutex
+	status    int
+	body      []byte
+	reqs      []*http.Request
+	reqBodies [][]byte
 }
 
-func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	return m.roundTrip(req)
-}
-
-func init() {
-	http.DefaultTransport = &mockRoundTripper{
-		roundTrip: func(req *http.Request) (*http.Response, error) {
-			mockHTTPMu.Lock()
-			defer mockHTTPMu.Unlock()
-			mockHTTPReqs = append(mockHTTPReqs, req)
-			var body []byte
-			if req.Body != nil {
-				body, _ = io.ReadAll(req.Body)
-			}
-			mockHTTPReqBodies = append(mockHTTPReqBodies, body)
-
-			status := mockHTTPStatus
-			respBody := mockHTTPBody
-
-			// Interactions must always succeed
-			if strings.Contains(req.URL.Path, "/interactions/") {
-				status = http.StatusOK
-				respBody = []byte(`{}`)
-			} else if strings.Contains(req.URL.Path, "/channels/") && strings.Contains(req.URL.Path, "/messages") {
-				// For SendMessageComplex, return a valid message with valid ID/ChannelID
-				if req.Method == http.MethodPost {
-					respBody = []byte(`{"id": "999888777", "channel_id": "12345"}`)
-				}
-			}
-
-			return &http.Response{
-				StatusCode: status,
-				Body:       io.NopCloser(bytes.NewReader(respBody)),
-				Header:     make(http.Header),
-			}, nil
-		},
+func (m *testHTTPMock) RoundTrip(req *http.Request) (*http.Response, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.reqs = append(m.reqs, req)
+	var body []byte
+	if req.Body != nil {
+		body, _ = io.ReadAll(req.Body)
 	}
+	m.reqBodies = append(m.reqBodies, body)
+
+	status := m.status
+	respBody := m.body
+
+	if strings.Contains(req.URL.Path, "/interactions/") {
+		status = http.StatusOK
+		respBody = []byte(`{}`)
+	} else if strings.Contains(req.URL.Path, "/channels/") && strings.Contains(req.URL.Path, "/messages") {
+		if req.Method == http.MethodPost {
+			respBody = []byte(`{"id": "999888777", "channel_id": "12345"}`)
+		}
+	}
+
+	return &http.Response{
+		StatusCode: status,
+		Body:       io.NopCloser(bytes.NewReader(respBody)),
+		Header:     make(http.Header),
+	}, nil
 }
 
-func resetMockHTTP() {
-	mockHTTPMu.Lock()
-	defer mockHTTPMu.Unlock()
-	mockHTTPStatus = http.StatusOK
-	mockHTTPBody = []byte(`{}`)
-	mockHTTPReqs = nil
-	mockHTTPReqBodies = nil
+// init removed
+
+func resetMockHTTP(t *testing.T) {
+	mock := &testHTTPMock{
+		status: http.StatusOK,
+		body:   []byte(`{}`),
+	}
+	testMocks.Store(t.Name(), mock)
 }
 
-func getLastResponse() string {
-	mockHTTPMu.Lock()
-	defer mockHTTPMu.Unlock()
-	if len(mockHTTPReqBodies) == 0 {
+func getLastResponse(t *testing.T) string {
+	m, ok := testMocks.Load(t.Name())
+	if !ok {
 		return ""
 	}
-	return string(mockHTTPReqBodies[len(mockHTTPReqBodies)-1])
+	mock := m.(*testHTTPMock)
+	mock.mu.Lock()
+	defer mock.mu.Unlock()
+	if len(mock.reqBodies) == 0 {
+		return ""
+	}
+	return string(mock.reqBodies[len(mock.reqBodies)-1])
 }
 
-func newTestContext(event discord.InteractionEvent, cm *files.ConfigManager) *commands.ArikawaContext {
+func setMockStatusAndBody(t *testing.T, status int, body []byte) {
+	if m, ok := testMocks.Load(t.Name()); ok {
+		mock := m.(*testHTTPMock)
+		mock.mu.Lock()
+		defer mock.mu.Unlock()
+		mock.status = status
+		mock.body = body
+	}
+}
+
+func newTestContext(t *testing.T, event discord.InteractionEvent, cm *files.ConfigManager) *commands.ArikawaContext {
 	ctx, _ := commands.NewArikawaContext(event, cm)
 	if ctx != nil {
 		ctx.Client = api.NewClient("mockToken")
+		if m, ok := testMocks.Load(t.Name()); ok {
+			customClient := http.Client{Transport: m.(*testHTTPMock)}
+			ctx.Client.Client.Client = httpdriver.WrapClient(customClient)
+		}
 	}
 	return ctx
 }
 
-func newSubCommandContext(cm *files.ConfigManager, subCommandName string, options []discord.CommandInteractionOption) *commands.ArikawaContext {
-	return newTestContext(discord.InteractionEvent{
+func newSubCommandContext(t *testing.T, cm *files.ConfigManager, subCommandName string, options []discord.CommandInteractionOption) *commands.ArikawaContext {
+	return newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -112,8 +123,8 @@ func newSubCommandContext(cm *files.ConfigManager, subCommandName string, option
 	}, cm)
 }
 
-func newNestedSubCommandContext(cm *files.ConfigManager, groupName string, subCommandName string, options []discord.CommandInteractionOption) *commands.ArikawaContext {
-	return newTestContext(discord.InteractionEvent{
+func newNestedSubCommandContext(t *testing.T, cm *files.ConfigManager, groupName string, subCommandName string, options []discord.CommandInteractionOption) *commands.ArikawaContext {
+	return newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -246,18 +257,19 @@ func TestRolePanelCommands_ConvertPanelToArikawa(t *testing.T) {
 
 func TestRolePanelCommands_SubCommands(t *testing.T) {
 	t.Run("post", func(t *testing.T) {
-		resetMockHTTP()
+		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 		cmd := newRolePanelPostSubCommand(cm, svc)
-		ctx := newSubCommandContext(cm, "post", []discord.CommandInteractionOption{
+		ctx := newSubCommandContext(t, cm, "post", []discord.CommandInteractionOption{
 			{Name: rolePanelOptionKey, Type: discord.StringOptionType, Value: []byte(`"test-key"`)},
 		})
+
 		err := cmd.Handle(ctx)
 		if err != nil {
 			t.Fatalf("post handle failed: %v", err)
 		}
-		if !strings.Contains(getLastResponse(), "Panel `test-key` was posted") {
-			t.Errorf("expected success response, got: %s", getLastResponse())
+		if !strings.Contains(getLastResponse(t), "Panel `test-key` was posted") {
+			t.Errorf("expected success response, got: %s", getLastResponse(t))
 		}
 		// Check that posting config is stored
 		panel, err := cm.RolePanel("12345", "test-key")
@@ -270,37 +282,39 @@ func TestRolePanelCommands_SubCommands(t *testing.T) {
 	})
 
 	t.Run("preview", func(t *testing.T) {
-		resetMockHTTP()
+		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 		cmd := newRolePanelPreviewSubCommand(cm, svc)
-		ctx := newSubCommandContext(cm, "preview", []discord.CommandInteractionOption{
+		ctx := newSubCommandContext(t, cm, "preview", []discord.CommandInteractionOption{
 			{Name: rolePanelOptionKey, Type: discord.StringOptionType, Value: []byte(`"test-key"`)},
 		})
+
 		err := cmd.Handle(ctx)
 		if err != nil {
 			t.Fatalf("preview handle failed: %v", err)
 		}
-		if !strings.Contains(getLastResponse(), "test-key") && !strings.Contains(getLastResponse(), "Test Title") {
-			t.Errorf("expected preview embed payload, got: %s", getLastResponse())
+		if !strings.Contains(getLastResponse(t), "test-key") && !strings.Contains(getLastResponse(t), "Test Title") {
+			t.Errorf("expected preview embed payload, got: %s", getLastResponse(t))
 		}
 	})
 
 	t.Run("set", func(t *testing.T) {
-		resetMockHTTP()
+		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 		cmd := newRolePanelSetSubCommand(cm, svc)
-		ctx := newSubCommandContext(cm, "set", []discord.CommandInteractionOption{
+		ctx := newSubCommandContext(t, cm, "set", []discord.CommandInteractionOption{
 			{Name: rolePanelOptionKey, Type: discord.StringOptionType, Value: []byte(`"test-key"`)},
 			{Name: rolePanelOptionTitle, Type: discord.StringOptionType, Value: []byte(`"New Title"`)},
 			{Name: rolePanelOptionDescription, Type: discord.StringOptionType, Value: []byte(`"New Description"`)},
 			{Name: rolePanelOptionColor, Type: discord.IntegerOptionType, Value: []byte(`255`)},
 		})
+
 		err := cmd.Handle(ctx)
 		if err != nil {
 			t.Fatalf("set handle failed: %v", err)
 		}
-		if !strings.Contains(getLastResponse(), "updated") {
-			t.Errorf("expected updated message, got: %s", getLastResponse())
+		if !strings.Contains(getLastResponse(t), "updated") {
+			t.Errorf("expected updated message, got: %s", getLastResponse(t))
 		}
 		panel, _ := cm.RolePanel("12345", "test-key")
 		if panel.Title != "New Title" || panel.Description != "New Description" || panel.Color != 255 {
@@ -309,18 +323,19 @@ func TestRolePanelCommands_SubCommands(t *testing.T) {
 	})
 
 	t.Run("delete", func(t *testing.T) {
-		resetMockHTTP()
+		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 		cmd := newRolePanelDeleteSubCommand(cm, svc)
-		ctx := newSubCommandContext(cm, "delete", []discord.CommandInteractionOption{
+		ctx := newSubCommandContext(t, cm, "delete", []discord.CommandInteractionOption{
 			{Name: rolePanelOptionKey, Type: discord.StringOptionType, Value: []byte(`"test-key"`)},
 		})
+
 		err := cmd.Handle(ctx)
 		if err != nil {
 			t.Fatalf("delete handle failed: %v", err)
 		}
-		if !strings.Contains(getLastResponse(), "deleted") {
-			t.Errorf("expected deleted message, got: %s", getLastResponse())
+		if !strings.Contains(getLastResponse(t), "deleted") {
+			t.Errorf("expected deleted message, got: %s", getLastResponse(t))
 		}
 		_, err = cm.RolePanel("12345", "test-key")
 		if !errors.Is(err, files.ErrRolePanelNotFound) {
@@ -329,91 +344,96 @@ func TestRolePanelCommands_SubCommands(t *testing.T) {
 	})
 
 	t.Run("list", func(t *testing.T) {
-		resetMockHTTP()
+		resetMockHTTP(t)
 		cm, _ := setupConfigManagerWithPanel(t)
 		cmd := newRolePanelListSubCommand(cm)
-		ctx := newSubCommandContext(cm, "list", nil)
+		ctx := newSubCommandContext(t, cm, "list", nil)
 		err := cmd.Handle(ctx)
 		if err != nil {
 			t.Fatalf("list handle failed: %v", err)
 		}
-		if !strings.Contains(getLastResponse(), "test-key") {
-			t.Errorf("expected list to contain test-key, got: %s", getLastResponse())
+		if !strings.Contains(getLastResponse(t), "test-key") {
+			t.Errorf("expected list to contain test-key, got: %s", getLastResponse(t))
 		}
 	})
 
 	t.Run("placeholders", func(t *testing.T) {
-		resetMockHTTP()
+		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 
 		// refresh
 		cmdRefresh := newRolePanelRefreshSubCommand(cm, svc)
-		ctxRefresh := newSubCommandContext(cm, "refresh", []discord.CommandInteractionOption{
+		ctxRefresh := newSubCommandContext(t, cm, "refresh", []discord.CommandInteractionOption{
 			{Name: rolePanelOptionKey, Type: discord.StringOptionType, Value: []byte(`"test-key"`)},
 		})
+
 		_ = cmdRefresh.Handle(ctxRefresh)
-		if !strings.Contains(getLastResponse(), "Refresh logic placeholder") {
-			t.Errorf("expected refresh placeholder, got: %s", getLastResponse())
+		if !strings.Contains(getLastResponse(t), "Refresh logic placeholder") {
+			t.Errorf("expected refresh placeholder, got: %s", getLastResponse(t))
 		}
 
 		// unpost
 		cmdUnpost := newRolePanelUnpostSubCommand(cm, svc)
-		ctxUnpost := newSubCommandContext(cm, "unpost", []discord.CommandInteractionOption{
+		ctxUnpost := newSubCommandContext(t, cm, "unpost", []discord.CommandInteractionOption{
 			{Name: rolePanelOptionMessageID, Type: discord.StringOptionType, Value: []byte(`"999888"`)},
 		})
+
 		_ = cmdUnpost.Handle(ctxUnpost)
-		if !strings.Contains(getLastResponse(), "Unpost logic placeholder") {
-			t.Errorf("expected unpost placeholder, got: %s", getLastResponse())
+		if !strings.Contains(getLastResponse(t), "Unpost logic placeholder") {
+			t.Errorf("expected unpost placeholder, got: %s", getLastResponse(t))
 		}
 
 		// toggle
 		cmdToggle := newRolePanelToggleSubCommand(cm)
-		ctxToggle := newSubCommandContext(cm, "toggle", nil)
+		ctxToggle := newSubCommandContext(t, cm, "toggle", nil)
 		_ = cmdToggle.Handle(ctxToggle)
-		if !strings.Contains(getLastResponse(), "Toggle logic placeholder") {
-			t.Errorf("expected toggle placeholder, got: %s", getLastResponse())
+		if !strings.Contains(getLastResponse(t), "Toggle logic placeholder") {
+			t.Errorf("expected toggle placeholder, got: %s", getLastResponse(t))
 		}
 
 		// import
 		cmdImport := newRolePanelImportSubCommand(cm, svc)
-		ctxImport := newSubCommandContext(cm, "import", []discord.CommandInteractionOption{
+		ctxImport := newSubCommandContext(t, cm, "import", []discord.CommandInteractionOption{
 			{Name: rolePanelOptionKey, Type: discord.StringOptionType, Value: []byte(`"test-key"`)},
 			{Name: rolePanelOptionURL, Type: discord.StringOptionType, Value: []byte(`"http://url"`)},
 		})
+
 		_ = cmdImport.Handle(ctxImport)
-		if !strings.Contains(getLastResponse(), "Import logic placeholder") {
-			t.Errorf("expected import placeholder, got: %s", getLastResponse())
+		if !strings.Contains(getLastResponse(t), "Import logic placeholder") {
+			t.Errorf("expected import placeholder, got: %s", getLastResponse(t))
 		}
 
 		// export
 		cmdExport := newRolePanelExportSubCommand(cm)
-		ctxExport := newSubCommandContext(cm, "export", []discord.CommandInteractionOption{
+		ctxExport := newSubCommandContext(t, cm, "export", []discord.CommandInteractionOption{
 			{Name: rolePanelOptionKey, Type: discord.StringOptionType, Value: []byte(`"test-key"`)},
 		})
+
 		_ = cmdExport.Handle(ctxExport)
-		if !strings.Contains(getLastResponse(), "Export logic placeholder") {
-			t.Errorf("expected export placeholder, got: %s", getLastResponse())
+		if !strings.Contains(getLastResponse(t), "Export logic placeholder") {
+			t.Errorf("expected export placeholder, got: %s", getLastResponse(t))
 		}
 	})
 
 	t.Run("buttons", func(t *testing.T) {
-		resetMockHTTP()
+		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 
 		// add button
 		cmdAdd := newRolePanelButtonAddSubCommand(cm, svc)
-		ctxAdd := newNestedSubCommandContext(cm, "button", "add", []discord.CommandInteractionOption{
+		ctxAdd := newNestedSubCommandContext(t, cm, "button", "add", []discord.CommandInteractionOption{
 			{Name: rolePanelOptionKey, Type: discord.StringOptionType, Value: []byte(`"test-key"`)},
 			{Name: rolePanelOptionRole, Type: discord.StringOptionType, Value: []byte(`"111222333"`)},
 			{Name: rolePanelOptionLabel, Type: discord.StringOptionType, Value: []byte(`"Role B"`)},
 			{Name: rolePanelOptionEmoji, Type: discord.StringOptionType, Value: []byte(`":smile:"`)},
 		})
+
 		err := cmdAdd.Handle(ctxAdd)
 		if err != nil {
 			t.Fatalf("button add failed: %v", err)
 		}
-		if !strings.Contains(getLastResponse(), "saved") {
-			t.Errorf("expected saved response, got: %s", getLastResponse())
+		if !strings.Contains(getLastResponse(t), "saved") {
+			t.Errorf("expected saved response, got: %s", getLastResponse(t))
 		}
 
 		panel, _ := cm.RolePanel("12345", "test-key")
@@ -423,29 +443,31 @@ func TestRolePanelCommands_SubCommands(t *testing.T) {
 
 		// list buttons
 		cmdList := newRolePanelButtonListSubCommand(cm)
-		ctxList := newNestedSubCommandContext(cm, "button", "list", []discord.CommandInteractionOption{
+		ctxList := newNestedSubCommandContext(t, cm, "button", "list", []discord.CommandInteractionOption{
 			{Name: rolePanelOptionKey, Type: discord.StringOptionType, Value: []byte(`"test-key"`)},
 		})
+
 		err = cmdList.Handle(ctxList)
 		if err != nil {
 			t.Fatalf("button list failed: %v", err)
 		}
-		if !strings.Contains(getLastResponse(), "has 2 buttons") {
-			t.Errorf("expected list to show 2 buttons, got: %s", getLastResponse())
+		if !strings.Contains(getLastResponse(t), "has 2 buttons") {
+			t.Errorf("expected list to show 2 buttons, got: %s", getLastResponse(t))
 		}
 
 		// remove button
 		cmdRemove := newRolePanelButtonRemoveSubCommand(cm, svc)
-		ctxRemove := newNestedSubCommandContext(cm, "button", "remove", []discord.CommandInteractionOption{
+		ctxRemove := newNestedSubCommandContext(t, cm, "button", "remove", []discord.CommandInteractionOption{
 			{Name: rolePanelOptionKey, Type: discord.StringOptionType, Value: []byte(`"test-key"`)},
 			{Name: rolePanelOptionRole, Type: discord.StringOptionType, Value: []byte(`"111222333"`)},
 		})
+
 		err = cmdRemove.Handle(ctxRemove)
 		if err != nil {
 			t.Fatalf("button remove failed: %v", err)
 		}
-		if !strings.Contains(getLastResponse(), "removed") {
-			t.Errorf("expected removed response, got: %s", getLastResponse())
+		if !strings.Contains(getLastResponse(t), "removed") {
+			t.Errorf("expected removed response, got: %s", getLastResponse(t))
 		}
 
 		panel, _ = cm.RolePanel("12345", "test-key")
@@ -455,47 +477,50 @@ func TestRolePanelCommands_SubCommands(t *testing.T) {
 	})
 
 	t.Run("fields", func(t *testing.T) {
-		resetMockHTTP()
+		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 
 		// add field
 		cmdAdd := newRolePanelFieldAddSubCommand(cm, svc)
-		ctxAdd := newNestedSubCommandContext(cm, "field", "add", []discord.CommandInteractionOption{
+		ctxAdd := newNestedSubCommandContext(t, cm, "field", "add", []discord.CommandInteractionOption{
 			{Name: rolePanelOptionKey, Type: discord.StringOptionType, Value: []byte(`"test-key"`)},
 			{Name: rolePanelOptionFieldName, Type: discord.StringOptionType, Value: []byte(`"Name"`)},
 			{Name: rolePanelOptionFieldValue, Type: discord.StringOptionType, Value: []byte(`"Value"`)},
 		})
+
 		_ = cmdAdd.Handle(ctxAdd)
-		if !strings.Contains(getLastResponse(), "Field add placeholder") {
-			t.Errorf("expected field add placeholder, got: %s", getLastResponse())
+		if !strings.Contains(getLastResponse(t), "Field add placeholder") {
+			t.Errorf("expected field add placeholder, got: %s", getLastResponse(t))
 		}
 
 		// remove field
 		cmdRemove := newRolePanelFieldRemoveSubCommand(cm, svc)
-		ctxRemove := newNestedSubCommandContext(cm, "field", "remove", []discord.CommandInteractionOption{
+		ctxRemove := newNestedSubCommandContext(t, cm, "field", "remove", []discord.CommandInteractionOption{
 			{Name: rolePanelOptionKey, Type: discord.StringOptionType, Value: []byte(`"test-key"`)},
 			{Name: rolePanelOptionFieldIndex, Type: discord.IntegerOptionType, Value: []byte(`1`)},
 		})
+
 		_ = cmdRemove.Handle(ctxRemove)
-		if !strings.Contains(getLastResponse(), "Field remove placeholder") {
-			t.Errorf("expected field remove placeholder, got: %s", getLastResponse())
+		if !strings.Contains(getLastResponse(t), "Field remove placeholder") {
+			t.Errorf("expected field remove placeholder, got: %s", getLastResponse(t))
 		}
 
 		// list fields
 		cmdList := newRolePanelFieldListSubCommand(cm)
-		ctxList := newNestedSubCommandContext(cm, "field", "list", []discord.CommandInteractionOption{
+		ctxList := newNestedSubCommandContext(t, cm, "field", "list", []discord.CommandInteractionOption{
 			{Name: rolePanelOptionKey, Type: discord.StringOptionType, Value: []byte(`"test-key"`)},
 		})
+
 		_ = cmdList.Handle(ctxList)
-		if !strings.Contains(getLastResponse(), "Field list placeholder") {
-			t.Errorf("expected field list placeholder, got: %s", getLastResponse())
+		if !strings.Contains(getLastResponse(t), "Field list placeholder") {
+			t.Errorf("expected field list placeholder, got: %s", getLastResponse(t))
 		}
 	})
 }
 
 func TestRolePanelCommands_ErrorsAndEdgeCases(t *testing.T) {
 	t.Run("disabled feature", func(t *testing.T) {
-		resetMockHTTP()
+		resetMockHTTP(t)
 		cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 		disabled := false
 		_, _ = cm.UpdateConfig(context.Background(), func(bc *files.BotConfig) error {
@@ -511,141 +536,151 @@ func TestRolePanelCommands_ErrorsAndEdgeCases(t *testing.T) {
 		})
 		svc := rolesvc.NewRolePanelService(cm)
 		cmd := newRolePanelPostSubCommand(cm, svc)
-		ctx := newSubCommandContext(cm, "post", []discord.CommandInteractionOption{
+		ctx := newSubCommandContext(t, cm, "post", []discord.CommandInteractionOption{
 			{Name: rolePanelOptionKey, Type: discord.StringOptionType, Value: []byte(`"test-key"`)},
 		})
+
 		err := cmd.Handle(ctx)
 		if err != nil {
 			t.Fatalf("unexpected handle error: %v", err)
 		}
-		if !strings.Contains(getLastResponse(), "disabled") {
-			t.Errorf("expected disabled error message, got: %s", getLastResponse())
+		if !strings.Contains(getLastResponse(t), "disabled") {
+			t.Errorf("expected disabled error message, got: %s", getLastResponse(t))
 		}
 	})
 
 	t.Run("post without buttons", func(t *testing.T) {
-		resetMockHTTP()
+		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 		_ = cm.DeleteRolePanelButton("12345", "test-key", "987654321")
 
 		cmd := newRolePanelPostSubCommand(cm, svc)
-		ctx := newSubCommandContext(cm, "post", []discord.CommandInteractionOption{
+		ctx := newSubCommandContext(t, cm, "post", []discord.CommandInteractionOption{
 			{Name: rolePanelOptionKey, Type: discord.StringOptionType, Value: []byte(`"test-key"`)},
 		})
+
 		_ = cmd.Handle(ctx)
-		if !strings.Contains(getLastResponse(), "has no buttons configured") {
-			t.Errorf("expected no buttons message, got: %s", getLastResponse())
+		if !strings.Contains(getLastResponse(t), "has no buttons configured") {
+			t.Errorf("expected no buttons message, got: %s", getLastResponse(t))
 		}
 	})
 
 	t.Run("webhook url unsupported", func(t *testing.T) {
-		resetMockHTTP()
+		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 		cmd := newRolePanelPostSubCommand(cm, svc)
-		ctx := newSubCommandContext(cm, "post", []discord.CommandInteractionOption{
+		ctx := newSubCommandContext(t, cm, "post", []discord.CommandInteractionOption{
 			{Name: rolePanelOptionKey, Type: discord.StringOptionType, Value: []byte(`"test-key"`)},
 			{Name: rolePanelOptionWebhookURL, Type: discord.StringOptionType, Value: []byte(`"http://webhook"`)},
 		})
+
 		_ = cmd.Handle(ctx)
-		if !strings.Contains(getLastResponse(), "not implemented in this mock") {
-			t.Errorf("expected webhook error, got: %s", getLastResponse())
+		if !strings.Contains(getLastResponse(t), "not implemented in this mock") {
+			t.Errorf("expected webhook error, got: %s", getLastResponse(t))
 		}
 	})
 
 	t.Run("non-existent panel on set", func(t *testing.T) {
-		resetMockHTTP()
+		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 		cmd := newRolePanelSetSubCommand(cm, svc)
-		ctx := newSubCommandContext(cm, "set", []discord.CommandInteractionOption{
+		ctx := newSubCommandContext(t, cm, "set", []discord.CommandInteractionOption{
 			{Name: rolePanelOptionKey, Type: discord.StringOptionType, Value: []byte(`"non-existent"`)},
 			{Name: rolePanelOptionTitle, Type: discord.StringOptionType, Value: []byte(`"title"`)},
 		})
+
 		_ = cmd.Handle(ctx)
-		if !strings.Contains(getLastResponse(), "updated") {
-			t.Errorf("expected updated message, got: %s", getLastResponse())
+		if !strings.Contains(getLastResponse(t), "updated") {
+			t.Errorf("expected updated message, got: %s", getLastResponse(t))
 		}
 	})
 
 	t.Run("non-existent panel on delete", func(t *testing.T) {
-		resetMockHTTP()
+		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 		cmd := newRolePanelDeleteSubCommand(cm, svc)
-		ctx := newSubCommandContext(cm, "delete", []discord.CommandInteractionOption{
+		ctx := newSubCommandContext(t, cm, "delete", []discord.CommandInteractionOption{
 			{Name: rolePanelOptionKey, Type: discord.StringOptionType, Value: []byte(`"non-existent"`)},
 		})
+
 		_ = cmd.Handle(ctx)
-		if !strings.Contains(getLastResponse(), "does not exist") {
-			t.Errorf("expected does not exist error, got: %s", getLastResponse())
+		if !strings.Contains(getLastResponse(t), "does not exist") {
+			t.Errorf("expected does not exist error, got: %s", getLastResponse(t))
 		}
 	})
 
 	t.Run("empty panel key", func(t *testing.T) {
-		resetMockHTTP()
+		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 		cmd := newRolePanelPostSubCommand(cm, svc)
-		ctx := newSubCommandContext(cm, "post", []discord.CommandInteractionOption{
+		ctx := newSubCommandContext(t, cm, "post", []discord.CommandInteractionOption{
 			{Name: rolePanelOptionKey, Type: discord.StringOptionType, Value: []byte(`""`)},
 		})
+
 		_ = cmd.Handle(ctx)
-		if !strings.Contains(getLastResponse(), "a non-empty key option is required") {
-			t.Errorf("expected key required error, got: %s", getLastResponse())
+		if !strings.Contains(getLastResponse(t), "a non-empty key option is required") {
+			t.Errorf("expected key required error, got: %s", getLastResponse(t))
 		}
 	})
 
 	t.Run("missing button options", func(t *testing.T) {
-		resetMockHTTP()
+		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 		cmd := newRolePanelButtonAddSubCommand(cm, svc)
 
-		ctxNoRole := newNestedSubCommandContext(cm, "button", "add", []discord.CommandInteractionOption{
+		ctxNoRole := newNestedSubCommandContext(t, cm, "button", "add", []discord.CommandInteractionOption{
 			{Name: rolePanelOptionKey, Type: discord.StringOptionType, Value: []byte(`"test-key"`)},
 			{Name: rolePanelOptionLabel, Type: discord.StringOptionType, Value: []byte(`"label"`)},
 		})
+
 		_ = cmd.Handle(ctxNoRole)
-		if !strings.Contains(getLastResponse(), "role is required") {
-			t.Errorf("expected role required, got: %s", getLastResponse())
+		if !strings.Contains(getLastResponse(t), "role is required") {
+			t.Errorf("expected role required, got: %s", getLastResponse(t))
 		}
 
-		ctxNoLabel := newNestedSubCommandContext(cm, "button", "add", []discord.CommandInteractionOption{
+		ctxNoLabel := newNestedSubCommandContext(t, cm, "button", "add", []discord.CommandInteractionOption{
 			{Name: rolePanelOptionKey, Type: discord.StringOptionType, Value: []byte(`"test-key"`)},
 			{Name: rolePanelOptionRole, Type: discord.StringOptionType, Value: []byte(`"123"`)},
 		})
+
 		_ = cmd.Handle(ctxNoLabel)
-		if !strings.Contains(getLastResponse(), "Label is required") {
-			t.Errorf("expected label required, got: %s", getLastResponse())
+		if !strings.Contains(getLastResponse(t), "Label is required") {
+			t.Errorf("expected label required, got: %s", getLastResponse(t))
 		}
 	})
 
 	t.Run("missing button remove options", func(t *testing.T) {
-		resetMockHTTP()
+		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 		cmd := newRolePanelButtonRemoveSubCommand(cm, svc)
-		ctxNoRole := newNestedSubCommandContext(cm, "button", "remove", []discord.CommandInteractionOption{
+		ctxNoRole := newNestedSubCommandContext(t, cm, "button", "remove", []discord.CommandInteractionOption{
 			{Name: rolePanelOptionKey, Type: discord.StringOptionType, Value: []byte(`"test-key"`)},
 		})
+
 		_ = cmd.Handle(ctxNoRole)
-		if !strings.Contains(getLastResponse(), "role is required") {
-			t.Errorf("expected role required, got: %s", getLastResponse())
+		if !strings.Contains(getLastResponse(t), "role is required") {
+			t.Errorf("expected role required, got: %s", getLastResponse(t))
 		}
 	})
 
 	t.Run("list empty buttons panel", func(t *testing.T) {
-		resetMockHTTP()
+		resetMockHTTP(t)
 		cm, _ := setupConfigManagerWithPanel(t)
 		_ = cm.DeleteRolePanelButton("12345", "test-key", "987654321")
 
 		cmd := newRolePanelButtonListSubCommand(cm)
-		ctx := newNestedSubCommandContext(cm, "button", "list", []discord.CommandInteractionOption{
+		ctx := newNestedSubCommandContext(t, cm, "button", "list", []discord.CommandInteractionOption{
 			{Name: rolePanelOptionKey, Type: discord.StringOptionType, Value: []byte(`"test-key"`)},
 		})
+
 		_ = cmd.Handle(ctx)
-		if !strings.Contains(getLastResponse(), "has no buttons") {
-			t.Errorf("expected no buttons message, got: %s", getLastResponse())
+		if !strings.Contains(getLastResponse(t), "has no buttons") {
+			t.Errorf("expected no buttons message, got: %s", getLastResponse(t))
 		}
 	})
 
 	t.Run("list empty panels list", func(t *testing.T) {
-		resetMockHTTP()
+		resetMockHTTP(t)
 		cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 		enabled := true
 		_, _ = cm.UpdateConfig(context.Background(), func(bc *files.BotConfig) error {
@@ -653,15 +688,15 @@ func TestRolePanelCommands_ErrorsAndEdgeCases(t *testing.T) {
 			return nil
 		})
 		cmd := newRolePanelListSubCommand(cm)
-		ctx := newSubCommandContext(cm, "list", nil)
+		ctx := newSubCommandContext(t, cm, "list", nil)
 		_ = cmd.Handle(ctx)
-		if !strings.Contains(getLastResponse(), "No role panels are configured") {
-			t.Errorf("expected no panels configured message, got: %s", getLastResponse())
+		if !strings.Contains(getLastResponse(t), "No role panels are configured") {
+			t.Errorf("expected no panels configured message, got: %s", getLastResponse(t))
 		}
 	})
 
 	t.Run("respondStructuralError", func(t *testing.T) {
-		resetMockHTTP()
+		resetMockHTTP(t)
 		cm, _ := setupConfigManagerWithPanel(t)
 
 		var logBuf bytes.Buffer
@@ -670,11 +705,12 @@ func TestRolePanelCommands_ErrorsAndEdgeCases(t *testing.T) {
 		slog.SetDefault(slog.New(jsonHandler))
 		defer slog.SetDefault(oldDefault)
 
-		ctxErr := newTestContext(discord.InteractionEvent{
+		ctxErr := newTestContext(t, discord.InteractionEvent{
 			GuildID: 12345,
 			Member:  &discord.Member{User: discord.User{ID: 999}},
 			Data:    &discord.CommandInteraction{},
 		}, cm)
+
 		err := respondStructuralError(ctxErr, "Test Action", errors.New("underlying error"))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -692,25 +728,23 @@ func TestRolePanelCommands_ErrorsAndEdgeCases(t *testing.T) {
 	})
 
 	t.Run("post failure", func(t *testing.T) {
-		resetMockHTTP()
-		mockHTTPMu.Lock()
-		mockHTTPStatus = http.StatusInternalServerError
-		mockHTTPBody = []byte(`{"message": "Internal Server Error", "code": 0}`)
-		mockHTTPMu.Unlock()
+		resetMockHTTP(t)
+		setMockStatusAndBody(t, http.StatusInternalServerError, []byte(`{"message": "Internal Server Error", "code": 0}`))
 
 		cm, svc := setupConfigManagerWithPanel(t)
 		cmd := newRolePanelPostSubCommand(cm, svc)
-		ctx := newSubCommandContext(cm, "post", []discord.CommandInteractionOption{
+		ctx := newSubCommandContext(t, cm, "post", []discord.CommandInteractionOption{
 			{Name: rolePanelOptionKey, Type: discord.StringOptionType, Value: []byte(`"test-key"`)},
 		})
+
 		_ = cmd.Handle(ctx)
-		if !strings.Contains(getLastResponse(), "Failed to post the panel") {
-			t.Errorf("expected post failure error, got: %s", getLastResponse())
+		if !strings.Contains(getLastResponse(t), "Failed to post the panel") {
+			t.Errorf("expected post failure error, got: %s", getLastResponse(t))
 		}
 	})
 
 	t.Run("delete with postings success", func(t *testing.T) {
-		resetMockHTTP()
+		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 		_ = cm.AddRolePanelPosting("12345", "test-key", files.RolePanelPostingConfig{
 			ChannelID: "12345",
@@ -718,24 +752,22 @@ func TestRolePanelCommands_ErrorsAndEdgeCases(t *testing.T) {
 		})
 
 		cmd := newRolePanelDeleteSubCommand(cm, svc)
-		ctx := newSubCommandContext(cm, "delete", []discord.CommandInteractionOption{
+		ctx := newSubCommandContext(t, cm, "delete", []discord.CommandInteractionOption{
 			{Name: rolePanelOptionKey, Type: discord.StringOptionType, Value: []byte(`"test-key"`)},
 		})
+
 		err := cmd.Handle(ctx)
 		if err != nil {
 			t.Fatalf("delete failed: %v", err)
 		}
-		if !strings.Contains(getLastResponse(), "deleted") {
-			t.Errorf("expected deleted response, got: %s", getLastResponse())
+		if !strings.Contains(getLastResponse(t), "deleted") {
+			t.Errorf("expected deleted response, got: %s", getLastResponse(t))
 		}
 	})
 
 	t.Run("delete with postings sync failure", func(t *testing.T) {
-		resetMockHTTP()
-		mockHTTPMu.Lock()
-		mockHTTPStatus = http.StatusInternalServerError
-		mockHTTPBody = []byte(`{"message": "Internal error", "code": 50001}`)
-		mockHTTPMu.Unlock()
+		resetMockHTTP(t)
+		setMockStatusAndBody(t, http.StatusInternalServerError, []byte(`{"message": "Internal error", "code": 50001}`))
 
 		cm, svc := setupConfigManagerWithPanel(t)
 		_ = cm.AddRolePanelPosting("12345", "test-key", files.RolePanelPostingConfig{
@@ -744,20 +776,21 @@ func TestRolePanelCommands_ErrorsAndEdgeCases(t *testing.T) {
 		})
 
 		cmd := newRolePanelDeleteSubCommand(cm, svc)
-		ctx := newSubCommandContext(cm, "delete", []discord.CommandInteractionOption{
+		ctx := newSubCommandContext(t, cm, "delete", []discord.CommandInteractionOption{
 			{Name: rolePanelOptionKey, Type: discord.StringOptionType, Value: []byte(`"test-key"`)},
 		})
+
 		err := cmd.Handle(ctx)
 		if err != nil {
 			t.Fatalf("delete failed: %v", err)
 		}
-		if !strings.Contains(getLastResponse(), "Could not reconcile") {
-			t.Errorf("expected sync failure message, got: %s", getLastResponse())
+		if !strings.Contains(getLastResponse(t), "Could not reconcile") {
+			t.Errorf("expected sync failure message, got: %s", getLastResponse(t))
 		}
 	})
 
 	t.Run("button add limit reached", func(t *testing.T) {
-		resetMockHTTP()
+		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 		for i := 1; i <= 25; i++ {
 			_ = cm.UpsertRolePanelButton("12345", "test-key", files.RolePanelButtonConfig{
@@ -767,31 +800,33 @@ func TestRolePanelCommands_ErrorsAndEdgeCases(t *testing.T) {
 		}
 
 		cmd := newRolePanelButtonAddSubCommand(cm, svc)
-		ctx := newNestedSubCommandContext(cm, "button", "add", []discord.CommandInteractionOption{
+		ctx := newNestedSubCommandContext(t, cm, "button", "add", []discord.CommandInteractionOption{
 			{Name: rolePanelOptionKey, Type: discord.StringOptionType, Value: []byte(`"test-key"`)},
 			{Name: rolePanelOptionRole, Type: discord.StringOptionType, Value: []byte(`"111222333"`)},
 			{Name: rolePanelOptionLabel, Type: discord.StringOptionType, Value: []byte(`"Role B"`)},
 		})
+
 		err := cmd.Handle(ctx)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if !strings.Contains(getLastResponse(), "Failed to save button") {
-			t.Errorf("expected save error response, got: %s", getLastResponse())
+		if !strings.Contains(getLastResponse(t), "Failed to save button") {
+			t.Errorf("expected save error response, got: %s", getLastResponse(t))
 		}
 	})
 
 	t.Run("button remove non-existent", func(t *testing.T) {
-		resetMockHTTP()
+		resetMockHTTP(t)
 		cm, svc := setupConfigManagerWithPanel(t)
 		cmd := newRolePanelButtonRemoveSubCommand(cm, svc)
-		ctx := newNestedSubCommandContext(cm, "button", "remove", []discord.CommandInteractionOption{
+		ctx := newNestedSubCommandContext(t, cm, "button", "remove", []discord.CommandInteractionOption{
 			{Name: rolePanelOptionKey, Type: discord.StringOptionType, Value: []byte(`"test-key"`)},
 			{Name: rolePanelOptionRole, Type: discord.StringOptionType, Value: []byte(`"999999999"`)},
 		})
+
 		_ = cmd.Handle(ctx)
-		if !strings.Contains(getLastResponse(), "Failed to delete button") {
-			t.Errorf("expected button not found error, got: %s", getLastResponse())
+		if !strings.Contains(getLastResponse(t), "Failed to delete button") {
+			t.Errorf("expected button not found error, got: %s", getLastResponse(t))
 		}
 	})
 }

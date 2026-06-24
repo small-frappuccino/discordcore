@@ -36,6 +36,7 @@ func (m *mockGateway) StreamGuildMembers(ctx context.Context, guildID string) it
 }
 
 func TestReconcileGuild(t *testing.T) {
+	t.Parallel()
 
 	cm := newTestConfigManager(t)
 	cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
@@ -99,6 +100,7 @@ func TestReconcileGuild(t *testing.T) {
 }
 
 func TestReconcileAllGuilds(t *testing.T) {
+	t.Parallel()
 
 	cm := newTestConfigManager(t)
 	cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
@@ -131,6 +133,7 @@ func TestReconcileAllGuilds(t *testing.T) {
 }
 
 func TestStatsServiceLifecycle(t *testing.T) {
+	t.Parallel()
 	cm := newTestConfigManager(t)
 
 	// Test early return with nil store

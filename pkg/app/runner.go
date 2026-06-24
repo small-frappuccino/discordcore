@@ -65,7 +65,7 @@ type App struct {
 	membersMetrics    *members.InMemoryMetrics
 	messagesMetrics   *messages.InMemoryMetrics
 
-	cleanupStop chan struct{}
+	cleanupCancel context.CancelFunc
 }
 
 // NewApp allocates the initial structural foundations for a bot runtime pipeline.
@@ -218,7 +218,9 @@ func (a *App) InitializeIO(ctx context.Context) error {
 
 	applyConfiguredTheme(a.configManager)
 
-	a.cleanupStop = scheduleDBCleanup(a.store, a.configManager)
+	cleanupCtx, cleanupCancel := context.WithCancel(context.Background())
+	scheduleDBCleanup(cleanupCtx, a.store, a.configManager)
+	a.cleanupCancel = cleanupCancel
 
 	return nil
 }
@@ -408,8 +410,8 @@ func (a *App) Teardown(originalErr error) error {
 		slog.String("app_name", a.appName),
 	)
 
-	if a.cleanupStop != nil {
-		close(a.cleanupStop)
+	if a.cleanupCancel != nil {
+		a.cleanupCancel()
 	}
 
 	if a.startupTasks != nil {
@@ -457,7 +459,7 @@ func applyConfiguredTheme(configManager *files.ConfigManager) {
 	}
 }
 
-func scheduleDBCleanup(store *postgres.Store, configManager *files.ConfigManager) chan struct{} {
+func scheduleDBCleanup(ctx context.Context, store *postgres.Store, configManager *files.ConfigManager) {
 	cfg := configManager.Config()
 	var features files.ResolvedFeatureToggles
 	var disableCleanup bool
@@ -478,7 +480,8 @@ func scheduleDBCleanup(store *postgres.Store, configManager *files.ConfigManager
 
 	// Avaliação Estrita O(1) de Ativação
 	if cleanupEnabled && !disableCleanup {
-		return cache.SchedulePeriodicCleanup(store, 6*time.Hour)
+		cache.SchedulePeriodicCleanup(ctx, store, 6*time.Hour)
+		return
 	}
 
 	// Avaliação de Logs Desacoplada e Clara
@@ -491,8 +494,6 @@ func scheduleDBCleanup(store *postgres.Store, configManager *files.ConfigManager
 			slog.String("flag", "disable_db_cleanup"),
 		)
 	}
-
-	return nil
 }
 
 func resolveRuntimeCapabilities(configSnapshot *files.BotConfig, botInstances []resolvedBotInstance, profile RunProfile) map[string]botRuntimeCapabilities {

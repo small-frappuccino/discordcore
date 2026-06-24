@@ -27,9 +27,10 @@ func (m *JSONManager) WithProjectRoot(projectRoot string) *JSONManager {
 // Load reads the JSON file and unmarshals it into the provided data structure.
 func (m *JSONManager) Load(data any) error {
 	m.mu.RLock()
-	defer m.mu.RUnlock()
+	filePath := m.FilePath
+	m.mu.RUnlock()
 
-	fileData, err := os.ReadFile(m.FilePath)
+	fileData, err := os.ReadFile(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -46,17 +47,18 @@ func (m *JSONManager) Load(data any) error {
 
 // Save marshals the provided data structure and writes it to the JSON file.
 func (m *JSONManager) Save(data any) (err error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	fileData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal json: %w", err)
 	}
 
+	m.mu.Lock()
 	targetPath := m.FilePath
-	if m.ProjectRoot != "" {
-		safePath, err := safeJoin(m.ProjectRoot, m.FilePath)
+	projectRoot := m.ProjectRoot
+	m.mu.Unlock()
+
+	if projectRoot != "" {
+		safePath, err := safeJoin(projectRoot, targetPath)
 		if err != nil {
 			return fmt.Errorf("failed to resolve safe file path: %w", err)
 		}
@@ -117,6 +119,9 @@ func (m *JSONManager) Save(data any) (err error) {
 	if err := tmpFile.Close(); err != nil {
 		return fmt.Errorf("failed to close temp file: %w", err)
 	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	if err := replaceFile(tmpPath, targetPath); err != nil {
 		return fmt.Errorf("failed to replace file atomically: %w", err)

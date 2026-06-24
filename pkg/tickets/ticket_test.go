@@ -16,6 +16,7 @@ import (
 )
 
 func TestNextID_ACID(t *testing.T) {
+	t.Parallel()
 	baseDSN, err := testdb.BaseDatabaseURLFromEnv()
 	if err != nil {
 		if testdb.IsDatabaseURLNotConfigured(err) {

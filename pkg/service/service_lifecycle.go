@@ -131,43 +131,6 @@ func (sl *BaseLifecycle) IsRunning() bool {
 	return sl.state == lifecycleStateRunning
 }
 
-func RunWithTimeout[T any](ctx context.Context, timeout time.Duration, fn func() (T, error)) (T, error) {
-	var zero T
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, timeout)
-		defer cancel()
-	}
-
-	type result struct {
-		value T
-		err   error
-	}
-
-	resultCh := make(chan result, 1)
-	go func() {
-		value, err := fn()
-		resultCh <- result{value: value, err: err}
-	}()
-
-	select {
-	case res := <-resultCh:
-		return res.value, res.err
-	case <-ctx.Done():
-		return zero, ctx.Err()
-	}
-}
-
-func RunErrWithTimeout(ctx context.Context, timeout time.Duration, fn func() error) error {
-	_, err := RunWithTimeout(ctx, timeout, func() (struct{}, error) {
-		return struct{}{}, fn()
-	})
-	return err
-}
-
 func RunWithTimeoutContext[T any](ctx context.Context, timeout time.Duration, fn func(context.Context) (T, error)) (T, error) {
 	var zero T
 	if ctx == nil {

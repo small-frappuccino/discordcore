@@ -19,6 +19,21 @@ import (
 // Hastebin creates unlisted pastes, which satisfies the restricted access requirement.
 const DefaultPasteProviderURL = "https://hastebin.com"
 
+type contextKey struct {
+	name string
+}
+
+// HTTPTransportContextKey allows tests to inject a mock http.RoundTripper into the context.
+var HTTPTransportContextKey = &contextKey{"http_transport"}
+
+func getHTTPClient(ctx context.Context) *http.Client {
+	client := &http.Client{Timeout: 10 * time.Second}
+	if rt, ok := ctx.Value(HTTPTransportContextKey).(http.RoundTripper); ok {
+		client.Transport = rt
+	}
+	return client
+}
+
 // FetchPastebinContent downloads the text content from a given URL.
 func FetchPastebinContent(ctx context.Context, pasteURL string) ([]byte, error) {
 	parsed, err := url.Parse(pasteURL)
@@ -50,7 +65,7 @@ func FetchPastebinContent(ctx context.Context, pasteURL string) ([]byte, error) 
 		return nil, fmt.Errorf("FetchPastebinContent: %w", err)
 	}
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := getHTTPClient(ctx)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch paste: %w", err)
@@ -79,7 +94,7 @@ func UploadHastebinContent(ctx context.Context, data []byte) (string, error) {
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := getHTTPClient(ctx)
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to upload paste: %w", err)
@@ -118,7 +133,7 @@ func UploadPastebinContent(ctx context.Context, data []byte, devKey, username, p
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := getHTTPClient(ctx)
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to authenticate with Pastebin: %w", err)

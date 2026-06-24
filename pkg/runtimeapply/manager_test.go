@@ -23,6 +23,7 @@ func (m *MockMonitoringHotApplier) ApplyRuntimeToggles(ctx context.Context, rc f
 }
 
 func TestManager(t *testing.T) {
+	t.Parallel()
 	// Register a dummy theme for testing SetCurrent
 	testTheme := &theme.Theme{Name: "testtheme"}
 	_ = theme.Register(testTheme)
@@ -118,6 +119,7 @@ func TestManager(t *testing.T) {
 }
 
 func TestMonitoringTogglesChanged(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name     string
 		modify   func(*files.RuntimeConfig)

@@ -9,6 +9,7 @@ import (
 )
 
 func TestOpenIsolatedDatabase(t *testing.T) {
+	t.Parallel()
 	dsn, err := testdb.BaseDatabaseURLFromEnv()
 	if testdb.IsDatabaseURLNotConfigured(err) {
 		t.Skip("skipping test due to missing database url")
@@ -37,6 +38,7 @@ func TestOpenIsolatedDatabase(t *testing.T) {
 }
 
 func TestBaseDatabaseURLFromEnv_NotConfigured(t *testing.T) {
+	t.Parallel()
 	oldVal := os.Getenv(testdb.EnvDatabaseURL)
 	os.Setenv(testdb.EnvDatabaseURL, "")
 	defer os.Setenv(testdb.EnvDatabaseURL, oldVal)
@@ -48,6 +50,7 @@ func TestBaseDatabaseURLFromEnv_NotConfigured(t *testing.T) {
 }
 
 func TestOpenIsolatedDatabase_Errors(t *testing.T) {
+	t.Parallel()
 	// Test empty DSN
 	_, _, _, err := testdb.OpenIsolatedDatabaseWithDSN(context.Background(), "")
 	if err == nil {

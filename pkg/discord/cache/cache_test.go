@@ -11,6 +11,7 @@ import (
 
 // TestCache_GCEviction verifies that weak references are correctly garbage collected and evicted.
 func TestCache_GCEviction(t *testing.T) {
+	t.Parallel()
 	uc := NewUnifiedCache(CacheConfig{GuildTTL: time.Minute})
 
 	guild := &discord.Guild{ID: discord.GuildID(123)}
@@ -39,6 +40,7 @@ func TestCache_GCEviction(t *testing.T) {
 
 // TestCache_StaleReads ensures that fetching an explicitly nulled weak reference correctly returns a miss.
 func TestCache_StaleReads(t *testing.T) {
+	t.Parallel()
 	uc := NewUnifiedCache(CacheConfig{GuildTTL: time.Minute})
 
 	guild := &discord.Guild{ID: discord.GuildID(456)}
@@ -57,6 +59,7 @@ func TestCache_StaleReads(t *testing.T) {
 
 // TestCache_ReferenceCycles guarantees that cyclic references within cached structs do not prevent garbage collection.
 func TestCache_ReferenceCycles(t *testing.T) {
+	t.Parallel()
 	uc := NewUnifiedCache(CacheConfig{MemberTTL: time.Minute})
 
 	type Cycle struct {
@@ -103,6 +106,7 @@ func BenchmarkCache_Shards(b *testing.B) {
 
 // TestCache_AsyncIO asserts the performance bounds of snapshot extraction under concurrent lock acquisition.
 func TestCache_AsyncIO(t *testing.T) {
+	t.Parallel()
 	uc := NewUnifiedCache(CacheConfig{GuildTTL: time.Minute})
 
 	for i := 0; i < 1000; i++ {
@@ -120,6 +124,7 @@ func TestCache_AsyncIO(t *testing.T) {
 
 // TestCache_CorruptRecovery checks that the warmup routine robustly ignores absent datastores.
 func TestCache_CorruptRecovery(t *testing.T) {
+	t.Parallel()
 	// We simulate this by directly calling Warmup with a mock store
 	uc := NewUnifiedCache(CacheConfig{})
 	err := uc.Warmup(context.Background())

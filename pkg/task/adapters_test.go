@@ -171,6 +171,7 @@ func (m *mockAvatarProcessor) ProcessChange(guildID, userID, currentAvatar, user
 }
 
 func TestNotificationAdapters_AllMethods(t *testing.T) {
+	t.Parallel()
 	notifier := &mockNotifier{}
 	processor := &mockAvatarProcessor{}
 	router := NewRouter(Defaults())

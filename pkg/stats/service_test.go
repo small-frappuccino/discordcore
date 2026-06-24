@@ -3,6 +3,7 @@ package stats
 import "testing"
 
 func TestNormalizeMemberType(t *testing.T) {
+	t.Parallel()
 	cases := map[string]string{
 		"":       "all",
 		"ALL":    "all",
@@ -21,6 +22,7 @@ func TestNormalizeMemberType(t *testing.T) {
 }
 
 func TestMemberTypeMatches(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		raw   string
 		isBot bool
@@ -42,6 +44,7 @@ func TestMemberTypeMatches(t *testing.T) {
 }
 
 func TestRenderStatsChannelName(t *testing.T) {
+	t.Parallel()
 	got := renderStatsChannelName("Total Proxies: ", "", 42)
 	if got != "Total Proxies: 42" {
 		t.Fatalf("default template: got %q", got)

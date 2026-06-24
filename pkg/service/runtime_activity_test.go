@@ -12,6 +12,7 @@ import (
 )
 
 func TestRuntimeActivityMarkEventPersistsTimestamp(t *testing.T) {
+	t.Parallel()
 	store, _ := newLoggingStore(t, "runtime-activity-mark-event.db")
 	expected := time.Date(2026, time.January, 2, 3, 4, 5, 0, time.UTC)
 
@@ -37,6 +38,7 @@ func TestRuntimeActivityMarkEventPersistsTimestamp(t *testing.T) {
 }
 
 func TestRuntimeActivityMarkEventPersistsTimestampPerBot(t *testing.T) {
+	t.Parallel()
 	store, _ := newLoggingStore(t, "runtime-activity-mark-event-by-bot.db")
 	expected := time.Date(2026, time.January, 2, 3, 14, 15, 0, time.UTC)
 
@@ -63,6 +65,7 @@ func TestRuntimeActivityMarkEventPersistsTimestampPerBot(t *testing.T) {
 }
 
 func TestRuntimeActivityStartHeartbeatPersistsImmediatelyAndPeriodically(t *testing.T) {
+	t.Parallel()
 	store, _ := newLoggingStore(t, "runtime-activity-heartbeat.db")
 	base := time.Date(2026, time.January, 2, 5, 0, 0, 0, time.UTC)
 	var calls atomic.Int32
@@ -108,6 +111,7 @@ func TestRuntimeActivityStartHeartbeatPersistsImmediatelyAndPeriodically(t *test
 }
 
 func TestRuntimeActivityStartHeartbeatNoopsWhenAlreadyRunning(t *testing.T) {
+	t.Parallel()
 	store, _ := newLoggingStore(t, "runtime-activity-heartbeat-noop.db")
 	activity := newRuntimeActivity(store, runtimeActivityOptions{
 		RunErr:           RunErrWithTimeoutContext,
@@ -133,6 +137,7 @@ func TestRuntimeActivityStartHeartbeatNoopsWhenAlreadyRunning(t *testing.T) {
 }
 
 func TestRuntimeActivityStopHeartbeatIsIdempotent(t *testing.T) {
+	t.Parallel()
 	store, _ := newLoggingStore(t, "runtime-activity-heartbeat-stop.db")
 	activity := newRuntimeActivity(store, runtimeActivityOptions{
 		RunErr:           RunErrWithTimeoutContext,
@@ -153,6 +158,7 @@ func TestRuntimeActivityStopHeartbeatIsIdempotent(t *testing.T) {
 }
 
 func TestRuntimeActivityHeartbeatStartupContinuesAfterInitialPersistenceFailure(t *testing.T) {
+	t.Parallel()
 	store, _ := newLoggingStore(t, "runtime-activity-heartbeat-retry.db")
 	base := time.Date(2026, time.January, 2, 6, 0, 0, 0, time.UTC)
 	var calls atomic.Int32
@@ -211,6 +217,7 @@ func TestRuntimeActivityHeartbeatStartupContinuesAfterInitialPersistenceFailure(
 // hangs and Stop (2) hangs. Hard timeouts convert either regression into a
 // failure with a goroutine stack dump pointing at the wedge.
 func TestRuntimeActivityStartHeartbeatReturnsWhenStartupPersistenceWedges(t *testing.T) {
+	t.Parallel()
 	store, _ := newLoggingStore(t, "runtime-activity-start-stop-race.db")
 
 	release := make(chan struct{})

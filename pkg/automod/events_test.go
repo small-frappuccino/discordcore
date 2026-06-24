@@ -28,6 +28,7 @@ const simulateGoldenPayload = `{
 
 // TestExecutionEvent_Golden_Unmarshal valida se o JSON da API mapeia 1:1 para as structs locais.
 func TestExecutionEvent_Golden_Unmarshal(t *testing.T) {
+	t.Parallel()
 	var event ExecutionEvent
 	err := json.Unmarshal([]byte(simulateGoldenPayload), &event)
 	if err != nil {
@@ -49,6 +50,7 @@ func TestExecutionEvent_Golden_Unmarshal(t *testing.T) {
 // TestExecutionEvent_RoundTrip garante simetria. Detecta regressões silenciosas
 // onde tags omit_empty engolem campos booleanos falsos ou ints nulos indesejadamente.
 func TestExecutionEvent_RoundTrip(t *testing.T) {
+	t.Parallel()
 	original := ExecutionEvent{
 		GuildID:              discord.GuildID(123456789012345678),
 		ChannelID:            discord.ChannelID(987654321098765432),

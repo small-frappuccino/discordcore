@@ -11,11 +11,8 @@ import (
 
 // TestOrchestrator_Preemption checks if long-running I/O calls are preempted correctly.
 func TestOrchestrator_Preemption(t *testing.T) {
-	oldDeadline := shutdownDeadline
-	shutdownDeadline = 10 * time.Millisecond
-	defer func() { shutdownDeadline = oldDeadline }()
-
-	ctx, cancel := context.WithCancel(context.Background())
+	t.Parallel()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 
 	startCalled := make(chan struct{})
@@ -32,6 +29,7 @@ func TestOrchestrator_Preemption(t *testing.T) {
 }
 
 func TestExecuteOrchestration_PanicRecovery(t *testing.T) {
+	t.Parallel()
 	err := ExecuteOrchestration(context.Background(), func(c context.Context) error {
 		panic("simulated panic in boundary")
 	})
@@ -46,6 +44,7 @@ func TestExecuteOrchestration_PanicRecovery(t *testing.T) {
 }
 
 func TestExecuteOrchestration_ContextCancellationPropagates(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 
 	errCh := make(chan error, 1)
@@ -69,6 +68,7 @@ func TestExecuteOrchestration_ContextCancellationPropagates(t *testing.T) {
 }
 
 func TestExecuteOrchestration_FalseSharingMitigation(t *testing.T) {
+	t.Parallel()
 	// A test to ensure multiple executions don't share memory unsafely.
 	var wg sync.WaitGroup
 	errs := make(chan error, 10)

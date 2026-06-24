@@ -54,6 +54,7 @@ func newTestConfigManager(t *testing.T) *files.ConfigManager {
 }
 
 func TestStatsServiceHandlesGuild(t *testing.T) {
+	t.Parallel()
 	cm := newTestConfigManager(t)
 
 	_, err := cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {

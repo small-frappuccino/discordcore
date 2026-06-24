@@ -16,6 +16,7 @@ type ServiceWrapper interface {
 type serviceState struct {
 	wrapper    ServiceWrapper
 	cancelFunc context.CancelFunc
+	runDone    chan struct{}
 }
 
 type Manager struct {
@@ -38,12 +39,15 @@ func (m *Manager) RegisterAndStart(name string, svc ServiceWrapper) error {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	m.services[name] = &serviceState{
+	state := &serviceState{
 		wrapper:    svc,
 		cancelFunc: cancel,
+		runDone:    make(chan struct{}),
 	}
+	m.services[name] = state
 
 	go func() {
+		defer close(state.runDone)
 		if err := svc.Start(ctx); err != nil {
 			fmt.Printf("fatal: service %s stopped: %v\n", name, err)
 		}
@@ -69,7 +73,7 @@ func (m *Manager) StopAndRemove(ctx context.Context, name string) error {
 	}
 
 	select {
-	case <-state.wrapper.Done():
+	case <-state.runDone:
 		return nil
 	case <-ctx.Done():
 		return fmt.Errorf("drain timeout exceeded for %s: %w", name, ctx.Err())

@@ -69,7 +69,7 @@ type messageCreateWriter struct {
 
 	state atomic.Uint32
 
-	mu        sync.RWMutex
+	mu        sync.Mutex
 	nextToken uint64
 	pending   map[string]pendingMessageState
 	stopOnce  sync.Once
@@ -256,9 +256,9 @@ func (w *messageCreateWriter) Lookup(guildID, messageID string) *CachedMessage {
 	if key == "" {
 		return nil
 	}
-	w.mu.RLock()
+	w.mu.Lock()
 	pending, ok := w.pending[key]
-	w.mu.RUnlock()
+	w.mu.Unlock()
 	if !ok || pending.deleted {
 		return nil
 	}
@@ -506,8 +506,8 @@ func (w *messageCreateWriter) storePendingDelete(key string) uint64 {
 }
 
 func (w *messageCreateWriter) pendingStateMatches(key string, token uint64, deleted bool) bool {
-	w.mu.RLock()
-	defer w.mu.RUnlock()
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	current, ok := w.pending[key]
 	return ok && current.token == token && current.deleted == deleted
 }

@@ -8,90 +8,145 @@ import (
 	"sync"
 	"testing"
 
+	"context"
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/utils/httputil/httpdriver"
+	localdiscord "github.com/small-frappuccino/discordcore/pkg/discord"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 var (
-	mockHTTPStatus      = http.StatusOK
-	mockHTTPBody        = []byte(`{}`)
-	mockHTTPPatchStatus = http.StatusOK
-	mockHTTPPatchBody   = []byte(`{}`)
-	mockHTTPReqs        []*http.Request
-	mockHTTPReqBodies   [][]byte
-	mockHTTPMu          sync.Mutex
+	testMocks sync.Map // map[string]*testHTTPMock
 )
 
-type mockRoundTripper struct {
-	roundTrip func(req *http.Request) (*http.Response, error)
+type testHTTPMock struct {
+	mu          sync.Mutex
+	status      int
+	body        []byte
+	patchStatus int
+	patchBody   []byte
+	reqs        []*http.Request
+	reqBodies   [][]byte
 }
 
-func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	return m.roundTrip(req)
+func (m *testHTTPMock) RoundTrip(req *http.Request) (*http.Response, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.reqs = append(m.reqs, req)
+	var body []byte
+	if req.Body != nil {
+		body, _ = io.ReadAll(req.Body)
+	}
+	m.reqBodies = append(m.reqBodies, body)
+
+	status := http.StatusOK
+	respBody := []byte(`{}`)
+
+	if strings.Contains(req.URL.Path, "/auto-moderation/rules") {
+		if req.Method == http.MethodPatch && m.patchStatus != 0 && m.patchStatus != http.StatusOK {
+			status = m.patchStatus
+			respBody = m.patchBody
+		} else {
+			status = m.status
+			respBody = m.body
+		}
+	}
+
+	return &http.Response{
+		StatusCode: status,
+		Body:       io.NopCloser(bytes.NewReader(respBody)),
+		Header:     make(http.Header),
+	}, nil
 }
 
-func init() {
-	http.DefaultTransport = &mockRoundTripper{
-		roundTrip: func(req *http.Request) (*http.Response, error) {
-			mockHTTPMu.Lock()
-			defer mockHTTPMu.Unlock()
-			mockHTTPReqs = append(mockHTTPReqs, req)
-			var body []byte
-			if req.Body != nil {
-				body, _ = io.ReadAll(req.Body)
-			}
-			mockHTTPReqBodies = append(mockHTTPReqBodies, body)
-
-			// Default behavior for non-AutoMod requests (e.g. interaction responses/callbacks) is 200 OK
-			status := http.StatusOK
-			respBody := []byte(`{}`)
-
-			// Only intercept and inject mock responses on AutoMod rules API calls
-			if strings.Contains(req.URL.Path, "/auto-moderation/rules") {
-				if req.Method == http.MethodPatch && mockHTTPPatchStatus != http.StatusOK {
-					status = mockHTTPPatchStatus
-					respBody = mockHTTPPatchBody
-				} else {
-					status = mockHTTPStatus
-					respBody = mockHTTPBody
-				}
-			}
-
-			return &http.Response{
-				StatusCode: status,
-				Body:       io.NopCloser(bytes.NewReader(respBody)),
-				Header:     make(http.Header),
-			}, nil
-		},
+func resetMockHTTP(t *testing.T) {
+	m, ok := testMocks.Load(t.Name())
+	if ok {
+		mock := m.(*testHTTPMock)
+		mock.mu.Lock()
+		defer mock.mu.Unlock()
+		mock.status = http.StatusOK
+		mock.body = []byte(`{}`)
+		mock.patchStatus = 0
+		mock.patchBody = nil
+		mock.reqs = nil
+		mock.reqBodies = nil
+	} else {
+		mock := &testHTTPMock{
+			status: http.StatusOK,
+			body:   []byte(`{}`),
+		}
+		testMocks.Store(t.Name(), mock)
 	}
 }
 
-func resetMockHTTP() {
-	mockHTTPMu.Lock()
-	defer mockHTTPMu.Unlock()
-	mockHTTPStatus = http.StatusOK
-	mockHTTPBody = []byte(`{}`)
-	mockHTTPPatchStatus = http.StatusOK
-	mockHTTPPatchBody = []byte(`{}`)
-	mockHTTPReqs = nil
-	mockHTTPReqBodies = nil
-}
-
-func getLastResponse() string {
-	mockHTTPMu.Lock()
-	defer mockHTTPMu.Unlock()
-	if len(mockHTTPReqBodies) == 0 {
+func getLastResponse(t *testing.T) string {
+	m, ok := testMocks.Load(t.Name())
+	if !ok {
 		return ""
 	}
-	return string(mockHTTPReqBodies[len(mockHTTPReqBodies)-1])
+	mock := m.(*testHTTPMock)
+	mock.mu.Lock()
+	defer mock.mu.Unlock()
+	if len(mock.reqBodies) == 0 {
+		return ""
+	}
+	return string(mock.reqBodies[len(mock.reqBodies)-1])
 }
 
-func newTestContext(event discord.InteractionEvent, cm *files.ConfigManager) *commands.ArikawaContext {
+func setMockStatusAndBody(t *testing.T, status int, body []byte) {
+	if m, ok := testMocks.Load(t.Name()); ok {
+		mock := m.(*testHTTPMock)
+		mock.mu.Lock()
+		defer mock.mu.Unlock()
+		mock.status = status
+		mock.body = body
+	}
+}
+
+func setMockPatchStatusAndBody(t *testing.T, status int, body []byte) {
+	if m, ok := testMocks.Load(t.Name()); ok {
+		mock := m.(*testHTTPMock)
+		mock.mu.Lock()
+		defer mock.mu.Unlock()
+		mock.patchStatus = status
+		mock.patchBody = body
+	}
+}
+
+func getMockReqs(t *testing.T) []*http.Request {
+	m, ok := testMocks.Load(t.Name())
+	if !ok {
+		return nil
+	}
+	mock := m.(*testHTTPMock)
+	mock.mu.Lock()
+	defer mock.mu.Unlock()
+	return mock.reqs
+}
+
+func getMockReqBodies(t *testing.T) [][]byte {
+	m, ok := testMocks.Load(t.Name())
+	if !ok {
+		return nil
+	}
+	mock := m.(*testHTTPMock)
+	mock.mu.Lock()
+	defer mock.mu.Unlock()
+	return mock.reqBodies
+}
+
+func newTestContext(t *testing.T, event discord.InteractionEvent, cm *files.ConfigManager) *commands.ArikawaContext {
 	ctx, _ := commands.NewArikawaContext(event, cm)
 	if ctx != nil {
 		ctx.Client = api.NewClient("mockToken")
+		if m, ok := testMocks.Load(t.Name()); ok {
+			customClient := http.Client{Transport: m.(*testHTTPMock)}
+			ctx.Client.Client.Client = httpdriver.WrapClient(customClient)
+			ctx.WithContext(context.WithValue(ctx.Context(), localdiscord.HTTPTransportContextKey, m.(*testHTTPMock)))
+		}
 	}
 	return ctx
 }
@@ -107,6 +162,7 @@ func (s *spyRouter) Register(cmd commands.ArikawaCommand) {
 func (s *spyRouter) RegisterComponent(customIDPrefix string, handler commands.ComponentHandler) {}
 
 func TestLoggingCommands_RegisterCommands(t *testing.T) {
+	t.Parallel()
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	lc := NewLoggingCommands(cm)
 	sr := &spyRouter{}
@@ -142,11 +198,12 @@ func TestLoggingCommands_RegisterCommands(t *testing.T) {
 }
 
 func TestLoggingRootCommand_HandleSafety(t *testing.T) {
+	t.Parallel()
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	cmd := &loggingRootCommand{configManager: cm}
 
 	// Interaction without Options
-	ctxEmpty := newTestContext(discord.InteractionEvent{
+	ctxEmpty := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -159,7 +216,7 @@ func TestLoggingRootCommand_HandleSafety(t *testing.T) {
 	}
 
 	// Unknown subcommand safety
-	ctxUnknown := newTestContext(discord.InteractionEvent{
+	ctxUnknown := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -175,14 +232,15 @@ func TestLoggingRootCommand_HandleSafety(t *testing.T) {
 }
 
 func TestLoggingRootCommand_Avatar(t *testing.T) {
-	resetMockHTTP()
+	t.Parallel()
+	resetMockHTTP(t)
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
 	})
 	cmd := &loggingRootCommand{configManager: cm}
 
-	ctx := newTestContext(discord.InteractionEvent{
+	ctx := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -211,20 +269,21 @@ func TestLoggingRootCommand_Avatar(t *testing.T) {
 	if cfg.Channels.AvatarLogging != "11111" {
 		t.Errorf("expected AvatarLogging channel to be 11111, got %s", cfg.Channels.AvatarLogging)
 	}
-	if !strings.Contains(getLastResponse(), "11111") {
-		t.Errorf("expected response to mention channel, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "11111") {
+		t.Errorf("expected response to mention channel, got: %s", getLastResponse(t))
 	}
 }
 
 func TestLoggingRootCommand_RoleUpdate(t *testing.T) {
-	resetMockHTTP()
+	t.Parallel()
+	resetMockHTTP(t)
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
 	})
 	cmd := &loggingRootCommand{configManager: cm}
 
-	ctx := newTestContext(discord.InteractionEvent{
+	ctx := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -253,20 +312,21 @@ func TestLoggingRootCommand_RoleUpdate(t *testing.T) {
 	if cfg.Channels.RoleUpdate != "22222" {
 		t.Errorf("expected RoleUpdate channel to be 22222, got %s", cfg.Channels.RoleUpdate)
 	}
-	if !strings.Contains(getLastResponse(), "22222") {
-		t.Errorf("expected response to mention channel, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "22222") {
+		t.Errorf("expected response to mention channel, got: %s", getLastResponse(t))
 	}
 }
 
 func TestLoggingRootCommand_Messages(t *testing.T) {
-	resetMockHTTP()
+	t.Parallel()
+	resetMockHTTP(t)
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
 	})
 	cmd := &loggingRootCommand{configManager: cm}
 
-	ctx := newTestContext(discord.InteractionEvent{
+	ctx := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -298,7 +358,8 @@ func TestLoggingRootCommand_Messages(t *testing.T) {
 }
 
 func TestLoggingRootCommand_EntryExit(t *testing.T) {
-	resetMockHTTP()
+	t.Parallel()
+	resetMockHTTP(t)
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
@@ -306,7 +367,7 @@ func TestLoggingRootCommand_EntryExit(t *testing.T) {
 	cmd := &loggingRootCommand{configManager: cm}
 
 	// Entry
-	ctxEntry := newTestContext(discord.InteractionEvent{
+	ctxEntry := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -337,7 +398,7 @@ func TestLoggingRootCommand_EntryExit(t *testing.T) {
 	}
 
 	// Exit
-	ctxExit := newTestContext(discord.InteractionEvent{
+	ctxExit := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -369,14 +430,15 @@ func TestLoggingRootCommand_EntryExit(t *testing.T) {
 }
 
 func TestLoggingRootCommand_Warnings(t *testing.T) {
-	resetMockHTTP()
+	t.Parallel()
+	resetMockHTTP(t)
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
 	})
 	cmd := &loggingRootCommand{configManager: cm}
 
-	ctx := newTestContext(discord.InteractionEvent{
+	ctx := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -409,7 +471,8 @@ func TestLoggingRootCommand_Warnings(t *testing.T) {
 }
 
 func TestLoggingRootCommand_AutomodNoRule(t *testing.T) {
-	resetMockHTTP()
+	t.Parallel()
+	resetMockHTTP(t)
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
@@ -417,14 +480,12 @@ func TestLoggingRootCommand_AutomodNoRule(t *testing.T) {
 	cmd := &loggingRootCommand{configManager: cm}
 
 	// 1. Success, auto-check native rules
-	mockHTTPMu.Lock()
-	mockHTTPBody = []byte(`[
+	setMockStatusAndBody(t, http.StatusOK, []byte(`[
 		{"id": "111", "guild_id": "12345", "name": "Keywords Rule", "trigger_type": 1, "enabled": true},
 		{"id": "222", "guild_id": "12345", "name": "Profile Rule", "trigger_type": 5, "enabled": true}
-	]`)
-	mockHTTPMu.Unlock()
+	]`))
 
-	ctx := newTestContext(discord.InteractionEvent{
+	ctx := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -455,22 +516,21 @@ func TestLoggingRootCommand_AutomodNoRule(t *testing.T) {
 	}
 
 	// 2. Warning case (rules disabled/missing)
-	resetMockHTTP()
-	mockHTTPMu.Lock()
-	mockHTTPBody = []byte(`[]`)
-	mockHTTPMu.Unlock()
+	resetMockHTTP(t)
+	setMockStatusAndBody(t, http.StatusOK, []byte(`[]`))
 
 	err = cmd.Handle(ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "Aviso") {
-		t.Errorf("expected warning in response when native rules are not active, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "Aviso") {
+		t.Errorf("expected warning in response when native rules are not active, got: %s", getLastResponse(t))
 	}
 }
 
 func TestLoggingRootCommand_AutomodWithRule(t *testing.T) {
-	resetMockHTTP()
+	t.Parallel()
+	resetMockHTTP(t)
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
@@ -478,17 +538,15 @@ func TestLoggingRootCommand_AutomodWithRule(t *testing.T) {
 	cmd := &loggingRootCommand{configManager: cm}
 
 	// 1. Success with Rule ID (rule disabled, no alert action, we update it)
-	mockHTTPMu.Lock()
-	mockHTTPBody = []byte(`{
+	setMockStatusAndBody(t, http.StatusOK, []byte(`{
 		"id": "999",
 		"guild_id": "12345",
 		"name": "AutoMod Rule",
 		"enabled": false,
 		"actions": []
-	}`)
-	mockHTTPMu.Unlock()
+	}`))
 
-	ctx := newTestContext(discord.InteractionEvent{
+	ctx := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -513,46 +571,40 @@ func TestLoggingRootCommand_AutomodWithRule(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "Aviso") {
-		t.Errorf("expected warning because rule is disabled, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "Aviso") {
+		t.Errorf("expected warning because rule is disabled, got: %s", getLastResponse(t))
 	}
 
 	// 2. Error fetching rule
-	resetMockHTTP()
-	mockHTTPMu.Lock()
-	mockHTTPStatus = http.StatusNotFound
-	mockHTTPBody = []byte(`{"message": "Unknown Rule", "code": 10015}`)
-	mockHTTPMu.Unlock()
+	resetMockHTTP(t)
+	setMockStatusAndBody(t, http.StatusNotFound, []byte(`{"message": "Unknown Rule", "code": 10015}`))
 
 	err = cmd.Handle(ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "Failed to fetch rule") {
-		t.Errorf("expected fetch failure message, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "Failed to fetch rule") {
+		t.Errorf("expected fetch failure message, got: %s", getLastResponse(t))
 	}
 
 	// 3. Error modifying rule
-	resetMockHTTP()
-	mockHTTPMu.Lock()
+	resetMockHTTP(t)
 	// Return valid rule on GET
-	mockHTTPBody = []byte(`{
+	setMockStatusAndBody(t, http.StatusOK, []byte(`{
 		"id": "999",
 		"guild_id": "12345",
 		"name": "AutoMod Rule",
 		"enabled": true,
 		"actions": [{"type": 1, "metadata": {"channel_id": "11111"}}]
-	}`)
+	}`))
 	// Fail on PATCH
-	mockHTTPPatchStatus = http.StatusBadRequest
-	mockHTTPPatchBody = []byte(`{"message": "Bad request modifying rule"}`)
-	mockHTTPMu.Unlock()
+	setMockPatchStatusAndBody(t, http.StatusBadRequest, []byte(`{"message": "Bad request modifying rule"}`))
 
 	err = cmd.Handle(ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "Failed to update Discord rule") {
-		t.Errorf("expected update failure message, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "Failed to update Discord rule") {
+		t.Errorf("expected update failure message, got: %s", getLastResponse(t))
 	}
 }

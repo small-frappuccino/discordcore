@@ -14,6 +14,7 @@ import (
 // It statically compares serialized embed structures against approved .golden files,
 // exposing silent regressions in formatting before payloads are submitted to the API.
 func TestBuildModerationEmbed_Golden(t *testing.T) {
+	t.Parallel()
 	// Fixed timestamp to ensure deterministic golden file output.
 	fixedTime := time.Date(2026, 6, 20, 12, 0, 0, 0, time.UTC)
 

@@ -20,6 +20,7 @@ func init() {
 }
 
 func TestStore_Iterators_EarlyExitCursorClosure(t *testing.T) {
+	t.Parallel()
 	mock, err := pgxmock.NewPool()
 	if err != nil {
 		t.Fatalf("failed to open stub db connection: %v", err)
@@ -84,6 +85,7 @@ func BenchmarkStore_Iterators_CompleteDrain(b *testing.B) {
 }
 
 func TestStore_Context_ExecutionBoundaryTimeout(t *testing.T) {
+	t.Parallel()
 	mock, err := pgxmock.NewPool()
 	if err != nil {
 		t.Fatalf("failed to open stub db connection: %v", err)
@@ -109,6 +111,7 @@ func TestStore_Context_ExecutionBoundaryTimeout(t *testing.T) {
 }
 
 func TestStore_Context_StructuralMisalignment(t *testing.T) {
+	t.Parallel()
 	mock, err := pgxmock.NewPool()
 	if err != nil {
 		t.Fatalf("failed to open stub db connection: %v", err)
@@ -138,6 +141,7 @@ func TestStore_Context_StructuralMisalignment(t *testing.T) {
 }
 
 func TestStore_Context_UnaryMissingState(t *testing.T) {
+	t.Parallel()
 	mock, err := pgxmock.NewPool()
 	if err != nil {
 		t.Fatalf("failed to open stub db connection: %v", err)
@@ -170,6 +174,7 @@ func TestStore_Context_UnaryMissingState(t *testing.T) {
 var _ DB = (*pgxpool.Pool)(nil)
 
 func TestStore_Members_Idempotency_And_Temporal_Precedence(t *testing.T) {
+	t.Parallel()
 	mock, err := pgxmock.NewPool()
 	if err != nil {
 		t.Fatalf("failed to open stub db connection: %v", err)
@@ -204,6 +209,7 @@ func TestStore_Members_Idempotency_And_Temporal_Precedence(t *testing.T) {
 }
 
 func TestStore_Members_UserPreferences(t *testing.T) {
+	t.Parallel()
 	t.Run("success GetUserPreferences", func(t *testing.T) {
 		mock, _ := pgxmock.NewPool()
 		defer mock.Close()
@@ -281,6 +287,7 @@ func TestStore_Members_UserPreferences(t *testing.T) {
 }
 
 func TestStore_Members_UpsertMemberJoinContext(t *testing.T) {
+	t.Parallel()
 	t.Run("empty validation", func(t *testing.T) {
 		mock, _ := pgxmock.NewPool()
 		defer mock.Close()
@@ -310,6 +317,7 @@ func TestStore_Members_UpsertMemberJoinContext(t *testing.T) {
 }
 
 func TestStore_Members_GetActiveGuildMemberStatesContext(t *testing.T) {
+	t.Parallel()
 	t.Run("empty validation", func(t *testing.T) {
 		mock, _ := pgxmock.NewPool()
 		defer mock.Close()
@@ -379,6 +387,7 @@ func TestStore_Members_GetActiveGuildMemberStatesContext(t *testing.T) {
 }
 
 func TestStore_Members_MarkMemberLeftContext(t *testing.T) {
+	t.Parallel()
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()
 	store, _ := NewStore(mock, nil)
@@ -395,6 +404,7 @@ func TestStore_Members_MarkMemberLeftContext(t *testing.T) {
 }
 
 func TestStore_Members_UpsertMemberRoles(t *testing.T) {
+	t.Parallel()
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()
 	store, _ := NewStore(mock, nil)

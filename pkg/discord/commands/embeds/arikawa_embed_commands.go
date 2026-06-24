@@ -1,7 +1,6 @@
 package embeds
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -697,7 +696,7 @@ func (c *embedImportSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	opts := commands.ArikawaOptionList(commands.GetArikawaSubCommandOptions(ctx.Interaction))
 	pasteURL := opts.String(embedOptionURL)
 
-	data, err := localdiscord.FetchPastebinContent(context.Background(), pasteURL)
+	data, err := localdiscord.FetchPastebinContent(ctx.Context(), pasteURL)
 	if err != nil {
 		return respondEphemeralError(ctx, fmt.Sprintf("Failed to fetch from pastebin: %v", err))
 	}
@@ -757,7 +756,7 @@ func (c *embedExportSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	// This invokes localdiscord.UploadExportedContent to handle Pastebin uploads.
 	// We pass nil for the authoring member as this package relies on arikawa
 	// and the upload helper gracefully handles nil members.
-	url, err := localdiscord.UploadExportedContent(context.Background(), nil, "", c.configManager, data)
+	url, err := localdiscord.UploadExportedContent(ctx.Context(), nil, "", c.configManager, data)
 	if err != nil {
 		return respondEphemeralError(ctx, fmt.Sprintf("Failed to upload: %v", err))
 	}

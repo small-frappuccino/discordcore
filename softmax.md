@@ -1,47 +1,36 @@
-Este documento descreve a mecânica e o ciclo de vida de um token na arquitetura de inferência focada em clusters TPU operando sob JetStream e Pathways. A análise a seguir detalha a progressão estrutural e computacional dos dados, desde a ingestão até a emissão.
+O sistema opera sob um paradigma de decodificação distribuída assíncrona, maximizando a ocupação vetorial da `MXU` e minimizando a saturação do barramento através de particionamento estrito na `SRAM` e compressão latente espacial. A progressão do ciclo de vida do token executa sob determinismo de hardware absoluto, delineado nas etapas estruturais a seguir.
 
-### 1. Ingestão Assíncrona e Alocação XLA
+### 1. Ingestão e Alocação Determinística (`XLA`)
 
-A entrada de dados multimodais ocorre de forma contínua através de um **ring buffer** assíncrono. O compilador XLA realiza a pré-alocação do mapa de registradores na SRAM e na HBM antes da execução da primeira instrução.
-
-O processamento inicial paraleliza e integra texto (tokenização discreta), vídeo (convolução 3D via ViT) e áudio (decodificação via USM), convergindo os tensores dinamicamente:
-
+A convergência de dados multimodais flui por um `ring buffer` assíncrono, operando como vias de tráfego de alta capacidade desaguando em um único coletor vetorial. O compilador `XLA` exige alocação rígida, mapeando registradores na `SRAM` e limites de paginação na `HBM` antes do disparo do primeiro ciclo de clock. Tensores textuais discretos, matrizes de convolução de vídeo (`ViT`) e decodificadores de áudio (`USM`) são integrados espacialmente:
 
 $$H_0 = \text{Asynchronous-Stream}\Big( \text{Tokenize}(X_{\text{text}}) E_{\text{text}} \ \big| \ \text{ViT}_{\text{3D}}(X_{\text{vision}}) W_{\text{vision}} \ \big| \ \text{USM}(X_{\text{audio}}) W_{\text{audio}} \Big)$$
 
-Nesta etapa, o JetStream consulta a Radix Tree em memória em busca de **prefix cache hits**, o que permite omitir o reprocessamento de blocos contextuais idênticos.
+A latência de inicialização é estritamente suprimida pelo `JetStream`, que interroga uma `Radix Tree` em memória primária para `prefix cache hits`. Isso isola os blocos contextuais idênticos e bloqueia qualquer reprocessamento redundante de estados já mapeados.
 
-### 2. Compressão de Estado Híbrida (SSM) e Continuous Batching
+### 2. Compressão Espacial e `Continuous Batching`
 
-Para mitigar o custo de latência na transferência de janelas de contexto via CXL, o pipeline emprega uma arquitetura híbrida. O histórico profundo da sequência é comprimido em um espaço de estado latente de tamanho fixo $\mathcal{O}(1)$ utilizando Modelos Espaciais de Estado (SSM):
-
+Para anular o estrangulamento do barramento `CXL` durante transferências massivas de janelas de contexto, o pipeline comprime o histórico profundo em um espaço de estado $\mathcal{O}(1)$ latente, governado por `SSM`. A complexidade temporal e espacial é ancorada de forma isolada:
 
 $$h_t = A h_{t-1} + B x_t$$
 
 $$y_t = C h_t + D x_t$$
 
-A integração de novos tokens ocorre por meio de **Continuous Batching**. O processamento adota o **Chunked Pre-Fill**, fatiando e inserindo novos tokens na matriz de execução durante os ciclos de decodificação de outras requisições para maximizar a utilização da MXU.
+A injeção de estados subsequentes processa via `Continuous Batching`. O algoritmo aciona o `Chunked Pre-Fill`, particionando novos tokens e sobrepondo-os aos ciclos ociosos das matrizes de decodificação concorrentes, saturando a capacidade de execução da `MXU`.
 
-### 3. Estabilização e Projeção com Dynamic Micro-Scaling
+### 3. Estabilização e Geometria de Escala
 
-A estabilização primária do tensor é executada via RMSNorm:
-
+A normalização termodinâmica do tensor opera no limite do ciclo através de `RMSNorm`:
 
 $$H_{\text{norm}} = \frac{H}{\sqrt{\frac{1}{d} \sum_{i=1}^d h_i^2 + \epsilon}} \odot \gamma$$
 
-As projeções de Consultas ($Q$), Chaves ($K$) e Valores ($V$) operam sob o padrão GQA (Grouped-Query Attention). Em substituição à quantização estática, os **Pallas Kernels** aplicam **Dynamic Micro-Scaling** (FP4 ou MX4). Fatores de escala de ponto flutuante são compartilhados por sub-blocos vetoriais na MXU, o que preserva a precisão de ativações atípicas (outliers) sem saturar o barramento.
-
-A geometria posicional é aplicada via RoPE (Rotary Positional Embedding):
-
+As projeções topológicas de $Q$, $K$ e $V$ executam sob o particionamento `GQA`. Rejeitando a degradação estrutural da quantização estática, a camada delega aos `Pallas Kernels` a execução do `Dynamic Micro-Scaling` (`FP4` ou `MX4`). Fatores flutuantes calibram sub-blocos independentes na `MXU`, absorvendo *outliers* de ativação sem perfurar a estabilidade do hardware. O mapeamento rotacional posicional é forçado estritamente via `RoPE`:
 
 $$q_m = R_{\Theta, m}^d q, \quad k_n = R_{\Theta, n}^d k$$
 
-### 4. Tiling e Online Softmax na SRAM Local
+### 4. Particionamento Local e `Online Softmax`
 
-O cálculo de atenção nas camadas Transformer ocorre em uma janela local deslizante. Para manter o processamento estritamente dentro dos limites de memória da SRAM, a sequência é fatiada através de **tiling**.
-
-O processamento utiliza o algoritmo **Online Softmax** para atualizar os valores máximos locais ($m_i$) e os fatores de escala ($l_i$) de forma incremental nos registradores. Isso assegura uma complexidade de memória linear $\mathcal{O}(N)$:
-
+O confinamento da mecânica de atenção aos limites físicos da `SRAM` exige o fracionamento em grade via `tiling`. Para assegurar estabilidade iterativa sem desencadear alocações quadráticas massivas, a estrutura emprega o `Online Softmax`. O estado avança atualizando acumuladores de máxima ($m_i$) e fatores exponenciais ($l_i$) nos registradores, ancorando a operação em complexidade de memória $\mathcal{O}(N)$:
 
 $$m_i = \max(m_{i-1}, \max(x_i))$$
 
@@ -49,41 +38,32 @@ $$l_i = l_{i-1} e^{m_{i-1} - m_i} + \sum e^{x_i - m_i}$$
 
 $$\text{Attention}_{\text{local}} = \frac{e^{x_i - m_i}}{l_i} V_i$$
 
-### 5. Ring Attention Inter-Chip (ICI)
+### 5. Sincronização Topológica em Anel (`ICI`)
 
-Quando a dimensão da janela de contexto excede a capacidade da memória de um único nó, o **Ring Attention** é ativado. As consultas ($Q$) permanecem ancoradas na SRAM local, enquanto as chaves ($K$) e valores ($V$) são transmitidos fisicamente através do anel da topologia do cluster. O motor CAE (Collectives Acceleration Engine) processa essa comunicação de rede assincronamente em paralelo às operações da MXU:
-
+Quando a matriz escalar rompe os limites de alocação da `SRAM` de um único chip, a malha de comutação engata o `Ring Attention`. As consultas de estado ($Q$) permanecem imutáveis localmente, enquanto as variáveis $K$ e $V$ circulam ao longo do anel físico da rede via `ICI`. O co-processador `CAE` absorve a latência de trânsito em segundo plano de modo estritamente assíncrono:
 
 $$\text{Attention}(Q, K, V) = \text{Softmax}\left(\frac{Q K^T}{\sqrt{d_k}}\right)V$$
 
-### 6. Roteamento Invertido: Expert-Choice MoE
+### 6. Roteamento de Ocupação (`Expert-Choice MoE`)
 
-A arquitetura MoE adota o modelo **Expert-Choice Routing**. Em vez de os tokens consultarem os especialistas, a rede projeta as probabilidades espacialmente, permitindo que cada especialista recupere o número exato de tokens exigido pelo seu **Capacity Factor**. Isso garante ocupação contígua no hardware:
-
+O sistema erradica ineficiências estocásticas adotando o roteamento `Expert-Choice MoE`. Especialistas funcionam como coletores independentes, preenchendo seu `Capacity Factor` físico a partir de projeções de probabilidade de token espacial. Isso fixa a ocupação de rotina sem vazamentos de bloco:
 
 $$I_{\text{expert}} = \text{TopK}_{\text{tokens}}\Big( \text{Softmax}(X W_g) \Big)$$
 
-Os tokens roteados são submetidos à transformação não-linear paramétrica SwiGLU:
-
+A não-linearidade vetorial atravessa as comportas multiplicativas da `SwiGLU`:
 
 $$\text{SwiGLU}(x) = \Big( x W_{\text{gate}} \cdot \text{sigmoid}(x W_{\text{gate}}) \Big) (x W_{\text{up}})$$
 
-### 7. Validação Causal Simultânea (Tree Attention)
+### 7. Verificação Especulativa e `Tree Attention`
 
-No contexto de decodificação especulativa, um **Draft Model** gera simultaneamente árvores compostas de 5 a 8 tokens futuros. O modelo principal valida essa estrutura em uma única **forward pass**.
-
-Uma máscara causal bidimensional ($M_{\text{tree}}$) é aplicada para isolar o cálculo de atenção, evitando dependências incorretas entre ramificações especulativas divergentes:
-
+Compactando a latência de geração sequencial, o `Draft Model` projeta antecipadamente estruturas arbóreas com 5 a 8 ramificações especulativas. A topologia principal processa as validações em uma única `forward pass`. Uma máscara causal bidimensional estrita ($M_{\text{tree}}$) oblitera dependências interconectadas defeituosas:
 
 $$\text{Tree Attention}(Q, K, V) = \text{Softmax}\left(\frac{Q K^T}{\sqrt{d_k}} + M_{\text{tree}}\right) V$$
 
-### 8. Descompressão, Amostragem e Emissão (SSE)
+### 8. Emissão Assíncrona e Compactação de Estado
 
-O vetor validado é convertido de volta para o domínio do vocabulário ($W_U$), produzindo os logits de saída ($z$). A variação de entropia da distribuição é controlada pela aplicação do parâmetro de Temperatura ($T$):
-
+Os coeficientes validados retornam ao domínio discreto de vocabulário. A modulação de variação térmica ($T$) calibra a entropia bruta, que é então filtrada pelas restrições nucleares limitantes de `Top-p` e `Top-k`:
 
 $$P(y_i) = \frac{\exp(z_i / T)}{\sum_{j=1}^V \exp(z_j / T)}$$
 
-A amostragem estocástica corta a distribuição secundária utilizando **Nucleus Sampling** (Top-p) e Top-k. O token amostrado é enviado imediatamente ao cliente via fluxo **SSE (Server-Sent Events)**.
-
-Concorrentemente, a camada **PagedAttention** consolida os tensores $K$ e $V$ atualizados em memória (ou transmite o estado contínuo para o módulo SSM) e libera os registradores para o próximo ciclo de execução.
+O fluxo vetorial final é injetado diretamente na rota de escape via protocolo assíncrono `SSE`. Em tempo real, o gerenciador estrito de memória `PagedAttention` trava e arquiva os ponteiros dos tensores na `KV cache`, limpa os sinalizadores dos registradores, e libera os ciclos de memória subsequentes para a próxima iteração contígua do pipeline.

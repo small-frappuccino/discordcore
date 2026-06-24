@@ -745,7 +745,7 @@ func (c *partnerImportTemplateSubCommand) Handle(ctx *commands.ArikawaContext) e
 	opts := commands.ArikawaOptionList(commands.GetArikawaSubCommandOptions(ctx.Interaction))
 	pasteURL := strings.TrimSpace(opts.String(optionURL))
 
-	data, err := localdiscord.FetchPastebinContent(context.Background(), pasteURL)
+	data, err := localdiscord.FetchPastebinContent(ctx.Context(), pasteURL)
 	if err != nil {
 		return partnerDetailedCommandError(ctx, fmt.Sprintf("Failed to fetch from pastebin: %v", err))
 	}
@@ -809,7 +809,7 @@ func (c *partnerExportTemplateSubCommand) Handle(ctx *commands.ArikawaContext) e
 		return partnerDetailedCommandError(ctx, fmt.Sprintf("Failed to format JSON: %v", err))
 	}
 
-	url, err := localdiscord.UploadExportedContent(context.Background(), nil, "", c.configManager, data)
+	url, err := localdiscord.UploadExportedContent(ctx.Context(), nil, "", c.configManager, data)
 	if err != nil {
 		return partnerDetailedCommandError(ctx, fmt.Sprintf("Failed to upload: %v", err))
 	}

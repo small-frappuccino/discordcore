@@ -35,6 +35,7 @@ func (m *mockClient) ModifyMember(guildID discord.GuildID, userID discord.UserID
 // TestCommands_StatelessExecution verifies that metrics isolate command
 // executions seamlessly without crossing data bounds between concurrent instances.
 func TestCommands_StatelessExecution(t *testing.T) {
+	t.Parallel()
 	metricsBan := &mockMetrics{}
 	metricsTimeout := &mockMetrics{}
 
@@ -81,6 +82,7 @@ func TestCommands_StatelessExecution(t *testing.T) {
 
 // TestMassBanCommand_Parity ensures MassBan natively utilizes the core logic parsing.
 func TestMassBanCommand_Parity(t *testing.T) {
+	t.Parallel()
 	svc := discordmod.NewService(&mockClient{}, nil)
 	cmd := NewMassBanCommand(svc, nil, nil)
 

@@ -8,6 +8,7 @@ import (
 )
 
 func TestOpen_InvalidConfig(t *testing.T) {
+	t.Parallel()
 	_, err := persistence.Open(context.Background(), persistence.Config{
 		DatabaseURL: "",
 	})
@@ -17,6 +18,7 @@ func TestOpen_InvalidConfig(t *testing.T) {
 }
 
 func TestOpen_InvalidDSN(t *testing.T) {
+	t.Parallel()
 	_, err := persistence.Open(context.Background(), persistence.Config{
 		DatabaseURL: "not_a_valid_dsn://",
 	})

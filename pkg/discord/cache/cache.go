@@ -13,7 +13,9 @@ import (
 	"weak"
 
 	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/small-frappuccino/discordcore/pkg/discord/session"
 	"github.com/small-frappuccino/discordcore/pkg/storage/postgres"
+	"golang.org/x/sync/errgroup"
 )
 
 // WeakRef encapsulates a weak pointer and an explicit time-to-live expiration boundary.
@@ -27,7 +29,7 @@ type WeakRef[T any] struct {
 // Shard represents a dedicated partition of the cache state secured by an independent RWMutex.
 // Sharding the map reduces lock contention across concurrent Discord events affecting different entities.
 type Shard[T any] struct {
-	mu   sync.RWMutex
+	mu   sync.Mutex
 	data map[string]WeakRef[T]
 }
 
@@ -57,9 +59,9 @@ func NewSegment[T any](ttl time.Duration) *Segment[T] {
 // Get retrieves a strongly-typed value from the cache if it exists, is not expired, and hasn't been collected.
 func (s *Segment[T]) Get(key string) (*T, bool) {
 	shard := s.shards[getShardIndex(key)]
-	shard.mu.RLock()
+	shard.mu.Lock()
 	ref, ok := shard.data[key]
-	shard.mu.RUnlock()
+	shard.mu.Unlock()
 
 	if !ok {
 		return nil, false
@@ -120,13 +122,13 @@ func (s *Segment[T]) Snapshot() map[string]*T {
 	snapshot := make(map[string]*T)
 	for i := 0; i < 16; i++ {
 		shard := s.shards[i]
-		shard.mu.RLock()
+		shard.mu.Lock()
 		for k, ref := range shard.data {
 			if val := ref.ptr.Value(); val != nil && time.Now().Before(ref.expiresAt) {
 				snapshot[k] = val
 			}
 		}
-		shard.mu.RUnlock()
+		shard.mu.Unlock()
 	}
 	return snapshot
 }
@@ -265,7 +267,7 @@ func DefaultWarmupConfig() WarmupConfig {
 }
 
 // IntelligentWarmupContext orchestrates an adaptive hydration phase tailored to specific cache contexts.
-func IntelligentWarmupContext(ctx context.Context, session any, uc *UnifiedCache, store *postgres.Store, config WarmupConfig) error {
+func IntelligentWarmupContext(ctx context.Context, s *session.LegacySession, uc *UnifiedCache, store *postgres.Store, config WarmupConfig) error {
 	return uc.Warmup(ctx)
 }
 
@@ -275,23 +277,23 @@ func (uc *UnifiedCache) WasWarmedUpRecently(d time.Duration) bool {
 }
 
 // SchedulePeriodicCleanup initializes a background goroutine to purge expired entries from the durable store.
-// Callers must close the returned channel to terminate the background collector safely.
-func SchedulePeriodicCleanup(store *postgres.Store, interval time.Duration) chan struct{} {
+// Callers must use the context cancellation to terminate the background collector safely.
+func SchedulePeriodicCleanup(ctx context.Context, store *postgres.Store, interval time.Duration) *errgroup.Group {
 	slog.Info("Architectural state transition: Initializing persistent cache garbage collector")
-	stop := make(chan struct{})
-	go func() {
+	g, gCtx := errgroup.WithContext(ctx)
+	g.Go(func() error {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
 				if store != nil {
-					_ = store.CleanupExpiredCacheEntries(context.Background())
+					_ = store.CleanupExpiredCacheEntries(gCtx)
 				}
-			case <-stop:
-				return
+			case <-gCtx.Done():
+				return gCtx.Err()
 			}
 		}
-	}()
-	return stop
+	})
+	return g
 }

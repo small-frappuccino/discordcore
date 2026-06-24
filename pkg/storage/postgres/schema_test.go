@@ -148,6 +148,7 @@ CREATE TABLE daily_message_metrics (
 }
 
 func TestStore_Schema_ParametricDeletion(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("skipping testcontainers-go tests on local windows environment due to rootless docker limitation")
 	}
@@ -182,6 +183,7 @@ func TestStore_Schema_ParametricDeletion(t *testing.T) {
 }
 
 func TestStore_Schema_TypeRegression(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("skipping testcontainers-go tests on local windows environment due to rootless docker limitation")
 	}

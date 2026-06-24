@@ -26,6 +26,7 @@ import (
 // query needing the PostgreSQL JSONB key-existence operator should use the
 // jsonb_exists() function form instead of "?", so this guard stays reliable.
 func TestStorageQueriesUsePositionalPlaceholders(t *testing.T) {
+	t.Parallel()
 	files, err := filepath.Glob("*.go")
 	if err != nil {
 		t.Fatalf("glob storage package go files: %v", err)

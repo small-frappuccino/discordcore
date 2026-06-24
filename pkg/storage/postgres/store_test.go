@@ -11,6 +11,7 @@ import (
 )
 
 func TestStore_TransactionalLifecycle_CommitValidation(t *testing.T) {
+	t.Parallel()
 	// Validação de Commit e Ignição de Rollback Silencioso
 	mock, err := pgxmock.NewPool()
 	if err != nil {
@@ -49,6 +50,7 @@ func TestStore_TransactionalLifecycle_CommitValidation(t *testing.T) {
 }
 
 func TestStore_TransactionalLifecycle_HybridRollbackFailures(t *testing.T) {
+	t.Parallel()
 	// Propagação Híbrida de Falhas de Rollback
 	mock, err := pgxmock.NewPool()
 	if err != nil {
@@ -97,6 +99,7 @@ func TestStore_TransactionalLifecycle_HybridRollbackFailures(t *testing.T) {
 }
 
 func TestNewStore_NilDB(t *testing.T) {
+	t.Parallel()
 	s, err := NewStore(nil, nil)
 	if err == nil {
 		t.Error("expected error when passing nil DB, got nil")

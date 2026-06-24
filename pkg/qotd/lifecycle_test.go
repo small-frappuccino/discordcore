@@ -10,6 +10,7 @@ import (
 )
 
 func TestUncoveredLifecycleAndService(t *testing.T) {
+	t.Parallel()
 	// 1. Test resolvePublishSchedule
 	cfgEmpty := files.QOTDConfig{}
 	_, err := resolvePublishSchedule(cfgEmpty)

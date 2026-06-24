@@ -10,6 +10,7 @@ import (
 )
 
 func TestServiceLifecycleStopTimesOutUntilOwnedWorkFinishes(t *testing.T) {
+	t.Parallel()
 	lifecycle := newServiceLifecycle("test lifecycle")
 
 	runCtx, err := lifecycle.Start(context.Background())
@@ -57,6 +58,7 @@ func TestServiceLifecycleStopTimesOutUntilOwnedWorkFinishes(t *testing.T) {
 }
 
 func TestServiceLifecycleBeginReturnsFalseAfterCancel(t *testing.T) {
+	t.Parallel()
 	lifecycle := newServiceLifecycle("test lifecycle")
 
 	if _, err := lifecycle.Start(context.Background()); err != nil {

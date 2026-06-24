@@ -14,6 +14,7 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/state"
+	"github.com/diamondburned/arikawa/v3/utils/httputil/httpdriver"
 	"go.uber.org/goleak"
 )
 
@@ -35,22 +36,29 @@ func newMockClient(t *testing.T, serverURL string) *state.State {
 		t.Fatalf("parse mock url: %v", err)
 	}
 
-	oldTransport := http.DefaultTransport
-	http.DefaultTransport = &rewriteTransport{
-		Transport: oldTransport,
-		MockURL:   u,
-	}
+	tr := &http.Transport{}
+	s.Client.Client.Client = httpdriver.WrapClient(http.Client{
+		Transport: &rewriteTransport{
+			Transport: tr,
+			MockURL:   u,
+		},
+	})
+
 	t.Cleanup(func() {
-		http.DefaultTransport = oldTransport
-		if tr, ok := oldTransport.(*http.Transport); ok {
-			tr.CloseIdleConnections()
-		}
+		tr.CloseIdleConnections()
 	})
 	return s
 }
 
+func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m,
+		goleak.IgnoreTopFunction("net/http.(*persistConn).readLoop"),
+		goleak.IgnoreTopFunction("net/http.(*persistConn).writeLoop"),
+	)
+}
+
 func TestService_GenerateAndUploadTranscript_Success(t *testing.T) {
-	defer goleak.VerifyNone(t, goleak.IgnoreTopFunction("net/http.(*persistConn).readLoop"), goleak.IgnoreTopFunction("net/http.(*persistConn).writeLoop"))
+	t.Parallel()
 
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/messages") {
@@ -116,7 +124,7 @@ func TestService_GenerateAndUploadTranscript_Success(t *testing.T) {
 }
 
 func TestService_GenerateAndUploadTranscript_Deadlock(t *testing.T) {
-	defer goleak.VerifyNone(t, goleak.IgnoreTopFunction("net/http.(*persistConn).readLoop"), goleak.IgnoreTopFunction("net/http.(*persistConn).writeLoop"))
+	t.Parallel()
 
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/messages") {

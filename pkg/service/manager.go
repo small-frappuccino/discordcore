@@ -449,7 +449,13 @@ func (sm *ServiceManager) RestartService(ctx context.Context, name string) error
 	}
 
 	// Wait a bit before restarting
-	time.Sleep(sm.restartDelay)
+	timer := time.NewTimer(sm.restartDelay)
+	select {
+	case <-ctx.Done():
+		timer.Stop()
+		return ctx.Err()
+	case <-timer.C:
+	}
 
 	return sm.StartService(name)
 }

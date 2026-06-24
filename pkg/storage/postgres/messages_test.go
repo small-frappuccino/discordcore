@@ -12,6 +12,7 @@ import (
 )
 
 func TestStore_Messages_UpsertMessage(t *testing.T) {
+	t.Parallel()
 	t.Run("with expiry", func(t *testing.T) {
 		mock, err := pgxmock.NewPool()
 		if err != nil {
@@ -105,6 +106,7 @@ func TestStore_Messages_UpsertMessage(t *testing.T) {
 }
 
 func TestStore_Messages_UpsertMessagesContext(t *testing.T) {
+	t.Parallel()
 	t.Run("empty slice", func(t *testing.T) {
 		mock, _ := pgxmock.NewPool()
 		defer mock.Close()
@@ -172,6 +174,7 @@ func TestStore_Messages_UpsertMessagesContext(t *testing.T) {
 }
 
 func TestStore_Messages_GetMessage(t *testing.T) {
+	t.Parallel()
 	t.Run("found with expiry", func(t *testing.T) {
 		mock, _ := pgxmock.NewPool()
 		defer mock.Close()
@@ -260,6 +263,7 @@ func TestStore_Messages_GetMessage(t *testing.T) {
 }
 
 func TestStore_Messages_DeleteMessagesContext(t *testing.T) {
+	t.Parallel()
 	t.Run("empty keys", func(t *testing.T) {
 		mock, _ := pgxmock.NewPool()
 		defer mock.Close()
@@ -313,6 +317,7 @@ func TestStore_Messages_DeleteMessagesContext(t *testing.T) {
 }
 
 func TestStore_Messages_InsertMessageVersionsMixedBatchContext(t *testing.T) {
+	t.Parallel()
 	t.Run("empty versions", func(t *testing.T) {
 		mock, _ := pgxmock.NewPool()
 		defer mock.Close()
@@ -425,6 +430,7 @@ func TestStore_Messages_InsertMessageVersionsMixedBatchContext(t *testing.T) {
 }
 
 func TestStore_Messages_CleanupExpiredMessages(t *testing.T) {
+	t.Parallel()
 	t.Run("success", func(t *testing.T) {
 		mock, _ := pgxmock.NewPool()
 		defer mock.Close()
@@ -455,6 +461,7 @@ func TestStore_Messages_CleanupExpiredMessages(t *testing.T) {
 }
 
 func TestStore_Messages_IncrementDailyMessageCountsContext(t *testing.T) {
+	t.Parallel()
 	t.Run("empty deltas", func(t *testing.T) {
 		mock, _ := pgxmock.NewPool()
 		defer mock.Close()
@@ -511,6 +518,7 @@ func TestStore_Messages_IncrementDailyMessageCountsContext(t *testing.T) {
 }
 
 func TestStore_Messages_DeleteMessage(t *testing.T) {
+	t.Parallel()
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()
 	store, _ := NewStore(mock, nil)
@@ -526,6 +534,7 @@ func TestStore_Messages_DeleteMessage(t *testing.T) {
 }
 
 func TestStore_Messages_InsertMessageVersion(t *testing.T) {
+	t.Parallel()
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()
 	store, _ := NewStore(mock, nil)
@@ -555,6 +564,7 @@ func TestStore_Messages_InsertMessageVersion(t *testing.T) {
 }
 
 func TestStore_Messages_IncrementDailyMessageCount(t *testing.T) {
+	t.Parallel()
 	mock, _ := pgxmock.NewPool()
 	defer mock.Close()
 	store, _ := NewStore(mock, nil)

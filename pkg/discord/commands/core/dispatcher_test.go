@@ -30,6 +30,7 @@ func FuzzDispatcher_DispatchRaw(f *testing.F) {
 }
 
 func TestDispatcher_ValidCommand(t *testing.T) {
+	t.Parallel()
 	registry := NewCommandRegistry()
 	called := false
 	_ = registry.Register(&Command{

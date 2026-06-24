@@ -24,6 +24,7 @@ func (m *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 func TestFormatUserLabel(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		username string
 		userID   string
@@ -45,6 +46,7 @@ func TestFormatUserLabel(t *testing.T) {
 }
 
 func TestFormatUserRef(t *testing.T) {
+	t.Parallel()
 	got := FormatUserRef("123")
 	expected := "<@123> (`123`)"
 	if got != expected {
@@ -53,6 +55,7 @@ func TestFormatUserRef(t *testing.T) {
 }
 
 func TestFormatChannelLabel(t *testing.T) {
+	t.Parallel()
 	if FormatChannelLabel("") != "Unknown" {
 		t.Errorf("expected Unknown for empty channel ID")
 	}
@@ -64,6 +67,7 @@ func TestFormatChannelLabel(t *testing.T) {
 }
 
 func TestFormatRoleLabel(t *testing.T) {
+	t.Parallel()
 	if FormatRoleLabel("123", "") != "<@&123> (`123`)" {
 		t.Errorf("unexpected role reference output")
 	}
@@ -76,6 +80,7 @@ func TestFormatRoleLabel(t *testing.T) {
 }
 
 func TestFormatDurationFull(t *testing.T) {
+	t.Parallel()
 	if FormatDurationFull(-1) != "0 seconds" {
 		t.Errorf("expected 0 seconds for negative duration")
 	}
@@ -88,6 +93,7 @@ func TestFormatDurationFull(t *testing.T) {
 }
 
 func TestFormatDurationSmart(t *testing.T) {
+	t.Parallel()
 	if FormatDurationSmart(-1) != "" {
 		t.Errorf("expected empty string for negative duration")
 	}
@@ -102,6 +108,7 @@ func TestFormatDurationSmart(t *testing.T) {
 }
 
 func TestFormatDuration(t *testing.T) {
+	t.Parallel()
 	if FormatDuration(0) != "`            `" {
 		t.Errorf("unexpected zero duration output")
 	}
@@ -147,6 +154,7 @@ func TestFormatDuration(t *testing.T) {
 }
 
 func TestTruncateString(t *testing.T) {
+	t.Parallel()
 	if TruncateString("", 10) != "*empty message*" {
 		t.Errorf("unexpected empty message output")
 	}
@@ -159,6 +167,7 @@ func TestTruncateString(t *testing.T) {
 }
 
 func TestLogEventCapabilities(t *testing.T) {
+	t.Parallel()
 	caps := LogEventCapabilities()
 	if len(caps) != len(logEventCapabilities) {
 		t.Errorf("expected same length")
@@ -166,6 +175,7 @@ func TestLogEventCapabilities(t *testing.T) {
 }
 
 func TestResolveLogChannel(t *testing.T) {
+	t.Parallel()
 	// nil inputs
 	if ResolveLogChannel(LogEventAvatarChange, "111", nil) != "" {
 		t.Errorf("expected empty string for nil config manager")
@@ -219,6 +229,7 @@ func TestResolveLogChannel(t *testing.T) {
 }
 
 func TestCheckFeatureEnabled_Errors(t *testing.T) {
+	t.Parallel()
 	// Unknown event
 	dec := CheckFeatureEnabled(nil, LogEventType("unknown"), "111")
 	if dec.Enabled || dec.Reason != EmitReasonUnknownEvent {
@@ -251,6 +262,7 @@ func boolPtr(b bool) *bool {
 }
 
 func TestCheckFeatureEnabled_Toggles(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		eventType LogEventType
 		rc        files.RuntimeConfig
@@ -300,6 +312,7 @@ func TestCheckFeatureEnabled_Toggles(t *testing.T) {
 }
 
 func TestCheckFeatureEnabled_NoChannelConfigured(t *testing.T) {
+	t.Parallel()
 	store := &files.MemoryConfigStore{}
 	_ = store.Save(&files.BotConfig{
 		Guilds: []files.GuildConfig{
@@ -318,6 +331,7 @@ func TestCheckFeatureEnabled_NoChannelConfigured(t *testing.T) {
 }
 
 func TestValidateLogCapability(t *testing.T) {
+	t.Parallel()
 	// Test not enabled decision
 	dec := EmitDecision{Enabled: false, Reason: EmitReasonUnknownEvent}
 	reason, _, ok := ValidateLogCapability(nil, 0, dec, "111", nil)
@@ -415,6 +429,7 @@ func (m *mockPermEval) Permissions(channelID discord.ChannelID, userID discord.U
 }
 
 func TestValidateModerationLogChannel(t *testing.T) {
+	t.Parallel()
 	// nil state
 	if err := ValidateModerationLogChannel(nil, "111", "222"); err == nil || !strings.Contains(err.Error(), "state is nil") {
 		t.Errorf("expected error for nil state")
@@ -494,6 +509,7 @@ func TestValidateModerationLogChannel(t *testing.T) {
 }
 
 func TestIsSharedModerationChannel(t *testing.T) {
+	t.Parallel()
 	if IsSharedModerationChannel("123", nil) {
 		t.Errorf("expected false for nil guild config")
 	}

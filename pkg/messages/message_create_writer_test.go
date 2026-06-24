@@ -20,6 +20,7 @@ import (
 )
 
 func TestMessageEventService_ProcessMessageUpdateQueuesAsyncPersistence(t *testing.T) {
+	t.Parallel()
 	const (
 		guildID      = "g-message-writer-update"
 		channelID    = "c-message-writer-update"
@@ -126,6 +127,7 @@ func TestMessageEventService_ProcessMessageUpdateQueuesAsyncPersistence(t *testi
 }
 
 func TestMessageEventService_ProcessMessageDeleteQueuesAsyncPersistenceWhenDeleteOnLogEnabled(t *testing.T) {
+	t.Parallel()
 	const (
 		guildID      = "g-message-writer-delete"
 		channelID    = "c-message-writer-delete"
@@ -207,6 +209,7 @@ func TestMessageEventService_ProcessMessageDeleteQueuesAsyncPersistenceWhenDelet
 }
 
 func TestMessageEventService_WriterDrainKeepsCreateEditDeleteVersionsContiguous(t *testing.T) {
+	t.Parallel()
 	const (
 		guildID     = "g-message-writer-sequence"
 		channelID   = "c-message-writer-sequence"
@@ -315,6 +318,7 @@ func TestMessageEventService_WriterDrainKeepsCreateEditDeleteVersionsContiguous(
 }
 
 func TestMessageEventService_ProcessMessageDeleteSkipsRetryWhenMessageProcessDisabled(t *testing.T) {
+	t.Parallel()
 	const (
 		guildID   = "g-message-delete-no-process"
 		channelID = "c-message-delete-no-process"
@@ -346,6 +350,7 @@ func TestMessageEventService_ProcessMessageDeleteSkipsRetryWhenMessageProcessDis
 }
 
 func TestMessageEventService_ProcessMessageDeleteSkipsRetryForBotMessageInState(t *testing.T) {
+	t.Parallel()
 	const (
 		guildID      = "g-message-delete-bot"
 		channelID    = "c-message-delete-bot"
@@ -389,6 +394,7 @@ func TestMessageEventService_ProcessMessageDeleteSkipsRetryForBotMessageInState(
 }
 
 func TestMessageCreateWriterEnqueueAfterStopReturnsStopped(t *testing.T) {
+	t.Parallel()
 	writer := newMessageCreateWriter(nil, nil, slog.Default())
 	writer.flushInterval = time.Hour
 	writer.Start()

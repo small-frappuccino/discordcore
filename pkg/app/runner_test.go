@@ -95,7 +95,7 @@ func TestRunner_ApplyConfiguredTheme(t *testing.T) {
 
 func TestRunner_ScheduleDBCleanup(t *testing.T) {
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
-	scheduleDBCleanup(nil, cm)
+	scheduleDBCleanup(context.Background(), nil, cm)
 }
 
 func TestFormatStartupMessage(t *testing.T) {

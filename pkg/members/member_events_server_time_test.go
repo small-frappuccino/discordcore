@@ -249,6 +249,7 @@ func setupTestService(t *testing.T) (*MemberEventService, *mockMembersRepo, *moc
 }
 
 func TestMemberEventService_LifeCycle(t *testing.T) {
+	t.Parallel()
 	svc, _, _, _, _ := setupTestService(t)
 	ctx := context.Background()
 
@@ -299,6 +300,7 @@ func TestMemberEventService_LifeCycle(t *testing.T) {
 }
 
 func TestMemberEventService_IngestGuildMemberAdd(t *testing.T) {
+	t.Parallel()
 	svc, mRepo, sRepo, sink, transport := setupTestService(t)
 	_ = svc.Start(context.Background())
 	defer func() { _ = svc.Stop(context.Background()) }()
@@ -368,6 +370,7 @@ func TestMemberEventService_IngestGuildMemberAdd(t *testing.T) {
 }
 
 func TestMemberEventService_IngestGuildMemberRemove(t *testing.T) {
+	t.Parallel()
 	svc, _, sRepo, sink, transport := setupTestService(t)
 	_ = svc.Start(context.Background())
 	defer func() { _ = svc.Stop(context.Background()) }()
@@ -405,6 +408,7 @@ func TestMemberEventService_IngestGuildMemberRemove(t *testing.T) {
 }
 
 func TestMemberEventService_IngestGuildMemberRemove_StoreFallback(t *testing.T) {
+	t.Parallel()
 	svc, mRepo, sRepo, sink, _ := setupTestService(t)
 	_ = svc.Start(context.Background())
 	defer func() { _ = svc.Stop(context.Background()) }()
@@ -437,6 +441,7 @@ func TestMemberEventService_IngestGuildMemberRemove_StoreFallback(t *testing.T) 
 }
 
 func TestMemberEventService_IngestGuildMemberUpdate(t *testing.T) {
+	t.Parallel()
 	svc, _, _, sink, transport := setupTestService(t)
 	_ = svc.Start(context.Background())
 	defer func() { _ = svc.Stop(context.Background()) }()
@@ -508,6 +513,7 @@ func TestMemberEventService_IngestGuildMemberUpdate(t *testing.T) {
 }
 
 func TestMemberEventService_CleanupJoinTimes(t *testing.T) {
+	t.Parallel()
 	svc, _, _, _, _ := setupTestService(t)
 	svc.joinTimes = make(map[string]time.Time)
 	svc.joinTimes["k1"] = time.Now().Add(-8 * 24 * time.Hour) // older than 7 days
@@ -515,8 +521,8 @@ func TestMemberEventService_CleanupJoinTimes(t *testing.T) {
 
 	svc.cleanupJoinTimes()
 
-	svc.joinMu.RLock()
-	defer svc.joinMu.RUnlock()
+	svc.joinMu.Lock()
+	defer svc.joinMu.Unlock()
 	if _, ok := svc.joinTimes["k1"]; ok {
 		t.Errorf("expected k1 to be cleaned up")
 	}
@@ -526,6 +532,7 @@ func TestMemberEventService_CleanupJoinTimes(t *testing.T) {
 }
 
 func TestInMemoryMetrics(t *testing.T) {
+	t.Parallel()
 	metrics := NewInMemoryMetrics()
 	metrics.RecordGuildMemberCall()
 	metrics.RecordStateMemberCacheHit()
@@ -541,6 +548,7 @@ func TestInMemoryMetrics(t *testing.T) {
 }
 
 func TestNopMemberSink(t *testing.T) {
+	t.Parallel()
 	sink := NopMemberSink{}
 	// None should panic
 	sink.OnMemberJoin(context.Background(), nil, 0)
@@ -551,6 +559,7 @@ func TestNopMemberSink(t *testing.T) {
 }
 
 func TestNopMetrics(t *testing.T) {
+	t.Parallel()
 	metrics := NopMetrics{}
 	// None should panic
 	metrics.RecordGuildMemberCall()
@@ -562,6 +571,7 @@ func TestNopMetrics(t *testing.T) {
 }
 
 func TestMemberEventService_HandlesGuild(t *testing.T) {
+	t.Parallel()
 	// 1. nil service or nil config manager
 	var nilSvc *MemberEventService
 	if nilSvc.handlesGuild("111") {

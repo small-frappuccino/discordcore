@@ -12,9 +12,13 @@ import (
 	"go.uber.org/goleak"
 )
 
+func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
+}
+
 // Injeção de $N$ assinantes de bloqueio simultâneo onde $N$ supera o limite de errgroup.SetLimit.
 func TestNotifySubscribers_ConcurrencyLimitExceeded(t *testing.T) {
-	defer goleak.VerifyNone(t)
+	t.Parallel()
 
 	cfgManager := NewConfigManagerWithStore(nil, nil)
 
@@ -84,7 +88,7 @@ func TestNotifySubscribers_ConcurrencyLimitExceeded(t *testing.T) {
 
 // Disparo de exceções forçadas via panic("simulated") no interior das rotinas de processamento de múltiplos assinantes.
 func TestNotifySubscribers_PanicRecovery(t *testing.T) {
-	defer goleak.VerifyNone(t)
+	t.Parallel()
 
 	cfgManager := NewConfigManagerWithStore(nil, nil)
 
@@ -117,7 +121,7 @@ func TestNotifySubscribers_PanicRecovery(t *testing.T) {
 
 // Injeção de time.Sleep ou laços infinitos em assinantes combinada com uma janela milissegunda restrita via context.WithTimeout.
 func TestNotifySubscribers_ContextTimeoutPreemption(t *testing.T) {
-	defer goleak.VerifyNone(t)
+	t.Parallel()
 
 	cfgManager := NewConfigManagerWithStore(nil, nil)
 

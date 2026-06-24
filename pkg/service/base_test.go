@@ -7,6 +7,7 @@ import (
 )
 
 func TestBaseServiceStopReturnsErrorAndKeepsErrorState(t *testing.T) {
+	t.Parallel()
 	stopErr := stdErrors.New("stop failed")
 	svc := NewBaseService("test", TypeMonitoring, PriorityNormal, nil, nil)
 	svc.SetStopHook(func(context.Context) error {
@@ -33,6 +34,7 @@ func TestBaseServiceStopReturnsErrorAndKeepsErrorState(t *testing.T) {
 }
 
 func TestLegacyServiceWrapperPassesLifecycleContext(t *testing.T) {
+	t.Parallel()
 	startCtxKey := struct{}{}
 	stopCtxKey := struct{}{}
 
@@ -71,6 +73,7 @@ func TestLegacyServiceWrapperPassesLifecycleContext(t *testing.T) {
 }
 
 func TestServiceManagerStopFailureLeavesServiceInErrorState(t *testing.T) {
+	t.Parallel()
 	stopErr := stdErrors.New("stop failed")
 	svc := NewBaseService("managed", TypeMonitoring, PriorityNormal, nil, nil)
 	svc.SetStopHook(func(context.Context) error {

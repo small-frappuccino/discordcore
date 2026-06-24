@@ -12,9 +12,9 @@ import (
 )
 
 func TestNewArikawaMissingConfigErrorData(t *testing.T) {
+	t.Parallel()
 	// Garante velocidade máxima rodando os testes em paralelo,
 	// já que a função geradora não possui side-effects ou estado global.
-	t.Parallel()
 
 	tests := []struct {
 		name        string

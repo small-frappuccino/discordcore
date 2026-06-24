@@ -7,6 +7,7 @@ import (
 )
 
 func TestHasRoleID(t *testing.T) {
+	t.Parallel()
 	if hasRoleID(nil, "r1") {
 		t.Fatalf("expected false for nil roles")
 	}
@@ -22,6 +23,7 @@ func TestHasRoleID(t *testing.T) {
 }
 
 func TestMemberHasRole(t *testing.T) {
+	t.Parallel()
 	if memberHasRole(nil, "r1") {
 		t.Fatalf("expected false for nil member")
 	}
@@ -35,6 +37,7 @@ func TestMemberHasRole(t *testing.T) {
 }
 
 func TestEvaluateAutoRoleDecision(t *testing.T) {
+	t.Parallel()
 	required := []string{"role-a", "role-b"}
 	target := "role-target"
 

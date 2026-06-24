@@ -12,6 +12,7 @@ import (
 )
 
 func TestRegisterDiscordGoEventHandlers(t *testing.T) {
+	t.Parallel()
 	session := &discordgo.Session{}
 	logger := slog.Default()
 
@@ -20,6 +21,7 @@ func TestRegisterDiscordGoEventHandlers(t *testing.T) {
 }
 
 func TestHandleDiscordGoGuildMemberAdd(t *testing.T) {
+	t.Parallel()
 	// Nil checks
 	handleDiscordGoGuildMemberAdd(nil, nil)
 
@@ -57,6 +59,7 @@ func TestHandleDiscordGoGuildMemberAdd(t *testing.T) {
 }
 
 func TestHandleDiscordGoGuildMemberRemove(t *testing.T) {
+	t.Parallel()
 	handleDiscordGoGuildMemberRemove(nil, nil)
 
 	store, db, cleanup := setupTestDB(t)
@@ -89,6 +92,7 @@ func TestHandleDiscordGoGuildMemberRemove(t *testing.T) {
 }
 
 func TestHandleDiscordGoGuildMemberUpdate(t *testing.T) {
+	t.Parallel()
 	handleDiscordGoGuildMemberUpdate(nil, nil)
 
 	store, db, cleanup := setupTestDB(t)

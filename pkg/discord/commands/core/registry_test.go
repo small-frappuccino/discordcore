@@ -19,6 +19,7 @@ func (m *MockClient) BulkOverwriteCommands(appID discord.AppID, commands []api.C
 }
 
 func TestRegistry_SyncMock(t *testing.T) {
+	t.Parallel()
 	r := NewCommandRegistry()
 	r.Register(&Command{Name: "test", Description: "test cmd"})
 	r.Seal()
@@ -35,6 +36,7 @@ func TestRegistry_SyncMock(t *testing.T) {
 }
 
 func TestRegistry_ParallelReads(t *testing.T) {
+	t.Parallel()
 	r := NewCommandRegistry()
 	r.Register(&Command{Name: "test1"})
 	r.Register(&Command{Name: "test2"})

@@ -10,6 +10,7 @@ import (
 )
 
 func TestApplyMemberAdd(t *testing.T) {
+	t.Parallel()
 	// test store
 
 	cm := newTestConfigManager(t)
@@ -51,6 +52,7 @@ func TestApplyMemberAdd(t *testing.T) {
 }
 
 func TestApplyMemberRemove(t *testing.T) {
+	t.Parallel()
 	cm := newTestConfigManager(t)
 	cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
@@ -70,6 +72,7 @@ func TestApplyMemberRemove(t *testing.T) {
 }
 
 func TestApplyStatsMemberUpdate(t *testing.T) {
+	t.Parallel()
 	cm := newTestConfigManager(t)
 	cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{

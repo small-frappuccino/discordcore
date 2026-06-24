@@ -14,6 +14,7 @@ import (
 )
 
 func TestQOTDTablesInitialized(t *testing.T) {
+	t.Parallel()
 	store := newTempStore(t)
 
 	required := []string{
@@ -104,6 +105,7 @@ func TestQOTDTablesInitialized(t *testing.T) {
 }
 
 func TestInitResetsQOTDQuestionSequenceWhenTableEmpty(t *testing.T) {
+	t.Parallel()
 	store := newTempStore(t)
 	ctx := context.Background()
 
@@ -142,6 +144,7 @@ func TestInitResetsQOTDQuestionSequenceWhenTableEmpty(t *testing.T) {
 }
 
 func TestDeleteQOTDQuestionReindexesDisplayIDs(t *testing.T) {
+	t.Parallel()
 	store := newTempStore(t)
 	ctx := context.Background()
 
@@ -201,6 +204,7 @@ func TestDeleteQOTDQuestionReindexesDisplayIDs(t *testing.T) {
 }
 
 func TestReserveNextQOTDQuestionUsesQueueOrder(t *testing.T) {
+	t.Parallel()
 	store := newTempStore(t)
 	ctx := context.Background()
 
@@ -244,6 +248,7 @@ func TestReserveNextQOTDQuestionUsesQueueOrder(t *testing.T) {
 }
 
 func TestReserveNextQOTDQuestionSkipsPublishedOnceQuestion(t *testing.T) {
+	t.Parallel()
 	store := newTempStore(t)
 	ctx := context.Background()
 	publishedAt := time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
@@ -285,6 +290,7 @@ func TestReserveNextQOTDQuestionSkipsPublishedOnceQuestion(t *testing.T) {
 }
 
 func TestReserveNextReadyQOTDQuestionSkipsPublishedOnceQuestion(t *testing.T) {
+	t.Parallel()
 	store := newTempStore(t)
 	ctx := context.Background()
 	publishedAt := time.Date(2026, 4, 3, 13, 0, 0, 0, time.UTC)
@@ -329,6 +335,7 @@ func TestReserveNextReadyQOTDQuestionSkipsPublishedOnceQuestion(t *testing.T) {
 // eligible question must eventually be picked, otherwise the random selector
 // is silently degenerating to a deterministic order.
 func TestReserveNextReadyQOTDQuestionRandomCoversAllReadyQuestions(t *testing.T) {
+	t.Parallel()
 	store := newTempStore(t)
 	ctx := context.Background()
 
@@ -387,6 +394,7 @@ func TestReserveNextReadyQOTDQuestionRandomCoversAllReadyQuestions(t *testing.T)
 // insert must increment publish_ordinal per (guild_id, deck_id), never
 // recycling a value, even across decks within the same guild.
 func TestCreateQOTDOfficialPostProvisioningAssignsMonotonicPublishOrdinal(t *testing.T) {
+	t.Parallel()
 	store := newTempStore(t)
 	ctx := context.Background()
 
@@ -458,6 +466,7 @@ func TestCreateQOTDOfficialPostProvisioningAssignsMonotonicPublishOrdinal(t *tes
 // UpdateQOTDOfficialPostProgress). Resume flows depend on this stability
 // because they re-derive the visible thread name from the persisted ordinal.
 func TestCreateQOTDOfficialPostProvisioningOrdinalSurvivesUpdates(t *testing.T) {
+	t.Parallel()
 	store := newTempStore(t)
 	ctx := context.Background()
 	publishDate := time.Date(2026, 6, 4, 0, 0, 0, 0, time.UTC)
@@ -550,6 +559,7 @@ func TestCreateQOTDOfficialPostProvisioningOrdinalSurvivesUpdates(t *testing.T) 
 // reset whenever an admin used /qotd-publish (manual) instead of the
 // scheduler.
 func TestCreateQOTDOfficialPostProvisioningOrdinalSharedAcrossPublishModes(t *testing.T) {
+	t.Parallel()
 	store := newTempStore(t)
 	ctx := context.Background()
 
@@ -601,6 +611,7 @@ func TestCreateQOTDOfficialPostProvisioningOrdinalSharedAcrossPublishModes(t *te
 }
 
 func TestReorderQOTDQuestionsAllowsQueuePositionSwap(t *testing.T) {
+	t.Parallel()
 	store := newTempStore(t)
 	ctx := context.Background()
 
@@ -644,6 +655,7 @@ func TestReorderQOTDQuestionsAllowsQueuePositionSwap(t *testing.T) {
 }
 
 func TestGetQOTDOfficialPostByDatePrefersPublishedPostAcrossModes(t *testing.T) {
+	t.Parallel()
 	store := newTempStore(t)
 	ctx := context.Background()
 
@@ -735,6 +747,7 @@ func TestGetQOTDOfficialPostByDatePrefersPublishedPostAcrossModes(t *testing.T) 
 // previously used "?" binds and failed under the pgx driver with SQLSTATE 42601
 // ("syntax error at or near \"AND\"").
 func TestGetQOTDOfficialPostByDateRoundTrip(t *testing.T) {
+	t.Parallel()
 	store := newTempStore(t)
 	ctx := context.Background()
 
@@ -791,6 +804,7 @@ func TestGetQOTDOfficialPostByDateRoundTrip(t *testing.T) {
 }
 
 func TestGetScheduledQOTDOfficialPostByDateIgnoresManualPost(t *testing.T) {
+	t.Parallel()
 	store := newTempStore(t)
 	ctx := context.Background()
 
@@ -879,6 +893,7 @@ func TestGetScheduledQOTDOfficialPostByDateIgnoresManualPost(t *testing.T) {
 }
 
 func TestReclaimOrphanReservedQOTDQuestionsReleasesPastReservationsWithoutPosts(t *testing.T) {
+	t.Parallel()
 	store := newTempStore(t)
 	ctx := context.Background()
 
@@ -923,6 +938,7 @@ func TestReclaimOrphanReservedQOTDQuestionsReleasesPastReservationsWithoutPosts(
 }
 
 func TestReclaimOrphanReservedQOTDQuestionsKeepsTodayReservation(t *testing.T) {
+	t.Parallel()
 	store := newTempStore(t)
 	ctx := context.Background()
 
@@ -963,6 +979,7 @@ func TestReclaimOrphanReservedQOTDQuestionsKeepsTodayReservation(t *testing.T) {
 }
 
 func TestReclaimOrphanReservedQOTDQuestionsLeavesQuestionsWithLinkedPosts(t *testing.T) {
+	t.Parallel()
 	store := newTempStore(t)
 	ctx := context.Background()
 
@@ -1020,6 +1037,7 @@ func TestReclaimOrphanReservedQOTDQuestionsLeavesQuestionsWithLinkedPosts(t *tes
 }
 
 func TestQOTDOfficialPostProgressAndPendingRecoveryLifecycle(t *testing.T) {
+	t.Parallel()
 	store := newTempStore(t)
 	ctx := context.Background()
 
@@ -1114,6 +1132,7 @@ func TestQOTDOfficialPostProgressAndPendingRecoveryLifecycle(t *testing.T) {
 }
 
 func TestDeleteQOTDQuestionsByDecksPreservesOfficialPostHistory(t *testing.T) {
+	t.Parallel()
 	store := newTempStore(t)
 	ctx := context.Background()
 
@@ -1177,6 +1196,7 @@ func TestDeleteQOTDQuestionsByDecksPreservesOfficialPostHistory(t *testing.T) {
 }
 
 func TestDeleteQOTDOfficialPostsByDeckRemovesOnlyMatchingDeck(t *testing.T) {
+	t.Parallel()
 	store := newTempStore(t)
 	ctx := context.Background()
 
@@ -1260,6 +1280,7 @@ func TestDeleteQOTDOfficialPostsByDeckRemovesOnlyMatchingDeck(t *testing.T) {
 }
 
 func TestListQOTDOfficialPostsByDateReturnsAllMatchingRecords(t *testing.T) {
+	t.Parallel()
 	store := newTempStore(t)
 	ctx := context.Background()
 
@@ -1338,6 +1359,7 @@ func TestListQOTDOfficialPostsByDateReturnsAllMatchingRecords(t *testing.T) {
 }
 
 func TestDeleteQOTDOfficialPostByIDRemovesOnlyTargetRecord(t *testing.T) {
+	t.Parallel()
 	store := newTempStore(t)
 	ctx := context.Background()
 
@@ -1444,6 +1466,7 @@ func collectQuestions(t *testing.T, seq iter.Seq2[qotd.QuestionRecord, error]) [
 }
 
 func TestQOTDSurfaces(t *testing.T) {
+	t.Parallel()
 	store := newTempStore(t)
 	ctx := context.Background()
 
@@ -1510,6 +1533,7 @@ func TestQOTDSurfaces(t *testing.T) {
 }
 
 func TestQOTDAnswerMessages(t *testing.T) {
+	t.Parallel()
 	store := newTempStore(t)
 	ctx := context.Background()
 

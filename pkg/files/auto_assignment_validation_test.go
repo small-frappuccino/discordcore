@@ -6,6 +6,7 @@ import (
 )
 
 func TestNormalizeAutoAssignmentRoleOrderBackfillsBoosterRole(t *testing.T) {
+	t.Parallel()
 	cfg := &BotConfig{
 		Guilds: []GuildConfig{
 			{
@@ -34,6 +35,7 @@ func TestNormalizeAutoAssignmentRoleOrderBackfillsBoosterRole(t *testing.T) {
 }
 
 func TestValidateBotConfigRejectsAutoAssignmentOrderMismatch(t *testing.T) {
+	t.Parallel()
 	cfg := &BotConfig{
 		Guilds: []GuildConfig{
 			{
@@ -60,6 +62,7 @@ func TestValidateBotConfigRejectsAutoAssignmentOrderMismatch(t *testing.T) {
 }
 
 func TestValidateBotConfigRejectsInvalidRequiredRolesLength(t *testing.T) {
+	t.Parallel()
 	cfg := &BotConfig{
 		Guilds: []GuildConfig{
 			{
@@ -86,6 +89,7 @@ func TestValidateBotConfigRejectsInvalidRequiredRolesLength(t *testing.T) {
 }
 
 func TestConfigManagerLoadConfigMigratesAutoAssignmentBoosterRole(t *testing.T) {
+	t.Parallel()
 	store := &MemoryConfigStore{}
 	input := BotConfig{
 		Guilds: []GuildConfig{
@@ -131,6 +135,7 @@ func TestConfigManagerLoadConfigMigratesAutoAssignmentBoosterRole(t *testing.T) 
 }
 
 func TestConfigManagerSaveConfigRejectsInvalidAutoAssignmentOrder(t *testing.T) {
+	t.Parallel()
 	mgr := NewConfigManagerWithStore(&MemoryConfigStore{}, nil)
 	mgr.config = &BotConfig{
 		Guilds: []GuildConfig{

@@ -4,18 +4,14 @@ import (
 	"context"
 	"fmt"
 	"runtime/debug"
-	"time"
 
 	"golang.org/x/sync/errgroup"
 )
 
 // ExecuteOrchestration is a resilient wrapper that executes a service lifecycle step
 // using synchronized propagation and explicit preemption.
-
-var shutdownDeadline = 30 * time.Second
-
-func ExecuteOrchestration(rootCtx context.Context, action func(context.Context) error) error {
-	eg, ctx := errgroup.WithContext(rootCtx)
+func ExecuteOrchestration(ctx context.Context, action func(context.Context) error) error {
+	eg, egCtx := errgroup.WithContext(ctx)
 
 	eg.Go(func() (err error) {
 		defer func() {
@@ -24,21 +20,12 @@ func ExecuteOrchestration(rootCtx context.Context, action func(context.Context) 
 			}
 		}()
 
-		if err := action(ctx); err != nil {
-			return err
-		}
-		return nil
+		return action(egCtx)
 	})
 
-	waitCh := make(chan error, 1)
-	go func() {
-		waitCh <- eg.Wait()
-	}()
-
-	select {
-	case err := <-waitCh:
-		return err
-	case <-time.After(shutdownDeadline):
+	err := eg.Wait()
+	if ctx.Err() == context.DeadlineExceeded {
 		return fmt.Errorf("shutdown deadline exceeded: pre-empting execution")
 	}
+	return err
 }

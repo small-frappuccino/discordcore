@@ -5,14 +5,15 @@ import (
 )
 
 func TestGenerator(t *testing.T) {
+	t.Parallel()
 	// Backup and restore globalNode
-	oldGlobalNode := globalNode
+	oldGlobalNode := globalNode.Load()
 	defer func() {
-		globalNode = oldGlobalNode
+		globalNode.Store(oldGlobalNode)
 	}()
 
 	// 1. Test panic behaviors when globalNode is nil
-	globalNode = nil
+	globalNode.Store(nil)
 
 	func() {
 		defer func() {
@@ -47,7 +48,7 @@ func TestGenerator(t *testing.T) {
 		t.Fatalf("Init(42) failed: %v", err)
 	}
 
-	if globalNode == nil {
+	if globalNode.Load() == nil {
 		t.Fatalf("globalNode should not be nil after Init")
 	}
 
@@ -97,9 +98,10 @@ func TestGenerator(t *testing.T) {
 
 // TestHostNameParsing tests (indirectly) that Init runs without error regardless of the hostname.
 func TestHostNameParsing(t *testing.T) {
-	oldGlobalNode := globalNode
+	t.Parallel()
+	oldGlobalNode := globalNode.Load()
 	defer func() {
-		globalNode = oldGlobalNode
+		globalNode.Store(oldGlobalNode)
 	}()
 
 	// Init should handle hostnames that do or don't end in numbers gracefully.

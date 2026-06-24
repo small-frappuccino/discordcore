@@ -86,6 +86,7 @@ func newTestConfigManager(t *testing.T) *files.ConfigManager {
 }
 
 func TestRegisterArikawaEventHandlers(t *testing.T) {
+	t.Parallel()
 	s := state.New("Bot token")
 	logger := slog.Default()
 
@@ -94,6 +95,7 @@ func TestRegisterArikawaEventHandlers(t *testing.T) {
 }
 
 func TestHandleArikawaGuildMemberAdd(t *testing.T) {
+	t.Parallel()
 	handleArikawaGuildMemberAdd(nil, nil)
 
 	store, db, cleanup := setupTestDB(t)
@@ -132,6 +134,7 @@ func TestHandleArikawaGuildMemberAdd(t *testing.T) {
 func testBoolPtr(b bool) *bool { return &b }
 
 func TestHandleArikawaGuildMemberRemove(t *testing.T) {
+	t.Parallel()
 	handleArikawaGuildMemberRemove(nil, nil)
 
 	store, db, cleanup := setupTestDB(t)
@@ -162,6 +165,7 @@ func TestHandleArikawaGuildMemberRemove(t *testing.T) {
 }
 
 func TestHandleArikawaGuildMemberUpdate(t *testing.T) {
+	t.Parallel()
 	handleArikawaGuildMemberUpdate(nil, nil)
 
 	store, db, cleanup := setupTestDB(t)

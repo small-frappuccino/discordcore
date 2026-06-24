@@ -9,6 +9,7 @@ import (
 )
 
 func TestMigrator(t *testing.T) {
+	t.Parallel()
 	dsn, err := testdb.BaseDatabaseURLFromEnv()
 	if testdb.IsDatabaseURLNotConfigured(err) {
 		t.Skip("skipping test due to missing database url")

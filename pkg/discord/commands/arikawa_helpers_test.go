@@ -8,6 +8,7 @@ import (
 )
 
 func TestGetArikawaSubCommandOptions(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		data     discord.InteractionData
@@ -84,6 +85,7 @@ func TestGetArikawaSubCommandOptions(t *testing.T) {
 }
 
 func TestArikawaOptionList_String(t *testing.T) {
+	t.Parallel()
 	opts := ArikawaOptionList{
 		{Name: "key", Type: discord.StringOptionType, Value: []byte(`"value"`)},
 		{Name: "invalid_type", Type: discord.IntegerOptionType, Value: []byte(`123`)},
@@ -111,6 +113,7 @@ func TestArikawaOptionList_String(t *testing.T) {
 }
 
 func TestArikawaOptionList_Int(t *testing.T) {
+	t.Parallel()
 	opts := ArikawaOptionList{
 		{Name: "key", Type: discord.IntegerOptionType, Value: []byte(`42`)},
 		{Name: "invalid_type", Type: discord.StringOptionType, Value: []byte(`"foo"`)},
@@ -136,6 +139,7 @@ func TestArikawaOptionList_Int(t *testing.T) {
 }
 
 func TestArikawaOptionList_Bool(t *testing.T) {
+	t.Parallel()
 	opts := ArikawaOptionList{
 		{Name: "key", Type: discord.BooleanOptionType, Value: []byte(`true`)},
 		{Name: "invalid_type", Type: discord.StringOptionType, Value: []byte(`"foo"`)},
@@ -161,6 +165,7 @@ func TestArikawaOptionList_Bool(t *testing.T) {
 }
 
 func TestArikawaOptionList_Float(t *testing.T) {
+	t.Parallel()
 	opts := ArikawaOptionList{
 		{Name: "key", Type: discord.NumberOptionType, Value: []byte(`42.5`)},
 		{Name: "invalid_type", Type: discord.StringOptionType, Value: []byte(`"foo"`)},
@@ -186,6 +191,7 @@ func TestArikawaOptionList_Float(t *testing.T) {
 }
 
 func TestArikawaOptionList_ChannelID(t *testing.T) {
+	t.Parallel()
 	opts := ArikawaOptionList{
 		{Name: "key", Type: discord.ChannelOptionType, Value: []byte(`"123456789"`)},
 		{Name: "invalid_type", Type: discord.StringOptionType, Value: []byte(`"foo"`)},
@@ -211,6 +217,7 @@ func TestArikawaOptionList_ChannelID(t *testing.T) {
 }
 
 func TestArikawaOptionList_RoleID(t *testing.T) {
+	t.Parallel()
 	opts := ArikawaOptionList{
 		{Name: "key", Type: discord.RoleOptionType, Value: []byte(`"987654321"`)},
 		{Name: "invalid_type", Type: discord.StringOptionType, Value: []byte(`"foo"`)},
@@ -236,6 +243,7 @@ func TestArikawaOptionList_RoleID(t *testing.T) {
 }
 
 func TestArikawaOptionList_HasOption(t *testing.T) {
+	t.Parallel()
 	opts := ArikawaOptionList{
 		{Name: "key", Type: discord.StringOptionType, Value: []byte(`"value"`)},
 		{Name: "nil_value", Type: discord.StringOptionType, Value: nil},

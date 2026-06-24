@@ -6,6 +6,7 @@ import (
 )
 
 func TestErrors_Operational(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		op   string
@@ -35,6 +36,7 @@ func TestErrors_Operational(t *testing.T) {
 }
 
 func TestErrors_Validation(t *testing.T) {
+	t.Parallel()
 	valErr := &ValidationError{Field: "amount", Reason: "must be positive"}
 
 	var target *ValidationError

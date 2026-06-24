@@ -7,6 +7,7 @@ import (
 )
 
 func TestPartnerService_Render(t *testing.T) {
+	t.Parallel()
 	svc := NewPartnerService(nil)
 	template := PartnerBoardTemplate{
 		Title: "Test Board",

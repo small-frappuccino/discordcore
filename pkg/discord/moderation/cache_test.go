@@ -25,6 +25,7 @@ func (m *mockCacheResolver) MemberFromAPI(guildID discord.GuildID, userID discor
 // TestFallbackCache_ResolveMember validates that cache misses trigger immediate
 // secondary REST calls.
 func TestFallbackCache_ResolveMember(t *testing.T) {
+	t.Parallel()
 	mockState := &mockCacheResolver{}
 	cache := NewFallbackCache(mockState, nil)
 

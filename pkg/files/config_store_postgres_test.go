@@ -36,6 +36,7 @@ func openIsolatedPostgresConfigStore(t *testing.T) *PostgresConfigStore {
 }
 
 func TestPostgresConfigStoreSaveLoadRoundTrip(t *testing.T) {
+	t.Parallel()
 	store := openIsolatedPostgresConfigStore(t)
 
 	exists, err := store.Exists()

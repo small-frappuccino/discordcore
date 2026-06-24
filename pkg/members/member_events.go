@@ -36,7 +36,7 @@ type MemberEventService struct {
 
 	// Cache for join times (member and bot)
 	joinTimes map[string]time.Time // key: guildID:userID
-	joinMu    sync.RWMutex
+	joinMu    sync.Mutex
 
 	membersRepo Repository
 	systemRepo  system.Repository
@@ -443,9 +443,9 @@ func (mes *MemberEventService) calculateAccountAge(userID string) time.Duration 
 // calculateServerTime tries to estimate how long the user was on the server.
 func (mes *MemberEventService) calculateServerTime(ctx context.Context, guildID, userID string) (time.Duration, bool, error) {
 	// 1) memory (most precise during runtime)
-	mes.joinMu.RLock()
+	mes.joinMu.Lock()
 	t, ok := mes.joinTimes[guildID+":"+userID]
-	mes.joinMu.RUnlock()
+	mes.joinMu.Unlock()
 	if ok && !t.IsZero() {
 		return time.Since(t), true, nil
 	}
@@ -503,13 +503,13 @@ func (mes *MemberEventService) cleanupJoinTimes() {
 	var toDelete []string
 
 	// Collect keys to delete (can't delete while iterating)
-	mes.joinMu.RLock()
+	mes.joinMu.Lock()
 	for key, joinTime := range mes.joinTimes {
 		if now.Sub(joinTime) > threshold {
 			toDelete = append(toDelete, key)
 		}
 	}
-	mes.joinMu.RUnlock()
+	mes.joinMu.Unlock()
 
 	// Delete old entries
 	if len(toDelete) > 0 {
@@ -561,8 +561,8 @@ func (mes *MemberEventService) getGuildMember(ctx context.Context, guildID, user
 	if err != nil {
 		return nil, err
 	}
-	return service.RunWithTimeout(ctx, service.DependencyTimeout, func() (*discord.Member, error) {
-		return mes.arikawaState.Member(discord.GuildID(gID), discord.UserID(uID))
+	return service.RunWithTimeoutContext(ctx, service.DependencyTimeout, func(runCtx context.Context) (*discord.Member, error) {
+		return mes.arikawaState.WithContext(runCtx).Member(discord.GuildID(gID), discord.UserID(uID))
 	})
 }
 
@@ -573,8 +573,8 @@ func (mes *MemberEventService) guildMemberRoleAdd(ctx context.Context, guildID, 
 	gID, _ := discord.ParseSnowflake(guildID)
 	uID, _ := discord.ParseSnowflake(userID)
 	rID, _ := discord.ParseSnowflake(roleID)
-	return service.RunErrWithTimeout(ctx, service.DependencyTimeout, func() error {
-		return mes.arikawaState.Client.AddRole(discord.GuildID(gID), discord.UserID(uID), discord.RoleID(rID), api.AddRoleData{})
+	return service.RunErrWithTimeoutContext(ctx, service.DependencyTimeout, func(runCtx context.Context) error {
+		return mes.arikawaState.WithContext(runCtx).Client.AddRole(discord.GuildID(gID), discord.UserID(uID), discord.RoleID(rID), api.AddRoleData{})
 	})
 }
 
@@ -585,8 +585,8 @@ func (mes *MemberEventService) guildMemberRoleRemove(ctx context.Context, guildI
 	gID, _ := discord.ParseSnowflake(guildID)
 	uID, _ := discord.ParseSnowflake(userID)
 	rID, _ := discord.ParseSnowflake(roleID)
-	return service.RunErrWithTimeout(ctx, service.DependencyTimeout, func() error {
-		return mes.arikawaState.Client.RemoveRole(discord.GuildID(gID), discord.UserID(uID), discord.RoleID(rID), "")
+	return service.RunErrWithTimeoutContext(ctx, service.DependencyTimeout, func(runCtx context.Context) error {
+		return mes.arikawaState.WithContext(runCtx).Client.RemoveRole(discord.GuildID(gID), discord.UserID(uID), discord.RoleID(rID), "")
 	})
 }
 

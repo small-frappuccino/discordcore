@@ -17,6 +17,7 @@ var validFeatureKeys = map[string]bool{
 }
 
 func TestResolveFeatureForCommandPath(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		path     string

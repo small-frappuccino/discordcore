@@ -33,7 +33,8 @@ func (cs *CachedSession) GuildMember(guildID, userID string) (*discord.Member, e
 		return member, nil
 	}
 
-	v, err, shared := cs.sf.Do(fmt.Sprintf("member:%s:%s", guildID, userID), func() (any, error) {
+	key := guildID + ":" + userID
+	v, err, shared := cs.sf.Do(key, func() (any, error) {
 		slog.Debug("Granular transient state inspection: Cache miss, executing singleflight fetch",
 			slog.String("guildID", guildID),
 			slog.String("userID", userID),
@@ -44,7 +45,7 @@ func (cs *CachedSession) GuildMember(guildID, userID string) (*discord.Member, e
 	})
 	if err != nil {
 		slog.Error("Blocking structural failure: Singleflight REST fetch failed for member",
-			slog.String("request_id", fmt.Sprintf("fetch_member_%s_%s", guildID, userID)),
+			slog.String("request_id", "fetch_member_"+key),
 			slog.String("error", err.Error()),
 			slog.Int("status_code", 500),
 		)
@@ -70,7 +71,8 @@ func (cs *CachedSession) Guild(guildID string) (*discord.Guild, error) {
 		return guild, nil
 	}
 
-	v, err, shared := cs.sf.Do(fmt.Sprintf("guild:%s", guildID), func() (any, error) {
+	key := "guild:" + guildID
+	v, err, shared := cs.sf.Do(key, func() (any, error) {
 		slog.Debug("Granular transient state inspection: Cache miss, executing singleflight fetch",
 			slog.String("guildID", guildID),
 		)
@@ -79,7 +81,7 @@ func (cs *CachedSession) Guild(guildID string) (*discord.Guild, error) {
 	})
 	if err != nil {
 		slog.Error("Blocking structural failure: Singleflight REST fetch failed for guild",
-			slog.String("request_id", fmt.Sprintf("fetch_guild_%s", guildID)),
+			slog.String("request_id", "fetch_"+key),
 			slog.String("error", err.Error()),
 			slog.Int("status_code", 500),
 		)

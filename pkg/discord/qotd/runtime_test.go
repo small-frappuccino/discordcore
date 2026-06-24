@@ -9,12 +9,15 @@ import (
 	"go.uber.org/goleak"
 )
 
-func TestRuntimeService_GracefulShutdown(t *testing.T) {
-	// Verify that no goroutines leak
-	defer goleak.VerifyNone(t,
+func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m,
 		goleak.IgnoreTopFunction("net/http.(*persistConn).readLoop"),
 		goleak.IgnoreTopFunction("net/http.(*persistConn).writeLoop"),
 	)
+}
+
+func TestRuntimeService_GracefulShutdown(t *testing.T) {
+	t.Parallel()
 
 	cfg := Config{
 		PublishInterval: 10 * time.Millisecond,

@@ -10,6 +10,7 @@ import (
 )
 
 func TestStore_Init_Success(t *testing.T) {
+	t.Parallel()
 	mock, err := pgxmock.NewPool()
 	if err != nil {
 		t.Fatalf("failed to create pgxmock pool: %v", err)
@@ -61,6 +62,7 @@ func TestStore_Init_Success(t *testing.T) {
 }
 
 func TestStore_Init_MissingColumnsAndEmptyQOTD(t *testing.T) {
+	t.Parallel()
 	mock, err := pgxmock.NewPool()
 	if err != nil {
 		t.Fatalf("failed to create pgxmock pool: %v", err)
@@ -128,6 +130,7 @@ func TestStore_Init_MissingColumnsAndEmptyQOTD(t *testing.T) {
 }
 
 func TestStore_Init_Failures(t *testing.T) {
+	t.Parallel()
 	t.Run("check columns error", func(t *testing.T) {
 		mock, err := pgxmock.NewPool()
 		if err != nil {

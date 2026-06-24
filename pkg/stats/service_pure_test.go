@@ -95,6 +95,7 @@ func (m *mockStateStore) HeartbeatForBot(ctx context.Context, botInstanceID stri
 }
 
 func TestHandlesGuild(t *testing.T) {
+	t.Parallel()
 	cm := newTestConfigManager(t)
 	cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
@@ -117,6 +118,7 @@ func TestHandlesGuild(t *testing.T) {
 }
 
 func TestStatsServiceMethods(t *testing.T) {
+	t.Parallel()
 	cm := newTestConfigManager(t)
 	svc := NewStatsService(nil, cm, nil, slog.Default(), "generic")
 
@@ -134,6 +136,7 @@ func TestStatsServiceMethods(t *testing.T) {
 }
 
 func TestShouldRunStatsUpdate(t *testing.T) {
+	t.Parallel()
 	cm := newTestConfigManager(t)
 	svc := NewStatsService(nil, cm, nil, slog.Default(), "generic")
 
@@ -155,6 +158,7 @@ func TestShouldRunStatsUpdate(t *testing.T) {
 }
 
 func TestStatsTrackedRoles(t *testing.T) {
+	t.Parallel()
 	channels := []files.StatsChannelConfig{
 		{ChannelID: "1", RoleID: "r1"},
 		{ChannelID: "2"},
@@ -177,6 +181,7 @@ func TestStatsTrackedRoles(t *testing.T) {
 }
 
 func TestStatsRequiresBotClassification(t *testing.T) {
+	t.Parallel()
 	if statsRequiresBotClassification([]files.StatsChannelConfig{{MemberType: "all"}}) {
 		t.Errorf("expected false")
 	}
@@ -189,6 +194,7 @@ func TestStatsRequiresBotClassification(t *testing.T) {
 }
 
 func TestFilterTrackedRoles(t *testing.T) {
+	t.Parallel()
 	trackedRoles := map[string]struct{}{
 		"r1": {},
 		"r3": {},
@@ -204,6 +210,7 @@ func TestFilterTrackedRoles(t *testing.T) {
 }
 
 func TestStatsCountForChannel(t *testing.T) {
+	t.Parallel()
 	state := newStatsGuildState("r1", nil)
 	state.applyAdd("user1", statsMemberSnapshot{isBot: false, trackedRoles: []string{"r1"}})
 	state.applyAdd("user2", statsMemberSnapshot{isBot: false, trackedRoles: []string{"r1"}})
@@ -232,6 +239,7 @@ func TestStatsCountForChannel(t *testing.T) {
 }
 
 func TestStatsGuildStateMethods(t *testing.T) {
+	t.Parallel()
 	state := newStatsGuildState("r1", map[string]statsPublishedChannel{
 		"c1": {count: 10, name: "test", label: "test"},
 	})
@@ -266,6 +274,7 @@ func TestStatsGuildStateMethods(t *testing.T) {
 }
 
 func TestStatsSnapshotHelpers(t *testing.T) {
+	t.Parallel()
 	gwMem := MemberSnapshot{
 		UserID: "u1",
 		IsBot:  true,
@@ -306,6 +315,7 @@ func TestStatsSnapshotHelpers(t *testing.T) {
 }
 
 func TestStatsIntervalHelpers(t *testing.T) {
+	t.Parallel()
 	// interval logic testing
 	if statsInterval() != 5*time.Minute {
 		t.Errorf("expected 5m default")
@@ -321,6 +331,7 @@ func TestStatsIntervalHelpers(t *testing.T) {
 }
 
 func TestStatsStateAndStoreHelpers(t *testing.T) {
+	t.Parallel()
 	cm := newTestConfigManager(t)
 	svc := NewStatsService(nil, cm, nil, slog.Default(), "generic")
 	ctx := context.Background()
@@ -339,6 +350,7 @@ func TestStatsStateAndStoreHelpers(t *testing.T) {
 }
 
 func TestStatsGuildStateMemoryHelpers(t *testing.T) {
+	t.Parallel()
 	cm := newTestConfigManager(t)
 	svc := NewStatsService(nil, cm, nil, slog.Default(), "generic")
 
@@ -370,6 +382,7 @@ func TestStatsGuildStateMemoryHelpers(t *testing.T) {
 }
 
 func TestStatsReconcileInterval(t *testing.T) {
+	t.Parallel()
 	cm := newTestConfigManager(t)
 	cm.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{

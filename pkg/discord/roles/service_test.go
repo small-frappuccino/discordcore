@@ -10,6 +10,7 @@ import (
 )
 
 func TestRolePanelSyncEditsEachPosting(t *testing.T) {
+	t.Parallel()
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: "123"}); err != nil {
 		t.Fatalf("add guild config: %v", err)
@@ -56,6 +57,7 @@ func TestRolePanelSyncEditsEachPosting(t *testing.T) {
 }
 
 func TestRolePanelSyncDropsMissingPostings(t *testing.T) {
+	t.Parallel()
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: "123"}); err != nil {
 		t.Fatalf("add guild config: %v", err)

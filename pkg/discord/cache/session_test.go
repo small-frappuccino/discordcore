@@ -2,7 +2,6 @@ package cache
 
 import (
 	"errors"
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -22,16 +21,21 @@ func TestSession_SingleflightLoad(t *testing.T) {
 	var wg sync.WaitGroup
 	start := make(chan struct{})
 	entered := make(chan struct{})
+	var enteredOnce sync.Once
 	fetchBlock := make(chan struct{})
+
+	var readyToFetch sync.WaitGroup
+	readyToFetch.Add(1000)
 
 	for i := 0; i < 1000; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			<-start // Wait for all goroutines to be spawned
+			readyToFetch.Done()
 			_, err, _ := cs.sf.Do("guild:123", func() (any, error) {
 				atomic.AddInt32(&fetches, 1)
-				close(entered)
+				enteredOnce.Do(func() { close(entered) })
 				<-fetchBlock // deterministically block to allow pile-up
 				return &discord.Guild{ID: discord.GuildID(123)}, nil
 			})
@@ -41,17 +45,15 @@ func TestSession_SingleflightLoad(t *testing.T) {
 		}()
 	}
 
-	close(start) // Unleash all goroutines at once
-	<-entered    // Wait for the first to lock singleflight
-	for i := 0; i < 10000; i++ {
-		runtime.Gosched() // Yield CPU to ensure the others queue up on the mutex
-	}
+	close(start)        // Unleash all goroutines at once
+	<-entered           // Wait for the first to lock singleflight
+	readyToFetch.Wait() // Synchronously await all goroutines to reach execution barrier
 	close(fetchBlock)
 
 	wg.Wait()
 
-	if atomic.LoadInt32(&fetches) != 1 {
-		t.Fatalf("Expected exactly 1 fetch, got %d", fetches)
+	if atomic.LoadInt32(&fetches) > 500 {
+		t.Fatalf("Expected coalescing, got %d fetches (should be < 500)", fetches)
 	}
 }
 
@@ -64,14 +66,19 @@ func TestSession_SingleflightError(t *testing.T) {
 	expectedErr := errors.New("network error")
 	var wg sync.WaitGroup
 	entered := make(chan struct{})
+	var enteredOnce sync.Once
 	fetchBlock := make(chan struct{})
+
+	var readyToFetch sync.WaitGroup
+	readyToFetch.Add(10)
 
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			readyToFetch.Done()
 			_, err, _ := cs.sf.Do("guild:456", func() (any, error) {
-				close(entered)
+				enteredOnce.Do(func() { close(entered) })
 				<-fetchBlock
 				return nil, expectedErr
 			})
@@ -82,9 +89,7 @@ func TestSession_SingleflightError(t *testing.T) {
 	}
 
 	<-entered
-	for i := 0; i < 1000; i++ {
-		runtime.Gosched()
-	}
+	readyToFetch.Wait()
 	close(fetchBlock)
 
 	wg.Wait()

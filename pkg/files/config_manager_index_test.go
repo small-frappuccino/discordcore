@@ -13,6 +13,7 @@ func newTestConfigManager(guilds []GuildConfig) *ConfigManager {
 }
 
 func TestGuildConfigIndexHit(t *testing.T) {
+	t.Parallel()
 	mgr := newTestConfigManager([]GuildConfig{
 		{GuildID: "g1"},
 		{GuildID: "g2"},
@@ -28,6 +29,7 @@ func TestGuildConfigIndexHit(t *testing.T) {
 }
 
 func TestGuildConfigIndexMiss(t *testing.T) {
+	t.Parallel()
 	mgr := newTestConfigManager([]GuildConfig{
 		{GuildID: "g1"},
 	})
@@ -41,6 +43,7 @@ func TestGuildConfigIndexMiss(t *testing.T) {
 }
 
 func TestGuildConfigIndexUpdate(t *testing.T) {
+	t.Parallel()
 	mgr := newTestConfigManager([]GuildConfig{
 		{GuildID: "g1"},
 	})
@@ -62,6 +65,7 @@ func TestGuildConfigIndexUpdate(t *testing.T) {
 }
 
 func TestSnapshotConfigReturnsDefensiveCopy(t *testing.T) {
+	t.Parallel()
 	mgr := newTestConfigManager([]GuildConfig{
 		{
 			GuildID: "g1",
@@ -125,6 +129,7 @@ func TestPublishedConfigReadsReuseSnapshot(t *testing.T) {
 }
 
 func TestGuildConfigIndexDuplicateFix(t *testing.T) {
+	t.Parallel()
 	mgr := newTestConfigManager([]GuildConfig{
 		{GuildID: "g1"},
 		{GuildID: "g1"},
@@ -147,6 +152,7 @@ func TestGuildConfigIndexDuplicateFix(t *testing.T) {
 }
 
 func TestGuildConfigIndexDedupePersistsOnLoad(t *testing.T) {
+	t.Parallel()
 	store := &MemoryConfigStore{}
 	raw := &BotConfig{
 		Guilds: []GuildConfig{
@@ -177,6 +183,7 @@ func TestGuildConfigIndexDedupePersistsOnLoad(t *testing.T) {
 }
 
 func TestGuildConfigIndexConcurrency(t *testing.T) {
+	t.Parallel()
 	mgr := newTestConfigManager([]GuildConfig{
 		{GuildID: "g1"},
 	})

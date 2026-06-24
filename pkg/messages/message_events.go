@@ -812,11 +812,14 @@ func (mes *MessageEventService) lookupCachedMessage(ctx context.Context, guildID
 	}
 	// Poll for the asynchronous store write, but yield to context cancellation
 	// so a shutting-down handler does not block for the full backoff.
-	for _, d := range []time.Duration{cachedMessageRetryDelay1, cachedMessageRetryDelay2} {
+	delays := [...]time.Duration{cachedMessageRetryDelay1, cachedMessageRetryDelay2}
+	for _, d := range delays {
+		timer := time.NewTimer(d)
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			return tryFetch()
-		case <-time.After(d):
+		case <-timer.C:
 		}
 		if cached = tryFetch(); cached != nil {
 			return cached

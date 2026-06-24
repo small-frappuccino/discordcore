@@ -13,81 +13,116 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/utils/httputil/httpdriver"
+	localdiscord "github.com/small-frappuccino/discordcore/pkg/discord"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	partnersvc "github.com/small-frappuccino/discordcore/pkg/discord/partners"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 var (
-	mockHTTPStatus    = http.StatusOK
-	mockHTTPBody      = []byte(`{}`)
-	mockHTTPReqs      []*http.Request
-	mockHTTPReqBodies [][]byte
-	mockHTTPMu        sync.Mutex
+	testMocks sync.Map // map[string]*testHTTPMock
 )
 
-type mockRoundTripper struct {
-	roundTrip func(req *http.Request) (*http.Response, error)
+type testHTTPMock struct {
+	mu        sync.Mutex
+	status    int
+	body      []byte
+	reqs      []*http.Request
+	reqBodies [][]byte
 }
 
-func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	return m.roundTrip(req)
-}
-
-func init() {
-	http.DefaultTransport = &mockRoundTripper{
-		roundTrip: func(req *http.Request) (*http.Response, error) {
-			mockHTTPMu.Lock()
-			defer mockHTTPMu.Unlock()
-			mockHTTPReqs = append(mockHTTPReqs, req)
-			var body []byte
-			if req.Body != nil {
-				body, _ = io.ReadAll(req.Body)
-			}
-			mockHTTPReqBodies = append(mockHTTPReqBodies, body)
-
-			// Default behavior for Discord is always success (200 OK)
-			status := http.StatusOK
-			respBody := []byte(`{}`)
-
-			// If it's a provider lookup (Hastebin/Pastebin), apply custom mock settings
-			urlStr := req.URL.String()
-			if strings.Contains(urlStr, "hastebin.com") || strings.Contains(urlStr, "pastebin.com") {
-				status = mockHTTPStatus
-				respBody = mockHTTPBody
-			}
-
-			return &http.Response{
-				StatusCode: status,
-				Body:       io.NopCloser(bytes.NewReader(respBody)),
-				Header:     make(http.Header),
-			}, nil
-		},
+func (m *testHTTPMock) RoundTrip(req *http.Request) (*http.Response, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.reqs = append(m.reqs, req)
+	var body []byte
+	if req.Body != nil {
+		body, _ = io.ReadAll(req.Body)
 	}
+	m.reqBodies = append(m.reqBodies, body)
+
+	status := http.StatusOK
+	respBody := []byte(`{}`)
+
+	urlStr := req.URL.String()
+	if strings.Contains(urlStr, "hastebin.com") || strings.Contains(urlStr, "pastebin.com") {
+		status = m.status
+		respBody = m.body
+	}
+
+	return &http.Response{
+		StatusCode: status,
+		Body:       io.NopCloser(bytes.NewReader(respBody)),
+		Header:     make(http.Header),
+	}, nil
 }
 
-func resetMockHTTP() {
-	mockHTTPMu.Lock()
-	defer mockHTTPMu.Unlock()
-	mockHTTPStatus = http.StatusOK
-	mockHTTPBody = []byte(`{}`)
-	mockHTTPReqs = nil
-	mockHTTPReqBodies = nil
+// init removed
+
+func resetMockHTTP(t *testing.T) {
+	mock := &testHTTPMock{
+		status: http.StatusOK,
+		body:   []byte(`{}`),
+	}
+	testMocks.Store(t.Name(), mock)
 }
 
-func getLastResponse() string {
-	mockHTTPMu.Lock()
-	defer mockHTTPMu.Unlock()
-	if len(mockHTTPReqBodies) == 0 {
+func getLastResponse(t *testing.T) string {
+	m, ok := testMocks.Load(t.Name())
+	if !ok {
 		return ""
 	}
-	return string(mockHTTPReqBodies[len(mockHTTPReqBodies)-1])
+	mock := m.(*testHTTPMock)
+	mock.mu.Lock()
+	defer mock.mu.Unlock()
+	if len(mock.reqBodies) == 0 {
+		return ""
+	}
+	return string(mock.reqBodies[len(mock.reqBodies)-1])
 }
 
-func newTestContext(event discord.InteractionEvent, cm *files.ConfigManager) *commands.ArikawaContext {
+func setMockStatusAndBody(t *testing.T, status int, body []byte) {
+	if m, ok := testMocks.Load(t.Name()); ok {
+		mock := m.(*testHTTPMock)
+		mock.mu.Lock()
+		defer mock.mu.Unlock()
+		mock.status = status
+		mock.body = body
+	}
+}
+
+func getMockReqs(t *testing.T) []*http.Request {
+	m, ok := testMocks.Load(t.Name())
+	if !ok {
+		return nil
+	}
+	mock := m.(*testHTTPMock)
+	mock.mu.Lock()
+	defer mock.mu.Unlock()
+	return mock.reqs
+}
+
+func getMockReqBodies(t *testing.T) [][]byte {
+	m, ok := testMocks.Load(t.Name())
+	if !ok {
+		return nil
+	}
+	mock := m.(*testHTTPMock)
+	mock.mu.Lock()
+	defer mock.mu.Unlock()
+	return mock.reqBodies
+}
+
+func newTestContext(t *testing.T, event discord.InteractionEvent, cm *files.ConfigManager) *commands.ArikawaContext {
 	ctx, _ := commands.NewArikawaContext(event, cm)
 	if ctx != nil {
 		ctx.Client = api.NewClient("mockToken")
+		if m, ok := testMocks.Load(t.Name()); ok {
+			customClient := http.Client{Transport: m.(*testHTTPMock)}
+			ctx.Client.Client.Client = httpdriver.WrapClient(customClient)
+			ctx.WithContext(context.WithValue(ctx.Context(), localdiscord.HTTPTransportContextKey, m.(*testHTTPMock)))
+		}
 	}
 	return ctx
 }
@@ -120,7 +155,8 @@ func (s *fakeIOStore) Describe() string {
 }
 
 func TestPartnerCommands_ConcurrentStateMutation(t *testing.T) {
-	resetMockHTTP()
+	t.Parallel()
+	resetMockHTTP(t)
 	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
 
@@ -233,7 +269,8 @@ func TestPartnerCommands_ConcurrentStateMutation(t *testing.T) {
 }
 
 func TestPartnerAddSubCommand(t *testing.T) {
-	resetMockHTTP()
+	t.Parallel()
+	resetMockHTTP(t)
 	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
@@ -254,7 +291,7 @@ func TestPartnerAddSubCommand(t *testing.T) {
 	}
 
 	// Test validation error: empty options
-	ctx := newTestContext(discord.InteractionEvent{
+	ctx := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -271,16 +308,17 @@ func TestPartnerAddSubCommand(t *testing.T) {
 			},
 		},
 	}, cm)
+
 	err := cmd.Handle(ctx)
 	if err != nil {
 		t.Errorf("unexpected execution error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "❌") {
-		t.Errorf("expected validation failure response, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "❌") {
+		t.Errorf("expected validation failure response, got: %s", getLastResponse(t))
 	}
 
 	// Test success
-	ctx2 := newTestContext(discord.InteractionEvent{
+	ctx2 := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -297,12 +335,13 @@ func TestPartnerAddSubCommand(t *testing.T) {
 			},
 		},
 	}, cm)
+
 	err = cmd.Handle(ctx2)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "✅") {
-		t.Errorf("expected success response, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "✅") {
+		t.Errorf("expected success response, got: %s", getLastResponse(t))
 	}
 
 	// Verify it was added
@@ -316,12 +355,12 @@ func TestPartnerAddSubCommand(t *testing.T) {
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "❌") {
-		t.Errorf("expected duplicate failure response, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "❌") {
+		t.Errorf("expected duplicate failure response, got: %s", getLastResponse(t))
 	}
 
 	// Test guild not found
-	ctxNoGuild := newTestContext(discord.InteractionEvent{
+	ctxNoGuild := newTestContext(t, discord.InteractionEvent{
 		GuildID: 99999,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -338,17 +377,19 @@ func TestPartnerAddSubCommand(t *testing.T) {
 			},
 		},
 	}, cm)
+
 	err = cmd.Handle(ctxNoGuild)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "❌") {
-		t.Errorf("expected missing guild failure response, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "❌") {
+		t.Errorf("expected missing guild failure response, got: %s", getLastResponse(t))
 	}
 }
 
 func TestPartnerRemoveSubCommand(t *testing.T) {
-	resetMockHTTP()
+	t.Parallel()
+	resetMockHTTP(t)
 	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
@@ -371,7 +412,7 @@ func TestPartnerRemoveSubCommand(t *testing.T) {
 	}
 
 	// Test remove non-existent
-	ctxNonExistent := newTestContext(discord.InteractionEvent{
+	ctxNonExistent := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -386,16 +427,17 @@ func TestPartnerRemoveSubCommand(t *testing.T) {
 			},
 		},
 	}, cm)
+
 	err := cmd.Handle(ctxNonExistent)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "❌") {
-		t.Errorf("expected error response, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "❌") {
+		t.Errorf("expected error response, got: %s", getLastResponse(t))
 	}
 
 	// Test autocomplete
-	ctxAutocomplete := newTestContext(discord.InteractionEvent{
+	ctxAutocomplete := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.AutocompleteInteraction{
@@ -411,6 +453,7 @@ func TestPartnerRemoveSubCommand(t *testing.T) {
 			},
 		},
 	}, cm)
+
 	choices, err := cmd.Autocomplete(ctxAutocomplete)
 	if err != nil {
 		t.Errorf("autocomplete error: %v", err)
@@ -424,7 +467,7 @@ func TestPartnerRemoveSubCommand(t *testing.T) {
 	}
 
 	// Test remove success
-	ctxSuccess := newTestContext(discord.InteractionEvent{
+	ctxSuccess := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -439,12 +482,13 @@ func TestPartnerRemoveSubCommand(t *testing.T) {
 			},
 		},
 	}, cm)
+
 	err = cmd.Handle(ctxSuccess)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "✅") {
-		t.Errorf("expected success response, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "✅") {
+		t.Errorf("expected success response, got: %s", getLastResponse(t))
 	}
 
 	// Verify removal
@@ -455,7 +499,8 @@ func TestPartnerRemoveSubCommand(t *testing.T) {
 }
 
 func TestPartnerLinkSubCommand(t *testing.T) {
-	resetMockHTTP()
+	t.Parallel()
+	resetMockHTTP(t)
 	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
@@ -475,7 +520,7 @@ func TestPartnerLinkSubCommand(t *testing.T) {
 	}
 
 	// Test autocomplete
-	ctxAutocomplete := newTestContext(discord.InteractionEvent{
+	ctxAutocomplete := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.AutocompleteInteraction{
@@ -491,6 +536,7 @@ func TestPartnerLinkSubCommand(t *testing.T) {
 			},
 		},
 	}, cm)
+
 	choices, err := cmd.Autocomplete(ctxAutocomplete)
 	if err != nil {
 		t.Errorf("autocomplete error: %v", err)
@@ -504,7 +550,7 @@ func TestPartnerLinkSubCommand(t *testing.T) {
 	}
 
 	// Test success
-	ctx := newTestContext(discord.InteractionEvent{
+	ctx := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -520,12 +566,13 @@ func TestPartnerLinkSubCommand(t *testing.T) {
 			},
 		},
 	}, cm)
+
 	err = cmd.Handle(ctx)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "✅") {
-		t.Errorf("expected success response, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "✅") {
+		t.Errorf("expected success response, got: %s", getLastResponse(t))
 	}
 
 	cfg := cm.GuildConfig("12345")
@@ -534,7 +581,7 @@ func TestPartnerLinkSubCommand(t *testing.T) {
 	}
 
 	// Test error non-existent
-	ctxNonExistent := newTestContext(discord.InteractionEvent{
+	ctxNonExistent := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -550,17 +597,19 @@ func TestPartnerLinkSubCommand(t *testing.T) {
 			},
 		},
 	}, cm)
+
 	err = cmd.Handle(ctxNonExistent)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "❌") {
-		t.Errorf("expected error response, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "❌") {
+		t.Errorf("expected error response, got: %s", getLastResponse(t))
 	}
 }
 
 func TestPartnerRenameSubCommand(t *testing.T) {
-	resetMockHTTP()
+	t.Parallel()
+	resetMockHTTP(t)
 	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
@@ -581,7 +630,7 @@ func TestPartnerRenameSubCommand(t *testing.T) {
 	}
 
 	// Test autocomplete
-	ctxAutocomplete := newTestContext(discord.InteractionEvent{
+	ctxAutocomplete := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.AutocompleteInteraction{
@@ -597,6 +646,7 @@ func TestPartnerRenameSubCommand(t *testing.T) {
 			},
 		},
 	}, cm)
+
 	choices, err := cmd.Autocomplete(ctxAutocomplete)
 	if err != nil {
 		t.Errorf("autocomplete error: %v", err)
@@ -610,7 +660,7 @@ func TestPartnerRenameSubCommand(t *testing.T) {
 	}
 
 	// Test success renaming name and fandom
-	ctx := newTestContext(discord.InteractionEvent{
+	ctx := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -627,12 +677,13 @@ func TestPartnerRenameSubCommand(t *testing.T) {
 			},
 		},
 	}, cm)
+
 	err = cmd.Handle(ctx)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "✅") {
-		t.Errorf("expected success response, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "✅") {
+		t.Errorf("expected success response, got: %s", getLastResponse(t))
 	}
 
 	cfg := cm.GuildConfig("12345")
@@ -641,7 +692,7 @@ func TestPartnerRenameSubCommand(t *testing.T) {
 	}
 
 	// Test rename to existing name error
-	ctxExists := newTestContext(discord.InteractionEvent{
+	ctxExists := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -657,16 +708,17 @@ func TestPartnerRenameSubCommand(t *testing.T) {
 			},
 		},
 	}, cm)
+
 	err = cmd.Handle(ctxExists)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "❌") {
-		t.Errorf("expected failure response, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "❌") {
+		t.Errorf("expected failure response, got: %s", getLastResponse(t))
 	}
 
 	// Test non-existent partner rename error
-	ctxNonExistent := newTestContext(discord.InteractionEvent{
+	ctxNonExistent := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -682,16 +734,17 @@ func TestPartnerRenameSubCommand(t *testing.T) {
 			},
 		},
 	}, cm)
+
 	err = cmd.Handle(ctxNonExistent)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "❌") {
-		t.Errorf("expected failure response, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "❌") {
+		t.Errorf("expected failure response, got: %s", getLastResponse(t))
 	}
 
 	// Test empty new name error
-	ctxEmptyName := newTestContext(discord.InteractionEvent{
+	ctxEmptyName := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -707,17 +760,19 @@ func TestPartnerRenameSubCommand(t *testing.T) {
 			},
 		},
 	}, cm)
+
 	err = cmd.Handle(ctxEmptyName)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "❌") {
-		t.Errorf("expected failure response, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "❌") {
+		t.Errorf("expected failure response, got: %s", getLastResponse(t))
 	}
 }
 
 func TestPartnerListSubCommand(t *testing.T) {
-	resetMockHTTP()
+	t.Parallel()
+	resetMockHTTP(t)
 	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
@@ -734,7 +789,7 @@ func TestPartnerListSubCommand(t *testing.T) {
 	}
 
 	// Empty list test
-	ctxEmpty := newTestContext(discord.InteractionEvent{
+	ctxEmpty := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -743,12 +798,13 @@ func TestPartnerListSubCommand(t *testing.T) {
 			},
 		},
 	}, cm)
+
 	err := cmd.Handle(ctxEmpty)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "✅") && !strings.Contains(getLastResponse(), "No partners") {
-		t.Errorf("expected success/empty response, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "✅") && !strings.Contains(getLastResponse(t), "No partners") {
+		t.Errorf("expected success/empty response, got: %s", getLastResponse(t))
 	}
 
 	// Non-empty list test
@@ -763,12 +819,12 @@ func TestPartnerListSubCommand(t *testing.T) {
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "Partner List") {
-		t.Errorf("expected Partner List in response, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "Partner List") {
+		t.Errorf("expected Partner List in response, got: %s", getLastResponse(t))
 	}
 
 	// Missing guild config test
-	ctxNoGuild := newTestContext(discord.InteractionEvent{
+	ctxNoGuild := newTestContext(t, discord.InteractionEvent{
 		GuildID: 99999,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -777,17 +833,19 @@ func TestPartnerListSubCommand(t *testing.T) {
 			},
 		},
 	}, cm)
+
 	err = cmd.Handle(ctxNoGuild)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "❌") {
-		t.Errorf("expected error response, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "❌") {
+		t.Errorf("expected error response, got: %s", getLastResponse(t))
 	}
 }
 
 func TestPartnerPostSubCommand(t *testing.T) {
-	resetMockHTTP()
+	t.Parallel()
+	resetMockHTTP(t)
 	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
@@ -805,7 +863,7 @@ func TestPartnerPostSubCommand(t *testing.T) {
 	}
 
 	// Test webhook invalid URL
-	ctxBadWebhook := newTestContext(discord.InteractionEvent{
+	ctxBadWebhook := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -820,16 +878,17 @@ func TestPartnerPostSubCommand(t *testing.T) {
 			},
 		},
 	}, cm)
+
 	err := cmd.Handle(ctxBadWebhook)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "❌") {
-		t.Errorf("expected error response, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "❌") {
+		t.Errorf("expected error response, got: %s", getLastResponse(t))
 	}
 
 	// Test webhook success
-	ctxGoodWebhook := newTestContext(discord.InteractionEvent{
+	ctxGoodWebhook := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -844,12 +903,13 @@ func TestPartnerPostSubCommand(t *testing.T) {
 			},
 		},
 	}, cm)
+
 	err = cmd.Handle(ctxGoodWebhook)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "✅") {
-		t.Errorf("expected success response, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "✅") {
+		t.Errorf("expected success response, got: %s", getLastResponse(t))
 	}
 
 	cfg := cm.GuildConfig("12345")
@@ -862,12 +922,12 @@ func TestPartnerPostSubCommand(t *testing.T) {
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "❌") {
-		t.Errorf("expected error response, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "❌") {
+		t.Errorf("expected error response, got: %s", getLastResponse(t))
 	}
 
 	// Test channel register success
-	ctxChannel := newTestContext(discord.InteractionEvent{
+	ctxChannel := newTestContext(t, discord.InteractionEvent{
 		GuildID:   12345,
 		ChannelID: 54321,
 		Member:    &discord.Member{User: discord.User{ID: 999}},
@@ -881,12 +941,13 @@ func TestPartnerPostSubCommand(t *testing.T) {
 			},
 		},
 	}, cm)
+
 	err = cmd.Handle(ctxChannel)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "✅") {
-		t.Errorf("expected success response, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "✅") {
+		t.Errorf("expected success response, got: %s", getLastResponse(t))
 	}
 
 	cfg = cm.GuildConfig("12345")
@@ -899,13 +960,14 @@ func TestPartnerPostSubCommand(t *testing.T) {
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "❌") {
-		t.Errorf("expected error response, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "❌") {
+		t.Errorf("expected error response, got: %s", getLastResponse(t))
 	}
 }
 
 func TestPartnerUnpostSubCommand(t *testing.T) {
-	resetMockHTTP()
+	t.Parallel()
+	resetMockHTTP(t)
 	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
@@ -925,7 +987,7 @@ func TestPartnerUnpostSubCommand(t *testing.T) {
 	}
 
 	// Test error: no options provided
-	ctxEmpty := newTestContext(discord.InteractionEvent{
+	ctxEmpty := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -938,16 +1000,17 @@ func TestPartnerUnpostSubCommand(t *testing.T) {
 			},
 		},
 	}, cm)
+
 	err := cmd.Handle(ctxEmpty)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "❌") {
-		t.Errorf("expected error response, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "❌") {
+		t.Errorf("expected error response, got: %s", getLastResponse(t))
 	}
 
 	// Test error: bad webhook URL
-	ctxBadWebhook := newTestContext(discord.InteractionEvent{
+	ctxBadWebhook := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -962,16 +1025,17 @@ func TestPartnerUnpostSubCommand(t *testing.T) {
 			},
 		},
 	}, cm)
+
 	err = cmd.Handle(ctxBadWebhook)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "❌") {
-		t.Errorf("expected error response, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "❌") {
+		t.Errorf("expected error response, got: %s", getLastResponse(t))
 	}
 
 	// Test webhook unpost success
-	ctxWebhook := newTestContext(discord.InteractionEvent{
+	ctxWebhook := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -986,12 +1050,13 @@ func TestPartnerUnpostSubCommand(t *testing.T) {
 			},
 		},
 	}, cm)
+
 	err = cmd.Handle(ctxWebhook)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "✅") {
-		t.Errorf("expected success response, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "✅") {
+		t.Errorf("expected success response, got: %s", getLastResponse(t))
 	}
 
 	cfg := cm.GuildConfig("12345")
@@ -1000,7 +1065,7 @@ func TestPartnerUnpostSubCommand(t *testing.T) {
 	}
 
 	// Test message ID unpost success
-	ctxMsg := newTestContext(discord.InteractionEvent{
+	ctxMsg := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -1015,12 +1080,13 @@ func TestPartnerUnpostSubCommand(t *testing.T) {
 			},
 		},
 	}, cm)
+
 	err = cmd.Handle(ctxMsg)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "✅") {
-		t.Errorf("expected success response, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "✅") {
+		t.Errorf("expected success response, got: %s", getLastResponse(t))
 	}
 
 	cfg = cm.GuildConfig("12345")
@@ -1030,7 +1096,8 @@ func TestPartnerUnpostSubCommand(t *testing.T) {
 }
 
 func TestPartnerRefreshSubCommand(t *testing.T) {
-	resetMockHTTP()
+	t.Parallel()
+	resetMockHTTP(t)
 	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
@@ -1044,7 +1111,7 @@ func TestPartnerRefreshSubCommand(t *testing.T) {
 		t.Error("helper method failure")
 	}
 
-	ctx := newTestContext(discord.InteractionEvent{
+	ctx := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -1053,18 +1120,20 @@ func TestPartnerRefreshSubCommand(t *testing.T) {
 			},
 		},
 	}, cm)
+
 	err := cmd.Handle(ctx)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "✅") {
-		t.Errorf("expected success response, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "✅") {
+		t.Errorf("expected success response, got: %s", getLastResponse(t))
 	}
 }
 
 func TestPartnerTemplates(t *testing.T) {
+	t.Parallel()
 	// 1. Test Import Template Success
-	resetMockHTTP()
+	resetMockHTTP(t)
 	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
@@ -1083,12 +1152,9 @@ func TestPartnerTemplates(t *testing.T) {
 		}]
 	}`
 
-	mockHTTPMu.Lock()
-	mockHTTPStatus = http.StatusOK
-	mockHTTPBody = []byte(validJSON)
-	mockHTTPMu.Unlock()
+	setMockStatusAndBody(t, http.StatusOK, []byte(validJSON))
 
-	ctxImport := newTestContext(discord.InteractionEvent{
+	ctxImport := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -1108,19 +1174,16 @@ func TestPartnerTemplates(t *testing.T) {
 	if err != nil {
 		t.Errorf("unexpected error on import: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "✅") {
-		t.Errorf("expected success response, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "✅") {
+		t.Errorf("expected success response, got: %s", getLastResponse(t))
 	}
 
-	mockHTTPMu.Lock()
 	var hastebinRequest *http.Request
-	for _, req := range mockHTTPReqs {
+	for _, req := range getMockReqs(t) {
 		if strings.Contains(req.URL.String(), "hastebin.com") {
 			hastebinRequest = req
-			break
 		}
 	}
-	mockHTTPMu.Unlock()
 
 	if hastebinRequest == nil {
 		t.Fatal("expected a request to hastebin.com, but none was recorded")
@@ -1136,34 +1199,59 @@ func TestPartnerTemplates(t *testing.T) {
 
 	// 2. Test Import Template Failures
 	// Provider error
-	resetMockHTTP()
-	mockHTTPMu.Lock()
-	mockHTTPStatus = http.StatusInternalServerError
-	mockHTTPMu.Unlock()
+	resetMockHTTP(t)
+	setMockStatusAndBody(t, http.StatusInternalServerError, []byte(`{}`))
+	ctxImport = newTestContext(t, discord.InteractionEvent{
+		GuildID: 12345,
+		Member:  &discord.Member{User: discord.User{ID: 999}},
+		Data: &discord.CommandInteraction{
+			Options: []discord.CommandInteractionOption{
+				{
+					Type: discord.SubcommandOptionType,
+					Name: "import_template",
+					Options: []discord.CommandInteractionOption{
+						{Name: optionURL, Type: discord.StringOptionType, Value: []byte(`"https://hastebin.com/raw/abcdef"`)},
+					},
+				},
+			},
+		},
+	}, cm)
 	err = importCmd.Handle(ctxImport)
 	if err != nil {
 		t.Errorf("unexpected execution error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "❌") {
-		t.Errorf("expected error response, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "❌") {
+		t.Errorf("expected error response, got: %s", getLastResponse(t))
 	}
 
 	// Invalid JSON
-	resetMockHTTP()
-	mockHTTPMu.Lock()
-	mockHTTPStatus = http.StatusOK
-	mockHTTPBody = []byte(`{invalid json`)
-	mockHTTPMu.Unlock()
+	resetMockHTTP(t)
+	setMockStatusAndBody(t, http.StatusOK, []byte(`{invalid json`))
+	ctxImport = newTestContext(t, discord.InteractionEvent{
+		GuildID: 12345,
+		Member:  &discord.Member{User: discord.User{ID: 999}},
+		Data: &discord.CommandInteraction{
+			Options: []discord.CommandInteractionOption{
+				{
+					Type: discord.SubcommandOptionType,
+					Name: "import_template",
+					Options: []discord.CommandInteractionOption{
+						{Name: optionURL, Type: discord.StringOptionType, Value: []byte(`"https://hastebin.com/raw/abcdef"`)},
+					},
+				},
+			},
+		},
+	}, cm)
 	err = importCmd.Handle(ctxImport)
 	if err != nil {
 		t.Errorf("unexpected execution error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "❌") {
-		t.Errorf("expected error response, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "❌") {
+		t.Errorf("expected error response, got: %s", getLastResponse(t))
 	}
 
 	// 3. Test Export Template Success
-	resetMockHTTP()
+	resetMockHTTP(t)
 	exportCmd := newPartnerExportTemplateSubCommand(cm)
 	if exportCmd.Name() != "export_template" || !exportCmd.RequiresGuild() || !exportCmd.RequiresPermissions() || exportCmd.Options() != nil {
 		t.Error("helper method failure")
@@ -1175,12 +1263,9 @@ func TestPartnerTemplates(t *testing.T) {
 		return nil
 	})
 
-	mockHTTPMu.Lock()
-	mockHTTPStatus = http.StatusOK
-	mockHTTPBody = []byte(`{"key": "exportkey"}`)
-	mockHTTPMu.Unlock()
+	setMockStatusAndBody(t, http.StatusOK, []byte(`{"key": "exportkey"}`))
 
-	ctxExport := newTestContext(discord.InteractionEvent{
+	ctxExport := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member: &discord.Member{
 			User: discord.User{ID: 999},
@@ -1196,21 +1281,20 @@ func TestPartnerTemplates(t *testing.T) {
 	if err != nil {
 		t.Errorf("unexpected error on export: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "✅") {
-		t.Errorf("expected success response, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "✅") {
+		t.Errorf("expected success response, got: %s", getLastResponse(t))
 	}
 
-	mockHTTPMu.Lock()
 	var hastebinDocReq *http.Request
 	var hastebinDocBody []byte
-	for idx, req := range mockHTTPReqs {
+	reqs := getMockReqs(t)
+	bodies := getMockReqBodies(t)
+	for idx, req := range reqs {
 		if strings.Contains(req.URL.String(), "hastebin.com/documents") {
 			hastebinDocReq = req
-			hastebinDocBody = mockHTTPReqBodies[idx]
-			break
+			hastebinDocBody = bodies[idx]
 		}
 	}
-	mockHTTPMu.Unlock()
 
 	if hastebinDocReq == nil {
 		t.Fatal("expected request to hastebin.com/documents, but none was recorded")
@@ -1230,8 +1314,8 @@ func TestPartnerTemplates(t *testing.T) {
 	}
 
 	// Export failure: non-admin member
-	resetMockHTTP()
-	ctxNonAdminExport := newTestContext(discord.InteractionEvent{
+	resetMockHTTP(t)
+	ctxNonAdminExport := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member: &discord.Member{
 			User: discord.User{ID: 999},
@@ -1255,7 +1339,7 @@ func TestPartnerTemplates(t *testing.T) {
 	if err != nil {
 		t.Errorf("unexpected execution error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "❌") {
-		t.Errorf("expected error response, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "❌") {
+		t.Errorf("expected error response, got: %s", getLastResponse(t))
 	}
 }

@@ -2,6 +2,7 @@ package embeds
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -14,6 +15,8 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/utils/httputil/httpdriver"
+	localdiscord "github.com/small-frappuccino/discordcore/pkg/discord"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	embedsvc "github.com/small-frappuccino/discordcore/pkg/discord/embeds"
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -21,85 +24,123 @@ import (
 )
 
 var (
-	mockHTTPStatus       = http.StatusOK
-	mockHTTPBody         = []byte(`{}`)
-	mockExternalHTTPBody []byte
-	mockHTTPReqs         []*http.Request
-	mockHTTPReqBodies    [][]byte
-	mockHTTPMu           sync.Mutex
+	testMocks sync.Map // map[string]*testHTTPMock
 )
 
-type mockRoundTripper struct {
-	roundTrip func(req *http.Request) (*http.Response, error)
+type testHTTPMock struct {
+	mu        sync.Mutex
+	status    int
+	body      []byte
+	extBody   []byte
+	reqs      []*http.Request
+	reqBodies [][]byte
 }
 
-func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	return m.roundTrip(req)
-}
-
-func init() {
-	http.DefaultTransport = &mockRoundTripper{
-		roundTrip: func(req *http.Request) (*http.Response, error) {
-			mockHTTPMu.Lock()
-			defer mockHTTPMu.Unlock()
-			mockHTTPReqs = append(mockHTTPReqs, req)
-			var body []byte
-			if req.Body != nil {
-				body, _ = io.ReadAll(req.Body)
-			}
-			mockHTTPReqBodies = append(mockHTTPReqBodies, body)
-
-			status := http.StatusOK
-			respBody := []byte(`{}`)
-
-			// Intercept requests based on destination host
-			if strings.Contains(req.URL.Host, "discord") {
-				status = mockHTTPStatus
-				respBody = mockHTTPBody
-			} else if strings.Contains(req.URL.Host, "pastebin") || strings.Contains(req.URL.Host, "hastebin") {
-				if len(mockExternalHTTPBody) > 0 {
-					respBody = mockExternalHTTPBody
-				} else if req.Method == http.MethodGet {
-					// Pastebin import content (Discohook JSON format)
-					respBody = []byte(`{"embeds": [{"title": "Imported Title", "description": "Imported Description", "fields": [{"name": "Imported Field", "value": "Imported Value", "inline": true}]}]}`)
-				} else {
-					// Hastebin/Pastebin upload key
-					respBody = []byte(`{"key": "mockkey123"}`)
-				}
-			}
-
-			return &http.Response{
-				StatusCode: status,
-				Body:       io.NopCloser(bytes.NewReader(respBody)),
-				Header:     make(http.Header),
-			}, nil
-		},
+func (m *testHTTPMock) RoundTrip(req *http.Request) (*http.Response, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.reqs = append(m.reqs, req)
+	var body []byte
+	if req.Body != nil {
+		body, _ = io.ReadAll(req.Body)
 	}
+	m.reqBodies = append(m.reqBodies, body)
+
+	status := http.StatusOK
+	respBody := []byte(`{}`)
+
+	if strings.Contains(req.URL.Host, "discord") {
+		status = m.status
+		respBody = m.body
+	} else if strings.Contains(req.URL.Host, "pastebin") || strings.Contains(req.URL.Host, "hastebin") {
+		if len(m.extBody) > 0 {
+			respBody = m.extBody
+		} else if req.Method == http.MethodGet {
+			respBody = []byte(`{"embeds": [{"title": "Imported Title", "description": "Imported Description", "fields": [{"name": "Imported Field", "value": "Imported Value", "inline": true}]}]}`)
+		} else {
+			respBody = []byte(`{"key": "mockkey123"}`)
+		}
+	}
+
+	return &http.Response{
+		StatusCode: status,
+		Body:       io.NopCloser(bytes.NewReader(respBody)),
+		Header:     make(http.Header),
+	}, nil
 }
 
-func resetMockHTTP() {
-	mockHTTPMu.Lock()
-	defer mockHTTPMu.Unlock()
-	mockHTTPStatus = http.StatusOK
-	mockHTTPBody = []byte(`{}`)
-	mockExternalHTTPBody = nil
-	mockHTTPReqs = nil
-	mockHTTPReqBodies = nil
+func resetMockHTTP(t *testing.T) {
+	mock := &testHTTPMock{
+		status: http.StatusOK,
+		body:   []byte(`{}`),
+	}
+	testMocks.Store(t.Name(), mock)
 }
 
-func getLastResponse() string {
-	mockHTTPMu.Lock()
-	defer mockHTTPMu.Unlock()
-	if len(mockHTTPReqBodies) == 0 {
+func getLastResponse(t *testing.T) string {
+	m, ok := testMocks.Load(t.Name())
+	if !ok {
 		return ""
 	}
-	return string(mockHTTPReqBodies[len(mockHTTPReqBodies)-1])
+	mock := m.(*testHTTPMock)
+	mock.mu.Lock()
+	defer mock.mu.Unlock()
+	if len(mock.reqBodies) == 0 {
+		return ""
+	}
+	return string(mock.reqBodies[len(mock.reqBodies)-1])
 }
 
-func newTestContext(event discord.InteractionEvent, cm *files.ConfigManager) *commands.ArikawaContext {
+func setMockStatusAndBody(t *testing.T, status int, body []byte) {
+	if m, ok := testMocks.Load(t.Name()); ok {
+		mock := m.(*testHTTPMock)
+		mock.mu.Lock()
+		defer mock.mu.Unlock()
+		mock.status = status
+		mock.body = body
+	}
+}
+
+func setMockExtBody(t *testing.T, body []byte) {
+	if m, ok := testMocks.Load(t.Name()); ok {
+		mock := m.(*testHTTPMock)
+		mock.mu.Lock()
+		defer mock.mu.Unlock()
+		mock.extBody = body
+	}
+}
+
+func getMockReqs(t *testing.T) []*http.Request {
+	m, ok := testMocks.Load(t.Name())
+	if !ok {
+		return nil
+	}
+	mock := m.(*testHTTPMock)
+	mock.mu.Lock()
+	defer mock.mu.Unlock()
+	return mock.reqs
+}
+
+func getMockReqBodies(t *testing.T) [][]byte {
+	m, ok := testMocks.Load(t.Name())
+	if !ok {
+		return nil
+	}
+	mock := m.(*testHTTPMock)
+	mock.mu.Lock()
+	defer mock.mu.Unlock()
+	return mock.reqBodies
+}
+
+func newTestContext(t *testing.T, event discord.InteractionEvent, cm *files.ConfigManager) *commands.ArikawaContext {
 	ctx, _ := commands.NewArikawaContext(event, cm)
 	if ctx != nil {
 		ctx.Client = api.NewClient("mockToken")
+		if m, ok := testMocks.Load(t.Name()); ok {
+			customClient := http.Client{Transport: m.(*testHTTPMock)}
+			ctx.Client.Client.Client = httpdriver.WrapClient(customClient)
+			ctx.WithContext(context.WithValue(ctx.Context(), localdiscord.HTTPTransportContextKey, m.(*testHTTPMock)))
+		}
 	}
 	return ctx
 }
@@ -138,6 +179,7 @@ func (s *fakeIOStore) Describe() string {
 func (s *fakeIOStore) Finish() {}
 
 func TestEmbedCommands_ConcurrentMutation(t *testing.T) {
+	t.Parallel()
 	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
 	guildID := "guild-concurrent"
@@ -185,6 +227,7 @@ func TestEmbedCommands_ConcurrentMutation(t *testing.T) {
 }
 
 func TestEmbedCommands_ObservabilityStructuralFaults(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 	jsonHandler := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
 	logger := slog.New(jsonHandler)
@@ -254,6 +297,7 @@ func (s *spyRouter) Register(cmd commands.ArikawaCommand) {
 func (s *spyRouter) RegisterComponent(customIDPrefix string, handler commands.ComponentHandler) {}
 
 func TestEmbedCommands_RegisterCommands(t *testing.T) {
+	t.Parallel()
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	svc := embedsvc.NewEmbedService(cm)
 	ec := NewEmbedCommands(cm, svc)
@@ -277,7 +321,8 @@ func TestEmbedCommands_RegisterCommands(t *testing.T) {
 }
 
 func TestEmbedCommands_Post(t *testing.T) {
-	resetMockHTTP()
+	t.Parallel()
+	resetMockHTTP(t)
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
 	_ = cm.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{
@@ -288,11 +333,9 @@ func TestEmbedCommands_Post(t *testing.T) {
 	svc := embedsvc.NewEmbedService(cm)
 
 	// Mock successful Discord API response for Message Create
-	mockHTTPMu.Lock()
-	mockHTTPBody = []byte(`{"id": "99999", "channel_id": "88888", "content": ""}`)
-	mockHTTPMu.Unlock()
+	setMockStatusAndBody(t, http.StatusOK, []byte(`{"id": "99999", "channel_id": "88888", "content": ""}`))
 
-	ctx := newTestContext(discord.InteractionEvent{
+	ctx := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -328,7 +371,7 @@ func TestEmbedCommands_Post(t *testing.T) {
 	}
 
 	// Safety check with missing/invalid key
-	ctxInvalidKey := newTestContext(discord.InteractionEvent{
+	ctxInvalidKey := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -354,13 +397,14 @@ func TestEmbedCommands_Post(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "does not exist") {
-		t.Errorf("expected does not exist error message, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "does not exist") {
+		t.Errorf("expected does not exist error message, got: %s", getLastResponse(t))
 	}
 }
 
 func TestEmbedCommands_Preview(t *testing.T) {
-	resetMockHTTP()
+	t.Parallel()
+	resetMockHTTP(t)
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
 	_ = cm.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{
@@ -370,7 +414,7 @@ func TestEmbedCommands_Preview(t *testing.T) {
 	})
 	svc := embedsvc.NewEmbedService(cm)
 
-	ctx := newTestContext(discord.InteractionEvent{
+	ctx := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -399,18 +443,19 @@ func TestEmbedCommands_Preview(t *testing.T) {
 	}
 
 	// Verify that the interaction response includes the preview embed
-	if !strings.Contains(getLastResponse(), "Test Embed Title") {
-		t.Errorf("expected response to contain embed title, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "Test Embed Title") {
+		t.Errorf("expected response to contain embed title, got: %s", getLastResponse(t))
 	}
 }
 
 func TestEmbedCommands_Set(t *testing.T) {
-	resetMockHTTP()
+	t.Parallel()
+	resetMockHTTP(t)
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
 	svc := embedsvc.NewEmbedService(cm)
 
-	ctx := newTestContext(discord.InteractionEvent{
+	ctx := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -460,12 +505,13 @@ func TestEmbedCommands_Set(t *testing.T) {
 }
 
 func TestEmbedCommands_Delete(t *testing.T) {
-	resetMockHTTP()
+	t.Parallel()
+	resetMockHTTP(t)
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
 	_ = cm.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{Key: "test-key"})
 
-	ctx := newTestContext(discord.InteractionEvent{
+	ctx := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -503,17 +549,18 @@ func TestEmbedCommands_Delete(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "does not exist") {
-		t.Errorf("expected does not exist error message, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "does not exist") {
+		t.Errorf("expected does not exist error message, got: %s", getLastResponse(t))
 	}
 }
 
 func TestEmbedCommands_List(t *testing.T) {
-	resetMockHTTP()
+	t.Parallel()
+	resetMockHTTP(t)
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
 
-	ctx := newTestContext(discord.InteractionEvent{
+	ctx := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -537,8 +584,8 @@ func TestEmbedCommands_List(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "No custom embeds") {
-		t.Errorf("expected empty state message, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "No custom embeds") {
+		t.Errorf("expected empty state message, got: %s", getLastResponse(t))
 	}
 
 	_ = cm.SetCustomEmbedProperties("12345", "test-key-1", files.CustomEmbedConfig{Key: "test-key-1"})
@@ -548,13 +595,14 @@ func TestEmbedCommands_List(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "test-key-1") || !strings.Contains(getLastResponse(), "test-key-2") {
-		t.Errorf("expected configured embeds list, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "test-key-1") || !strings.Contains(getLastResponse(t), "test-key-2") {
+		t.Errorf("expected configured embeds list, got: %s", getLastResponse(t))
 	}
 }
 
 func TestEmbedCommands_Refresh(t *testing.T) {
-	resetMockHTTP()
+	t.Parallel()
+	resetMockHTTP(t)
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
 	_ = cm.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{
@@ -565,7 +613,7 @@ func TestEmbedCommands_Refresh(t *testing.T) {
 
 	svc := embedsvc.NewEmbedService(cm)
 
-	ctx := newTestContext(discord.InteractionEvent{
+	ctx := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -592,13 +640,13 @@ func TestEmbedCommands_Refresh(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "Refreshed") && !strings.Contains(getLastResponse(), "updating") {
-		t.Errorf("expected refresh summary message, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "Refreshed") && !strings.Contains(getLastResponse(t), "updating") {
+		t.Errorf("expected refresh summary message, got: %s", getLastResponse(t))
 	}
 
 	// Refresh empty postings
 	_ = cm.SetCustomEmbedProperties("12345", "test-key-no-posts", files.CustomEmbedConfig{Key: "test-key-no-posts"})
-	ctxNoPosts := newTestContext(discord.InteractionEvent{
+	ctxNoPosts := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -624,13 +672,14 @@ func TestEmbedCommands_Refresh(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "no tracked postings") {
-		t.Errorf("expected no tracked postings message, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "no tracked postings") {
+		t.Errorf("expected no tracked postings message, got: %s", getLastResponse(t))
 	}
 }
 
 func TestEmbedCommands_Unpost(t *testing.T) {
-	resetMockHTTP()
+	t.Parallel()
+	resetMockHTTP(t)
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
 	_ = cm.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{
@@ -641,7 +690,7 @@ func TestEmbedCommands_Unpost(t *testing.T) {
 
 	svc := embedsvc.NewEmbedService(cm)
 
-	ctx := newTestContext(discord.InteractionEvent{
+	ctx := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -680,20 +729,21 @@ func TestEmbedCommands_Unpost(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "No tracked posting") {
-		t.Errorf("expected no tracked posting warning, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "No tracked posting") {
+		t.Errorf("expected no tracked posting warning, got: %s", getLastResponse(t))
 	}
 }
 
 func TestEmbedCommands_Fields(t *testing.T) {
-	resetMockHTTP()
+	t.Parallel()
+	resetMockHTTP(t)
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
 	_ = cm.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{Key: "test-key"})
 	svc := embedsvc.NewEmbedService(cm)
 
 	// Add Field
-	ctxAdd := newTestContext(discord.InteractionEvent{
+	ctxAdd := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -730,7 +780,7 @@ func TestEmbedCommands_Fields(t *testing.T) {
 	}
 
 	// List Fields
-	ctxList := newTestContext(discord.InteractionEvent{
+	ctxList := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -757,12 +807,12 @@ func TestEmbedCommands_Fields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "FieldName") {
-		t.Errorf("expected fields list output to contain field name, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "FieldName") {
+		t.Errorf("expected fields list output to contain field name, got: %s", getLastResponse(t))
 	}
 
 	// Remove Field
-	ctxRemove := newTestContext(discord.InteractionEvent{
+	ctxRemove := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -801,13 +851,14 @@ func TestEmbedCommands_Fields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "no fields configured") {
-		t.Errorf("expected empty fields warning, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "no fields configured") {
+		t.Errorf("expected empty fields warning, got: %s", getLastResponse(t))
 	}
 }
 
 func TestEmbedCommands_ImportExport(t *testing.T) {
-	resetMockHTTP()
+	t.Parallel()
+	resetMockHTTP(t)
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
 	_ = cm.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{
@@ -817,7 +868,7 @@ func TestEmbedCommands_ImportExport(t *testing.T) {
 	})
 
 	// Import subcommand
-	ctxImport := newTestContext(discord.InteractionEvent{
+	ctxImport := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -852,7 +903,7 @@ func TestEmbedCommands_ImportExport(t *testing.T) {
 	}
 
 	// Export subcommand
-	ctxExport := newTestContext(discord.InteractionEvent{
+	ctxExport := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -879,20 +930,21 @@ func TestEmbedCommands_ImportExport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "mockkey123") {
-		t.Errorf("expected export response to contain uploaded hastebin paste URL key, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "mockkey123") {
+		t.Errorf("expected export response to contain uploaded hastebin paste URL key, got: %s", getLastResponse(t))
 	}
 }
 
 func TestEmbedCommands_ErrorAndEdgeCases(t *testing.T) {
-	resetMockHTTP()
+	t.Parallel()
+	resetMockHTTP(t)
 	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
 	_ = cm.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{Key: "test-key"})
 	svc := embedsvc.NewEmbedService(cm)
 
 	// 1. Missing Key Option (embedKeyFromOptions failure)
-	ctxNoKey := newTestContext(discord.InteractionEvent{
+	ctxNoKey := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -919,8 +971,8 @@ func TestEmbedCommands_ErrorAndEdgeCases(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "key option is required") {
-		t.Errorf("expected missing key error, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "key option is required") {
+		t.Errorf("expected missing key error, got: %s", getLastResponse(t))
 	}
 
 	// 2. refreshCustomEmbedPostingsBestEffort Nil Safety
@@ -936,7 +988,7 @@ func TestEmbedCommands_ErrorAndEdgeCases(t *testing.T) {
 	slog.SetDefault(slog.New(jsonHandler))
 	defer slog.SetDefault(oldDefault)
 
-	ctxErr := newTestContext(discord.InteractionEvent{
+	ctxErr := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data:    &discord.CommandInteraction{},
@@ -950,7 +1002,7 @@ func TestEmbedCommands_ErrorAndEdgeCases(t *testing.T) {
 	}
 
 	// 4. embedImportSubCommand invalid URL scheme
-	ctxImportBadURL := newTestContext(discord.InteractionEvent{
+	ctxImportBadURL := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -977,14 +1029,14 @@ func TestEmbedCommands_ErrorAndEdgeCases(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "unsupported URL scheme") {
-		t.Errorf("expected unsupported URL scheme error, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "unsupported URL scheme") {
+		t.Errorf("expected unsupported URL scheme error, got: %s", getLastResponse(t))
 	}
 
 	// 5. embedImportSubCommand invalid Discohook JSON
 	// Inject invalid JSON body response for pastebin/hastebin host
-	mockExternalHTTPBody = []byte(`{"invalid": json`)
-	ctxImportBadJSON := newTestContext(discord.InteractionEvent{
+	setMockExtBody(t, []byte(`{"invalid": json`))
+	ctxImportBadJSON := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -1010,15 +1062,15 @@ func TestEmbedCommands_ErrorAndEdgeCases(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "Invalid embed JSON") {
-		t.Errorf("expected invalid JSON error, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "Invalid embed JSON") {
+		t.Errorf("expected invalid JSON error, got: %s", getLastResponse(t))
 	}
 
 	// Reset custom HTTP body for subsequent tests
-	mockExternalHTTPBody = nil
+	setMockExtBody(t, nil)
 
 	// 6. embedExportSubCommand non-existent key
-	ctxExportNotFound := newTestContext(discord.InteractionEvent{
+	ctxExportNotFound := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -1044,12 +1096,12 @@ func TestEmbedCommands_ErrorAndEdgeCases(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "does not exist") {
-		t.Errorf("expected does not exist error, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "does not exist") {
+		t.Errorf("expected does not exist error, got: %s", getLastResponse(t))
 	}
 
 	// 7. embedFieldRemoveSubCommand out of bounds index
-	ctxRemoveBadIdx := newTestContext(discord.InteractionEvent{
+	ctxRemoveBadIdx := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -1076,12 +1128,12 @@ func TestEmbedCommands_ErrorAndEdgeCases(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "invalid field index") {
-		t.Errorf("expected invalid field index error, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "invalid field index") {
+		t.Errorf("expected invalid field index error, got: %s", getLastResponse(t))
 	}
 
 	// 8. embedFieldRemoveSubCommand missing index option
-	ctxRemoveNoIdx := newTestContext(discord.InteractionEvent{
+	ctxRemoveNoIdx := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
 		Data: &discord.CommandInteraction{
@@ -1106,7 +1158,7 @@ func TestEmbedCommands_ErrorAndEdgeCases(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(getLastResponse(), "field index is required") {
-		t.Errorf("expected field index required error, got: %s", getLastResponse())
+	if !strings.Contains(getLastResponse(t), "field index is required") {
+		t.Errorf("expected field index required error, got: %s", getLastResponse(t))
 	}
 }

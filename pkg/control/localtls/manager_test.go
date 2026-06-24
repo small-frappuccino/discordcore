@@ -27,6 +27,7 @@ func (f *fakeTrustInstaller) EnsureTrusted(_ context.Context, cert *x509.Certifi
 }
 
 func TestEnsureReadyCreatesMaterialsAndTrusts(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	truster := &fakeTrustInstaller{result: TrustResult{Trusted: true, Installed: true, Store: "test"}}
 	now := time.Date(2026, time.March, 11, 12, 0, 0, 0, time.UTC)
@@ -58,6 +59,7 @@ func TestEnsureReadyCreatesMaterialsAndTrusts(t *testing.T) {
 }
 
 func TestEnsureReadyReusesExistingMaterials(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	now := time.Date(2026, time.March, 11, 12, 0, 0, 0, time.UTC)
 
@@ -87,6 +89,7 @@ func TestEnsureReadyReusesExistingMaterials(t *testing.T) {
 }
 
 func TestEnsureReadyRotatesServerCertificateWhenSANSChange(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	now := time.Date(2026, time.March, 11, 12, 0, 0, 0, time.UTC)
 
@@ -115,6 +118,7 @@ func TestEnsureReadyRotatesServerCertificateWhenSANSChange(t *testing.T) {
 }
 
 func TestEnsureReadyErrorsOnCorruptKey(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	now := time.Date(2026, time.March, 11, 12, 0, 0, 0, time.UTC)
 	if _, err := EnsureReady(context.Background(), Config{

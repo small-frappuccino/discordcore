@@ -8,6 +8,7 @@ import (
 )
 
 func TestSummaryBasic(t *testing.T) {
+	t.Parallel()
 	// Zero value ready to use
 	var s Summary
 
@@ -72,6 +73,7 @@ func TestSummaryBasic(t *testing.T) {
 }
 
 func TestSummaryConcurrency(t *testing.T) {
+	t.Parallel()
 	var s Summary
 	var wg sync.WaitGroup
 	workers := 20
@@ -103,6 +105,7 @@ func TestSummaryConcurrency(t *testing.T) {
 type customKey string
 
 func TestGetOrCreateLabeledCounter(t *testing.T) {
+	t.Parallel()
 	var mu sync.Mutex
 	var m map[customKey]*atomic.Int64
 
@@ -139,6 +142,7 @@ func TestGetOrCreateLabeledCounter(t *testing.T) {
 }
 
 func TestGetOrCreateLabeledSummary(t *testing.T) {
+	t.Parallel()
 	var mu sync.Mutex
 	var m map[string]*Summary
 

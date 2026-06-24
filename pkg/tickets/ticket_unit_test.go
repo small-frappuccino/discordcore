@@ -13,6 +13,7 @@ import (
 )
 
 func TestPermissionsBitwise(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name          string
 		initialAllow  discord.Permissions
@@ -57,6 +58,7 @@ func TestPermissionsBitwise(t *testing.T) {
 }
 
 func TestNamingLogic(t *testing.T) {
+	t.Parallel()
 	if GenerateTicketName(5) != "ticket-0005" {
 		t.Errorf("GenerateTicketName(5) failed")
 	}
@@ -81,6 +83,7 @@ func TestNamingLogic(t *testing.T) {
 }
 
 func TestOpenPermissions(t *testing.T) {
+	t.Parallel()
 	expected := discord.PermissionViewChannel | discord.PermissionSendMessages | discord.PermissionReadMessageHistory
 	if ComputeOpenMemberAllow() != expected {
 		t.Errorf("ComputeOpenMemberAllow mismatch")
@@ -91,6 +94,7 @@ func TestOpenPermissions(t *testing.T) {
 }
 
 func TestManager_NewAndNextID(t *testing.T) {
+	t.Parallel()
 	mock, err := pgxmock.NewPool()
 	if err != nil {
 		t.Fatalf("failed to create pgxmock pool: %v", err)
