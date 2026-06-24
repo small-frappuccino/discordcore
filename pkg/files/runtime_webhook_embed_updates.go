@@ -24,10 +24,11 @@ var (
 func (mgr *ConfigManager) ListWebhookEmbedUpdates(guildID string) ([]WebhookEmbedUpdateConfig, error) {
 	scope := normalizeWebhookScope(guildID)
 
-	mgr.mu.RLock()
-	defer mgr.mu.RUnlock()
-
-	rc, err := mgr.runtimeConfigForScopeLocked(scope)
+	cfg := mgr.Config()
+	if cfg == nil {
+		return nil, nil
+	}
+	rc, err := runtimeConfigForScope(cfg, scope)
 	if err != nil {
 		return nil, fmt.Errorf("ConfigManager.ListWebhookEmbedUpdates: %w", err)
 	}
@@ -51,10 +52,11 @@ func (mgr *ConfigManager) GetWebhookEmbedUpdate(guildID, messageID string) (_ We
 
 	scope := normalizeWebhookScope(guildID)
 
-	mgr.mu.RLock()
-	defer mgr.mu.RUnlock()
-
-	rc, err := mgr.runtimeConfigForScopeLocked(scope)
+	cfg := mgr.Config()
+	if cfg == nil {
+		return WebhookEmbedUpdateConfig{}, fmt.Errorf("%w: message_id=%s", ErrWebhookEmbedUpdateNotFound, targetID)
+	}
+	rc, err := runtimeConfigForScope(cfg, scope)
 	if err != nil {
 		return WebhookEmbedUpdateConfig{}, fmt.Errorf("ConfigManager.GetWebhookEmbedUpdate: %w", err)
 	}
@@ -164,23 +166,6 @@ func normalizeWebhookScope(guildID string) string {
 		return ""
 	}
 	return scope
-}
-
-func (mgr *ConfigManager) runtimeConfigForScopeLocked(scopeGuildID string) (*RuntimeConfig, error) {
-	if mgr == nil {
-		return nil, nil
-	}
-	return runtimeConfigForScope(mgr.config, scopeGuildID)
-}
-
-func (mgr *ConfigManager) runtimeConfigForScopeLockedMutable(scopeGuildID string) (*RuntimeConfig, error) {
-	if mgr == nil {
-		return nil, fmt.Errorf("config manager is nil")
-	}
-	if mgr.config == nil {
-		mgr.config = &BotConfig{Guilds: []GuildConfig{}}
-	}
-	return runtimeConfigForScope(mgr.config, scopeGuildID)
 }
 
 func normalizeWebhookEmbedUpdateConfig(in WebhookEmbedUpdateConfig) (WebhookEmbedUpdateConfig, error) {

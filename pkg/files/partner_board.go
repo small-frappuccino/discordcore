@@ -110,12 +110,9 @@ func (mgr *ConfigManager) PartnerBoardTemplate(guildID string) (PartnerBoardTemp
 		return PartnerBoardTemplateConfig{}, fmt.Errorf("get partner board template: %w", invalidPartnerBoardInput("guild_id is required"))
 	}
 
-	mgr.mu.RLock()
-	defer mgr.mu.RUnlock()
-
-	guildConfig, err := mgr.guildConfigByIDLocked(scope)
-	if err != nil {
-		return PartnerBoardTemplateConfig{}, fmt.Errorf("ConfigManager.PartnerBoardTemplate: %w", err)
+	guildConfig := mgr.GuildConfig(scope)
+	if guildConfig == nil {
+		return PartnerBoardTemplateConfig{}, fmt.Errorf("ConfigManager.PartnerBoardTemplate: %w: guild_id=%s", ErrGuildConfigNotFound, scope)
 	}
 	return normalizePartnerBoardTemplate(guildConfig.PartnerBoard.Template), nil
 }
@@ -149,12 +146,9 @@ func (mgr *ConfigManager) PartnerBoard(guildID string) (PartnerBoardConfig, erro
 		return PartnerBoardConfig{}, fmt.Errorf("get partner board: %w", invalidPartnerBoardInput("guild_id is required"))
 	}
 
-	mgr.mu.RLock()
-	defer mgr.mu.RUnlock()
-
-	guildConfig, err := mgr.guildConfigByIDLocked(scope)
-	if err != nil {
-		return PartnerBoardConfig{}, fmt.Errorf("ConfigManager.PartnerBoard: %w", err)
+	guildConfig := mgr.GuildConfig(scope)
+	if guildConfig == nil {
+		return PartnerBoardConfig{}, fmt.Errorf("ConfigManager.PartnerBoard: %w: guild_id=%s", ErrGuildConfigNotFound, scope)
 	}
 
 	var postings []CustomEmbedPostingConfig
@@ -192,12 +186,9 @@ func (mgr *ConfigManager) ListPartners(guildID string) (_ []PartnerEntryConfig, 
 		return nil, invalidPartnerBoardInput("guild_id is required")
 	}
 
-	mgr.mu.RLock()
-	defer mgr.mu.RUnlock()
-
-	guildConfig, err := mgr.guildConfigByIDLocked(scope)
-	if err != nil {
-		return nil, fmt.Errorf("ConfigManager.ListPartners: %w", err)
+	guildConfig := mgr.GuildConfig(scope)
+	if guildConfig == nil {
+		return nil, fmt.Errorf("ConfigManager.ListPartners: %w: guild_id=%s", ErrGuildConfigNotFound, scope)
 	}
 
 	partners, err := canonicalizePartnerEntries(guildConfig.PartnerBoard.Partners)
@@ -224,12 +215,9 @@ func (mgr *ConfigManager) Partner(guildID, name string) (_ PartnerEntryConfig, e
 		return PartnerEntryConfig{}, invalidPartnerBoardInput("name is required")
 	}
 
-	mgr.mu.RLock()
-	defer mgr.mu.RUnlock()
-
-	guildConfig, err := mgr.guildConfigByIDLocked(scope)
-	if err != nil {
-		return PartnerEntryConfig{}, fmt.Errorf("ConfigManager.Partner: %w", err)
+	guildConfig := mgr.GuildConfig(scope)
+	if guildConfig == nil {
+		return PartnerEntryConfig{}, fmt.Errorf("ConfigManager.Partner: %w: guild_id=%s", ErrGuildConfigNotFound, scope)
 	}
 
 	partners, err := canonicalizePartnerEntries(guildConfig.PartnerBoard.Partners)
@@ -368,41 +356,6 @@ func (mgr *ConfigManager) DeletePartner(guildID, name string) (err error) {
 		guildConfig.PartnerBoard.Partners = current
 		return nil
 	})
-}
-
-func (mgr *ConfigManager) guildConfigByIDLocked(guildID string) (*GuildConfig, error) {
-	if mgr == nil || mgr.config == nil {
-		return nil, fmt.Errorf("%w: guild_id=%s", ErrGuildConfigNotFound, strings.TrimSpace(guildID))
-	}
-	target := strings.TrimSpace(guildID)
-	if target == "" {
-		return nil, fmt.Errorf("%w: guild_id=%s", ErrGuildConfigNotFound, strings.TrimSpace(guildID))
-	}
-
-	if mgr.guildIndex != nil {
-		if idx, ok := mgr.guildIndex[target]; ok {
-			if idx >= 0 && idx < len(mgr.config.Guilds) && mgr.config.Guilds[idx].GuildID == target {
-				return &mgr.config.Guilds[idx], nil
-			}
-		}
-	}
-
-	for i := range mgr.config.Guilds {
-		if mgr.config.Guilds[i].GuildID == target {
-			return &mgr.config.Guilds[i], nil
-		}
-	}
-	return nil, fmt.Errorf("%w: guild_id=%s", ErrGuildConfigNotFound, target)
-}
-
-func (mgr *ConfigManager) guildConfigByIDLockedMutable(guildID string) (*GuildConfig, error) {
-	if mgr == nil {
-		return nil, fmt.Errorf("%w: config manager is nil", ErrInvalidPartnerBoardInput)
-	}
-	if mgr.config == nil {
-		mgr.config = &BotConfig{Guilds: []GuildConfig{}}
-	}
-	return mgr.guildConfigByIDLocked(guildID)
 }
 
 func normalizeEmbedUpdateTargetConfig(in EmbedUpdateTargetConfig) (EmbedUpdateTargetConfig, error) {

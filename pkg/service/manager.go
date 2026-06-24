@@ -163,7 +163,7 @@ type ServiceManager struct {
 	services   map[string]*ServiceInfo
 	dependsOn  map[string][]string // service -> dependencies
 	dependents map[string][]string // service -> dependents
-	mu         sync.RWMutex
+	mu         sync.Mutex
 	ctx        context.Context
 	cancel     context.CancelFunc
 	// Stop channel for health monitor
@@ -462,8 +462,8 @@ func (sm *ServiceManager) RestartService(ctx context.Context, name string) error
 
 // GetServiceInfo returns information about a specific service
 func (sm *ServiceManager) GetServiceInfo(name string) (*ServiceInfo, error) {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
 
 	info, exists := sm.services[name]
 	if !exists {
@@ -477,8 +477,8 @@ func (sm *ServiceManager) GetServiceInfo(name string) (*ServiceInfo, error) {
 
 // GetAllServices returns information about all registered services
 func (sm *ServiceManager) GetAllServices() map[string]ServiceInfo {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
 
 	result := make(map[string]ServiceInfo, len(sm.services))
 	for name, info := range sm.services {
@@ -489,8 +489,8 @@ func (sm *ServiceManager) GetAllServices() map[string]ServiceInfo {
 
 // GetRunningServices returns a list of currently running services
 func (sm *ServiceManager) GetRunningServices() []string {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
 
 	running := make([]string, 0, len(sm.services))
 	for name, info := range sm.services {
@@ -572,14 +572,14 @@ func (sm *ServiceManager) healthMonitor() {
 
 // performHealthChecks checks the health of all running services
 func (sm *ServiceManager) performHealthChecks() {
-	sm.mu.RLock()
+	sm.mu.Lock()
 	var runningServices []*ServiceInfo
 	for _, info := range sm.services {
 		if info.State == StateRunning {
 			runningServices = append(runningServices, info)
 		}
 	}
-	sm.mu.RUnlock()
+	sm.mu.Unlock()
 
 	for _, info := range runningServices {
 		i := info

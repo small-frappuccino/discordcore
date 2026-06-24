@@ -497,12 +497,9 @@ func (mgr *ConfigManager) RolePanels(guildID string) ([]RolePanelConfig, error) 
 		return nil, invalidRolePanelInput("guild_id is required")
 	}
 
-	mgr.mu.RLock()
-	defer mgr.mu.RUnlock()
-
-	guildConfig, err := mgr.guildConfigByIDLocked(scope)
-	if err != nil {
-		return nil, fmt.Errorf("ConfigManager.RolePanels: %w", err)
+	guildConfig := mgr.GuildConfig(scope)
+	if guildConfig == nil {
+		return nil, fmt.Errorf("ConfigManager.RolePanels: %w: guild_id=%s", ErrGuildConfigNotFound, scope)
 	}
 	out := cloneRolePanels(guildConfig.RolePanels)
 	sortRolePanels(out)
@@ -521,12 +518,9 @@ func (mgr *ConfigManager) RolePanel(guildID, key string) (RolePanelConfig, error
 		return RolePanelConfig{}, fmt.Errorf("ConfigManager.RolePanel: %w", err)
 	}
 
-	mgr.mu.RLock()
-	defer mgr.mu.RUnlock()
-
-	guildConfig, err := mgr.guildConfigByIDLocked(scope)
-	if err != nil {
-		return RolePanelConfig{}, fmt.Errorf("ConfigManager.RolePanel: %w", err)
+	guildConfig := mgr.GuildConfig(scope)
+	if guildConfig == nil {
+		return RolePanelConfig{}, fmt.Errorf("ConfigManager.RolePanel: %w: guild_id=%s", ErrGuildConfigNotFound, scope)
 	}
 	idx := findRolePanelIndex(guildConfig.RolePanels, target)
 	if idx < 0 {
@@ -762,12 +756,9 @@ func (mgr *ConfigManager) ListRolePanelPostings(guildID, key string) ([]RolePane
 		return nil, fmt.Errorf("ConfigManager.ListRolePanelPostings: %w", err)
 	}
 
-	mgr.mu.RLock()
-	defer mgr.mu.RUnlock()
-
-	guildConfig, err := mgr.guildConfigByIDLocked(scope)
-	if err != nil {
-		return nil, fmt.Errorf("ConfigManager.ListRolePanelPostings: %w", err)
+	guildConfig := mgr.GuildConfig(scope)
+	if guildConfig == nil {
+		return nil, fmt.Errorf("ConfigManager.ListRolePanelPostings: %w: guild_id=%s", ErrGuildConfigNotFound, scope)
 	}
 	idx := findRolePanelIndex(guildConfig.RolePanels, target)
 	if idx < 0 {
@@ -923,12 +914,9 @@ func (mgr *ConfigManager) FindRolePanelPosting(guildID, messageID string) (strin
 		return "", RolePanelPostingConfig{}, invalidRolePanelInput("message_id is required")
 	}
 
-	mgr.mu.RLock()
-	defer mgr.mu.RUnlock()
-
-	guildConfig, err := mgr.guildConfigByIDLocked(scope)
-	if err != nil {
-		return "", RolePanelPostingConfig{}, fmt.Errorf("ConfigManager.FindRolePanelPosting: %w", err)
+	guildConfig := mgr.GuildConfig(scope)
+	if guildConfig == nil {
+		return "", RolePanelPostingConfig{}, fmt.Errorf("ConfigManager.FindRolePanelPosting: %w: guild_id=%s", ErrGuildConfigNotFound, scope)
 	}
 	for _, panel := range guildConfig.RolePanels {
 		pIdx := findRolePanelPostingIndex(panel.Postings, mid)
@@ -953,12 +941,9 @@ func (mgr *ConfigManager) RolePanelButtonByRoleID(guildID, roleID string) (RoleP
 		return RolePanelConfig{}, RolePanelButtonConfig{}, invalidRolePanelInput("role_id is required")
 	}
 
-	mgr.mu.RLock()
-	defer mgr.mu.RUnlock()
-
-	guildConfig, err := mgr.guildConfigByIDLocked(scope)
-	if err != nil {
-		return RolePanelConfig{}, RolePanelButtonConfig{}, fmt.Errorf("ConfigManager.RolePanelButtonByRoleID: %w", err)
+	guildConfig := mgr.GuildConfig(scope)
+	if guildConfig == nil {
+		return RolePanelConfig{}, RolePanelButtonConfig{}, fmt.Errorf("ConfigManager.RolePanelButtonByRoleID: %w: guild_id=%s", ErrGuildConfigNotFound, scope)
 	}
 	for _, panel := range guildConfig.RolePanels {
 		btnIdx := findRolePanelButtonIndex(panel.Buttons, rid)

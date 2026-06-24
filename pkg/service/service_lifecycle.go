@@ -19,7 +19,7 @@ const (
 
 type BaseLifecycle struct {
 	name   string
-	mu     sync.RWMutex
+	mu     sync.Mutex
 	state  lifecycleState
 	runCtx context.Context
 	cancel context.CancelFunc
@@ -59,14 +59,14 @@ func (sl *BaseLifecycle) Start(parent context.Context) (context.Context, error) 
 
 // Begin begins.
 func (sl *BaseLifecycle) Begin() (context.Context, func(), bool) {
-	sl.mu.RLock()
+	sl.mu.Lock()
 	if sl.state != lifecycleStateRunning || sl.runCtx == nil {
-		sl.mu.RUnlock()
+		sl.mu.Unlock()
 		return nil, nil, false
 	}
 	sl.wg.Add(1)
 	runCtx := sl.runCtx
-	sl.mu.RUnlock()
+	sl.mu.Unlock()
 
 	return runCtx, sl.wg.Done, true
 }
@@ -126,8 +126,8 @@ func (sl *BaseLifecycle) Stop(ctx context.Context) error {
 
 // IsRunning is running.
 func (sl *BaseLifecycle) IsRunning() bool {
-	sl.mu.RLock()
-	defer sl.mu.RUnlock()
+	sl.mu.Lock()
+	defer sl.mu.Unlock()
 	return sl.state == lifecycleStateRunning
 }
 

@@ -603,12 +603,9 @@ func (mgr *ConfigManager) FindCustomEmbedPosting(guildID, messageID string) (str
 		return "", CustomEmbedPostingConfig{}, invalidCustomEmbedInput("message_id is required")
 	}
 
-	mgr.mu.RLock()
-	defer mgr.mu.RUnlock()
-
-	guildConfig, err := mgr.guildConfigByIDLocked(scope)
-	if err != nil {
-		return "", CustomEmbedPostingConfig{}, fmt.Errorf("ConfigManager.FindCustomEmbedPosting: %w", err)
+	guildConfig := mgr.GuildConfig(scope)
+	if guildConfig == nil {
+		return "", CustomEmbedPostingConfig{}, fmt.Errorf("%w: guild_id=%s", ErrGuildConfigNotFound, scope)
 	}
 	for _, ce := range guildConfig.CustomEmbeds {
 		pIdx := findCustomEmbedPostingIndex(ce.Postings, mid)

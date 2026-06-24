@@ -157,12 +157,9 @@ func (mgr *ConfigManager) ReactionBlockConfig(guildID string) (_ ReactionBlockCo
 		return ReactionBlockConfig{}, invalidReactionBlockInput("guild_id is required")
 	}
 
-	mgr.mu.RLock()
-	defer mgr.mu.RUnlock()
-
-	guildConfig, err := mgr.guildConfigByIDLocked(scope)
-	if err != nil {
-		return ReactionBlockConfig{}, fmt.Errorf("ConfigManager.ReactionBlockConfig: %w", err)
+	guildConfig := mgr.GuildConfig(scope)
+	if guildConfig == nil {
+		return ReactionBlockConfig{}, fmt.Errorf("ConfigManager.ReactionBlockConfig: %w: guild_id=%s", ErrGuildConfigNotFound, scope)
 	}
 
 	normalized, err := NormalizeReactionBlockConfig(guildConfig.ReactionBlocks)

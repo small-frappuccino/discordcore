@@ -427,12 +427,9 @@ func (mgr *ConfigManager) QOTDConfig(guildID string) (_ QOTDConfig, err error) {
 		return QOTDConfig{}, invalidQOTDInput("guild_id is required")
 	}
 
-	mgr.mu.RLock()
-	defer mgr.mu.RUnlock()
-
-	guildConfig, err := mgr.guildConfigByIDLocked(scope)
-	if err != nil {
-		return QOTDConfig{}, fmt.Errorf("ConfigManager.QOTDConfig: %w", err)
+	guildConfig := mgr.GuildConfig(scope)
+	if guildConfig == nil {
+		return QOTDConfig{}, fmt.Errorf("ConfigManager.QOTDConfig: %w: guild_id=%s", ErrGuildConfigNotFound, scope)
 	}
 
 	normalized, err := NormalizeQOTDConfig(guildConfig.QOTD)

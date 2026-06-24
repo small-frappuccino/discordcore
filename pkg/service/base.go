@@ -24,7 +24,7 @@ type BaseService struct {
 
 	// State management
 	state        ServiceState
-	stateMutex   sync.RWMutex
+	stateMutex   sync.Mutex
 	isRunning    bool
 	startTime    *time.Time
 	stopTime     *time.Time
@@ -35,7 +35,7 @@ type BaseService struct {
 	// Health monitoring
 	lastHealthCheck time.Time
 	healthStatus    HealthStatus
-	healthMutex     sync.RWMutex
+	healthMutex     sync.Mutex
 
 	// Hooks for subclasses to implement
 	startHook  func(ctx context.Context) error
@@ -171,8 +171,8 @@ func (bs *BaseService) Stop(ctx context.Context) error {
 
 // IsRunning returns true if the service is running
 func (bs *BaseService) IsRunning() bool {
-	bs.stateMutex.RLock()
-	defer bs.stateMutex.RUnlock()
+	bs.stateMutex.Lock()
+	defer bs.stateMutex.Unlock()
 	return bs.isRunning
 }
 
@@ -209,8 +209,8 @@ func (bs *BaseService) HealthCheck(ctx context.Context) HealthStatus {
 // level; concrete services that want to expose display rows override Stats()
 // and populate them from their own typed sources.
 func (bs *BaseService) Stats() ServiceStats {
-	bs.stateMutex.RLock()
-	defer bs.stateMutex.RUnlock()
+	bs.stateMutex.Lock()
+	defer bs.stateMutex.Unlock()
 
 	stats := ServiceStats{
 		RestartCount: bs.restartCount,
@@ -232,8 +232,8 @@ func (bs *BaseService) Stats() ServiceStats {
 
 // GetState returns the current service state
 func (bs *BaseService) GetState() ServiceState {
-	bs.stateMutex.RLock()
-	defer bs.stateMutex.RUnlock()
+	bs.stateMutex.Lock()
+	defer bs.stateMutex.Unlock()
 	return bs.state
 }
 
