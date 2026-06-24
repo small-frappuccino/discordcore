@@ -8,7 +8,7 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/state"
-	"github.com/small-frappuccino/discordcore/pkg/discord/session"
+
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/storage/postgres"
@@ -122,14 +122,7 @@ func TestBotRuntime_InitializationRouting(t *testing.T) {
 
 			caps := resolveBotRuntimeCapabilities(tt.cfg, "main")
 
-			rt := &botRuntime{
-				instanceID:    "main",
-				capabilities:  caps,
-				legacySession: session.NewEmptySessionForCompat("Bot fake"),
-				arikawaState:  state.New("Bot fake"),
-			}
-
-			err := initializeBotRuntime(context.Background(), rt, botRuntimeOptions{
+			opts := botRuntimeOptions{
 				runtimeCount:            1,
 				configManager:           cfgMgr,
 				store:                   &postgres.Store{},
@@ -138,7 +131,9 @@ func TestBotRuntime_InitializationRouting(t *testing.T) {
 				openBotArikawaState:     openBotArikawaStateHook,
 				newCommandHandlerForBot: newCommandHandlerForBotHook,
 				setupCommandHandler:     setupCommandHandlerHook,
-			})
+			}
+
+			rt, err := NewBotRuntime(resolvedBotInstance{ID: "main", Token: "Bot fake"}, caps, opts)
 			if err != nil {
 				t.Fatalf("unexpected init error: %v", err)
 			}
@@ -169,8 +164,6 @@ func TestBotRuntime_InitializationRouting(t *testing.T) {
 					t.Errorf("expected command handler to be populated")
 				}
 			}
-
-			shutdownBotRuntime(rt, context.Background())
 		})
 	}
 }

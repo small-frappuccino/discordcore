@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"slices"
 	"strings"
-	"sync"
 	"sync/atomic"
 
 	"github.com/diamondburned/arikawa/v3/state"
@@ -23,6 +22,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordcore/pkg/storage/postgres"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -186,32 +186,19 @@ func scheduleRuntimeConfiguredGuildLogging(
 		panic("hardware-aligned validation failure: startupTasks cannot be nil during scheduleRuntimeConfiguredGuildLogging")
 	}
 
-	startupTasks.GoLight("log_configured_guilds:"+runtime.instanceID, &RuntimeConfiguredGuildLoggingTask{
-		Runtime:       runtime,
-		ConfigManager: configManager,
-		InstanceCtx:   ctx,
-	})
-}
-
-type RuntimeConfiguredGuildLoggingTask struct {
-	Runtime       *botRuntime
-	ConfigManager *files.ConfigManager
-	InstanceCtx   context.Context
-}
-
-func (t *RuntimeConfiguredGuildLoggingTask) Execute(_ context.Context) error {
-	ctx := t.InstanceCtx
-	if ctx.Err() != nil {
+	startupTasks.Go("log_configured_guilds:"+runtime.instanceID, func(taskCtx context.Context) error {
+		if taskCtx.Err() != nil {
+			return nil
+		}
+		err := files.LogConfiguredGuildsForBot(configManager, runtime.legacySession, runtime.instanceID)
+		if err != nil {
+			slog.Warn("Mitigated degradation: Some configured guilds could not be accessed during runtime logging",
+				slog.String("botInstanceID", runtime.instanceID),
+				slog.String("error", err.Error()),
+			)
+		}
 		return nil
-	}
-	err := files.LogConfiguredGuildsForBot(t.ConfigManager, t.Runtime.legacySession, t.Runtime.instanceID)
-	if err != nil {
-		slog.Warn("Mitigated degradation: Some configured guilds could not be accessed during runtime logging",
-			slog.String("botInstanceID", t.Runtime.instanceID),
-			slog.String("error", err.Error()),
-		)
-	}
-	return nil
+	})
 }
 func scheduleStartupWebhookEmbedUpdates(
 	startupTasks *StartupTaskOrchestrator,
@@ -227,53 +214,43 @@ func scheduleStartupWebhookEmbedUpdates(
 		panic("hardware-aligned validation failure: startupTasks cannot be nil during scheduleStartupWebhookEmbedUpdates")
 	}
 
-	startupTasks.GoLight("startup_webhook_embed_updates", &StartupWebhookEmbedUpdatesTask{
-		Cfg:             cfg,
-		SessionResolver: sessionResolver,
+	startupTasks.Go("startup_webhook_embed_updates", func(taskCtx context.Context) error {
+		for _, item := range collectStartupWebhookEmbedUpdates(cfg) {
+			if err := taskCtx.Err(); err != nil {
+				return fmt.Errorf("scheduleStartupWebhookEmbedUpdates: %w", err)
+			}
+
+			operation := fmt.Sprintf("runtime_config.webhook_embed_updates[%s:%d]", item.scope, item.index)
+			sess := sessionResolver(item.scope)
+			if sess == nil {
+				slog.Debug("Session resolution missed for webhook patch target; skipping",
+					slog.String("operation", operation),
+					slog.String("scope", item.scope),
+				)
+				continue
+			}
+
+			if err := webhook.PatchMessageEmbed(taskCtx, &webhook.ArikawaAPI{}, webhook.MessageEmbedPatch{
+				MessageID:  item.update.MessageID,
+				WebhookURL: item.update.WebhookURL,
+				Embed:      item.update.Embed,
+			}); err != nil {
+				slog.Warn("Compensatory action required: Webhook embed patch payload rejected",
+					slog.String("operation", operation),
+					slog.String("scope", item.scope),
+					slog.String("message_id", strings.TrimSpace(item.update.MessageID)),
+					slog.String("error", err.Error()),
+				)
+			} else {
+				slog.Debug("Webhook embed patch applied successfully to target",
+					slog.String("operation", operation),
+					slog.String("scope", item.scope),
+					slog.String("message_id", strings.TrimSpace(item.update.MessageID)),
+				)
+			}
+		}
+		return nil
 	})
-}
-
-type StartupWebhookEmbedUpdatesTask struct {
-	Cfg             *files.BotConfig
-	SessionResolver func(guildID string) *session.LegacySession
-}
-
-func (t *StartupWebhookEmbedUpdatesTask) Execute(ctx context.Context) error {
-	for _, item := range collectStartupWebhookEmbedUpdates(t.Cfg) {
-		if err := ctx.Err(); err != nil {
-			return fmt.Errorf("scheduleStartupWebhookEmbedUpdates: %w", err)
-		}
-
-		operation := fmt.Sprintf("runtime_config.webhook_embed_updates[%s:%d]", item.scope, item.index)
-		sess := t.SessionResolver(item.scope)
-		if sess == nil {
-			slog.Debug("Session resolution missed for webhook patch target; skipping",
-				slog.String("operation", operation),
-				slog.String("scope", item.scope),
-			)
-			continue
-		}
-
-		if err := webhook.PatchMessageEmbed(ctx, &webhook.ArikawaAPI{}, webhook.MessageEmbedPatch{
-			MessageID:  item.update.MessageID,
-			WebhookURL: item.update.WebhookURL,
-			Embed:      item.update.Embed,
-		}); err != nil {
-			slog.Warn("Compensatory action required: Webhook embed patch payload rejected",
-				slog.String("operation", operation),
-				slog.String("scope", item.scope),
-				slog.String("message_id", strings.TrimSpace(item.update.MessageID)),
-				slog.String("error", err.Error()),
-			)
-		} else {
-			slog.Debug("Webhook embed patch applied successfully to target",
-				slog.String("operation", operation),
-				slog.String("scope", item.scope),
-				slog.String("message_id", strings.TrimSpace(item.update.MessageID)),
-			)
-		}
-	}
-	return nil
 }
 func scheduleControlServerStartup(startupTasks *StartupTaskOrchestrator, opts controlStartupTaskOptions) {
 	if opts.runOptions.DisableControl {
@@ -286,17 +263,9 @@ func scheduleControlServerStartup(startupTasks *StartupTaskOrchestrator, opts co
 		panic("hardware-aligned validation failure: startupTasks cannot be nil during scheduleControlServerStartup")
 	}
 
-	startupTasks.GoLight("control_server", &ControlServerStartupTask{
-		Opts: opts,
+	startupTasks.Go("control_server", func(taskCtx context.Context) error {
+		return startControlServerStartupTask(taskCtx, opts)
 	})
-}
-
-type ControlServerStartupTask struct {
-	Opts controlStartupTaskOptions
-}
-
-func (t *ControlServerStartupTask) Execute(ctx context.Context) error {
-	return startControlServerStartupTask(ctx, t.Opts)
 }
 
 func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskOptions) error {
@@ -423,12 +392,6 @@ func startControlServerStartupTask(ctx context.Context, opts controlStartupTaskO
 	return nil
 }
 
-var (
-	openBotRuntimeFn       = openBotRuntime
-	initializeBotRuntimeFn = initializeBotRuntime
-	shutdownBotRuntimeFn   = shutdownBotRuntime
-)
-
 func ResolveRuntimeStartupParallelism(runtimeCount int) int {
 	if runtimeCount <= 1 {
 		return 1
@@ -439,250 +402,74 @@ func ResolveRuntimeStartupParallelism(runtimeCount int) int {
 	}
 }
 
-func ResolveRuntimeBackgroundParallelism(runtimeCount int) int {
-	switch {
-	case runtimeCount <= 1:
-		return 1
-	default:
-		return 2
-	}
-}
-
-func ResolveStartupLightParallelism(runtimeCount int) int {
-	switch {
-	case runtimeCount <= 1:
-		return 2
-	case runtimeCount == 2:
-		return 3
-	default:
-		return 4
-	}
-}
-
-func ResolveStartupLightQueueSize(runtimeCount int) int {
-	if runtimeCount <= 1 {
-		return 4
-	} else if runtimeCount == 2 {
-		return 6
-	} else {
-		return runtimeCount * 2
-	}
-}
-
-// RuntimeStartupBackgroundWorker implementa um pool estático com alocação O(1).
-type RuntimeStartupBackgroundWorker struct {
-	ctx          context.Context
-	cancel       context.CancelFunc
-	wg           sync.WaitGroup
-	queue        chan Task
-	shutdownOnce sync.Once
-	closed       atomic.Bool
-}
-
-func NewRuntimeStartupBackgroundWorker(runtimeCount int) *RuntimeStartupBackgroundWorker {
-	return NewRuntimeStartupBackgroundWorkerWithLimits(
-		ResolveRuntimeBackgroundParallelism(runtimeCount),
-		runtimeCount,
-	)
-}
-
-func NewRuntimeStartupBackgroundWorkerWithLimits(parallelism, queueSize int) *RuntimeStartupBackgroundWorker {
-	ctx, cancel := context.WithCancel(context.Background())
-	if parallelism <= 0 {
-		parallelism = 1
-	}
-	if queueSize <= 0 {
-		queueSize = 1
-	}
-
-	worker := &RuntimeStartupBackgroundWorker{
-		ctx:    ctx,
-		cancel: cancel,
-		queue:  make(chan Task, queueSize),
-	}
-
-	slog.Info("Architectural state transition: Background worker pool initialized",
-		slog.Int("parallelism_limit", parallelism),
-		slog.Int("queue_capacity", queueSize),
-	)
-
-	// Inicialização estática determinística do pool de execução fixa
-	worker.wg.Add(parallelism)
-	for i := 0; i < parallelism; i++ {
-		go worker.worker()
-	}
-
-	return worker
-}
-
+// StartupTaskOrchestrator unifies bounded concurrency via a strict errgroup.Group,
+// eradicating heuristic routing fragmentation and manual worker pools.
 type StartupTaskOrchestrator struct {
-	light *RuntimeStartupBackgroundWorker
-	heavy *RuntimeStartupBackgroundWorker
+	eg  *errgroup.Group
+	ctx context.Context
 }
 
-func NewStartupTaskOrchestrator(runtimeCount int) *StartupTaskOrchestrator {
+func NewStartupTaskOrchestrator(ctx context.Context, runtimeCount int) *StartupTaskOrchestrator {
+	eg, egCtx := errgroup.WithContext(ctx)
+
+	parallelism := runtimeCount * 2
+	if parallelism <= 0 {
+		parallelism = 2
+	}
+	eg.SetLimit(parallelism)
+
 	slog.Info("Architectural state transition: Startup task orchestrator instantiated",
-		slog.Int("runtime_count_heuristic", runtimeCount),
+		slog.Int("concurrency_limit", parallelism),
 	)
 
 	return &StartupTaskOrchestrator{
-		light: NewRuntimeStartupBackgroundWorkerWithLimits(
-			ResolveStartupLightParallelism(runtimeCount),
-			ResolveStartupLightQueueSize(runtimeCount),
-		),
-		heavy: NewRuntimeStartupBackgroundWorker(runtimeCount),
+		eg:  eg,
+		ctx: egCtx,
 	}
 }
 
-func (o *StartupTaskOrchestrator) GoLight(name string, t Task) {
-	if o == nil {
-		return
-	}
-	o.goTask(o.light, name, "light", t)
-}
-
-func (o *StartupTaskOrchestrator) GoHeavy(name string, t Task) {
-	if o == nil {
-		return
-	}
-	o.goTask(o.heavy, name, "heavy", t)
-}
-
-func (o *StartupTaskOrchestrator) goTask(worker *RuntimeStartupBackgroundWorker, name, kind string, t Task) {
-	if o == nil || worker == nil || t == nil {
+func (o *StartupTaskOrchestrator) Go(name string, t func(context.Context) error) {
+	if o == nil || o.eg == nil || t == nil {
 		return
 	}
 
-	slog.Debug("Tracking complex conditional branch: Injecting closure into orchestrator queue",
+	slog.Debug("Tracking complex conditional branch: Injecting closure into orchestrator",
 		slog.String("task_name", name),
-		slog.String("queue_tier", kind),
 	)
 
-	worker.Go(&TaskWrapper{
-		Task: t,
-		Name: name,
-		Kind: kind,
-	})
-}
-
-// TaskWrapper encapsula o Task com logging e tratamento de erro de forma estrutural
-type TaskWrapper struct {
-	Task Task
-	Name string
-	Kind string
-}
-
-func (w *TaskWrapper) Execute(ctx context.Context) error {
-	if err := w.Task.Execute(ctx); err != nil {
-		if ctx.Err() != nil {
-			slog.Debug("Tracking complex conditional branch: Task execution halted via context cancellation",
-				slog.String("task_name", w.Name),
+	o.eg.Go(func() error {
+		if err := t(o.ctx); err != nil {
+			if o.ctx.Err() != nil {
+				slog.Debug("Tracking complex conditional branch: Task execution halted via context cancellation",
+					slog.String("task_name", name),
+				)
+				return nil
+			}
+			slog.Warn("Mitigated service degradation: Background startup task encountered an error and aborted",
+				slog.String("task", name),
+				slog.String("error", err.Error()),
 			)
-			return nil
 		}
-		slog.Warn("Mitigated service degradation: Background startup task encountered an error and aborted",
-			slog.String("task", w.Name),
-			slog.String("kind", w.Kind),
-			slog.String("error", err.Error()),
-		)
-	}
-	return nil
+		return nil
+	})
 }
 
 func (o *StartupTaskOrchestrator) Shutdown(ctx context.Context) error {
-	if o == nil {
+	if o == nil || o.eg == nil {
 		return nil
 	}
 
-	slog.Info("Architectural state transition: Halting startup orchestrator and draining worker pools")
+	slog.Info("Architectural state transition: Halting startup orchestrator and draining execution ring")
 
-	var errs []error
-	if o.light != nil {
-		if err := o.light.Shutdown(ctx); err != nil {
-			errs = append(errs, fmt.Errorf("shutdown light startup tasks: %w", err))
-		}
-	}
-	if o.heavy != nil {
-		if err := o.heavy.Shutdown(ctx); err != nil {
-			errs = append(errs, fmt.Errorf("shutdown heavy startup tasks: %w", err))
-		}
-	}
-
-	return stdErrors.Join(errs...)
-}
-
-// Go insere workloads no canal de barramento de forma limpa.
-func (w *RuntimeStartupBackgroundWorker) Go(t Task) {
-	if w == nil || t == nil {
-		return
-	}
-
-	// Verificação atômica rápida para evitar escritas em canais em fase final de teardown
-	if w.closed.Load() {
-		return
-	}
+	done := make(chan error, 1)
+	go func() {
+		done <- o.eg.Wait()
+	}()
 
 	select {
-	case <-w.ctx.Done():
-		return
-	case w.queue <- t:
-	}
-}
-
-// Shutdown drena o pool garantindo zero panics por fechamento assíncrono.
-func (w *RuntimeStartupBackgroundWorker) Shutdown(ctx context.Context) error {
-	if w == nil {
-		return nil
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
-	w.shutdownOnce.Do(func() {
-		slog.Debug("Tracking complex conditional branch: Initiating worker pool graceful isolation sequence")
-		// 1. Bloqueia novas entradas a nível de API atômica imediatamente
-		w.closed.Store(true)
-
-		// 2. Sinaliza cancelamento para as tarefas em execução cortarem seu ciclo
-		if w.cancel != nil {
-			w.cancel()
-		}
-
-		// NOTA DE SEGURANÇA CONCORRENTE: Não fechamos o canal 'w.queue' aqui.
-		// Como as goroutines produtoras podem estar presas no operador 'select' do método Go,
-		// fechar o canal aqui induziria panics estocásticos por escrita em canal fechado.
-		// Deixamos o canal aberto; os consumidores estáticos da goroutine sairão via sinalização
-		// de canal ou expiração de contexto de qualquer forma, eliminando a corrida.
-	})
-
-	slog.Info("Architectural state transition: Draining worker pool via explicit synchronization barrier")
-	w.wg.Wait() // O protocolo de Shutdown deve ser obrigatoriamente bloqueado
-
-	return nil
-}
-
-func (w *RuntimeStartupBackgroundWorker) worker() {
-	defer w.wg.Done()
-
-	for {
-		select {
-		case <-w.ctx.Done():
-			// Contexto global cancelado, encerra imediatamente o worker estático
-			return
-		case t, ok := <-w.queue:
-			if !ok {
-				return
-			}
-			if t != nil {
-				// Executa a tarefa injetada usando o contexto encapsulado do worker pool
-				if err := t.Execute(w.ctx); err != nil {
-					if w.ctx.Err() == nil {
-						slog.Warn("Mitigated service degradation: Background startup task encountered an error",
-							slog.String("error", err.Error()),
-						)
-					}
-				}
-			}
-		}
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-done:
+		return err
 	}
 }

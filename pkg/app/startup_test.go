@@ -63,60 +63,26 @@ func TestResolveDatabaseBootstrapRequiresEnv(t *testing.T) {
 	resolveDatabaseBootstrap()
 }
 
-type mockFuncTask func(context.Context) error
-
-func (f mockFuncTask) Execute(ctx context.Context) error {
-	if f == nil {
-		return nil
-	}
-	return f(ctx)
-}
-
-func TestStartupTaskOrchestrator_GoLight(t *testing.T) {
+func TestStartupTaskOrchestrator_Go(t *testing.T) {
 	t.Parallel()
-	orchestrator := NewStartupTaskOrchestrator(1)
-
-	var executed int32
-	var wg sync.WaitGroup
-	wg.Add(1)
-
-	orchestrator.GoLight("test_light", mockFuncTask(func(ctx context.Context) error {
-		atomic.AddInt32(&executed, 1)
-		wg.Done()
-		return nil
-	}))
-
-	wg.Wait()
-
-	if atomic.LoadInt32(&executed) != 1 {
-		t.Errorf("Expected GoLight task to execute exactly once")
-	}
-
-	if err := orchestrator.Shutdown(context.Background()); err != nil {
-		t.Fatalf("Unexpected error during shutdown: %v", err)
-	}
-}
-
-func TestStartupTaskOrchestrator_GoHeavy(t *testing.T) {
-	t.Parallel()
-	orchestrator := NewStartupTaskOrchestrator(2)
+	orchestrator := NewStartupTaskOrchestrator(context.Background(), 2)
 
 	var executed int32
 	var wg sync.WaitGroup
 	wg.Add(2)
 
 	for i := 0; i < 2; i++ {
-		orchestrator.GoHeavy("test_heavy", mockFuncTask(func(ctx context.Context) error {
+		orchestrator.Go("test_task", func(ctx context.Context) error {
 			atomic.AddInt32(&executed, 1)
 			wg.Done()
 			return nil
-		}))
+		})
 	}
 
 	wg.Wait()
 
 	if atomic.LoadInt32(&executed) != 2 {
-		t.Errorf("Expected GoHeavy task to execute exactly twice")
+		t.Errorf("Expected Go task to execute exactly twice")
 	}
 
 	if err := orchestrator.Shutdown(context.Background()); err != nil {
@@ -126,16 +92,16 @@ func TestStartupTaskOrchestrator_GoHeavy(t *testing.T) {
 
 func TestStartupTaskOrchestrator_ShutdownWithContextCancellation(t *testing.T) {
 	t.Parallel()
-	orchestrator := NewStartupTaskOrchestrator(1)
+	orchestrator := NewStartupTaskOrchestrator(context.Background(), 1)
 
 	taskStarted := make(chan struct{})
 	unblockTask := make(chan struct{})
 
-	orchestrator.GoLight("blocking_task", mockFuncTask(func(ctx context.Context) error {
+	orchestrator.Go("blocking_task", func(ctx context.Context) error {
 		close(taskStarted)
 		<-unblockTask
 		return nil
-	}))
+	})
 
 	<-taskStarted
 
@@ -150,16 +116,16 @@ func TestStartupTaskOrchestrator_ShutdownWithContextCancellation(t *testing.T) {
 
 func TestStartupTaskOrchestrator_ShutdownTaskErrorSwallowed(t *testing.T) {
 	t.Parallel()
-	orchestrator := NewStartupTaskOrchestrator(1)
+	orchestrator := NewStartupTaskOrchestrator(context.Background(), 1)
 	var wg sync.WaitGroup
 	wg.Add(1)
 
 	expectedErr := errors.New("simulated task error")
 
-	orchestrator.GoHeavy("error_task", mockFuncTask(func(ctx context.Context) error {
+	orchestrator.Go("error_task", func(ctx context.Context) error {
 		defer wg.Done()
 		return expectedErr
-	}))
+	})
 
 	wg.Wait()
 
@@ -171,12 +137,11 @@ func TestStartupTaskOrchestrator_ShutdownTaskErrorSwallowed(t *testing.T) {
 
 func TestStartupTaskOrchestrator_GoNil(t *testing.T) {
 	t.Parallel()
-	orchestrator := NewStartupTaskOrchestrator(1)
-	orchestrator.GoLight("nil_task", nil)
-	orchestrator.GoHeavy("nil_task", nil)
+	orchestrator := NewStartupTaskOrchestrator(context.Background(), 1)
+	orchestrator.Go("nil_task", nil)
 
 	var nilOrchestrator *StartupTaskOrchestrator
-	nilOrchestrator.GoLight("nil_task", mockFuncTask(func(ctx context.Context) error { return nil }))
+	nilOrchestrator.Go("nil_task", func(ctx context.Context) error { return nil })
 	err := nilOrchestrator.Shutdown(context.Background())
 	if err != nil {
 		t.Errorf("Expected nil error for nil orchestrator shutdown")
@@ -191,9 +156,6 @@ func TestResolveParallelism(t *testing.T) {
 		inputs   map[int]int
 	}{
 		{"RuntimeStartup", ResolveRuntimeStartupParallelism, map[int]int{0: 1, 1: 1, 2: 2, 3: 3, 10: 3}},
-		{"RuntimeBackground", ResolveRuntimeBackgroundParallelism, map[int]int{0: 1, 1: 1, 2: 2, 10: 2}},
-		{"StartupLight", ResolveStartupLightParallelism, map[int]int{0: 2, 1: 2, 2: 3, 3: 4, 10: 4}},
-		{"StartupLightQueue", ResolveStartupLightQueueSize, map[int]int{0: 4, 1: 4, 2: 6, 3: 6, 10: 20}},
 	}
 
 	for _, tt := range tests {

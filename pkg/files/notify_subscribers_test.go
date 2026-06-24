@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"go.uber.org/goleak"
+	"golang.org/x/sync/errgroup"
 )
 
 func TestMain(m *testing.M) {
@@ -63,10 +64,14 @@ func TestNotifySubscribers_ConcurrencyLimitExceeded(t *testing.T) {
 
 	// Launch notifySubscribers in background so we can unblock the barrier
 	notifyDone := make(chan struct{})
-	go func() {
-		cfgManager.notifySubscribers(context.Background(), cfg, cfg)
-		close(notifyDone)
-	}()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	eg, egCtx := errgroup.WithContext(ctx)
+	eg.Go(func() error {
+		defer close(notifyDone)
+		return cfgManager.notifySubscribers(egCtx, cfg, cfg)
+	})
 
 	// Wait exactly for the errgroup limit (10) of workers to start
 	for i := 0; i < 10; i++ {
@@ -78,6 +83,9 @@ func TestNotifySubscribers_ConcurrencyLimitExceeded(t *testing.T) {
 
 	// Wait for notifications to finish
 	<-notifyDone
+	if err := eg.Wait(); err != nil {
+		t.Fatalf("notifySubscribers failed: %v", err)
+	}
 	wg.Wait()
 
 	limit := atomic.LoadInt32(&maxWorkers)

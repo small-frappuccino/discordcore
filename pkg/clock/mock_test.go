@@ -1,13 +1,14 @@
 package clock_test
 
 import (
-	"sync"
+	"context"
 	"testing"
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/clock"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
+	"golang.org/x/sync/errgroup"
 )
 
 func TestMain(m *testing.M) {
@@ -17,14 +18,13 @@ func TestMain(m *testing.M) {
 func TestMockClock_Concurrency(t *testing.T) {
 	t.Parallel()
 	c := clock.NewMockClock(time.Now())
-	var wg sync.WaitGroup
+	eg, _ := errgroup.WithContext(context.Background())
 
 	numGoroutines := 200
-	wg.Add(numGoroutines)
 
 	for i := 0; i < numGoroutines; i++ {
-		go func(i int) {
-			defer wg.Done()
+		i := i
+		eg.Go(func() error {
 			if i%2 == 0 {
 				for j := 0; j < 100; j++ {
 					_ = c.Now()
@@ -38,10 +38,11 @@ func TestMockClock_Concurrency(t *testing.T) {
 					}
 				}
 			}
-		}(i)
+			return nil
+		})
 	}
 
-	wg.Wait()
+	_ = eg.Wait()
 }
 
 func TestMockClock_TimersAndTickers(t *testing.T) {

@@ -1,10 +1,12 @@
 package control
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
-	"sync"
 	"testing"
+
+	"golang.org/x/sync/errgroup"
 )
 
 func TestFeaturesSettings_RaceConditions(t *testing.T) {
@@ -13,26 +15,25 @@ func TestFeaturesSettings_RaceConditions(t *testing.T) {
 	mux := http.NewServeMux()
 	srv.registerRoutes(mux)
 
-	var wg sync.WaitGroup
+	eg, _ := errgroup.WithContext(context.Background())
 
 	// Condições de Corrida em Hot-Reload
 	// Start 50 concurrent GETs and PUTs
 	for i := 0; i < 50; i++ {
-		wg.Add(2)
-		go func() {
-			defer wg.Done()
+		eg.Go(func() error {
 			req := httptest.NewRequest("GET", "/v1/settings", nil)
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)
-		}()
-		go func() {
-			defer wg.Done()
+			return nil
+		})
+		eg.Go(func() error {
 			req := httptest.NewRequest("PUT", "/v1/runtime-config", nil)
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)
-		}()
+			return nil
+		})
 	}
 
-	wg.Wait()
+	_ = eg.Wait()
 	// If run with -race, the compiler will flag any data races occurring here
 }

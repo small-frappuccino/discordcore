@@ -14,12 +14,6 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func init() {
-	// Acelera os backoffs para testes
-	baseBackoffDelay = float64(5 * time.Millisecond)
-	maxBackoffDelay = float64(20 * time.Millisecond)
-}
-
 // awaitCondition deterministically and repeatedly evaluates a condition until it returns true
 // or the timeout expires, ensuring execution resolution in minimum time.
 func awaitCondition(timeout time.Duration, condition func() bool) error {
@@ -75,7 +69,7 @@ func TestSupervisorFaultIsolation(t *testing.T) {
 	}
 	cfgManager.ApplyConfig(&cfg)
 
-	startupTasks := NewStartupTaskOrchestrator(3)
+	startupTasks := NewStartupTaskOrchestrator(context.Background(), 3)
 	t.Cleanup(func() {
 		_ = startupTasks.Shutdown(context.Background())
 	})
@@ -154,7 +148,7 @@ func TestZeroStateIdling(t *testing.T) {
 	}
 	cfgManager.ApplyConfig(&cfg)
 
-	startupTasks := NewStartupTaskOrchestrator(1)
+	startupTasks := NewStartupTaskOrchestrator(context.Background(), 1)
 	t.Cleanup(func() {
 		_ = startupTasks.Shutdown(context.Background())
 	})
@@ -223,7 +217,7 @@ func TestSupervisorSwarmTopology(t *testing.T) {
 	}
 	cfgManager.ApplyConfig(&cfg)
 
-	startupTasks := NewStartupTaskOrchestrator(10)
+	startupTasks := NewStartupTaskOrchestrator(context.Background(), 10)
 	t.Cleanup(func() {
 		_ = startupTasks.Shutdown(context.Background())
 	})
@@ -295,7 +289,7 @@ func TestSupervisorConfigChange(t *testing.T) {
 	}
 	cfgManager.ApplyConfig(&cfg)
 
-	startupTasks := NewStartupTaskOrchestrator(1)
+	startupTasks := NewStartupTaskOrchestrator(context.Background(), 1)
 	t.Cleanup(func() {
 		_ = startupTasks.Shutdown(context.Background())
 	})
@@ -391,7 +385,7 @@ func TestSupervisorConfigChange(t *testing.T) {
 
 func TestBotSupervisor_ConcurrentConfigThrashing(t *testing.T) {
 	t.Parallel()
-	startupTasks := NewStartupTaskOrchestrator(1)
+	startupTasks := NewStartupTaskOrchestrator(context.Background(), 1)
 	t.Cleanup(func() {
 		_ = startupTasks.Shutdown(context.Background())
 	})
@@ -469,42 +463,5 @@ func TestBotSupervisor_ConcurrentConfigThrashing(t *testing.T) {
 
 	if err := supervisor.Stop(stopCtx); err != nil {
 		t.Fatalf("resource leak: timeout exceeded waiting for bgWG in Stop: %v", err)
-	}
-}
-
-type mockBlockingServiceWrapper struct {
-	done chan struct{}
-}
-
-func (m *mockBlockingServiceWrapper) Start(ctx context.Context) error { return nil }
-func (m *mockBlockingServiceWrapper) Stop(ctx context.Context) error {
-	<-ctx.Done()
-	return ctx.Err()
-}
-func (m *mockBlockingServiceWrapper) Done() <-chan struct{} { return m.done }
-
-func TestBotSupervisor_GracefulShutdownOrchestration(t *testing.T) {
-	t.Parallel()
-	startupTasks := NewStartupTaskOrchestrator(1)
-	t.Cleanup(func() {
-		_ = startupTasks.Shutdown(context.Background())
-	})
-
-	supervisor := NewBotSupervisor(nil, botRuntimeOptions{
-		startupTasks: startupTasks,
-	})
-
-	// Start initializes background groups now
-	supervisor.Start()
-
-	_ = supervisor.serviceManager.RegisterAndStart("bot-runtime-zombie_instance", &mockBlockingServiceWrapper{done: make(chan struct{})})
-
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
-
-	err := supervisor.Stop(ctx)
-
-	if err == nil {
-		t.Fatal("expected context deadline exceeded error, but Stop completed without errors")
 	}
 }

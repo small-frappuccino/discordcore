@@ -249,7 +249,7 @@ func (a *App) ConstructServices(ctx context.Context) error {
 	}
 
 	a.controlServerRegistry = &controlServerHolder{}
-	a.startupTasks = NewStartupTaskOrchestrator(runtimeCount)
+	a.startupTasks = NewStartupTaskOrchestrator(ctx, runtimeCount)
 
 	qotdMetrics := qotd.NopMetrics{}
 	qotdService := qotd.NewServiceWithMetrics(a.configManager, a.store, nil, qotdMetrics)

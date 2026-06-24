@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/state"
@@ -228,6 +230,23 @@ var ErrNoBotTokensConfigured = errors.New("no bot instances have a configured to
 
 // ErrSessionUnavailable defines err when a bot session is not available for a guild or globally.
 var ErrSessionUnavailable = errors.New("discord session is unavailable")
+
+// TelemetryState represents the lifecycle phase of a bot runtime.
+type TelemetryState string
+
+const (
+	TelemetryStateConnected       TelemetryState = "connected"
+	TelemetryStateReconnecting    TelemetryState = "reconnecting"
+	TelemetryStateCriticalFailure TelemetryState = "critical_failure"
+	TelemetryStateShuttingDown    TelemetryState = "shutting_down"
+)
+
+// RuntimeTelemetryEvent is dispatched from the bot runtime back to the orchestrator.
+type RuntimeTelemetryEvent struct {
+	InstanceID string
+	State      TelemetryState
+	Error      error
+}
 
 // resolvedBotInstance describes a loaded bot ready for startup.
 type resolvedBotInstance struct {
@@ -591,9 +610,10 @@ func (w memberSinkWrapper) OnModerationAction(ctx context.Context, guildID strin
 	}
 }
 
-func openBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabilities, opts botRuntimeOptions) (*botRuntime, error) {
+// NewBotRuntime instantiates a fully isolated bot runtime.
+func NewBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabilities, opts botRuntimeOptions) (*botRuntime, error) {
 	if instance.Token == "" {
-		panic("hardware-aligned validation failure: bot token is missing prior to socket coupling")
+		return nil, errors.New("hardware-aligned validation failure: bot token is missing prior to socket coupling")
 	}
 	slog.Info("Architectural state transition: Initializing primary Discord API routine",
 		slog.String("botInstanceID", instance.ID),
@@ -608,7 +628,6 @@ func openBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabil
 	arikawaState := state.New("Bot " + botToken)
 	arikawaState.AddIntents(gateway.Intents(capabilities.intents))
 
-	// Enforce hard execution deadlines on gateway socket binding to prevent invisible deadlocks.
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
@@ -626,38 +645,31 @@ func openBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabil
 		slog.String("botUser", fmt.Sprintf("%s#%s", me.Username, me.Discriminator)),
 	)
 
-	return &botRuntime{
+	runtime := &botRuntime{
 		instanceID:    instance.ID,
 		capabilities:  capabilities,
 		legacySession: session.NewEmptySessionForCompat(botToken),
 		arikawaState:  arikawaState,
-	}, nil
-}
-
-// Assinatura removida por diretiva de refatoração para procedural flattening.
-
-func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRuntimeOptions) error {
-	slog.Debug("Iniciando rotina de alocação de runtime", slog.String("instance_id", runtime.instanceID))
-
-	if runtime == nil || runtime.legacySession == nil {
-		panic("hardware-aligned validation failure: runtime or legacy session is nil during initialization")
 	}
 
+	if err := populateBotRuntimeServices(runtime, opts); err != nil {
+		_ = arikawaState.Close()
+		return nil, err
+	}
+
+	return runtime, nil
+}
+
+func populateBotRuntimeServices(runtime *botRuntime, opts botRuntimeOptions) error {
 	cfg := opts.configManager.Config()
 	if cfg == nil {
-		panic("hardware-aligned validation failure: config snapshot is nil")
+		return errors.New("hardware-aligned validation failure: config snapshot is nil")
 	}
 
 	routerConfig := newRuntimeTaskRouterConfig(cfg, runtime.instanceID, opts.runtimeCount)
-	_ = routerConfig // might be used by domain setups internally if passed, but currently they aren't taking it here
+	_ = routerConfig // might be used by domain setups internally if passed
 
 	runtime.serviceManager = service.NewServiceManager(slog.Default())
-
-	token := runtime.legacySession.Token
-	if !strings.HasPrefix(token, "Bot ") {
-		token = "Bot " + token
-	}
-	runtime.arikawaState = state.New(token)
 
 	if opts.runtimeApplier != nil {
 		opts.runtimeApplier.AddRuntime(runtime.serviceManager, nil)
@@ -778,6 +790,54 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 	return nil
 }
 
+// Run executes the bot runtime, synchronizing all resident goroutines via an errgroup.
+func (r *botRuntime) Run(ctx context.Context, telemetryCh chan<- RuntimeTelemetryEvent, opts botRuntimeOptions) error {
+	eg, egCtx := errgroup.WithContext(ctx)
+
+	eg.Go(func() error {
+		if err := r.serviceManager.StartAll(); err != nil {
+			select {
+			case telemetryCh <- RuntimeTelemetryEvent{InstanceID: r.instanceID, State: TelemetryStateCriticalFailure, Error: err}:
+			default:
+			}
+			return fmt.Errorf("start services for %s: %w", r.instanceID, err)
+		}
+		select {
+		case telemetryCh <- RuntimeTelemetryEvent{InstanceID: r.instanceID, State: TelemetryStateConnected, Error: nil}:
+		default:
+		}
+		scheduleRuntimeWarmup(egCtx, r, opts.store, opts.startupTasks)
+		return nil
+	})
+
+	<-egCtx.Done()
+	select {
+	case telemetryCh <- RuntimeTelemetryEvent{InstanceID: r.instanceID, State: TelemetryStateShuttingDown, Error: nil}:
+	default:
+	}
+
+	slog.Info("Architectural state transition: Executing localized teardown for runtime instance",
+		slog.String("botInstanceID", r.instanceID),
+	)
+
+	stopCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := r.serviceManager.StopAll(stopCtx); err != nil {
+		slog.Error("Failed to cleanly stop service manager for runtime", slog.String("botInstanceID", r.instanceID), slog.Any("error", err))
+	}
+
+	if r.arikawaState != nil {
+		if opts.discordSessionCloseHook != nil {
+			_ = opts.discordSessionCloseHook(r.arikawaState)
+		} else {
+			_ = r.arikawaState.Close()
+		}
+	}
+
+	return eg.Wait()
+}
+
 var intelligentWarmupFn = cache.IntelligentWarmupContext
 
 func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *postgres.Store, startupTasks *StartupTaskOrchestrator) {
@@ -804,35 +864,18 @@ func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *post
 	slog.Debug("Delegating cache warmup to orchestrator scheduling queue",
 		slog.String("botInstanceID", runtime.instanceID),
 	)
-	startupTasks.GoHeavy("cache_warmup:"+runtime.instanceID, &RuntimeWarmupTask{
-		Runtime:      runtime,
-		UnifiedCache: unifiedCache,
-		Store:        store,
-		WarmupConfig: memberWarmupConfig,
-		InstanceCtx:  ctx,
-	})
-}
-
-type RuntimeWarmupTask struct {
-	Runtime      *botRuntime
-	UnifiedCache *cache.UnifiedCache
-	Store        *postgres.Store
-	WarmupConfig cache.WarmupConfig
-	InstanceCtx  context.Context
-}
-
-func (t *RuntimeWarmupTask) Execute(_ context.Context) error {
-	ctx := t.InstanceCtx
-	if err := intelligentWarmupFn(ctx, t.Runtime.legacySession, t.UnifiedCache, t.Store, t.WarmupConfig); err != nil {
-		if ctx.Err() != nil {
-			return nil
+	startupTasks.Go("cache_warmup:"+runtime.instanceID, func(taskCtx context.Context) error {
+		if err := intelligentWarmupFn(taskCtx, runtime.legacySession, unifiedCache, store, memberWarmupConfig); err != nil {
+			if taskCtx.Err() != nil {
+				return nil
+			}
+			slog.Warn("Mitigated service degradation: Orchestrated cache warmup failed, pipeline resumes",
+				slog.String("botInstanceID", runtime.instanceID),
+				slog.String("error", err.Error()),
+			)
 		}
-		slog.Warn("Mitigated service degradation: Orchestrated cache warmup failed, pipeline resumes",
-			slog.String("botInstanceID", t.Runtime.instanceID),
-			slog.String("error", err.Error()),
-		)
-	}
-	return nil
+		return nil
+	})
 }
 
 func runtimeWarmupPhases() (cache.WarmupConfig, cache.WarmupConfig) {
@@ -847,23 +890,7 @@ func runtimeWarmupPhases() (cache.WarmupConfig, cache.WarmupConfig) {
 	return base, members
 }
 
-func shutdownBotRuntime(runtime *botRuntime, ctx context.Context) []error {
-	if runtime == nil {
-		return nil
-	}
-
-	slog.Info("Architectural state transition: Executing planned shutdown across main runtime instances",
-		slog.String("botInstanceID", runtime.instanceID),
-	)
-
-	var errs []error
-	if runtime.serviceManager != nil {
-		if err := runtime.serviceManager.StopAll(ctx); err != nil {
-			errs = append(errs, fmt.Errorf("stop services for %s: %w", runtime.instanceID, err))
-		}
-	}
-	return errs
-}
+// shutdownBotRuntime removed as teardown is now handled natively by Run via Context cancellation
 
 // resolveEventLogger centraliza a injeção do sink de logs para serviços de auditoria.
 func resolveEventLogger(runtime *botRuntime, configManager *files.ConfigManager) *logging.Logger {
