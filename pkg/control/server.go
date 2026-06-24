@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/diamondburned/arikawa/v3/state"
@@ -67,7 +66,6 @@ type Server struct {
 	oauthConfig  *oauth2.Config
 
 	httpServer *http.Server
-	mu         sync.RWMutex
 }
 
 // NewServer initializes a new control plane server instance.

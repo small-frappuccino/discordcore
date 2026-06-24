@@ -63,8 +63,13 @@ func (r *CommandRegistry) Seal() {
 func (r *CommandRegistry) All() iter.Seq[*Command] {
 	return func(yield func(*Command) bool) {
 		r.mu.RLock()
-		defer r.mu.RUnlock()
+		cmds := make([]*Command, 0, len(r.commands))
 		for _, cmd := range r.commands {
+			cmds = append(cmds, cmd)
+		}
+		r.mu.RUnlock()
+
+		for _, cmd := range cmds {
 			if !yield(cmd) {
 				return
 			}

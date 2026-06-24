@@ -234,13 +234,18 @@ func (t *CommandCatalogSyncTask) Execute(ctx context.Context) error {
 	case <-time.After(time.Duration(rand.Float64()*500) * time.Millisecond):
 	}
 
-	currentRuntimes := t.Resolver.getRuntimes()
 	for _, instanceID := range t.Instances {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		runtime, ok := currentRuntimes[instanceID]
-		if !ok || runtime == nil || runtime.commandHandler == nil {
+		var runtime *botRuntime
+		for id, rt := range t.Resolver.getRuntimes() {
+			if id == instanceID {
+				runtime = rt
+				break
+			}
+		}
+		if runtime == nil || runtime.commandHandler == nil {
 			continue
 		}
 		if syncer := runtime.commandHandler.GetSyncer(); syncer != nil {
@@ -539,7 +544,6 @@ func (s *BotSupervisor) onConfigChanged(ctx context.Context, oldCfg, newCfg *fil
 	var gatewayUpdates []Task
 
 	if oldCfg != nil {
-		oldRuntimes := s.resolver.getRuntimes()
 		for id, token := range currentTokens {
 			oldToken := ""
 			for _, g := range oldCfg.Guilds {
@@ -558,7 +562,14 @@ func (s *BotSupervisor) onConfigChanged(ctx context.Context, oldCfg, newCfg *fil
 					oldStatus = "online"
 				}
 				if oldStatus != currentStatuses[id] {
-					if rt, ok := oldRuntimes[id]; ok && rt.arikawaState != nil {
+					var rt *botRuntime
+					for rtID, runtime := range s.resolver.getRuntimes() {
+						if rtID == id {
+							rt = runtime
+							break
+						}
+					}
+					if rt != nil && rt.arikawaState != nil {
 						st := currentStatuses[id]
 						gwState := rt.arikawaState
 						instanceID := id

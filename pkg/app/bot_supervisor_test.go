@@ -108,22 +108,38 @@ func TestSupervisorFaultIsolation(t *testing.T) {
 	}
 
 	errWait := awaitCondition(2*time.Second, func() bool {
-		rts := supervisor.GetResolver().getRuntimes()
-		return rts["child1"] != nil
+		var found bool
+		for id := range supervisor.GetResolver().getRuntimes() {
+			if id == "child1" {
+				found = true
+			}
+		}
+		return found
 	})
 	if errWait != nil {
 		t.Fatalf("failed waiting for supervisor state: %v", errWait)
 	}
 
 	// Comprovamos empiricamente que child1 entrou no runtimes map
-	rts := supervisor.GetResolver().getRuntimes()
-	if rts["child1"] == nil {
+	var hasChild1, hasChild2, hasChild3 bool
+	for id := range supervisor.GetResolver().getRuntimes() {
+		if id == "child1" {
+			hasChild1 = true
+		}
+		if id == "child2" {
+			hasChild2 = true
+		}
+		if id == "child3" {
+			hasChild3 = true
+		}
+	}
+	if !hasChild1 {
 		t.Errorf("child1 should be running")
 	}
-	if rts["child2"] != nil {
+	if hasChild2 {
 		t.Errorf("child2 should be retrying (starting) and not be in runtime pool")
 	}
-	if rts["child3"] != nil {
+	if hasChild3 {
 		t.Errorf("child3 should have token revoked")
 	}
 }
@@ -151,9 +167,12 @@ func TestZeroStateIdling(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 
-	rts := supervisor.GetResolver().getRuntimes()
-	if len(rts) != 0 {
-		t.Errorf("expected 0 instances running, got %d", len(rts))
+	count := 0
+	for range supervisor.GetResolver().getRuntimes() {
+		count++
+	}
+	if count != 0 {
+		t.Errorf("expected 0 instances running, got %d", count)
 	}
 
 	if err := supervisor.Stop(context.Background()); err != nil {
@@ -213,16 +232,22 @@ func TestSupervisorSwarmTopology(t *testing.T) {
 	}
 
 	errWait := awaitCondition(3*time.Second, func() bool {
-		rts := supervisor.GetResolver().getRuntimes()
-		return len(rts) == 10
+		count := 0
+		for range supervisor.GetResolver().getRuntimes() {
+			count++
+		}
+		return count == 10
 	})
 	if errWait != nil {
 		t.Fatalf("structural failure in Swarm initialization: %v", errWait)
 	}
 
-	rts := supervisor.GetResolver().getRuntimes()
-	if len(rts) != 10 {
-		t.Errorf("expected 10 running instances, got %d", len(rts))
+	count := 0
+	for range supervisor.GetResolver().getRuntimes() {
+		count++
+	}
+	if count != 10 {
+		t.Errorf("expected 10 running instances, got %d", count)
 	}
 
 	if err := supervisor.Stop(context.Background()); err != nil {
@@ -278,8 +303,13 @@ func TestSupervisorConfigChange(t *testing.T) {
 	}
 
 	errWait1 := awaitCondition(2500*time.Millisecond, func() bool {
-		rts := supervisor.GetResolver().getRuntimes()
-		return rts["child1"] != nil
+		found := false
+		for id := range supervisor.GetResolver().getRuntimes() {
+			if id == "child1" {
+				found = true
+			}
+		}
+		return found
 	})
 	if errWait1 != nil {
 		t.Fatalf("failed waiting for child1 to run: %v", errWait1)
@@ -303,8 +333,13 @@ func TestSupervisorConfigChange(t *testing.T) {
 
 	// Since actor model handles token change deterministically, wait for runtime to be back
 	errWait2 := awaitCondition(2500*time.Millisecond, func() bool {
-		rts := supervisor.GetResolver().getRuntimes()
-		return rts["child1"] != nil
+		found := false
+		for id := range supervisor.GetResolver().getRuntimes() {
+			if id == "child1" {
+				found = true
+			}
+		}
+		return found
 	})
 	if errWait2 != nil {
 		t.Fatalf("failed waiting for child1 with new token: %v", errWait2)
@@ -318,8 +353,13 @@ func TestSupervisorConfigChange(t *testing.T) {
 	supervisor.onConfigChanged(context.Background(), nil, &cfg3)
 
 	errWait3 := awaitCondition(2500*time.Millisecond, func() bool {
-		rts := supervisor.GetResolver().getRuntimes()
-		return rts["child1"] == nil
+		found := false
+		for id := range supervisor.GetResolver().getRuntimes() {
+			if id == "child1" {
+				found = true
+			}
+		}
+		return !found
 	})
 	if errWait3 != nil {
 		t.Fatalf("failed waiting for child1 removal: %v", errWait3)

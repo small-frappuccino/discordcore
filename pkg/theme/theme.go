@@ -3,6 +3,7 @@ package theme
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 )
 
 // Color is the int value used by discordgo.MessageEmbed.Color
@@ -164,10 +165,14 @@ func defaultTheme() *Theme {
 }
 
 var (
-	mu        sync.RWMutex
-	registry  = map[string]*Theme{}
-	currentTh = defaultTheme()
+	mu          sync.Mutex
+	registry    = map[string]*Theme{}
+	activeTheme atomic.Pointer[Theme]
 )
+
+func init() {
+	activeTheme.Store(defaultTheme())
+}
 
 // Register adds a theme to the registry. It returns an error if the name is empty or already registered.
 func Register(t *Theme) error {
@@ -194,24 +199,22 @@ func SetCurrent(name string) error {
 	mu.Lock()
 	defer mu.Unlock()
 	if name == "" {
-		currentTh = defaultTheme()
+		activeTheme.Store(defaultTheme())
 		return nil
 	}
 	th, ok := registry[name]
 	if !ok {
 		return fmt.Errorf("theme: theme %q not found", name)
 	}
-	currentTh = th.Clone()
-	currentTh.ensureDefaults()
+	cp := th.Clone()
+	cp.ensureDefaults()
+	activeTheme.Store(cp)
 	return nil
 }
 
-// Current returns a copy of the current theme.
-// Modifying the returned value does not affect the global theme.
+// Current returns the current active theme.
 func Current() *Theme {
-	mu.RLock()
-	defer mu.RUnlock()
-	return currentTh.Clone()
+	return activeTheme.Load()
 }
 
 // Default returns a copy of the built-in default theme.

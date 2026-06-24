@@ -6,6 +6,7 @@ import (
 )
 
 func TestTheme_Default(t *testing.T) {
+	t.Parallel()
 
 	th := Default()
 	if th == nil {
@@ -20,6 +21,7 @@ func TestTheme_Default(t *testing.T) {
 }
 
 func TestTheme_Register(t *testing.T) {
+	t.Parallel()
 
 	// Test nil registration
 	err := Register(nil)

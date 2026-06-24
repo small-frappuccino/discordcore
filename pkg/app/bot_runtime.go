@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/diamondburned/arikawa/v3/discord"
@@ -40,7 +39,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/storage/postgres"
 	"github.com/small-frappuccino/discordcore/pkg/task"
 	"github.com/small-frappuccino/discordgo"
-	"golang.org/x/sync/errgroup"
 )
 
 type botRuntimeCapabilities struct {
@@ -283,8 +281,7 @@ type botRuntime struct {
 
 type botRuntimeResolver struct {
 	configManager *files.ConfigManager
-	runtimes      atomic.Pointer[map[string]*botRuntime]
-	mu            sync.Mutex
+	runtimes      sync.Map // key: string, value: *botRuntime
 	readyCh       chan struct{}
 	readyOnce     sync.Once
 }
@@ -311,48 +308,23 @@ func (r *botRuntimeResolver) waitForReady(ctx context.Context) error {
 	}
 }
 
-func (r *botRuntimeResolver) getRuntimes() map[string]*botRuntime {
-	ptr := r.runtimes.Load()
-	if ptr == nil {
-		return nil
+func (r *botRuntimeResolver) getRuntimes() iter.Seq2[string, *botRuntime] {
+	return func(yield func(string, *botRuntime) bool) {
+		r.runtimes.Range(func(key, value any) bool {
+			return yield(key.(string), value.(*botRuntime))
+		})
 	}
-	return *ptr
-}
-
-func (r *botRuntimeResolver) swapRuntimes(newMap map[string]*botRuntime) {
-	slog.Debug("Granular inspection: Executing atomic pointer rotation for active runtimes map",
-		slog.Int("new_map_size", len(newMap)),
-	)
-
-	r.runtimes.Store(&newMap)
 }
 
 func (r *botRuntimeResolver) addRuntime(id string, runtime *botRuntime) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	current := r.getRuntimes()
-	newMap := make(map[string]*botRuntime, len(current)+1)
-	for k, v := range current {
-		newMap[k] = v
-	}
-	newMap[id] = runtime
-	r.swapRuntimes(newMap)
+	r.runtimes.Store(id, runtime)
 }
 
 func (r *botRuntimeResolver) removeRuntime(id string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	current := r.getRuntimes()
-	newMap := make(map[string]*botRuntime, len(current))
-	for k, v := range current {
-		if k != id {
-			newMap[k] = v
-		}
-	}
-	r.swapRuntimes(newMap)
+	r.runtimes.Delete(id)
 }
 
-func knownBotInstanceCatalogSeq(runtimes map[string]*botRuntime, additional []string) iter.Seq[string] {
+func knownBotInstanceCatalogSeq(runtimes iter.Seq2[string, *botRuntime], additional []string) iter.Seq[string] {
 	return func(yield func(string) bool) {
 		known := make(map[string]struct{})
 
@@ -369,7 +341,7 @@ func knownBotInstanceCatalogSeq(runtimes map[string]*botRuntime, additional []st
 			return true
 		}
 
-		for id := range runtimes {
+		for id, _ := range runtimes {
 			if !tryYield(id) {
 				return
 			}
@@ -390,7 +362,9 @@ func newBotRuntimeResolver(configManager *files.ConfigManager, initialRuntimes m
 		configManager: configManager,
 		readyCh:       make(chan struct{}),
 	}
-	resolver.runtimes.Store(&initialRuntimes)
+	for k, v := range initialRuntimes {
+		resolver.runtimes.Store(k, v)
+	}
 	return resolver
 }
 
@@ -401,8 +375,7 @@ func (r *botRuntimeResolver) aggregateUnifiedCaches() map[string]*cache.UnifiedC
 	}
 
 	caches := make(map[string]*cache.UnifiedCache)
-	runtimes := r.getRuntimes()
-	for id, runtime := range runtimes {
+	for id, runtime := range r.getRuntimes() {
 		if runtime.unifiedCache != nil {
 			caches[id] = runtime.unifiedCache
 		}
@@ -427,8 +400,9 @@ func (r *botRuntimeResolver) runtimeForGuild(guildID string, feature string) (*b
 		return nil, "", fmt.Errorf("%w: guild %s is not configured", ErrSessionUnavailable, guildID)
 	}
 
-	runtimes := r.getRuntimes()
-	if len(runtimes) == 0 {
+	hasAny := false
+	r.runtimes.Range(func(_, _ any) bool { hasAny = true; return false })
+	if !hasAny {
 		return nil, "", fmt.Errorf("%w: primary runtime vector exhausted or uninitialized for guild %s", ErrSessionUnavailable, guildID)
 	}
 
@@ -440,8 +414,10 @@ func (r *botRuntimeResolver) runtimeForGuild(guildID string, feature string) (*b
 	bestInstanceID, _ := guild.ResolveFeatureBotInstanceID(feature)
 	if bestInstanceID != "" {
 		if tokenEnc, ok := guild.BotInstanceTokens[bestInstanceID]; ok && string(tokenEnc) != "" {
-			if runtime, ok := runtimes[bestInstanceID]; ok && runtime != nil {
-				return runtime, bestInstanceID, nil
+			if val, ok := r.runtimes.Load(bestInstanceID); ok {
+				if runtime := val.(*botRuntime); runtime != nil {
+					return runtime, bestInstanceID, nil
+				}
 			}
 		}
 	}
@@ -451,14 +427,18 @@ func (r *botRuntimeResolver) runtimeForGuild(guildID string, feature string) (*b
 		if string(tokenEnc) == "" {
 			continue
 		}
-		if runtime, ok := runtimes[id]; ok && runtime != nil {
-			return runtime, id, nil
+		if val, ok := r.runtimes.Load(id); ok {
+			if runtime := val.(*botRuntime); runtime != nil {
+				return runtime, id, nil
+			}
 		}
 	}
 
 	// 3. Fallback de Último Recurso: Instância Global/Default
-	if runtime, ok := runtimes[""]; ok && runtime != nil {
-		return runtime, "", nil
+	if val, ok := r.runtimes.Load(""); ok {
+		if runtime := val.(*botRuntime); runtime != nil {
+			return runtime, "", nil
+		}
 	}
 
 	return nil, "", fmt.Errorf("%w: orchestrator failed to couple guild %s to an active port", ErrSessionUnavailable, guildID)
@@ -508,8 +488,9 @@ func (r *botRuntimeResolver) guildBindings(context.Context) ([]control.BotGuildB
 		return nil, nil
 	}
 
-	runtimes := r.getRuntimes()
-	if len(runtimes) == 0 {
+	hasAny := false
+	r.runtimes.Range(func(_, _ any) bool { hasAny = true; return false })
+	if !hasAny {
 		return nil, nil
 	}
 
@@ -523,8 +504,12 @@ func (r *botRuntimeResolver) guildBindings(context.Context) ([]control.BotGuildB
 			if token == "" {
 				continue
 			}
-			runtime, ok := runtimes[botInstanceID]
-			if !ok || runtime == nil || runtime.legacySession == nil {
+			val, ok := r.runtimes.Load(botInstanceID)
+			if !ok {
+				continue
+			}
+			runtime := val.(*botRuntime)
+			if runtime == nil || runtime.legacySession == nil {
 				continue
 			}
 
@@ -678,8 +663,7 @@ func openBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabil
 	}, nil
 }
 
-// RuntimeServiceConfigurator define a assinatura padronizada para alocação de serviços em memória.
-type RuntimeServiceConfigurator func(runtime *botRuntime, opts botRuntimeOptions, routerConfig task.RouterConfig) (service.Service, error)
+// Assinatura removida por diretiva de refatoração para procedural flattening.
 
 func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRuntimeOptions) error {
 	slog.Debug("Iniciando rotina de alocação de runtime", slog.String("instance_id", runtime.instanceID))
@@ -703,25 +687,52 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 		opts.runtimeApplier.AddRuntime(runtime.serviceManager, nil)
 	}
 
-	// Orquestração Declarativa: A matriz de serviços define a topologia sem ruído imperativo.
-	pipeline := []RuntimeServiceConfigurator{
-		buildMessageEventServiceConfigurator,
-		buildMemberEventServiceConfigurator,
-		buildAutomodServiceConfigurator,
-		buildQOTDRuntimeServiceConfigurator,
-		buildStatsServiceConfigurator,
-		buildCommandHandlerServiceConfigurator,
+	// Orquestração Procedimental Estrita: Invocação linear e direta com falha rápida (fail-fast), sem closures no heap.
+	if svc, err := buildMessageEventServiceConfigurator(runtime, opts, routerConfig); err != nil {
+		return err
+	} else if svc != nil {
+		if err := runtime.serviceManager.Register(svc); err != nil {
+			return fmt.Errorf("service registration failure for %s: %w", runtime.instanceID, err)
+		}
 	}
 
-	for _, configurator := range pipeline {
-		svc, err := configurator(runtime, opts, routerConfig)
-		if err != nil {
-			return err
+	if svc, err := buildMemberEventServiceConfigurator(runtime, opts, routerConfig); err != nil {
+		return err
+	} else if svc != nil {
+		if err := runtime.serviceManager.Register(svc); err != nil {
+			return fmt.Errorf("service registration failure for %s: %w", runtime.instanceID, err)
 		}
-		if svc != nil {
-			if err := runtime.serviceManager.Register(svc); err != nil {
-				return fmt.Errorf("service registration failure for %s: %w", runtime.instanceID, err)
-			}
+	}
+
+	if svc, err := buildAutomodServiceConfigurator(runtime, opts, routerConfig); err != nil {
+		return err
+	} else if svc != nil {
+		if err := runtime.serviceManager.Register(svc); err != nil {
+			return fmt.Errorf("service registration failure for %s: %w", runtime.instanceID, err)
+		}
+	}
+
+	if svc, err := buildQOTDRuntimeServiceConfigurator(runtime, opts, routerConfig); err != nil {
+		return err
+	} else if svc != nil {
+		if err := runtime.serviceManager.Register(svc); err != nil {
+			return fmt.Errorf("service registration failure for %s: %w", runtime.instanceID, err)
+		}
+	}
+
+	if svc, err := buildStatsServiceConfigurator(runtime, opts, routerConfig); err != nil {
+		return err
+	} else if svc != nil {
+		if err := runtime.serviceManager.Register(svc); err != nil {
+			return fmt.Errorf("service registration failure for %s: %w", runtime.instanceID, err)
+		}
+	}
+
+	if svc, err := buildCommandHandlerServiceConfigurator(runtime, opts, routerConfig); err != nil {
+		return err
+	} else if svc != nil {
+		if err := runtime.serviceManager.Register(svc); err != nil {
+			return fmt.Errorf("service registration failure for %s: %w", runtime.instanceID, err)
 		}
 	}
 
@@ -843,38 +854,16 @@ func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *post
 	}
 
 	if startupTasks == nil {
-		eg, egCtx := errgroup.WithContext(ctx)
-		eg.Go(func() error {
-			if err := runWarmup(egCtx, memberWarmupConfig); err != nil {
-				if egCtx.Err() != nil {
-					return nil
-				}
-				slog.Warn("Mitigated service degradation: Cache warmup failed, executing compensatory bypass",
-					slog.String("botInstanceID", runtime.instanceID),
-					slog.String("error", err.Error()),
-				)
-			}
-			return nil
-		})
-		return
+		slog.Error("Blocking structural failure: startupTasks orchestrator is nil, refusing to launch unprotected warmup goroutine")
+		panic("hardware-aligned validation failure: startupTasks cannot be nil during runtime warmup phase")
 	}
 
 	slog.Debug("Delegating cache warmup to orchestrator scheduling queue",
 		slog.String("botInstanceID", runtime.instanceID),
 	)
 	startupTasks.GoHeavy("cache_warmup:"+runtime.instanceID, func(taskCtx context.Context) error {
-		localCtx, localCancel := context.WithCancel(taskCtx)
-		defer localCancel()
-		go func() {
-			select {
-			case <-ctx.Done():
-				localCancel()
-			case <-localCtx.Done():
-			}
-		}()
-
-		if err := runWarmup(localCtx, memberWarmupConfig); err != nil {
-			if localCtx.Err() != nil {
+		if err := runWarmup(taskCtx, memberWarmupConfig); err != nil {
+			if taskCtx.Err() != nil {
 				return nil
 			}
 			slog.Warn("Mitigated service degradation: Orchestrated cache warmup failed, pipeline resumes",

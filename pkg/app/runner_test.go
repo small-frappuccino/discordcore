@@ -23,7 +23,7 @@ func TestRun_MissingDatabaseURL(t *testing.T) {
 	os.Unsetenv("DISCORDCORE_DATABASE_URL")
 	err := Run("testapp")
 	if err == nil {
-		t.Fatal("expected Run to fail without DISCORDCORE_DATABASE_URL")
+		t.Fatal("expected Run to return an error without DISCORDCORE_DATABASE_URL")
 	}
 }
 
@@ -31,7 +31,7 @@ func TestRunWithOptions_MissingDatabaseURL(t *testing.T) {
 	os.Unsetenv("DISCORDCORE_DATABASE_URL")
 	err := RunWithOptions("testapp", RunOptions{})
 	if err == nil {
-		t.Fatal("expected RunWithOptions to fail without DISCORDCORE_DATABASE_URL")
+		t.Fatal("expected RunWithOptions to return an error without DISCORDCORE_DATABASE_URL")
 	}
 }
 

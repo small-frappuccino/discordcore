@@ -47,7 +47,7 @@ func resolveDatabaseBootstrap() (resolvedDatabaseBootstrap, error) {
 			Source: "env",
 		}, nil
 	}
-	return resolvedDatabaseBootstrap{}, fmt.Errorf("postgres bootstrap config unavailable: set %s before startup", databaseURLEnv)
+	panic("hardware-aligned validation failure: postgres bootstrap config unavailable: set DISCORDCORE_DATABASE_URL before startup")
 }
 
 func databaseBootstrapFromEnv() (files.DatabaseRuntimeConfig, bool) {
@@ -192,12 +192,8 @@ func scheduleRuntimeConfiguredGuildLogging(
 	}
 
 	if startupTasks == nil {
-		if err := run(context.Background()); err != nil {
-			slog.Warn("Failed to execute synchronous guild logging task",
-				slog.String("error", err.Error()),
-			)
-		}
-		return
+		slog.Error("Blocking structural failure: startupTasks orchestrator is nil")
+		panic("hardware-aligned validation failure: startupTasks cannot be nil during scheduleRuntimeConfiguredGuildLogging")
 	}
 
 	startupTasks.GoLight("log_configured_guilds:"+runtime.instanceID, run)
@@ -251,12 +247,8 @@ func scheduleStartupWebhookEmbedUpdates(
 	}
 
 	if startupTasks == nil {
-		if err := run(context.Background()); err != nil {
-			slog.Warn("Failed to execute synchronous webhook embed update schedule",
-				slog.String("error", err.Error()),
-			)
-		}
-		return
+		slog.Error("Blocking structural failure: startupTasks orchestrator is nil")
+		panic("hardware-aligned validation failure: startupTasks cannot be nil during scheduleStartupWebhookEmbedUpdates")
 	}
 
 	startupTasks.GoLight("startup_webhook_embed_updates", run)
@@ -273,10 +265,8 @@ func scheduleControlServerStartup(startupTasks *StartupTaskOrchestrator, opts co
 	}
 
 	if startupTasks == nil {
-		if err := run(context.Background()); err != nil {
-			log.EmitBlockingError("Synchronous execution of control server startup failed completely", err, log.GenerateRequestID())
-		}
-		return
+		slog.Error("Blocking structural failure: startupTasks orchestrator is nil")
+		panic("hardware-aligned validation failure: startupTasks cannot be nil during scheduleControlServerStartup")
 	}
 
 	startupTasks.GoLight("control_server", run)
@@ -625,29 +615,10 @@ func (w *RuntimeStartupBackgroundWorker) Shutdown(ctx context.Context) error {
 		// de canal ou expiração de contexto de qualquer forma, eliminando a corrida.
 	})
 
-	// Canal auxiliar para monitorar a conclusão do WaitGroup sem travar a thread de shutdown principal
-	done := make(chan struct{})
-	go func() {
-		w.wg.Wait()
-		close(done)
-	}()
+	slog.Info("Architectural state transition: Draining worker pool via explicit synchronization barrier")
+	w.wg.Wait() // O protocolo de Shutdown deve ser obrigatoriamente bloqueado
 
-	// Aguarda os workers finalizarem ou o contexto de shutdown estourar o limite
-	select {
-	case <-done:
-		// Sincronização limpa completa
-	case <-ctx.Done():
-		// Timeout estourado pelo chamador superior (ex: runner.go Teardown)
-	}
-
-	err := ctx.Err()
-	if err != nil && !stdErrors.Is(err, context.Canceled) && !stdErrors.Is(err, context.DeadlineExceeded) {
-		slog.Warn("Mitigated service degradation: Anomalous failure during worker pool drain",
-			slog.String("error", err.Error()),
-		)
-	}
-
-	return err
+	return nil
 }
 
 func (w *RuntimeStartupBackgroundWorker) worker() {

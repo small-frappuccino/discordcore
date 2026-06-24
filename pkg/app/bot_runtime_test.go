@@ -256,9 +256,7 @@ func TestBotRuntimeResolver_ConcurrentMemoryRotation(t *testing.T) {
 			case <-egCtx.Done():
 				return nil
 			case <-ticker.C:
-				resolver.swapRuntimes(map[string]*botRuntime{
-					"test": {instanceID: "test"},
-				})
+				resolver.addRuntime("test", &botRuntime{instanceID: "test"})
 			}
 		}
 	})
@@ -271,10 +269,15 @@ func TestBotRuntimeResolver_ConcurrentMemoryRotation(t *testing.T) {
 				case <-egCtx.Done():
 					return nil
 				default:
-					rtMap := resolver.getRuntimes()
+					var rt *botRuntime
+					for id, runtime := range resolver.getRuntimes() {
+						if id == "test" {
+							rt = runtime
+						}
+					}
 
 					// Structural validation, not just a panic check
-					if rt, exists := rtMap["test"]; !exists || rt.instanceID != "test" {
+					if rt == nil || rt.instanceID != "test" {
 						return fmt.Errorf("memory layout corrupted during atomic rotation")
 					}
 
