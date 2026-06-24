@@ -125,8 +125,9 @@ func (s *Store) ListModerationWarnings(ctx context.Context, guildID, userID stri
 		}
 		defer rows.Close()
 
+		var warning moderation.Warning
 		for rows.Next() {
-			var warning moderation.Warning
+			warning = moderation.Warning{}
 			if err := rows.Scan(&warning.ID, &warning.GuildID, &warning.UserID, &warning.CaseNumber, &warning.ModeratorID, &warning.Reason, &warning.CreatedAt); err != nil {
 				yield(moderation.Warning{}, err)
 				return

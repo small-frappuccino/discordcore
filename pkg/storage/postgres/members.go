@@ -519,14 +519,21 @@ func (s *Store) GetActiveGuildMemberStatesContext(ctx context.Context, guildID s
 
 		var currentState *members.CurrentState
 
+		var (
+			userID     string
+			joinedAt   time.Time
+			lastSeenAt *time.Time
+			isBot      *bool
+			roleID     *string
+		)
+
 		for rows.Next() {
-			var (
-				userID     string
-				joinedAt   time.Time
-				lastSeenAt *time.Time
-				isBot      *bool
-				roleID     *string
-			)
+			userID = ""
+			joinedAt = time.Time{}
+			lastSeenAt = nil
+			isBot = nil
+			roleID = nil
+
 			if err := rows.Scan(&userID, &joinedAt, &lastSeenAt, &isBot, &roleID); err != nil {
 				yield(members.CurrentState{}, fmt.Errorf("Store.GetActiveGuildMemberStatesContext: %w", err))
 				return
@@ -582,9 +589,9 @@ func (s *Store) StreamAllGuildMemberRoles(ctx context.Context, guildID string) (
 
 		var currentUser string
 		var currentRoles []string
+		var userID, roleID string
 
 		for rows.Next() {
-			var userID, roleID string
 			if err := rows.Scan(&userID, &roleID); err != nil {
 				return
 			}

@@ -172,8 +172,9 @@ func (s *Store) GetCacheEntriesByType(ctx context.Context, cacheType string) ite
 		}
 		defer rows.Close()
 
+		var entry system.CacheEntry
 		for rows.Next() {
-			var entry system.CacheEntry
+			entry = system.CacheEntry{}
 			if err := rows.Scan(&entry.Key, &entry.Data, &entry.ExpiresAt); err != nil {
 				yield(system.CacheEntry{}, fmt.Errorf("Store.GetCacheEntriesByType: %w", err))
 				return

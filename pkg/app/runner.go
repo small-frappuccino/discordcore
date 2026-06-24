@@ -267,8 +267,12 @@ func (a *App) ConstructServices(ctx context.Context) error {
 		Type:     service.TypeCache,
 		Priority: service.PriorityHigh,
 		Start:    func(context.Context) error { return nil },
-		Stop: func(context.Context) error {
-			time.Sleep(a.opts.ShutdownDelay)
+		Stop: func(ctx context.Context) error {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(a.opts.ShutdownDelay):
+			}
 			return a.opts.StoreCloseHook(a.store)
 		},
 		Logger: a.logger,

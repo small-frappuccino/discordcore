@@ -372,13 +372,14 @@ func (s *Store) ListQOTDQuestions(ctx context.Context, guildID, deckID string) (
 		}
 		defer rows.Close()
 
+		var record qotd.QuestionRecord
 		for rows.Next() {
-			record, err := scanQuestionRecord(rows)
-			if err != nil {
+			record = qotd.QuestionRecord{}
+			if err := scanQuestionRecordDest(rows, &record); err != nil {
 				yield(qotd.QuestionRecord{}, fmt.Errorf("Store.ListQOTDQuestions: %w", err))
 				return
 			}
-			if !yield(*record, nil) {
+			if !yield(record, nil) {
 				return
 			}
 		}
@@ -471,10 +472,12 @@ func (s *Store) ReorderQOTDQuestions(ctx context.Context, guildID, deckID string
 	defer rows.Close()
 
 	currentIDs := make([]int64, 0, len(normalizedIDs))
+	var id int64
+	var queuePosition int64
 	var maxQueuePosition int64
 	for rows.Next() {
-		var id int64
-		var queuePosition int64
+		id = 0
+		queuePosition = 0
 		if err := rows.Scan(&id, &queuePosition); err != nil {
 			return fmt.Errorf("Store.ReorderQOTDQuestions: %w", err)
 		}
@@ -759,8 +762,9 @@ func (s *Store) ReclaimOrphanReservedQOTDQuestions(ctx context.Context, guildID 
 		}
 		defer rows.Close()
 
+		var id int64
 		for rows.Next() {
-			var id int64
+			id = 0
 			if err := rows.Scan(&id); err != nil {
 				yield(0, fmt.Errorf("reclaim orphan qotd reservations: Store.ReclaimOrphanReservedQOTDQuestions: %w", err))
 				return
@@ -857,31 +861,38 @@ func sameQOTDIDSet(current, ordered []int64) bool {
 	return true
 }
 
-func scanQuestionRecord(scanner qotdRowScanner) (*qotd.QuestionRecord, error) {
-	var record qotd.QuestionRecord
+func scanQuestionRecordDest(scanner qotdRowScanner, dest *qotd.QuestionRecord) error {
 	var scheduledFor sql.NullTime
 	var usedAt sql.NullTime
 	var publishedOnceAt sql.NullTime
 	if err := scanner.Scan(
-		&record.ID,
-		&record.DisplayID,
-		&record.GuildID,
-		&record.DeckID,
-		&record.Body,
-		&record.Status,
-		&record.QueuePosition,
-		&record.CreatedBy,
+		&dest.ID,
+		&dest.DisplayID,
+		&dest.GuildID,
+		&dest.DeckID,
+		&dest.Body,
+		&dest.Status,
+		&dest.QueuePosition,
+		&dest.CreatedBy,
 		&scheduledFor,
 		&usedAt,
 		&publishedOnceAt,
-		&record.CreatedAt,
-		&record.UpdatedAt,
+		&dest.CreatedAt,
+		&dest.UpdatedAt,
 	); err != nil {
+		return err
+	}
+	dest.ScheduledForDateUTC = timePtrFromNull(scheduledFor)
+	dest.UsedAt = timePtrFromNull(usedAt)
+	dest.PublishedOnceAt = timePtrFromNull(publishedOnceAt)
+	return nil
+}
+
+func scanQuestionRecord(scanner qotdRowScanner) (*qotd.QuestionRecord, error) {
+	var record qotd.QuestionRecord
+	if err := scanQuestionRecordDest(scanner, &record); err != nil {
 		return nil, err
 	}
-	record.ScheduledForDateUTC = timePtrFromNull(scheduledFor)
-	record.UsedAt = timePtrFromNull(usedAt)
-	record.PublishedOnceAt = timePtrFromNull(publishedOnceAt)
 	return &record, nil
 }
 
@@ -1378,12 +1389,13 @@ func (s *Store) ListQOTDOfficialPostsByDate(ctx context.Context, guildID string,
 
 	return func(yield func(qotd.OfficialPostRecord) bool) {
 		defer rows.Close()
+		var record qotd.OfficialPostRecord
 		for rows.Next() {
-			record, err := scanOfficialPostRecord(rows)
-			if err != nil {
+			record = qotd.OfficialPostRecord{}
+			if err := scanOfficialPostRecordDest(rows, &record); err != nil {
 				return
 			}
-			if !yield(*record) {
+			if !yield(record) {
 				return
 			}
 		}
@@ -1634,8 +1646,7 @@ func normalizeOfficialPostRecord(rec qotd.OfficialPostRecord) (qotd.OfficialPost
 	}
 	return rec, nil
 }
-func scanOfficialPostRecord(scanner qotdRowScanner) (*qotd.OfficialPostRecord, error) {
-	var record qotd.OfficialPostRecord
+func scanOfficialPostRecordDest(scanner qotdRowScanner, dest *qotd.OfficialPostRecord) error {
 	var questionListThreadID sql.NullString
 	var questionListEntryMessageID sql.NullString
 	var threadID sql.NullString
@@ -1648,50 +1659,58 @@ func scanOfficialPostRecord(scanner qotdRowScanner) (*qotd.OfficialPostRecord, e
 	var archivedAt sql.NullTime
 	var reconciledAt sql.NullTime
 	if err := scanner.Scan(
-		&record.ID,
-		&record.GuildID,
-		&record.DeckID,
-		&record.DeckNameSnapshot,
-		&record.QuestionID,
-		&record.PublishMode,
+		&dest.ID,
+		&dest.GuildID,
+		&dest.DeckID,
+		&dest.DeckNameSnapshot,
+		&dest.QuestionID,
+		&dest.PublishMode,
 		&consumeAutomaticSlot,
-		&record.PublishDateUTC,
-		&record.State,
-		&record.ChannelID,
+		&dest.PublishDateUTC,
+		&dest.State,
+		&dest.ChannelID,
 		&questionListThreadID,
 		&questionListEntryMessageID,
 		&threadID,
 		&starterMessageID,
 		&answerChannelID,
-		&record.QuestionTextSnapshot,
+		&dest.QuestionTextSnapshot,
 		&nonce,
-		&record.PublishOrdinal,
+		&dest.PublishOrdinal,
 		&publishedAt,
-		&record.GraceUntil,
-		&record.ArchiveAt,
+		&dest.GraceUntil,
+		&dest.ArchiveAt,
 		&closedAt,
 		&archivedAt,
 		&reconciledAt,
-		&record.CreatedAt,
-		&record.UpdatedAt,
+		&dest.CreatedAt,
+		&dest.UpdatedAt,
 	); err != nil {
+		return err
+	}
+	dest.ConsumeAutomaticSlot = consumeAutomaticSlot
+	dest.QuestionListThreadID = strings.TrimSpace(questionListThreadID.String)
+	dest.QuestionListEntryMessageID = strings.TrimSpace(questionListEntryMessageID.String)
+	dest.DiscordThreadID = threadID.String
+	dest.DiscordStarterMessageID = starterMessageID.String
+	dest.AnswerChannelID = strings.TrimSpace(answerChannelID.String)
+	dest.Nonce = strings.TrimSpace(nonce.String)
+	dest.PublishedAt = timePtrFromNull(publishedAt)
+	dest.ClosedAt = timePtrFromNull(closedAt)
+	dest.ArchivedAt = timePtrFromNull(archivedAt)
+	dest.LastReconciledAt = timePtrFromNull(reconciledAt)
+	dest.PublishMode = strings.TrimSpace(dest.PublishMode)
+	dest.PublishDateUTC = normalizeQOTDDateUTC(dest.PublishDateUTC)
+	dest.GraceUntil = dest.GraceUntil.UTC()
+	dest.ArchiveAt = dest.ArchiveAt.UTC()
+	return nil
+}
+
+func scanOfficialPostRecord(scanner qotdRowScanner) (*qotd.OfficialPostRecord, error) {
+	var record qotd.OfficialPostRecord
+	if err := scanOfficialPostRecordDest(scanner, &record); err != nil {
 		return nil, err
 	}
-	record.ConsumeAutomaticSlot = consumeAutomaticSlot
-	record.QuestionListThreadID = strings.TrimSpace(questionListThreadID.String)
-	record.QuestionListEntryMessageID = strings.TrimSpace(questionListEntryMessageID.String)
-	record.DiscordThreadID = threadID.String
-	record.DiscordStarterMessageID = starterMessageID.String
-	record.AnswerChannelID = strings.TrimSpace(answerChannelID.String)
-	record.Nonce = strings.TrimSpace(nonce.String)
-	record.PublishedAt = timePtrFromNull(publishedAt)
-	record.ClosedAt = timePtrFromNull(closedAt)
-	record.ArchivedAt = timePtrFromNull(archivedAt)
-	record.LastReconciledAt = timePtrFromNull(reconciledAt)
-	record.PublishMode = strings.TrimSpace(record.PublishMode)
-	record.PublishDateUTC = normalizeQOTDDateUTC(record.PublishDateUTC)
-	record.GraceUntil = record.GraceUntil.UTC()
-	record.ArchiveAt = record.ArchiveAt.UTC()
 	return &record, nil
 }
 
@@ -1807,13 +1826,14 @@ func (s *Store) ListQOTDOfficialPostsPendingRecovery(ctx context.Context, guildI
 		}
 		defer rows.Close()
 
+		var record qotd.OfficialPostRecord
 		for rows.Next() {
-			record, err := scanOfficialPostRecord(rows)
-			if err != nil {
+			record = qotd.OfficialPostRecord{}
+			if err := scanOfficialPostRecordDest(rows, &record); err != nil {
 				yield(qotd.OfficialPostRecord{}, fmt.Errorf("Store.ListQOTDOfficialPostsPendingRecovery: %w", err))
 				return
 			}
-			if !yield(*record, nil) {
+			if !yield(record, nil) {
 				return
 			}
 		}
@@ -2316,13 +2336,14 @@ func (s *Store) GetCurrentAndPreviousQOTDPosts(ctx context.Context, guildID stri
 		}
 		defer rows.Close()
 
+		var record qotd.OfficialPostRecord
 		for rows.Next() {
-			record, err := scanOfficialPostRecord(rows)
-			if err != nil {
+			record = qotd.OfficialPostRecord{}
+			if err := scanOfficialPostRecordDest(rows, &record); err != nil {
 				yield(qotd.OfficialPostRecord{}, fmt.Errorf("Store.GetCurrentAndPreviousQOTDPosts: %w", err))
 				return
 			}
-			if !yield(*record, nil) {
+			if !yield(record, nil) {
 				return
 			}
 		}
@@ -2381,13 +2402,14 @@ func (s *Store) ListQOTDOfficialPostsNeedingArchive(ctx context.Context, now tim
 		}
 		defer rows.Close()
 
+		var record qotd.OfficialPostRecord
 		for rows.Next() {
-			record, err := scanOfficialPostRecord(rows)
-			if err != nil {
+			record = qotd.OfficialPostRecord{}
+			if err := scanOfficialPostRecordDest(rows, &record); err != nil {
 				yield(qotd.OfficialPostRecord{}, fmt.Errorf("Store.ListQOTDOfficialPostsNeedingArchive: %w", err))
 				return
 			}
-			if !yield(*record, nil) {
+			if !yield(record, nil) {
 				return
 			}
 		}
