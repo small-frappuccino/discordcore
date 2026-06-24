@@ -1,4 +1,6 @@
 import sys
+import zipfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 def generate_topology(directory: Path, prefix: str = "") -> str:
@@ -17,6 +19,112 @@ def generate_topology(directory: Path, prefix: str = "") -> str:
             tree_buffer.append(generate_topology(path, prefix + pointer[1]))
             
     return "".join(tree_buffer)
+
+def convert_odt_to_markdown(odt_path: Path) -> str:
+    """
+    Converts an OpenDocument Text (.odt) file into basic Markdown format.
+    Extracts headings based on style parent relationships, lists, tables, and paragraphs.
+    """
+    NS = {
+        'office': 'urn:oasis:names:tc:opendocument:xmlns:office:1.0',
+        'text': 'urn:oasis:names:tc:opendocument:xmlns:text:1.0',
+        'table': 'urn:oasis:names:tc:opendocument:xmlns:table:1.0',
+        'style': 'urn:oasis:names:tc:opendocument:xmlns:style:1.0',
+    }
+
+    def clean_tag(tag):
+        return tag.split('}')[-1]
+
+    def extract_text(element):
+        parts = []
+        if element.text:
+            parts.append(element.text)
+        for child in element:
+            parts.append(extract_text(child))
+            if child.tail:
+                parts.append(child.tail)
+        return "".join(parts)
+
+    try:
+        with zipfile.ZipFile(odt_path) as z:
+            content_xml = z.read("content.xml")
+            root = ET.fromstring(content_xml)
+            
+            # Map automatic styles to their parent styles to identify headings
+            style_parent_map = {}
+            auto_styles = root.find('.//office:automatic-styles', NS)
+            if auto_styles is not None:
+                for style in auto_styles:
+                    name = style.attrib.get(f"{{{NS['style']}}}name", "")
+                    parent = style.attrib.get(f"{{{NS['style']}}}parent-style-name", "")
+                    if name and parent:
+                        style_parent_map[name] = parent
+            
+            def get_heading_level(style_name):
+                if not style_name:
+                    return 0
+                parent = style_parent_map.get(style_name, style_name)
+                if parent == 'Heading_20_1' or parent.startswith('Heading 1') or parent.endswith('1'):
+                    return 1
+                elif parent == 'Heading_20_2' or parent.startswith('Heading 2') or parent.endswith('2'):
+                    return 2
+                elif parent == 'Heading_20_3' or parent.startswith('Heading 3') or parent.endswith('3'):
+                    return 3
+                elif parent == 'Heading_20_4' or parent.startswith('Heading 4') or parent.endswith('4'):
+                    return 4
+                return 0
+
+            body = root.find('.//office:body', NS)
+            if body is None:
+                return ""
+            text_body = body.find('.//office:text', NS)
+            if text_body is None:
+                return ""
+
+            md_lines = []
+            
+            def process_element(element):
+                tag = clean_tag(element.tag)
+                if tag == 'p':
+                    style_name = element.attrib.get(f"{{{NS['text']}}}style-name", "")
+                    level = get_heading_level(style_name)
+                    txt = extract_text(element).strip()
+                    if txt:
+                        if level > 0:
+                            md_lines.append(f"{'#' * level} {txt}\n")
+                        else:
+                            md_lines.append(f"{txt}\n")
+                elif tag == 'list':
+                    for item in element.findall('.//text:list-item', NS):
+                        for p in item.findall('.//text:p', NS):
+                            txt = extract_text(p).strip()
+                            if txt:
+                                md_lines.append(f"- {txt}")
+                    md_lines.append("")
+                elif tag == 'table':
+                    rows = element.findall('.//table:table-row', NS)
+                    if not rows:
+                        return
+                    md_rows = []
+                    for r_idx, row in enumerate(rows):
+                        cells = row.findall('.//table:table-cell', NS)
+                        cell_texts = []
+                        for cell in cells:
+                            p_texts = [extract_text(p).strip() for p in cell.findall('.//text:p', NS)]
+                            cell_texts.append(" ".join(filter(None, p_texts)))
+                        md_rows.append(f"| {' | '.join(cell_texts)} |")
+                        if r_idx == 0:
+                            seps = ['---'] * len(cell_texts)
+                            md_rows.append(f"| {' | '.join(seps)} |")
+                    md_lines.extend(md_rows)
+                    md_lines.append("")
+            
+            for child in text_body:
+                process_element(child)
+                
+            return "\n".join(md_lines)
+    except Exception as e:
+        return f"// [I/O FAULT]: Failed to convert ODT - {e}\n"
 
 def execute_payload_aggregation(base_dir: str = "./pkg"):
     pkg_path = Path(base_dir).resolve()
@@ -60,9 +168,14 @@ def execute_payload_aggregation(base_dir: str = "./pkg"):
         print("[!] Target root documents not found. Skipping Phase 1.")
 
     # =================================================================
-    # PHASE 2: Domain Boundary Ingestion (./pkg/*)
+    # PHASE 2: Domain Boundary Ingestion (./pkg/* & ./performance)
     # =================================================================
     domains = [d for d in pkg_path.iterdir() if d.is_dir()]
+    performance_path = repo_root / "performance"
+    if performance_path.exists() and performance_path.is_dir():
+        domains.append(performance_path)
+    
+    domains.sort(key=lambda d: d.name)
 
     for domain in domains:
         print(f"[-] Compiling domain boundary: {domain.name}")
@@ -79,22 +192,36 @@ def execute_payload_aggregation(base_dir: str = "./pkg"):
         ]
         
         # Sequential file ingestion into RAM
-        go_files = sorted(domain.rglob("*.go"))
-        if not go_files:
+        if domain.name == "performance":
+            files = sorted([f for f in domain.rglob("*") if f.is_file()])
+        else:
+            files = sorted(domain.rglob("*.go"))
+
+        if not files:
             domain_buffer.append("> [WARN] 0x00 source streams detected within this layout boundary.\n")
             # Flush empty state to disk
             payload_path.write_text("".join(domain_buffer), encoding="utf-8")
             continue
         
-        for go_file in go_files:
-            relative_path = go_file.relative_to(repo_root).as_posix()
+        for file_path in files:
+            relative_path = file_path.relative_to(repo_root).as_posix()
             
-            domain_buffer.append(f"// === FILE: {relative_path} ===\n```go\n")
-            try:
-                domain_buffer.append(go_file.read_text(encoding="utf-8"))
-            except Exception as e:
-                domain_buffer.append(f"// [I/O FAULT]: Failed to map memory boundary - {e}\n")
-            domain_buffer.append("\n```\n\n")
+            if file_path.suffix.lower() == ".odt":
+                display_path = relative_path.replace(".odt", ".md")
+                domain_buffer.append(f"// === FILE: {display_path} ===\n```markdown\n")
+                try:
+                    domain_buffer.append(convert_odt_to_markdown(file_path))
+                except Exception as e:
+                    domain_buffer.append(f"// [I/O FAULT]: Failed to map memory boundary - {e}\n")
+                domain_buffer.append("\n```\n\n")
+            else:
+                lang = "go" if file_path.suffix.lower() == ".go" else "markdown" if file_path.suffix.lower() == ".md" else "text"
+                domain_buffer.append(f"// === FILE: {relative_path} ===\n```{lang}\n")
+                try:
+                    domain_buffer.append(file_path.read_text(encoding="utf-8"))
+                except Exception as e:
+                    domain_buffer.append(f"// [I/O FAULT]: Failed to map memory boundary - {e}\n")
+                domain_buffer.append("\n```\n\n")
             
         # Atomic flush from RAM to persistent disk
         payload_path.write_text("".join(domain_buffer), encoding="utf-8")
