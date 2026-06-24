@@ -81,7 +81,6 @@ flowchart TD
     Testdb["pkg/testdb"]
     Theme["pkg/theme"]
     Tickets["pkg/tickets"]
-    Scratch["scratch"]
     UI["ui"]
 
     %% SDK & API Flow
@@ -157,6 +156,7 @@ flowchart TD
     App --> Clock
     App --> Commands
     App --> CommandsClean
+    App --> CommandsCore
     App --> CommandsEmbeds
     App --> CommandsLogging
     App --> CommandsModeration
@@ -312,7 +312,7 @@ flowchart TD
     class App,AppRuntimecmd,Files,Persistence,Runtimeapply,StoragePostgres,StoragePostgresStoragetest core;
     class Discord,AdapterAutomod,AdapterCache,AdapterClean,Commands,CommandsClean,CommandsCore,CommandsEmbeds,CommandsLogging,CommandsModeration,CommandsPartners,CommandsQotd,CommandsRoles,CommandsRuntime,CommandsStats,CommandsTickets,AdapterEmbeds,AdapterLogging,AdapterMembers,AdapterMessages,AdapterModeration,AdapterPartners,AdapterPerf,AdapterQotd,AdapterRoles,AdapterSession,AdapterStats,AdapterTickets,AdapterWebhook adapter;
     class Automod,Clean,Control,ControlLocaltls,Logging,Members,Messages,Moderation,Qotd,Stats,Task,Tickets feature;
-    class AutomodAutomodmocks,Clock,Config,Idgen,Log,Observability,Service,Sys,System,Testdb,Theme,Scratch infra;
+    class AutomodAutomodmocks,Clock,Config,Idgen,Log,Observability,Service,Sys,System,Testdb,Theme infra;
     class DiscordGo,Arikawa,DiscordAPI,DiscordGateway external;
     class CmdClean-config,CmdDiscordcore,CmdTsgen,UI ui;
 ```

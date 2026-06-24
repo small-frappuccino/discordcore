@@ -1,22 +1,34 @@
 import sys
 import zipfile
+import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-def generate_topology(directory: Path, prefix: str = "") -> str:
+# Noise pattern matching directory components of (vendor, testdata, _gen, test, misc, .git)
+# or filenames ending with _gen.go or _test.go
+noise_rx = re.compile(r'(?:[\\/](?:vendor|testdata|_gen|test|misc|\.git)(?:[\\/]|$))|_(?:gen|test)\.go$', re.IGNORECASE)
+
+def should_exclude(path: Path) -> bool:
+    """Returns True if the path matches the noise pattern."""
+    posix_path = path.as_posix()
+    return bool(noise_rx.search(posix_path))
+
+def generate_topology(directory: Path, prefix: str = "", exclude_fn=None) -> str:
     """
     Recursively builds a deterministic directory tree visualization.
     Executes an O(N) traversal. Output is aggregated in RAM before return.
     """
     tree_buffer = []
+    # Filter paths if exclude_fn is provided
+    paths = [p for p in directory.iterdir() if exclude_fn is None or not exclude_fn(p)]
     # Enforce deterministic ordering: directories first, then files, alphabetically sorted
-    paths = sorted(directory.iterdir(), key=lambda p: (not p.is_dir(), p.name))
+    paths = sorted(paths, key=lambda p: (not p.is_dir(), p.name))
     pointers = [('├── ', '│   ')] * (len(paths) - 1) + [('└── ', '    ')] if paths else []
     
     for pointer, path in zip(pointers, paths):
         tree_buffer.append(f"{prefix}{pointer[0]}{path.name}\n")
         if path.is_dir():
-            tree_buffer.append(generate_topology(path, prefix + pointer[1]))
+            tree_buffer.append(generate_topology(path, prefix + pointer[1], exclude_fn))
             
     return "".join(tree_buffer)
 
@@ -168,31 +180,101 @@ def execute_payload_aggregation(base_dir: str = "./pkg"):
         print("[!] Target root documents not found. Skipping Phase 1.")
 
     # =================================================================
-    # PHASE 2: Domain Boundary Ingestion (./pkg/* & ./performance)
+    # PHASE 2: Domain Boundary Ingestion (./pkg/* & ./performance & references/go/src/*)
     # =================================================================
     domains = [d for d in pkg_path.iterdir() if d.is_dir()]
     performance_path = repo_root / "performance"
     if performance_path.exists() and performance_path.is_dir():
         domains.append(performance_path)
     
+    references_path = repo_root / "references" / "go" / "src"
+    if not references_path.exists():
+        references_path = repo_root.parent / "references" / "go" / "src"
+    split_parents = {"cmd", "crypto", "runtime", "syscall"}
+    compile_internal_path = references_path / "cmd" / "compile" / "internal"
+
+    if references_path.exists() and references_path.is_dir():
+        for d in references_path.iterdir():
+            if d.is_dir() and not should_exclude(d):
+                if d.name in split_parents:
+                    # Treat immediate subfolders inside d as individual domains
+                    for sub in d.iterdir():
+                        if sub.is_dir() and not should_exclude(sub):
+                            if d.name == "cmd" and sub.name == "compile":
+                                # Add cmd/compile itself as a domain
+                                domains.append(sub)
+                                # Also add every subfolder inside cmd/compile/internal
+                                if compile_internal_path.exists() and compile_internal_path.is_dir():
+                                    for subsub in compile_internal_path.iterdir():
+                                        if subsub.is_dir() and not should_exclude(subsub):
+                                            domains.append(subsub)
+                            else:
+                                domains.append(sub)
+                else:
+                    domains.append(d)
+    
     domains.sort(key=lambda d: d.name)
 
     for domain in domains:
-        print(f"[-] Compiling domain boundary: {domain.name}")
-        payload_path = output_sink / f"{domain.name}_notebook_payload.md"
+        is_golang_ref = False
+        try:
+            is_golang_ref = domain.is_relative_to(references_path)
+        except Exception:
+            is_golang_ref = "references" in domain.parts and "go" in domain.parts and "src" in domain.parts
+
+        # Determine output payload name and display name
+        if is_golang_ref:
+            is_compile_internal_sub = False
+            try:
+                is_compile_internal_sub = domain.is_relative_to(compile_internal_path) and domain != compile_internal_path
+            except Exception:
+                is_compile_internal_sub = "compile" in domain.parts and "internal" in domain.parts and domain.parent.name == "internal"
+            
+            if is_compile_internal_sub:
+                domain_display_name = f"golang_cmd_compile_internal_{domain.name}"
+                payload_path = output_sink / f"golang_cmd_compile_internal_{domain.name}.md"
+                arch_title = f"cmd/compile/internal/{domain.name}"
+            else:
+                parent_name = domain.parent.name
+                if parent_name in split_parents:
+                    domain_display_name = f"golang_{parent_name}_{domain.name}"
+                    payload_path = output_sink / f"golang_{parent_name}_{domain.name}.md"
+                    arch_title = f"{parent_name}/{domain.name}"
+                else:
+                    domain_display_name = f"golang_{domain.name}"
+                    payload_path = output_sink / f"golang_{domain.name}.md"
+                    arch_title = domain.name
+        else:
+            domain_display_name = domain.name
+            payload_path = output_sink / f"{domain.name}_notebook_payload.md"
+            arch_title = domain.name
+
+        print(f"[-] Compiling domain boundary: {domain_display_name}")
         
         # Initialize contiguous memory buffer for this domain
+        if is_golang_ref and domain == (references_path / "cmd" / "compile"):
+            exclude_fn = lambda p: should_exclude(p) or p.name == "internal"
+        elif is_golang_ref:
+            exclude_fn = should_exclude
+        else:
+            exclude_fn = None
+        
         domain_buffer = [
-            f"# Domain Architecture: {domain.name}\n\n",
+            f"# Domain Architecture: {arch_title}\n\n",
             "## Layout Topology\n```text\n",
-            f"{domain.name}/\n",
-            generate_topology(domain),
+            f"{arch_title}/\n",
+            generate_topology(domain, exclude_fn=exclude_fn),
             "```\n\n",
             "## Source Stream Aggregation\n\n"
         ]
         
         # Sequential file ingestion into RAM
-        if domain.name == "performance":
+        if is_golang_ref:
+            if domain == (references_path / "cmd" / "compile"):
+                files = sorted([f for f in domain.rglob("*") if f.is_file() and not should_exclude(f) and not any(p == "internal" for p in f.relative_to(domain).parts)])
+            else:
+                files = sorted([f for f in domain.rglob("*") if f.is_file() and not should_exclude(f)])
+        elif domain.name == "performance":
             files = sorted([f for f in domain.rglob("*") if f.is_file()])
         else:
             files = sorted(domain.rglob("*.go"))
@@ -204,7 +286,10 @@ def execute_payload_aggregation(base_dir: str = "./pkg"):
             continue
         
         for file_path in files:
-            relative_path = file_path.relative_to(repo_root).as_posix()
+            try:
+                relative_path = file_path.relative_to(repo_root).as_posix()
+            except ValueError:
+                relative_path = (Path("references") / file_path.relative_to(references_path.parent.parent)).as_posix()
             
             if file_path.suffix.lower() == ".odt":
                 display_path = relative_path.replace(".odt", ".md")

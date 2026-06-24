@@ -34,4 +34,6 @@ tmp/
 /package.json
 /package-lock.json
 /scratch
+/references/
+/go.work
 !notebookLM.py
