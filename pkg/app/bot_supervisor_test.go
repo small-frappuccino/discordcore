@@ -39,6 +39,7 @@ func awaitCondition(timeout time.Duration, condition func() bool) error {
 }
 
 func TestSupervisorFaultIsolation(t *testing.T) {
+	t.Parallel()
 	fetchBotArikawaMeHook := func(s *state.State) (*discord.User, error) {
 		return &discord.User{ID: 123, Username: "test"}, nil
 	}
@@ -145,6 +146,8 @@ func TestSupervisorFaultIsolation(t *testing.T) {
 }
 
 func TestZeroStateIdling(t *testing.T) {
+	t.Parallel()
+
 	cfgManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	cfg := files.BotConfig{
 		Guilds: []files.GuildConfig{},
@@ -165,7 +168,16 @@ func TestZeroStateIdling(t *testing.T) {
 		t.Fatalf("supervisor start: %v", err)
 	}
 
-	time.Sleep(50 * time.Millisecond)
+	errWait := awaitCondition(500*time.Millisecond, func() bool {
+		count := 0
+		for range supervisor.GetResolver().getRuntimes() {
+			count++
+		}
+		return count == 0
+	})
+	if errWait != nil {
+		t.Fatalf("failed waiting for idle state: %v", errWait)
+	}
 
 	count := 0
 	for range supervisor.GetResolver().getRuntimes() {
@@ -181,6 +193,7 @@ func TestZeroStateIdling(t *testing.T) {
 }
 
 func TestSupervisorSwarmTopology(t *testing.T) {
+	t.Parallel()
 	fetchBotArikawaMeHook := func(s *state.State) (*discord.User, error) {
 		return &discord.User{ID: 123, Username: "test"}, nil
 	}
@@ -256,6 +269,7 @@ func TestSupervisorSwarmTopology(t *testing.T) {
 }
 
 func TestSupervisorConfigChange(t *testing.T) {
+	t.Parallel()
 	fetchBotArikawaMeHook := func(s *state.State) (*discord.User, error) {
 		return &discord.User{ID: 123, Username: "test"}, nil
 	}
@@ -376,6 +390,7 @@ func TestSupervisorConfigChange(t *testing.T) {
 }
 
 func TestBotSupervisor_ConcurrentConfigThrashing(t *testing.T) {
+	t.Parallel()
 	startupTasks := NewStartupTaskOrchestrator(1)
 	t.Cleanup(func() {
 		_ = startupTasks.Shutdown(context.Background())
@@ -469,6 +484,7 @@ func (m *mockBlockingServiceWrapper) Stop(ctx context.Context) error {
 func (m *mockBlockingServiceWrapper) Done() <-chan struct{} { return m.done }
 
 func TestBotSupervisor_GracefulShutdownOrchestration(t *testing.T) {
+	t.Parallel()
 	startupTasks := NewStartupTaskOrchestrator(1)
 	t.Cleanup(func() {
 		_ = startupTasks.Shutdown(context.Background())

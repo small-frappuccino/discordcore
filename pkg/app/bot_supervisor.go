@@ -129,10 +129,12 @@ func (t InstanceStartTask) Execute(ctx context.Context) error {
 			return nil
 		},
 		Stop: func(stopCtx context.Context) error {
+			slog.Info("Stop hook called for bot-runtime wrapper", slog.String("botInstanceID", runtime.instanceID), slog.Bool("hasArikawaState", runtime.arikawaState != nil), slog.Bool("hasCloseHook", t.Opts.discordSessionCloseHook != nil))
 			shutdownBotRuntime(runtime, stopCtx)
 			if runtime.arikawaState != nil {
 				var err error
 				if t.Opts.discordSessionCloseHook != nil {
+					slog.Info("Executing discordSessionCloseHook for bot-runtime wrapper", slog.String("botInstanceID", runtime.instanceID))
 					err = t.Opts.discordSessionCloseHook(runtime.arikawaState)
 				} else {
 					err = runtime.arikawaState.Close()
@@ -434,8 +436,23 @@ func (s *BotSupervisor) reconcileTopology(parentCtx context.Context, cmd topolog
 	}
 
 	// Fase 2 & 3: Inicializar novas vias de execução via errgroup
+	var startWG sync.WaitGroup
+	var pendingCount int
+	isReady := false
+	if s.resolver != nil {
+		select {
+		case <-s.resolver.readyCh:
+			isReady = true
+		default:
+		}
+	}
+
 	for id, token := range desiredTokens {
 		if _, active := s.trackedInstances[id]; !active {
+			if !isReady {
+				pendingCount++
+				startWG.Add(1)
+			}
 			instanceCtx, instanceCancel := context.WithCancel(s.groupCtx)
 
 			s.trackedInstances[id] = &managedInstance{
@@ -477,6 +494,10 @@ func (s *BotSupervisor) reconcileTopology(parentCtx context.Context, cmd topolog
 					}
 				}
 
+				if !isReady {
+					startWG.Done()
+				}
+
 				<-instanceCtx.Done()
 
 				s.log().Info("Deterministic lifecycle orchestration: Context cancellation verified; freeing stack resources")
@@ -486,11 +507,26 @@ func (s *BotSupervisor) reconcileTopology(parentCtx context.Context, cmd topolog
 					Logger:     s.logger,
 					Resolver:   s.resolver,
 				}
-				_ = cleanupTask.Execute(context.Background())
+				cleanupErr := cleanupTask.Execute(context.Background())
 
 				<-execErrCh
+
+				if s.ctx.Err() != nil {
+					return cleanupErr
+				}
 				return nil
 			})
+		}
+	}
+
+	if !isReady {
+		if pendingCount == 0 {
+			s.resolver.markReady()
+		} else {
+			go func() {
+				startWG.Wait()
+				s.resolver.markReady()
+			}()
 		}
 	}
 

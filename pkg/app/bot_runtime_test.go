@@ -17,6 +17,8 @@ import (
 )
 
 func TestBotRuntime_InitializationRouting(t *testing.T) {
+	t.Parallel()
+
 	fetchBotArikawaMeHook := func(s *state.State) (*discord.User, error) {
 		return &discord.User{ID: 123, Username: "test"}, nil
 	}
@@ -294,6 +296,8 @@ func TestBotRuntimeResolver_ConcurrentMemoryRotation(t *testing.T) {
 }
 
 func TestBotRuntimeResolver_WaitBarrierOrchestration(t *testing.T) {
+	t.Parallel()
+
 	resolver := newBotRuntimeResolver(nil, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
@@ -305,16 +309,21 @@ func TestBotRuntimeResolver_WaitBarrierOrchestration(t *testing.T) {
 	}
 
 	resolver = newBotRuntimeResolver(nil, nil)
+	done := make(chan struct{})
 	go func() {
-		time.Sleep(20 * time.Millisecond)
-		resolver.markReady()
+		defer close(done)
+		ctx2, cancel2 := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel2()
+		if err := resolver.waitForReady(ctx2); err != nil {
+			t.Errorf("expected nil error, got: %v", err)
+		}
 	}()
 
-	ctx2, cancel2 := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel2()
+	resolver.markReady()
 
-	err = resolver.waitForReady(ctx2)
-	if err != nil {
-		t.Fatalf("expected nil error, got: %v", err)
+	select {
+	case <-done:
+	case <-time.After(1 * time.Second):
+		t.Fatal("timed out waiting for ready signal propagation")
 	}
 }

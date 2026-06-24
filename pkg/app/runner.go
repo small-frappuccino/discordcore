@@ -428,14 +428,12 @@ func (a *App) RunAndListen(ctx context.Context) error {
 			a.logger.Info("Architectural state transition: Process termination signal acknowledged. Initiating graceful teardown.")
 			rootCancel()
 			// Unblock a.serviceManager.Wait() dynamically by initiating the graceful stop sequence
-			_ = a.serviceManager.StopAll(context.Background())
-			return nil
+			return a.serviceManager.StopAll(context.Background())
 		case <-a.opts.TestShutdownCh:
 			a.logger.Info("Architectural state transition: Test simulated shutdown initiated")
 			rootCancel()
 			// Unblock a.serviceManager.Wait() dynamically by initiating the graceful stop sequence
-			_ = a.serviceManager.StopAll(context.Background())
-			return nil
+			return a.serviceManager.StopAll(context.Background())
 		case <-egCtx.Done():
 			// Natural synchronized drainage due to sibling cancellation
 			return nil

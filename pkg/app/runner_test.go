@@ -3,7 +3,9 @@ package app
 import (
 	"context"
 	"errors"
+	"net/http"
 	"os"
+	"os/signal"
 	"runtime"
 	"strings"
 	"sync/atomic"
@@ -234,7 +236,7 @@ func TestRun_CascadingRollbackFailures(t *testing.T) {
 	shutdownCh := make(chan struct{})
 
 	go func() {
-		time.Sleep(2 * time.Second)
+		time.Sleep(300 * time.Millisecond)
 		close(shutdownCh)
 	}()
 
@@ -303,14 +305,26 @@ func TestRun_ResourceCleanupOnBootFailure(t *testing.T) {
 	var storeCloseCalls int32
 	var discordCloseCalls int32
 
+	// Warm up global packages to initialize their background loops
+	dummySigCh := make(chan os.Signal, 1)
+	signal.Notify(dummySigCh, os.Interrupt)
+	signal.Stop(dummySigCh)
+
+	// Warm up http.DefaultClient connection pool
+	if req, err := http.NewRequest(http.MethodHead, "https://discord.com", nil); err == nil {
+		if resp, err := http.DefaultClient.Do(req); err == nil {
+			resp.Body.Close()
+		}
+	}
+
 	shutdownCh := make(chan struct{})
 
 	go func() {
-		time.Sleep(2 * time.Second)
+		time.Sleep(300 * time.Millisecond)
 		close(shutdownCh)
 	}()
 
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(150 * time.Millisecond)
 	goroutinesBefore := runtime.NumGoroutine()
 
 	setupCommandHandlerHook := func(ch *CommandHandler) error { return nil }
@@ -321,7 +335,7 @@ func TestRun_ResourceCleanupOnBootFailure(t *testing.T) {
 		setupCommandHandler: setupCommandHandlerHook,
 		StoreCloseHook: func(c interface{ Close() error }) error {
 			atomic.AddInt32(&storeCloseCalls, 1)
-			return nil
+			return c.Close()
 		},
 		DiscordSessionCloseHook: func(c interface{ Close() error }) error {
 			atomic.AddInt32(&discordCloseCalls, 1)
@@ -343,10 +357,13 @@ func TestRun_ResourceCleanupOnBootFailure(t *testing.T) {
 		t.Errorf("expected 1 discord session close call on rollback, got %d", got)
 	}
 
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(150 * time.Millisecond)
 	goroutinesAfter := runtime.NumGoroutine()
 
 	if goroutinesAfter > goroutinesBefore+2 {
+		buf := make([]byte, 102400)
+		n := runtime.Stack(buf, true)
+		t.Logf("Goroutine stack traces:\n%s", string(buf[:n]))
 		t.Errorf("goroutine leak detected: before %d, after %d", goroutinesBefore, goroutinesAfter)
 	}
 }

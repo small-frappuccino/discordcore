@@ -67,13 +67,13 @@ const (
 	// alongside the OS-level supervisor (NSSM/Task Scheduler) so a
 	// graceful stop emits a chat message before the supervisor relaunches.
 	lifecycleWebhookEnv = "DISCORDCORE_LIFECYCLE_WEBHOOK_URL"
-
-	// lifecycleWebhookTimeout caps how long the shutdown notification
-	// blocks the actual process exit. Three seconds is enough for one
-	// HTTP POST round-trip to discord.com on a slow link; longer would
-	// delay restarts under a supervisor.
-	lifecycleWebhookTimeout = 3 * time.Second
 )
+
+// lifecycleWebhookTimeout caps how long the shutdown notification
+// blocks the actual process exit. Three seconds is enough for one
+// HTTP POST round-trip to discord.com on a slow link; longer would
+// delay restarts under a supervisor.
+var lifecycleWebhookTimeout = 3 * time.Second
 
 // notifyLifecycleEvent best-effort POSTs a one-line content message to
 // the configured Discord webhook. Caller passes the high-level reason

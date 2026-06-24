@@ -185,12 +185,18 @@ func TestNotifyLifecycleEventHandles5xx(t *testing.T) {
 }
 
 func TestNotifyLifecycleEventTimeoutContext(t *testing.T) {
+	origTimeout := lifecycleWebhookTimeout
+	lifecycleWebhookTimeout = 50 * time.Millisecond
+	t.Cleanup(func() {
+		lifecycleWebhookTimeout = origTimeout
+	})
+
 	var handlerCalled sync.WaitGroup
 	handlerCalled.Add(1)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled.Done()
-		time.Sleep(5 * time.Second)
+		time.Sleep(200 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
@@ -203,8 +209,8 @@ func TestNotifyLifecycleEventTimeoutContext(t *testing.T) {
 
 	handlerCalled.Wait()
 
-	if elapsed >= 5*time.Second {
-		t.Fatalf("expected timeout near 3s, but request took %v", elapsed)
+	if elapsed >= 150*time.Millisecond {
+		t.Fatalf("expected timeout near 50ms, but request took %v", elapsed)
 	}
 }
 
