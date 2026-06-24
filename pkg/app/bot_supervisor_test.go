@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"golang.org/x/sync/errgroup"
 )
@@ -34,7 +35,7 @@ func awaitCondition(timeout time.Duration, condition func() bool) error {
 func TestSupervisorFaultIsolation(t *testing.T) {
 	t.Skip("Skipping test due to Arikawa 401 with mock tokens")
 	t.Parallel()
-	cfgManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cfgManager := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	cfg := files.BotConfig{
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
@@ -120,7 +121,7 @@ func TestSupervisorFaultIsolation(t *testing.T) {
 func TestZeroStateIdling(t *testing.T) {
 	t.Parallel()
 
-	cfgManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cfgManager := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	cfg := files.BotConfig{
 		Guilds: []files.GuildConfig{},
 	}
@@ -168,7 +169,7 @@ func TestSupervisorSwarmTopology(t *testing.T) {
 	t.Skip("Skipping test due to Arikawa 401 with mock tokens")
 	t.Parallel()
 
-	cfgManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cfgManager := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 
 	tokens := make(map[string]files.EncryptedString)
 	for i := 0; i < 10; i++ {
@@ -232,7 +233,7 @@ func TestSupervisorConfigChange(t *testing.T) {
 	t.Skip("Skipping test due to Arikawa 401 with mock tokens")
 	t.Parallel()
 
-	cfgManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cfgManager := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	cfg := files.BotConfig{
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
@@ -344,7 +345,7 @@ func TestBotSupervisor_ConcurrentConfigThrashing(t *testing.T) {
 		_ = startupTasks.Shutdown(context.Background())
 	})
 
-	cfgManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cfgManager := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	cfg := files.BotConfig{
 		Guilds: []files.GuildConfig{},
 	}
@@ -413,7 +414,7 @@ func TestBotSupervisor_ZeroLeakTeardown(t *testing.T) {
 	time.Sleep(50 * time.Millisecond) // stabilize background goroutines
 	initialGoroutines := runtime.NumGoroutine()
 
-	cfgManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cfgManager := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	cfg := files.BotConfig{
 		Guilds: []files.GuildConfig{},
 	}

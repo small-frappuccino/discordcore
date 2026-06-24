@@ -15,6 +15,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/httputil/httpdriver"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	rolesvc "github.com/small-frappuccino/discordcore/pkg/discord/roles"
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -95,7 +96,7 @@ func setMockStatusAndBody(t *testing.T, status int, body []byte) {
 	}
 }
 
-func newTestContext(t *testing.T, event discord.InteractionEvent, cm *files.ConfigManager) *commands.ArikawaContext {
+func newTestContext(t *testing.T, event discord.InteractionEvent, cm config.Provider) *commands.ArikawaContext {
 	ctx, _ := commands.NewArikawaContext(event, cm)
 	if ctx != nil {
 		ctx.Client = api.NewClient("mockToken")
@@ -107,7 +108,7 @@ func newTestContext(t *testing.T, event discord.InteractionEvent, cm *files.Conf
 	return ctx
 }
 
-func newSubCommandContext(t *testing.T, cm *files.ConfigManager, subCommandName string, options []discord.CommandInteractionOption) *commands.ArikawaContext {
+func newSubCommandContext(t *testing.T, cm config.Provider, subCommandName string, options []discord.CommandInteractionOption) *commands.ArikawaContext {
 	return newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
@@ -123,7 +124,7 @@ func newSubCommandContext(t *testing.T, cm *files.ConfigManager, subCommandName 
 	}, cm)
 }
 
-func newNestedSubCommandContext(t *testing.T, cm *files.ConfigManager, groupName string, subCommandName string, options []discord.CommandInteractionOption) *commands.ArikawaContext {
+func newNestedSubCommandContext(t *testing.T, cm config.Provider, groupName string, subCommandName string, options []discord.CommandInteractionOption) *commands.ArikawaContext {
 	return newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
@@ -145,8 +146,8 @@ func newNestedSubCommandContext(t *testing.T, cm *files.ConfigManager, groupName
 	}, cm)
 }
 
-func setupConfigManagerWithPanel(t *testing.T) (*files.ConfigManager, *rolesvc.RolePanelService) {
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+func setupConfigManagerWithPanel(t *testing.T) (config.Provider, *rolesvc.RolePanelService) {
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	enabled := true
 	_, err := cm.UpdateConfig(context.Background(), func(bc *files.BotConfig) error {
 		bc.Guilds = []files.GuildConfig{
@@ -179,7 +180,7 @@ func setupConfigManagerWithPanel(t *testing.T) (*files.ConfigManager, *rolesvc.R
 
 func TestRolePanelCommands_Registration(t *testing.T) {
 	t.Parallel()
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	svc := rolesvc.NewRolePanelService(cm)
 	rc := NewRolePanelCommands(cm, svc)
 
@@ -534,7 +535,7 @@ func TestRolePanelCommands_ErrorsAndEdgeCases(t *testing.T) {
 	t.Run("disabled feature", func(t *testing.T) {
 		t.Parallel()
 		resetMockHTTP(t)
-		cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+		cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 		disabled := false
 		_, _ = cm.UpdateConfig(context.Background(), func(bc *files.BotConfig) error {
 			bc.Guilds = []files.GuildConfig{
@@ -703,7 +704,7 @@ func TestRolePanelCommands_ErrorsAndEdgeCases(t *testing.T) {
 	t.Run("list empty panels list", func(t *testing.T) {
 		t.Parallel()
 		resetMockHTTP(t)
-		cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+		cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 		enabled := true
 		_, _ = cm.UpdateConfig(context.Background(), func(bc *files.BotConfig) error {
 			bc.Guilds = []files.GuildConfig{{GuildID: "12345", Features: files.FeatureToggles{RolePanels: &enabled}}}

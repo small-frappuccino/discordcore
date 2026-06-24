@@ -2,6 +2,7 @@ package logging
 
 import (
 	"fmt"
+
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/state"
 )

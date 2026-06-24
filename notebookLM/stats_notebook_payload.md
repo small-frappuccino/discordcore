@@ -249,10 +249,10 @@ func (s *StatsService) handlesGuild(guildID string) bool {
 	if cfg == nil {
 		return false
 	}
-	if !cfg.BelongsToBotInstance(s.botInstanceID) {
+	if !files.BelongsToBotInstance(*cfg, s.botInstanceID) {
 		return false
 	}
-	resolvedID, _ := cfg.ResolveFeatureBotInstanceID("stats")
+	resolvedID, _ := files.ResolveFeatureBotInstanceID(*cfg, "stats")
 	return resolvedID == s.botInstanceID
 }
 
@@ -261,7 +261,7 @@ func (s *StatsService) scopedConfig() *files.BotConfig {
 	if cfg == nil {
 		return nil
 	}
-	scopedGuilds := cfg.GuildsForBotInstance(s.botInstanceID)
+	scopedGuilds := files.GuildsForBotInstance(cfg, s.botInstanceID)
 	if len(scopedGuilds) == len(cfg.Guilds) {
 		return cfg
 	}
@@ -1307,6 +1307,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/members"
 	"golang.org/x/sync/errgroup"
@@ -1356,7 +1357,7 @@ func TestStatsService_DatabasePreemption(t *testing.T) {
 	store := &blockingStore{
 		entered: make(chan struct{}),
 	}
-	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	configManager := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 
 	monitoringEnabled := true
 	guildCfg := files.GuildConfig{

@@ -9,9 +9,11 @@ import (
 	"testing"
 
 	"context"
+
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/httputil/httpdriver"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	localdiscord "github.com/small-frappuccino/discordcore/pkg/discord"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -138,7 +140,7 @@ func getMockReqBodies(t *testing.T) [][]byte {
 	return mock.reqBodies
 }
 
-func newTestContext(t *testing.T, event discord.InteractionEvent, cm *files.ConfigManager) *commands.ArikawaContext {
+func newTestContext(t *testing.T, event discord.InteractionEvent, cm config.Provider) *commands.ArikawaContext {
 	ctx, _ := commands.NewArikawaContext(event, cm)
 	if ctx != nil {
 		ctx.Client = api.NewClient("mockToken")
@@ -163,7 +165,7 @@ func (s *spyRouter) RegisterComponent(customIDPrefix string, handler commands.Co
 
 func TestLoggingCommands_RegisterCommands(t *testing.T) {
 	t.Parallel()
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	lc := NewLoggingCommands(cm)
 	sr := &spyRouter{}
 	lc.RegisterCommands(sr)
@@ -199,7 +201,7 @@ func TestLoggingCommands_RegisterCommands(t *testing.T) {
 
 func TestLoggingRootCommand_HandleSafety(t *testing.T) {
 	t.Parallel()
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	cmd := &loggingRootCommand{configManager: cm}
 
 	// Interaction without Options
@@ -234,7 +236,7 @@ func TestLoggingRootCommand_HandleSafety(t *testing.T) {
 func TestLoggingRootCommand_Avatar(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
 	})
@@ -277,7 +279,7 @@ func TestLoggingRootCommand_Avatar(t *testing.T) {
 func TestLoggingRootCommand_RoleUpdate(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
 	})
@@ -320,7 +322,7 @@ func TestLoggingRootCommand_RoleUpdate(t *testing.T) {
 func TestLoggingRootCommand_Messages(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
 	})
@@ -360,7 +362,7 @@ func TestLoggingRootCommand_Messages(t *testing.T) {
 func TestLoggingRootCommand_EntryExit(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
 	})
@@ -432,7 +434,7 @@ func TestLoggingRootCommand_EntryExit(t *testing.T) {
 func TestLoggingRootCommand_Warnings(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
 	})
@@ -473,7 +475,7 @@ func TestLoggingRootCommand_Warnings(t *testing.T) {
 func TestLoggingRootCommand_AutomodNoRule(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
 	})
@@ -531,7 +533,7 @@ func TestLoggingRootCommand_AutomodNoRule(t *testing.T) {
 func TestLoggingRootCommand_AutomodWithRule(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
 	})

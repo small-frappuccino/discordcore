@@ -820,7 +820,7 @@ type AvatarChange struct {
 	Timestamp time.Time
 }
 
-func guildConfigByID(cfg *BotConfig, guildID string) (*GuildConfig, error) {
+func GuildConfigByID(cfg *BotConfig, guildID string) (*GuildConfig, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("%w: guild_id=%s", ErrGuildConfigNotFound, strings.TrimSpace(guildID))
 	}
@@ -902,7 +902,7 @@ func (mgr *ConfigManager) SetRolesCacheTTL(guildID string, ttl string) error {
 		}
 	}
 	_, err := mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
-		gcfg, err := guildConfigByID(cfg, guildID)
+		gcfg, err := GuildConfigByID(cfg, guildID)
 		if err != nil {
 			return fmt.Errorf("guild not found")
 		}

@@ -14,6 +14,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/httputil/httpdriver"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
@@ -80,10 +81,10 @@ func newStatsCommandTestRouter(
 	guildID string,
 	ownerID string,
 	cfg files.GuildConfig,
-) (*commands.CommandRouter, *files.ConfigManager, *mockStatsService, *interactionRecorder) {
+) (*commands.CommandRouter, config.Provider, *mockStatsService, *interactionRecorder) {
 	t.Helper()
 
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	if err := cm.AddGuildConfig(cfg); err != nil {
 		t.Fatalf("failed to add guild config: %v", err)
 	}
@@ -126,7 +127,7 @@ func newStatsSlashInteraction(
 	}
 }
 
-func handleRawStatsInteraction(t *testing.T, router *commands.CommandRouter, cm *files.ConfigManager, rec *interactionRecorder, ic *discord.InteractionEvent) {
+func handleRawStatsInteraction(t *testing.T, router *commands.CommandRouter, cm config.Provider, rec *interactionRecorder, ic *discord.InteractionEvent) {
 	t.Helper()
 
 	cmdData := ic.Data.(*discord.CommandInteraction)

@@ -1,6 +1,10 @@
-package files
+package config
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/small-frappuccino/discordcore/pkg/files"
+)
 
 func TestMemoryConfigStoreRoundTrip(t *testing.T) {
 	t.Parallel()
@@ -15,10 +19,10 @@ func TestMemoryConfigStoreRoundTrip(t *testing.T) {
 		t.Fatal("expected empty memory store to report exists=false")
 	}
 
-	cfg := &BotConfig{
-		Guilds: []GuildConfig{{
+	cfg := &files.BotConfig{
+		Guilds: []files.GuildConfig{{
 			GuildID: "g1",
-			Channels: ChannelsConfig{
+			Channels: files.ChannelsConfig{
 				Commands: "c1",
 			},
 		}},
@@ -48,10 +52,10 @@ func TestMemoryConfigStoreReturnsDefensiveCopies(t *testing.T) {
 	t.Parallel()
 
 	store := &MemoryConfigStore{}
-	if err := store.Save(&BotConfig{
-		Guilds: []GuildConfig{{
+	if err := store.Save(&files.BotConfig{
+		Guilds: []files.GuildConfig{{
 			GuildID: "g1",
-			Channels: ChannelsConfig{
+			Channels: files.ChannelsConfig{
 				MessageDelete: "c1",
 			},
 		}},

@@ -16,6 +16,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/httputil/httpdriver"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	localdiscord "github.com/small-frappuccino/discordcore/pkg/discord"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	embedsvc "github.com/small-frappuccino/discordcore/pkg/discord/embeds"
@@ -148,7 +149,7 @@ func newTestContext(t *testing.T, event discord.InteractionEvent, cm *files.Conf
 // fakeIOStore introduces an artificial delay to simulate async I/O and expose race conditions.
 type fakeIOStore struct {
 	mu     sync.Mutex
-	memory *files.MemoryConfigStore
+	memory *config.MemoryConfigStore
 }
 
 func (s *fakeIOStore) Load() (*files.BotConfig, error) {
@@ -180,8 +181,9 @@ func (s *fakeIOStore) Finish() {}
 
 func TestEmbedCommands_ConcurrentMutation(t *testing.T) {
 	t.Parallel()
-	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
+	store := &fakeIOStore{memory: &config.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
+	svc := embedsvc.NewEmbedService(cm)
 	guildID := "guild-concurrent"
 
 	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: guildID}); err != nil {
@@ -189,7 +191,7 @@ func TestEmbedCommands_ConcurrentMutation(t *testing.T) {
 	}
 
 	ce := files.CustomEmbedConfig{Key: "concurrent-embed", Title: "Initial Title"}
-	cm.SetCustomEmbedProperties(guildID, ce.Key, ce)
+	svc.SetCustomEmbedProperties(guildID, ce.Key, ce)
 
 	var eg errgroup.Group
 	workers := 50
@@ -201,21 +203,21 @@ func TestEmbedCommands_ConcurrentMutation(t *testing.T) {
 				Name:  fmt.Sprintf("Field %d", idx),
 				Value: "Val",
 			}
-			cm.AddCustomEmbedField(guildID, ce.Key, field)
+			svc.AddCustomEmbedField(guildID, ce.Key, field)
 			return nil
 		})
 	}
 
 	for i := 0; i < 10; i++ {
 		eg.Go(func() error {
-			cm.RemoveCustomEmbedField(guildID, ce.Key, 0)
+			svc.RemoveCustomEmbedField(guildID, ce.Key, 0)
 			return nil
 		})
 	}
 
 	_ = eg.Wait()
 
-	embeds, err := cm.CustomEmbed(guildID, ce.Key)
+	embeds, err := svc.CustomEmbed(guildID, ce.Key)
 	if err != nil {
 		t.Fatalf("failed to retrieve embed: %v", err)
 	}
@@ -231,11 +233,11 @@ func TestEmbedCommands_ObservabilityStructuralFaults(t *testing.T) {
 	jsonHandler := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
 	logger := slog.New(jsonHandler)
 
-	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
+	store := &fakeIOStore{memory: &config.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, logger)
+	svc := embedsvc.NewEmbedService(cm)
 
 	router := commands.NewCommandRouter(api.NewClient("dummy_token"), cm).WithLogger(logger)
-	svc := embedsvc.NewEmbedService(cm)
 	embedCmds := NewEmbedCommands(cm, svc)
 	embedCmds.RegisterCommands(router)
 
@@ -266,7 +268,7 @@ func TestEmbedCommands_ObservabilityStructuralFaults(t *testing.T) {
 	}
 
 	cm.AddGuildConfig(files.GuildConfig{GuildID: "123"})
-	cm.SetCustomEmbedProperties("123", "valid-key", files.CustomEmbedConfig{Key: "valid-key"})
+	svc.SetCustomEmbedProperties("123", "valid-key", files.CustomEmbedConfig{Key: "valid-key"})
 	interaction.GuildID = discord.GuildID(123)
 
 	router.HandleEvent(interaction)
@@ -294,7 +296,7 @@ func (s *spyRouter) RegisterComponent(customIDPrefix string, handler commands.Co
 
 func TestEmbedCommands_RegisterCommands(t *testing.T) {
 	t.Parallel()
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	svc := embedsvc.NewEmbedService(cm)
 	ec := NewEmbedCommands(cm, svc)
 	sr := &spyRouter{}
@@ -319,14 +321,14 @@ func TestEmbedCommands_RegisterCommands(t *testing.T) {
 func TestEmbedCommands_Post(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
+	svc := embedsvc.NewEmbedService(cm)
 	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
-	_ = cm.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{
+	_ = svc.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{
 		Key:         "test-key",
 		Title:       "Test Embed Title",
 		Description: "Test Embed Description",
 	})
-	svc := embedsvc.NewEmbedService(cm)
 
 	// Mock successful Discord API response for Message Create
 	setMockStatusAndBody(t, http.StatusOK, []byte(`{"id": "99999", "channel_id": "88888", "content": ""}`))
@@ -361,7 +363,7 @@ func TestEmbedCommands_Post(t *testing.T) {
 	}
 
 	// Check that a posting was added
-	ce, _ := cm.CustomEmbed("12345", "test-key")
+	ce, _ := svc.CustomEmbed("12345", "test-key")
 	if len(ce.Postings) != 1 || ce.Postings[0].MessageID != "99999" || ce.Postings[0].ChannelID != "88888" {
 		t.Errorf("expected 1 posting with msg=99999, got: %v", ce.Postings)
 	}
@@ -401,14 +403,14 @@ func TestEmbedCommands_Post(t *testing.T) {
 func TestEmbedCommands_Preview(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
+	svc := embedsvc.NewEmbedService(cm)
 	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
-	_ = cm.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{
+	_ = svc.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{
 		Key:         "test-key",
 		Title:       "Test Embed Title",
 		Description: "Test Embed Description",
 	})
-	svc := embedsvc.NewEmbedService(cm)
 
 	ctx := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
@@ -447,9 +449,9 @@ func TestEmbedCommands_Preview(t *testing.T) {
 func TestEmbedCommands_Set(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
-	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	svc := embedsvc.NewEmbedService(cm)
+	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
 
 	ctx := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
@@ -488,7 +490,7 @@ func TestEmbedCommands_Set(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	ce, err := cm.CustomEmbed("12345", "new-embed")
+	ce, err := svc.CustomEmbed("12345", "new-embed")
 	if err != nil {
 		t.Fatalf("failed to retrieve embed: %v", err)
 	}
@@ -503,9 +505,10 @@ func TestEmbedCommands_Set(t *testing.T) {
 func TestEmbedCommands_Delete(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
+	svc := embedsvc.NewEmbedService(cm)
 	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
-	_ = cm.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{Key: "test-key"})
+	_ = svc.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{Key: "test-key"})
 
 	ctx := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
@@ -529,14 +532,14 @@ func TestEmbedCommands_Delete(t *testing.T) {
 		},
 	}, cm)
 
-	cmd := newEmbedDeleteSubCommand(cm)
+	cmd := newEmbedDeleteSubCommand(cm, svc)
 	err := cmd.Handle(ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	_, err = cm.CustomEmbed("12345", "test-key")
-	if !errors.Is(err, files.ErrCustomEmbedNotFound) {
+	_, err = svc.CustomEmbed("12345", "test-key")
+	if !errors.Is(err, embedsvc.ErrCustomEmbedNotFound) {
 		t.Errorf("expected embed to be deleted, but got: %v", err)
 	}
 
@@ -553,7 +556,8 @@ func TestEmbedCommands_Delete(t *testing.T) {
 func TestEmbedCommands_List(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
+	svc := embedsvc.NewEmbedService(cm)
 	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
 
 	ctx := newTestContext(t, discord.InteractionEvent{
@@ -575,7 +579,7 @@ func TestEmbedCommands_List(t *testing.T) {
 		},
 	}, cm)
 
-	cmd := newEmbedListSubCommand(cm)
+	cmd := newEmbedListSubCommand(cm, svc)
 	err := cmd.Handle(ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -584,8 +588,8 @@ func TestEmbedCommands_List(t *testing.T) {
 		t.Errorf("expected empty state message, got: %s", getLastResponse(t))
 	}
 
-	_ = cm.SetCustomEmbedProperties("12345", "test-key-1", files.CustomEmbedConfig{Key: "test-key-1"})
-	_ = cm.SetCustomEmbedProperties("12345", "test-key-2", files.CustomEmbedConfig{Key: "test-key-2"})
+	_ = svc.SetCustomEmbedProperties("12345", "test-key-1", files.CustomEmbedConfig{Key: "test-key-1"})
+	_ = svc.SetCustomEmbedProperties("12345", "test-key-2", files.CustomEmbedConfig{Key: "test-key-2"})
 
 	err = cmd.Handle(ctx)
 	if err != nil {
@@ -599,15 +603,14 @@ func TestEmbedCommands_List(t *testing.T) {
 func TestEmbedCommands_Refresh(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
+	svc := embedsvc.NewEmbedService(cm)
 	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
-	_ = cm.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{
+	_ = svc.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{
 		Key:   "test-key",
 		Title: "Title",
 	})
-	_ = cm.AddCustomEmbedPosting("12345", "test-key", files.CustomEmbedPostingConfig{ChannelID: "111", MessageID: "222"})
-
-	svc := embedsvc.NewEmbedService(cm)
+	_ = svc.AddCustomEmbedPosting("12345", "test-key", files.CustomEmbedPostingConfig{ChannelID: "111", MessageID: "222"})
 
 	ctx := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
@@ -641,7 +644,7 @@ func TestEmbedCommands_Refresh(t *testing.T) {
 	}
 
 	// Refresh empty postings
-	_ = cm.SetCustomEmbedProperties("12345", "test-key-no-posts", files.CustomEmbedConfig{Key: "test-key-no-posts"})
+	_ = svc.SetCustomEmbedProperties("12345", "test-key-no-posts", files.CustomEmbedConfig{Key: "test-key-no-posts"})
 	ctxNoPosts := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
@@ -676,15 +679,14 @@ func TestEmbedCommands_Refresh(t *testing.T) {
 func TestEmbedCommands_Unpost(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
+	svc := embedsvc.NewEmbedService(cm)
 	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
-	_ = cm.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{
+	_ = svc.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{
 		Key:   "test-key",
 		Title: "Title",
 	})
-	_ = cm.AddCustomEmbedPosting("12345", "test-key", files.CustomEmbedPostingConfig{ChannelID: "111", MessageID: "222"})
-
-	svc := embedsvc.NewEmbedService(cm)
+	_ = svc.AddCustomEmbedPosting("12345", "test-key", files.CustomEmbedPostingConfig{ChannelID: "111", MessageID: "222"})
 
 	ctx := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
@@ -715,7 +717,7 @@ func TestEmbedCommands_Unpost(t *testing.T) {
 	}
 
 	// Verify posting was removed from config
-	ce, _ := cm.CustomEmbed("12345", "test-key")
+	ce, _ := svc.CustomEmbed("12345", "test-key")
 	if len(ce.Postings) != 0 {
 		t.Errorf("expected posting to be removed, got: %v", ce.Postings)
 	}
@@ -733,10 +735,10 @@ func TestEmbedCommands_Unpost(t *testing.T) {
 func TestEmbedCommands_Fields(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
-	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
-	_ = cm.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{Key: "test-key"})
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	svc := embedsvc.NewEmbedService(cm)
+	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
+	_ = svc.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{Key: "test-key"})
 
 	// Add Field
 	ctxAdd := newTestContext(t, discord.InteractionEvent{
@@ -770,7 +772,7 @@ func TestEmbedCommands_Fields(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	ce, _ := cm.CustomEmbed("12345", "test-key")
+	ce, _ := svc.CustomEmbed("12345", "test-key")
 	if len(ce.Fields) != 1 || ce.Fields[0].Name != "FieldName" || ce.Fields[0].Value != "FieldValue" || !ce.Fields[0].Inline {
 		t.Errorf("unexpected fields configuration: %v", ce.Fields)
 	}
@@ -798,7 +800,7 @@ func TestEmbedCommands_Fields(t *testing.T) {
 		},
 	}, cm)
 
-	cmdList := newEmbedFieldListSubCommand(cm)
+	cmdList := newEmbedFieldListSubCommand(cm, svc)
 	err = cmdList.Handle(ctxList)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -837,7 +839,7 @@ func TestEmbedCommands_Fields(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	ce, _ = cm.CustomEmbed("12345", "test-key")
+	ce, _ = svc.CustomEmbed("12345", "test-key")
 	if len(ce.Fields) != 0 {
 		t.Errorf("expected fields list to be empty, got: %v", ce.Fields)
 	}
@@ -855,9 +857,10 @@ func TestEmbedCommands_Fields(t *testing.T) {
 func TestEmbedCommands_ImportExport(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
+	svc := embedsvc.NewEmbedService(cm)
 	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
-	_ = cm.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{
+	_ = svc.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{
 		Key:         "test-key",
 		Title:       "Initial Title",
 		Description: "Initial Description",
@@ -887,13 +890,13 @@ func TestEmbedCommands_ImportExport(t *testing.T) {
 		},
 	}, cm)
 
-	cmdImport := newEmbedImportSubCommand(cm)
+	cmdImport := newEmbedImportSubCommand(cm, svc)
 	err := cmdImport.Handle(ctxImport)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	ce, _ := cm.CustomEmbed("12345", "test-key")
+	ce, _ := svc.CustomEmbed("12345", "test-key")
 	if ce.Title != "Imported Title" || ce.Description != "Imported Description" || len(ce.Fields) != 1 || ce.Fields[0].Name != "Imported Field" {
 		t.Errorf("unexpected properties on imported embed: %v", ce)
 	}
@@ -921,7 +924,7 @@ func TestEmbedCommands_ImportExport(t *testing.T) {
 		},
 	}, cm)
 
-	cmdExport := newEmbedExportSubCommand(cm)
+	cmdExport := newEmbedExportSubCommand(cm, svc)
 	err = cmdExport.Handle(ctxExport)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -934,10 +937,10 @@ func TestEmbedCommands_ImportExport(t *testing.T) {
 func TestEmbedCommands_ErrorAndEdgeCases(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
-	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
-	_ = cm.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{Key: "test-key"})
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	svc := embedsvc.NewEmbedService(cm)
+	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
+	_ = svc.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{Key: "test-key"})
 
 	// 1. Missing Key Option (embedKeyFromOptions failure)
 	ctxNoKey := newTestContext(t, discord.InteractionEvent{
@@ -1020,7 +1023,7 @@ func TestEmbedCommands_ErrorAndEdgeCases(t *testing.T) {
 			},
 		},
 	}, cm)
-	cmdImport := newEmbedImportSubCommand(cm)
+	cmdImport := newEmbedImportSubCommand(cm, svc)
 	err = cmdImport.Handle(ctxImportBadURL)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1087,7 +1090,7 @@ func TestEmbedCommands_ErrorAndEdgeCases(t *testing.T) {
 			},
 		},
 	}, cm)
-	cmdExport := newEmbedExportSubCommand(cm)
+	cmdExport := newEmbedExportSubCommand(cm, svc)
 	err = cmdExport.Handle(ctxExportNotFound)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

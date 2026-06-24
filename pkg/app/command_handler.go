@@ -12,6 +12,7 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	qotdcmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/qotd"
@@ -402,7 +403,7 @@ func (ch *CommandHandler) matchesGuildBotInstance(guildID string, feature string
 		return false
 	}
 
-	resolvedID, _ := guild.ResolveFeatureBotInstanceID(feature)
+	resolvedID, _ := files.ResolveFeatureBotInstanceID(*guild, feature)
 	if resolvedID == "" {
 		return false
 	}
@@ -435,7 +436,7 @@ func (ch *CommandHandler) SessionToken() string {
 	return ""
 }
 
-func (ch *CommandHandler) ConfigManager() *files.ConfigManager {
+func (ch *CommandHandler) ConfigProvider() config.Provider {
 	return ch.configManager
 }
 

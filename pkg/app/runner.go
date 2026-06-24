@@ -15,6 +15,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordcore/pkg/clock"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/control"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
@@ -726,7 +727,7 @@ func setupStorage(dbb resolvedDatabaseBootstrap) (*postgres.Store, *files.Config
 		slog.String("driver", "postgres"),
 	)
 
-	configStore := files.NewPostgresConfigStore(db, files.DefaultPostgresConfigStoreKey, slog.Default())
+	configStore := config.NewPostgresConfigStore(db, config.DefaultPostgresConfigStoreKey, slog.Default())
 	configManager := files.NewConfigManagerWithStore(configStore, slog.Default())
 
 	slog.Debug("Executing cross-boundary extraction for master configuration tree")

@@ -16,7 +16,7 @@ func newWebhookUpdatesTestManager(t *testing.T, cfg *BotConfig) *ConfigManager {
 		cfg.Guilds = []GuildConfig{}
 	}
 
-	mgr := NewConfigManagerWithStore(&MemoryConfigStore{}, nil)
+	mgr := NewConfigManagerWithStore(&mockConfigStore{}, nil)
 	mgr.config = cfg
 	return mgr
 }

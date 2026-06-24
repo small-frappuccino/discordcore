@@ -15,14 +15,14 @@ func (s *transactionalTestStore) Load() (*BotConfig, error) {
 	if s == nil || s.cfg == nil {
 		return &BotConfig{Guilds: []GuildConfig{}}, nil
 	}
-	return cloneBotConfigPtr(s.cfg), nil
+	return CloneBotConfigPtr(s.cfg), nil
 }
 
 func (s *transactionalTestStore) Save(cfg *BotConfig) error {
 	if s.saveErr != nil {
 		return s.saveErr
 	}
-	s.cfg = cloneBotConfigPtr(cfg)
+	s.cfg = CloneBotConfigPtr(cfg)
 	return nil
 }
 
@@ -45,11 +45,11 @@ func newTransactionalTestManager(t *testing.T, cfg *BotConfig, saveErr error) (*
 	}
 
 	store := &transactionalTestStore{
-		cfg:     cloneBotConfigPtr(cfg),
+		cfg:     CloneBotConfigPtr(cfg),
 		saveErr: saveErr,
 	}
 	mgr := NewConfigManagerWithStore(store, nil)
-	mgr.config = cloneBotConfigPtr(cfg)
+	mgr.config = CloneBotConfigPtr(cfg)
 	if _, err := mgr.rebuildGuildIndexLocked("test"); err != nil {
 		t.Fatalf("rebuild index: %v", err)
 	}

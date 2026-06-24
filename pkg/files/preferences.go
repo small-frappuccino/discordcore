@@ -383,7 +383,7 @@ func (mgr *ConfigManager) GuildIndexStats() GuildIndexStats {
 func (mgr *ConfigManager) AddGuildConfig(guildCfg GuildConfig) error {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
-	next := cloneBotConfigPtr(mgr.config)
+	next := CloneBotConfigPtr(mgr.config)
 	if next == nil {
 		next = &BotConfig{Guilds: []GuildConfig{}}
 	}
@@ -418,7 +418,7 @@ func (mgr *ConfigManager) RemoveGuildConfig(guildID string) {
 		slog.String("guildID", guildID),
 	)
 
-	next := cloneBotConfigPtr(mgr.config)
+	next := CloneBotConfigPtr(mgr.config)
 	next.Guilds = slices.DeleteFunc(next.Guilds, func(g GuildConfig) bool {
 		return g.GuildID == guildID
 	})
@@ -729,7 +729,7 @@ func LogConfiguredGuildsForBot(configManager *ConfigManager, session *discordgo.
 	return logConfiguredGuildSubset(configManager, session, func(cfg *BotConfig) []GuildConfig {
 		guilds := cfg.Guilds
 		if normalizedBotInstanceID := NormalizeBotInstanceID(botInstanceID); normalizedBotInstanceID != "" {
-			guilds = cfg.GuildsForBotInstance(normalizedBotInstanceID)
+			guilds = GuildsForBotInstance(cfg, normalizedBotInstanceID)
 		}
 		return guilds
 	})

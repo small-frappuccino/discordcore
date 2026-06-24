@@ -11,7 +11,7 @@ func NormalizeBotInstanceID(botInstanceID string) string {
 
 // BelongsToBotInstance reports whether the guild should be handled by the
 // provided runtime, which is true if the guild has a configured token for it.
-func (gc GuildConfig) BelongsToBotInstance(botInstanceID string) bool {
+func BelongsToBotInstance(gc GuildConfig, botInstanceID string) bool {
 	botInstanceID = NormalizeBotInstanceID(botInstanceID)
 
 	// If the guild has gracefully fallen back due to having NO bot tokens,
@@ -28,7 +28,7 @@ func (gc GuildConfig) BelongsToBotInstance(botInstanceID string) bool {
 
 // GuildsForBotInstance returns the guild subset assigned to the provided bot instance,
 // preserving config order.
-func (cfg *BotConfig) GuildsForBotInstance(botInstanceID string) []GuildConfig {
+func GuildsForBotInstance(cfg *BotConfig, botInstanceID string) []GuildConfig {
 	if cfg == nil || len(cfg.Guilds) == 0 {
 		return nil
 	}
@@ -37,7 +37,7 @@ func (cfg *BotConfig) GuildsForBotInstance(botInstanceID string) []GuildConfig {
 
 	out := make([]GuildConfig, 0, len(cfg.Guilds))
 	for _, guild := range cfg.Guilds {
-		if guild.BelongsToBotInstance(target) {
+		if BelongsToBotInstance(guild, target) {
 			out = append(out, guild)
 		}
 	}
@@ -47,7 +47,7 @@ func (cfg *BotConfig) GuildsForBotInstance(botInstanceID string) []GuildConfig {
 
 // GuildsForBotInstanceFeature returns the guild subset assigned to the provided bot instance for a specific feature,
 // preserving config order.
-func (cfg *BotConfig) GuildsForBotInstanceFeature(botInstanceID string, feature string) []GuildConfig {
+func GuildsForBotInstanceFeature(cfg *BotConfig, botInstanceID string, feature string) []GuildConfig {
 	if cfg == nil || len(cfg.Guilds) == 0 {
 		return nil
 	}
@@ -56,10 +56,10 @@ func (cfg *BotConfig) GuildsForBotInstanceFeature(botInstanceID string, feature 
 
 	out := make([]GuildConfig, 0, len(cfg.Guilds))
 	for _, guild := range cfg.Guilds {
-		if !guild.BelongsToBotInstance(target) {
+		if !BelongsToBotInstance(guild, target) {
 			continue
 		}
-		resolvedID, _ := guild.ResolveFeatureBotInstanceID(feature)
+		resolvedID, _ := ResolveFeatureBotInstanceID(guild, feature)
 		if resolvedID == target {
 			out = append(out, guild)
 		}
@@ -73,7 +73,7 @@ func (cfg *BotConfig) GuildsForBotInstanceFeature(botInstanceID string, feature 
 // It returns the resolved instance ID and a boolean fallbackFlag
 // indicating if the designated bot token was revoked, invalid, or missing, necessitating
 // a degradation to the default fallback bot.
-func (gc GuildConfig) ResolveFeatureBotInstanceID(feature string) (resolvedID string, fallback bool) {
+func ResolveFeatureBotInstanceID(gc GuildConfig, feature string) (resolvedID string, fallback bool) {
 	// If the guild has gracefully fallen back due to having NO bot tokens,
 	// the magic blank instance handles ALL features.
 	if len(gc.BotInstanceTokens) == 0 {

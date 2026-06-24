@@ -10,6 +10,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
@@ -22,13 +23,13 @@ type StatsService interface {
 
 // StatsCommands wiring.
 type StatsCommands struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 	statsService  StatsService
 	logger        *slog.Logger
 }
 
 // NewStatsCommands returns the root stats command tree.
-func NewStatsCommands(configManager *files.ConfigManager, statsService StatsService, logger *slog.Logger) *StatsCommands {
+func NewStatsCommands(configManager config.Provider, statsService StatsService, logger *slog.Logger) *StatsCommands {
 	return &StatsCommands{
 		configManager: configManager,
 		statsService:  statsService,
@@ -50,7 +51,7 @@ func (c *StatsCommands) RegisterCommands(router commands.ArikawaRegisterer) {
 }
 
 type statsRootCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 	statsService  StatsService
 	logger        *slog.Logger
 }

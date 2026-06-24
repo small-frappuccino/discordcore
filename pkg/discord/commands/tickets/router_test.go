@@ -15,6 +15,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/state"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	discordtickets "github.com/small-frappuccino/discordcore/pkg/discord/tickets"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
@@ -82,7 +83,7 @@ func TestRouter_DeferBeforeIO(t *testing.T) {
 	}
 	t.Cleanup(func() { http.DefaultTransport = oldTransport })
 
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	svc := discordtickets.NewService(st, logger)
 	r := NewTicketRouter(st, svc, nil, cm, logger)

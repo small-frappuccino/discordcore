@@ -16,6 +16,7 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/state"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/persistence"
 	"github.com/small-frappuccino/discordcore/pkg/testdb"
@@ -91,12 +92,12 @@ func TestRunner_ResolveRuntimeCapabilities(t *testing.T) {
 }
 
 func TestRunner_ApplyConfiguredTheme(t *testing.T) {
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	applyConfiguredTheme(cm)
 }
 
 func TestRunner_ScheduleDBCleanup(t *testing.T) {
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	scheduleDBCleanup(context.Background(), nil, cm)
 }
 
@@ -189,7 +190,7 @@ func seedRunnerConfig(t *testing.T, dbCfg files.DatabaseRuntimeConfig, cfg files
 		t.Fatalf("failed to open database for seeding: %v", err)
 	}
 	defer db.Close()
-	store := files.NewPostgresConfigStore(db, files.DefaultPostgresConfigStoreKey, slog.Default())
+	store := config.NewPostgresConfigStore(db, config.DefaultPostgresConfigStoreKey, slog.Default())
 	if err := store.Save(&cfg); err != nil {
 		t.Fatalf("failed to save test config to postgres: %v", err)
 	}

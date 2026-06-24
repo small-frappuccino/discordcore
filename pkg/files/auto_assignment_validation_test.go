@@ -90,7 +90,7 @@ func TestValidateBotConfigRejectsInvalidRequiredRolesLength(t *testing.T) {
 
 func TestConfigManagerLoadConfigMigratesAutoAssignmentBoosterRole(t *testing.T) {
 	t.Parallel()
-	store := &MemoryConfigStore{}
+	store := &mockConfigStore{}
 	input := BotConfig{
 		Guilds: []GuildConfig{
 			{
@@ -136,7 +136,7 @@ func TestConfigManagerLoadConfigMigratesAutoAssignmentBoosterRole(t *testing.T) 
 
 func TestConfigManagerSaveConfigRejectsInvalidAutoAssignmentOrder(t *testing.T) {
 	t.Parallel()
-	mgr := NewConfigManagerWithStore(&MemoryConfigStore{}, nil)
+	mgr := NewConfigManagerWithStore(&mockConfigStore{}, nil)
 	mgr.config = &BotConfig{
 		Guilds: []GuildConfig{
 			{

@@ -9,6 +9,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/httputil"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
@@ -41,19 +42,20 @@ func (r customEmbedSyncResult) HasIssues() bool {
 // It manages the conversion of configuration states into Discord-compatible
 // payloads and executes lifecycle mutations on the Discord platform.
 type EmbedService struct {
-	configManager *files.ConfigManager
-	editMessage   func(client *api.Client, channelID discord.ChannelID, messageID discord.MessageID, data api.EditMessageData) error
-	dropPostings  func(cm *files.ConfigManager, guildID, key string, messageIDs []string) error
+	configProvider config.Provider
+	editMessage    func(client *api.Client, channelID discord.ChannelID, messageID discord.MessageID, data api.EditMessageData) error
+	dropPostings   func(guildID, key string, messageIDs []string) error
 }
 
 // NewEmbedService instantiates the primary domain service for custom embed management.
 // It mandates the injection of the configuration manager to enforce state constraints.
-func NewEmbedService(configManager *files.ConfigManager) *EmbedService {
-	return &EmbedService{
-		configManager: configManager,
-		editMessage:   defaultCustomEmbedEditMessage,
-		dropPostings:  defaultCustomEmbedDropPostings,
+func NewEmbedService(configProvider config.Provider) *EmbedService {
+	s := &EmbedService{
+		configProvider: configProvider,
+		editMessage:    defaultCustomEmbedEditMessage,
 	}
+	s.dropPostings = s.RemoveCustomEmbedPostings
+	return s
 }
 
 // Post generates a Discord embed payload and dispatches it to the designated channel.
@@ -128,7 +130,7 @@ func (s *EmbedService) Sync(
 		}
 		// Operational annotation: We execute dropPostings synchronously rather than spawning
 		// a background goroutine to guarantee deterministic state resolution before returning.
-		if dropErr := s.dropPostings(s.configManager, guildID, key, ids); dropErr != nil {
+		if dropErr := s.dropPostings(guildID, key, ids); dropErr != nil {
 			slog.Warn("Service degradation intercepted and mitigated",
 				slog.String("reason", "Custom embed batch posting cleanup failed"),
 				slog.String("guildID", guildID),
@@ -240,11 +242,4 @@ func defaultCustomEmbedEditMessage(client *api.Client, channelID discord.Channel
 	}
 	_, err := client.EditMessageComplex(channelID, messageID, data)
 	return err
-}
-
-func defaultCustomEmbedDropPostings(cm *files.ConfigManager, guildID, key string, messageIDs []string) error {
-	if cm == nil {
-		return errors.New("config manager is nil")
-	}
-	return cm.RemoveCustomEmbedPostings(guildID, key, messageIDs)
 }

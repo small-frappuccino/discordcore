@@ -72,7 +72,7 @@ func resolveBotRuntimeCapabilities(
 		intents: discordgo.IntentsGuilds,
 	}
 
-	guilds := cfg.GuildsForBotInstance(botInstanceID)
+	guilds := files.GuildsForBotInstance(cfg, botInstanceID)
 	for _, guild := range guilds {
 		features := cfg.ResolveFeatures(guild.GuildID)
 		runtimeConfig := cfg.ResolveRuntimeConfig(guild.GuildID)
@@ -84,25 +84,25 @@ func resolveBotRuntimeCapabilities(
 		isLoggingBot := false
 
 		if !guild.QOTD.IsZero() {
-			if id, _ := guild.ResolveFeatureBotInstanceID("qotd"); id == botInstanceID {
+			if id, _ := files.ResolveFeatureBotInstanceID(guild, "qotd"); id == botInstanceID {
 				isQOTDBot = true
 			}
 		}
 		if features.Services.Commands {
-			if id, _ := guild.ResolveFeatureBotInstanceID("roles"); id == botInstanceID {
+			if id, _ := files.ResolveFeatureBotInstanceID(guild, "roles"); id == botInstanceID {
 				isRolesBot = true
 			}
-			if id, _ := guild.ResolveFeatureBotInstanceID("stats"); id == botInstanceID {
+			if id, _ := files.ResolveFeatureBotInstanceID(guild, "stats"); id == botInstanceID {
 				isStatsBot = true
 			}
 		}
 		if guild.Channels.AutomodAction != "" || guild.UserPrune.Enabled {
-			if id, _ := guild.ResolveFeatureBotInstanceID("moderation"); id == botInstanceID {
+			if id, _ := files.ResolveFeatureBotInstanceID(guild, "moderation"); id == botInstanceID {
 				isModBot = true
 			}
 		}
 		if features.Services.Monitoring {
-			if id, _ := guild.ResolveFeatureBotInstanceID("logging"); id == botInstanceID {
+			if id, _ := files.ResolveFeatureBotInstanceID(guild, "logging"); id == botInstanceID {
 				isLoggingBot = true
 			}
 		}
@@ -442,7 +442,7 @@ func (r *botRuntimeResolver) runtimeForGuild(guildID string, feature string) (*b
 		feature = "dashboard"
 	}
 
-	bestInstanceID, _ := guild.ResolveFeatureBotInstanceID(feature)
+	bestInstanceID, _ := files.ResolveFeatureBotInstanceID(*guild, feature)
 	if bestInstanceID == "" {
 		return nil, "", fmt.Errorf("%w: explicit feature mapping is missing for guild %s", ErrSessionUnavailable, guildID)
 	}

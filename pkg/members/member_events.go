@@ -592,10 +592,10 @@ func (mes *MemberEventService) handlesGuild(guildID string) bool {
 	if guild == nil {
 		return false
 	}
-	if !guild.BelongsToBotInstance(mes.botInstanceID) {
+	if !files.BelongsToBotInstance(*guild, mes.botInstanceID) {
 		return false
 	}
-	rolesResolvedID, _ := guild.ResolveFeatureBotInstanceID("roles")
-	loggingResolvedID, _ := guild.ResolveFeatureBotInstanceID("logging")
+	rolesResolvedID, _ := files.ResolveFeatureBotInstanceID(*guild, "roles")
+	loggingResolvedID, _ := files.ResolveFeatureBotInstanceID(*guild, "logging")
 	return rolesResolvedID == mes.botInstanceID || loggingResolvedID == mes.botInstanceID
 }

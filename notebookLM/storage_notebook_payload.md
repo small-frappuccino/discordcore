@@ -5005,12 +5005,13 @@ package postgres
 import (
 	"context"
 	"fmt"
-	"github.com/small-frappuccino/discordcore/pkg/qotd"
-	"github.com/small-frappuccino/discordcore/pkg/testdb"
 	"iter"
 	"slices"
 	"testing"
 	"time"
+
+	"github.com/small-frappuccino/discordcore/pkg/qotd"
+	"github.com/small-frappuccino/discordcore/pkg/testdb"
 )
 
 func TestQOTDTablesInitialized(t *testing.T) {

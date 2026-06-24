@@ -14,6 +14,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/httputil/httpdriver"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	localdiscord "github.com/small-frappuccino/discordcore/pkg/discord"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	partnersvc "github.com/small-frappuccino/discordcore/pkg/discord/partners"
@@ -115,7 +116,7 @@ func getMockReqBodies(t *testing.T) [][]byte {
 	return mock.reqBodies
 }
 
-func newTestContext(t *testing.T, event discord.InteractionEvent, cm *files.ConfigManager) *commands.ArikawaContext {
+func newTestContext(t *testing.T, event discord.InteractionEvent, cm config.Provider) *commands.ArikawaContext {
 	ctx, _ := commands.NewArikawaContext(event, cm)
 	if ctx != nil {
 		ctx.Client = api.NewClient("mockToken")
@@ -130,7 +131,7 @@ func newTestContext(t *testing.T, event discord.InteractionEvent, cm *files.Conf
 
 type fakeIOStore struct {
 	mu     sync.RWMutex
-	memory *files.MemoryConfigStore
+	memory *config.MemoryConfigStore
 	writes int
 }
 
@@ -158,7 +159,7 @@ func (s *fakeIOStore) Describe() string {
 func TestPartnerCommands_ConcurrentStateMutation(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
+	store := &fakeIOStore{memory: &config.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
 
 	if err := cm.AddGuildConfig(files.GuildConfig{
@@ -282,7 +283,7 @@ func TestPartnerCommands_ConcurrentStateMutation(t *testing.T) {
 func TestPartnerAddSubCommand(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
+	store := &fakeIOStore{memory: &config.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
@@ -401,7 +402,7 @@ func TestPartnerAddSubCommand(t *testing.T) {
 func TestPartnerRemoveSubCommand(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
+	store := &fakeIOStore{memory: &config.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
@@ -512,7 +513,7 @@ func TestPartnerRemoveSubCommand(t *testing.T) {
 func TestPartnerLinkSubCommand(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
+	store := &fakeIOStore{memory: &config.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
@@ -621,7 +622,7 @@ func TestPartnerLinkSubCommand(t *testing.T) {
 func TestPartnerRenameSubCommand(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
+	store := &fakeIOStore{memory: &config.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
@@ -784,7 +785,7 @@ func TestPartnerRenameSubCommand(t *testing.T) {
 func TestPartnerListSubCommand(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
+	store := &fakeIOStore{memory: &config.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
@@ -857,7 +858,7 @@ func TestPartnerListSubCommand(t *testing.T) {
 func TestPartnerPostSubCommand(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
+	store := &fakeIOStore{memory: &config.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
@@ -979,7 +980,7 @@ func TestPartnerPostSubCommand(t *testing.T) {
 func TestPartnerUnpostSubCommand(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
+	store := &fakeIOStore{memory: &config.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
@@ -1109,7 +1110,7 @@ func TestPartnerUnpostSubCommand(t *testing.T) {
 func TestPartnerRefreshSubCommand(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
+	store := &fakeIOStore{memory: &config.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
@@ -1145,7 +1146,7 @@ func TestPartnerTemplates(t *testing.T) {
 	t.Parallel()
 	// 1. Test Import Template Success
 	resetMockHTTP(t)
-	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
+	store := &fakeIOStore{memory: &config.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",

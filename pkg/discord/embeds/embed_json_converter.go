@@ -1,4 +1,4 @@
-package files
+package embeds
 
 import (
 	"encoding/json"
@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 // ErrEmbedJSONValidation defines err embed jsonvalidation.
@@ -125,9 +127,9 @@ func ParseAndValidateDiscohookJSON(data []byte) (DiscohookEmbed, error) {
 	return embed, nil
 }
 
-// ToCustomEmbedConfig converts a DiscohookEmbed into our internal CustomEmbedConfig format.
-func ToCustomEmbedConfig(embed DiscohookEmbed, key string) CustomEmbedConfig {
-	out := CustomEmbedConfig{
+// ToCustomEmbedConfig converts a DiscohookEmbed into our internal files.CustomEmbedConfig format.
+func ToCustomEmbedConfig(embed DiscohookEmbed, key string) files.CustomEmbedConfig {
+	out := files.CustomEmbedConfig{
 		Key:         key,
 		Title:       embed.Title,
 		Description: embed.Description,
@@ -150,9 +152,9 @@ func ToCustomEmbedConfig(embed DiscohookEmbed, key string) CustomEmbedConfig {
 	}
 
 	if len(embed.Fields) > 0 {
-		out.Fields = make([]CustomEmbedFieldConfig, 0, len(embed.Fields))
+		out.Fields = make([]files.CustomEmbedFieldConfig, 0, len(embed.Fields))
 		for _, f := range embed.Fields {
-			out.Fields = append(out.Fields, CustomEmbedFieldConfig{
+			out.Fields = append(out.Fields, files.CustomEmbedFieldConfig{
 				Name:   f.Name,
 				Value:  f.Value,
 				Inline: f.Inline,
@@ -163,8 +165,8 @@ func ToCustomEmbedConfig(embed DiscohookEmbed, key string) CustomEmbedConfig {
 	return out
 }
 
-// FromCustomEmbedConfig exports a CustomEmbedConfig into a DiscohookJSON object.
-func FromCustomEmbedConfig(ce CustomEmbedConfig) DiscohookJSON {
+// FromCustomEmbedConfig exports a files.CustomEmbedConfig into a DiscohookJSON object.
+func FromCustomEmbedConfig(ce files.CustomEmbedConfig) DiscohookJSON {
 	embed := buildDiscohookEmbedBase(discohookEmbedBase{
 		Title:       ce.Title,
 		Description: ce.Description,
@@ -193,9 +195,9 @@ func FromCustomEmbedConfig(ce CustomEmbedConfig) DiscohookJSON {
 	}
 }
 
-// ToRolePanelConfig converts a DiscohookEmbed into our internal RolePanelConfig format.
-func ToRolePanelConfig(embed DiscohookEmbed, key string) RolePanelConfig {
-	out := RolePanelConfig{
+// ToRolePanelConfig converts a DiscohookEmbed into our internal files.RolePanelConfig format.
+func ToRolePanelConfig(embed DiscohookEmbed, key string) files.RolePanelConfig {
+	out := files.RolePanelConfig{
 		Key:         key,
 		Title:       embed.Title,
 		Description: embed.Description,
@@ -218,9 +220,9 @@ func ToRolePanelConfig(embed DiscohookEmbed, key string) RolePanelConfig {
 	}
 
 	if len(embed.Fields) > 0 {
-		out.Fields = make([]RolePanelEmbedFieldConfig, 0, len(embed.Fields))
+		out.Fields = make([]files.RolePanelEmbedFieldConfig, 0, len(embed.Fields))
 		for _, f := range embed.Fields {
-			out.Fields = append(out.Fields, RolePanelEmbedFieldConfig{
+			out.Fields = append(out.Fields, files.RolePanelEmbedFieldConfig{
 				Name:   f.Name,
 				Value:  f.Value,
 				Inline: f.Inline,
@@ -231,8 +233,8 @@ func ToRolePanelConfig(embed DiscohookEmbed, key string) RolePanelConfig {
 	return out
 }
 
-// FromRolePanelConfig exports a RolePanelConfig into a DiscohookJSON object.
-func FromRolePanelConfig(rp RolePanelConfig) DiscohookJSON {
+// FromRolePanelConfig exports a files.RolePanelConfig into a DiscohookJSON object.
+func FromRolePanelConfig(rp files.RolePanelConfig) DiscohookJSON {
 	embed := buildDiscohookEmbedBase(discohookEmbedBase{
 		Title:       rp.Title,
 		Description: rp.Description,
@@ -261,9 +263,9 @@ func FromRolePanelConfig(rp RolePanelConfig) DiscohookJSON {
 	}
 }
 
-// ToPartnerBoardTemplate populates a PartnerBoardTemplateConfig from a DiscohookEmbed.
+// ToPartnerBoardTemplate populates a files.PartnerBoardTemplateConfig from a DiscohookEmbed.
 // It maps the embed title, description (Intro), color, and footer text.
-func ToPartnerBoardTemplate(embed DiscohookEmbed, current PartnerBoardTemplateConfig) PartnerBoardTemplateConfig {
+func ToPartnerBoardTemplate(embed DiscohookEmbed, current files.PartnerBoardTemplateConfig) files.PartnerBoardTemplateConfig {
 	out := current
 	out.Title = embed.Title
 	out.Intro = embed.Description
@@ -276,8 +278,8 @@ func ToPartnerBoardTemplate(embed DiscohookEmbed, current PartnerBoardTemplateCo
 	return out
 }
 
-// FromPartnerBoardTemplate exports a PartnerBoardTemplateConfig into a mock DiscohookJSON object.
-func FromPartnerBoardTemplate(tmpl PartnerBoardTemplateConfig) DiscohookJSON {
+// FromPartnerBoardTemplate exports a files.PartnerBoardTemplateConfig into a mock DiscohookJSON object.
+func FromPartnerBoardTemplate(tmpl files.PartnerBoardTemplateConfig) DiscohookJSON {
 	embed := buildDiscohookEmbedBase(discohookEmbedBase{
 		Title:       tmpl.Title,
 		Description: tmpl.Intro,
@@ -290,7 +292,7 @@ func FromPartnerBoardTemplate(tmpl PartnerBoardTemplateConfig) DiscohookJSON {
 }
 
 // discohookEmbedBase carries the flat embed fields shared by the
-// CustomEmbedConfig, RolePanelConfig, and PartnerBoardTemplateConfig
+// files.CustomEmbedConfig, files.RolePanelConfig, and files.PartnerBoardTemplateConfig
 // exporters. buildDiscohookEmbedBase promotes the non-empty author, footer,
 // image, and thumbnail values into their nested embed blocks.
 type discohookEmbedBase struct {

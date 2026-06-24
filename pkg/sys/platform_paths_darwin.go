@@ -1,6 +1,6 @@
 //go:build darwin
 
-package files
+package sys
 
 import (
 	"os"
@@ -18,19 +18,19 @@ import (
 // NOTE: This file intentionally does NOT deal with .env locations/lookup.
 
 // platformConfigDir returns the base directory for configuration files on macOS.
-func platformConfigDir(appName string) string {
+func PlatformConfigDir(appName string) string {
 	home := darwinHomeDir()
 	return filepath.Join(home, "Library", "Preferences", sanitizeAppNameForPath(appName))
 }
 
 // platformCacheDir returns the base directory for cache files on macOS.
-func platformCacheDir(appName string) string {
+func PlatformCacheDir(appName string) string {
 	home := darwinHomeDir()
 	return filepath.Join(home, "Library", "Caches", sanitizeAppNameForPath(appName))
 }
 
 // platformLogDir returns the base directory for log files on macOS.
-func platformLogDir(appName string) string {
+func PlatformLogDir(appName string) string {
 	home := darwinHomeDir()
 	return filepath.Join(home, "Library", "Logs", sanitizeAppNameForPath(appName))
 }
@@ -42,7 +42,7 @@ func darwinHomeDir() string {
 	}
 
 	// Best-effort fallbacks.
-	if h := strings.TrimSpace(os.Getenv("HOME")); h != "" {
+	if h := strings.TrimSpace(os.os.Getenv("HOME")); h != "" {
 		return h
 	}
 	if wd, err := os.Getwd(); err == nil && strings.TrimSpace(wd) != "" {

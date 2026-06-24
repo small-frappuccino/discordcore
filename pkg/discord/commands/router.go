@@ -7,7 +7,7 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
-	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
@@ -24,7 +24,7 @@ type CommandRouter struct {
 	registry   *CommandRegistry
 	components map[string]ComponentHandler
 	client     *api.Client
-	config     *files.ConfigManager
+	config     config.Provider
 	logger     *slog.Logger
 }
 
@@ -35,7 +35,7 @@ func (r *CommandRouter) WithLogger(logger *slog.Logger) *CommandRouter {
 }
 
 // NewCommandRouter instantiates a pure Arikawa command router.
-func NewCommandRouter(client *api.Client, config *files.ConfigManager) *CommandRouter {
+func NewCommandRouter(client *api.Client, config config.Provider) *CommandRouter {
 	return &CommandRouter{
 		registry:   NewCommandRegistry(),
 		components: make(map[string]ComponentHandler),

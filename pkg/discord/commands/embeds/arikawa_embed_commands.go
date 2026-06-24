@@ -11,6 +11,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	localdiscord "github.com/small-frappuccino/discordcore/pkg/discord"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	embedsvc "github.com/small-frappuccino/discordcore/pkg/discord/embeds"
@@ -55,13 +56,13 @@ const (
 // EmbedCommands orchestrates the slash-command routing for custom embed workflows.
 // It integrates directly with the Arikawa router to execute lifecycle mutations.
 type EmbedCommands struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 	embedService  *embedsvc.EmbedService
 }
 
 // NewEmbedCommands constructs the primary slash-command controller for embeds.
 // It mandates the injection of the configuration manager and domain service.
-func NewEmbedCommands(configManager *files.ConfigManager, embedService *embedsvc.EmbedService) *EmbedCommands {
+func NewEmbedCommands(configManager config.Provider, embedService *embedsvc.EmbedService) *EmbedCommands {
 	return &EmbedCommands{
 		configManager: configManager,
 		embedService:  embedService,
@@ -85,12 +86,12 @@ func (ec *EmbedCommands) RegisterCommands(router commands.ArikawaRegisterer) {
 	embedGroup.AddSubCommand(newEmbedPostSubCommand(ec.configManager, ec.embedService))
 	embedGroup.AddSubCommand(newEmbedPreviewSubCommand(ec.configManager, ec.embedService))
 	embedGroup.AddSubCommand(newEmbedSetSubCommand(ec.configManager, ec.embedService))
-	embedGroup.AddSubCommand(newEmbedDeleteSubCommand(ec.configManager))
-	embedGroup.AddSubCommand(newEmbedListSubCommand(ec.configManager))
+	embedGroup.AddSubCommand(newEmbedDeleteSubCommand(ec.configManager, ec.embedService))
+	embedGroup.AddSubCommand(newEmbedListSubCommand(ec.configManager, ec.embedService))
 	embedGroup.AddSubCommand(newEmbedRefreshSubCommand(ec.configManager, ec.embedService))
 	embedGroup.AddSubCommand(newEmbedUnpostSubCommand(ec.configManager, ec.embedService))
-	embedGroup.AddSubCommand(newEmbedImportSubCommand(ec.configManager))
-	embedGroup.AddSubCommand(newEmbedExportSubCommand(ec.configManager))
+	embedGroup.AddSubCommand(newEmbedImportSubCommand(ec.configManager, ec.embedService))
+	embedGroup.AddSubCommand(newEmbedExportSubCommand(ec.configManager, ec.embedService))
 
 	fieldGroup := commands.NewArikawaGroupCommand(
 		embedFieldGroupName,
@@ -98,7 +99,7 @@ func (ec *EmbedCommands) RegisterCommands(router commands.ArikawaRegisterer) {
 	)
 	fieldGroup.AddSubCommand(newEmbedFieldAddSubCommand(ec.configManager, ec.embedService))
 	fieldGroup.AddSubCommand(newEmbedFieldRemoveSubCommand(ec.configManager, ec.embedService))
-	fieldGroup.AddSubCommand(newEmbedFieldListSubCommand(ec.configManager))
+	fieldGroup.AddSubCommand(newEmbedFieldListSubCommand(ec.configManager, ec.embedService))
 	embedGroup.AddSubCommand(fieldGroup)
 
 	router.Register(embedGroup)
@@ -121,17 +122,17 @@ func embedKeyFromOptions(ctx *commands.ArikawaContext) (string, error) {
 	if key == "" {
 		return "", errors.New("a non-empty key option is required")
 	}
-	key = files.NormalizeCustomEmbedKey(key)
+	key = embedsvc.NormalizeCustomEmbedKey(key)
 	if key == "" {
 		return "", errors.New("a non-empty key option is required")
 	}
 	return key, nil
 }
 
-func loadCustomEmbed(cm *files.ConfigManager, guildID discord.GuildID, key string) (files.CustomEmbedConfig, error) {
-	ce, err := cm.CustomEmbed(guildID.String(), key)
+func loadCustomEmbed(svc *embedsvc.EmbedService, guildID discord.GuildID, key string) (files.CustomEmbedConfig, error) {
+	ce, err := svc.CustomEmbed(guildID.String(), key)
 	if err != nil {
-		if errors.Is(err, files.ErrCustomEmbedNotFound) {
+		if errors.Is(err, embedsvc.ErrCustomEmbedNotFound) {
 			return files.CustomEmbedConfig{}, fmt.Errorf("embed `%s` does not exist", key)
 		}
 		return files.CustomEmbedConfig{}, fmt.Errorf("failed to load embed `%s`: %v", key, err)
@@ -163,11 +164,11 @@ func respondEphemeralSuccess(ctx *commands.ArikawaContext, message string) error
 	})
 }
 
-func refreshCustomEmbedPostingsBestEffort(cm *files.ConfigManager, svc *embedsvc.EmbedService, ctx *commands.ArikawaContext, key string) string {
+func refreshCustomEmbedPostingsBestEffort(cm config.Provider, svc *embedsvc.EmbedService, ctx *commands.ArikawaContext, key string) string {
 	if cm == nil || svc == nil || ctx == nil {
 		return ""
 	}
-	ce, err := cm.CustomEmbed(ctx.GuildID.String(), key)
+	ce, err := svc.CustomEmbed(ctx.GuildID.String(), key)
 	if err != nil || len(ce.Postings) == 0 {
 		return ""
 	}
@@ -195,11 +196,11 @@ func refreshCustomEmbedPostingsBestEffort(cm *files.ConfigManager, svc *embedsvc
 // --- Subcommands ---
 
 type embedPostSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 	embedService  *embedsvc.EmbedService
 }
 
-func newEmbedPostSubCommand(cm *files.ConfigManager, svc *embedsvc.EmbedService) *embedPostSubCommand {
+func newEmbedPostSubCommand(cm config.Provider, svc *embedsvc.EmbedService) *embedPostSubCommand {
 	return &embedPostSubCommand{configManager: cm, embedService: svc}
 }
 
@@ -224,7 +225,7 @@ func (c *embedPostSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	if err != nil {
 		return respondEphemeralError(ctx, err.Error())
 	}
-	ce, err := loadCustomEmbed(c.configManager, ctx.GuildID, key)
+	ce, err := loadCustomEmbed(c.embedService, ctx.GuildID, key)
 	if err != nil {
 		return respondEphemeralError(ctx, err.Error())
 	}
@@ -249,7 +250,7 @@ func (c *embedPostSubCommand) Handle(ctx *commands.ArikawaContext) error {
 			ChannelID: channelID.String(),
 			MessageID: message.ID.String(),
 		}
-		if err := c.configManager.AddCustomEmbedPosting(ctx.GuildID.String(), ce.Key, posting); err != nil {
+		if err := c.embedService.AddCustomEmbedPosting(ctx.GuildID.String(), ce.Key, posting); err != nil {
 			slog.Warn("Mitigated service degradation: failed to track custom embed posting",
 				slog.String("req_id", ctx.GuildID.String()),
 				slog.String("embed_key", ce.Key),
@@ -263,11 +264,11 @@ func (c *embedPostSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type embedPreviewSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 	embedService  *embedsvc.EmbedService
 }
 
-func newEmbedPreviewSubCommand(cm *files.ConfigManager, svc *embedsvc.EmbedService) *embedPreviewSubCommand {
+func newEmbedPreviewSubCommand(cm config.Provider, svc *embedsvc.EmbedService) *embedPreviewSubCommand {
 	return &embedPreviewSubCommand{configManager: cm, embedService: svc}
 }
 
@@ -285,7 +286,7 @@ func (c *embedPreviewSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	if err != nil {
 		return respondEphemeralError(ctx, err.Error())
 	}
-	ce, err := loadCustomEmbed(c.configManager, ctx.GuildID, key)
+	ce, err := loadCustomEmbed(c.embedService, ctx.GuildID, key)
 	if err != nil {
 		return respondEphemeralError(ctx, err.Error())
 	}
@@ -304,11 +305,11 @@ func (c *embedPreviewSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type embedSetSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 	embedService  *embedsvc.EmbedService
 }
 
-func newEmbedSetSubCommand(cm *files.ConfigManager, svc *embedsvc.EmbedService) *embedSetSubCommand {
+func newEmbedSetSubCommand(cm config.Provider, svc *embedsvc.EmbedService) *embedSetSubCommand {
 	return &embedSetSubCommand{configManager: cm, embedService: svc}
 }
 
@@ -339,8 +340,8 @@ func (c *embedSetSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	}
 	opts := commands.ArikawaOptionList(commands.GetArikawaSubCommandOptions(ctx.Interaction))
 
-	current, fetchErr := c.configManager.CustomEmbed(ctx.GuildID.String(), key)
-	if fetchErr != nil && !errors.Is(fetchErr, files.ErrCustomEmbedNotFound) {
+	current, fetchErr := c.embedService.CustomEmbed(ctx.GuildID.String(), key)
+	if fetchErr != nil && !errors.Is(fetchErr, embedsvc.ErrCustomEmbedNotFound) {
 		return respondEphemeralError(ctx, fmt.Sprintf("Failed to load embed `%s`: %v", key, fetchErr))
 	}
 
@@ -373,7 +374,7 @@ func (c *embedSetSubCommand) Handle(ctx *commands.ArikawaContext) error {
 		embed.ThumbnailURL = opts.String(embedOptionThumbnailURL)
 	}
 
-	if err := c.configManager.SetCustomEmbedProperties(ctx.GuildID.String(), key, embed); err != nil {
+	if err := c.embedService.SetCustomEmbedProperties(ctx.GuildID.String(), key, embed); err != nil {
 		return respondStructuralError(ctx, "Failed to save changes", err)
 	}
 
@@ -382,11 +383,12 @@ func (c *embedSetSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type embedDeleteSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
+	embedService  *embedsvc.EmbedService
 }
 
-func newEmbedDeleteSubCommand(cm *files.ConfigManager) *embedDeleteSubCommand {
-	return &embedDeleteSubCommand{configManager: cm}
+func newEmbedDeleteSubCommand(cm config.Provider, svc *embedsvc.EmbedService) *embedDeleteSubCommand {
+	return &embedDeleteSubCommand{configManager: cm, embedService: svc}
 }
 
 func (c *embedDeleteSubCommand) Name() string { return embedSubDelete }
@@ -404,8 +406,8 @@ func (c *embedDeleteSubCommand) Handle(ctx *commands.ArikawaContext) error {
 		return respondEphemeralError(ctx, err.Error())
 	}
 
-	if _, err := c.configManager.DeleteCustomEmbed(ctx.GuildID.String(), key); err != nil {
-		if errors.Is(err, files.ErrCustomEmbedNotFound) {
+	if _, err := c.embedService.DeleteCustomEmbed(ctx.GuildID.String(), key); err != nil {
+		if errors.Is(err, embedsvc.ErrCustomEmbedNotFound) {
 			return respondEphemeralError(ctx, fmt.Sprintf("Embed `%s` does not exist.", key))
 		}
 		return respondStructuralError(ctx, "Failed to delete embed", err)
@@ -415,11 +417,12 @@ func (c *embedDeleteSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type embedListSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
+	embedService  *embedsvc.EmbedService
 }
 
-func newEmbedListSubCommand(cm *files.ConfigManager) *embedListSubCommand {
-	return &embedListSubCommand{configManager: cm}
+func newEmbedListSubCommand(cm config.Provider, svc *embedsvc.EmbedService) *embedListSubCommand {
+	return &embedListSubCommand{configManager: cm, embedService: svc}
 }
 
 func (c *embedListSubCommand) Name() string                     { return embedSubList }
@@ -428,7 +431,7 @@ func (c *embedListSubCommand) Options() []discord.CommandOption { return nil }
 func (c *embedListSubCommand) RequiresGuild() bool              { return true }
 func (c *embedListSubCommand) RequiresPermissions() bool        { return true }
 func (c *embedListSubCommand) Handle(ctx *commands.ArikawaContext) error {
-	embeds, err := c.configManager.CustomEmbeds(ctx.GuildID.String())
+	embeds, err := c.embedService.CustomEmbeds(ctx.GuildID.String())
 	if err != nil {
 		return respondEphemeralError(ctx, fmt.Sprintf("Failed to list embeds: %v", err))
 	}
@@ -445,11 +448,11 @@ func (c *embedListSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type embedRefreshSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 	embedService  *embedsvc.EmbedService
 }
 
-func newEmbedRefreshSubCommand(cm *files.ConfigManager, svc *embedsvc.EmbedService) *embedRefreshSubCommand {
+func newEmbedRefreshSubCommand(cm config.Provider, svc *embedsvc.EmbedService) *embedRefreshSubCommand {
 	return &embedRefreshSubCommand{configManager: cm, embedService: svc}
 }
 
@@ -467,7 +470,7 @@ func (c *embedRefreshSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	if err != nil {
 		return respondEphemeralError(ctx, err.Error())
 	}
-	ce, err := loadCustomEmbed(c.configManager, ctx.GuildID, key)
+	ce, err := loadCustomEmbed(c.embedService, ctx.GuildID, key)
 	if err != nil {
 		return respondEphemeralError(ctx, err.Error())
 	}
@@ -491,11 +494,11 @@ func (c *embedRefreshSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type embedUnpostSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 	embedService  *embedsvc.EmbedService
 }
 
-func newEmbedUnpostSubCommand(cm *files.ConfigManager, svc *embedsvc.EmbedService) *embedUnpostSubCommand {
+func newEmbedUnpostSubCommand(cm config.Provider, svc *embedsvc.EmbedService) *embedUnpostSubCommand {
 	return &embedUnpostSubCommand{configManager: cm, embedService: svc}
 }
 
@@ -521,9 +524,9 @@ func (c *embedUnpostSubCommand) Handle(ctx *commands.ArikawaContext) error {
 		return respondEphemeralError(ctx, "A message ID is required.")
 	}
 
-	embedKey, posting, lookupErr := c.configManager.FindCustomEmbedPosting(ctx.GuildID.String(), messageID)
+	embedKey, posting, lookupErr := c.embedService.FindCustomEmbedPosting(ctx.GuildID.String(), messageID)
 	if lookupErr != nil {
-		if errors.Is(lookupErr, files.ErrCustomEmbedPostingNotFound) {
+		if errors.Is(lookupErr, embedsvc.ErrCustomEmbedPostingNotFound) {
 			return respondEphemeralError(ctx, fmt.Sprintf("No tracked posting for message_id `%s`.", strings.TrimSpace(messageID)))
 		}
 		return respondEphemeralError(ctx, fmt.Sprintf("Failed to look up posting: %v", lookupErr))
@@ -535,7 +538,7 @@ func (c *embedUnpostSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	c.embedService.DeletePosting(ctx.Client, discord.ChannelID(chID), discord.MessageID(msgID))
 
 	// Remove posting track from config
-	if err := c.configManager.RemoveCustomEmbedPosting(ctx.GuildID.String(), embedKey, posting.MessageID); err != nil && !errors.Is(err, files.ErrCustomEmbedPostingNotFound) {
+	if err := c.embedService.RemoveCustomEmbedPosting(ctx.GuildID.String(), embedKey, posting.MessageID); err != nil && !errors.Is(err, embedsvc.ErrCustomEmbedPostingNotFound) {
 		slog.Warn("Mitigated service degradation: failed to strictly untrack old posting",
 			slog.String("req_id", ctx.GuildID.String()),
 			slog.String("error", err.Error()),
@@ -547,11 +550,11 @@ func (c *embedUnpostSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type embedFieldAddSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 	embedService  *embedsvc.EmbedService
 }
 
-func newEmbedFieldAddSubCommand(cm *files.ConfigManager, svc *embedsvc.EmbedService) *embedFieldAddSubCommand {
+func newEmbedFieldAddSubCommand(cm config.Provider, svc *embedsvc.EmbedService) *embedFieldAddSubCommand {
 	return &embedFieldAddSubCommand{configManager: cm, embedService: svc}
 }
 
@@ -583,7 +586,7 @@ func (c *embedFieldAddSubCommand) Handle(ctx *commands.ArikawaContext) error {
 		Value:  value,
 		Inline: inline,
 	}
-	if err := c.configManager.AddCustomEmbedField(ctx.GuildID.String(), key, field); err != nil {
+	if err := c.embedService.AddCustomEmbedField(ctx.GuildID.String(), key, field); err != nil {
 		return respondStructuralError(ctx, "Failed to add field", err)
 	}
 	syncNote := refreshCustomEmbedPostingsBestEffort(c.configManager, c.embedService, ctx, key)
@@ -591,11 +594,11 @@ func (c *embedFieldAddSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type embedFieldRemoveSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 	embedService  *embedsvc.EmbedService
 }
 
-func newEmbedFieldRemoveSubCommand(cm *files.ConfigManager, svc *embedsvc.EmbedService) *embedFieldRemoveSubCommand {
+func newEmbedFieldRemoveSubCommand(cm config.Provider, svc *embedsvc.EmbedService) *embedFieldRemoveSubCommand {
 	return &embedFieldRemoveSubCommand{configManager: cm, embedService: svc}
 }
 
@@ -622,7 +625,7 @@ func (c *embedFieldRemoveSubCommand) Handle(ctx *commands.ArikawaContext) error 
 	}
 	index := int(opts.Int(embedOptionFieldIndex)) - 1
 
-	if err := c.configManager.RemoveCustomEmbedField(ctx.GuildID.String(), key, index); err != nil {
+	if err := c.embedService.RemoveCustomEmbedField(ctx.GuildID.String(), key, index); err != nil {
 		return respondStructuralError(ctx, "Failed to remove field", err)
 	}
 	syncNote := refreshCustomEmbedPostingsBestEffort(c.configManager, c.embedService, ctx, key)
@@ -630,11 +633,12 @@ func (c *embedFieldRemoveSubCommand) Handle(ctx *commands.ArikawaContext) error 
 }
 
 type embedFieldListSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
+	embedService  *embedsvc.EmbedService
 }
 
-func newEmbedFieldListSubCommand(cm *files.ConfigManager) *embedFieldListSubCommand {
-	return &embedFieldListSubCommand{configManager: cm}
+func newEmbedFieldListSubCommand(cm config.Provider, svc *embedsvc.EmbedService) *embedFieldListSubCommand {
+	return &embedFieldListSubCommand{configManager: cm, embedService: svc}
 }
 
 func (c *embedFieldListSubCommand) Name() string { return embedSubFieldList }
@@ -651,7 +655,7 @@ func (c *embedFieldListSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	if err != nil {
 		return respondEphemeralError(ctx, err.Error())
 	}
-	ce, err := loadCustomEmbed(c.configManager, ctx.GuildID, key)
+	ce, err := loadCustomEmbed(c.embedService, ctx.GuildID, key)
 	if err != nil {
 		return respondEphemeralError(ctx, err.Error())
 	}
@@ -668,11 +672,12 @@ func (c *embedFieldListSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type embedImportSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
+	embedService  *embedsvc.EmbedService
 }
 
-func newEmbedImportSubCommand(cm *files.ConfigManager) *embedImportSubCommand {
-	return &embedImportSubCommand{configManager: cm}
+func newEmbedImportSubCommand(cm config.Provider, svc *embedsvc.EmbedService) *embedImportSubCommand {
+	return &embedImportSubCommand{configManager: cm, embedService: svc}
 }
 
 func (c *embedImportSubCommand) Name() string { return embedSubImport }
@@ -701,16 +706,16 @@ func (c *embedImportSubCommand) Handle(ctx *commands.ArikawaContext) error {
 		return respondEphemeralError(ctx, fmt.Sprintf("Failed to fetch from pastebin: %v", err))
 	}
 
-	discohookEmbed, err := files.ParseAndValidateDiscohookJSON(data)
+	discohookEmbed, err := embedsvc.ParseAndValidateDiscohookJSON(data)
 	if err != nil {
 		return respondEphemeralError(ctx, fmt.Sprintf("Invalid embed JSON: %v", err))
 	}
 
-	newEmbed := files.ToCustomEmbedConfig(discohookEmbed, key)
-	if err := c.configManager.SetCustomEmbedProperties(ctx.GuildID.String(), key, newEmbed); err != nil {
+	newEmbed := embedsvc.ToCustomEmbedConfig(discohookEmbed, key)
+	if err := c.embedService.SetCustomEmbedProperties(ctx.GuildID.String(), key, newEmbed); err != nil {
 		return respondStructuralError(ctx, "Failed to save imported embed properties", err)
 	}
-	if err := c.configManager.SetCustomEmbedFields(ctx.GuildID.String(), key, newEmbed.Fields); err != nil {
+	if err := c.embedService.SetCustomEmbedFields(ctx.GuildID.String(), key, newEmbed.Fields); err != nil {
 		return respondStructuralError(ctx, "Failed to save imported embed fields", err)
 	}
 
@@ -718,11 +723,12 @@ func (c *embedImportSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type embedExportSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
+	embedService  *embedsvc.EmbedService
 }
 
-func newEmbedExportSubCommand(cm *files.ConfigManager) *embedExportSubCommand {
-	return &embedExportSubCommand{configManager: cm}
+func newEmbedExportSubCommand(cm config.Provider, svc *embedsvc.EmbedService) *embedExportSubCommand {
+	return &embedExportSubCommand{configManager: cm, embedService: svc}
 }
 
 func (c *embedExportSubCommand) Name() string { return embedSubExport }
@@ -742,12 +748,12 @@ func (c *embedExportSubCommand) Handle(ctx *commands.ArikawaContext) error {
 		return respondEphemeralError(ctx, err.Error())
 	}
 
-	ce, err := loadCustomEmbed(c.configManager, ctx.GuildID, key)
+	ce, err := loadCustomEmbed(c.embedService, ctx.GuildID, key)
 	if err != nil {
 		return respondEphemeralError(ctx, err.Error())
 	}
 
-	discohookJSON := files.FromCustomEmbedConfig(ce)
+	discohookJSON := embedsvc.FromCustomEmbedConfig(ce)
 	data, err := json.MarshalIndent(discohookJSON, "", "  ")
 	if err != nil {
 		return respondEphemeralError(ctx, fmt.Sprintf("Failed to format JSON: %v", err))

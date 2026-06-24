@@ -10,8 +10,8 @@ import (
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
 
 	coreclean "github.com/small-frappuccino/discordcore/pkg/clean"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
-	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 // CleanExecutor defines the execution bounds for a concrete deletion service.
@@ -21,12 +21,12 @@ type CleanExecutor interface {
 
 // CleanCommand bridges the Discord Slash Command interaction to the bounded clean executor.
 type CleanCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 	cleanExecutor CleanExecutor
 }
 
 // NewCleanCommand initializes a router-compatible clean interaction handler.
-func NewCleanCommand(cfg *files.ConfigManager, executor CleanExecutor) *CleanCommand {
+func NewCleanCommand(cfg config.Provider, executor CleanExecutor) *CleanCommand {
 	return &CleanCommand{
 		configManager: cfg,
 		cleanExecutor: executor,

@@ -9,19 +9,20 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	rolesvc "github.com/small-frappuccino/discordcore/pkg/discord/roles"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 type rolePanelComponentHandler struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 	memberLookup  func(ctx *commands.ArikawaContext, roleID string) (bool, error)
 	addRole       func(ctx *commands.ArikawaContext, guildID, userID, roleID string) error
 	removeRole    func(ctx *commands.ArikawaContext, guildID, userID, roleID string) error
 }
 
-func newRolePanelComponentHandler(configManager *files.ConfigManager) *rolePanelComponentHandler {
+func newRolePanelComponentHandler(configManager config.Provider) *rolePanelComponentHandler {
 	return &rolePanelComponentHandler{
 		configManager: configManager,
 		memberLookup:  defaultRolePanelMemberHasRoleArikawa,

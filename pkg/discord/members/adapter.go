@@ -2,10 +2,11 @@ package members
 
 import (
 	"context"
+	"time"
+
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/state"
-	"time"
 )
 
 // ArikawaAdapter implements the domain members.DiscordAdapter interface

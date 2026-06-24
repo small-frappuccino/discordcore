@@ -6,6 +6,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/httputil"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
@@ -63,7 +64,8 @@ func TestRenderCustomEmbed(t *testing.T) {
 func TestCustomEmbedPostingSyncer(t *testing.T) {
 	t.Parallel()
 
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
+	svc := NewEmbedService(cm)
 	guildID := "123456789012345678"
 	key := "embed-key"
 
@@ -79,28 +81,22 @@ func TestCustomEmbedPostingSyncer(t *testing.T) {
 			{ChannelID: "333333333333333333", MessageID: "444444444444444444"},
 		},
 	}
-	if err := cm.SetCustomEmbedProperties(guildID, key, ce); err != nil {
+	if err := svc.SetCustomEmbedProperties(guildID, key, ce); err != nil {
 		t.Fatalf("set custom embed: %v", err)
 	}
 	for _, p := range ce.Postings {
-		if err := cm.AddCustomEmbedPosting(guildID, key, p); err != nil {
+		if err := svc.AddCustomEmbedPosting(guildID, key, p); err != nil {
 			t.Fatalf("add posting: %v", err)
 		}
 	}
 
 	var editedPaths []discord.MessageID
-	svc := &EmbedService{
-		configManager: cm,
-		editMessage: func(client *api.Client, channelID discord.ChannelID, messageID discord.MessageID, data api.EditMessageData) error {
-			if messageID == discord.MessageID(444444444444444444) {
-				return &httputil.HTTPError{Code: discordErrUnknownMessage}
-			}
-			editedPaths = append(editedPaths, messageID)
-			return nil
-		},
-		dropPostings: func(c *files.ConfigManager, gid, k string, mid []string) error {
-			return c.RemoveCustomEmbedPostings(gid, k, mid)
-		},
+	svc.editMessage = func(client *api.Client, channelID discord.ChannelID, messageID discord.MessageID, data api.EditMessageData) error {
+		if messageID == discord.MessageID(444444444444444444) {
+			return &httputil.HTTPError{Code: discordErrUnknownMessage}
+		}
+		editedPaths = append(editedPaths, messageID)
+		return nil
 	}
 
 	client := &api.Client{}
@@ -115,7 +111,7 @@ func TestCustomEmbedPostingSyncer(t *testing.T) {
 	}
 
 	// Verify that msg2 was dropped from config Manager
-	updated, err := cm.CustomEmbed(guildID, key)
+	updated, err := svc.CustomEmbed(guildID, key)
 	if err != nil {
 		t.Fatalf("load custom embed: %v", err)
 	}

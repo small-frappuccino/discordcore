@@ -1,6 +1,6 @@
 //go:build !windows && !darwin
 
-package files
+package sys
 
 import (
 	"os"
@@ -16,17 +16,17 @@ import (
 // These helpers return base directories only; callers should create directories
 // (e.g., via os.MkdirAll) as needed.
 
-func platformConfigDir(appName string) string {
+func PlatformConfigDir(appName string) string {
 	home := platformHomeDir()
 	return filepath.Join(home, ".config", sanitizeAppNameForPath(appName))
 }
 
-func platformCacheDir(appName string) string {
+func PlatformCacheDir(appName string) string {
 	home := platformHomeDir()
 	return filepath.Join(home, ".cache", sanitizeAppNameForPath(appName))
 }
 
-func platformLogDir(appName string) string {
+func PlatformLogDir(appName string) string {
 	home := platformHomeDir()
 	return filepath.Join(home, ".log", sanitizeAppNameForPath(appName))
 }
@@ -34,7 +34,7 @@ func platformLogDir(appName string) string {
 // platformHomeDir resolves the user's home directory in a robust way across
 // Unix-like environments.
 func platformHomeDir() string {
-	if h := strings.TrimSpace(os.Getenv("HOME")); h != "" {
+	if h := strings.TrimSpace(os.os.Getenv("HOME")); h != "" {
 		return h
 	}
 	if h, err := os.UserHomeDir(); err == nil && strings.TrimSpace(h) != "" {

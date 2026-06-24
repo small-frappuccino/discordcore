@@ -30,7 +30,7 @@ func (mgr *ConfigManager) publishSnapshotLocked() *publishedConfigSnapshot {
 	}
 
 	snap := &publishedConfigSnapshot{
-		config:     cloneBotConfigPtr(mgr.config),
+		config:     CloneBotConfigPtr(mgr.config),
 		guildIndex: cloneGuildIndex(mgr.guildIndex),
 	}
 	if snap.guildIndex == nil {
@@ -98,7 +98,7 @@ func (mgr *ConfigManager) UpdateConfig(ctx context.Context, fn func(*BotConfig) 
 
 	previous := mgr.config
 	previousIndex := cloneGuildIndex(mgr.guildIndex)
-	next := cloneBotConfigPtr(mgr.config)
+	next := CloneBotConfigPtr(mgr.config)
 
 	if fn != nil {
 		if err := fn(next); err != nil {
@@ -183,7 +183,7 @@ func (mgr *ConfigManager) notifySubscribers(ctx context.Context, oldCfg, newCfg 
 	return nil
 }
 
-func cloneBotConfigPtr(in *BotConfig) *BotConfig {
+func CloneBotConfigPtr(in *BotConfig) *BotConfig {
 	if in == nil {
 		return nil
 	}

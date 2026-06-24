@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"golang.org/x/sync/errgroup"
 )
@@ -16,7 +17,7 @@ func TestSaveRuntimeConfig_RaceDetection(t *testing.T) {
 
 	tmp := t.TempDir()
 	_ = tmp
-	store := &files.MemoryConfigStore{}
+	store := &config.MemoryConfigStore{}
 	// Pre-seed an initial state to trigger standard Load/Update branches explicitly.
 	cm := files.NewConfigManagerWithStore(store, nil)
 	cm.LoadConfig() // Guarantee map initialization before bombardment.

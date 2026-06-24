@@ -36,7 +36,7 @@ def execute_payload_aggregation(base_dir: str = "./pkg"):
     # PHASE 1: Root Architectural Ingestion
     # =================================================================
     print("[-] Initializing root architectural aggregation...")
-    root_target_files = ["ARCHITECTURE.md", "AGENTS.md"]
+    root_target_files = ["ARCHITECTURE.md", "AGENTS.md", "softmax.md"]
     found_root_files = [f for f in root_target_files if (repo_root / f).exists()]
 
     if found_root_files:

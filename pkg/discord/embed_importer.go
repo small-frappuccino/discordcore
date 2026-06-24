@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -187,7 +187,7 @@ func UploadPastebinContent(ctx context.Context, data []byte, devKey, username, p
 }
 
 // UploadExportedContent uploads the data to Pastebin (if configured and user is admin) or Hastebin.
-func UploadExportedContent(ctx context.Context, member *discordgo.Member, ownerID string, configManager *files.ConfigManager, data []byte) (string, error) {
+func UploadExportedContent(ctx context.Context, member *discordgo.Member, ownerID string, configManager config.Provider, data []byte) (string, error) {
 	rc := configManager.Config().RuntimeConfig
 	if rc.PastebinDevKey != "" && rc.PastebinUserName != "" && rc.PastebinUserPassword != "" {
 		// Check if user is administrator

@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"sync"
+
+	"github.com/small-frappuccino/discordcore/pkg/sys"
 )
 
 // JSONManager handles reading and writing JSON data to a file.
@@ -123,10 +125,10 @@ func (m *JSONManager) Save(data any) (err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if err := replaceFile(tmpPath, targetPath); err != nil {
+	if err := sys.ReplaceFile(tmpPath, targetPath); err != nil {
 		return fmt.Errorf("failed to replace file atomically: %w", err)
 	}
-	if err := syncDir(dir); err != nil {
+	if err := sys.SyncDir(dir); err != nil {
 		return fmt.Errorf("failed to sync parent directory: %w", err)
 	}
 	cleanupTmp = false

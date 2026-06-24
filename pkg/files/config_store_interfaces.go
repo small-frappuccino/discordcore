@@ -1,9 +1,5 @@
 package files
 
-// ConfigStore persists the canonical BotConfig.
-//
-// Missing state is normalized as an empty config instead of an error so the
-// ConfigManager can keep one consistent lifecycle across backends.
 // ConfigLoader defines the read paths for the bot configuration.
 type ConfigLoader interface {
 	Load() (*BotConfig, error)
@@ -26,6 +22,3 @@ type ConfigStore interface {
 	ConfigSaver
 	ConfigDescriber
 }
-
-// DefaultPostgresConfigStoreKey defines default postgres config store key.
-const DefaultPostgresConfigStoreKey = "primary"

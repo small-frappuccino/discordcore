@@ -7,7 +7,7 @@ import (
 
 func (mgr *ConfigManager) updateGuildConfig(guildID string, fn func(*GuildConfig) error) error {
 	_, err := mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
-		guildConfig, err := guildConfigByID(cfg, guildID)
+		guildConfig, err := GuildConfigByID(cfg, guildID)
 		if err != nil {
 			return fmt.Errorf("ConfigManager.updateGuildConfig: %w", err)
 		}
@@ -48,7 +48,7 @@ func runtimeConfigForScope(cfg *BotConfig, scopeGuildID string) (*RuntimeConfig,
 		return &cfg.RuntimeConfig, nil
 	}
 
-	guildConfig, err := guildConfigByID(cfg, scopeGuildID)
+	guildConfig, err := GuildConfigByID(cfg, scopeGuildID)
 	if err != nil {
 		return nil, fmt.Errorf("guild config not found for %s", scopeGuildID)
 	}

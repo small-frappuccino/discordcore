@@ -5,19 +5,19 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/discord"
 
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
-	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 // ReactionBlockCommand natively encapsulates reaction blocking mechanics
 // utilizing pure arikawa interfaces.
 type ReactionBlockCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 	metrics       Metrics
 	logger        *slog.Logger
 }
 
-func NewReactionBlockCommand(cm *files.ConfigManager, metrics Metrics, logger *slog.Logger) *ReactionBlockCommand {
+func NewReactionBlockCommand(cm config.Provider, metrics Metrics, logger *slog.Logger) *ReactionBlockCommand {
 	if metrics == nil {
 		metrics = NopMetrics{}
 	}

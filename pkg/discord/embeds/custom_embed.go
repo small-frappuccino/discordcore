@@ -1,4 +1,4 @@
-package files
+package embeds
 
 import (
 	"context"
@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 var (
@@ -13,6 +15,9 @@ var (
 	ErrCustomEmbedNotFound = errors.New("custom embed not found")
 	// ErrCustomEmbedPostingNotFound indicates no posting matched the requested message ID.
 	ErrCustomEmbedPostingNotFound = errors.New("custom embed posting not found")
+	// ErrGuildConfigNotFound indicates no guild config matched the requested ID.
+	ErrGuildConfigNotFound = errors.New("guild config not found")
+
 	// ErrInvalidCustomEmbedInput indicates invalid custom embed input payload.
 	ErrInvalidCustomEmbedInput = errors.New("invalid custom embed input")
 )
@@ -39,61 +44,6 @@ const (
 	CustomEmbedMaxFields         = 25
 	CustomEmbedMaxTotalLen       = 6000
 )
-
-// CustomEmbedFieldConfig captures one field in a custom embed.
-type CustomEmbedFieldConfig struct {
-	Name   string `json:"name"`
-	Value  string `json:"value"`
-	Inline bool   `json:"inline,omitempty"`
-}
-
-// CustomEmbedPostingConfig identifies one Discord message authored by the bot.
-type CustomEmbedPostingConfig struct {
-	ChannelID    string `json:"channel_id"`
-	MessageID    string `json:"message_id"`
-	WebhookID    string `json:"webhook_id,omitempty"`
-	WebhookToken string `json:"webhook_token,omitempty"`
-}
-
-// IsZero is zero.
-func (p CustomEmbedPostingConfig) IsZero() bool {
-	return strings.TrimSpace(p.ChannelID) == "" &&
-		strings.TrimSpace(p.MessageID) == "" &&
-		strings.TrimSpace(p.WebhookID) == "" &&
-		strings.TrimSpace(p.WebhookToken) == ""
-}
-
-// CustomEmbedConfig captures one keyed custom embed for a guild.
-type CustomEmbedConfig struct {
-	Key           string                     `json:"key"`
-	Title         string                     `json:"title,omitempty"`
-	Description   string                     `json:"description,omitempty"`
-	Color         int                        `json:"color,omitempty"`
-	AuthorName    string                     `json:"author_name,omitempty"`
-	AuthorIconURL string                     `json:"author_icon_url,omitempty"`
-	FooterText    string                     `json:"footer_text,omitempty"`
-	FooterIconURL string                     `json:"footer_icon_url,omitempty"`
-	ImageURL      string                     `json:"image_url,omitempty"`
-	ThumbnailURL  string                     `json:"thumbnail_url,omitempty"`
-	Fields        []CustomEmbedFieldConfig   `json:"fields,omitempty"`
-	Postings      []CustomEmbedPostingConfig `json:"postings,omitempty"`
-}
-
-// IsZero reports whether the embed carries no meaningful data.
-func (cfg CustomEmbedConfig) IsZero() bool {
-	return strings.TrimSpace(cfg.Key) == "" &&
-		strings.TrimSpace(cfg.Title) == "" &&
-		strings.TrimSpace(cfg.Description) == "" &&
-		cfg.Color == 0 &&
-		strings.TrimSpace(cfg.AuthorName) == "" &&
-		strings.TrimSpace(cfg.AuthorIconURL) == "" &&
-		strings.TrimSpace(cfg.FooterText) == "" &&
-		strings.TrimSpace(cfg.FooterIconURL) == "" &&
-		strings.TrimSpace(cfg.ImageURL) == "" &&
-		strings.TrimSpace(cfg.ThumbnailURL) == "" &&
-		len(cfg.Fields) == 0 &&
-		len(cfg.Postings) == 0
-}
 
 func invalidCustomEmbedInput(format string, args ...any) error {
 	msg := fmt.Sprintf(format, args...)
@@ -127,7 +77,7 @@ func validateCustomEmbedKey(raw string) (string, error) {
 	return out, nil
 }
 
-func validateCustomEmbedFields(in CustomEmbedConfig) (CustomEmbedConfig, error) {
+func validateCustomEmbedFields(in files.CustomEmbedConfig) (files.CustomEmbedConfig, error) {
 	out := in
 	out.Title = strings.TrimSpace(in.Title)
 	out.Description = strings.TrimSpace(in.Description)
@@ -139,24 +89,24 @@ func validateCustomEmbedFields(in CustomEmbedConfig) (CustomEmbedConfig, error) 
 	out.ThumbnailURL = strings.TrimSpace(in.ThumbnailURL)
 
 	if utf8.RuneCountInString(out.Title) > CustomEmbedTitleMaxLen {
-		return CustomEmbedConfig{}, invalidCustomEmbedInput("title must be at most %d characters", CustomEmbedTitleMaxLen)
+		return files.CustomEmbedConfig{}, invalidCustomEmbedInput("title must be at most %d characters", CustomEmbedTitleMaxLen)
 	}
 	if utf8.RuneCountInString(out.Description) > CustomEmbedDescriptionMaxLen {
-		return CustomEmbedConfig{}, invalidCustomEmbedInput("description must be at most %d characters", CustomEmbedDescriptionMaxLen)
+		return files.CustomEmbedConfig{}, invalidCustomEmbedInput("description must be at most %d characters", CustomEmbedDescriptionMaxLen)
 	}
 	if out.Color < 0 || out.Color > CustomEmbedColorMax {
-		return CustomEmbedConfig{}, invalidCustomEmbedInput("color must be in range [0, %d]", CustomEmbedColorMax)
+		return files.CustomEmbedConfig{}, invalidCustomEmbedInput("color must be in range [0, %d]", CustomEmbedColorMax)
 	}
 	if utf8.RuneCountInString(out.AuthorName) > CustomEmbedAuthorMaxLen {
-		return CustomEmbedConfig{}, invalidCustomEmbedInput("author_name must be at most %d characters", CustomEmbedAuthorMaxLen)
+		return files.CustomEmbedConfig{}, invalidCustomEmbedInput("author_name must be at most %d characters", CustomEmbedAuthorMaxLen)
 	}
 	if utf8.RuneCountInString(out.FooterText) > CustomEmbedFooterMaxLen {
-		return CustomEmbedConfig{}, invalidCustomEmbedInput("footer_text must be at most %d characters", CustomEmbedFooterMaxLen)
+		return files.CustomEmbedConfig{}, invalidCustomEmbedInput("footer_text must be at most %d characters", CustomEmbedFooterMaxLen)
 	}
 	return out, nil
 }
 
-func customEmbedTotalLen(embed CustomEmbedConfig) int {
+func customEmbedTotalLen(embed files.CustomEmbedConfig) int {
 	count := utf8.RuneCountInString(embed.Title) +
 		utf8.RuneCountInString(embed.Description) +
 		utf8.RuneCountInString(embed.AuthorName) +
@@ -167,61 +117,61 @@ func customEmbedTotalLen(embed CustomEmbedConfig) int {
 	return count
 }
 
-func normalizeCustomEmbedField(in CustomEmbedFieldConfig) (CustomEmbedFieldConfig, error) {
-	out := CustomEmbedFieldConfig{
+func normalizeCustomEmbedField(in files.CustomEmbedFieldConfig) (files.CustomEmbedFieldConfig, error) {
+	out := files.CustomEmbedFieldConfig{
 		Name:   strings.TrimSpace(in.Name),
 		Value:  strings.TrimSpace(in.Value),
 		Inline: in.Inline,
 	}
 	if out.Name == "" {
-		return CustomEmbedFieldConfig{}, invalidCustomEmbedInput("field name is required")
+		return files.CustomEmbedFieldConfig{}, invalidCustomEmbedInput("field name is required")
 	}
 	if out.Value == "" {
-		return CustomEmbedFieldConfig{}, invalidCustomEmbedInput("field value is required")
+		return files.CustomEmbedFieldConfig{}, invalidCustomEmbedInput("field value is required")
 	}
 	if utf8.RuneCountInString(out.Name) > CustomEmbedFieldNameMaxLen {
-		return CustomEmbedFieldConfig{}, invalidCustomEmbedInput("field name must be at most %d characters", CustomEmbedFieldNameMaxLen)
+		return files.CustomEmbedFieldConfig{}, invalidCustomEmbedInput("field name must be at most %d characters", CustomEmbedFieldNameMaxLen)
 	}
 	if utf8.RuneCountInString(out.Value) > CustomEmbedFieldValueMaxLen {
-		return CustomEmbedFieldConfig{}, invalidCustomEmbedInput("field value must be at most %d characters", CustomEmbedFieldValueMaxLen)
+		return files.CustomEmbedFieldConfig{}, invalidCustomEmbedInput("field value must be at most %d characters", CustomEmbedFieldValueMaxLen)
 	}
 	return out, nil
 }
 
-func normalizeCustomEmbed(in CustomEmbedConfig) (CustomEmbedConfig, error) {
+func normalizeCustomEmbed(in files.CustomEmbedConfig) (files.CustomEmbedConfig, error) {
 	key, err := validateCustomEmbedKey(in.Key)
 	if err != nil {
-		return CustomEmbedConfig{}, fmt.Errorf("normalizeCustomEmbed: %w", err)
+		return files.CustomEmbedConfig{}, fmt.Errorf("normalizeCustomEmbed: %w", err)
 	}
 	out, err := validateCustomEmbedFields(in)
 	if err != nil {
-		return CustomEmbedConfig{}, fmt.Errorf("normalizeCustomEmbed: %w", err)
+		return files.CustomEmbedConfig{}, fmt.Errorf("normalizeCustomEmbed: %w", err)
 	}
 	out.Key = key
 
 	if len(in.Fields) > 0 {
-		out.Fields = make([]CustomEmbedFieldConfig, 0, len(in.Fields))
+		out.Fields = make([]files.CustomEmbedFieldConfig, 0, len(in.Fields))
 		for i, f := range in.Fields {
 			nf, err := normalizeCustomEmbedField(f)
 			if err != nil {
-				return CustomEmbedConfig{}, fmt.Errorf("fields[%d]: %w", i, err)
+				return files.CustomEmbedConfig{}, fmt.Errorf("fields[%d]: %w", i, err)
 			}
 			out.Fields = append(out.Fields, nf)
 		}
 		if len(out.Fields) > CustomEmbedMaxFields {
-			return CustomEmbedConfig{}, invalidCustomEmbedInput("embed must have at most %d fields", CustomEmbedMaxFields)
+			return files.CustomEmbedConfig{}, invalidCustomEmbedInput("embed must have at most %d fields", CustomEmbedMaxFields)
 		}
 	} else {
 		out.Fields = nil
 	}
 
 	if len(in.Postings) > 0 {
-		out.Postings = make([]CustomEmbedPostingConfig, 0, len(in.Postings))
+		out.Postings = make([]files.CustomEmbedPostingConfig, 0, len(in.Postings))
 		for _, p := range in.Postings {
 			if p.IsZero() {
 				continue
 			}
-			out.Postings = append(out.Postings, CustomEmbedPostingConfig{
+			out.Postings = append(out.Postings, files.CustomEmbedPostingConfig{
 				ChannelID:    strings.TrimSpace(p.ChannelID),
 				MessageID:    strings.TrimSpace(p.MessageID),
 				WebhookID:    strings.TrimSpace(p.WebhookID),
@@ -235,8 +185,8 @@ func normalizeCustomEmbed(in CustomEmbedConfig) (CustomEmbedConfig, error) {
 	return out, nil
 }
 
-func cloneCustomEmbed(in CustomEmbedConfig) CustomEmbedConfig {
-	out := CustomEmbedConfig{
+func cloneCustomEmbed(in files.CustomEmbedConfig) files.CustomEmbedConfig {
+	out := files.CustomEmbedConfig{
 		Key:           in.Key,
 		Title:         in.Title,
 		Description:   in.Description,
@@ -250,19 +200,19 @@ func cloneCustomEmbed(in CustomEmbedConfig) CustomEmbedConfig {
 	}
 
 	if len(in.Fields) > 0 {
-		out.Fields = make([]CustomEmbedFieldConfig, len(in.Fields))
+		out.Fields = make([]files.CustomEmbedFieldConfig, len(in.Fields))
 		copy(out.Fields, in.Fields)
 	}
 
 	if len(in.Postings) > 0 {
-		out.Postings = make([]CustomEmbedPostingConfig, len(in.Postings))
+		out.Postings = make([]files.CustomEmbedPostingConfig, len(in.Postings))
 		copy(out.Postings, in.Postings)
 	}
 
 	return out
 }
 
-func findCustomEmbedIndex(embeds []CustomEmbedConfig, key string) int {
+func findCustomEmbedIndex(embeds []files.CustomEmbedConfig, key string) int {
 	for i, e := range embeds {
 		if e.Key == key {
 			return i
@@ -272,13 +222,13 @@ func findCustomEmbedIndex(embeds []CustomEmbedConfig, key string) int {
 }
 
 // CustomEmbeds customs embeds.
-func (mgr *ConfigManager) CustomEmbeds(guildID string) ([]CustomEmbedConfig, error) {
+func (s *EmbedService) CustomEmbeds(guildID string) ([]files.CustomEmbedConfig, error) {
 	if guildID == "" {
 		return nil, invalidCustomEmbedInput("guild_id is required")
 	}
 
-	gcfg := mgr.GuildConfig(guildID)
-	if gcfg == nil {
+	gcfg := s.configProvider.GuildConfig(guildID)
+	if false {
 		return nil, nil
 	}
 
@@ -286,7 +236,7 @@ func (mgr *ConfigManager) CustomEmbeds(guildID string) ([]CustomEmbedConfig, err
 		return nil, nil
 	}
 
-	out := make([]CustomEmbedConfig, 0, len(gcfg.CustomEmbeds))
+	out := make([]files.CustomEmbedConfig, 0, len(gcfg.CustomEmbeds))
 	for _, e := range gcfg.CustomEmbeds {
 		out = append(out, cloneCustomEmbed(e))
 	}
@@ -294,30 +244,30 @@ func (mgr *ConfigManager) CustomEmbeds(guildID string) ([]CustomEmbedConfig, err
 }
 
 // CustomEmbed customs embed.
-func (mgr *ConfigManager) CustomEmbed(guildID, key string) (CustomEmbedConfig, error) {
+func (s *EmbedService) CustomEmbed(guildID, key string) (files.CustomEmbedConfig, error) {
 	if guildID == "" {
-		return CustomEmbedConfig{}, invalidCustomEmbedInput("guild_id is required")
+		return files.CustomEmbedConfig{}, invalidCustomEmbedInput("guild_id is required")
 	}
 	target, err := validateCustomEmbedKey(key)
 	if err != nil {
-		return CustomEmbedConfig{}, fmt.Errorf("ConfigManager.CustomEmbed: %w", err)
+		return files.CustomEmbedConfig{}, fmt.Errorf("ConfigManager.CustomEmbed: %w", err)
 	}
 
-	gcfg := mgr.GuildConfig(guildID)
-	if gcfg == nil {
-		return CustomEmbedConfig{}, fmt.Errorf("%w: key=%s", ErrCustomEmbedNotFound, target)
+	gcfg := s.configProvider.GuildConfig(guildID)
+	if false {
+		return files.CustomEmbedConfig{}, fmt.Errorf("%w: key=%s", ErrCustomEmbedNotFound, target)
 	}
 
 	idx := findCustomEmbedIndex(gcfg.CustomEmbeds, target)
 	if idx < 0 {
-		return CustomEmbedConfig{}, fmt.Errorf("%w: key=%s", ErrCustomEmbedNotFound, target)
+		return files.CustomEmbedConfig{}, fmt.Errorf("%w: key=%s", ErrCustomEmbedNotFound, target)
 	}
 
 	return cloneCustomEmbed(gcfg.CustomEmbeds[idx]), nil
 }
 
 // SetCustomEmbedProperties sets custom embed properties.
-func (mgr *ConfigManager) SetCustomEmbedProperties(guildID, key string, embed CustomEmbedConfig) error {
+func (s *EmbedService) SetCustomEmbedProperties(guildID, key string, embed files.CustomEmbedConfig) error {
 	if guildID == "" {
 		return invalidCustomEmbedInput("guild_id is required")
 	}
@@ -330,8 +280,8 @@ func (mgr *ConfigManager) SetCustomEmbedProperties(guildID, key string, embed Cu
 		return fmt.Errorf("ConfigManager.SetCustomEmbedProperties: %w", err)
 	}
 
-	_, err = mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
-		gc, err := guildConfigByID(cfg, guildID)
+	_, err = s.configProvider.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
+		gc, err := files.GuildConfigByID(cfg, guildID)
 		if err != nil {
 			return fmt.Errorf("ConfigManager.SetCustomEmbedProperties: %w", err)
 		}
@@ -358,7 +308,7 @@ func (mgr *ConfigManager) SetCustomEmbedProperties(guildID, key string, embed Cu
 			if len(gc.CustomEmbeds) >= 25 {
 				return invalidCustomEmbedInput("guild cannot have more than 25 custom embeds")
 			}
-			newEmbed := CustomEmbedConfig{
+			newEmbed := files.CustomEmbedConfig{
 				Key:           targetKey,
 				Title:         validated.Title,
 				Description:   validated.Description,
@@ -379,18 +329,18 @@ func (mgr *ConfigManager) SetCustomEmbedProperties(guildID, key string, embed Cu
 }
 
 // DeleteCustomEmbed deletes custom embed.
-func (mgr *ConfigManager) DeleteCustomEmbed(guildID, key string) (CustomEmbedConfig, error) {
+func (s *EmbedService) DeleteCustomEmbed(guildID, key string) (files.CustomEmbedConfig, error) {
 	if guildID == "" {
-		return CustomEmbedConfig{}, invalidCustomEmbedInput("guild_id is required")
+		return files.CustomEmbedConfig{}, invalidCustomEmbedInput("guild_id is required")
 	}
 	target, err := validateCustomEmbedKey(key)
 	if err != nil {
-		return CustomEmbedConfig{}, fmt.Errorf("ConfigManager.DeleteCustomEmbed: %w", err)
+		return files.CustomEmbedConfig{}, fmt.Errorf("ConfigManager.DeleteCustomEmbed: %w", err)
 	}
 
-	var deleted CustomEmbedConfig
-	_, err = mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
-		gc, err := guildConfigByID(cfg, guildID)
+	var deleted files.CustomEmbedConfig
+	_, err = s.configProvider.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
+		gc, err := files.GuildConfigByID(cfg, guildID)
 		if err != nil {
 			return fmt.Errorf("ConfigManager.DeleteCustomEmbed: %w", err)
 		}
@@ -409,7 +359,7 @@ func (mgr *ConfigManager) DeleteCustomEmbed(guildID, key string) (CustomEmbedCon
 }
 
 // AddCustomEmbedPosting adds custom embed posting.
-func (mgr *ConfigManager) AddCustomEmbedPosting(guildID, key string, posting CustomEmbedPostingConfig) error {
+func (s *EmbedService) AddCustomEmbedPosting(guildID, key string, posting files.CustomEmbedPostingConfig) error {
 	if guildID == "" {
 		return invalidCustomEmbedInput("guild_id is required")
 	}
@@ -421,8 +371,8 @@ func (mgr *ConfigManager) AddCustomEmbedPosting(guildID, key string, posting Cus
 		return fmt.Errorf("ConfigManager.AddCustomEmbedPosting: %w", err)
 	}
 
-	_, err = mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
-		gc, err := guildConfigByID(cfg, guildID)
+	_, err = s.configProvider.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
+		gc, err := files.GuildConfigByID(cfg, guildID)
 		if err != nil {
 			return fmt.Errorf("ConfigManager.AddCustomEmbedPosting: %w", err)
 		}
@@ -442,7 +392,7 @@ func (mgr *ConfigManager) AddCustomEmbedPosting(guildID, key string, posting Cus
 		if len(embed.Postings) >= 50 {
 			embed.Postings = embed.Postings[1:]
 		}
-		embed.Postings = append(embed.Postings, CustomEmbedPostingConfig{
+		embed.Postings = append(embed.Postings, files.CustomEmbedPostingConfig{
 			ChannelID:    strings.TrimSpace(posting.ChannelID),
 			MessageID:    strings.TrimSpace(posting.MessageID),
 			WebhookID:    strings.TrimSpace(posting.WebhookID),
@@ -455,7 +405,7 @@ func (mgr *ConfigManager) AddCustomEmbedPosting(guildID, key string, posting Cus
 }
 
 // RemoveCustomEmbedPosting removes custom embed posting.
-func (mgr *ConfigManager) RemoveCustomEmbedPosting(guildID, key, messageID string) error {
+func (s *EmbedService) RemoveCustomEmbedPosting(guildID, key, messageID string) error {
 	if guildID == "" {
 		return invalidCustomEmbedInput("guild_id is required")
 	}
@@ -468,8 +418,8 @@ func (mgr *ConfigManager) RemoveCustomEmbedPosting(guildID, key, messageID strin
 		return fmt.Errorf("ConfigManager.RemoveCustomEmbedPosting: %w", err)
 	}
 
-	_, err = mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
-		gc, err := guildConfigByID(cfg, guildID)
+	_, err = s.configProvider.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
+		gc, err := files.GuildConfigByID(cfg, guildID)
 		if err != nil {
 			return fmt.Errorf("ConfigManager.RemoveCustomEmbedPosting: %w", err)
 		}
@@ -493,7 +443,7 @@ func (mgr *ConfigManager) RemoveCustomEmbedPosting(guildID, key, messageID strin
 }
 
 // RemoveCustomEmbedPostings removes custom embed postings.
-func (mgr *ConfigManager) RemoveCustomEmbedPostings(guildID, key string, messageIDs []string) error {
+func (s *EmbedService) RemoveCustomEmbedPostings(guildID, key string, messageIDs []string) error {
 	if len(messageIDs) == 0 {
 		return nil
 	}
@@ -516,8 +466,8 @@ func (mgr *ConfigManager) RemoveCustomEmbedPostings(guildID, key string, message
 		return nil
 	}
 
-	_, err = mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
-		gc, err := guildConfigByID(cfg, guildID)
+	_, err = s.configProvider.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
+		gc, err := files.GuildConfigByID(cfg, guildID)
 		if err != nil {
 			return fmt.Errorf("ConfigManager.RemoveCustomEmbedPostings: %w", err)
 		}
@@ -528,7 +478,7 @@ func (mgr *ConfigManager) RemoveCustomEmbedPostings(guildID, key string, message
 		}
 
 		embed := &gc.CustomEmbeds[idx]
-		var kept []CustomEmbedPostingConfig
+		var kept []files.CustomEmbedPostingConfig
 		for _, p := range embed.Postings {
 			if !idsToRemove[p.MessageID] {
 				kept = append(kept, p)
@@ -542,7 +492,7 @@ func (mgr *ConfigManager) RemoveCustomEmbedPostings(guildID, key string, message
 }
 
 // SetCustomEmbedFields sets custom embed fields.
-func (mgr *ConfigManager) SetCustomEmbedFields(guildID, key string, fields []CustomEmbedFieldConfig) error {
+func (s *EmbedService) SetCustomEmbedFields(guildID, key string, fields []files.CustomEmbedFieldConfig) error {
 	if guildID == "" {
 		return invalidCustomEmbedInput("guild_id is required")
 	}
@@ -555,7 +505,7 @@ func (mgr *ConfigManager) SetCustomEmbedFields(guildID, key string, fields []Cus
 		return invalidCustomEmbedInput("embed must have at most %d fields", CustomEmbedMaxFields)
 	}
 
-	normalized := make([]CustomEmbedFieldConfig, 0, len(fields))
+	normalized := make([]files.CustomEmbedFieldConfig, 0, len(fields))
 	for i, f := range fields {
 		nf, err := normalizeCustomEmbedField(f)
 		if err != nil {
@@ -564,8 +514,8 @@ func (mgr *ConfigManager) SetCustomEmbedFields(guildID, key string, fields []Cus
 		normalized = append(normalized, nf)
 	}
 
-	_, err = mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
-		gc, err := guildConfigByID(cfg, guildID)
+	_, err = s.configProvider.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
+		gc, err := files.GuildConfigByID(cfg, guildID)
 		if err != nil {
 			return fmt.Errorf("ConfigManager.SetCustomEmbedFields: %w", err)
 		}
@@ -593,19 +543,19 @@ func (mgr *ConfigManager) SetCustomEmbedFields(guildID, key string, fields []Cus
 // matching the message ID. Returns the custom embed key plus the posting on
 // hit, or ErrCustomEmbedPostingNotFound when no custom embed tracks the
 // message.
-func (mgr *ConfigManager) FindCustomEmbedPosting(guildID, messageID string) (string, CustomEmbedPostingConfig, error) {
+func (s *EmbedService) FindCustomEmbedPosting(guildID, messageID string) (string, files.CustomEmbedPostingConfig, error) {
 	scope := strings.TrimSpace(guildID)
 	if scope == "" {
-		return "", CustomEmbedPostingConfig{}, invalidCustomEmbedInput("guild_id is required")
+		return "", files.CustomEmbedPostingConfig{}, invalidCustomEmbedInput("guild_id is required")
 	}
 	mid := strings.TrimSpace(messageID)
 	if mid == "" {
-		return "", CustomEmbedPostingConfig{}, invalidCustomEmbedInput("message_id is required")
+		return "", files.CustomEmbedPostingConfig{}, invalidCustomEmbedInput("message_id is required")
 	}
 
-	guildConfig := mgr.GuildConfig(scope)
+	guildConfig := s.configProvider.GuildConfig(scope)
 	if guildConfig == nil {
-		return "", CustomEmbedPostingConfig{}, fmt.Errorf("%w: guild_id=%s", ErrGuildConfigNotFound, scope)
+		return "", files.CustomEmbedPostingConfig{}, fmt.Errorf("%w: guild_id=%s", ErrGuildConfigNotFound, scope)
 	}
 	for _, ce := range guildConfig.CustomEmbeds {
 		pIdx := findCustomEmbedPostingIndex(ce.Postings, mid)
@@ -613,10 +563,10 @@ func (mgr *ConfigManager) FindCustomEmbedPosting(guildID, messageID string) (str
 			return ce.Key, ce.Postings[pIdx], nil
 		}
 	}
-	return "", CustomEmbedPostingConfig{}, fmt.Errorf("%w: message_id=%s", ErrCustomEmbedPostingNotFound, mid)
+	return "", files.CustomEmbedPostingConfig{}, fmt.Errorf("%w: message_id=%s", ErrCustomEmbedPostingNotFound, mid)
 }
 
-func findCustomEmbedPostingIndex(postings []CustomEmbedPostingConfig, messageID string) int {
+func findCustomEmbedPostingIndex(postings []files.CustomEmbedPostingConfig, messageID string) int {
 	for i, p := range postings {
 		if p.MessageID == messageID {
 			return i
@@ -626,7 +576,7 @@ func findCustomEmbedPostingIndex(postings []CustomEmbedPostingConfig, messageID 
 }
 
 // AddCustomEmbedField appends a field to the custom embed.
-func (mgr *ConfigManager) AddCustomEmbedField(guildID, key string, field CustomEmbedFieldConfig) error {
+func (s *EmbedService) AddCustomEmbedField(guildID, key string, field files.CustomEmbedFieldConfig) error {
 	scope := strings.TrimSpace(guildID)
 	if scope == "" {
 		return invalidCustomEmbedInput("guild_id is required")
@@ -640,8 +590,8 @@ func (mgr *ConfigManager) AddCustomEmbedField(guildID, key string, field CustomE
 		return fmt.Errorf("ConfigManager.AddCustomEmbedField: %w", err)
 	}
 
-	_, err = mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
-		gc, err := guildConfigByID(cfg, scope)
+	_, err = s.configProvider.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
+		gc, err := files.GuildConfigByID(cfg, scope)
 		if err != nil {
 			return fmt.Errorf("ConfigManager.AddCustomEmbedField: %w", err)
 		}
@@ -668,7 +618,7 @@ func (mgr *ConfigManager) AddCustomEmbedField(guildID, key string, field CustomE
 }
 
 // RemoveCustomEmbedField removes a field from the custom embed by its index (0-based).
-func (mgr *ConfigManager) RemoveCustomEmbedField(guildID, key string, fieldIndex int) error {
+func (s *EmbedService) RemoveCustomEmbedField(guildID, key string, fieldIndex int) error {
 	scope := strings.TrimSpace(guildID)
 	if scope == "" {
 		return invalidCustomEmbedInput("guild_id is required")
@@ -678,8 +628,8 @@ func (mgr *ConfigManager) RemoveCustomEmbedField(guildID, key string, fieldIndex
 		return fmt.Errorf("ConfigManager.RemoveCustomEmbedField: %w", err)
 	}
 
-	_, err = mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
-		gc, err := guildConfigByID(cfg, scope)
+	_, err = s.configProvider.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
+		gc, err := files.GuildConfigByID(cfg, scope)
 		if err != nil {
 			return fmt.Errorf("ConfigManager.RemoveCustomEmbedField: %w", err)
 		}
@@ -698,11 +648,11 @@ func (mgr *ConfigManager) RemoveCustomEmbedField(guildID, key string, fieldIndex
 	return err
 }
 
-func cloneCustomEmbeds(in []CustomEmbedConfig) []CustomEmbedConfig {
+func cloneCustomEmbeds(in []files.CustomEmbedConfig) []files.CustomEmbedConfig {
 	if len(in) == 0 {
 		return nil
 	}
-	out := make([]CustomEmbedConfig, 0, len(in))
+	out := make([]files.CustomEmbedConfig, 0, len(in))
 	for _, ce := range in {
 		out = append(out, cloneCustomEmbed(ce))
 	}

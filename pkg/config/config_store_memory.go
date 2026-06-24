@@ -1,25 +1,27 @@
-package files
+package config
 
 import (
 	"fmt"
 	"sync"
+
+	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 const defaultMemoryConfigStoreDescription = "memory://bot_config_state"
 
-// MemoryConfigStore persists BotConfig in memory.
+// MemoryConfigStore persists files.BotConfig in memory.
 // It is primarily intended for tests and lightweight local workflows that do
 // not need cross-process persistence.
 type MemoryConfigStore struct {
 	mu          sync.Mutex
-	config      *BotConfig
+	config      *files.BotConfig
 	exists      bool
 	description string
 }
 
 // Load loads.
-func (s *MemoryConfigStore) Load() (*BotConfig, error) {
-	cfg := &BotConfig{Guilds: []GuildConfig{}}
+func (s *MemoryConfigStore) Load() (*files.BotConfig, error) {
+	cfg := &files.BotConfig{Guilds: []files.GuildConfig{}}
 	if s == nil {
 		return cfg, nil
 	}
@@ -31,18 +33,18 @@ func (s *MemoryConfigStore) Load() (*BotConfig, error) {
 		return cfg, nil
 	}
 
-	out := cloneBotConfigPtr(s.config)
+	out := files.CloneBotConfigPtr(s.config)
 	if out == nil {
 		return cfg, nil
 	}
 	if out.Guilds == nil {
-		out.Guilds = []GuildConfig{}
+		out.Guilds = []files.GuildConfig{}
 	}
 	return out, nil
 }
 
 // Save saves.
-func (s *MemoryConfigStore) Save(cfg *BotConfig) error {
+func (s *MemoryConfigStore) Save(cfg *files.BotConfig) error {
 	if cfg == nil {
 		return fmt.Errorf("cannot save nil config")
 	}
@@ -53,12 +55,12 @@ func (s *MemoryConfigStore) Save(cfg *BotConfig) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.config = cloneBotConfigPtr(cfg)
+	s.config = files.CloneBotConfigPtr(cfg)
 	if s.config == nil {
-		s.config = &BotConfig{Guilds: []GuildConfig{}}
+		s.config = &files.BotConfig{Guilds: []files.GuildConfig{}}
 	}
 	if s.config.Guilds == nil {
-		s.config.Guilds = []GuildConfig{}
+		s.config.Guilds = []files.GuildConfig{}
 	}
 	s.exists = true
 	return nil

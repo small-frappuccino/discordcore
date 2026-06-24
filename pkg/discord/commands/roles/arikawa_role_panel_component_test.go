@@ -8,6 +8,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 
 	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	rolesvc "github.com/small-frappuccino/discordcore/pkg/discord/roles"
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -15,7 +16,7 @@ import (
 
 func TestRolePanelComponentHandler_InjectionAndRouting(t *testing.T) {
 	t.Parallel()
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 
 	// Pre-configure a panel and button
 	guildID := discord.GuildID(12345)
@@ -144,7 +145,7 @@ func TestRolePanelComponentHandler_InjectionAndRouting(t *testing.T) {
 func TestBuildRolePanelToggleResponseArikawa_VisibilityFlags(t *testing.T) {
 	t.Parallel()
 
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 
 	tests := []struct {
 		name           string

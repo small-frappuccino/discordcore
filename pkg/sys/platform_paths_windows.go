@@ -1,6 +1,6 @@
 //go:build windows
 
-package files
+package sys
 
 import (
 	"os"
@@ -15,21 +15,21 @@ import (
 //
 // These helpers return paths only. Callers should create directories via os.MkdirAll.
 
-func platformConfigDir(appName string) string {
+func PlatformConfigDir(appName string) string {
 	base := windowsAppDataBase()
 	return filepath.Join(base, sanitizeAppNameForPath(appName))
 }
 
-func platformCacheDir(appName string) string {
-	return filepath.Join(platformConfigDir(appName), "Cache")
+func PlatformCacheDir(appName string) string {
+	return filepath.Join(PlatformConfigDir(appName), "Cache")
 }
 
-func platformLogDir(appName string) string {
-	return filepath.Join(platformConfigDir(appName), "Logs")
+func PlatformLogDir(appName string) string {
+	return filepath.Join(PlatformConfigDir(appName), "Logs")
 }
 
 func windowsAppDataBase() string {
-	if v := strings.TrimSpace(getEnv("APPDATA")); v != "" {
+	if v := strings.TrimSpace(os.Getenv("APPDATA")); v != "" {
 		return v
 	}
 

@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordgo"
@@ -89,7 +90,7 @@ func TestCommandHandlerSetupAndShutdownLifecycle(t *testing.T) {
 		}
 	})
 
-	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cfgMgr := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	handler, err := NewCommandHandler(CommandHandlerDeps{
 		Session:        session,
 		ConfigManager:  cfgMgr,
@@ -139,7 +140,7 @@ func TestCommandHandlerSetupRollbackOnManagerFailure(t *testing.T) {
 	session.State = discordgo.NewState()
 	session.State.User = nil
 
-	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cfgMgr := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	handler, err := NewCommandHandler(CommandHandlerDeps{
 		Session:        session,
 		ConfigManager:  cfgMgr,
@@ -160,7 +161,7 @@ func TestCommandHandlerSetupRollbackOnManagerFailure(t *testing.T) {
 
 func TestCommandHandlerSkipsGuildWithoutCommandsFeature(t *testing.T) {
 	boolPtr := func(v bool) *bool { return &v }
-	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cfgMgr := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	if _, err := cfgMgr.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
 			{

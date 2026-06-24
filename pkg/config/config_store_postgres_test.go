@@ -1,10 +1,11 @@
-package files
+package config
 
 import (
 	"context"
 	"testing"
 	"time"
 
+	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/testdb"
 )
 
@@ -47,31 +48,31 @@ func TestPostgresConfigStoreSaveLoadRoundTrip(t *testing.T) {
 		t.Fatalf("expected config row to be absent before save")
 	}
 
-	cfg := &BotConfig{
-		Guilds: []GuildConfig{
+	cfg := &files.BotConfig{
+		Guilds: []files.GuildConfig{
 			{
 				GuildID: "guild-1",
-				Channels: ChannelsConfig{
+				Channels: files.ChannelsConfig{
 					Commands:      "channel-1",
 					AvatarLogging: "channel-2",
 				},
-				Roles: RolesConfig{
+				Roles: files.RolesConfig{
 					Allowed: []string{"role-1", "role-2"},
 				},
 			},
 		},
-		Features: FeatureToggles{
-			Services: FeatureServiceToggles{
-				Monitoring: boolPtr(true),
-				Commands:   boolPtr(false),
+		Features: files.FeatureToggles{
+			Services: files.FeatureServiceToggles{
+				Monitoring: BoolPtr(true),
+				Commands:   BoolPtr(false),
 			},
-			Logging: FeatureLoggingToggles{
-				AvatarLogging: boolPtr(false),
+			Logging: files.FeatureLoggingToggles{
+				AvatarLogging: BoolPtr(false),
 			},
 		},
-		RuntimeConfig: RuntimeConfig{
+		RuntimeConfig: files.RuntimeConfig{
 			BotTheme: "matrix",
-			Database: DatabaseRuntimeConfig{
+			Database: files.DatabaseRuntimeConfig{
 				Driver:        "postgres",
 				DatabaseURL:   "postgres://example.invalid/test",
 				MaxOpenConns:  7,
@@ -114,3 +115,5 @@ func TestPostgresConfigStoreSaveLoadRoundTrip(t *testing.T) {
 		t.Fatalf("expected commands feature override to remain disabled after round-trip")
 	}
 }
+
+func BoolPtr(b bool) *bool { return &b }

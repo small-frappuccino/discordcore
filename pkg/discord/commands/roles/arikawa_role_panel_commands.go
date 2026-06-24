@@ -10,6 +10,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	rolesvc "github.com/small-frappuccino/discordcore/pkg/discord/roles"
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -18,13 +19,13 @@ import (
 // RolePanelCommands orchestrates the slash-command routing for role panel workflows.
 // It integrates directly with the Arikawa router to execute lifecycle mutations.
 type RolePanelCommands struct {
-	configManager    *files.ConfigManager
+	configManager    config.Provider
 	rolePanelService *rolesvc.RolePanelService
 }
 
 // NewRolePanelCommands constructs the primary slash-command controller for role panels.
 // It mandates the injection of the configuration manager and domain service.
-func NewRolePanelCommands(configManager *files.ConfigManager, svc *rolesvc.RolePanelService) *RolePanelCommands {
+func NewRolePanelCommands(configManager config.Provider, svc *rolesvc.RolePanelService) *RolePanelCommands {
 	return &RolePanelCommands{
 		configManager:    configManager,
 		rolePanelService: svc,
@@ -103,7 +104,7 @@ func rolePanelKeyFromOptions(ctx *commands.ArikawaContext) (string, error) {
 	return key, nil
 }
 
-func loadRolePanel(cm *files.ConfigManager, guildID discord.GuildID, key string) (files.RolePanelConfig, error) {
+func loadRolePanel(cm config.Provider, guildID discord.GuildID, key string) (files.RolePanelConfig, error) {
 	panel, err := cm.RolePanel(guildID.String(), key)
 	if err != nil {
 		if errors.Is(err, files.ErrRolePanelNotFound) {
@@ -150,7 +151,7 @@ func ensureRolePanelEnabled(ctx *commands.ArikawaContext) error {
 	return nil
 }
 
-func refreshRolePanelPostingsBestEffort(cm *files.ConfigManager, svc *rolesvc.RolePanelService, ctx *commands.ArikawaContext, key string) string {
+func refreshRolePanelPostingsBestEffort(cm config.Provider, svc *rolesvc.RolePanelService, ctx *commands.ArikawaContext, key string) string {
 	if cm == nil || svc == nil || ctx == nil {
 		return ""
 	}
@@ -247,11 +248,11 @@ func convertPanelToArikawa(panel files.RolePanelConfig) (discord.Embed, []discor
 // --- Leaf subcommands: /roles post|preview|set|delete|list|refresh|unpost|import|export|toggle ---
 
 type rolePanelPostSubCommand struct {
-	configManager    *files.ConfigManager
+	configManager    config.Provider
 	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelPostSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelPostSubCommand {
+func newRolePanelPostSubCommand(cm config.Provider, svc *rolesvc.RolePanelService) *rolePanelPostSubCommand {
 	return &rolePanelPostSubCommand{configManager: cm, rolePanelService: svc}
 }
 func (c *rolePanelPostSubCommand) Name() string { return rolePanelSubPost }
@@ -325,11 +326,11 @@ func (c *rolePanelPostSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type rolePanelPreviewSubCommand struct {
-	configManager    *files.ConfigManager
+	configManager    config.Provider
 	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelPreviewSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelPreviewSubCommand {
+func newRolePanelPreviewSubCommand(cm config.Provider, svc *rolesvc.RolePanelService) *rolePanelPreviewSubCommand {
 	return &rolePanelPreviewSubCommand{configManager: cm, rolePanelService: svc}
 }
 func (c *rolePanelPreviewSubCommand) Name() string { return rolePanelSubPreview }
@@ -364,11 +365,11 @@ func (c *rolePanelPreviewSubCommand) Handle(ctx *commands.ArikawaContext) error 
 }
 
 type rolePanelSetSubCommand struct {
-	configManager    *files.ConfigManager
+	configManager    config.Provider
 	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelSetSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelSetSubCommand {
+func newRolePanelSetSubCommand(cm config.Provider, svc *rolesvc.RolePanelService) *rolePanelSetSubCommand {
 	return &rolePanelSetSubCommand{configManager: cm, rolePanelService: svc}
 }
 func (c *rolePanelSetSubCommand) Name() string { return rolePanelSubSet }
@@ -444,11 +445,11 @@ func (c *rolePanelSetSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type rolePanelDeleteSubCommand struct {
-	configManager    *files.ConfigManager
+	configManager    config.Provider
 	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelDeleteSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelDeleteSubCommand {
+func newRolePanelDeleteSubCommand(cm config.Provider, svc *rolesvc.RolePanelService) *rolePanelDeleteSubCommand {
 	return &rolePanelDeleteSubCommand{configManager: cm, rolePanelService: svc}
 }
 func (c *rolePanelDeleteSubCommand) Name() string        { return rolePanelSubDelete }
@@ -491,10 +492,10 @@ func (c *rolePanelDeleteSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type rolePanelListSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 }
 
-func newRolePanelListSubCommand(cm *files.ConfigManager) *rolePanelListSubCommand {
+func newRolePanelListSubCommand(cm config.Provider) *rolePanelListSubCommand {
 	return &rolePanelListSubCommand{configManager: cm}
 }
 func (c *rolePanelListSubCommand) Name() string { return rolePanelSubList }
@@ -525,11 +526,11 @@ func (c *rolePanelListSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type rolePanelRefreshSubCommand struct {
-	configManager    *files.ConfigManager
+	configManager    config.Provider
 	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelRefreshSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelRefreshSubCommand {
+func newRolePanelRefreshSubCommand(cm config.Provider, svc *rolesvc.RolePanelService) *rolePanelRefreshSubCommand {
 	return &rolePanelRefreshSubCommand{configManager: cm, rolePanelService: svc}
 }
 func (c *rolePanelRefreshSubCommand) Name() string { return rolePanelSubRefresh }
@@ -546,11 +547,11 @@ func (c *rolePanelRefreshSubCommand) Handle(ctx *commands.ArikawaContext) error 
 }
 
 type rolePanelUnpostSubCommand struct {
-	configManager    *files.ConfigManager
+	configManager    config.Provider
 	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelUnpostSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelUnpostSubCommand {
+func newRolePanelUnpostSubCommand(cm config.Provider, svc *rolesvc.RolePanelService) *rolePanelUnpostSubCommand {
 	return &rolePanelUnpostSubCommand{configManager: cm, rolePanelService: svc}
 }
 func (c *rolePanelUnpostSubCommand) Name() string { return rolePanelSubUnpost }
@@ -569,10 +570,10 @@ func (c *rolePanelUnpostSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type rolePanelToggleSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 }
 
-func newRolePanelToggleSubCommand(cm *files.ConfigManager) *rolePanelToggleSubCommand {
+func newRolePanelToggleSubCommand(cm config.Provider) *rolePanelToggleSubCommand {
 	return &rolePanelToggleSubCommand{configManager: cm}
 }
 func (c *rolePanelToggleSubCommand) Name() string                     { return "toggle" }
@@ -585,11 +586,11 @@ func (c *rolePanelToggleSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type rolePanelImportSubCommand struct {
-	configManager    *files.ConfigManager
+	configManager    config.Provider
 	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelImportSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelImportSubCommand {
+func newRolePanelImportSubCommand(cm config.Provider, svc *rolesvc.RolePanelService) *rolePanelImportSubCommand {
 	return &rolePanelImportSubCommand{configManager: cm, rolePanelService: svc}
 }
 func (c *rolePanelImportSubCommand) Name() string        { return rolePanelSubImport }
@@ -607,10 +608,10 @@ func (c *rolePanelImportSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type rolePanelExportSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 }
 
-func newRolePanelExportSubCommand(cm *files.ConfigManager) *rolePanelExportSubCommand {
+func newRolePanelExportSubCommand(cm config.Provider) *rolePanelExportSubCommand {
 	return &rolePanelExportSubCommand{configManager: cm}
 }
 func (c *rolePanelExportSubCommand) Name() string        { return rolePanelSubExport }
@@ -627,11 +628,11 @@ func (c *rolePanelExportSubCommand) Handle(ctx *commands.ArikawaContext) error {
 // --- Subgroup: /roles button add|remove|list ---
 
 type rolePanelButtonAddSubCommand struct {
-	configManager    *files.ConfigManager
+	configManager    config.Provider
 	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelButtonAddSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelButtonAddSubCommand {
+func newRolePanelButtonAddSubCommand(cm config.Provider, svc *rolesvc.RolePanelService) *rolePanelButtonAddSubCommand {
 	return &rolePanelButtonAddSubCommand{configManager: cm, rolePanelService: svc}
 }
 func (c *rolePanelButtonAddSubCommand) Name() string { return rolePanelSubButtonAdd }
@@ -690,11 +691,11 @@ func (c *rolePanelButtonAddSubCommand) Handle(ctx *commands.ArikawaContext) erro
 }
 
 type rolePanelButtonRemoveSubCommand struct {
-	configManager    *files.ConfigManager
+	configManager    config.Provider
 	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelButtonRemoveSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelButtonRemoveSubCommand {
+func newRolePanelButtonRemoveSubCommand(cm config.Provider, svc *rolesvc.RolePanelService) *rolePanelButtonRemoveSubCommand {
 	return &rolePanelButtonRemoveSubCommand{configManager: cm, rolePanelService: svc}
 }
 func (c *rolePanelButtonRemoveSubCommand) Name() string { return rolePanelSubButtonRemove }
@@ -728,10 +729,10 @@ func (c *rolePanelButtonRemoveSubCommand) Handle(ctx *commands.ArikawaContext) e
 }
 
 type rolePanelButtonListSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 }
 
-func newRolePanelButtonListSubCommand(cm *files.ConfigManager) *rolePanelButtonListSubCommand {
+func newRolePanelButtonListSubCommand(cm config.Provider) *rolePanelButtonListSubCommand {
 	return &rolePanelButtonListSubCommand{configManager: cm}
 }
 func (c *rolePanelButtonListSubCommand) Name() string        { return rolePanelSubButtonList }
@@ -760,11 +761,11 @@ func (c *rolePanelButtonListSubCommand) Handle(ctx *commands.ArikawaContext) err
 // --- Subgroup: /roles field add|remove|list ---
 
 type rolePanelFieldAddSubCommand struct {
-	configManager    *files.ConfigManager
+	configManager    config.Provider
 	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelFieldAddSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelFieldAddSubCommand {
+func newRolePanelFieldAddSubCommand(cm config.Provider, svc *rolesvc.RolePanelService) *rolePanelFieldAddSubCommand {
 	return &rolePanelFieldAddSubCommand{configManager: cm, rolePanelService: svc}
 }
 func (c *rolePanelFieldAddSubCommand) Name() string        { return rolePanelSubFieldAdd }
@@ -784,11 +785,11 @@ func (c *rolePanelFieldAddSubCommand) Handle(ctx *commands.ArikawaContext) error
 }
 
 type rolePanelFieldRemoveSubCommand struct {
-	configManager    *files.ConfigManager
+	configManager    config.Provider
 	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelFieldRemoveSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelFieldRemoveSubCommand {
+func newRolePanelFieldRemoveSubCommand(cm config.Provider, svc *rolesvc.RolePanelService) *rolePanelFieldRemoveSubCommand {
 	return &rolePanelFieldRemoveSubCommand{configManager: cm, rolePanelService: svc}
 }
 func (c *rolePanelFieldRemoveSubCommand) Name() string        { return rolePanelSubFieldRemove }
@@ -806,10 +807,10 @@ func (c *rolePanelFieldRemoveSubCommand) Handle(ctx *commands.ArikawaContext) er
 }
 
 type rolePanelFieldListSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 }
 
-func newRolePanelFieldListSubCommand(cm *files.ConfigManager) *rolePanelFieldListSubCommand {
+func newRolePanelFieldListSubCommand(cm config.Provider) *rolePanelFieldListSubCommand {
 	return &rolePanelFieldListSubCommand{configManager: cm}
 }
 func (c *rolePanelFieldListSubCommand) Name() string        { return rolePanelSubFieldList }

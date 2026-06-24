@@ -7,6 +7,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/discord"
 
 	coreclean "github.com/small-frappuccino/discordcore/pkg/clean"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
@@ -24,7 +25,7 @@ func (m *mockExecutor) ExecuteClean(ctx context.Context, channelID discord.Chann
 // are gracefully handled without panicking or passing corrupted states.
 func TestArikawaCleanCommand_SyntheticPayloadInjection(t *testing.T) {
 	t.Parallel()
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	enabled := true
 	cfg := &files.BotConfig{
 		Guilds: []files.GuildConfig{{

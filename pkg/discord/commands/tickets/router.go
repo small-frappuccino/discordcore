@@ -11,8 +11,8 @@ import (
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	discordtickets "github.com/small-frappuccino/discordcore/pkg/discord/tickets"
-	"github.com/small-frappuccino/discordcore/pkg/files"
 	pkgtickets "github.com/small-frappuccino/discordcore/pkg/tickets"
 )
 
@@ -21,12 +21,12 @@ type TicketRouter struct {
 	state  *state.State
 	svc    *discordtickets.Service
 	mgr    *pkgtickets.Manager
-	config *files.ConfigManager
+	config config.Provider
 	logger *slog.Logger
 }
 
 // NewTicketRouter instantiates the Arikawa native router.
-func NewTicketRouter(st *state.State, svc *discordtickets.Service, mgr *pkgtickets.Manager, cm *files.ConfigManager, logger *slog.Logger) *TicketRouter {
+func NewTicketRouter(st *state.State, svc *discordtickets.Service, mgr *pkgtickets.Manager, cm config.Provider, logger *slog.Logger) *TicketRouter {
 	r := &TicketRouter{
 		state:  st,
 		svc:    svc,

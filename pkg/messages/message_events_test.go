@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/task"
@@ -428,7 +429,7 @@ func TestMessageEventService_LifecycleAndMetadata(t *testing.T) {
 
 	store := &mockRepository{}
 	store.cleanupErr = errors.New("cleanup failed") // coverage for cleanup failure warning
-	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cfgMgr := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	_ = cfgMgr.AddGuildConfig(files.GuildConfig{
 		GuildID: "111",
 		RuntimeConfig: files.RuntimeConfig{
@@ -497,7 +498,7 @@ func TestMessageEventService_IngestMessageCreate(t *testing.T) {
 		auditLogs:       make(map[string][]AuditLogMessageDeleteEntry),
 	}
 	store := &mockRepository{}
-	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cfgMgr := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 
 	// Add guild config
 	_ = cfgMgr.AddGuildConfig(files.GuildConfig{
@@ -578,7 +579,7 @@ func TestMessageEventService_IngestMessageUpdate_And_Delete(t *testing.T) {
 		auditLogs:       make(map[string][]AuditLogMessageDeleteEntry),
 	}
 	store := &mockRepository{}
-	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cfgMgr := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 
 	// Add guild config
 	deleteOnLog := true
@@ -682,7 +683,7 @@ func TestMessageEventService_ActiveBotInstanceRouting(t *testing.T) {
 			Content:        "hello",
 		},
 	}
-	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cfgMgr := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 
 	// Add guild config that belongs to bot-1 and routes logging to bot-1
 	deleteOnLog := true
@@ -775,7 +776,7 @@ func TestMessageEventService_TaskRouterAsynchronousHandling(t *testing.T) {
 			Content:        "hello",
 		},
 	}
-	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cfgMgr := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 
 	_ = cfgMgr.AddGuildConfig(files.GuildConfig{
 		GuildID: "111",
@@ -837,7 +838,7 @@ func TestLookupCachedMessage_PollingAndCancellation(t *testing.T) {
 	t.Parallel()
 
 	store := &mockRepository{}
-	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cfgMgr := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 
 	deps := EventServiceDeps{
 		ConfigManager: cfgMgr,
@@ -898,7 +899,7 @@ func TestMessageEventService_PersistFallbacks(t *testing.T) {
 		incrementDailyErr: errors.New("sync increment daily err"),
 		deleteErr:         errors.New("sync delete err"),
 	}
-	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cfgMgr := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 
 	deps := EventServiceDeps{
 		ConfigManager: cfgMgr,
@@ -951,7 +952,7 @@ func TestAuditLogFetchFailureFallback(t *testing.T) {
 	// Since Client.AuditLog will make actual HTTP calls and fail because of invalid token, it returns error.
 	// We verify that it returns empty string on AuditLog fetch failure.
 	store := &mockRepository{}
-	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cfgMgr := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	deps := EventServiceDeps{
 		ConfigManager: cfgMgr,
 		Sink:          &mockMessageSink{},
@@ -1028,7 +1029,7 @@ func TestDeleteOnLogEnabled(t *testing.T) {
 	}
 
 	// config is nil -> returns mes.deleteOnLog (true)
-	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cfgMgr := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	svc.configManager = cfgMgr
 	if !svc.deleteOnLogEnabled("111") {
 		t.Errorf("expected true")

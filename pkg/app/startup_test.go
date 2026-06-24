@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/control"
 	"github.com/small-frappuccino/discordcore/pkg/discord/session"
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -243,7 +244,7 @@ func TestScheduleStartupWebhookEmbedUpdates(t *testing.T) {
 
 func TestStartControlServerStartupTask(t *testing.T) {
 	t.Parallel()
-	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cfgMgr := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	controlRuntime := resolvedControlRuntime{
 		bindAddr: "127.0.0.1:0",
 	}

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/members"
 	"golang.org/x/sync/errgroup"
@@ -55,7 +56,7 @@ func TestStatsService_DatabasePreemption(t *testing.T) {
 	store := &blockingStore{
 		entered: make(chan struct{}),
 	}
-	configManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	configManager := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 
 	monitoringEnabled := true
 	guildCfg := files.GuildConfig{

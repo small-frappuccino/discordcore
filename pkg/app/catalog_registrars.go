@@ -8,6 +8,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	discordclean "github.com/small-frappuccino/discordcore/pkg/discord/clean"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/clean"
@@ -23,7 +24,6 @@ import (
 	discordmod "github.com/small-frappuccino/discordcore/pkg/discord/moderation"
 	"github.com/small-frappuccino/discordcore/pkg/discord/partners"
 	"github.com/small-frappuccino/discordcore/pkg/discord/roles"
-	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	appstats "github.com/small-frappuccino/discordcore/pkg/stats"
 )
@@ -32,7 +32,7 @@ import (
 // Any orchestrator (like CommandHandler) or test mock only needs to satisfy this surface.
 type RegistrarContext interface {
 	SessionToken() string
-	ConfigManager() *files.ConfigManager
+	ConfigProvider() config.Provider
 	RuntimeApplier() *runtimeapply.Manager
 	PartnerService() *partners.PartnerService
 	ModerationMetrics() moderation.Metrics
@@ -127,7 +127,7 @@ func RuntimeCommandCatalogRegistrar() CommandCatalogRegistrar {
 				panic("fail-fast violation: runtimeApplier is strictly required for RuntimeCommandCatalogRegistrar")
 			}
 			replier := &arikawaReplierAdapter{client: api.NewClient("Bot " + ctx.SessionToken())}
-			handler := runtime.NewHandler(replier, ctx.ConfigManager(), ctx.RuntimeApplier(), slog.Default())
+			handler := runtime.NewHandler(replier, ctx.ConfigProvider(), ctx.RuntimeApplier(), slog.Default())
 			shim := &runtimeShim{handler: handler}
 			router.Register(shim)
 			router.RegisterComponent("runtime|", shim)
@@ -175,7 +175,7 @@ func PartnerCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
 		RegisterArikawa: func(ctx RegistrarContext, router commands.ArikawaRegisterer) {
 			// Domain packages now receive native router directly.
-			partnercmd.NewPartnerCommands(ctx.ConfigManager(), ctx.PartnerService()).RegisterCommands(router)
+			partnercmd.NewPartnerCommands(ctx.ConfigProvider(), ctx.PartnerService()).RegisterCommands(router)
 		},
 	}
 }
@@ -189,7 +189,7 @@ func ModerationCommandCatalogRegistrar() CommandCatalogRegistrar {
 			router.Register(moderation.NewBanCommand(svc, ctx.ModerationMetrics(), slog.Default()))
 			router.Register(moderation.NewTimeoutCommand(svc, ctx.ModerationMetrics(), slog.Default()))
 			router.Register(moderation.NewMassBanCommand(svc, ctx.ModerationMetrics(), slog.Default()))
-			router.Register(moderation.NewReactionBlockCommand(ctx.ConfigManager(), ctx.ModerationMetrics(), slog.Default()))
+			router.Register(moderation.NewReactionBlockCommand(ctx.ConfigProvider(), ctx.ModerationMetrics(), slog.Default()))
 		},
 	}
 }
@@ -203,7 +203,7 @@ func CleanCommandCatalogRegistrar() CommandCatalogRegistrar {
 				metrics = cleanMetricsAdapter{m: ctx.ModerationMetrics()}
 			}
 			svc := discordclean.NewService(client, metrics, nil)
-			router.Register(clean.NewCleanCommand(ctx.ConfigManager(), svc))
+			router.Register(clean.NewCleanCommand(ctx.ConfigProvider(), svc))
 		},
 	}
 }
@@ -223,7 +223,7 @@ func (a cleanMetricsAdapter) RecordCleanAuditLogFailure()                       
 func RolesCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
 		RegisterArikawa: func(ctx RegistrarContext, router commands.ArikawaRegisterer) {
-			rolescmd.NewRolePanelCommands(ctx.ConfigManager(), ctx.RolePanelService()).RegisterCommands(router)
+			rolescmd.NewRolePanelCommands(ctx.ConfigProvider(), ctx.RolePanelService()).RegisterCommands(router)
 		},
 	}
 }
@@ -232,7 +232,7 @@ func RolesCommandCatalogRegistrar() CommandCatalogRegistrar {
 func EmbedsCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
 		RegisterArikawa: func(ctx RegistrarContext, router commands.ArikawaRegisterer) {
-			embedscmd.NewEmbedCommands(ctx.ConfigManager(), ctx.EmbedService()).RegisterCommands(router)
+			embedscmd.NewEmbedCommands(ctx.ConfigProvider(), ctx.EmbedService()).RegisterCommands(router)
 		},
 	}
 }
@@ -282,7 +282,7 @@ func StatsCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
 		RequiredCapabilities: CapStats,
 		RegisterArikawa: func(ctx RegistrarContext, router commands.ArikawaRegisterer) {
-			stats.NewStatsCommands(ctx.ConfigManager(), ctx.StatsService(), slog.Default()).RegisterCommands(router)
+			stats.NewStatsCommands(ctx.ConfigProvider(), ctx.StatsService(), slog.Default()).RegisterCommands(router)
 		},
 	}
 }
@@ -291,7 +291,7 @@ func StatsCommandCatalogRegistrar() CommandCatalogRegistrar {
 func LoggingCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
 		RegisterArikawa: func(ctx RegistrarContext, router commands.ArikawaRegisterer) {
-			logging.NewLoggingCommands(ctx.ConfigManager()).RegisterCommands(router)
+			logging.NewLoggingCommands(ctx.ConfigProvider()).RegisterCommands(router)
 		},
 	}
 }

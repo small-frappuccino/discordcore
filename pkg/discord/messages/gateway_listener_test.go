@@ -11,6 +11,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/diamondburned/arikawa/v3/utils/handler"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/messages"
 	"github.com/small-frappuccino/discordcore/pkg/service"
@@ -126,7 +127,7 @@ func TestGatewayListener_Lifecycle(t *testing.T) {
 			},
 		},
 	}
-	store := &files.MemoryConfigStore{}
+	store := &config.MemoryConfigStore{}
 	_ = store.Save(storeConfig)
 	configMgr := files.NewConfigManagerWithStore(store, logger)
 	_ = configMgr.LoadConfig()

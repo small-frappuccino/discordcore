@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
@@ -181,7 +182,7 @@ func TestResolveLogChannel(t *testing.T) {
 		t.Errorf("expected empty string for empty guild ID")
 	}
 
-	store := &files.MemoryConfigStore{}
+	store := &config.MemoryConfigStore{}
 	_ = store.Save(&files.BotConfig{
 		Guilds: []files.GuildConfig{
 			{
@@ -240,7 +241,7 @@ func TestCheckFeatureEnabled_Errors(t *testing.T) {
 	}
 
 	// config unavailable (nil config store load)
-	mgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	mgr := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	dec = CheckFeatureEnabled(mgr, LogEventAvatarChange, "111")
 	if dec.Enabled || dec.Reason != EmitReasonConfigUnavailable {
 		t.Errorf("expected EmitReasonConfigUnavailable")
@@ -278,7 +279,7 @@ func TestCheckFeatureEnabled_Toggles(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		store := &files.MemoryConfigStore{}
+		store := &config.MemoryConfigStore{}
 		_ = store.Save(&files.BotConfig{
 			Guilds: []files.GuildConfig{
 				{
@@ -310,7 +311,7 @@ func TestCheckFeatureEnabled_Toggles(t *testing.T) {
 
 func TestCheckFeatureEnabled_NoChannelConfigured(t *testing.T) {
 	t.Parallel()
-	store := &files.MemoryConfigStore{}
+	store := &config.MemoryConfigStore{}
 	_ = store.Save(&files.BotConfig{
 		Guilds: []files.GuildConfig{
 			{
@@ -351,7 +352,7 @@ func TestValidateLogCapability(t *testing.T) {
 	}
 
 	// Test validate resolved log channel: exclusive moderation channel conflict
-	store := &files.MemoryConfigStore{}
+	store := &config.MemoryConfigStore{}
 	_ = store.Save(&files.BotConfig{
 		Guilds: []files.GuildConfig{
 			{

@@ -7,17 +7,18 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 // LoggingCommands wiring.
 type LoggingCommands struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 }
 
 // NewLoggingCommands returns the root logging command tree.
-func NewLoggingCommands(configManager *files.ConfigManager) *LoggingCommands {
+func NewLoggingCommands(configManager config.Provider) *LoggingCommands {
 	return &LoggingCommands{
 		configManager: configManager,
 	}
@@ -35,7 +36,7 @@ func (c *LoggingCommands) RegisterCommands(router commands.ArikawaRegisterer) {
 }
 
 type loggingRootCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 }
 
 func (c *loggingRootCommand) Name() string              { return "logging" }

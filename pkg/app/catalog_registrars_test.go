@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	qotdcmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/qotd"
@@ -29,8 +30,13 @@ type MockRegistrarContext struct {
 	statsService      *appstats.StatsService
 }
 
-func (m MockRegistrarContext) SessionToken() string                      { return m.sessionToken }
-func (m MockRegistrarContext) ConfigManager() *files.ConfigManager       { return m.configManager }
+func (m MockRegistrarContext) SessionToken() string { return m.sessionToken }
+func (m MockRegistrarContext) ConfigProvider() config.Provider {
+	if m.configManager == nil {
+		return nil
+	}
+	return m.configManager
+}
 func (m MockRegistrarContext) RuntimeApplier() *runtimeapply.Manager     { return m.runtimeApplier }
 func (m MockRegistrarContext) PartnerService() *partners.PartnerService  { return m.partnerService }
 func (m MockRegistrarContext) ModerationMetrics() moderation.Metrics     { return m.moderationMetrics }

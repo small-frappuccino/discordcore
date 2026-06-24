@@ -11,8 +11,10 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	localdiscord "github.com/small-frappuccino/discordcore/pkg/discord"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
+	"github.com/small-frappuccino/discordcore/pkg/discord/embeds"
 	partnersvc "github.com/small-frappuccino/discordcore/pkg/discord/partners"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
@@ -37,13 +39,13 @@ var (
 // PartnerCommands orchestrates the slash-command routing for partner board workflows.
 // It integrates directly with the Arikawa router to execute lifecycle mutations.
 type PartnerCommands struct {
-	configManager  *files.ConfigManager
+	configManager  config.Provider
 	partnerService *partnersvc.PartnerService
 }
 
 // NewPartnerCommands constructs the primary slash-command controller for partner boards.
 // It mandates the injection of the configuration manager and domain service.
-func NewPartnerCommands(configManager *files.ConfigManager, svc *partnersvc.PartnerService) *PartnerCommands {
+func NewPartnerCommands(configManager config.Provider, svc *partnersvc.PartnerService) *PartnerCommands {
 	return &PartnerCommands{
 		configManager:  configManager,
 		partnerService: svc,
@@ -127,11 +129,11 @@ func partnerSuccess(ctx *commands.ArikawaContext, message string) error {
 
 // --- Add ---
 type partnerAddSubCommand struct {
-	configManager  *files.ConfigManager
+	configManager  config.Provider
 	partnerService *partnersvc.PartnerService
 }
 
-func newPartnerAddSubCommand(cm *files.ConfigManager, s *partnersvc.PartnerService) *partnerAddSubCommand {
+func newPartnerAddSubCommand(cm config.Provider, s *partnersvc.PartnerService) *partnerAddSubCommand {
 	return &partnerAddSubCommand{configManager: cm, partnerService: s}
 }
 
@@ -191,7 +193,7 @@ func (c *partnerAddSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	return partnerSuccess(ctx, "Partner added successfully.")
 }
 
-func autocompletePartnerNameFocused(ctx *commands.ArikawaContext, cm *files.ConfigManager, focusedOption string) (api.AutocompleteChoices, error) {
+func autocompletePartnerNameFocused(ctx *commands.ArikawaContext, cm config.Provider, focusedOption string) (api.AutocompleteChoices, error) {
 	var query string
 	if data, ok := ctx.Interaction.Data.(*discord.AutocompleteInteraction); ok {
 		var opts []discord.AutocompleteOption
@@ -236,17 +238,17 @@ func autocompletePartnerNameFocused(ctx *commands.ArikawaContext, cm *files.Conf
 	return choices, nil
 }
 
-func autocompletePartnerName(ctx *commands.ArikawaContext, cm *files.ConfigManager) (api.AutocompleteChoices, error) {
+func autocompletePartnerName(ctx *commands.ArikawaContext, cm config.Provider) (api.AutocompleteChoices, error) {
 	return autocompletePartnerNameFocused(ctx, cm, optionName)
 }
 
 // --- Remove ---
 type partnerRemoveSubCommand struct {
-	configManager  *files.ConfigManager
+	configManager  config.Provider
 	partnerService *partnersvc.PartnerService
 }
 
-func newPartnerRemoveSubCommand(cm *files.ConfigManager, s *partnersvc.PartnerService) *partnerRemoveSubCommand {
+func newPartnerRemoveSubCommand(cm config.Provider, s *partnersvc.PartnerService) *partnerRemoveSubCommand {
 	return &partnerRemoveSubCommand{configManager: cm, partnerService: s}
 }
 
@@ -306,11 +308,11 @@ func (c *partnerRemoveSubCommand) Handle(ctx *commands.ArikawaContext) error {
 
 // --- Link ---
 type partnerLinkSubCommand struct {
-	configManager  *files.ConfigManager
+	configManager  config.Provider
 	partnerService *partnersvc.PartnerService
 }
 
-func newPartnerLinkSubCommand(cm *files.ConfigManager, s *partnersvc.PartnerService) *partnerLinkSubCommand {
+func newPartnerLinkSubCommand(cm config.Provider, s *partnersvc.PartnerService) *partnerLinkSubCommand {
 	return &partnerLinkSubCommand{configManager: cm, partnerService: s}
 }
 
@@ -370,11 +372,11 @@ func (c *partnerLinkSubCommand) Handle(ctx *commands.ArikawaContext) error {
 
 // --- Rename ---
 type partnerRenameSubCommand struct {
-	configManager  *files.ConfigManager
+	configManager  config.Provider
 	partnerService *partnersvc.PartnerService
 }
 
-func newPartnerRenameSubCommand(cm *files.ConfigManager, s *partnersvc.PartnerService) *partnerRenameSubCommand {
+func newPartnerRenameSubCommand(cm config.Provider, s *partnersvc.PartnerService) *partnerRenameSubCommand {
 	return &partnerRenameSubCommand{configManager: cm, partnerService: s}
 }
 
@@ -477,10 +479,10 @@ func (c *partnerRenameSubCommand) Handle(ctx *commands.ArikawaContext) error {
 
 // --- List ---
 type partnerListSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 }
 
-func newPartnerListSubCommand(cm *files.ConfigManager) *partnerListSubCommand {
+func newPartnerListSubCommand(cm config.Provider) *partnerListSubCommand {
 	return &partnerListSubCommand{configManager: cm}
 }
 
@@ -521,11 +523,11 @@ func (c *partnerListSubCommand) Handle(ctx *commands.ArikawaContext) error {
 
 // --- Post ---
 type partnerPostSubCommand struct {
-	configManager  *files.ConfigManager
+	configManager  config.Provider
 	partnerService *partnersvc.PartnerService
 }
 
-func newPartnerPostSubCommand(cm *files.ConfigManager, s *partnersvc.PartnerService) *partnerPostSubCommand {
+func newPartnerPostSubCommand(cm config.Provider, s *partnersvc.PartnerService) *partnerPostSubCommand {
 	return &partnerPostSubCommand{configManager: cm, partnerService: s}
 }
 
@@ -612,10 +614,10 @@ func (c *partnerPostSubCommand) Handle(ctx *commands.ArikawaContext) error {
 
 // --- Unpost ---
 type partnerUnpostSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 }
 
-func newPartnerUnpostSubCommand(cm *files.ConfigManager) *partnerUnpostSubCommand {
+func newPartnerUnpostSubCommand(cm config.Provider) *partnerUnpostSubCommand {
 	return &partnerUnpostSubCommand{configManager: cm}
 }
 
@@ -694,11 +696,11 @@ func (c *partnerUnpostSubCommand) Handle(ctx *commands.ArikawaContext) error {
 
 // --- Refresh ---
 type partnerRefreshSubCommand struct {
-	configManager  *files.ConfigManager
+	configManager  config.Provider
 	partnerService *partnersvc.PartnerService
 }
 
-func newPartnerRefreshSubCommand(cm *files.ConfigManager, s *partnersvc.PartnerService) *partnerRefreshSubCommand {
+func newPartnerRefreshSubCommand(cm config.Provider, s *partnersvc.PartnerService) *partnerRefreshSubCommand {
 	return &partnerRefreshSubCommand{configManager: cm, partnerService: s}
 }
 
@@ -720,10 +722,10 @@ func (c *partnerRefreshSubCommand) Handle(ctx *commands.ArikawaContext) error {
 
 // --- ImportTemplate ---
 type partnerImportTemplateSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 }
 
-func newPartnerImportTemplateSubCommand(cm *files.ConfigManager) *partnerImportTemplateSubCommand {
+func newPartnerImportTemplateSubCommand(cm config.Provider) *partnerImportTemplateSubCommand {
 	return &partnerImportTemplateSubCommand{configManager: cm}
 }
 
@@ -750,7 +752,7 @@ func (c *partnerImportTemplateSubCommand) Handle(ctx *commands.ArikawaContext) e
 		return partnerDetailedCommandError(ctx, fmt.Sprintf("Failed to fetch from pastebin: %v", err))
 	}
 
-	discohookEmbed, err := files.ParseAndValidateDiscohookJSON(data)
+	discohookEmbed, err := embeds.ParseAndValidateDiscohookJSON(data)
 	if err != nil {
 		return partnerDetailedCommandError(ctx, fmt.Sprintf("Invalid embed JSON: %v", err))
 	}
@@ -760,7 +762,7 @@ func (c *partnerImportTemplateSubCommand) Handle(ctx *commands.ArikawaContext) e
 		return partnerDetailedCommandError(ctx, "Guild config not found.")
 	}
 
-	template := files.ToPartnerBoardTemplate(discohookEmbed, cfg.PartnerBoard.Template)
+	template := embeds.ToPartnerBoardTemplate(discohookEmbed, cfg.PartnerBoard.Template)
 
 	if _, err := c.configManager.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		for i := range cfg.Guilds {
@@ -779,10 +781,10 @@ func (c *partnerImportTemplateSubCommand) Handle(ctx *commands.ArikawaContext) e
 
 // --- ExportTemplate ---
 type partnerExportTemplateSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 }
 
-func newPartnerExportTemplateSubCommand(cm *files.ConfigManager) *partnerExportTemplateSubCommand {
+func newPartnerExportTemplateSubCommand(cm config.Provider) *partnerExportTemplateSubCommand {
 	return &partnerExportTemplateSubCommand{configManager: cm}
 }
 
@@ -803,7 +805,7 @@ func (c *partnerExportTemplateSubCommand) Handle(ctx *commands.ArikawaContext) e
 	}
 
 	template := cfg.PartnerBoard.Template
-	discohookJSON := files.FromPartnerBoardTemplate(template)
+	discohookJSON := embeds.FromPartnerBoardTemplate(template)
 	data, err := json.MarshalIndent(discohookJSON, "", "  ")
 	if err != nil {
 		return partnerDetailedCommandError(ctx, fmt.Sprintf("Failed to format JSON: %v", err))

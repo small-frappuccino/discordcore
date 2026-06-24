@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/storage/postgres"
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -421,7 +421,7 @@ func newMessageWriterConfigManager(t *testing.T, guildID string, channels files.
 		opt(&cfg)
 	}
 
-	mgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	mgr := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	if err := mgr.AddGuildConfig(cfg); err != nil {
 		t.Fatalf("add guild config: %v", err)
 	}

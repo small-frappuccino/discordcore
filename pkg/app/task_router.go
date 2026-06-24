@@ -34,7 +34,7 @@ func configuredRuntimeTaskRouterWorkers(cfg *files.BotConfig, botInstanceID stri
 	// State Bleed Resolved: Determine the maximum required concurrency bound
 	// across all attached guilds to prevent a single restrictive tenant
 	// from starving the entire shared generic bot ecosystem.
-	for _, guild := range cfg.GuildsForBotInstance(botInstanceID) {
+	for _, guild := range files.GuildsForBotInstance(cfg, botInstanceID) {
 		if override := guild.RuntimeConfig.GlobalMaxWorkers; override > maxWorkers {
 			maxWorkers = override
 		}

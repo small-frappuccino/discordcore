@@ -1,6 +1,6 @@
 //go:build windows
 
-package files
+package sys
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-func replaceFile(sourcePath, targetPath string) error {
+func ReplaceFile(sourcePath, targetPath string) error {
 	sourcePtr, err := windows.UTF16PtrFromString(sourcePath)
 	if err != nil {
 		return fmt.Errorf("replaceFile: %w", err)
@@ -24,6 +24,6 @@ func replaceFile(sourcePath, targetPath string) error {
 	)
 }
 
-func syncDir(string) error {
+func SyncDir(string) error {
 	return nil
 }

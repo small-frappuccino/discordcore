@@ -7,6 +7,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/stretchr/testify/assert"
@@ -81,7 +82,7 @@ func TestNewArikawaContext_InitializationAndFailFast(t *testing.T) {
 
 			// Injeção rigorosa do ConfigManager alimentado por um in-memory store
 			// garantindo validação de Pre-fetch do GuildConfig em nanosegundos
-			store := &files.MemoryConfigStore{}
+			store := &config.MemoryConfigStore{}
 			_ = store.Save(&files.BotConfig{
 				Guilds: []files.GuildConfig{
 					{GuildID: "12345"},

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/system"
@@ -161,7 +162,7 @@ func (m *mockDiscordAdapter) RemoveRole(ctx context.Context, guildID, userID, ro
 
 func setupTestService(t *testing.T) (*MemberEventService, *mockMembersRepo, *mockSystemRepo, *mockMemberSink, *mockDiscordAdapter) {
 	t.Helper()
-	store := &files.MemoryConfigStore{}
+	store := &config.MemoryConfigStore{}
 	_ = store.Save(&files.BotConfig{
 		Guilds: []files.GuildConfig{
 			{
@@ -538,7 +539,7 @@ func TestMemberEventService_HandlesGuild(t *testing.T) {
 	}
 
 	// Setup config store with a guild that doesn't belong to instance1
-	store := &files.MemoryConfigStore{}
+	store := &config.MemoryConfigStore{}
 	_ = store.Save(&files.BotConfig{
 		Guilds: []files.GuildConfig{
 			{

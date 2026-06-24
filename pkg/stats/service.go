@@ -192,10 +192,10 @@ func (s *StatsService) handlesGuild(guildID string) bool {
 	if cfg == nil {
 		return false
 	}
-	if !cfg.BelongsToBotInstance(s.botInstanceID) {
+	if !files.BelongsToBotInstance(*cfg, s.botInstanceID) {
 		return false
 	}
-	resolvedID, _ := cfg.ResolveFeatureBotInstanceID("stats")
+	resolvedID, _ := files.ResolveFeatureBotInstanceID(*cfg, "stats")
 	return resolvedID == s.botInstanceID
 }
 
@@ -204,7 +204,7 @@ func (s *StatsService) scopedConfig() *files.BotConfig {
 	if cfg == nil {
 		return nil
 	}
-	scopedGuilds := cfg.GuildsForBotInstance(s.botInstanceID)
+	scopedGuilds := files.GuildsForBotInstance(cfg, s.botInstanceID)
 	if len(scopedGuilds) == len(cfg.Guilds) {
 		return cfg
 	}

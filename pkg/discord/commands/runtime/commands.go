@@ -9,7 +9,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
-	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 )
 
 type InteractionReplier interface {
@@ -19,12 +19,12 @@ type InteractionReplier interface {
 
 type Handler struct {
 	replier InteractionReplier
-	cm      *files.ConfigManager
+	cm      config.Provider
 	applier runtimeConfigApplier
 	logger  *slog.Logger
 }
 
-func NewHandler(replier InteractionReplier, cm *files.ConfigManager, applier runtimeConfigApplier, logger *slog.Logger) *Handler {
+func NewHandler(replier InteractionReplier, cm config.Provider, applier runtimeConfigApplier, logger *slog.Logger) *Handler {
 	if logger == nil {
 		logger = slog.Default() // Fallback
 	}

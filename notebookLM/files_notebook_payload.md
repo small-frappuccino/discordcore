@@ -3,8 +3,6 @@
 ## Layout Topology
 ```text
 files/
-├── atomic_file_unix.go
-├── atomic_file_windows.go
 ├── auto_assignment_validation.go
 ├── auto_assignment_validation_test.go
 ├── bot_instances.go
@@ -13,16 +11,10 @@ files/
 ├── config_mutation.go
 ├── config_snapshot.go
 ├── config_snapshot_test.go
-├── config_store.go
-├── config_store_memory.go
-├── config_store_memory_test.go
-├── config_store_postgres.go
-├── config_store_postgres_test.go
+├── config_store_interfaces.go
 ├── config_transaction_test.go
 ├── consts.go
-├── custom_embed.go
 ├── custom_rpc.go
-├── embed_json_converter.go
 ├── encryption.go
 ├── encryption_test.go
 ├── env.go
@@ -37,14 +29,11 @@ files/
 ├── json_manager_test.go
 ├── legacy_guild_config_test.go
 ├── legacy_moderation_migration_test.go
+├── mock_store_test.go
 ├── notify_subscribers_test.go
 ├── partner_board.go
 ├── partner_board_test.go
 ├── paths.go
-├── platform_paths_darwin.go
-├── platform_paths_unix.go
-├── platform_paths_windows.go
-├── platform_paths_windows_test.go
 ├── preferences.go
 ├── qotd.go
 ├── qotd_test.go
@@ -57,72 +46,13 @@ files/
 ├── runtime_webhook_embed_updates_test.go
 ├── settings_normalization.go
 ├── types.go
+├── types_embeds.go
 ├── validation_errors.go
 ├── validation_errors_test.go
 └── version.go
 ```
 
 ## Source Stream Aggregation
-
-// === FILE: pkg/files/atomic_file_unix.go ===
-```go
-//go:build !windows
-
-package files
-
-import (
-	"fmt"
-	"os"
-)
-
-func replaceFile(sourcePath, targetPath string) error {
-	return os.Rename(sourcePath, targetPath)
-}
-
-func syncDir(dir string) error {
-	handle, err := os.Open(dir)
-	if err != nil {
-		return fmt.Errorf("syncDir: %w", err)
-	}
-	defer handle.Close()
-	return handle.Sync()
-}
-
-```
-
-// === FILE: pkg/files/atomic_file_windows.go ===
-```go
-//go:build windows
-
-package files
-
-import (
-	"fmt"
-
-	"golang.org/x/sys/windows"
-)
-
-func replaceFile(sourcePath, targetPath string) error {
-	sourcePtr, err := windows.UTF16PtrFromString(sourcePath)
-	if err != nil {
-		return fmt.Errorf("replaceFile: %w", err)
-	}
-	targetPtr, err := windows.UTF16PtrFromString(targetPath)
-	if err != nil {
-		return fmt.Errorf("replaceFile: %w", err)
-	}
-	return windows.MoveFileEx(
-		sourcePtr,
-		targetPtr,
-		windows.MOVEFILE_REPLACE_EXISTING|windows.MOVEFILE_WRITE_THROUGH,
-	)
-}
-
-func syncDir(string) error {
-	return nil
-}
-
-```
 
 // === FILE: pkg/files/auto_assignment_validation.go ===
 ```go
@@ -338,7 +268,7 @@ func TestValidateBotConfigRejectsInvalidRequiredRolesLength(t *testing.T) {
 
 func TestConfigManagerLoadConfigMigratesAutoAssignmentBoosterRole(t *testing.T) {
 	t.Parallel()
-	store := &MemoryConfigStore{}
+	store := &mockConfigStore{}
 	input := BotConfig{
 		Guilds: []GuildConfig{
 			{
@@ -384,7 +314,7 @@ func TestConfigManagerLoadConfigMigratesAutoAssignmentBoosterRole(t *testing.T) 
 
 func TestConfigManagerSaveConfigRejectsInvalidAutoAssignmentOrder(t *testing.T) {
 	t.Parallel()
-	mgr := NewConfigManagerWithStore(&MemoryConfigStore{}, nil)
+	mgr := NewConfigManagerWithStore(&mockConfigStore{}, nil)
 	mgr.config = &BotConfig{
 		Guilds: []GuildConfig{
 			{
@@ -427,7 +357,7 @@ func NormalizeBotInstanceID(botInstanceID string) string {
 
 // BelongsToBotInstance reports whether the guild should be handled by the
 // provided runtime, which is true if the guild has a configured token for it.
-func (gc GuildConfig) BelongsToBotInstance(botInstanceID string) bool {
+func BelongsToBotInstance(gc GuildConfig, botInstanceID string) bool {
 	botInstanceID = NormalizeBotInstanceID(botInstanceID)
 
 	// If the guild has gracefully fallen back due to having NO bot tokens,
@@ -444,7 +374,7 @@ func (gc GuildConfig) BelongsToBotInstance(botInstanceID string) bool {
 
 // GuildsForBotInstance returns the guild subset assigned to the provided bot instance,
 // preserving config order.
-func (cfg *BotConfig) GuildsForBotInstance(botInstanceID string) []GuildConfig {
+func GuildsForBotInstance(cfg *BotConfig, botInstanceID string) []GuildConfig {
 	if cfg == nil || len(cfg.Guilds) == 0 {
 		return nil
 	}
@@ -453,7 +383,7 @@ func (cfg *BotConfig) GuildsForBotInstance(botInstanceID string) []GuildConfig {
 
 	out := make([]GuildConfig, 0, len(cfg.Guilds))
 	for _, guild := range cfg.Guilds {
-		if guild.BelongsToBotInstance(target) {
+		if BelongsToBotInstance(guild, target) {
 			out = append(out, guild)
 		}
 	}
@@ -463,7 +393,7 @@ func (cfg *BotConfig) GuildsForBotInstance(botInstanceID string) []GuildConfig {
 
 // GuildsForBotInstanceFeature returns the guild subset assigned to the provided bot instance for a specific feature,
 // preserving config order.
-func (cfg *BotConfig) GuildsForBotInstanceFeature(botInstanceID string, feature string) []GuildConfig {
+func GuildsForBotInstanceFeature(cfg *BotConfig, botInstanceID string, feature string) []GuildConfig {
 	if cfg == nil || len(cfg.Guilds) == 0 {
 		return nil
 	}
@@ -472,10 +402,10 @@ func (cfg *BotConfig) GuildsForBotInstanceFeature(botInstanceID string, feature 
 
 	out := make([]GuildConfig, 0, len(cfg.Guilds))
 	for _, guild := range cfg.Guilds {
-		if !guild.BelongsToBotInstance(target) {
+		if !BelongsToBotInstance(guild, target) {
 			continue
 		}
-		resolvedID, _ := guild.ResolveFeatureBotInstanceID(feature)
+		resolvedID, _ := ResolveFeatureBotInstanceID(guild, feature)
 		if resolvedID == target {
 			out = append(out, guild)
 		}
@@ -489,7 +419,7 @@ func (cfg *BotConfig) GuildsForBotInstanceFeature(botInstanceID string, feature 
 // It returns the resolved instance ID and a boolean fallbackFlag
 // indicating if the designated bot token was revoked, invalid, or missing, necessitating
 // a degradation to the default fallback bot.
-func (gc GuildConfig) ResolveFeatureBotInstanceID(feature string) (resolvedID string, fallback bool) {
+func ResolveFeatureBotInstanceID(gc GuildConfig, feature string) (resolvedID string, fallback bool) {
 	// If the guild has gracefully fallen back due to having NO bot tokens,
 	// the magic blank instance handles ALL features.
 	if len(gc.BotInstanceTokens) == 0 {
@@ -741,7 +671,7 @@ func TestGuildConfigIndexDuplicateFix(t *testing.T) {
 
 func TestGuildConfigIndexDedupePersistsOnLoad(t *testing.T) {
 	t.Parallel()
-	store := &MemoryConfigStore{}
+	store := &mockConfigStore{}
 	raw := &BotConfig{
 		Guilds: []GuildConfig{
 			{GuildID: "g1"},
@@ -834,7 +764,7 @@ import (
 
 func (mgr *ConfigManager) updateGuildConfig(guildID string, fn func(*GuildConfig) error) error {
 	_, err := mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
-		guildConfig, err := guildConfigByID(cfg, guildID)
+		guildConfig, err := GuildConfigByID(cfg, guildID)
 		if err != nil {
 			return fmt.Errorf("ConfigManager.updateGuildConfig: %w", err)
 		}
@@ -875,7 +805,7 @@ func runtimeConfigForScope(cfg *BotConfig, scopeGuildID string) (*RuntimeConfig,
 		return &cfg.RuntimeConfig, nil
 	}
 
-	guildConfig, err := guildConfigByID(cfg, scopeGuildID)
+	guildConfig, err := GuildConfigByID(cfg, scopeGuildID)
 	if err != nil {
 		return nil, fmt.Errorf("guild config not found for %s", scopeGuildID)
 	}
@@ -952,7 +882,7 @@ func (mgr *ConfigManager) publishSnapshotLocked() *publishedConfigSnapshot {
 	}
 
 	snap := &publishedConfigSnapshot{
-		config:     cloneBotConfigPtr(mgr.config),
+		config:     CloneBotConfigPtr(mgr.config),
 		guildIndex: cloneGuildIndex(mgr.guildIndex),
 	}
 	if snap.guildIndex == nil {
@@ -1020,7 +950,7 @@ func (mgr *ConfigManager) UpdateConfig(ctx context.Context, fn func(*BotConfig) 
 
 	previous := mgr.config
 	previousIndex := cloneGuildIndex(mgr.guildIndex)
-	next := cloneBotConfigPtr(mgr.config)
+	next := CloneBotConfigPtr(mgr.config)
 
 	if fn != nil {
 		if err := fn(next); err != nil {
@@ -1105,7 +1035,7 @@ func (mgr *ConfigManager) notifySubscribers(ctx context.Context, oldCfg, newCfg 
 	return nil
 }
 
-func cloneBotConfigPtr(in *BotConfig) *BotConfig {
+func CloneBotConfigPtr(in *BotConfig) *BotConfig {
 	if in == nil {
 		return nil
 	}
@@ -1457,14 +1387,10 @@ func TestCloneFeatureTogglesIsolatesMutation(t *testing.T) {
 
 ```
 
-// === FILE: pkg/files/config_store.go ===
+// === FILE: pkg/files/config_store_interfaces.go ===
 ```go
 package files
 
-// ConfigStore persists the canonical BotConfig.
-//
-// Missing state is normalized as an empty config instead of an error so the
-// ConfigManager can keep one consistent lifecycle across backends.
 // ConfigLoader defines the read paths for the bot configuration.
 type ConfigLoader interface {
 	Load() (*BotConfig, error)
@@ -1488,578 +1414,6 @@ type ConfigStore interface {
 	ConfigDescriber
 }
 
-// DefaultPostgresConfigStoreKey defines default postgres config store key.
-const DefaultPostgresConfigStoreKey = "primary"
-
-```
-
-// === FILE: pkg/files/config_store_memory.go ===
-```go
-package files
-
-import (
-	"fmt"
-	"sync"
-)
-
-const defaultMemoryConfigStoreDescription = "memory://bot_config_state"
-
-// MemoryConfigStore persists BotConfig in memory.
-// It is primarily intended for tests and lightweight local workflows that do
-// not need cross-process persistence.
-type MemoryConfigStore struct {
-	mu          sync.Mutex
-	config      *BotConfig
-	exists      bool
-	description string
-}
-
-// Load loads.
-func (s *MemoryConfigStore) Load() (*BotConfig, error) {
-	cfg := &BotConfig{Guilds: []GuildConfig{}}
-	if s == nil {
-		return cfg, nil
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.config == nil {
-		return cfg, nil
-	}
-
-	out := cloneBotConfigPtr(s.config)
-	if out == nil {
-		return cfg, nil
-	}
-	if out.Guilds == nil {
-		out.Guilds = []GuildConfig{}
-	}
-	return out, nil
-}
-
-// Save saves.
-func (s *MemoryConfigStore) Save(cfg *BotConfig) error {
-	if cfg == nil {
-		return fmt.Errorf("cannot save nil config")
-	}
-	if s == nil {
-		return fmt.Errorf("memory config store is not configured")
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.config = cloneBotConfigPtr(cfg)
-	if s.config == nil {
-		s.config = &BotConfig{Guilds: []GuildConfig{}}
-	}
-	if s.config.Guilds == nil {
-		s.config.Guilds = []GuildConfig{}
-	}
-	s.exists = true
-	return nil
-}
-
-// Exists exists.
-func (s *MemoryConfigStore) Exists() (bool, error) {
-	if s == nil {
-		return false, nil
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.exists, nil
-}
-
-// Describe describes.
-func (s *MemoryConfigStore) Describe() string {
-	if s == nil || s.description == "" {
-		return defaultMemoryConfigStoreDescription
-	}
-	return s.description
-}
-
-```
-
-// === FILE: pkg/files/config_store_memory_test.go ===
-```go
-package files
-
-import "testing"
-
-func TestMemoryConfigStoreRoundTrip(t *testing.T) {
-	t.Parallel()
-
-	store := &MemoryConfigStore{}
-
-	exists, err := store.Exists()
-	if err != nil {
-		t.Fatalf("exists before save: %v", err)
-	}
-	if exists {
-		t.Fatal("expected empty memory store to report exists=false")
-	}
-
-	cfg := &BotConfig{
-		Guilds: []GuildConfig{{
-			GuildID: "g1",
-			Channels: ChannelsConfig{
-				Commands: "c1",
-			},
-		}},
-	}
-	if err := store.Save(cfg); err != nil {
-		t.Fatalf("save config: %v", err)
-	}
-
-	exists, err = store.Exists()
-	if err != nil {
-		t.Fatalf("exists after save: %v", err)
-	}
-	if !exists {
-		t.Fatal("expected saved memory store to report exists=true")
-	}
-
-	loaded, err := store.Load()
-	if err != nil {
-		t.Fatalf("load config: %v", err)
-	}
-	if len(loaded.Guilds) != 1 || loaded.Guilds[0].Channels.Commands != "c1" {
-		t.Fatalf("unexpected loaded config: %+v", loaded)
-	}
-}
-
-func TestMemoryConfigStoreReturnsDefensiveCopies(t *testing.T) {
-	t.Parallel()
-
-	store := &MemoryConfigStore{}
-	if err := store.Save(&BotConfig{
-		Guilds: []GuildConfig{{
-			GuildID: "g1",
-			Channels: ChannelsConfig{
-				MessageDelete: "c1",
-			},
-		}},
-	}); err != nil {
-		t.Fatalf("save config: %v", err)
-	}
-
-	first, err := store.Load()
-	if err != nil {
-		t.Fatalf("first load: %v", err)
-	}
-	second, err := store.Load()
-	if err != nil {
-		t.Fatalf("second load: %v", err)
-	}
-
-	first.Guilds[0].Channels.MessageDelete = "mutated"
-	if second.Guilds[0].Channels.MessageDelete != "c1" {
-		t.Fatalf("expected independent config copies, got %+v", second.Guilds[0].Channels)
-	}
-}
-
-```
-
-// === FILE: pkg/files/config_store_postgres.go ===
-```go
-package files
-
-import (
-	"context"
-	"encoding/json"
-	"fmt"
-	"log/slog"
-	"strings"
-
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
-)
-
-// PostgresConfigStore persists BotConfig in PostgreSQL as one canonical JSONB document.
-type PostgresConfigStore struct {
-	db     *pgxpool.Pool
-	key    string
-	logger *slog.Logger
-}
-
-// NewPostgresConfigStore news postgres config store.
-func NewPostgresConfigStore(db *pgxpool.Pool, key string, logger *slog.Logger) *PostgresConfigStore {
-	if logger == nil {
-		logger = slog.Default()
-	}
-	key = strings.TrimSpace(key)
-	if key == "" {
-		key = DefaultPostgresConfigStoreKey
-	}
-
-	logger.Info("Architectural state transition: Coupling of isolated PostgreSQL storage adapter for configuration parameters")
-
-	return &PostgresConfigStore{
-		db:     db,
-		key:    key,
-		logger: logger,
-	}
-}
-
-// Load loads.
-func (s *PostgresConfigStore) Load() (*BotConfig, error) {
-	cfg := &BotConfig{Guilds: []GuildConfig{}}
-	if s == nil || s.db == nil {
-		err := fmt.Errorf("postgres config store database handle is nil")
-		EmitBlockingError(s.logger, "Blocking structural failure: Nil pointer blocked PostgreSQL driver initialization", err, GenerateRequestID())
-		return cfg, err
-	}
-
-	s.logger.Info("Architectural state transition: Starting persistent loading of global tree",
-		slog.String("store_key", s.key),
-	)
-
-	var globalRaw []byte
-	queryGlobal := `SELECT config_json FROM bot_config_state WHERE config_key = $1`
-
-	s.logger.Debug("Granular I/O inspection: Dump of dynamically generated SQL query (Load Global)",
-		slog.String("query", queryGlobal),
-		slog.String("param_1", s.key),
-	)
-
-	err := s.db.QueryRow(
-		context.Background(),
-		queryGlobal,
-		s.key,
-	).Scan(&globalRaw)
-
-	if err != nil && err != pgx.ErrNoRows {
-		errWrap := fmt.Errorf("load global config row from postgres: %w", err)
-		EmitBlockingError(s.logger, "Blocking structural failure: SQL driver rejected global document read", errWrap, GenerateRequestID())
-		return nil, errWrap
-	}
-
-	if err == pgx.ErrNoRows {
-		s.logger.Warn("Mitigated degradation: Canonical document not found; matrix will adopt empty structure compensation routine",
-			slog.String("missing_key", s.key),
-		)
-	} else if len(globalRaw) > 0 {
-		s.logger.Debug("Granular transient state inspection: Raw deserialization enabled",
-			slog.Int("payload_bytes", len(globalRaw)),
-		)
-		if err := json.Unmarshal(globalRaw, cfg); err != nil {
-			errWrap := fmt.Errorf("decode global config row from postgres: %w", err)
-			EmitBlockingError(s.logger, "Blocking structural failure: Corrupted JSON document parsing in global block", errWrap, GenerateRequestID())
-			return nil, errWrap
-		}
-	}
-	cfg.Guilds = []GuildConfig{}
-
-	queryGuilds := `SELECT config_json FROM guild_configs`
-	s.logger.Debug("Granular I/O inspection: Dump of dynamically generated SQL query (Load Guilds)",
-		slog.String("query", queryGuilds),
-	)
-
-	rows, err := s.db.Query(
-		context.Background(),
-		queryGuilds,
-	)
-	if err != nil {
-		errWrap := fmt.Errorf("query guild_configs: %w", err)
-		EmitBlockingError(s.logger, "Blocking structural failure: Instance settings subgraph rejected by relational server", errWrap, GenerateRequestID())
-		return nil, errWrap
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var guildRaw []byte
-		if err := rows.Scan(&guildRaw); err != nil {
-			errWrap := fmt.Errorf("scan guild_configs row: %w", err)
-			EmitBlockingError(s.logger, "Blocking structural failure: I/O cursor overflowed during bidirectional table tracking", errWrap, GenerateRequestID())
-			return nil, errWrap
-		}
-		var guildCfg GuildConfig
-		if err := json.Unmarshal(guildRaw, &guildCfg); err != nil {
-			errWrap := fmt.Errorf("decode guild_configs json: %w", err)
-			EmitBlockingError(s.logger, "Blocking structural failure: Corrupted JSON document parsing in guild sub-node", errWrap, GenerateRequestID())
-			return nil, errWrap
-		}
-		cfg.Guilds = append(cfg.Guilds, guildCfg)
-	}
-	if err := rows.Err(); err != nil {
-		errWrap := fmt.Errorf("iterate guild_configs rows: %w", err)
-		EmitBlockingError(s.logger, "Blocking structural failure: SQL pagination pipe reported non-recoverable contention", errWrap, GenerateRequestID())
-		return nil, errWrap
-	}
-
-	return cfg, nil
-}
-
-// Save saves.
-func (s *PostgresConfigStore) Save(cfg *BotConfig) error {
-	if cfg == nil {
-		err := fmt.Errorf("cannot save nil config")
-		EmitBlockingError(s.logger, "Blocking structural failure: Persistence attempt with nil global matrix", err, GenerateRequestID())
-		return err
-	}
-	if s == nil || s.db == nil {
-		err := fmt.Errorf("postgres config store database handle is nil")
-		EmitBlockingError(s.logger, "Blocking structural failure: Synchronization blocked by nil relational driver", err, GenerateRequestID())
-		return err
-	}
-
-	s.logger.Info("Architectural state transition: Initializing unified ACID transaction for I/O matrix write",
-		slog.Int("guilds_payload", len(cfg.Guilds)),
-	)
-
-	ctx := context.Background()
-	tx, err := s.db.Begin(ctx)
-	if err != nil {
-		errWrap := fmt.Errorf("begin config save tx: %w", err)
-		EmitBlockingError(s.logger, "Blocking structural failure: Transaction negotiation aborted by DBMS", errWrap, GenerateRequestID())
-		return errWrap
-	}
-	defer func() {
-		if rbErr := tx.Rollback(ctx); rbErr != nil && rbErr != pgx.ErrTxClosed {
-			s.logger.Warn("Mitigated degradation intercepted: Compensatory rollback of exposed transaction failed over TCP pipe",
-				slog.String("error", rbErr.Error()),
-			)
-		}
-	}()
-
-	// Save global features/runtime to bot_config_state (without guilds)
-	globalCopy := *cfg
-	globalCopy.Guilds = nil
-	globalRaw, err := json.Marshal(globalCopy)
-	if err != nil {
-		errWrap := fmt.Errorf("encode global config: %w", err)
-		EmitBlockingError(s.logger, "Blocking structural failure: Marshal operation cleared primary write buffer", errWrap, GenerateRequestID())
-		return errWrap
-	}
-
-	upsertGlobalQuery := `INSERT INTO bot_config_state (config_key, config_json)
-		 VALUES ($1, $2::jsonb)
-		 ON CONFLICT (config_key) DO UPDATE
-		 SET config_json = EXCLUDED.config_json,
-		     updated_at = NOW()`
-
-	s.logger.Debug("Granular I/O inspection: Dump of conditional state SQL query (Upsert Global)",
-		slog.String("query", upsertGlobalQuery),
-		slog.String("param_1", s.key),
-		slog.Int("payload_bytes", len(globalRaw)),
-	)
-
-	if _, err := tx.Exec(
-		ctx,
-		upsertGlobalQuery,
-		s.key,
-		string(globalRaw),
-	); err != nil {
-		errWrap := fmt.Errorf("save global config row: %w", err)
-		EmitBlockingError(s.logger, "Blocking structural failure: Base topology upsert executable command rejected", errWrap, GenerateRequestID())
-		return errWrap
-	}
-
-	upsertGuildQuery := `INSERT INTO guild_configs (guild_id, config_version, config_json)
-			 VALUES ($1, $2, $3::jsonb)
-			 ON CONFLICT (guild_id) DO UPDATE
-			 SET config_version = EXCLUDED.config_version,
-			     config_json = EXCLUDED.config_json,
-			     updated_at = NOW()`
-
-	// Upsert all guilds into guild_configs table
-	for _, guild := range cfg.Guilds {
-		guildRaw, err := json.Marshal(guild)
-		if err != nil {
-			errWrap := fmt.Errorf("encode guild config for %s: %w", guild.GuildID, err)
-			EmitBlockingError(s.logger, "Blocking structural failure: Marshal operation failed on isolated hierarchical scope", errWrap, GenerateRequestID())
-			return errWrap
-		}
-
-		s.logger.Debug("Granular transient state inspection: Injecting atomic relational branch for guild node",
-			slog.String("guild_id", guild.GuildID),
-			slog.Int64("config_version", guild.ConfigVersion),
-			slog.Int("payload_bytes", len(guildRaw)),
-		)
-
-		if _, err := tx.Exec(
-			ctx,
-			upsertGuildQuery,
-			guild.GuildID,
-			guild.ConfigVersion,
-			string(guildRaw),
-		); err != nil {
-			errWrap := fmt.Errorf("save guild_configs row %s: %w", guild.GuildID, err)
-			EmitBlockingError(s.logger, "Blocking structural failure: Collision or transactional obstruction bound to sub-level", errWrap, GenerateRequestID())
-			return errWrap
-		}
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		errWrap := fmt.Errorf("commit config save tx: %w", err)
-		EmitBlockingError(s.logger, "Blocking structural failure: Consolidative 2PC protocol rejected; commit failed and locked state at source", errWrap, GenerateRequestID())
-		return errWrap
-	}
-
-	s.logger.Info("Architectural state transition: SQL ACID transaction completed, I/O pipeline drained")
-	return nil
-}
-
-// Exists exists.
-func (s *PostgresConfigStore) Exists() (bool, error) {
-	if s == nil || s.db == nil {
-		err := fmt.Errorf("postgres config store database handle is nil")
-		EmitBlockingError(s.logger, "Blocking structural failure: Static probe failed on node referential integrity", err, GenerateRequestID())
-		return false, err
-	}
-
-	var exists bool
-	queryExists := `SELECT EXISTS(SELECT 1 FROM bot_config_state WHERE config_key = $1)`
-
-	s.logger.Debug("Granular I/O inspection: Conditional tracking of relational SQL verification",
-		slog.String("query", queryExists),
-		slog.String("param_1", s.key),
-	)
-
-	if err := s.db.QueryRow(
-		context.Background(),
-		queryExists,
-		s.key,
-	).Scan(&exists); err != nil {
-		errWrap := fmt.Errorf("check config row in postgres: %w", err)
-		EmitBlockingError(s.logger, "Blocking structural failure: Scalar boolean query collapsed during scan", errWrap, GenerateRequestID())
-		return false, errWrap
-	}
-	return exists, nil
-}
-
-// Describe describes.
-func (s *PostgresConfigStore) Describe() string {
-	key := DefaultPostgresConfigStoreKey
-	if s != nil && strings.TrimSpace(s.key) != "" {
-		key = s.key
-	}
-	return "postgres://bot_config_state/" + key
-}
-
-```
-
-// === FILE: pkg/files/config_store_postgres_test.go ===
-```go
-package files
-
-import (
-	"context"
-	"testing"
-	"time"
-
-	"github.com/small-frappuccino/discordcore/pkg/testdb"
-)
-
-func openIsolatedPostgresConfigStore(t *testing.T) *PostgresConfigStore {
-	t.Helper()
-
-	baseDSN, err := testdb.BaseDatabaseURLFromEnv()
-	if err != nil {
-		if testdb.IsDatabaseURLNotConfigured(err) {
-			t.Skipf("skipping postgres integration test: %v", err)
-		}
-		t.Fatalf("resolve postgres test dsn: %v", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	db, cleanup, err := testdb.OpenIsolatedDatabase(ctx, baseDSN)
-	if err != nil {
-		t.Fatalf("open isolated postgres database: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := cleanup(); err != nil {
-			t.Fatalf("cleanup isolated postgres database: %v", err)
-		}
-	})
-
-	return NewPostgresConfigStore(db, "test", nil)
-}
-
-func TestPostgresConfigStoreSaveLoadRoundTrip(t *testing.T) {
-	t.Parallel()
-	store := openIsolatedPostgresConfigStore(t)
-
-	exists, err := store.Exists()
-	if err != nil {
-		t.Fatalf("check config existence before save: %v", err)
-	}
-	if exists {
-		t.Fatalf("expected config row to be absent before save")
-	}
-
-	cfg := &BotConfig{
-		Guilds: []GuildConfig{
-			{
-				GuildID: "guild-1",
-				Channels: ChannelsConfig{
-					Commands:      "channel-1",
-					AvatarLogging: "channel-2",
-				},
-				Roles: RolesConfig{
-					Allowed: []string{"role-1", "role-2"},
-				},
-			},
-		},
-		Features: FeatureToggles{
-			Services: FeatureServiceToggles{
-				Monitoring: boolPtr(true),
-				Commands:   boolPtr(false),
-			},
-			Logging: FeatureLoggingToggles{
-				AvatarLogging: boolPtr(false),
-			},
-		},
-		RuntimeConfig: RuntimeConfig{
-			BotTheme: "matrix",
-			Database: DatabaseRuntimeConfig{
-				Driver:        "postgres",
-				DatabaseURL:   "postgres://example.invalid/test",
-				MaxOpenConns:  7,
-				MaxIdleConns:  3,
-				PingTimeoutMS: 4000,
-			},
-		},
-	}
-
-	if err := store.Save(cfg); err != nil {
-		t.Fatalf("save config: %v", err)
-	}
-
-	exists, err = store.Exists()
-	if err != nil {
-		t.Fatalf("check config existence after save: %v", err)
-	}
-	if !exists {
-		t.Fatalf("expected config row to exist after save")
-	}
-
-	loaded, err := store.Load()
-	if err != nil {
-		t.Fatalf("load config: %v", err)
-	}
-
-	if got := loaded.RuntimeConfig.BotTheme; got != "matrix" {
-		t.Fatalf("expected bot theme matrix, got %q", got)
-	}
-	if got := loaded.RuntimeConfig.Database.DatabaseURL; got != "postgres://example.invalid/test" {
-		t.Fatalf("expected database url to round-trip, got %q", got)
-	}
-	if len(loaded.Guilds) != 1 {
-		t.Fatalf("expected one guild, got %d", len(loaded.Guilds))
-	}
-	if got := loaded.Guilds[0].Channels.AvatarLogging; got != "channel-2" {
-		t.Fatalf("expected avatar logging channel channel-2, got %q", got)
-	}
-	if resolved := loaded.ResolveFeatures("guild-1"); resolved.Services.Commands {
-		t.Fatalf("expected commands feature override to remain disabled after round-trip")
-	}
-}
-
 ```
 
 // === FILE: pkg/files/config_transaction_test.go ===
@@ -2081,14 +1435,14 @@ func (s *transactionalTestStore) Load() (*BotConfig, error) {
 	if s == nil || s.cfg == nil {
 		return &BotConfig{Guilds: []GuildConfig{}}, nil
 	}
-	return cloneBotConfigPtr(s.cfg), nil
+	return CloneBotConfigPtr(s.cfg), nil
 }
 
 func (s *transactionalTestStore) Save(cfg *BotConfig) error {
 	if s.saveErr != nil {
 		return s.saveErr
 	}
-	s.cfg = cloneBotConfigPtr(cfg)
+	s.cfg = CloneBotConfigPtr(cfg)
 	return nil
 }
 
@@ -2111,11 +1465,11 @@ func newTransactionalTestManager(t *testing.T, cfg *BotConfig, saveErr error) (*
 	}
 
 	store := &transactionalTestStore{
-		cfg:     cloneBotConfigPtr(cfg),
+		cfg:     CloneBotConfigPtr(cfg),
 		saveErr: saveErr,
 	}
 	mgr := NewConfigManagerWithStore(store, nil)
-	mgr.config = cloneBotConfigPtr(cfg)
+	mgr.config = CloneBotConfigPtr(cfg)
 	if _, err := mgr.rebuildGuildIndexLocked("test"); err != nil {
 		t.Fatalf("rebuild index: %v", err)
 	}
@@ -2258,721 +1612,6 @@ const (
 
 ```
 
-// === FILE: pkg/files/custom_embed.go ===
-```go
-package files
-
-import (
-	"context"
-	"errors"
-	"fmt"
-	"strings"
-	"unicode/utf8"
-)
-
-var (
-	// ErrCustomEmbedNotFound indicates no custom embed matched the requested key.
-	ErrCustomEmbedNotFound = errors.New("custom embed not found")
-	// ErrCustomEmbedPostingNotFound indicates no posting matched the requested message ID.
-	ErrCustomEmbedPostingNotFound = errors.New("custom embed posting not found")
-	// ErrInvalidCustomEmbedInput indicates invalid custom embed input payload.
-	ErrInvalidCustomEmbedInput = errors.New("invalid custom embed input")
-)
-
-// CustomEmbedTitleMaxLen defines custom embed title max len.
-// CustomEmbedDescriptionMaxLen defines custom embed description max len.
-// CustomEmbedColorMax defines custom embed color max.
-// CustomEmbedAuthorMaxLen defines custom embed author max len.
-// CustomEmbedFooterMaxLen defines custom embed footer max len.
-// CustomEmbedFieldNameMaxLen defines custom embed field name max len.
-// CustomEmbedFieldValueMaxLen defines custom embed field value max len.
-// CustomEmbedMaxFields defines custom embed max fields.
-// CustomEmbedMaxTotalLen defines custom embed max total len.
-// CustomEmbedKeyMaxLen defines custom embed key max len.
-const (
-	CustomEmbedKeyMaxLen         = 32
-	CustomEmbedTitleMaxLen       = 256
-	CustomEmbedDescriptionMaxLen = 4000
-	CustomEmbedColorMax          = 0xFFFFFF
-	CustomEmbedAuthorMaxLen      = 256
-	CustomEmbedFooterMaxLen      = 2048
-	CustomEmbedFieldNameMaxLen   = 256
-	CustomEmbedFieldValueMaxLen  = 1024
-	CustomEmbedMaxFields         = 25
-	CustomEmbedMaxTotalLen       = 6000
-)
-
-// CustomEmbedFieldConfig captures one field in a custom embed.
-type CustomEmbedFieldConfig struct {
-	Name   string `json:"name"`
-	Value  string `json:"value"`
-	Inline bool   `json:"inline,omitempty"`
-}
-
-// CustomEmbedPostingConfig identifies one Discord message authored by the bot.
-type CustomEmbedPostingConfig struct {
-	ChannelID    string `json:"channel_id"`
-	MessageID    string `json:"message_id"`
-	WebhookID    string `json:"webhook_id,omitempty"`
-	WebhookToken string `json:"webhook_token,omitempty"`
-}
-
-// IsZero is zero.
-func (p CustomEmbedPostingConfig) IsZero() bool {
-	return strings.TrimSpace(p.ChannelID) == "" &&
-		strings.TrimSpace(p.MessageID) == "" &&
-		strings.TrimSpace(p.WebhookID) == "" &&
-		strings.TrimSpace(p.WebhookToken) == ""
-}
-
-// CustomEmbedConfig captures one keyed custom embed for a guild.
-type CustomEmbedConfig struct {
-	Key           string                     `json:"key"`
-	Title         string                     `json:"title,omitempty"`
-	Description   string                     `json:"description,omitempty"`
-	Color         int                        `json:"color,omitempty"`
-	AuthorName    string                     `json:"author_name,omitempty"`
-	AuthorIconURL string                     `json:"author_icon_url,omitempty"`
-	FooterText    string                     `json:"footer_text,omitempty"`
-	FooterIconURL string                     `json:"footer_icon_url,omitempty"`
-	ImageURL      string                     `json:"image_url,omitempty"`
-	ThumbnailURL  string                     `json:"thumbnail_url,omitempty"`
-	Fields        []CustomEmbedFieldConfig   `json:"fields,omitempty"`
-	Postings      []CustomEmbedPostingConfig `json:"postings,omitempty"`
-}
-
-// IsZero reports whether the embed carries no meaningful data.
-func (cfg CustomEmbedConfig) IsZero() bool {
-	return strings.TrimSpace(cfg.Key) == "" &&
-		strings.TrimSpace(cfg.Title) == "" &&
-		strings.TrimSpace(cfg.Description) == "" &&
-		cfg.Color == 0 &&
-		strings.TrimSpace(cfg.AuthorName) == "" &&
-		strings.TrimSpace(cfg.AuthorIconURL) == "" &&
-		strings.TrimSpace(cfg.FooterText) == "" &&
-		strings.TrimSpace(cfg.FooterIconURL) == "" &&
-		strings.TrimSpace(cfg.ImageURL) == "" &&
-		strings.TrimSpace(cfg.ThumbnailURL) == "" &&
-		len(cfg.Fields) == 0 &&
-		len(cfg.Postings) == 0
-}
-
-func invalidCustomEmbedInput(format string, args ...any) error {
-	msg := fmt.Sprintf(format, args...)
-	return fmt.Errorf("%w: %s", ErrInvalidCustomEmbedInput, msg)
-}
-
-// NormalizeCustomEmbedKey normalizes custom embed key.
-func NormalizeCustomEmbedKey(raw string) string {
-	out := strings.TrimSpace(raw)
-	out = strings.ToLower(out)
-	return out
-}
-
-func validateCustomEmbedKey(raw string) (string, error) {
-	out := NormalizeCustomEmbedKey(raw)
-	if out == "" {
-		return "", invalidCustomEmbedInput("key is required")
-	}
-	if utf8.RuneCountInString(out) > CustomEmbedKeyMaxLen {
-		return "", invalidCustomEmbedInput("key must be at most %d characters", CustomEmbedKeyMaxLen)
-	}
-	for _, r := range out {
-		switch {
-		case r >= 'a' && r <= 'z':
-		case r >= '0' && r <= '9':
-		case r == '-' || r == '_':
-		default:
-			return "", invalidCustomEmbedInput("key may only contain lowercase letters, digits, '-' and '_'")
-		}
-	}
-	return out, nil
-}
-
-func validateCustomEmbedFields(in CustomEmbedConfig) (CustomEmbedConfig, error) {
-	out := in
-	out.Title = strings.TrimSpace(in.Title)
-	out.Description = strings.TrimSpace(in.Description)
-	out.AuthorName = strings.TrimSpace(in.AuthorName)
-	out.AuthorIconURL = strings.TrimSpace(in.AuthorIconURL)
-	out.FooterText = strings.TrimSpace(in.FooterText)
-	out.FooterIconURL = strings.TrimSpace(in.FooterIconURL)
-	out.ImageURL = strings.TrimSpace(in.ImageURL)
-	out.ThumbnailURL = strings.TrimSpace(in.ThumbnailURL)
-
-	if utf8.RuneCountInString(out.Title) > CustomEmbedTitleMaxLen {
-		return CustomEmbedConfig{}, invalidCustomEmbedInput("title must be at most %d characters", CustomEmbedTitleMaxLen)
-	}
-	if utf8.RuneCountInString(out.Description) > CustomEmbedDescriptionMaxLen {
-		return CustomEmbedConfig{}, invalidCustomEmbedInput("description must be at most %d characters", CustomEmbedDescriptionMaxLen)
-	}
-	if out.Color < 0 || out.Color > CustomEmbedColorMax {
-		return CustomEmbedConfig{}, invalidCustomEmbedInput("color must be in range [0, %d]", CustomEmbedColorMax)
-	}
-	if utf8.RuneCountInString(out.AuthorName) > CustomEmbedAuthorMaxLen {
-		return CustomEmbedConfig{}, invalidCustomEmbedInput("author_name must be at most %d characters", CustomEmbedAuthorMaxLen)
-	}
-	if utf8.RuneCountInString(out.FooterText) > CustomEmbedFooterMaxLen {
-		return CustomEmbedConfig{}, invalidCustomEmbedInput("footer_text must be at most %d characters", CustomEmbedFooterMaxLen)
-	}
-	return out, nil
-}
-
-func customEmbedTotalLen(embed CustomEmbedConfig) int {
-	count := utf8.RuneCountInString(embed.Title) +
-		utf8.RuneCountInString(embed.Description) +
-		utf8.RuneCountInString(embed.AuthorName) +
-		utf8.RuneCountInString(embed.FooterText)
-	for _, f := range embed.Fields {
-		count += utf8.RuneCountInString(f.Name) + utf8.RuneCountInString(f.Value)
-	}
-	return count
-}
-
-func normalizeCustomEmbedField(in CustomEmbedFieldConfig) (CustomEmbedFieldConfig, error) {
-	out := CustomEmbedFieldConfig{
-		Name:   strings.TrimSpace(in.Name),
-		Value:  strings.TrimSpace(in.Value),
-		Inline: in.Inline,
-	}
-	if out.Name == "" {
-		return CustomEmbedFieldConfig{}, invalidCustomEmbedInput("field name is required")
-	}
-	if out.Value == "" {
-		return CustomEmbedFieldConfig{}, invalidCustomEmbedInput("field value is required")
-	}
-	if utf8.RuneCountInString(out.Name) > CustomEmbedFieldNameMaxLen {
-		return CustomEmbedFieldConfig{}, invalidCustomEmbedInput("field name must be at most %d characters", CustomEmbedFieldNameMaxLen)
-	}
-	if utf8.RuneCountInString(out.Value) > CustomEmbedFieldValueMaxLen {
-		return CustomEmbedFieldConfig{}, invalidCustomEmbedInput("field value must be at most %d characters", CustomEmbedFieldValueMaxLen)
-	}
-	return out, nil
-}
-
-func normalizeCustomEmbed(in CustomEmbedConfig) (CustomEmbedConfig, error) {
-	key, err := validateCustomEmbedKey(in.Key)
-	if err != nil {
-		return CustomEmbedConfig{}, fmt.Errorf("normalizeCustomEmbed: %w", err)
-	}
-	out, err := validateCustomEmbedFields(in)
-	if err != nil {
-		return CustomEmbedConfig{}, fmt.Errorf("normalizeCustomEmbed: %w", err)
-	}
-	out.Key = key
-
-	if len(in.Fields) > 0 {
-		out.Fields = make([]CustomEmbedFieldConfig, 0, len(in.Fields))
-		for i, f := range in.Fields {
-			nf, err := normalizeCustomEmbedField(f)
-			if err != nil {
-				return CustomEmbedConfig{}, fmt.Errorf("fields[%d]: %w", i, err)
-			}
-			out.Fields = append(out.Fields, nf)
-		}
-		if len(out.Fields) > CustomEmbedMaxFields {
-			return CustomEmbedConfig{}, invalidCustomEmbedInput("embed must have at most %d fields", CustomEmbedMaxFields)
-		}
-	} else {
-		out.Fields = nil
-	}
-
-	if len(in.Postings) > 0 {
-		out.Postings = make([]CustomEmbedPostingConfig, 0, len(in.Postings))
-		for _, p := range in.Postings {
-			if p.IsZero() {
-				continue
-			}
-			out.Postings = append(out.Postings, CustomEmbedPostingConfig{
-				ChannelID:    strings.TrimSpace(p.ChannelID),
-				MessageID:    strings.TrimSpace(p.MessageID),
-				WebhookID:    strings.TrimSpace(p.WebhookID),
-				WebhookToken: strings.TrimSpace(p.WebhookToken),
-			})
-		}
-	} else {
-		out.Postings = nil
-	}
-
-	return out, nil
-}
-
-func cloneCustomEmbed(in CustomEmbedConfig) CustomEmbedConfig {
-	out := CustomEmbedConfig{
-		Key:           in.Key,
-		Title:         in.Title,
-		Description:   in.Description,
-		Color:         in.Color,
-		AuthorName:    in.AuthorName,
-		AuthorIconURL: in.AuthorIconURL,
-		FooterText:    in.FooterText,
-		FooterIconURL: in.FooterIconURL,
-		ImageURL:      in.ImageURL,
-		ThumbnailURL:  in.ThumbnailURL,
-	}
-
-	if len(in.Fields) > 0 {
-		out.Fields = make([]CustomEmbedFieldConfig, len(in.Fields))
-		copy(out.Fields, in.Fields)
-	}
-
-	if len(in.Postings) > 0 {
-		out.Postings = make([]CustomEmbedPostingConfig, len(in.Postings))
-		copy(out.Postings, in.Postings)
-	}
-
-	return out
-}
-
-func findCustomEmbedIndex(embeds []CustomEmbedConfig, key string) int {
-	for i, e := range embeds {
-		if e.Key == key {
-			return i
-		}
-	}
-	return -1
-}
-
-// CustomEmbeds customs embeds.
-func (mgr *ConfigManager) CustomEmbeds(guildID string) ([]CustomEmbedConfig, error) {
-	if guildID == "" {
-		return nil, invalidCustomEmbedInput("guild_id is required")
-	}
-
-	gcfg := mgr.GuildConfig(guildID)
-	if gcfg == nil {
-		return nil, nil
-	}
-
-	if len(gcfg.CustomEmbeds) == 0 {
-		return nil, nil
-	}
-
-	out := make([]CustomEmbedConfig, 0, len(gcfg.CustomEmbeds))
-	for _, e := range gcfg.CustomEmbeds {
-		out = append(out, cloneCustomEmbed(e))
-	}
-	return out, nil
-}
-
-// CustomEmbed customs embed.
-func (mgr *ConfigManager) CustomEmbed(guildID, key string) (CustomEmbedConfig, error) {
-	if guildID == "" {
-		return CustomEmbedConfig{}, invalidCustomEmbedInput("guild_id is required")
-	}
-	target, err := validateCustomEmbedKey(key)
-	if err != nil {
-		return CustomEmbedConfig{}, fmt.Errorf("ConfigManager.CustomEmbed: %w", err)
-	}
-
-	gcfg := mgr.GuildConfig(guildID)
-	if gcfg == nil {
-		return CustomEmbedConfig{}, fmt.Errorf("%w: key=%s", ErrCustomEmbedNotFound, target)
-	}
-
-	idx := findCustomEmbedIndex(gcfg.CustomEmbeds, target)
-	if idx < 0 {
-		return CustomEmbedConfig{}, fmt.Errorf("%w: key=%s", ErrCustomEmbedNotFound, target)
-	}
-
-	return cloneCustomEmbed(gcfg.CustomEmbeds[idx]), nil
-}
-
-// SetCustomEmbedProperties sets custom embed properties.
-func (mgr *ConfigManager) SetCustomEmbedProperties(guildID, key string, embed CustomEmbedConfig) error {
-	if guildID == "" {
-		return invalidCustomEmbedInput("guild_id is required")
-	}
-	targetKey, err := validateCustomEmbedKey(key)
-	if err != nil {
-		return fmt.Errorf("ConfigManager.SetCustomEmbedProperties: %w", err)
-	}
-	validated, err := validateCustomEmbedFields(embed)
-	if err != nil {
-		return fmt.Errorf("ConfigManager.SetCustomEmbedProperties: %w", err)
-	}
-
-	_, err = mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
-		gc, err := guildConfigByID(cfg, guildID)
-		if err != nil {
-			return fmt.Errorf("ConfigManager.SetCustomEmbedProperties: %w", err)
-		}
-
-		idx := findCustomEmbedIndex(gc.CustomEmbeds, targetKey)
-		if idx >= 0 {
-			copyEmbed := gc.CustomEmbeds[idx]
-			copyEmbed.Title = validated.Title
-			copyEmbed.Description = validated.Description
-			copyEmbed.Color = validated.Color
-			copyEmbed.AuthorName = validated.AuthorName
-			copyEmbed.AuthorIconURL = validated.AuthorIconURL
-			copyEmbed.FooterText = validated.FooterText
-			copyEmbed.FooterIconURL = validated.FooterIconURL
-			copyEmbed.ImageURL = validated.ImageURL
-			copyEmbed.ThumbnailURL = validated.ThumbnailURL
-
-			if customEmbedTotalLen(copyEmbed) > CustomEmbedMaxTotalLen {
-				return invalidCustomEmbedInput("embed total character count must be at most %d", CustomEmbedMaxTotalLen)
-			}
-
-			gc.CustomEmbeds[idx] = copyEmbed
-		} else {
-			if len(gc.CustomEmbeds) >= 25 {
-				return invalidCustomEmbedInput("guild cannot have more than 25 custom embeds")
-			}
-			newEmbed := CustomEmbedConfig{
-				Key:           targetKey,
-				Title:         validated.Title,
-				Description:   validated.Description,
-				Color:         validated.Color,
-				AuthorName:    validated.AuthorName,
-				AuthorIconURL: validated.AuthorIconURL,
-				FooterText:    validated.FooterText,
-				FooterIconURL: validated.FooterIconURL,
-				ImageURL:      validated.ImageURL,
-				ThumbnailURL:  validated.ThumbnailURL,
-			}
-			gc.CustomEmbeds = append(gc.CustomEmbeds, newEmbed)
-		}
-		return nil
-	})
-
-	return err
-}
-
-// DeleteCustomEmbed deletes custom embed.
-func (mgr *ConfigManager) DeleteCustomEmbed(guildID, key string) (CustomEmbedConfig, error) {
-	if guildID == "" {
-		return CustomEmbedConfig{}, invalidCustomEmbedInput("guild_id is required")
-	}
-	target, err := validateCustomEmbedKey(key)
-	if err != nil {
-		return CustomEmbedConfig{}, fmt.Errorf("ConfigManager.DeleteCustomEmbed: %w", err)
-	}
-
-	var deleted CustomEmbedConfig
-	_, err = mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
-		gc, err := guildConfigByID(cfg, guildID)
-		if err != nil {
-			return fmt.Errorf("ConfigManager.DeleteCustomEmbed: %w", err)
-		}
-
-		idx := findCustomEmbedIndex(gc.CustomEmbeds, target)
-		if idx < 0 {
-			return fmt.Errorf("%w: key=%s", ErrCustomEmbedNotFound, target)
-		}
-
-		deleted = cloneCustomEmbed(gc.CustomEmbeds[idx])
-		gc.CustomEmbeds = append(gc.CustomEmbeds[:idx], gc.CustomEmbeds[idx+1:]...)
-		return nil
-	})
-
-	return deleted, err
-}
-
-// AddCustomEmbedPosting adds custom embed posting.
-func (mgr *ConfigManager) AddCustomEmbedPosting(guildID, key string, posting CustomEmbedPostingConfig) error {
-	if guildID == "" {
-		return invalidCustomEmbedInput("guild_id is required")
-	}
-	if posting.IsZero() {
-		return invalidCustomEmbedInput("posting cannot be empty")
-	}
-	targetKey, err := validateCustomEmbedKey(key)
-	if err != nil {
-		return fmt.Errorf("ConfigManager.AddCustomEmbedPosting: %w", err)
-	}
-
-	_, err = mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
-		gc, err := guildConfigByID(cfg, guildID)
-		if err != nil {
-			return fmt.Errorf("ConfigManager.AddCustomEmbedPosting: %w", err)
-		}
-
-		idx := findCustomEmbedIndex(gc.CustomEmbeds, targetKey)
-		if idx < 0 {
-			return fmt.Errorf("%w: key=%s", ErrCustomEmbedNotFound, targetKey)
-		}
-
-		embed := &gc.CustomEmbeds[idx]
-		for _, p := range embed.Postings {
-			if p.MessageID == posting.MessageID {
-				return nil
-			}
-		}
-
-		if len(embed.Postings) >= 50 {
-			embed.Postings = embed.Postings[1:]
-		}
-		embed.Postings = append(embed.Postings, CustomEmbedPostingConfig{
-			ChannelID:    strings.TrimSpace(posting.ChannelID),
-			MessageID:    strings.TrimSpace(posting.MessageID),
-			WebhookID:    strings.TrimSpace(posting.WebhookID),
-			WebhookToken: strings.TrimSpace(posting.WebhookToken),
-		})
-		return nil
-	})
-
-	return err
-}
-
-// RemoveCustomEmbedPosting removes custom embed posting.
-func (mgr *ConfigManager) RemoveCustomEmbedPosting(guildID, key, messageID string) error {
-	if guildID == "" {
-		return invalidCustomEmbedInput("guild_id is required")
-	}
-	msgID := strings.TrimSpace(messageID)
-	if msgID == "" {
-		return invalidCustomEmbedInput("message_id is required")
-	}
-	targetKey, err := validateCustomEmbedKey(key)
-	if err != nil {
-		return fmt.Errorf("ConfigManager.RemoveCustomEmbedPosting: %w", err)
-	}
-
-	_, err = mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
-		gc, err := guildConfigByID(cfg, guildID)
-		if err != nil {
-			return fmt.Errorf("ConfigManager.RemoveCustomEmbedPosting: %w", err)
-		}
-
-		idx := findCustomEmbedIndex(gc.CustomEmbeds, targetKey)
-		if idx < 0 {
-			return fmt.Errorf("%w: key=%s", ErrCustomEmbedNotFound, targetKey)
-		}
-
-		embed := &gc.CustomEmbeds[idx]
-		for i, p := range embed.Postings {
-			if p.MessageID == msgID {
-				embed.Postings = append(embed.Postings[:i], embed.Postings[i+1:]...)
-				return nil
-			}
-		}
-		return fmt.Errorf("%w: message_id=%s", ErrCustomEmbedPostingNotFound, msgID)
-	})
-
-	return err
-}
-
-// RemoveCustomEmbedPostings removes custom embed postings.
-func (mgr *ConfigManager) RemoveCustomEmbedPostings(guildID, key string, messageIDs []string) error {
-	if len(messageIDs) == 0 {
-		return nil
-	}
-	if guildID == "" {
-		return invalidCustomEmbedInput("guild_id is required")
-	}
-	targetKey, err := validateCustomEmbedKey(key)
-	if err != nil {
-		return fmt.Errorf("ConfigManager.RemoveCustomEmbedPostings: %w", err)
-	}
-
-	idsToRemove := make(map[string]bool, len(messageIDs))
-	for _, id := range messageIDs {
-		trimmed := strings.TrimSpace(id)
-		if trimmed != "" {
-			idsToRemove[trimmed] = true
-		}
-	}
-	if len(idsToRemove) == 0 {
-		return nil
-	}
-
-	_, err = mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
-		gc, err := guildConfigByID(cfg, guildID)
-		if err != nil {
-			return fmt.Errorf("ConfigManager.RemoveCustomEmbedPostings: %w", err)
-		}
-
-		idx := findCustomEmbedIndex(gc.CustomEmbeds, targetKey)
-		if idx < 0 {
-			return fmt.Errorf("%w: key=%s", ErrCustomEmbedNotFound, targetKey)
-		}
-
-		embed := &gc.CustomEmbeds[idx]
-		var kept []CustomEmbedPostingConfig
-		for _, p := range embed.Postings {
-			if !idsToRemove[p.MessageID] {
-				kept = append(kept, p)
-			}
-		}
-		embed.Postings = kept
-		return nil
-	})
-
-	return err
-}
-
-// SetCustomEmbedFields sets custom embed fields.
-func (mgr *ConfigManager) SetCustomEmbedFields(guildID, key string, fields []CustomEmbedFieldConfig) error {
-	if guildID == "" {
-		return invalidCustomEmbedInput("guild_id is required")
-	}
-	targetKey, err := validateCustomEmbedKey(key)
-	if err != nil {
-		return fmt.Errorf("ConfigManager.SetCustomEmbedFields: %w", err)
-	}
-
-	if len(fields) > CustomEmbedMaxFields {
-		return invalidCustomEmbedInput("embed must have at most %d fields", CustomEmbedMaxFields)
-	}
-
-	normalized := make([]CustomEmbedFieldConfig, 0, len(fields))
-	for i, f := range fields {
-		nf, err := normalizeCustomEmbedField(f)
-		if err != nil {
-			return fmt.Errorf("fields[%d]: %w", i, err)
-		}
-		normalized = append(normalized, nf)
-	}
-
-	_, err = mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
-		gc, err := guildConfigByID(cfg, guildID)
-		if err != nil {
-			return fmt.Errorf("ConfigManager.SetCustomEmbedFields: %w", err)
-		}
-
-		idx := findCustomEmbedIndex(gc.CustomEmbeds, targetKey)
-		if idx < 0 {
-			return fmt.Errorf("%w: key=%s", ErrCustomEmbedNotFound, targetKey)
-		}
-
-		copyEmbed := gc.CustomEmbeds[idx]
-		copyEmbed.Fields = normalized
-
-		if customEmbedTotalLen(copyEmbed) > CustomEmbedMaxTotalLen {
-			return invalidCustomEmbedInput("embed total character count must be at most %d", CustomEmbedMaxTotalLen)
-		}
-
-		gc.CustomEmbeds[idx] = copyEmbed
-		return nil
-	})
-
-	return err
-}
-
-// FindCustomEmbedPosting searches all custom embeds in a guild for a posting
-// matching the message ID. Returns the custom embed key plus the posting on
-// hit, or ErrCustomEmbedPostingNotFound when no custom embed tracks the
-// message.
-func (mgr *ConfigManager) FindCustomEmbedPosting(guildID, messageID string) (string, CustomEmbedPostingConfig, error) {
-	scope := strings.TrimSpace(guildID)
-	if scope == "" {
-		return "", CustomEmbedPostingConfig{}, invalidCustomEmbedInput("guild_id is required")
-	}
-	mid := strings.TrimSpace(messageID)
-	if mid == "" {
-		return "", CustomEmbedPostingConfig{}, invalidCustomEmbedInput("message_id is required")
-	}
-
-	guildConfig := mgr.GuildConfig(scope)
-	if guildConfig == nil {
-		return "", CustomEmbedPostingConfig{}, fmt.Errorf("%w: guild_id=%s", ErrGuildConfigNotFound, scope)
-	}
-	for _, ce := range guildConfig.CustomEmbeds {
-		pIdx := findCustomEmbedPostingIndex(ce.Postings, mid)
-		if pIdx >= 0 {
-			return ce.Key, ce.Postings[pIdx], nil
-		}
-	}
-	return "", CustomEmbedPostingConfig{}, fmt.Errorf("%w: message_id=%s", ErrCustomEmbedPostingNotFound, mid)
-}
-
-func findCustomEmbedPostingIndex(postings []CustomEmbedPostingConfig, messageID string) int {
-	for i, p := range postings {
-		if p.MessageID == messageID {
-			return i
-		}
-	}
-	return -1
-}
-
-// AddCustomEmbedField appends a field to the custom embed.
-func (mgr *ConfigManager) AddCustomEmbedField(guildID, key string, field CustomEmbedFieldConfig) error {
-	scope := strings.TrimSpace(guildID)
-	if scope == "" {
-		return invalidCustomEmbedInput("guild_id is required")
-	}
-	target, err := validateCustomEmbedKey(key)
-	if err != nil {
-		return fmt.Errorf("ConfigManager.AddCustomEmbedField: %w", err)
-	}
-	nf, err := normalizeCustomEmbedField(field)
-	if err != nil {
-		return fmt.Errorf("ConfigManager.AddCustomEmbedField: %w", err)
-	}
-
-	_, err = mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
-		gc, err := guildConfigByID(cfg, scope)
-		if err != nil {
-			return fmt.Errorf("ConfigManager.AddCustomEmbedField: %w", err)
-		}
-		idx := findCustomEmbedIndex(gc.CustomEmbeds, target)
-		if idx < 0 {
-			return fmt.Errorf("%w: key=%s", ErrCustomEmbedNotFound, target)
-		}
-		if len(gc.CustomEmbeds[idx].Fields) >= CustomEmbedMaxFields {
-			return invalidCustomEmbedInput("embed must have at most %d fields", CustomEmbedMaxFields)
-		}
-
-		copyEmbed := gc.CustomEmbeds[idx]
-		copyEmbed.Fields = append(copyEmbed.Fields, nf)
-
-		if customEmbedTotalLen(copyEmbed) > CustomEmbedMaxTotalLen {
-			return invalidCustomEmbedInput("embed total character count must be at most %d", CustomEmbedMaxTotalLen)
-		}
-
-		gc.CustomEmbeds[idx] = copyEmbed
-		return nil
-	})
-
-	return err
-}
-
-// RemoveCustomEmbedField removes a field from the custom embed by its index (0-based).
-func (mgr *ConfigManager) RemoveCustomEmbedField(guildID, key string, fieldIndex int) error {
-	scope := strings.TrimSpace(guildID)
-	if scope == "" {
-		return invalidCustomEmbedInput("guild_id is required")
-	}
-	target, err := validateCustomEmbedKey(key)
-	if err != nil {
-		return fmt.Errorf("ConfigManager.RemoveCustomEmbedField: %w", err)
-	}
-
-	_, err = mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
-		gc, err := guildConfigByID(cfg, scope)
-		if err != nil {
-			return fmt.Errorf("ConfigManager.RemoveCustomEmbedField: %w", err)
-		}
-		idx := findCustomEmbedIndex(gc.CustomEmbeds, target)
-		if idx < 0 {
-			return fmt.Errorf("%w: key=%s", ErrCustomEmbedNotFound, target)
-		}
-		fields := gc.CustomEmbeds[idx].Fields
-		if fieldIndex < 0 || fieldIndex >= len(fields) {
-			return invalidCustomEmbedInput("invalid field index")
-		}
-		gc.CustomEmbeds[idx].Fields = append(fields[:fieldIndex], fields[fieldIndex+1:]...)
-		return nil
-	})
-
-	return err
-}
-
-func cloneCustomEmbeds(in []CustomEmbedConfig) []CustomEmbedConfig {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make([]CustomEmbedConfig, 0, len(in))
-	for _, ce := range in {
-		out = append(out, cloneCustomEmbed(ce))
-	}
-	return out
-}
-
-```
-
 // === FILE: pkg/files/custom_rpc.go ===
 ```go
 package files
@@ -3063,346 +1702,6 @@ func writeDefaultCustomRPC(path string) error {
 		return fmt.Errorf("failed to write custom rpc config: %w", err)
 	}
 	return nil
-}
-
-```
-
-// === FILE: pkg/files/embed_json_converter.go ===
-```go
-package files
-
-import (
-	"encoding/json"
-	"errors"
-	"fmt"
-	"strings"
-	"unicode/utf8"
-)
-
-// ErrEmbedJSONValidation defines err embed jsonvalidation.
-var (
-	ErrEmbedJSONValidation = errors.New("embed json validation failed")
-)
-
-// DiscohookJSON represents the standard structure of a Discord message JSON
-// commonly used by tools like Discohook.
-type DiscohookJSON struct {
-	Content string           `json:"content,omitempty"`
-	Embeds  []DiscohookEmbed `json:"embeds,omitempty"`
-}
-
-// DiscohookEmbed mirrors a single Discord embed in the Discohook JSON schema.
-// Color is the Discord decimal color value; pointer fields are absent when nil.
-type DiscohookEmbed struct {
-	Title       string           `json:"title,omitempty"`
-	Description string           `json:"description,omitempty"`
-	Color       int              `json:"color,omitempty"`
-	Author      *DiscohookAuthor `json:"author,omitempty"`
-	Footer      *DiscohookFooter `json:"footer,omitempty"`
-	Image       *DiscohookImage  `json:"image,omitempty"`
-	Thumbnail   *DiscohookImage  `json:"thumbnail,omitempty"`
-	Fields      []DiscohookField `json:"fields,omitempty"`
-}
-
-// DiscohookAuthor is the author block of a DiscohookEmbed.
-type DiscohookAuthor struct {
-	Name    string `json:"name,omitempty"`
-	IconURL string `json:"icon_url,omitempty"`
-}
-
-// DiscohookFooter is the footer block of a DiscohookEmbed.
-type DiscohookFooter struct {
-	Text    string `json:"text,omitempty"`
-	IconURL string `json:"icon_url,omitempty"`
-}
-
-// DiscohookImage is an image or thumbnail reference in a DiscohookEmbed.
-type DiscohookImage struct {
-	URL string `json:"url,omitempty"`
-}
-
-// DiscohookField is a single name/value field of a DiscohookEmbed; Inline lays
-// the field alongside adjacent inline fields.
-type DiscohookField struct {
-	Name   string `json:"name,omitempty"`
-	Value  string `json:"value,omitempty"`
-	Inline bool   `json:"inline,omitempty"`
-}
-
-// ParseAndValidateDiscohookJSON parses the raw JSON payload and strictly enforces
-// Discord's embed limits, returning the first embed found or an error.
-func ParseAndValidateDiscohookJSON(data []byte) (DiscohookEmbed, error) {
-	var payload DiscohookJSON
-	if err := json.Unmarshal(data, &payload); err != nil {
-		return DiscohookEmbed{}, fmt.Errorf("%w: invalid JSON format: %w", ErrEmbedJSONValidation, err)
-	}
-
-	if len(payload.Embeds) == 0 {
-		return DiscohookEmbed{}, fmt.Errorf("%w: no embeds found in JSON payload", ErrEmbedJSONValidation)
-	}
-
-	embed := payload.Embeds[0]
-
-	if utf8.RuneCountInString(embed.Title) > CustomEmbedTitleMaxLen {
-		return DiscohookEmbed{}, fmt.Errorf("%w: title exceeds %d characters", ErrEmbedJSONValidation, CustomEmbedTitleMaxLen)
-	}
-	if utf8.RuneCountInString(embed.Description) > CustomEmbedDescriptionMaxLen {
-		return DiscohookEmbed{}, fmt.Errorf("%w: description exceeds %d characters", ErrEmbedJSONValidation, CustomEmbedDescriptionMaxLen)
-	}
-	if embed.Color < 0 || embed.Color > CustomEmbedColorMax {
-		return DiscohookEmbed{}, fmt.Errorf("%w: color %d is out of bounds [0, %d]", ErrEmbedJSONValidation, embed.Color, CustomEmbedColorMax)
-	}
-	if embed.Author != nil && utf8.RuneCountInString(embed.Author.Name) > CustomEmbedAuthorMaxLen {
-		return DiscohookEmbed{}, fmt.Errorf("%w: author name exceeds %d characters", ErrEmbedJSONValidation, CustomEmbedAuthorMaxLen)
-	}
-	if embed.Footer != nil && utf8.RuneCountInString(embed.Footer.Text) > CustomEmbedFooterMaxLen {
-		return DiscohookEmbed{}, fmt.Errorf("%w: footer text exceeds %d characters", ErrEmbedJSONValidation, CustomEmbedFooterMaxLen)
-	}
-
-	if len(embed.Fields) > CustomEmbedMaxFields {
-		return DiscohookEmbed{}, fmt.Errorf("%w: embed contains more than %d fields", ErrEmbedJSONValidation, CustomEmbedMaxFields)
-	}
-
-	for i, f := range embed.Fields {
-		if strings.TrimSpace(f.Name) == "" {
-			return DiscohookEmbed{}, fmt.Errorf("%w: field %d name is required", ErrEmbedJSONValidation, i+1)
-		}
-		if strings.TrimSpace(f.Value) == "" {
-			return DiscohookEmbed{}, fmt.Errorf("%w: field %d value is required", ErrEmbedJSONValidation, i+1)
-		}
-		if utf8.RuneCountInString(f.Name) > CustomEmbedFieldNameMaxLen {
-			return DiscohookEmbed{}, fmt.Errorf("%w: field %d name exceeds %d characters", ErrEmbedJSONValidation, i+1, CustomEmbedFieldNameMaxLen)
-		}
-		if utf8.RuneCountInString(f.Value) > CustomEmbedFieldValueMaxLen {
-			return DiscohookEmbed{}, fmt.Errorf("%w: field %d value exceeds %d characters", ErrEmbedJSONValidation, i+1, CustomEmbedFieldValueMaxLen)
-		}
-	}
-
-	totalLen := utf8.RuneCountInString(embed.Title) + utf8.RuneCountInString(embed.Description)
-	if embed.Author != nil {
-		totalLen += utf8.RuneCountInString(embed.Author.Name)
-	}
-	if embed.Footer != nil {
-		totalLen += utf8.RuneCountInString(embed.Footer.Text)
-	}
-	for _, f := range embed.Fields {
-		totalLen += utf8.RuneCountInString(f.Name) + utf8.RuneCountInString(f.Value)
-	}
-
-	if totalLen > CustomEmbedMaxTotalLen {
-		return DiscohookEmbed{}, fmt.Errorf("%w: embed total character count (%d) exceeds the maximum of %d", ErrEmbedJSONValidation, totalLen, CustomEmbedMaxTotalLen)
-	}
-
-	return embed, nil
-}
-
-// ToCustomEmbedConfig converts a DiscohookEmbed into our internal CustomEmbedConfig format.
-func ToCustomEmbedConfig(embed DiscohookEmbed, key string) CustomEmbedConfig {
-	out := CustomEmbedConfig{
-		Key:         key,
-		Title:       embed.Title,
-		Description: embed.Description,
-		Color:       embed.Color,
-	}
-
-	if embed.Author != nil {
-		out.AuthorName = embed.Author.Name
-		out.AuthorIconURL = embed.Author.IconURL
-	}
-	if embed.Footer != nil {
-		out.FooterText = embed.Footer.Text
-		out.FooterIconURL = embed.Footer.IconURL
-	}
-	if embed.Image != nil {
-		out.ImageURL = embed.Image.URL
-	}
-	if embed.Thumbnail != nil {
-		out.ThumbnailURL = embed.Thumbnail.URL
-	}
-
-	if len(embed.Fields) > 0 {
-		out.Fields = make([]CustomEmbedFieldConfig, 0, len(embed.Fields))
-		for _, f := range embed.Fields {
-			out.Fields = append(out.Fields, CustomEmbedFieldConfig{
-				Name:   f.Name,
-				Value:  f.Value,
-				Inline: f.Inline,
-			})
-		}
-	}
-
-	return out
-}
-
-// FromCustomEmbedConfig exports a CustomEmbedConfig into a DiscohookJSON object.
-func FromCustomEmbedConfig(ce CustomEmbedConfig) DiscohookJSON {
-	embed := buildDiscohookEmbedBase(discohookEmbedBase{
-		Title:       ce.Title,
-		Description: ce.Description,
-		Color:       ce.Color,
-		AuthorName:  ce.AuthorName,
-		AuthorIcon:  ce.AuthorIconURL,
-		FooterText:  ce.FooterText,
-		FooterIcon:  ce.FooterIconURL,
-		ImageURL:    ce.ImageURL,
-		ThumbURL:    ce.ThumbnailURL,
-	})
-
-	if len(ce.Fields) > 0 {
-		embed.Fields = make([]DiscohookField, 0, len(ce.Fields))
-		for _, f := range ce.Fields {
-			embed.Fields = append(embed.Fields, DiscohookField{
-				Name:   f.Name,
-				Value:  f.Value,
-				Inline: f.Inline,
-			})
-		}
-	}
-
-	return DiscohookJSON{
-		Embeds: []DiscohookEmbed{embed},
-	}
-}
-
-// ToRolePanelConfig converts a DiscohookEmbed into our internal RolePanelConfig format.
-func ToRolePanelConfig(embed DiscohookEmbed, key string) RolePanelConfig {
-	out := RolePanelConfig{
-		Key:         key,
-		Title:       embed.Title,
-		Description: embed.Description,
-		Color:       embed.Color,
-	}
-
-	if embed.Author != nil {
-		out.AuthorName = embed.Author.Name
-		out.AuthorIconURL = embed.Author.IconURL
-	}
-	if embed.Footer != nil {
-		out.FooterText = embed.Footer.Text
-		out.FooterIconURL = embed.Footer.IconURL
-	}
-	if embed.Image != nil {
-		out.ImageURL = embed.Image.URL
-	}
-	if embed.Thumbnail != nil {
-		out.ThumbnailURL = embed.Thumbnail.URL
-	}
-
-	if len(embed.Fields) > 0 {
-		out.Fields = make([]RolePanelEmbedFieldConfig, 0, len(embed.Fields))
-		for _, f := range embed.Fields {
-			out.Fields = append(out.Fields, RolePanelEmbedFieldConfig{
-				Name:   f.Name,
-				Value:  f.Value,
-				Inline: f.Inline,
-			})
-		}
-	}
-
-	return out
-}
-
-// FromRolePanelConfig exports a RolePanelConfig into a DiscohookJSON object.
-func FromRolePanelConfig(rp RolePanelConfig) DiscohookJSON {
-	embed := buildDiscohookEmbedBase(discohookEmbedBase{
-		Title:       rp.Title,
-		Description: rp.Description,
-		Color:       rp.Color,
-		AuthorName:  rp.AuthorName,
-		AuthorIcon:  rp.AuthorIconURL,
-		FooterText:  rp.FooterText,
-		FooterIcon:  rp.FooterIconURL,
-		ImageURL:    rp.ImageURL,
-		ThumbURL:    rp.ThumbnailURL,
-	})
-
-	if len(rp.Fields) > 0 {
-		embed.Fields = make([]DiscohookField, 0, len(rp.Fields))
-		for _, f := range rp.Fields {
-			embed.Fields = append(embed.Fields, DiscohookField{
-				Name:   f.Name,
-				Value:  f.Value,
-				Inline: f.Inline,
-			})
-		}
-	}
-
-	return DiscohookJSON{
-		Embeds: []DiscohookEmbed{embed},
-	}
-}
-
-// ToPartnerBoardTemplate populates a PartnerBoardTemplateConfig from a DiscohookEmbed.
-// It maps the embed title, description (Intro), color, and footer text.
-func ToPartnerBoardTemplate(embed DiscohookEmbed, current PartnerBoardTemplateConfig) PartnerBoardTemplateConfig {
-	out := current
-	out.Title = embed.Title
-	out.Intro = embed.Description
-	out.Color = embed.Color
-	if embed.Footer != nil {
-		out.FooterTemplate = embed.Footer.Text
-	} else {
-		out.FooterTemplate = ""
-	}
-	return out
-}
-
-// FromPartnerBoardTemplate exports a PartnerBoardTemplateConfig into a mock DiscohookJSON object.
-func FromPartnerBoardTemplate(tmpl PartnerBoardTemplateConfig) DiscohookJSON {
-	embed := buildDiscohookEmbedBase(discohookEmbedBase{
-		Title:       tmpl.Title,
-		Description: tmpl.Intro,
-		Color:       tmpl.Color,
-		FooterText:  tmpl.FooterTemplate,
-	})
-	return DiscohookJSON{
-		Embeds: []DiscohookEmbed{embed},
-	}
-}
-
-// discohookEmbedBase carries the flat embed fields shared by the
-// CustomEmbedConfig, RolePanelConfig, and PartnerBoardTemplateConfig
-// exporters. buildDiscohookEmbedBase promotes the non-empty author, footer,
-// image, and thumbnail values into their nested embed blocks.
-type discohookEmbedBase struct {
-	Title       string
-	Description string
-	Color       int
-	AuthorName  string
-	AuthorIcon  string
-	FooterText  string
-	FooterIcon  string
-	ImageURL    string
-	ThumbURL    string
-}
-
-func buildDiscohookEmbedBase(base discohookEmbedBase) DiscohookEmbed {
-	embed := DiscohookEmbed{
-		Title:       base.Title,
-		Description: base.Description,
-		Color:       base.Color,
-	}
-
-	if base.AuthorName != "" || base.AuthorIcon != "" {
-		embed.Author = &DiscohookAuthor{
-			Name:    base.AuthorName,
-			IconURL: base.AuthorIcon,
-		}
-	}
-	if base.FooterText != "" || base.FooterIcon != "" {
-		embed.Footer = &DiscohookFooter{
-			Text:    base.FooterText,
-			IconURL: base.FooterIcon,
-		}
-	}
-	if base.ImageURL != "" {
-		embed.Image = &DiscohookImage{URL: base.ImageURL}
-	}
-	if base.ThumbURL != "" {
-		embed.Thumbnail = &DiscohookImage{URL: base.ThumbURL}
-	}
-
-	return embed
 }
 
 ```
@@ -4599,7 +2898,7 @@ func TestNewMinimalGuildConfigDisablesAllFeatures(t *testing.T) {
 func TestEnsureMinimalGuildConfigPersistsDormantGuild(t *testing.T) {
 	t.Parallel()
 
-	store := &MemoryConfigStore{}
+	store := &mockConfigStore{}
 	mgr := NewConfigManagerWithStore(store, nil)
 
 	if err := mgr.EnsureMinimalGuildConfig("guild-new"); err != nil {
@@ -4632,7 +2931,7 @@ func TestEnsureMinimalGuildConfigPersistsDormantGuild(t *testing.T) {
 func TestEnsureMinimalGuildConfigPreservesDomainOverridesOnExistingGuild(t *testing.T) {
 	t.Parallel()
 
-	store := &MemoryConfigStore{}
+	store := &mockConfigStore{}
 	mgr := NewConfigManagerWithStore(store, nil)
 	if _, err := mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
 		cfg.Guilds = []GuildConfig{{
@@ -4655,7 +2954,7 @@ func TestEnsureMinimalGuildConfigPreservesDomainOverridesOnExistingGuild(t *test
 
 func TestEnsureMinimalGuildConfigPersistsDormantGuildToPostgres(t *testing.T) {
 	t.Parallel()
-	store := openIsolatedPostgresConfigStore(t)
+	store := &mockConfigStore{}
 	mgr := NewConfigManagerWithStore(store, nil)
 
 	if err := mgr.EnsureMinimalGuildConfig("guild-pg"); err != nil {
@@ -4728,6 +3027,8 @@ import (
 	"strings"
 
 	"sync"
+
+	"github.com/small-frappuccino/discordcore/pkg/sys"
 )
 
 // JSONManager handles reading and writing JSON data to a file.
@@ -4842,10 +3143,10 @@ func (m *JSONManager) Save(data any) (err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if err := replaceFile(tmpPath, targetPath); err != nil {
+	if err := sys.ReplaceFile(tmpPath, targetPath); err != nil {
 		return fmt.Errorf("failed to replace file atomically: %w", err)
 	}
-	if err := syncDir(dir); err != nil {
+	if err := sys.SyncDir(dir); err != nil {
 		return fmt.Errorf("failed to sync parent directory: %w", err)
 	}
 	cleanupTmp = false
@@ -5113,6 +3414,45 @@ func TestBotConfigRoundTripDropsLegacyModerationFields(t *testing.T) {
 			t.Fatalf("expected migrated config to drop %s, got %s", legacyField, output)
 		}
 	}
+}
+
+```
+
+// === FILE: pkg/files/mock_store_test.go ===
+```go
+package files
+
+import "sync"
+
+type mockConfigStore struct {
+	mu  sync.Mutex
+	cfg *BotConfig
+}
+
+func (m *mockConfigStore) Load() (*BotConfig, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.cfg == nil {
+		return &BotConfig{Guilds: []GuildConfig{}}, nil
+	}
+	return m.cfg, nil
+}
+
+func (m *mockConfigStore) Save(cfg *BotConfig) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.cfg = cfg
+	return nil
+}
+
+func (m *mockConfigStore) Exists() (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.cfg != nil, nil
+}
+
+func (m *mockConfigStore) Describe() string {
+	return "mock://config"
 }
 
 ```
@@ -5953,7 +4293,7 @@ func newPartnerBoardTestManager(t *testing.T, cfg *BotConfig) *ConfigManager {
 		cfg.Guilds = []GuildConfig{}
 	}
 
-	mgr := NewConfigManagerWithStore(&MemoryConfigStore{}, nil)
+	mgr := NewConfigManagerWithStore(&mockConfigStore{}, nil)
 	mgr.config = cfg
 	if _, err := mgr.rebuildGuildIndexLocked("test"); err != nil {
 		t.Fatalf("rebuild index: %v", err)
@@ -6109,6 +4449,7 @@ import (
 
 	"strings"
 
+	"github.com/small-frappuccino/discordcore/pkg/sys"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
 
@@ -6224,7 +4565,7 @@ func EffectiveBotName() string {
 //   - Windows:     %APPDATA%/<AppName>
 func GetApplicationSupportPath(_ string) string {
 	app := EffectiveBotName()
-	if dir := strings.TrimSpace(platformConfigDir(app)); dir != "" {
+	if dir := strings.TrimSpace(sys.PlatformConfigDir(app)); dir != "" {
 		return dir
 	}
 	// Last-resort fallback if platform resolution fails unexpectedly.
@@ -6237,7 +4578,7 @@ func GetApplicationSupportPath(_ string) string {
 //   - Windows:     %APPDATA%/<AppName>/Cache
 func GetApplicationCachesPath() string {
 	app := EffectiveBotName()
-	if dir := strings.TrimSpace(platformCacheDir(app)); dir != "" {
+	if dir := strings.TrimSpace(sys.PlatformCacheDir(app)); dir != "" {
 		return dir
 	}
 	// Last-resort fallback if platform resolution fails unexpectedly.
@@ -6266,7 +4607,7 @@ func GetCustomRPCFilePath() string {
 //   - Windows:     %APPDATA%/<AppName>/Logs/discordcore.log
 func GetLogFilePath() string {
 	app := EffectiveBotName()
-	base := strings.TrimSpace(platformLogDir(app))
+	base := strings.TrimSpace(sys.PlatformLogDir(app))
 	if base == "" {
 		base = filepath.Join(".", "logs", app)
 	}
@@ -6354,270 +4695,6 @@ func EnsureCacheInitialized() error {
 	os.WriteFile(filepath.Join(ApplicationCachesPath, "avatar", ".keep"), []byte{}, 0o644)
 
 	return nil
-}
-
-```
-
-// === FILE: pkg/files/platform_paths_darwin.go ===
-```go
-//go:build darwin
-
-package files
-
-import (
-	"os"
-	"path/filepath"
-	"strings"
-)
-
-// macOS (darwin) unified filesystem layout for this repo:
-//   - Config: ~/Library/Preferences/<AppName>
-//   - Cache:  ~/Library/Caches/<AppName>
-//   - Logs:   ~/Library/Logs/<AppName>
-//
-// These helpers return base directories only. Callers should os.MkdirAll as needed.
-//
-// NOTE: This file intentionally does NOT deal with .env locations/lookup.
-
-// platformConfigDir returns the base directory for configuration files on macOS.
-func platformConfigDir(appName string) string {
-	home := darwinHomeDir()
-	return filepath.Join(home, "Library", "Preferences", sanitizeAppNameForPath(appName))
-}
-
-// platformCacheDir returns the base directory for cache files on macOS.
-func platformCacheDir(appName string) string {
-	home := darwinHomeDir()
-	return filepath.Join(home, "Library", "Caches", sanitizeAppNameForPath(appName))
-}
-
-// platformLogDir returns the base directory for log files on macOS.
-func platformLogDir(appName string) string {
-	home := darwinHomeDir()
-	return filepath.Join(home, "Library", "Logs", sanitizeAppNameForPath(appName))
-}
-
-func darwinHomeDir() string {
-	// Prefer os.UserHomeDir() on macOS.
-	if h, err := os.UserHomeDir(); err == nil && strings.TrimSpace(h) != "" {
-		return h
-	}
-
-	// Best-effort fallbacks.
-	if h := strings.TrimSpace(os.Getenv("HOME")); h != "" {
-		return h
-	}
-	if wd, err := os.Getwd(); err == nil && strings.TrimSpace(wd) != "" {
-		return wd
-	}
-	return "."
-}
-
-// sanitizeAppNameForPath normalizes an application name so it is safe as a single path segment.
-func sanitizeAppNameForPath(name string) string {
-	n := strings.TrimSpace(name)
-	if n == "" {
-		return "discordmain"
-	}
-
-	// Avoid path separators.
-	n = strings.ReplaceAll(n, "/", "-")
-	n = strings.ReplaceAll(n, "\\", "-")
-
-	n = strings.TrimSpace(n)
-	if n == "" {
-		return "discordmain"
-	}
-	return n
-}
-
-```
-
-// === FILE: pkg/files/platform_paths_unix.go ===
-```go
-//go:build !windows && !darwin
-
-package files
-
-import (
-	"os"
-	"path/filepath"
-	"strings"
-)
-
-// Unix/Linux unified filesystem layout:
-//   - Config: ~/.config/<AppName>
-//   - Cache:  ~/.cache/<AppName>
-//   - Logs:   ~/.log/<AppName>
-//
-// These helpers return base directories only; callers should create directories
-// (e.g., via os.MkdirAll) as needed.
-
-func platformConfigDir(appName string) string {
-	home := platformHomeDir()
-	return filepath.Join(home, ".config", sanitizeAppNameForPath(appName))
-}
-
-func platformCacheDir(appName string) string {
-	home := platformHomeDir()
-	return filepath.Join(home, ".cache", sanitizeAppNameForPath(appName))
-}
-
-func platformLogDir(appName string) string {
-	home := platformHomeDir()
-	return filepath.Join(home, ".log", sanitizeAppNameForPath(appName))
-}
-
-// platformHomeDir resolves the user's home directory in a robust way across
-// Unix-like environments.
-func platformHomeDir() string {
-	if h := strings.TrimSpace(os.Getenv("HOME")); h != "" {
-		return h
-	}
-	if h, err := os.UserHomeDir(); err == nil && strings.TrimSpace(h) != "" {
-		return h
-	}
-	return "."
-}
-
-// sanitizeAppNameForPath normalizes an application name so it is safe as a single
-// directory segment across platforms.
-func sanitizeAppNameForPath(name string) string {
-	n := strings.TrimSpace(name)
-	if n == "" {
-		return "discordmain"
-	}
-
-	// Replace common path separators and characters that can break paths.
-	n = strings.ReplaceAll(n, "/", "-")
-	n = strings.ReplaceAll(n, "\\", "-")
-
-	// Keep it conservative: no NULs, no leading/trailing whitespace.
-	n = strings.ReplaceAll(n, "\x00", "")
-	n = strings.TrimSpace(n)
-
-	if n == "" {
-		return "discordmain"
-	}
-	return n
-}
-
-```
-
-// === FILE: pkg/files/platform_paths_windows.go ===
-```go
-//go:build windows
-
-package files
-
-import (
-	"os"
-	"path/filepath"
-	"strings"
-)
-
-// Windows unified filesystem layout (per repo requirements):
-//   - Config base: %APPDATA%/<AppName>
-//   - Cache base:  %APPDATA%/<AppName>/Cache
-//   - Logs base:   %APPDATA%/<AppName>/Logs
-//
-// These helpers return paths only. Callers should create directories via os.MkdirAll.
-
-func platformConfigDir(appName string) string {
-	base := windowsAppDataBase()
-	return filepath.Join(base, sanitizeAppNameForPath(appName))
-}
-
-func platformCacheDir(appName string) string {
-	return filepath.Join(platformConfigDir(appName), "Cache")
-}
-
-func platformLogDir(appName string) string {
-	return filepath.Join(platformConfigDir(appName), "Logs")
-}
-
-func windowsAppDataBase() string {
-	if v := strings.TrimSpace(getEnv("APPDATA")); v != "" {
-		return v
-	}
-
-	// Best-effort fallback if APPDATA isn't defined.
-	// Typical location: C:\Users\<User>\AppData\Roaming
-	if home, err := os.UserHomeDir(); err == nil && strings.TrimSpace(home) != "" {
-		return filepath.Join(home, "AppData", "Roaming")
-	}
-
-	// Last resort: relative directory.
-	return "."
-}
-
-// sanitizeAppNameForPath normalizes an application name so it is safe as a single
-// directory segment on Windows, while staying stable across platforms.
-//
-// Windows disallows these characters in filenames/dirnames: <>:"/\|?*
-// and also disallows trailing dots/spaces.
-func sanitizeAppNameForPath(name string) string {
-	n := strings.TrimSpace(name)
-	if n == "" {
-		n = "discordmain"
-	}
-
-	// Replace path separators first.
-	n = strings.ReplaceAll(n, "/", "-")
-	n = strings.ReplaceAll(n, "\\", "-")
-
-	// Replace invalid Windows filename characters.
-	n = strings.NewReplacer(
-		"<", "-",
-		">", "-",
-		":", "-",
-		"\"", "-",
-		"|", "-",
-		"?", "-",
-		"*", "-",
-	).Replace(n)
-
-	// Windows does not allow trailing spaces or dots in directory names.
-	n = strings.TrimRight(n, " .")
-
-	if strings.TrimSpace(n) == "" {
-		return "discordmain"
-	}
-	return n
-}
-
-```
-
-// === FILE: pkg/files/platform_paths_windows_test.go ===
-```go
-//go:build windows
-
-package files
-
-import (
-	"path/filepath"
-	"testing"
-)
-
-func TestPlatformPathsWindows(t *testing.T) {
-	t.Parallel()
-	setTestEnv(t, map[string]string{
-		"APPDATA": `C:\AppData\Roaming`,
-	})
-	expectedCfg := filepath.Join(`C:\AppData\Roaming`, "Alice-Bot")
-	if cfg := platformConfigDir("Alice:Bot "); cfg != expectedCfg {
-		t.Fatalf("unexpected config dir: %q", cfg)
-	}
-
-	expectedCache := filepath.Join(expectedCfg, "Cache")
-	if cache := platformCacheDir("Alice:Bot "); cache != expectedCache {
-		t.Fatalf("unexpected cache dir: %q", cache)
-	}
-
-	expectedLog := filepath.Join(expectedCfg, "Logs")
-	if logDir := platformLogDir("Alice:Bot "); logDir != expectedLog {
-		t.Fatalf("unexpected log dir: %q", logDir)
-	}
 }
 
 ```
@@ -7009,7 +5086,7 @@ func (mgr *ConfigManager) GuildIndexStats() GuildIndexStats {
 func (mgr *ConfigManager) AddGuildConfig(guildCfg GuildConfig) error {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
-	next := cloneBotConfigPtr(mgr.config)
+	next := CloneBotConfigPtr(mgr.config)
 	if next == nil {
 		next = &BotConfig{Guilds: []GuildConfig{}}
 	}
@@ -7044,7 +5121,7 @@ func (mgr *ConfigManager) RemoveGuildConfig(guildID string) {
 		slog.String("guildID", guildID),
 	)
 
-	next := cloneBotConfigPtr(mgr.config)
+	next := CloneBotConfigPtr(mgr.config)
 	next.Guilds = slices.DeleteFunc(next.Guilds, func(g GuildConfig) bool {
 		return g.GuildID == guildID
 	})
@@ -7355,7 +5432,7 @@ func LogConfiguredGuildsForBot(configManager *ConfigManager, session *discordgo.
 	return logConfiguredGuildSubset(configManager, session, func(cfg *BotConfig) []GuildConfig {
 		guilds := cfg.Guilds
 		if normalizedBotInstanceID := NormalizeBotInstanceID(botInstanceID); normalizedBotInstanceID != "" {
-			guilds = cfg.GuildsForBotInstance(normalizedBotInstanceID)
+			guilds = GuildsForBotInstance(cfg, normalizedBotInstanceID)
 		}
 		return guilds
 	})
@@ -9799,7 +7876,7 @@ import (
 
 func newRolePanelTestManager(t *testing.T, guildID string) *ConfigManager {
 	t.Helper()
-	mgr := NewConfigManagerWithStore(&MemoryConfigStore{}, nil)
+	mgr := NewConfigManagerWithStore(&mockConfigStore{}, nil)
 	mgr.config = &BotConfig{Guilds: []GuildConfig{{GuildID: guildID}}}
 	return mgr
 }
@@ -11111,7 +9188,7 @@ func newWebhookUpdatesTestManager(t *testing.T, cfg *BotConfig) *ConfigManager {
 		cfg.Guilds = []GuildConfig{}
 	}
 
-	mgr := NewConfigManagerWithStore(&MemoryConfigStore{}, nil)
+	mgr := NewConfigManagerWithStore(&mockConfigStore{}, nil)
 	mgr.config = cfg
 	return mgr
 }
@@ -12439,7 +10516,7 @@ type AvatarChange struct {
 	Timestamp time.Time
 }
 
-func guildConfigByID(cfg *BotConfig, guildID string) (*GuildConfig, error) {
+func GuildConfigByID(cfg *BotConfig, guildID string) (*GuildConfig, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("%w: guild_id=%s", ErrGuildConfigNotFound, strings.TrimSpace(guildID))
 	}
@@ -12521,7 +10598,7 @@ func (mgr *ConfigManager) SetRolesCacheTTL(guildID string, ttl string) error {
 		}
 	}
 	_, err := mgr.UpdateConfig(context.Background(), func(cfg *BotConfig) error {
-		gcfg, err := guildConfigByID(cfg, guildID)
+		gcfg, err := GuildConfigByID(cfg, guildID)
 		if err != nil {
 			return fmt.Errorf("guild not found")
 		}
@@ -12669,6 +10746,107 @@ var ErrRateLimited = errors.New("rate limited")
 
 ```
 
+// === FILE: pkg/files/types_embeds.go ===
+```go
+package files
+
+import (
+	"errors"
+	"strings"
+)
+
+type CustomEmbedFieldConfig struct {
+	Name   string `json:"name"`
+	Value  string `json:"value"`
+	Inline bool   `json:"inline,omitempty"`
+}
+
+type CustomEmbedPostingConfig struct {
+	ChannelID    string `json:"channel_id"`
+	MessageID    string `json:"message_id"`
+	WebhookID    string `json:"webhook_id,omitempty"`
+	WebhookToken string `json:"webhook_token,omitempty"`
+}
+
+func (p CustomEmbedPostingConfig) IsZero() bool {
+	return strings.TrimSpace(p.ChannelID) == "" &&
+		strings.TrimSpace(p.MessageID) == "" &&
+		strings.TrimSpace(p.WebhookID) == "" &&
+		strings.TrimSpace(p.WebhookToken) == ""
+}
+
+type CustomEmbedConfig struct {
+	Key           string                     `json:"key"`
+	Title         string                     `json:"title,omitempty"`
+	Description   string                     `json:"description,omitempty"`
+	Color         int                        `json:"color,omitempty"`
+	AuthorName    string                     `json:"author_name,omitempty"`
+	AuthorIconURL string                     `json:"author_icon_url,omitempty"`
+	FooterText    string                     `json:"footer_text,omitempty"`
+	FooterIconURL string                     `json:"footer_icon_url,omitempty"`
+	ImageURL      string                     `json:"image_url,omitempty"`
+	ThumbnailURL  string                     `json:"thumbnail_url,omitempty"`
+	Fields        []CustomEmbedFieldConfig   `json:"fields,omitempty"`
+	Postings      []CustomEmbedPostingConfig `json:"postings,omitempty"`
+}
+
+func (cfg CustomEmbedConfig) IsZero() bool {
+	return strings.TrimSpace(cfg.Key) == "" &&
+		strings.TrimSpace(cfg.Title) == "" &&
+		strings.TrimSpace(cfg.Description) == "" &&
+		cfg.Color == 0 &&
+		strings.TrimSpace(cfg.AuthorName) == "" &&
+		strings.TrimSpace(cfg.AuthorIconURL) == "" &&
+		strings.TrimSpace(cfg.FooterText) == "" &&
+		strings.TrimSpace(cfg.FooterIconURL) == "" &&
+		strings.TrimSpace(cfg.ImageURL) == "" &&
+		strings.TrimSpace(cfg.ThumbnailURL) == "" &&
+		len(cfg.Fields) == 0 &&
+		len(cfg.Postings) == 0
+}
+
+var ErrCustomEmbedPostingNotFound = errors.New("custom embed posting not found")
+
+func cloneCustomEmbeds(in []CustomEmbedConfig) []CustomEmbedConfig {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]CustomEmbedConfig, 0, len(in))
+	for _, ce := range in {
+		out = append(out, cloneCustomEmbed(ce))
+	}
+	return out
+}
+
+func cloneCustomEmbed(in CustomEmbedConfig) CustomEmbedConfig {
+	out := CustomEmbedConfig{
+		Key:           in.Key,
+		Title:         in.Title,
+		Description:   in.Description,
+		Color:         in.Color,
+		AuthorName:    in.AuthorName,
+		AuthorIconURL: in.AuthorIconURL,
+		FooterText:    in.FooterText,
+		FooterIconURL: in.FooterIconURL,
+		ImageURL:      in.ImageURL,
+		ThumbnailURL:  in.ThumbnailURL,
+	}
+
+	if len(in.Fields) > 0 {
+		out.Fields = make([]CustomEmbedFieldConfig, len(in.Fields))
+		copy(out.Fields, in.Fields)
+	}
+
+	if len(in.Postings) > 0 {
+		out.Postings = make([]CustomEmbedPostingConfig, len(in.Postings))
+		copy(out.Postings, in.Postings)
+	}
+
+	return out
+}
+
+```
+
 // === FILE: pkg/files/validation_errors.go ===
 ```go
 package files
@@ -12731,7 +10909,7 @@ package files
 
 // DiscordCoreVersion is the current version of the discordcore package.
 // This value is automatically updated by the release CLI tool.
-const DiscordCoreVersion = "v0.857.0-rc.2"
+const DiscordCoreVersion = "v0.857.0-rc.3"
 
 // AppVersion is the version of the application using discordcore.
 var AppVersion string

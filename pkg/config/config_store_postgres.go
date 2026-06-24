@@ -1,4 +1,4 @@
-package files
+package config
 
 import (
 	"context"
@@ -7,11 +7,15 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/small-frappuccino/discordcore/pkg/files"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// PostgresConfigStore persists BotConfig in PostgreSQL as one canonical JSONB document.
+// PostgresConfigStore persists files.BotConfig in PostgreSQL as one canonical JSONB document.
+const DefaultPostgresConfigStoreKey = "primary"
+
 type PostgresConfigStore struct {
 	db     *pgxpool.Pool
 	key    string
@@ -38,11 +42,11 @@ func NewPostgresConfigStore(db *pgxpool.Pool, key string, logger *slog.Logger) *
 }
 
 // Load loads.
-func (s *PostgresConfigStore) Load() (*BotConfig, error) {
-	cfg := &BotConfig{Guilds: []GuildConfig{}}
+func (s *PostgresConfigStore) Load() (*files.BotConfig, error) {
+	cfg := &files.BotConfig{Guilds: []files.GuildConfig{}}
 	if s == nil || s.db == nil {
 		err := fmt.Errorf("postgres config store database handle is nil")
-		EmitBlockingError(s.logger, "Blocking structural failure: Nil pointer blocked PostgreSQL driver initialization", err, GenerateRequestID())
+		files.EmitBlockingError(s.logger, "Blocking structural failure: Nil pointer blocked PostgreSQL driver initialization", err, files.GenerateRequestID())
 		return cfg, err
 	}
 
@@ -66,7 +70,7 @@ func (s *PostgresConfigStore) Load() (*BotConfig, error) {
 
 	if err != nil && err != pgx.ErrNoRows {
 		errWrap := fmt.Errorf("load global config row from postgres: %w", err)
-		EmitBlockingError(s.logger, "Blocking structural failure: SQL driver rejected global document read", errWrap, GenerateRequestID())
+		files.EmitBlockingError(s.logger, "Blocking structural failure: SQL driver rejected global document read", errWrap, files.GenerateRequestID())
 		return nil, errWrap
 	}
 
@@ -80,11 +84,11 @@ func (s *PostgresConfigStore) Load() (*BotConfig, error) {
 		)
 		if err := json.Unmarshal(globalRaw, cfg); err != nil {
 			errWrap := fmt.Errorf("decode global config row from postgres: %w", err)
-			EmitBlockingError(s.logger, "Blocking structural failure: Corrupted JSON document parsing in global block", errWrap, GenerateRequestID())
+			files.EmitBlockingError(s.logger, "Blocking structural failure: Corrupted JSON document parsing in global block", errWrap, files.GenerateRequestID())
 			return nil, errWrap
 		}
 	}
-	cfg.Guilds = []GuildConfig{}
+	cfg.Guilds = []files.GuildConfig{}
 
 	queryGuilds := `SELECT config_json FROM guild_configs`
 	s.logger.Debug("Granular I/O inspection: Dump of dynamically generated SQL query (Load Guilds)",
@@ -97,7 +101,7 @@ func (s *PostgresConfigStore) Load() (*BotConfig, error) {
 	)
 	if err != nil {
 		errWrap := fmt.Errorf("query guild_configs: %w", err)
-		EmitBlockingError(s.logger, "Blocking structural failure: Instance settings subgraph rejected by relational server", errWrap, GenerateRequestID())
+		files.EmitBlockingError(s.logger, "Blocking structural failure: Instance settings subgraph rejected by relational server", errWrap, files.GenerateRequestID())
 		return nil, errWrap
 	}
 	defer rows.Close()
@@ -106,20 +110,20 @@ func (s *PostgresConfigStore) Load() (*BotConfig, error) {
 		var guildRaw []byte
 		if err := rows.Scan(&guildRaw); err != nil {
 			errWrap := fmt.Errorf("scan guild_configs row: %w", err)
-			EmitBlockingError(s.logger, "Blocking structural failure: I/O cursor overflowed during bidirectional table tracking", errWrap, GenerateRequestID())
+			files.EmitBlockingError(s.logger, "Blocking structural failure: I/O cursor overflowed during bidirectional table tracking", errWrap, files.GenerateRequestID())
 			return nil, errWrap
 		}
-		var guildCfg GuildConfig
+		var guildCfg files.GuildConfig
 		if err := json.Unmarshal(guildRaw, &guildCfg); err != nil {
 			errWrap := fmt.Errorf("decode guild_configs json: %w", err)
-			EmitBlockingError(s.logger, "Blocking structural failure: Corrupted JSON document parsing in guild sub-node", errWrap, GenerateRequestID())
+			files.EmitBlockingError(s.logger, "Blocking structural failure: Corrupted JSON document parsing in guild sub-node", errWrap, files.GenerateRequestID())
 			return nil, errWrap
 		}
 		cfg.Guilds = append(cfg.Guilds, guildCfg)
 	}
 	if err := rows.Err(); err != nil {
 		errWrap := fmt.Errorf("iterate guild_configs rows: %w", err)
-		EmitBlockingError(s.logger, "Blocking structural failure: SQL pagination pipe reported non-recoverable contention", errWrap, GenerateRequestID())
+		files.EmitBlockingError(s.logger, "Blocking structural failure: SQL pagination pipe reported non-recoverable contention", errWrap, files.GenerateRequestID())
 		return nil, errWrap
 	}
 
@@ -127,15 +131,15 @@ func (s *PostgresConfigStore) Load() (*BotConfig, error) {
 }
 
 // Save saves.
-func (s *PostgresConfigStore) Save(cfg *BotConfig) error {
+func (s *PostgresConfigStore) Save(cfg *files.BotConfig) error {
 	if cfg == nil {
 		err := fmt.Errorf("cannot save nil config")
-		EmitBlockingError(s.logger, "Blocking structural failure: Persistence attempt with nil global matrix", err, GenerateRequestID())
+		files.EmitBlockingError(s.logger, "Blocking structural failure: Persistence attempt with nil global matrix", err, files.GenerateRequestID())
 		return err
 	}
 	if s == nil || s.db == nil {
 		err := fmt.Errorf("postgres config store database handle is nil")
-		EmitBlockingError(s.logger, "Blocking structural failure: Synchronization blocked by nil relational driver", err, GenerateRequestID())
+		files.EmitBlockingError(s.logger, "Blocking structural failure: Synchronization blocked by nil relational driver", err, files.GenerateRequestID())
 		return err
 	}
 
@@ -147,7 +151,7 @@ func (s *PostgresConfigStore) Save(cfg *BotConfig) error {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		errWrap := fmt.Errorf("begin config save tx: %w", err)
-		EmitBlockingError(s.logger, "Blocking structural failure: Transaction negotiation aborted by DBMS", errWrap, GenerateRequestID())
+		files.EmitBlockingError(s.logger, "Blocking structural failure: Transaction negotiation aborted by DBMS", errWrap, files.GenerateRequestID())
 		return errWrap
 	}
 	defer func() {
@@ -164,7 +168,7 @@ func (s *PostgresConfigStore) Save(cfg *BotConfig) error {
 	globalRaw, err := json.Marshal(globalCopy)
 	if err != nil {
 		errWrap := fmt.Errorf("encode global config: %w", err)
-		EmitBlockingError(s.logger, "Blocking structural failure: Marshal operation cleared primary write buffer", errWrap, GenerateRequestID())
+		files.EmitBlockingError(s.logger, "Blocking structural failure: Marshal operation cleared primary write buffer", errWrap, files.GenerateRequestID())
 		return errWrap
 	}
 
@@ -187,7 +191,7 @@ func (s *PostgresConfigStore) Save(cfg *BotConfig) error {
 		string(globalRaw),
 	); err != nil {
 		errWrap := fmt.Errorf("save global config row: %w", err)
-		EmitBlockingError(s.logger, "Blocking structural failure: Base topology upsert executable command rejected", errWrap, GenerateRequestID())
+		files.EmitBlockingError(s.logger, "Blocking structural failure: Base topology upsert executable command rejected", errWrap, files.GenerateRequestID())
 		return errWrap
 	}
 
@@ -203,7 +207,7 @@ func (s *PostgresConfigStore) Save(cfg *BotConfig) error {
 		guildRaw, err := json.Marshal(guild)
 		if err != nil {
 			errWrap := fmt.Errorf("encode guild config for %s: %w", guild.GuildID, err)
-			EmitBlockingError(s.logger, "Blocking structural failure: Marshal operation failed on isolated hierarchical scope", errWrap, GenerateRequestID())
+			files.EmitBlockingError(s.logger, "Blocking structural failure: Marshal operation failed on isolated hierarchical scope", errWrap, files.GenerateRequestID())
 			return errWrap
 		}
 
@@ -221,14 +225,14 @@ func (s *PostgresConfigStore) Save(cfg *BotConfig) error {
 			string(guildRaw),
 		); err != nil {
 			errWrap := fmt.Errorf("save guild_configs row %s: %w", guild.GuildID, err)
-			EmitBlockingError(s.logger, "Blocking structural failure: Collision or transactional obstruction bound to sub-level", errWrap, GenerateRequestID())
+			files.EmitBlockingError(s.logger, "Blocking structural failure: Collision or transactional obstruction bound to sub-level", errWrap, files.GenerateRequestID())
 			return errWrap
 		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
 		errWrap := fmt.Errorf("commit config save tx: %w", err)
-		EmitBlockingError(s.logger, "Blocking structural failure: Consolidative 2PC protocol rejected; commit failed and locked state at source", errWrap, GenerateRequestID())
+		files.EmitBlockingError(s.logger, "Blocking structural failure: Consolidative 2PC protocol rejected; commit failed and locked state at source", errWrap, files.GenerateRequestID())
 		return errWrap
 	}
 
@@ -240,7 +244,7 @@ func (s *PostgresConfigStore) Save(cfg *BotConfig) error {
 func (s *PostgresConfigStore) Exists() (bool, error) {
 	if s == nil || s.db == nil {
 		err := fmt.Errorf("postgres config store database handle is nil")
-		EmitBlockingError(s.logger, "Blocking structural failure: Static probe failed on node referential integrity", err, GenerateRequestID())
+		files.EmitBlockingError(s.logger, "Blocking structural failure: Static probe failed on node referential integrity", err, files.GenerateRequestID())
 		return false, err
 	}
 
@@ -258,7 +262,7 @@ func (s *PostgresConfigStore) Exists() (bool, error) {
 		s.key,
 	).Scan(&exists); err != nil {
 		errWrap := fmt.Errorf("check config row in postgres: %w", err)
-		EmitBlockingError(s.logger, "Blocking structural failure: Scalar boolean query collapsed during scan", errWrap, GenerateRequestID())
+		files.EmitBlockingError(s.logger, "Blocking structural failure: Scalar boolean query collapsed during scan", errWrap, files.GenerateRequestID())
 		return false, errWrap
 	}
 	return exists, nil

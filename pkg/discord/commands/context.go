@@ -7,6 +7,7 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 )
@@ -19,7 +20,7 @@ var ErrInvalidEventData = errors.New("interaction event payload is structurally 
 type ArikawaContext struct {
 	Client      *api.Client
 	Interaction *discord.InteractionEvent
-	Config      *files.ConfigManager
+	Config      config.Provider
 	Logger      *slog.Logger
 	GuildID     discord.GuildID
 	UserID      discord.UserID
@@ -29,7 +30,7 @@ type ArikawaContext struct {
 
 // NewArikawaContext constructs an operational context securely. It validates the
 // payload defensively to avoid runtime panics when faced with malformed inputs.
-func NewArikawaContext(event discord.InteractionEvent, configManager *files.ConfigManager) (*ArikawaContext, error) {
+func NewArikawaContext(event discord.InteractionEvent, configManager config.Provider) (*ArikawaContext, error) {
 	// Defensive Validation against bizzare payloads.
 	if event.SenderID() == 0 {
 		return nil, ErrInvalidEventData

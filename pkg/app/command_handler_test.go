@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
@@ -12,7 +13,7 @@ import (
 
 func TestCommandHandlerRoutesFeaturesToCorrectBotInstance(t *testing.T) {
 	boolPtr := func(v bool) *bool { return &v }
-	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cfgMgr := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	if _, err := cfgMgr.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
 			{

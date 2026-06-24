@@ -107,7 +107,7 @@ func resolveBotRuntimeCapabilities(
 		intents: discordgo.IntentsGuilds,
 	}
 
-	guilds := cfg.GuildsForBotInstance(botInstanceID)
+	guilds := files.GuildsForBotInstance(cfg, botInstanceID)
 	for _, guild := range guilds {
 		features := cfg.ResolveFeatures(guild.GuildID)
 		runtimeConfig := cfg.ResolveRuntimeConfig(guild.GuildID)
@@ -119,25 +119,25 @@ func resolveBotRuntimeCapabilities(
 		isLoggingBot := false
 
 		if !guild.QOTD.IsZero() {
-			if id, _ := guild.ResolveFeatureBotInstanceID("qotd"); id == botInstanceID {
+			if id, _ := files.ResolveFeatureBotInstanceID(guild, "qotd"); id == botInstanceID {
 				isQOTDBot = true
 			}
 		}
 		if features.Services.Commands {
-			if id, _ := guild.ResolveFeatureBotInstanceID("roles"); id == botInstanceID {
+			if id, _ := files.ResolveFeatureBotInstanceID(guild, "roles"); id == botInstanceID {
 				isRolesBot = true
 			}
-			if id, _ := guild.ResolveFeatureBotInstanceID("stats"); id == botInstanceID {
+			if id, _ := files.ResolveFeatureBotInstanceID(guild, "stats"); id == botInstanceID {
 				isStatsBot = true
 			}
 		}
 		if guild.Channels.AutomodAction != "" || guild.UserPrune.Enabled {
-			if id, _ := guild.ResolveFeatureBotInstanceID("moderation"); id == botInstanceID {
+			if id, _ := files.ResolveFeatureBotInstanceID(guild, "moderation"); id == botInstanceID {
 				isModBot = true
 			}
 		}
 		if features.Services.Monitoring {
-			if id, _ := guild.ResolveFeatureBotInstanceID("logging"); id == botInstanceID {
+			if id, _ := files.ResolveFeatureBotInstanceID(guild, "logging"); id == botInstanceID {
 				isLoggingBot = true
 			}
 		}
@@ -477,7 +477,7 @@ func (r *botRuntimeResolver) runtimeForGuild(guildID string, feature string) (*b
 		feature = "dashboard"
 	}
 
-	bestInstanceID, _ := guild.ResolveFeatureBotInstanceID(feature)
+	bestInstanceID, _ := files.ResolveFeatureBotInstanceID(*guild, feature)
 	if bestInstanceID == "" {
 		return nil, "", fmt.Errorf("%w: explicit feature mapping is missing for guild %s", ErrSessionUnavailable, guildID)
 	}
@@ -1000,6 +1000,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/storage/postgres"
@@ -1100,7 +1101,7 @@ func TestBotRuntime_InitializationRouting(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+			cfgMgr := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 			cfgMgr.ApplyConfig(tt.cfg)
 
 			caps := resolveBotRuntimeCapabilities(tt.cfg, "main")
@@ -1827,6 +1828,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"golang.org/x/sync/errgroup"
 )
@@ -1852,7 +1854,7 @@ func awaitCondition(timeout time.Duration, condition func() bool) error {
 func TestSupervisorFaultIsolation(t *testing.T) {
 	t.Skip("Skipping test due to Arikawa 401 with mock tokens")
 	t.Parallel()
-	cfgManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cfgManager := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	cfg := files.BotConfig{
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
@@ -1938,7 +1940,7 @@ func TestSupervisorFaultIsolation(t *testing.T) {
 func TestZeroStateIdling(t *testing.T) {
 	t.Parallel()
 
-	cfgManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cfgManager := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	cfg := files.BotConfig{
 		Guilds: []files.GuildConfig{},
 	}
@@ -1986,7 +1988,7 @@ func TestSupervisorSwarmTopology(t *testing.T) {
 	t.Skip("Skipping test due to Arikawa 401 with mock tokens")
 	t.Parallel()
 
-	cfgManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cfgManager := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 
 	tokens := make(map[string]files.EncryptedString)
 	for i := 0; i < 10; i++ {
@@ -2050,7 +2052,7 @@ func TestSupervisorConfigChange(t *testing.T) {
 	t.Skip("Skipping test due to Arikawa 401 with mock tokens")
 	t.Parallel()
 
-	cfgManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cfgManager := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	cfg := files.BotConfig{
 		Features: files.FeatureToggles{
 			Services: files.FeatureServiceToggles{
@@ -2162,7 +2164,7 @@ func TestBotSupervisor_ConcurrentConfigThrashing(t *testing.T) {
 		_ = startupTasks.Shutdown(context.Background())
 	})
 
-	cfgManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cfgManager := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	cfg := files.BotConfig{
 		Guilds: []files.GuildConfig{},
 	}
@@ -2231,7 +2233,7 @@ func TestBotSupervisor_ZeroLeakTeardown(t *testing.T) {
 	time.Sleep(50 * time.Millisecond) // stabilize background goroutines
 	initialGoroutines := runtime.NumGoroutine()
 
-	cfgManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cfgManager := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	cfg := files.BotConfig{
 		Guilds: []files.GuildConfig{},
 	}
@@ -2299,6 +2301,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	discordclean "github.com/small-frappuccino/discordcore/pkg/discord/clean"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/clean"
@@ -2314,7 +2317,6 @@ import (
 	discordmod "github.com/small-frappuccino/discordcore/pkg/discord/moderation"
 	"github.com/small-frappuccino/discordcore/pkg/discord/partners"
 	"github.com/small-frappuccino/discordcore/pkg/discord/roles"
-	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	appstats "github.com/small-frappuccino/discordcore/pkg/stats"
 )
@@ -2323,7 +2325,7 @@ import (
 // Any orchestrator (like CommandHandler) or test mock only needs to satisfy this surface.
 type RegistrarContext interface {
 	SessionToken() string
-	ConfigManager() *files.ConfigManager
+	ConfigProvider() config.Provider
 	RuntimeApplier() *runtimeapply.Manager
 	PartnerService() *partners.PartnerService
 	ModerationMetrics() moderation.Metrics
@@ -2418,7 +2420,7 @@ func RuntimeCommandCatalogRegistrar() CommandCatalogRegistrar {
 				panic("fail-fast violation: runtimeApplier is strictly required for RuntimeCommandCatalogRegistrar")
 			}
 			replier := &arikawaReplierAdapter{client: api.NewClient("Bot " + ctx.SessionToken())}
-			handler := runtime.NewHandler(replier, ctx.ConfigManager(), ctx.RuntimeApplier(), slog.Default())
+			handler := runtime.NewHandler(replier, ctx.ConfigProvider(), ctx.RuntimeApplier(), slog.Default())
 			shim := &runtimeShim{handler: handler}
 			router.Register(shim)
 			router.RegisterComponent("runtime|", shim)
@@ -2466,7 +2468,7 @@ func PartnerCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
 		RegisterArikawa: func(ctx RegistrarContext, router commands.ArikawaRegisterer) {
 			// Domain packages now receive native router directly.
-			partnercmd.NewPartnerCommands(ctx.ConfigManager(), ctx.PartnerService()).RegisterCommands(router)
+			partnercmd.NewPartnerCommands(ctx.ConfigProvider(), ctx.PartnerService()).RegisterCommands(router)
 		},
 	}
 }
@@ -2480,7 +2482,7 @@ func ModerationCommandCatalogRegistrar() CommandCatalogRegistrar {
 			router.Register(moderation.NewBanCommand(svc, ctx.ModerationMetrics(), slog.Default()))
 			router.Register(moderation.NewTimeoutCommand(svc, ctx.ModerationMetrics(), slog.Default()))
 			router.Register(moderation.NewMassBanCommand(svc, ctx.ModerationMetrics(), slog.Default()))
-			router.Register(moderation.NewReactionBlockCommand(ctx.ConfigManager(), ctx.ModerationMetrics(), slog.Default()))
+			router.Register(moderation.NewReactionBlockCommand(ctx.ConfigProvider(), ctx.ModerationMetrics(), slog.Default()))
 		},
 	}
 }
@@ -2494,7 +2496,7 @@ func CleanCommandCatalogRegistrar() CommandCatalogRegistrar {
 				metrics = cleanMetricsAdapter{m: ctx.ModerationMetrics()}
 			}
 			svc := discordclean.NewService(client, metrics, nil)
-			router.Register(clean.NewCleanCommand(ctx.ConfigManager(), svc))
+			router.Register(clean.NewCleanCommand(ctx.ConfigProvider(), svc))
 		},
 	}
 }
@@ -2514,7 +2516,7 @@ func (a cleanMetricsAdapter) RecordCleanAuditLogFailure()                       
 func RolesCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
 		RegisterArikawa: func(ctx RegistrarContext, router commands.ArikawaRegisterer) {
-			rolescmd.NewRolePanelCommands(ctx.ConfigManager(), ctx.RolePanelService()).RegisterCommands(router)
+			rolescmd.NewRolePanelCommands(ctx.ConfigProvider(), ctx.RolePanelService()).RegisterCommands(router)
 		},
 	}
 }
@@ -2523,7 +2525,7 @@ func RolesCommandCatalogRegistrar() CommandCatalogRegistrar {
 func EmbedsCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
 		RegisterArikawa: func(ctx RegistrarContext, router commands.ArikawaRegisterer) {
-			embedscmd.NewEmbedCommands(ctx.ConfigManager(), ctx.EmbedService()).RegisterCommands(router)
+			embedscmd.NewEmbedCommands(ctx.ConfigProvider(), ctx.EmbedService()).RegisterCommands(router)
 		},
 	}
 }
@@ -2573,7 +2575,7 @@ func StatsCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
 		RequiredCapabilities: CapStats,
 		RegisterArikawa: func(ctx RegistrarContext, router commands.ArikawaRegisterer) {
-			stats.NewStatsCommands(ctx.ConfigManager(), ctx.StatsService(), slog.Default()).RegisterCommands(router)
+			stats.NewStatsCommands(ctx.ConfigProvider(), ctx.StatsService(), slog.Default()).RegisterCommands(router)
 		},
 	}
 }
@@ -2582,7 +2584,7 @@ func StatsCommandCatalogRegistrar() CommandCatalogRegistrar {
 func LoggingCommandCatalogRegistrar() CommandCatalogRegistrar {
 	return CommandCatalogRegistrar{
 		RegisterArikawa: func(ctx RegistrarContext, router commands.ArikawaRegisterer) {
-			logging.NewLoggingCommands(ctx.ConfigManager()).RegisterCommands(router)
+			logging.NewLoggingCommands(ctx.ConfigProvider()).RegisterCommands(router)
 		},
 	}
 }
@@ -2599,6 +2601,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	qotdcmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/qotd"
@@ -2623,7 +2626,12 @@ type MockRegistrarContext struct {
 }
 
 func (m MockRegistrarContext) SessionToken() string                      { return m.sessionToken }
-func (m MockRegistrarContext) ConfigManager() *files.ConfigManager       { return m.configManager }
+func (m MockRegistrarContext) ConfigProvider() config.Provider {
+	if m.configManager == nil {
+		return nil
+	}
+	return m.configManager
+}
 func (m MockRegistrarContext) RuntimeApplier() *runtimeapply.Manager     { return m.runtimeApplier }
 func (m MockRegistrarContext) PartnerService() *partners.PartnerService  { return m.partnerService }
 func (m MockRegistrarContext) ModerationMetrics() moderation.Metrics     { return m.moderationMetrics }
@@ -2833,6 +2841,7 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	qotdcmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/qotd"
@@ -3223,7 +3232,7 @@ func (ch *CommandHandler) matchesGuildBotInstance(guildID string, feature string
 		return false
 	}
 
-	resolvedID, _ := guild.ResolveFeatureBotInstanceID(feature)
+	resolvedID, _ := files.ResolveFeatureBotInstanceID(*guild, feature)
 	if resolvedID == "" {
 		return false
 	}
@@ -3256,7 +3265,7 @@ func (ch *CommandHandler) SessionToken() string {
 	return ""
 }
 
-func (ch *CommandHandler) ConfigManager() *files.ConfigManager {
+func (ch *CommandHandler) ConfigProvider() config.Provider {
 	return ch.configManager
 }
 
@@ -3304,6 +3313,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
 	"github.com/small-frappuccino/discordgo"
@@ -3383,7 +3393,7 @@ func TestCommandHandlerSetupAndShutdownLifecycle(t *testing.T) {
 		}
 	})
 
-	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cfgMgr := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	handler, err := NewCommandHandler(CommandHandlerDeps{
 		Session:        session,
 		ConfigManager:  cfgMgr,
@@ -3433,7 +3443,7 @@ func TestCommandHandlerSetupRollbackOnManagerFailure(t *testing.T) {
 	session.State = discordgo.NewState()
 	session.State.User = nil
 
-	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cfgMgr := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	handler, err := NewCommandHandler(CommandHandlerDeps{
 		Session:        session,
 		ConfigManager:  cfgMgr,
@@ -3454,7 +3464,7 @@ func TestCommandHandlerSetupRollbackOnManagerFailure(t *testing.T) {
 
 func TestCommandHandlerSkipsGuildWithoutCommandsFeature(t *testing.T) {
 	boolPtr := func(v bool) *bool { return &v }
-	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cfgMgr := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	if _, err := cfgMgr.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
 			{
@@ -3526,6 +3536,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/runtimeapply"
@@ -3534,7 +3545,7 @@ import (
 
 func TestCommandHandlerRoutesFeaturesToCorrectBotInstance(t *testing.T) {
 	boolPtr := func(v bool) *bool { return &v }
-	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cfgMgr := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	if _, err := cfgMgr.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		cfg.Guilds = []files.GuildConfig{
 			{
@@ -4143,11 +4154,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/small-frappuccino/discordcore/pkg/files"
 	"log/slog"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 const (
@@ -4588,6 +4600,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordcore/pkg/clock"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/control"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
@@ -5299,7 +5312,7 @@ func setupStorage(dbb resolvedDatabaseBootstrap) (*postgres.Store, *files.Config
 		slog.String("driver", "postgres"),
 	)
 
-	configStore := files.NewPostgresConfigStore(db, files.DefaultPostgresConfigStoreKey, slog.Default())
+	configStore := config.NewPostgresConfigStore(db, config.DefaultPostgresConfigStoreKey, slog.Default())
 	configManager := files.NewConfigManagerWithStore(configStore, slog.Default())
 
 	slog.Debug("Executing cross-boundary extraction for master configuration tree")
@@ -5355,6 +5368,7 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/state"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/persistence"
 	"github.com/small-frappuccino/discordcore/pkg/testdb"
@@ -5430,12 +5444,12 @@ func TestRunner_ResolveRuntimeCapabilities(t *testing.T) {
 }
 
 func TestRunner_ApplyConfiguredTheme(t *testing.T) {
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	applyConfiguredTheme(cm)
 }
 
 func TestRunner_ScheduleDBCleanup(t *testing.T) {
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	scheduleDBCleanup(context.Background(), nil, cm)
 }
 
@@ -5528,7 +5542,7 @@ func seedRunnerConfig(t *testing.T, dbCfg files.DatabaseRuntimeConfig, cfg files
 		t.Fatalf("failed to open database for seeding: %v", err)
 	}
 	defer db.Close()
-	store := files.NewPostgresConfigStore(db, files.DefaultPostgresConfigStoreKey, slog.Default())
+	store := config.NewPostgresConfigStore(db, config.DefaultPostgresConfigStoreKey, slog.Default())
 	if err := store.Save(&cfg); err != nil {
 		t.Fatalf("failed to save test config to postgres: %v", err)
 	}
@@ -6304,6 +6318,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/control"
 	"github.com/small-frappuccino/discordcore/pkg/discord/session"
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -6538,7 +6553,7 @@ func TestScheduleStartupWebhookEmbedUpdates(t *testing.T) {
 
 func TestStartControlServerStartupTask(t *testing.T) {
 	t.Parallel()
-	cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cfgMgr := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	controlRuntime := resolvedControlRuntime{
 		bindAddr: "127.0.0.1:0",
 	}
@@ -6589,7 +6604,7 @@ func configuredRuntimeTaskRouterWorkers(cfg *files.BotConfig, botInstanceID stri
 	// State Bleed Resolved: Determine the maximum required concurrency bound
 	// across all attached guilds to prevent a single restrictive tenant
 	// from starving the entire shared generic bot ecosystem.
-	for _, guild := range cfg.GuildsForBotInstance(botInstanceID) {
+	for _, guild := range files.GuildsForBotInstance(cfg, botInstanceID) {
 		if override := guild.RuntimeConfig.GlobalMaxWorkers; override > maxWorkers {
 			maxWorkers = override
 		}

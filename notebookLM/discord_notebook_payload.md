@@ -97,7 +97,9 @@ discord/
 │   ├── syncer_test.go
 │   └── types.go
 ├── embeds
+│   ├── custom_embed.go
 │   ├── doc.go
+│   ├── embed_json_converter.go
 │   ├── service.go
 │   └── service_test.go
 ├── logging
@@ -2403,8 +2405,8 @@ import (
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
 
 	coreclean "github.com/small-frappuccino/discordcore/pkg/clean"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
-	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 // CleanExecutor defines the execution bounds for a concrete deletion service.
@@ -2414,12 +2416,12 @@ type CleanExecutor interface {
 
 // CleanCommand bridges the Discord Slash Command interaction to the bounded clean executor.
 type CleanCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 	cleanExecutor CleanExecutor
 }
 
 // NewCleanCommand initializes a router-compatible clean interaction handler.
-func NewCleanCommand(cfg *files.ConfigManager, executor CleanExecutor) *CleanCommand {
+func NewCleanCommand(cfg config.Provider, executor CleanExecutor) *CleanCommand {
 	return &CleanCommand{
 		configManager: cfg,
 		cleanExecutor: executor,
@@ -2614,6 +2616,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/discord"
 
 	coreclean "github.com/small-frappuccino/discordcore/pkg/clean"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
@@ -2631,7 +2634,7 @@ func (m *mockExecutor) ExecuteClean(ctx context.Context, channelID discord.Chann
 // are gracefully handled without panicking or passing corrupted states.
 func TestArikawaCleanCommand_SyntheticPayloadInjection(t *testing.T) {
 	t.Parallel()
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	enabled := true
 	cfg := &files.BotConfig{
 		Guilds: []files.GuildConfig{{
@@ -2712,6 +2715,7 @@ package commands
 
 import (
 	"fmt"
+
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
@@ -2814,6 +2818,7 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 )
@@ -2826,7 +2831,7 @@ var ErrInvalidEventData = errors.New("interaction event payload is structurally 
 type ArikawaContext struct {
 	Client      *api.Client
 	Interaction *discord.InteractionEvent
-	Config      *files.ConfigManager
+	Config      config.Provider
 	Logger      *slog.Logger
 	GuildID     discord.GuildID
 	UserID      discord.UserID
@@ -2836,7 +2841,7 @@ type ArikawaContext struct {
 
 // NewArikawaContext constructs an operational context securely. It validates the
 // payload defensively to avoid runtime panics when faced with malformed inputs.
-func NewArikawaContext(event discord.InteractionEvent, configManager *files.ConfigManager) (*ArikawaContext, error) {
+func NewArikawaContext(event discord.InteractionEvent, configManager config.Provider) (*ArikawaContext, error) {
 	// Defensive Validation against bizzare payloads.
 	if event.SenderID() == 0 {
 		return nil, ErrInvalidEventData
@@ -2920,6 +2925,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/stretchr/testify/assert"
@@ -2994,7 +3000,7 @@ func TestNewArikawaContext_InitializationAndFailFast(t *testing.T) {
 
 			// Injeção rigorosa do ConfigManager alimentado por um in-memory store
 			// garantindo validação de Pre-fetch do GuildConfig em nanosegundos
-			store := &files.MemoryConfigStore{}
+			store := &config.MemoryConfigStore{}
 			_ = store.Save(&files.BotConfig{
 				Guilds: []files.GuildConfig{
 					{GuildID: "12345"},
@@ -3701,6 +3707,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	localdiscord "github.com/small-frappuccino/discordcore/pkg/discord"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	embedsvc "github.com/small-frappuccino/discordcore/pkg/discord/embeds"
@@ -3745,13 +3752,13 @@ const (
 // EmbedCommands orchestrates the slash-command routing for custom embed workflows.
 // It integrates directly with the Arikawa router to execute lifecycle mutations.
 type EmbedCommands struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 	embedService  *embedsvc.EmbedService
 }
 
 // NewEmbedCommands constructs the primary slash-command controller for embeds.
 // It mandates the injection of the configuration manager and domain service.
-func NewEmbedCommands(configManager *files.ConfigManager, embedService *embedsvc.EmbedService) *EmbedCommands {
+func NewEmbedCommands(configManager config.Provider, embedService *embedsvc.EmbedService) *EmbedCommands {
 	return &EmbedCommands{
 		configManager: configManager,
 		embedService:  embedService,
@@ -3775,12 +3782,12 @@ func (ec *EmbedCommands) RegisterCommands(router commands.ArikawaRegisterer) {
 	embedGroup.AddSubCommand(newEmbedPostSubCommand(ec.configManager, ec.embedService))
 	embedGroup.AddSubCommand(newEmbedPreviewSubCommand(ec.configManager, ec.embedService))
 	embedGroup.AddSubCommand(newEmbedSetSubCommand(ec.configManager, ec.embedService))
-	embedGroup.AddSubCommand(newEmbedDeleteSubCommand(ec.configManager))
-	embedGroup.AddSubCommand(newEmbedListSubCommand(ec.configManager))
+	embedGroup.AddSubCommand(newEmbedDeleteSubCommand(ec.configManager, ec.embedService))
+	embedGroup.AddSubCommand(newEmbedListSubCommand(ec.configManager, ec.embedService))
 	embedGroup.AddSubCommand(newEmbedRefreshSubCommand(ec.configManager, ec.embedService))
 	embedGroup.AddSubCommand(newEmbedUnpostSubCommand(ec.configManager, ec.embedService))
-	embedGroup.AddSubCommand(newEmbedImportSubCommand(ec.configManager))
-	embedGroup.AddSubCommand(newEmbedExportSubCommand(ec.configManager))
+	embedGroup.AddSubCommand(newEmbedImportSubCommand(ec.configManager, ec.embedService))
+	embedGroup.AddSubCommand(newEmbedExportSubCommand(ec.configManager, ec.embedService))
 
 	fieldGroup := commands.NewArikawaGroupCommand(
 		embedFieldGroupName,
@@ -3788,7 +3795,7 @@ func (ec *EmbedCommands) RegisterCommands(router commands.ArikawaRegisterer) {
 	)
 	fieldGroup.AddSubCommand(newEmbedFieldAddSubCommand(ec.configManager, ec.embedService))
 	fieldGroup.AddSubCommand(newEmbedFieldRemoveSubCommand(ec.configManager, ec.embedService))
-	fieldGroup.AddSubCommand(newEmbedFieldListSubCommand(ec.configManager))
+	fieldGroup.AddSubCommand(newEmbedFieldListSubCommand(ec.configManager, ec.embedService))
 	embedGroup.AddSubCommand(fieldGroup)
 
 	router.Register(embedGroup)
@@ -3811,17 +3818,17 @@ func embedKeyFromOptions(ctx *commands.ArikawaContext) (string, error) {
 	if key == "" {
 		return "", errors.New("a non-empty key option is required")
 	}
-	key = files.NormalizeCustomEmbedKey(key)
+	key = embedsvc.NormalizeCustomEmbedKey(key)
 	if key == "" {
 		return "", errors.New("a non-empty key option is required")
 	}
 	return key, nil
 }
 
-func loadCustomEmbed(cm *files.ConfigManager, guildID discord.GuildID, key string) (files.CustomEmbedConfig, error) {
-	ce, err := cm.CustomEmbed(guildID.String(), key)
+func loadCustomEmbed(svc *embedsvc.EmbedService, guildID discord.GuildID, key string) (files.CustomEmbedConfig, error) {
+	ce, err := svc.CustomEmbed(guildID.String(), key)
 	if err != nil {
-		if errors.Is(err, files.ErrCustomEmbedNotFound) {
+		if errors.Is(err, embedsvc.ErrCustomEmbedNotFound) {
 			return files.CustomEmbedConfig{}, fmt.Errorf("embed `%s` does not exist", key)
 		}
 		return files.CustomEmbedConfig{}, fmt.Errorf("failed to load embed `%s`: %v", key, err)
@@ -3853,11 +3860,11 @@ func respondEphemeralSuccess(ctx *commands.ArikawaContext, message string) error
 	})
 }
 
-func refreshCustomEmbedPostingsBestEffort(cm *files.ConfigManager, svc *embedsvc.EmbedService, ctx *commands.ArikawaContext, key string) string {
+func refreshCustomEmbedPostingsBestEffort(cm config.Provider, svc *embedsvc.EmbedService, ctx *commands.ArikawaContext, key string) string {
 	if cm == nil || svc == nil || ctx == nil {
 		return ""
 	}
-	ce, err := cm.CustomEmbed(ctx.GuildID.String(), key)
+	ce, err := svc.CustomEmbed(ctx.GuildID.String(), key)
 	if err != nil || len(ce.Postings) == 0 {
 		return ""
 	}
@@ -3885,11 +3892,11 @@ func refreshCustomEmbedPostingsBestEffort(cm *files.ConfigManager, svc *embedsvc
 // --- Subcommands ---
 
 type embedPostSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 	embedService  *embedsvc.EmbedService
 }
 
-func newEmbedPostSubCommand(cm *files.ConfigManager, svc *embedsvc.EmbedService) *embedPostSubCommand {
+func newEmbedPostSubCommand(cm config.Provider, svc *embedsvc.EmbedService) *embedPostSubCommand {
 	return &embedPostSubCommand{configManager: cm, embedService: svc}
 }
 
@@ -3914,7 +3921,7 @@ func (c *embedPostSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	if err != nil {
 		return respondEphemeralError(ctx, err.Error())
 	}
-	ce, err := loadCustomEmbed(c.configManager, ctx.GuildID, key)
+	ce, err := loadCustomEmbed(c.embedService, ctx.GuildID, key)
 	if err != nil {
 		return respondEphemeralError(ctx, err.Error())
 	}
@@ -3939,7 +3946,7 @@ func (c *embedPostSubCommand) Handle(ctx *commands.ArikawaContext) error {
 			ChannelID: channelID.String(),
 			MessageID: message.ID.String(),
 		}
-		if err := c.configManager.AddCustomEmbedPosting(ctx.GuildID.String(), ce.Key, posting); err != nil {
+		if err := c.embedService.AddCustomEmbedPosting(ctx.GuildID.String(), ce.Key, posting); err != nil {
 			slog.Warn("Mitigated service degradation: failed to track custom embed posting",
 				slog.String("req_id", ctx.GuildID.String()),
 				slog.String("embed_key", ce.Key),
@@ -3953,11 +3960,11 @@ func (c *embedPostSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type embedPreviewSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 	embedService  *embedsvc.EmbedService
 }
 
-func newEmbedPreviewSubCommand(cm *files.ConfigManager, svc *embedsvc.EmbedService) *embedPreviewSubCommand {
+func newEmbedPreviewSubCommand(cm config.Provider, svc *embedsvc.EmbedService) *embedPreviewSubCommand {
 	return &embedPreviewSubCommand{configManager: cm, embedService: svc}
 }
 
@@ -3975,7 +3982,7 @@ func (c *embedPreviewSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	if err != nil {
 		return respondEphemeralError(ctx, err.Error())
 	}
-	ce, err := loadCustomEmbed(c.configManager, ctx.GuildID, key)
+	ce, err := loadCustomEmbed(c.embedService, ctx.GuildID, key)
 	if err != nil {
 		return respondEphemeralError(ctx, err.Error())
 	}
@@ -3994,11 +4001,11 @@ func (c *embedPreviewSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type embedSetSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 	embedService  *embedsvc.EmbedService
 }
 
-func newEmbedSetSubCommand(cm *files.ConfigManager, svc *embedsvc.EmbedService) *embedSetSubCommand {
+func newEmbedSetSubCommand(cm config.Provider, svc *embedsvc.EmbedService) *embedSetSubCommand {
 	return &embedSetSubCommand{configManager: cm, embedService: svc}
 }
 
@@ -4029,8 +4036,8 @@ func (c *embedSetSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	}
 	opts := commands.ArikawaOptionList(commands.GetArikawaSubCommandOptions(ctx.Interaction))
 
-	current, fetchErr := c.configManager.CustomEmbed(ctx.GuildID.String(), key)
-	if fetchErr != nil && !errors.Is(fetchErr, files.ErrCustomEmbedNotFound) {
+	current, fetchErr := c.embedService.CustomEmbed(ctx.GuildID.String(), key)
+	if fetchErr != nil && !errors.Is(fetchErr, embedsvc.ErrCustomEmbedNotFound) {
 		return respondEphemeralError(ctx, fmt.Sprintf("Failed to load embed `%s`: %v", key, fetchErr))
 	}
 
@@ -4063,7 +4070,7 @@ func (c *embedSetSubCommand) Handle(ctx *commands.ArikawaContext) error {
 		embed.ThumbnailURL = opts.String(embedOptionThumbnailURL)
 	}
 
-	if err := c.configManager.SetCustomEmbedProperties(ctx.GuildID.String(), key, embed); err != nil {
+	if err := c.embedService.SetCustomEmbedProperties(ctx.GuildID.String(), key, embed); err != nil {
 		return respondStructuralError(ctx, "Failed to save changes", err)
 	}
 
@@ -4072,11 +4079,12 @@ func (c *embedSetSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type embedDeleteSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
+	embedService  *embedsvc.EmbedService
 }
 
-func newEmbedDeleteSubCommand(cm *files.ConfigManager) *embedDeleteSubCommand {
-	return &embedDeleteSubCommand{configManager: cm}
+func newEmbedDeleteSubCommand(cm config.Provider, svc *embedsvc.EmbedService) *embedDeleteSubCommand {
+	return &embedDeleteSubCommand{configManager: cm, embedService: svc}
 }
 
 func (c *embedDeleteSubCommand) Name() string { return embedSubDelete }
@@ -4094,8 +4102,8 @@ func (c *embedDeleteSubCommand) Handle(ctx *commands.ArikawaContext) error {
 		return respondEphemeralError(ctx, err.Error())
 	}
 
-	if _, err := c.configManager.DeleteCustomEmbed(ctx.GuildID.String(), key); err != nil {
-		if errors.Is(err, files.ErrCustomEmbedNotFound) {
+	if _, err := c.embedService.DeleteCustomEmbed(ctx.GuildID.String(), key); err != nil {
+		if errors.Is(err, embedsvc.ErrCustomEmbedNotFound) {
 			return respondEphemeralError(ctx, fmt.Sprintf("Embed `%s` does not exist.", key))
 		}
 		return respondStructuralError(ctx, "Failed to delete embed", err)
@@ -4105,11 +4113,12 @@ func (c *embedDeleteSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type embedListSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
+	embedService  *embedsvc.EmbedService
 }
 
-func newEmbedListSubCommand(cm *files.ConfigManager) *embedListSubCommand {
-	return &embedListSubCommand{configManager: cm}
+func newEmbedListSubCommand(cm config.Provider, svc *embedsvc.EmbedService) *embedListSubCommand {
+	return &embedListSubCommand{configManager: cm, embedService: svc}
 }
 
 func (c *embedListSubCommand) Name() string                     { return embedSubList }
@@ -4118,7 +4127,7 @@ func (c *embedListSubCommand) Options() []discord.CommandOption { return nil }
 func (c *embedListSubCommand) RequiresGuild() bool              { return true }
 func (c *embedListSubCommand) RequiresPermissions() bool        { return true }
 func (c *embedListSubCommand) Handle(ctx *commands.ArikawaContext) error {
-	embeds, err := c.configManager.CustomEmbeds(ctx.GuildID.String())
+	embeds, err := c.embedService.CustomEmbeds(ctx.GuildID.String())
 	if err != nil {
 		return respondEphemeralError(ctx, fmt.Sprintf("Failed to list embeds: %v", err))
 	}
@@ -4135,11 +4144,11 @@ func (c *embedListSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type embedRefreshSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 	embedService  *embedsvc.EmbedService
 }
 
-func newEmbedRefreshSubCommand(cm *files.ConfigManager, svc *embedsvc.EmbedService) *embedRefreshSubCommand {
+func newEmbedRefreshSubCommand(cm config.Provider, svc *embedsvc.EmbedService) *embedRefreshSubCommand {
 	return &embedRefreshSubCommand{configManager: cm, embedService: svc}
 }
 
@@ -4157,7 +4166,7 @@ func (c *embedRefreshSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	if err != nil {
 		return respondEphemeralError(ctx, err.Error())
 	}
-	ce, err := loadCustomEmbed(c.configManager, ctx.GuildID, key)
+	ce, err := loadCustomEmbed(c.embedService, ctx.GuildID, key)
 	if err != nil {
 		return respondEphemeralError(ctx, err.Error())
 	}
@@ -4181,11 +4190,11 @@ func (c *embedRefreshSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type embedUnpostSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 	embedService  *embedsvc.EmbedService
 }
 
-func newEmbedUnpostSubCommand(cm *files.ConfigManager, svc *embedsvc.EmbedService) *embedUnpostSubCommand {
+func newEmbedUnpostSubCommand(cm config.Provider, svc *embedsvc.EmbedService) *embedUnpostSubCommand {
 	return &embedUnpostSubCommand{configManager: cm, embedService: svc}
 }
 
@@ -4211,9 +4220,9 @@ func (c *embedUnpostSubCommand) Handle(ctx *commands.ArikawaContext) error {
 		return respondEphemeralError(ctx, "A message ID is required.")
 	}
 
-	embedKey, posting, lookupErr := c.configManager.FindCustomEmbedPosting(ctx.GuildID.String(), messageID)
+	embedKey, posting, lookupErr := c.embedService.FindCustomEmbedPosting(ctx.GuildID.String(), messageID)
 	if lookupErr != nil {
-		if errors.Is(lookupErr, files.ErrCustomEmbedPostingNotFound) {
+		if errors.Is(lookupErr, embedsvc.ErrCustomEmbedPostingNotFound) {
 			return respondEphemeralError(ctx, fmt.Sprintf("No tracked posting for message_id `%s`.", strings.TrimSpace(messageID)))
 		}
 		return respondEphemeralError(ctx, fmt.Sprintf("Failed to look up posting: %v", lookupErr))
@@ -4225,7 +4234,7 @@ func (c *embedUnpostSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	c.embedService.DeletePosting(ctx.Client, discord.ChannelID(chID), discord.MessageID(msgID))
 
 	// Remove posting track from config
-	if err := c.configManager.RemoveCustomEmbedPosting(ctx.GuildID.String(), embedKey, posting.MessageID); err != nil && !errors.Is(err, files.ErrCustomEmbedPostingNotFound) {
+	if err := c.embedService.RemoveCustomEmbedPosting(ctx.GuildID.String(), embedKey, posting.MessageID); err != nil && !errors.Is(err, embedsvc.ErrCustomEmbedPostingNotFound) {
 		slog.Warn("Mitigated service degradation: failed to strictly untrack old posting",
 			slog.String("req_id", ctx.GuildID.String()),
 			slog.String("error", err.Error()),
@@ -4237,11 +4246,11 @@ func (c *embedUnpostSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type embedFieldAddSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 	embedService  *embedsvc.EmbedService
 }
 
-func newEmbedFieldAddSubCommand(cm *files.ConfigManager, svc *embedsvc.EmbedService) *embedFieldAddSubCommand {
+func newEmbedFieldAddSubCommand(cm config.Provider, svc *embedsvc.EmbedService) *embedFieldAddSubCommand {
 	return &embedFieldAddSubCommand{configManager: cm, embedService: svc}
 }
 
@@ -4273,7 +4282,7 @@ func (c *embedFieldAddSubCommand) Handle(ctx *commands.ArikawaContext) error {
 		Value:  value,
 		Inline: inline,
 	}
-	if err := c.configManager.AddCustomEmbedField(ctx.GuildID.String(), key, field); err != nil {
+	if err := c.embedService.AddCustomEmbedField(ctx.GuildID.String(), key, field); err != nil {
 		return respondStructuralError(ctx, "Failed to add field", err)
 	}
 	syncNote := refreshCustomEmbedPostingsBestEffort(c.configManager, c.embedService, ctx, key)
@@ -4281,11 +4290,11 @@ func (c *embedFieldAddSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type embedFieldRemoveSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 	embedService  *embedsvc.EmbedService
 }
 
-func newEmbedFieldRemoveSubCommand(cm *files.ConfigManager, svc *embedsvc.EmbedService) *embedFieldRemoveSubCommand {
+func newEmbedFieldRemoveSubCommand(cm config.Provider, svc *embedsvc.EmbedService) *embedFieldRemoveSubCommand {
 	return &embedFieldRemoveSubCommand{configManager: cm, embedService: svc}
 }
 
@@ -4312,7 +4321,7 @@ func (c *embedFieldRemoveSubCommand) Handle(ctx *commands.ArikawaContext) error 
 	}
 	index := int(opts.Int(embedOptionFieldIndex)) - 1
 
-	if err := c.configManager.RemoveCustomEmbedField(ctx.GuildID.String(), key, index); err != nil {
+	if err := c.embedService.RemoveCustomEmbedField(ctx.GuildID.String(), key, index); err != nil {
 		return respondStructuralError(ctx, "Failed to remove field", err)
 	}
 	syncNote := refreshCustomEmbedPostingsBestEffort(c.configManager, c.embedService, ctx, key)
@@ -4320,11 +4329,12 @@ func (c *embedFieldRemoveSubCommand) Handle(ctx *commands.ArikawaContext) error 
 }
 
 type embedFieldListSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
+	embedService  *embedsvc.EmbedService
 }
 
-func newEmbedFieldListSubCommand(cm *files.ConfigManager) *embedFieldListSubCommand {
-	return &embedFieldListSubCommand{configManager: cm}
+func newEmbedFieldListSubCommand(cm config.Provider, svc *embedsvc.EmbedService) *embedFieldListSubCommand {
+	return &embedFieldListSubCommand{configManager: cm, embedService: svc}
 }
 
 func (c *embedFieldListSubCommand) Name() string { return embedSubFieldList }
@@ -4341,7 +4351,7 @@ func (c *embedFieldListSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	if err != nil {
 		return respondEphemeralError(ctx, err.Error())
 	}
-	ce, err := loadCustomEmbed(c.configManager, ctx.GuildID, key)
+	ce, err := loadCustomEmbed(c.embedService, ctx.GuildID, key)
 	if err != nil {
 		return respondEphemeralError(ctx, err.Error())
 	}
@@ -4358,11 +4368,12 @@ func (c *embedFieldListSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type embedImportSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
+	embedService  *embedsvc.EmbedService
 }
 
-func newEmbedImportSubCommand(cm *files.ConfigManager) *embedImportSubCommand {
-	return &embedImportSubCommand{configManager: cm}
+func newEmbedImportSubCommand(cm config.Provider, svc *embedsvc.EmbedService) *embedImportSubCommand {
+	return &embedImportSubCommand{configManager: cm, embedService: svc}
 }
 
 func (c *embedImportSubCommand) Name() string { return embedSubImport }
@@ -4391,16 +4402,16 @@ func (c *embedImportSubCommand) Handle(ctx *commands.ArikawaContext) error {
 		return respondEphemeralError(ctx, fmt.Sprintf("Failed to fetch from pastebin: %v", err))
 	}
 
-	discohookEmbed, err := files.ParseAndValidateDiscohookJSON(data)
+	discohookEmbed, err := embedsvc.ParseAndValidateDiscohookJSON(data)
 	if err != nil {
 		return respondEphemeralError(ctx, fmt.Sprintf("Invalid embed JSON: %v", err))
 	}
 
-	newEmbed := files.ToCustomEmbedConfig(discohookEmbed, key)
-	if err := c.configManager.SetCustomEmbedProperties(ctx.GuildID.String(), key, newEmbed); err != nil {
+	newEmbed := embedsvc.ToCustomEmbedConfig(discohookEmbed, key)
+	if err := c.embedService.SetCustomEmbedProperties(ctx.GuildID.String(), key, newEmbed); err != nil {
 		return respondStructuralError(ctx, "Failed to save imported embed properties", err)
 	}
-	if err := c.configManager.SetCustomEmbedFields(ctx.GuildID.String(), key, newEmbed.Fields); err != nil {
+	if err := c.embedService.SetCustomEmbedFields(ctx.GuildID.String(), key, newEmbed.Fields); err != nil {
 		return respondStructuralError(ctx, "Failed to save imported embed fields", err)
 	}
 
@@ -4408,11 +4419,12 @@ func (c *embedImportSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type embedExportSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
+	embedService  *embedsvc.EmbedService
 }
 
-func newEmbedExportSubCommand(cm *files.ConfigManager) *embedExportSubCommand {
-	return &embedExportSubCommand{configManager: cm}
+func newEmbedExportSubCommand(cm config.Provider, svc *embedsvc.EmbedService) *embedExportSubCommand {
+	return &embedExportSubCommand{configManager: cm, embedService: svc}
 }
 
 func (c *embedExportSubCommand) Name() string { return embedSubExport }
@@ -4432,12 +4444,12 @@ func (c *embedExportSubCommand) Handle(ctx *commands.ArikawaContext) error {
 		return respondEphemeralError(ctx, err.Error())
 	}
 
-	ce, err := loadCustomEmbed(c.configManager, ctx.GuildID, key)
+	ce, err := loadCustomEmbed(c.embedService, ctx.GuildID, key)
 	if err != nil {
 		return respondEphemeralError(ctx, err.Error())
 	}
 
-	discohookJSON := files.FromCustomEmbedConfig(ce)
+	discohookJSON := embedsvc.FromCustomEmbedConfig(ce)
 	data, err := json.MarshalIndent(discohookJSON, "", "  ")
 	if err != nil {
 		return respondEphemeralError(ctx, fmt.Sprintf("Failed to format JSON: %v", err))
@@ -4476,6 +4488,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/httputil/httpdriver"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	localdiscord "github.com/small-frappuccino/discordcore/pkg/discord"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	embedsvc "github.com/small-frappuccino/discordcore/pkg/discord/embeds"
@@ -4608,7 +4621,7 @@ func newTestContext(t *testing.T, event discord.InteractionEvent, cm *files.Conf
 // fakeIOStore introduces an artificial delay to simulate async I/O and expose race conditions.
 type fakeIOStore struct {
 	mu     sync.Mutex
-	memory *files.MemoryConfigStore
+	memory *config.MemoryConfigStore
 }
 
 func (s *fakeIOStore) Load() (*files.BotConfig, error) {
@@ -4640,8 +4653,9 @@ func (s *fakeIOStore) Finish() {}
 
 func TestEmbedCommands_ConcurrentMutation(t *testing.T) {
 	t.Parallel()
-	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
+	store := &fakeIOStore{memory: &config.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
+	svc := embedsvc.NewEmbedService(cm)
 	guildID := "guild-concurrent"
 
 	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: guildID}); err != nil {
@@ -4649,7 +4663,7 @@ func TestEmbedCommands_ConcurrentMutation(t *testing.T) {
 	}
 
 	ce := files.CustomEmbedConfig{Key: "concurrent-embed", Title: "Initial Title"}
-	cm.SetCustomEmbedProperties(guildID, ce.Key, ce)
+	svc.SetCustomEmbedProperties(guildID, ce.Key, ce)
 
 	var eg errgroup.Group
 	workers := 50
@@ -4661,21 +4675,21 @@ func TestEmbedCommands_ConcurrentMutation(t *testing.T) {
 				Name:  fmt.Sprintf("Field %d", idx),
 				Value: "Val",
 			}
-			cm.AddCustomEmbedField(guildID, ce.Key, field)
+			svc.AddCustomEmbedField(guildID, ce.Key, field)
 			return nil
 		})
 	}
 
 	for i := 0; i < 10; i++ {
 		eg.Go(func() error {
-			cm.RemoveCustomEmbedField(guildID, ce.Key, 0)
+			svc.RemoveCustomEmbedField(guildID, ce.Key, 0)
 			return nil
 		})
 	}
 
 	_ = eg.Wait()
 
-	embeds, err := cm.CustomEmbed(guildID, ce.Key)
+	embeds, err := svc.CustomEmbed(guildID, ce.Key)
 	if err != nil {
 		t.Fatalf("failed to retrieve embed: %v", err)
 	}
@@ -4691,11 +4705,11 @@ func TestEmbedCommands_ObservabilityStructuralFaults(t *testing.T) {
 	jsonHandler := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
 	logger := slog.New(jsonHandler)
 
-	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
+	store := &fakeIOStore{memory: &config.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, logger)
+	svc := embedsvc.NewEmbedService(cm)
 
 	router := commands.NewCommandRouter(api.NewClient("dummy_token"), cm).WithLogger(logger)
-	svc := embedsvc.NewEmbedService(cm)
 	embedCmds := NewEmbedCommands(cm, svc)
 	embedCmds.RegisterCommands(router)
 
@@ -4726,7 +4740,7 @@ func TestEmbedCommands_ObservabilityStructuralFaults(t *testing.T) {
 	}
 
 	cm.AddGuildConfig(files.GuildConfig{GuildID: "123"})
-	cm.SetCustomEmbedProperties("123", "valid-key", files.CustomEmbedConfig{Key: "valid-key"})
+	svc.SetCustomEmbedProperties("123", "valid-key", files.CustomEmbedConfig{Key: "valid-key"})
 	interaction.GuildID = discord.GuildID(123)
 
 	router.HandleEvent(interaction)
@@ -4754,7 +4768,7 @@ func (s *spyRouter) RegisterComponent(customIDPrefix string, handler commands.Co
 
 func TestEmbedCommands_RegisterCommands(t *testing.T) {
 	t.Parallel()
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	svc := embedsvc.NewEmbedService(cm)
 	ec := NewEmbedCommands(cm, svc)
 	sr := &spyRouter{}
@@ -4779,14 +4793,14 @@ func TestEmbedCommands_RegisterCommands(t *testing.T) {
 func TestEmbedCommands_Post(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
+	svc := embedsvc.NewEmbedService(cm)
 	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
-	_ = cm.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{
+	_ = svc.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{
 		Key:         "test-key",
 		Title:       "Test Embed Title",
 		Description: "Test Embed Description",
 	})
-	svc := embedsvc.NewEmbedService(cm)
 
 	// Mock successful Discord API response for Message Create
 	setMockStatusAndBody(t, http.StatusOK, []byte(`{"id": "99999", "channel_id": "88888", "content": ""}`))
@@ -4821,7 +4835,7 @@ func TestEmbedCommands_Post(t *testing.T) {
 	}
 
 	// Check that a posting was added
-	ce, _ := cm.CustomEmbed("12345", "test-key")
+	ce, _ := svc.CustomEmbed("12345", "test-key")
 	if len(ce.Postings) != 1 || ce.Postings[0].MessageID != "99999" || ce.Postings[0].ChannelID != "88888" {
 		t.Errorf("expected 1 posting with msg=99999, got: %v", ce.Postings)
 	}
@@ -4861,14 +4875,14 @@ func TestEmbedCommands_Post(t *testing.T) {
 func TestEmbedCommands_Preview(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
+	svc := embedsvc.NewEmbedService(cm)
 	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
-	_ = cm.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{
+	_ = svc.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{
 		Key:         "test-key",
 		Title:       "Test Embed Title",
 		Description: "Test Embed Description",
 	})
-	svc := embedsvc.NewEmbedService(cm)
 
 	ctx := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
@@ -4907,9 +4921,9 @@ func TestEmbedCommands_Preview(t *testing.T) {
 func TestEmbedCommands_Set(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
-	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	svc := embedsvc.NewEmbedService(cm)
+	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
 
 	ctx := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
@@ -4948,7 +4962,7 @@ func TestEmbedCommands_Set(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	ce, err := cm.CustomEmbed("12345", "new-embed")
+	ce, err := svc.CustomEmbed("12345", "new-embed")
 	if err != nil {
 		t.Fatalf("failed to retrieve embed: %v", err)
 	}
@@ -4963,9 +4977,10 @@ func TestEmbedCommands_Set(t *testing.T) {
 func TestEmbedCommands_Delete(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
+	svc := embedsvc.NewEmbedService(cm)
 	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
-	_ = cm.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{Key: "test-key"})
+	_ = svc.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{Key: "test-key"})
 
 	ctx := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
@@ -4989,14 +5004,14 @@ func TestEmbedCommands_Delete(t *testing.T) {
 		},
 	}, cm)
 
-	cmd := newEmbedDeleteSubCommand(cm)
+	cmd := newEmbedDeleteSubCommand(cm, svc)
 	err := cmd.Handle(ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	_, err = cm.CustomEmbed("12345", "test-key")
-	if !errors.Is(err, files.ErrCustomEmbedNotFound) {
+	_, err = svc.CustomEmbed("12345", "test-key")
+	if !errors.Is(err, embedsvc.ErrCustomEmbedNotFound) {
 		t.Errorf("expected embed to be deleted, but got: %v", err)
 	}
 
@@ -5013,7 +5028,8 @@ func TestEmbedCommands_Delete(t *testing.T) {
 func TestEmbedCommands_List(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
+	svc := embedsvc.NewEmbedService(cm)
 	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
 
 	ctx := newTestContext(t, discord.InteractionEvent{
@@ -5035,7 +5051,7 @@ func TestEmbedCommands_List(t *testing.T) {
 		},
 	}, cm)
 
-	cmd := newEmbedListSubCommand(cm)
+	cmd := newEmbedListSubCommand(cm, svc)
 	err := cmd.Handle(ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -5044,8 +5060,8 @@ func TestEmbedCommands_List(t *testing.T) {
 		t.Errorf("expected empty state message, got: %s", getLastResponse(t))
 	}
 
-	_ = cm.SetCustomEmbedProperties("12345", "test-key-1", files.CustomEmbedConfig{Key: "test-key-1"})
-	_ = cm.SetCustomEmbedProperties("12345", "test-key-2", files.CustomEmbedConfig{Key: "test-key-2"})
+	_ = svc.SetCustomEmbedProperties("12345", "test-key-1", files.CustomEmbedConfig{Key: "test-key-1"})
+	_ = svc.SetCustomEmbedProperties("12345", "test-key-2", files.CustomEmbedConfig{Key: "test-key-2"})
 
 	err = cmd.Handle(ctx)
 	if err != nil {
@@ -5059,15 +5075,14 @@ func TestEmbedCommands_List(t *testing.T) {
 func TestEmbedCommands_Refresh(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
+	svc := embedsvc.NewEmbedService(cm)
 	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
-	_ = cm.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{
+	_ = svc.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{
 		Key:   "test-key",
 		Title: "Title",
 	})
-	_ = cm.AddCustomEmbedPosting("12345", "test-key", files.CustomEmbedPostingConfig{ChannelID: "111", MessageID: "222"})
-
-	svc := embedsvc.NewEmbedService(cm)
+	_ = svc.AddCustomEmbedPosting("12345", "test-key", files.CustomEmbedPostingConfig{ChannelID: "111", MessageID: "222"})
 
 	ctx := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
@@ -5101,7 +5116,7 @@ func TestEmbedCommands_Refresh(t *testing.T) {
 	}
 
 	// Refresh empty postings
-	_ = cm.SetCustomEmbedProperties("12345", "test-key-no-posts", files.CustomEmbedConfig{Key: "test-key-no-posts"})
+	_ = svc.SetCustomEmbedProperties("12345", "test-key-no-posts", files.CustomEmbedConfig{Key: "test-key-no-posts"})
 	ctxNoPosts := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
@@ -5136,15 +5151,14 @@ func TestEmbedCommands_Refresh(t *testing.T) {
 func TestEmbedCommands_Unpost(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
+	svc := embedsvc.NewEmbedService(cm)
 	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
-	_ = cm.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{
+	_ = svc.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{
 		Key:   "test-key",
 		Title: "Title",
 	})
-	_ = cm.AddCustomEmbedPosting("12345", "test-key", files.CustomEmbedPostingConfig{ChannelID: "111", MessageID: "222"})
-
-	svc := embedsvc.NewEmbedService(cm)
+	_ = svc.AddCustomEmbedPosting("12345", "test-key", files.CustomEmbedPostingConfig{ChannelID: "111", MessageID: "222"})
 
 	ctx := newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
@@ -5175,7 +5189,7 @@ func TestEmbedCommands_Unpost(t *testing.T) {
 	}
 
 	// Verify posting was removed from config
-	ce, _ := cm.CustomEmbed("12345", "test-key")
+	ce, _ := svc.CustomEmbed("12345", "test-key")
 	if len(ce.Postings) != 0 {
 		t.Errorf("expected posting to be removed, got: %v", ce.Postings)
 	}
@@ -5193,10 +5207,10 @@ func TestEmbedCommands_Unpost(t *testing.T) {
 func TestEmbedCommands_Fields(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
-	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
-	_ = cm.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{Key: "test-key"})
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	svc := embedsvc.NewEmbedService(cm)
+	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
+	_ = svc.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{Key: "test-key"})
 
 	// Add Field
 	ctxAdd := newTestContext(t, discord.InteractionEvent{
@@ -5230,7 +5244,7 @@ func TestEmbedCommands_Fields(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	ce, _ := cm.CustomEmbed("12345", "test-key")
+	ce, _ := svc.CustomEmbed("12345", "test-key")
 	if len(ce.Fields) != 1 || ce.Fields[0].Name != "FieldName" || ce.Fields[0].Value != "FieldValue" || !ce.Fields[0].Inline {
 		t.Errorf("unexpected fields configuration: %v", ce.Fields)
 	}
@@ -5258,7 +5272,7 @@ func TestEmbedCommands_Fields(t *testing.T) {
 		},
 	}, cm)
 
-	cmdList := newEmbedFieldListSubCommand(cm)
+	cmdList := newEmbedFieldListSubCommand(cm, svc)
 	err = cmdList.Handle(ctxList)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -5297,7 +5311,7 @@ func TestEmbedCommands_Fields(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	ce, _ = cm.CustomEmbed("12345", "test-key")
+	ce, _ = svc.CustomEmbed("12345", "test-key")
 	if len(ce.Fields) != 0 {
 		t.Errorf("expected fields list to be empty, got: %v", ce.Fields)
 	}
@@ -5315,9 +5329,10 @@ func TestEmbedCommands_Fields(t *testing.T) {
 func TestEmbedCommands_ImportExport(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
+	svc := embedsvc.NewEmbedService(cm)
 	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
-	_ = cm.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{
+	_ = svc.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{
 		Key:         "test-key",
 		Title:       "Initial Title",
 		Description: "Initial Description",
@@ -5347,13 +5362,13 @@ func TestEmbedCommands_ImportExport(t *testing.T) {
 		},
 	}, cm)
 
-	cmdImport := newEmbedImportSubCommand(cm)
+	cmdImport := newEmbedImportSubCommand(cm, svc)
 	err := cmdImport.Handle(ctxImport)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	ce, _ := cm.CustomEmbed("12345", "test-key")
+	ce, _ := svc.CustomEmbed("12345", "test-key")
 	if ce.Title != "Imported Title" || ce.Description != "Imported Description" || len(ce.Fields) != 1 || ce.Fields[0].Name != "Imported Field" {
 		t.Errorf("unexpected properties on imported embed: %v", ce)
 	}
@@ -5381,7 +5396,7 @@ func TestEmbedCommands_ImportExport(t *testing.T) {
 		},
 	}, cm)
 
-	cmdExport := newEmbedExportSubCommand(cm)
+	cmdExport := newEmbedExportSubCommand(cm, svc)
 	err = cmdExport.Handle(ctxExport)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -5394,10 +5409,10 @@ func TestEmbedCommands_ImportExport(t *testing.T) {
 func TestEmbedCommands_ErrorAndEdgeCases(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
-	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
-	_ = cm.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{Key: "test-key"})
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	svc := embedsvc.NewEmbedService(cm)
+	_ = cm.AddGuildConfig(files.GuildConfig{GuildID: "12345"})
+	_ = svc.SetCustomEmbedProperties("12345", "test-key", files.CustomEmbedConfig{Key: "test-key"})
 
 	// 1. Missing Key Option (embedKeyFromOptions failure)
 	ctxNoKey := newTestContext(t, discord.InteractionEvent{
@@ -5480,7 +5495,7 @@ func TestEmbedCommands_ErrorAndEdgeCases(t *testing.T) {
 			},
 		},
 	}, cm)
-	cmdImport := newEmbedImportSubCommand(cm)
+	cmdImport := newEmbedImportSubCommand(cm, svc)
 	err = cmdImport.Handle(ctxImportBadURL)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -5547,7 +5562,7 @@ func TestEmbedCommands_ErrorAndEdgeCases(t *testing.T) {
 			},
 		},
 	}, cm)
-	cmdExport := newEmbedExportSubCommand(cm)
+	cmdExport := newEmbedExportSubCommand(cm, svc)
 	err = cmdExport.Handle(ctxExportNotFound)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -5792,17 +5807,18 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 // LoggingCommands wiring.
 type LoggingCommands struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 }
 
 // NewLoggingCommands returns the root logging command tree.
-func NewLoggingCommands(configManager *files.ConfigManager) *LoggingCommands {
+func NewLoggingCommands(configManager config.Provider) *LoggingCommands {
 	return &LoggingCommands{
 		configManager: configManager,
 	}
@@ -5820,7 +5836,7 @@ func (c *LoggingCommands) RegisterCommands(router commands.ArikawaRegisterer) {
 }
 
 type loggingRootCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 }
 
 func (c *loggingRootCommand) Name() string              { return "logging" }
@@ -6180,9 +6196,11 @@ import (
 	"testing"
 
 	"context"
+
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/httputil/httpdriver"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	localdiscord "github.com/small-frappuccino/discordcore/pkg/discord"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -6309,7 +6327,7 @@ func getMockReqBodies(t *testing.T) [][]byte {
 	return mock.reqBodies
 }
 
-func newTestContext(t *testing.T, event discord.InteractionEvent, cm *files.ConfigManager) *commands.ArikawaContext {
+func newTestContext(t *testing.T, event discord.InteractionEvent, cm config.Provider) *commands.ArikawaContext {
 	ctx, _ := commands.NewArikawaContext(event, cm)
 	if ctx != nil {
 		ctx.Client = api.NewClient("mockToken")
@@ -6334,7 +6352,7 @@ func (s *spyRouter) RegisterComponent(customIDPrefix string, handler commands.Co
 
 func TestLoggingCommands_RegisterCommands(t *testing.T) {
 	t.Parallel()
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	lc := NewLoggingCommands(cm)
 	sr := &spyRouter{}
 	lc.RegisterCommands(sr)
@@ -6370,7 +6388,7 @@ func TestLoggingCommands_RegisterCommands(t *testing.T) {
 
 func TestLoggingRootCommand_HandleSafety(t *testing.T) {
 	t.Parallel()
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	cmd := &loggingRootCommand{configManager: cm}
 
 	// Interaction without Options
@@ -6405,7 +6423,7 @@ func TestLoggingRootCommand_HandleSafety(t *testing.T) {
 func TestLoggingRootCommand_Avatar(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
 	})
@@ -6448,7 +6466,7 @@ func TestLoggingRootCommand_Avatar(t *testing.T) {
 func TestLoggingRootCommand_RoleUpdate(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
 	})
@@ -6491,7 +6509,7 @@ func TestLoggingRootCommand_RoleUpdate(t *testing.T) {
 func TestLoggingRootCommand_Messages(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
 	})
@@ -6531,7 +6549,7 @@ func TestLoggingRootCommand_Messages(t *testing.T) {
 func TestLoggingRootCommand_EntryExit(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
 	})
@@ -6603,7 +6621,7 @@ func TestLoggingRootCommand_EntryExit(t *testing.T) {
 func TestLoggingRootCommand_Warnings(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
 	})
@@ -6644,7 +6662,7 @@ func TestLoggingRootCommand_Warnings(t *testing.T) {
 func TestLoggingRootCommand_AutomodNoRule(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
 	})
@@ -6702,7 +6720,7 @@ func TestLoggingRootCommand_AutomodNoRule(t *testing.T) {
 func TestLoggingRootCommand_AutomodWithRule(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
 	})
@@ -7178,19 +7196,19 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/discord"
 
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
-	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 // ReactionBlockCommand natively encapsulates reaction blocking mechanics
 // utilizing pure arikawa interfaces.
 type ReactionBlockCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 	metrics       Metrics
 	logger        *slog.Logger
 }
 
-func NewReactionBlockCommand(cm *files.ConfigManager, metrics Metrics, logger *slog.Logger) *ReactionBlockCommand {
+func NewReactionBlockCommand(cm config.Provider, metrics Metrics, logger *slog.Logger) *ReactionBlockCommand {
 	if metrics == nil {
 		metrics = NopMetrics{}
 	}
@@ -7281,8 +7299,10 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	localdiscord "github.com/small-frappuccino/discordcore/pkg/discord"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
+	"github.com/small-frappuccino/discordcore/pkg/discord/embeds"
 	partnersvc "github.com/small-frappuccino/discordcore/pkg/discord/partners"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
@@ -7307,13 +7327,13 @@ var (
 // PartnerCommands orchestrates the slash-command routing for partner board workflows.
 // It integrates directly with the Arikawa router to execute lifecycle mutations.
 type PartnerCommands struct {
-	configManager  *files.ConfigManager
+	configManager  config.Provider
 	partnerService *partnersvc.PartnerService
 }
 
 // NewPartnerCommands constructs the primary slash-command controller for partner boards.
 // It mandates the injection of the configuration manager and domain service.
-func NewPartnerCommands(configManager *files.ConfigManager, svc *partnersvc.PartnerService) *PartnerCommands {
+func NewPartnerCommands(configManager config.Provider, svc *partnersvc.PartnerService) *PartnerCommands {
 	return &PartnerCommands{
 		configManager:  configManager,
 		partnerService: svc,
@@ -7397,11 +7417,11 @@ func partnerSuccess(ctx *commands.ArikawaContext, message string) error {
 
 // --- Add ---
 type partnerAddSubCommand struct {
-	configManager  *files.ConfigManager
+	configManager  config.Provider
 	partnerService *partnersvc.PartnerService
 }
 
-func newPartnerAddSubCommand(cm *files.ConfigManager, s *partnersvc.PartnerService) *partnerAddSubCommand {
+func newPartnerAddSubCommand(cm config.Provider, s *partnersvc.PartnerService) *partnerAddSubCommand {
 	return &partnerAddSubCommand{configManager: cm, partnerService: s}
 }
 
@@ -7461,7 +7481,7 @@ func (c *partnerAddSubCommand) Handle(ctx *commands.ArikawaContext) error {
 	return partnerSuccess(ctx, "Partner added successfully.")
 }
 
-func autocompletePartnerNameFocused(ctx *commands.ArikawaContext, cm *files.ConfigManager, focusedOption string) (api.AutocompleteChoices, error) {
+func autocompletePartnerNameFocused(ctx *commands.ArikawaContext, cm config.Provider, focusedOption string) (api.AutocompleteChoices, error) {
 	var query string
 	if data, ok := ctx.Interaction.Data.(*discord.AutocompleteInteraction); ok {
 		var opts []discord.AutocompleteOption
@@ -7506,17 +7526,17 @@ func autocompletePartnerNameFocused(ctx *commands.ArikawaContext, cm *files.Conf
 	return choices, nil
 }
 
-func autocompletePartnerName(ctx *commands.ArikawaContext, cm *files.ConfigManager) (api.AutocompleteChoices, error) {
+func autocompletePartnerName(ctx *commands.ArikawaContext, cm config.Provider) (api.AutocompleteChoices, error) {
 	return autocompletePartnerNameFocused(ctx, cm, optionName)
 }
 
 // --- Remove ---
 type partnerRemoveSubCommand struct {
-	configManager  *files.ConfigManager
+	configManager  config.Provider
 	partnerService *partnersvc.PartnerService
 }
 
-func newPartnerRemoveSubCommand(cm *files.ConfigManager, s *partnersvc.PartnerService) *partnerRemoveSubCommand {
+func newPartnerRemoveSubCommand(cm config.Provider, s *partnersvc.PartnerService) *partnerRemoveSubCommand {
 	return &partnerRemoveSubCommand{configManager: cm, partnerService: s}
 }
 
@@ -7576,11 +7596,11 @@ func (c *partnerRemoveSubCommand) Handle(ctx *commands.ArikawaContext) error {
 
 // --- Link ---
 type partnerLinkSubCommand struct {
-	configManager  *files.ConfigManager
+	configManager  config.Provider
 	partnerService *partnersvc.PartnerService
 }
 
-func newPartnerLinkSubCommand(cm *files.ConfigManager, s *partnersvc.PartnerService) *partnerLinkSubCommand {
+func newPartnerLinkSubCommand(cm config.Provider, s *partnersvc.PartnerService) *partnerLinkSubCommand {
 	return &partnerLinkSubCommand{configManager: cm, partnerService: s}
 }
 
@@ -7640,11 +7660,11 @@ func (c *partnerLinkSubCommand) Handle(ctx *commands.ArikawaContext) error {
 
 // --- Rename ---
 type partnerRenameSubCommand struct {
-	configManager  *files.ConfigManager
+	configManager  config.Provider
 	partnerService *partnersvc.PartnerService
 }
 
-func newPartnerRenameSubCommand(cm *files.ConfigManager, s *partnersvc.PartnerService) *partnerRenameSubCommand {
+func newPartnerRenameSubCommand(cm config.Provider, s *partnersvc.PartnerService) *partnerRenameSubCommand {
 	return &partnerRenameSubCommand{configManager: cm, partnerService: s}
 }
 
@@ -7747,10 +7767,10 @@ func (c *partnerRenameSubCommand) Handle(ctx *commands.ArikawaContext) error {
 
 // --- List ---
 type partnerListSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 }
 
-func newPartnerListSubCommand(cm *files.ConfigManager) *partnerListSubCommand {
+func newPartnerListSubCommand(cm config.Provider) *partnerListSubCommand {
 	return &partnerListSubCommand{configManager: cm}
 }
 
@@ -7791,11 +7811,11 @@ func (c *partnerListSubCommand) Handle(ctx *commands.ArikawaContext) error {
 
 // --- Post ---
 type partnerPostSubCommand struct {
-	configManager  *files.ConfigManager
+	configManager  config.Provider
 	partnerService *partnersvc.PartnerService
 }
 
-func newPartnerPostSubCommand(cm *files.ConfigManager, s *partnersvc.PartnerService) *partnerPostSubCommand {
+func newPartnerPostSubCommand(cm config.Provider, s *partnersvc.PartnerService) *partnerPostSubCommand {
 	return &partnerPostSubCommand{configManager: cm, partnerService: s}
 }
 
@@ -7882,10 +7902,10 @@ func (c *partnerPostSubCommand) Handle(ctx *commands.ArikawaContext) error {
 
 // --- Unpost ---
 type partnerUnpostSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 }
 
-func newPartnerUnpostSubCommand(cm *files.ConfigManager) *partnerUnpostSubCommand {
+func newPartnerUnpostSubCommand(cm config.Provider) *partnerUnpostSubCommand {
 	return &partnerUnpostSubCommand{configManager: cm}
 }
 
@@ -7964,11 +7984,11 @@ func (c *partnerUnpostSubCommand) Handle(ctx *commands.ArikawaContext) error {
 
 // --- Refresh ---
 type partnerRefreshSubCommand struct {
-	configManager  *files.ConfigManager
+	configManager  config.Provider
 	partnerService *partnersvc.PartnerService
 }
 
-func newPartnerRefreshSubCommand(cm *files.ConfigManager, s *partnersvc.PartnerService) *partnerRefreshSubCommand {
+func newPartnerRefreshSubCommand(cm config.Provider, s *partnersvc.PartnerService) *partnerRefreshSubCommand {
 	return &partnerRefreshSubCommand{configManager: cm, partnerService: s}
 }
 
@@ -7990,10 +8010,10 @@ func (c *partnerRefreshSubCommand) Handle(ctx *commands.ArikawaContext) error {
 
 // --- ImportTemplate ---
 type partnerImportTemplateSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 }
 
-func newPartnerImportTemplateSubCommand(cm *files.ConfigManager) *partnerImportTemplateSubCommand {
+func newPartnerImportTemplateSubCommand(cm config.Provider) *partnerImportTemplateSubCommand {
 	return &partnerImportTemplateSubCommand{configManager: cm}
 }
 
@@ -8020,7 +8040,7 @@ func (c *partnerImportTemplateSubCommand) Handle(ctx *commands.ArikawaContext) e
 		return partnerDetailedCommandError(ctx, fmt.Sprintf("Failed to fetch from pastebin: %v", err))
 	}
 
-	discohookEmbed, err := files.ParseAndValidateDiscohookJSON(data)
+	discohookEmbed, err := embeds.ParseAndValidateDiscohookJSON(data)
 	if err != nil {
 		return partnerDetailedCommandError(ctx, fmt.Sprintf("Invalid embed JSON: %v", err))
 	}
@@ -8030,7 +8050,7 @@ func (c *partnerImportTemplateSubCommand) Handle(ctx *commands.ArikawaContext) e
 		return partnerDetailedCommandError(ctx, "Guild config not found.")
 	}
 
-	template := files.ToPartnerBoardTemplate(discohookEmbed, cfg.PartnerBoard.Template)
+	template := embeds.ToPartnerBoardTemplate(discohookEmbed, cfg.PartnerBoard.Template)
 
 	if _, err := c.configManager.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
 		for i := range cfg.Guilds {
@@ -8049,10 +8069,10 @@ func (c *partnerImportTemplateSubCommand) Handle(ctx *commands.ArikawaContext) e
 
 // --- ExportTemplate ---
 type partnerExportTemplateSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 }
 
-func newPartnerExportTemplateSubCommand(cm *files.ConfigManager) *partnerExportTemplateSubCommand {
+func newPartnerExportTemplateSubCommand(cm config.Provider) *partnerExportTemplateSubCommand {
 	return &partnerExportTemplateSubCommand{configManager: cm}
 }
 
@@ -8073,7 +8093,7 @@ func (c *partnerExportTemplateSubCommand) Handle(ctx *commands.ArikawaContext) e
 	}
 
 	template := cfg.PartnerBoard.Template
-	discohookJSON := files.FromPartnerBoardTemplate(template)
+	discohookJSON := embeds.FromPartnerBoardTemplate(template)
 	data, err := json.MarshalIndent(discohookJSON, "", "  ")
 	if err != nil {
 		return partnerDetailedCommandError(ctx, fmt.Sprintf("Failed to format JSON: %v", err))
@@ -8107,6 +8127,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/httputil/httpdriver"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	localdiscord "github.com/small-frappuccino/discordcore/pkg/discord"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	partnersvc "github.com/small-frappuccino/discordcore/pkg/discord/partners"
@@ -8208,7 +8229,7 @@ func getMockReqBodies(t *testing.T) [][]byte {
 	return mock.reqBodies
 }
 
-func newTestContext(t *testing.T, event discord.InteractionEvent, cm *files.ConfigManager) *commands.ArikawaContext {
+func newTestContext(t *testing.T, event discord.InteractionEvent, cm config.Provider) *commands.ArikawaContext {
 	ctx, _ := commands.NewArikawaContext(event, cm)
 	if ctx != nil {
 		ctx.Client = api.NewClient("mockToken")
@@ -8223,7 +8244,7 @@ func newTestContext(t *testing.T, event discord.InteractionEvent, cm *files.Conf
 
 type fakeIOStore struct {
 	mu     sync.RWMutex
-	memory *files.MemoryConfigStore
+	memory *config.MemoryConfigStore
 	writes int
 }
 
@@ -8251,7 +8272,7 @@ func (s *fakeIOStore) Describe() string {
 func TestPartnerCommands_ConcurrentStateMutation(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
+	store := &fakeIOStore{memory: &config.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
 
 	if err := cm.AddGuildConfig(files.GuildConfig{
@@ -8375,7 +8396,7 @@ func TestPartnerCommands_ConcurrentStateMutation(t *testing.T) {
 func TestPartnerAddSubCommand(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
+	store := &fakeIOStore{memory: &config.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
@@ -8494,7 +8515,7 @@ func TestPartnerAddSubCommand(t *testing.T) {
 func TestPartnerRemoveSubCommand(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
+	store := &fakeIOStore{memory: &config.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
@@ -8605,7 +8626,7 @@ func TestPartnerRemoveSubCommand(t *testing.T) {
 func TestPartnerLinkSubCommand(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
+	store := &fakeIOStore{memory: &config.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
@@ -8714,7 +8735,7 @@ func TestPartnerLinkSubCommand(t *testing.T) {
 func TestPartnerRenameSubCommand(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
+	store := &fakeIOStore{memory: &config.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
@@ -8877,7 +8898,7 @@ func TestPartnerRenameSubCommand(t *testing.T) {
 func TestPartnerListSubCommand(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
+	store := &fakeIOStore{memory: &config.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
@@ -8950,7 +8971,7 @@ func TestPartnerListSubCommand(t *testing.T) {
 func TestPartnerPostSubCommand(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
+	store := &fakeIOStore{memory: &config.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
@@ -9072,7 +9093,7 @@ func TestPartnerPostSubCommand(t *testing.T) {
 func TestPartnerUnpostSubCommand(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
+	store := &fakeIOStore{memory: &config.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
@@ -9202,7 +9223,7 @@ func TestPartnerUnpostSubCommand(t *testing.T) {
 func TestPartnerRefreshSubCommand(t *testing.T) {
 	t.Parallel()
 	resetMockHTTP(t)
-	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
+	store := &fakeIOStore{memory: &config.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
@@ -9238,7 +9259,7 @@ func TestPartnerTemplates(t *testing.T) {
 	t.Parallel()
 	// 1. Test Import Template Success
 	resetMockHTTP(t)
-	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
+	store := &fakeIOStore{memory: &config.MemoryConfigStore{}}
 	cm := files.NewConfigManagerWithStore(store, nil)
 	_ = cm.AddGuildConfig(files.GuildConfig{
 		GuildID: "12345",
@@ -9956,6 +9977,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	rolesvc "github.com/small-frappuccino/discordcore/pkg/discord/roles"
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -9964,13 +9986,13 @@ import (
 // RolePanelCommands orchestrates the slash-command routing for role panel workflows.
 // It integrates directly with the Arikawa router to execute lifecycle mutations.
 type RolePanelCommands struct {
-	configManager    *files.ConfigManager
+	configManager    config.Provider
 	rolePanelService *rolesvc.RolePanelService
 }
 
 // NewRolePanelCommands constructs the primary slash-command controller for role panels.
 // It mandates the injection of the configuration manager and domain service.
-func NewRolePanelCommands(configManager *files.ConfigManager, svc *rolesvc.RolePanelService) *RolePanelCommands {
+func NewRolePanelCommands(configManager config.Provider, svc *rolesvc.RolePanelService) *RolePanelCommands {
 	return &RolePanelCommands{
 		configManager:    configManager,
 		rolePanelService: svc,
@@ -10049,7 +10071,7 @@ func rolePanelKeyFromOptions(ctx *commands.ArikawaContext) (string, error) {
 	return key, nil
 }
 
-func loadRolePanel(cm *files.ConfigManager, guildID discord.GuildID, key string) (files.RolePanelConfig, error) {
+func loadRolePanel(cm config.Provider, guildID discord.GuildID, key string) (files.RolePanelConfig, error) {
 	panel, err := cm.RolePanel(guildID.String(), key)
 	if err != nil {
 		if errors.Is(err, files.ErrRolePanelNotFound) {
@@ -10096,7 +10118,7 @@ func ensureRolePanelEnabled(ctx *commands.ArikawaContext) error {
 	return nil
 }
 
-func refreshRolePanelPostingsBestEffort(cm *files.ConfigManager, svc *rolesvc.RolePanelService, ctx *commands.ArikawaContext, key string) string {
+func refreshRolePanelPostingsBestEffort(cm config.Provider, svc *rolesvc.RolePanelService, ctx *commands.ArikawaContext, key string) string {
 	if cm == nil || svc == nil || ctx == nil {
 		return ""
 	}
@@ -10193,11 +10215,11 @@ func convertPanelToArikawa(panel files.RolePanelConfig) (discord.Embed, []discor
 // --- Leaf subcommands: /roles post|preview|set|delete|list|refresh|unpost|import|export|toggle ---
 
 type rolePanelPostSubCommand struct {
-	configManager    *files.ConfigManager
+	configManager    config.Provider
 	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelPostSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelPostSubCommand {
+func newRolePanelPostSubCommand(cm config.Provider, svc *rolesvc.RolePanelService) *rolePanelPostSubCommand {
 	return &rolePanelPostSubCommand{configManager: cm, rolePanelService: svc}
 }
 func (c *rolePanelPostSubCommand) Name() string { return rolePanelSubPost }
@@ -10271,11 +10293,11 @@ func (c *rolePanelPostSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type rolePanelPreviewSubCommand struct {
-	configManager    *files.ConfigManager
+	configManager    config.Provider
 	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelPreviewSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelPreviewSubCommand {
+func newRolePanelPreviewSubCommand(cm config.Provider, svc *rolesvc.RolePanelService) *rolePanelPreviewSubCommand {
 	return &rolePanelPreviewSubCommand{configManager: cm, rolePanelService: svc}
 }
 func (c *rolePanelPreviewSubCommand) Name() string { return rolePanelSubPreview }
@@ -10310,11 +10332,11 @@ func (c *rolePanelPreviewSubCommand) Handle(ctx *commands.ArikawaContext) error 
 }
 
 type rolePanelSetSubCommand struct {
-	configManager    *files.ConfigManager
+	configManager    config.Provider
 	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelSetSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelSetSubCommand {
+func newRolePanelSetSubCommand(cm config.Provider, svc *rolesvc.RolePanelService) *rolePanelSetSubCommand {
 	return &rolePanelSetSubCommand{configManager: cm, rolePanelService: svc}
 }
 func (c *rolePanelSetSubCommand) Name() string { return rolePanelSubSet }
@@ -10390,11 +10412,11 @@ func (c *rolePanelSetSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type rolePanelDeleteSubCommand struct {
-	configManager    *files.ConfigManager
+	configManager    config.Provider
 	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelDeleteSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelDeleteSubCommand {
+func newRolePanelDeleteSubCommand(cm config.Provider, svc *rolesvc.RolePanelService) *rolePanelDeleteSubCommand {
 	return &rolePanelDeleteSubCommand{configManager: cm, rolePanelService: svc}
 }
 func (c *rolePanelDeleteSubCommand) Name() string        { return rolePanelSubDelete }
@@ -10437,10 +10459,10 @@ func (c *rolePanelDeleteSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type rolePanelListSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 }
 
-func newRolePanelListSubCommand(cm *files.ConfigManager) *rolePanelListSubCommand {
+func newRolePanelListSubCommand(cm config.Provider) *rolePanelListSubCommand {
 	return &rolePanelListSubCommand{configManager: cm}
 }
 func (c *rolePanelListSubCommand) Name() string { return rolePanelSubList }
@@ -10471,11 +10493,11 @@ func (c *rolePanelListSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type rolePanelRefreshSubCommand struct {
-	configManager    *files.ConfigManager
+	configManager    config.Provider
 	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelRefreshSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelRefreshSubCommand {
+func newRolePanelRefreshSubCommand(cm config.Provider, svc *rolesvc.RolePanelService) *rolePanelRefreshSubCommand {
 	return &rolePanelRefreshSubCommand{configManager: cm, rolePanelService: svc}
 }
 func (c *rolePanelRefreshSubCommand) Name() string { return rolePanelSubRefresh }
@@ -10492,11 +10514,11 @@ func (c *rolePanelRefreshSubCommand) Handle(ctx *commands.ArikawaContext) error 
 }
 
 type rolePanelUnpostSubCommand struct {
-	configManager    *files.ConfigManager
+	configManager    config.Provider
 	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelUnpostSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelUnpostSubCommand {
+func newRolePanelUnpostSubCommand(cm config.Provider, svc *rolesvc.RolePanelService) *rolePanelUnpostSubCommand {
 	return &rolePanelUnpostSubCommand{configManager: cm, rolePanelService: svc}
 }
 func (c *rolePanelUnpostSubCommand) Name() string { return rolePanelSubUnpost }
@@ -10515,10 +10537,10 @@ func (c *rolePanelUnpostSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type rolePanelToggleSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 }
 
-func newRolePanelToggleSubCommand(cm *files.ConfigManager) *rolePanelToggleSubCommand {
+func newRolePanelToggleSubCommand(cm config.Provider) *rolePanelToggleSubCommand {
 	return &rolePanelToggleSubCommand{configManager: cm}
 }
 func (c *rolePanelToggleSubCommand) Name() string                     { return "toggle" }
@@ -10531,11 +10553,11 @@ func (c *rolePanelToggleSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type rolePanelImportSubCommand struct {
-	configManager    *files.ConfigManager
+	configManager    config.Provider
 	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelImportSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelImportSubCommand {
+func newRolePanelImportSubCommand(cm config.Provider, svc *rolesvc.RolePanelService) *rolePanelImportSubCommand {
 	return &rolePanelImportSubCommand{configManager: cm, rolePanelService: svc}
 }
 func (c *rolePanelImportSubCommand) Name() string        { return rolePanelSubImport }
@@ -10553,10 +10575,10 @@ func (c *rolePanelImportSubCommand) Handle(ctx *commands.ArikawaContext) error {
 }
 
 type rolePanelExportSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 }
 
-func newRolePanelExportSubCommand(cm *files.ConfigManager) *rolePanelExportSubCommand {
+func newRolePanelExportSubCommand(cm config.Provider) *rolePanelExportSubCommand {
 	return &rolePanelExportSubCommand{configManager: cm}
 }
 func (c *rolePanelExportSubCommand) Name() string        { return rolePanelSubExport }
@@ -10573,11 +10595,11 @@ func (c *rolePanelExportSubCommand) Handle(ctx *commands.ArikawaContext) error {
 // --- Subgroup: /roles button add|remove|list ---
 
 type rolePanelButtonAddSubCommand struct {
-	configManager    *files.ConfigManager
+	configManager    config.Provider
 	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelButtonAddSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelButtonAddSubCommand {
+func newRolePanelButtonAddSubCommand(cm config.Provider, svc *rolesvc.RolePanelService) *rolePanelButtonAddSubCommand {
 	return &rolePanelButtonAddSubCommand{configManager: cm, rolePanelService: svc}
 }
 func (c *rolePanelButtonAddSubCommand) Name() string { return rolePanelSubButtonAdd }
@@ -10636,11 +10658,11 @@ func (c *rolePanelButtonAddSubCommand) Handle(ctx *commands.ArikawaContext) erro
 }
 
 type rolePanelButtonRemoveSubCommand struct {
-	configManager    *files.ConfigManager
+	configManager    config.Provider
 	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelButtonRemoveSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelButtonRemoveSubCommand {
+func newRolePanelButtonRemoveSubCommand(cm config.Provider, svc *rolesvc.RolePanelService) *rolePanelButtonRemoveSubCommand {
 	return &rolePanelButtonRemoveSubCommand{configManager: cm, rolePanelService: svc}
 }
 func (c *rolePanelButtonRemoveSubCommand) Name() string { return rolePanelSubButtonRemove }
@@ -10674,10 +10696,10 @@ func (c *rolePanelButtonRemoveSubCommand) Handle(ctx *commands.ArikawaContext) e
 }
 
 type rolePanelButtonListSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 }
 
-func newRolePanelButtonListSubCommand(cm *files.ConfigManager) *rolePanelButtonListSubCommand {
+func newRolePanelButtonListSubCommand(cm config.Provider) *rolePanelButtonListSubCommand {
 	return &rolePanelButtonListSubCommand{configManager: cm}
 }
 func (c *rolePanelButtonListSubCommand) Name() string        { return rolePanelSubButtonList }
@@ -10706,11 +10728,11 @@ func (c *rolePanelButtonListSubCommand) Handle(ctx *commands.ArikawaContext) err
 // --- Subgroup: /roles field add|remove|list ---
 
 type rolePanelFieldAddSubCommand struct {
-	configManager    *files.ConfigManager
+	configManager    config.Provider
 	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelFieldAddSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelFieldAddSubCommand {
+func newRolePanelFieldAddSubCommand(cm config.Provider, svc *rolesvc.RolePanelService) *rolePanelFieldAddSubCommand {
 	return &rolePanelFieldAddSubCommand{configManager: cm, rolePanelService: svc}
 }
 func (c *rolePanelFieldAddSubCommand) Name() string        { return rolePanelSubFieldAdd }
@@ -10730,11 +10752,11 @@ func (c *rolePanelFieldAddSubCommand) Handle(ctx *commands.ArikawaContext) error
 }
 
 type rolePanelFieldRemoveSubCommand struct {
-	configManager    *files.ConfigManager
+	configManager    config.Provider
 	rolePanelService *rolesvc.RolePanelService
 }
 
-func newRolePanelFieldRemoveSubCommand(cm *files.ConfigManager, svc *rolesvc.RolePanelService) *rolePanelFieldRemoveSubCommand {
+func newRolePanelFieldRemoveSubCommand(cm config.Provider, svc *rolesvc.RolePanelService) *rolePanelFieldRemoveSubCommand {
 	return &rolePanelFieldRemoveSubCommand{configManager: cm, rolePanelService: svc}
 }
 func (c *rolePanelFieldRemoveSubCommand) Name() string        { return rolePanelSubFieldRemove }
@@ -10752,10 +10774,10 @@ func (c *rolePanelFieldRemoveSubCommand) Handle(ctx *commands.ArikawaContext) er
 }
 
 type rolePanelFieldListSubCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 }
 
-func newRolePanelFieldListSubCommand(cm *files.ConfigManager) *rolePanelFieldListSubCommand {
+func newRolePanelFieldListSubCommand(cm config.Provider) *rolePanelFieldListSubCommand {
 	return &rolePanelFieldListSubCommand{configManager: cm}
 }
 func (c *rolePanelFieldListSubCommand) Name() string        { return rolePanelSubFieldList }
@@ -10790,6 +10812,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/httputil/httpdriver"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	rolesvc "github.com/small-frappuccino/discordcore/pkg/discord/roles"
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -10870,7 +10893,7 @@ func setMockStatusAndBody(t *testing.T, status int, body []byte) {
 	}
 }
 
-func newTestContext(t *testing.T, event discord.InteractionEvent, cm *files.ConfigManager) *commands.ArikawaContext {
+func newTestContext(t *testing.T, event discord.InteractionEvent, cm config.Provider) *commands.ArikawaContext {
 	ctx, _ := commands.NewArikawaContext(event, cm)
 	if ctx != nil {
 		ctx.Client = api.NewClient("mockToken")
@@ -10882,7 +10905,7 @@ func newTestContext(t *testing.T, event discord.InteractionEvent, cm *files.Conf
 	return ctx
 }
 
-func newSubCommandContext(t *testing.T, cm *files.ConfigManager, subCommandName string, options []discord.CommandInteractionOption) *commands.ArikawaContext {
+func newSubCommandContext(t *testing.T, cm config.Provider, subCommandName string, options []discord.CommandInteractionOption) *commands.ArikawaContext {
 	return newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
@@ -10898,7 +10921,7 @@ func newSubCommandContext(t *testing.T, cm *files.ConfigManager, subCommandName 
 	}, cm)
 }
 
-func newNestedSubCommandContext(t *testing.T, cm *files.ConfigManager, groupName string, subCommandName string, options []discord.CommandInteractionOption) *commands.ArikawaContext {
+func newNestedSubCommandContext(t *testing.T, cm config.Provider, groupName string, subCommandName string, options []discord.CommandInteractionOption) *commands.ArikawaContext {
 	return newTestContext(t, discord.InteractionEvent{
 		GuildID: 12345,
 		Member:  &discord.Member{User: discord.User{ID: 999}},
@@ -10920,8 +10943,8 @@ func newNestedSubCommandContext(t *testing.T, cm *files.ConfigManager, groupName
 	}, cm)
 }
 
-func setupConfigManagerWithPanel(t *testing.T) (*files.ConfigManager, *rolesvc.RolePanelService) {
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+func setupConfigManagerWithPanel(t *testing.T) (config.Provider, *rolesvc.RolePanelService) {
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	enabled := true
 	_, err := cm.UpdateConfig(context.Background(), func(bc *files.BotConfig) error {
 		bc.Guilds = []files.GuildConfig{
@@ -10954,7 +10977,7 @@ func setupConfigManagerWithPanel(t *testing.T) (*files.ConfigManager, *rolesvc.R
 
 func TestRolePanelCommands_Registration(t *testing.T) {
 	t.Parallel()
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	svc := rolesvc.NewRolePanelService(cm)
 	rc := NewRolePanelCommands(cm, svc)
 
@@ -11309,7 +11332,7 @@ func TestRolePanelCommands_ErrorsAndEdgeCases(t *testing.T) {
 	t.Run("disabled feature", func(t *testing.T) {
 		t.Parallel()
 		resetMockHTTP(t)
-		cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+		cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 		disabled := false
 		_, _ = cm.UpdateConfig(context.Background(), func(bc *files.BotConfig) error {
 			bc.Guilds = []files.GuildConfig{
@@ -11478,7 +11501,7 @@ func TestRolePanelCommands_ErrorsAndEdgeCases(t *testing.T) {
 	t.Run("list empty panels list", func(t *testing.T) {
 		t.Parallel()
 		resetMockHTTP(t)
-		cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+		cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 		enabled := true
 		_, _ = cm.UpdateConfig(context.Background(), func(bc *files.BotConfig) error {
 			bc.Guilds = []files.GuildConfig{{GuildID: "12345", Features: files.FeatureToggles{RolePanels: &enabled}}}
@@ -11650,19 +11673,20 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	rolesvc "github.com/small-frappuccino/discordcore/pkg/discord/roles"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 type rolePanelComponentHandler struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 	memberLookup  func(ctx *commands.ArikawaContext, roleID string) (bool, error)
 	addRole       func(ctx *commands.ArikawaContext, guildID, userID, roleID string) error
 	removeRole    func(ctx *commands.ArikawaContext, guildID, userID, roleID string) error
 }
 
-func newRolePanelComponentHandler(configManager *files.ConfigManager) *rolePanelComponentHandler {
+func newRolePanelComponentHandler(configManager config.Provider) *rolePanelComponentHandler {
 	return &rolePanelComponentHandler{
 		configManager: configManager,
 		memberLookup:  defaultRolePanelMemberHasRoleArikawa,
@@ -11851,6 +11875,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 
 	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	rolesvc "github.com/small-frappuccino/discordcore/pkg/discord/roles"
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -11858,7 +11883,7 @@ import (
 
 func TestRolePanelComponentHandler_InjectionAndRouting(t *testing.T) {
 	t.Parallel()
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 
 	// Pre-configure a panel and button
 	guildID := discord.GuildID(12345)
@@ -11987,7 +12012,7 @@ func TestRolePanelComponentHandler_InjectionAndRouting(t *testing.T) {
 func TestBuildRolePanelToggleResponseArikawa_VisibilityFlags(t *testing.T) {
 	t.Parallel()
 
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 
 	tests := []struct {
 		name           string
@@ -12335,7 +12360,7 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
-	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
@@ -12352,7 +12377,7 @@ type CommandRouter struct {
 	registry   *CommandRegistry
 	components map[string]ComponentHandler
 	client     *api.Client
-	config     *files.ConfigManager
+	config     config.Provider
 	logger     *slog.Logger
 }
 
@@ -12363,7 +12388,7 @@ func (r *CommandRouter) WithLogger(logger *slog.Logger) *CommandRouter {
 }
 
 // NewCommandRouter instantiates a pure Arikawa command router.
-func NewCommandRouter(client *api.Client, config *files.ConfigManager) *CommandRouter {
+func NewCommandRouter(client *api.Client, config config.Provider) *CommandRouter {
 	return &CommandRouter{
 		registry:   NewCommandRegistry(),
 		components: make(map[string]ComponentHandler),
@@ -12580,7 +12605,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
-	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 )
 
 type InteractionReplier interface {
@@ -12590,12 +12615,12 @@ type InteractionReplier interface {
 
 type Handler struct {
 	replier InteractionReplier
-	cm      *files.ConfigManager
+	cm      config.Provider
 	applier runtimeConfigApplier
 	logger  *slog.Logger
 }
 
-func NewHandler(replier InteractionReplier, cm *files.ConfigManager, applier runtimeConfigApplier, logger *slog.Logger) *Handler {
+func NewHandler(replier InteractionReplier, cm config.Provider, applier runtimeConfigApplier, logger *slog.Logger) *Handler {
 	if logger == nil {
 		logger = slog.Default() // Fallback
 	}
@@ -12965,6 +12990,7 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"go.uber.org/mock/gomock"
 )
@@ -12982,7 +13008,7 @@ func TestHandler_HandleSlash_EphemeralValidation(t *testing.T) {
 
 	tmp := t.TempDir()
 	_ = tmp
-	store := &files.MemoryConfigStore{}
+	store := &config.MemoryConfigStore{}
 	cm := files.NewConfigManagerWithStore(store, nil)
 	_ = cm.LoadConfig()
 
@@ -13036,6 +13062,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
@@ -13218,7 +13245,7 @@ func specsForGroup(group string) []spec {
 }
 
 // loadRuntimeConfig retrieves the contextualized runtime layout from memory, traversing the hierarchical overrides implicitly.
-func loadRuntimeConfig(cm *files.ConfigManager, scope string) (files.RuntimeConfig, error) {
+func loadRuntimeConfig(cm config.Provider, scope string) (files.RuntimeConfig, error) {
 	if cm == nil {
 		return files.RuntimeConfig{}, fmt.Errorf("config manager is nil")
 	}
@@ -13234,14 +13261,14 @@ func loadRuntimeConfig(cm *files.ConfigManager, scope string) (files.RuntimeConf
 	}
 
 	gcfg := cm.GuildConfig(scope)
-	if gcfg == nil {
+	if false {
 		return files.RuntimeConfig{}, fmt.Errorf("guild not found")
 	}
 	return gcfg.RuntimeConfig, nil
 }
 
 // saveRuntimeConfig explicitly locks the ConfigManager hierarchy and executes the payload transformation over shared memory.
-func saveRuntimeConfig(cm *files.ConfigManager, rc files.RuntimeConfig, scope string) error {
+func saveRuntimeConfig(cm config.Provider, rc files.RuntimeConfig, scope string) error {
 	if cm == nil {
 		return fmt.Errorf("config manager is nil")
 	}
@@ -13525,6 +13552,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"golang.org/x/sync/errgroup"
 )
@@ -13537,7 +13565,7 @@ func TestSaveRuntimeConfig_RaceDetection(t *testing.T) {
 
 	tmp := t.TempDir()
 	_ = tmp
-	store := &files.MemoryConfigStore{}
+	store := &config.MemoryConfigStore{}
 	// Pre-seed an initial state to trigger standard Load/Update branches explicitly.
 	cm := files.NewConfigManagerWithStore(store, nil)
 	cm.LoadConfig() // Guarantee map initialization before bombardment.
@@ -14564,6 +14592,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
@@ -14576,13 +14605,13 @@ type StatsService interface {
 
 // StatsCommands wiring.
 type StatsCommands struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 	statsService  StatsService
 	logger        *slog.Logger
 }
 
 // NewStatsCommands returns the root stats command tree.
-func NewStatsCommands(configManager *files.ConfigManager, statsService StatsService, logger *slog.Logger) *StatsCommands {
+func NewStatsCommands(configManager config.Provider, statsService StatsService, logger *slog.Logger) *StatsCommands {
 	return &StatsCommands{
 		configManager: configManager,
 		statsService:  statsService,
@@ -14604,7 +14633,7 @@ func (c *StatsCommands) RegisterCommands(router commands.ArikawaRegisterer) {
 }
 
 type statsRootCommand struct {
-	configManager *files.ConfigManager
+	configManager config.Provider
 	statsService  StatsService
 	logger        *slog.Logger
 }
@@ -15132,6 +15161,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/httputil/httpdriver"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
@@ -15198,10 +15228,10 @@ func newStatsCommandTestRouter(
 	guildID string,
 	ownerID string,
 	cfg files.GuildConfig,
-) (*commands.CommandRouter, *files.ConfigManager, *mockStatsService, *interactionRecorder) {
+) (*commands.CommandRouter, config.Provider, *mockStatsService, *interactionRecorder) {
 	t.Helper()
 
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	if err := cm.AddGuildConfig(cfg); err != nil {
 		t.Fatalf("failed to add guild config: %v", err)
 	}
@@ -15244,7 +15274,7 @@ func newStatsSlashInteraction(
 	}
 }
 
-func handleRawStatsInteraction(t *testing.T, router *commands.CommandRouter, cm *files.ConfigManager, rec *interactionRecorder, ic *discord.InteractionEvent) {
+func handleRawStatsInteraction(t *testing.T, router *commands.CommandRouter, cm config.Provider, rec *interactionRecorder, ic *discord.InteractionEvent) {
 	t.Helper()
 
 	cmdData := ic.Data.(*discord.CommandInteraction)
@@ -15747,8 +15777,8 @@ import (
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	discordtickets "github.com/small-frappuccino/discordcore/pkg/discord/tickets"
-	"github.com/small-frappuccino/discordcore/pkg/files"
 	pkgtickets "github.com/small-frappuccino/discordcore/pkg/tickets"
 )
 
@@ -15757,12 +15787,12 @@ type TicketRouter struct {
 	state  *state.State
 	svc    *discordtickets.Service
 	mgr    *pkgtickets.Manager
-	config *files.ConfigManager
+	config config.Provider
 	logger *slog.Logger
 }
 
 // NewTicketRouter instantiates the Arikawa native router.
-func NewTicketRouter(st *state.State, svc *discordtickets.Service, mgr *pkgtickets.Manager, cm *files.ConfigManager, logger *slog.Logger) *TicketRouter {
+func NewTicketRouter(st *state.State, svc *discordtickets.Service, mgr *pkgtickets.Manager, cm config.Provider, logger *slog.Logger) *TicketRouter {
 	r := &TicketRouter{
 		state:  st,
 		svc:    svc,
@@ -15979,6 +16009,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/state"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	discordtickets "github.com/small-frappuccino/discordcore/pkg/discord/tickets"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
@@ -16046,7 +16077,7 @@ func TestRouter_DeferBeforeIO(t *testing.T) {
 	}
 	t.Cleanup(func() { http.DefaultTransport = oldTransport })
 
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	svc := discordtickets.NewService(st, logger)
 	r := NewTicketRouter(st, svc, nil, cm, logger)
@@ -16152,7 +16183,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/small-frappuccino/discordcore/pkg/files"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordgo"
 )
 
@@ -16328,7 +16359,7 @@ func UploadPastebinContent(ctx context.Context, data []byte, devKey, username, p
 }
 
 // UploadExportedContent uploads the data to Pastebin (if configured and user is admin) or Hastebin.
-func UploadExportedContent(ctx context.Context, member *discordgo.Member, ownerID string, configManager *files.ConfigManager, data []byte) (string, error) {
+func UploadExportedContent(ctx context.Context, member *discordgo.Member, ownerID string, configManager config.Provider, data []byte) (string, error) {
 	rc := configManager.Config().RuntimeConfig
 	if rc.PastebinDevKey != "" && rc.PastebinUserName != "" && rc.PastebinUserPassword != "" {
 		// Check if user is administrator
@@ -16353,6 +16384,671 @@ func UploadExportedContent(ctx context.Context, member *discordgo.Member, ownerI
 
 ```
 
+// === FILE: pkg/discord/embeds/custom_embed.go ===
+```go
+package embeds
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+	"unicode/utf8"
+
+	"github.com/small-frappuccino/discordcore/pkg/files"
+)
+
+var (
+	// ErrCustomEmbedNotFound indicates no custom embed matched the requested key.
+	ErrCustomEmbedNotFound = errors.New("custom embed not found")
+	// ErrCustomEmbedPostingNotFound indicates no posting matched the requested message ID.
+	ErrCustomEmbedPostingNotFound = errors.New("custom embed posting not found")
+	// ErrGuildConfigNotFound indicates no guild config matched the requested ID.
+	ErrGuildConfigNotFound = errors.New("guild config not found")
+
+	// ErrInvalidCustomEmbedInput indicates invalid custom embed input payload.
+	ErrInvalidCustomEmbedInput = errors.New("invalid custom embed input")
+)
+
+// CustomEmbedTitleMaxLen defines custom embed title max len.
+// CustomEmbedDescriptionMaxLen defines custom embed description max len.
+// CustomEmbedColorMax defines custom embed color max.
+// CustomEmbedAuthorMaxLen defines custom embed author max len.
+// CustomEmbedFooterMaxLen defines custom embed footer max len.
+// CustomEmbedFieldNameMaxLen defines custom embed field name max len.
+// CustomEmbedFieldValueMaxLen defines custom embed field value max len.
+// CustomEmbedMaxFields defines custom embed max fields.
+// CustomEmbedMaxTotalLen defines custom embed max total len.
+// CustomEmbedKeyMaxLen defines custom embed key max len.
+const (
+	CustomEmbedKeyMaxLen         = 32
+	CustomEmbedTitleMaxLen       = 256
+	CustomEmbedDescriptionMaxLen = 4000
+	CustomEmbedColorMax          = 0xFFFFFF
+	CustomEmbedAuthorMaxLen      = 256
+	CustomEmbedFooterMaxLen      = 2048
+	CustomEmbedFieldNameMaxLen   = 256
+	CustomEmbedFieldValueMaxLen  = 1024
+	CustomEmbedMaxFields         = 25
+	CustomEmbedMaxTotalLen       = 6000
+)
+
+func invalidCustomEmbedInput(format string, args ...any) error {
+	msg := fmt.Sprintf(format, args...)
+	return fmt.Errorf("%w: %s", ErrInvalidCustomEmbedInput, msg)
+}
+
+// NormalizeCustomEmbedKey normalizes custom embed key.
+func NormalizeCustomEmbedKey(raw string) string {
+	out := strings.TrimSpace(raw)
+	out = strings.ToLower(out)
+	return out
+}
+
+func validateCustomEmbedKey(raw string) (string, error) {
+	out := NormalizeCustomEmbedKey(raw)
+	if out == "" {
+		return "", invalidCustomEmbedInput("key is required")
+	}
+	if utf8.RuneCountInString(out) > CustomEmbedKeyMaxLen {
+		return "", invalidCustomEmbedInput("key must be at most %d characters", CustomEmbedKeyMaxLen)
+	}
+	for _, r := range out {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= '0' && r <= '9':
+		case r == '-' || r == '_':
+		default:
+			return "", invalidCustomEmbedInput("key may only contain lowercase letters, digits, '-' and '_'")
+		}
+	}
+	return out, nil
+}
+
+func validateCustomEmbedFields(in files.CustomEmbedConfig) (files.CustomEmbedConfig, error) {
+	out := in
+	out.Title = strings.TrimSpace(in.Title)
+	out.Description = strings.TrimSpace(in.Description)
+	out.AuthorName = strings.TrimSpace(in.AuthorName)
+	out.AuthorIconURL = strings.TrimSpace(in.AuthorIconURL)
+	out.FooterText = strings.TrimSpace(in.FooterText)
+	out.FooterIconURL = strings.TrimSpace(in.FooterIconURL)
+	out.ImageURL = strings.TrimSpace(in.ImageURL)
+	out.ThumbnailURL = strings.TrimSpace(in.ThumbnailURL)
+
+	if utf8.RuneCountInString(out.Title) > CustomEmbedTitleMaxLen {
+		return files.CustomEmbedConfig{}, invalidCustomEmbedInput("title must be at most %d characters", CustomEmbedTitleMaxLen)
+	}
+	if utf8.RuneCountInString(out.Description) > CustomEmbedDescriptionMaxLen {
+		return files.CustomEmbedConfig{}, invalidCustomEmbedInput("description must be at most %d characters", CustomEmbedDescriptionMaxLen)
+	}
+	if out.Color < 0 || out.Color > CustomEmbedColorMax {
+		return files.CustomEmbedConfig{}, invalidCustomEmbedInput("color must be in range [0, %d]", CustomEmbedColorMax)
+	}
+	if utf8.RuneCountInString(out.AuthorName) > CustomEmbedAuthorMaxLen {
+		return files.CustomEmbedConfig{}, invalidCustomEmbedInput("author_name must be at most %d characters", CustomEmbedAuthorMaxLen)
+	}
+	if utf8.RuneCountInString(out.FooterText) > CustomEmbedFooterMaxLen {
+		return files.CustomEmbedConfig{}, invalidCustomEmbedInput("footer_text must be at most %d characters", CustomEmbedFooterMaxLen)
+	}
+	return out, nil
+}
+
+func customEmbedTotalLen(embed files.CustomEmbedConfig) int {
+	count := utf8.RuneCountInString(embed.Title) +
+		utf8.RuneCountInString(embed.Description) +
+		utf8.RuneCountInString(embed.AuthorName) +
+		utf8.RuneCountInString(embed.FooterText)
+	for _, f := range embed.Fields {
+		count += utf8.RuneCountInString(f.Name) + utf8.RuneCountInString(f.Value)
+	}
+	return count
+}
+
+func normalizeCustomEmbedField(in files.CustomEmbedFieldConfig) (files.CustomEmbedFieldConfig, error) {
+	out := files.CustomEmbedFieldConfig{
+		Name:   strings.TrimSpace(in.Name),
+		Value:  strings.TrimSpace(in.Value),
+		Inline: in.Inline,
+	}
+	if out.Name == "" {
+		return files.CustomEmbedFieldConfig{}, invalidCustomEmbedInput("field name is required")
+	}
+	if out.Value == "" {
+		return files.CustomEmbedFieldConfig{}, invalidCustomEmbedInput("field value is required")
+	}
+	if utf8.RuneCountInString(out.Name) > CustomEmbedFieldNameMaxLen {
+		return files.CustomEmbedFieldConfig{}, invalidCustomEmbedInput("field name must be at most %d characters", CustomEmbedFieldNameMaxLen)
+	}
+	if utf8.RuneCountInString(out.Value) > CustomEmbedFieldValueMaxLen {
+		return files.CustomEmbedFieldConfig{}, invalidCustomEmbedInput("field value must be at most %d characters", CustomEmbedFieldValueMaxLen)
+	}
+	return out, nil
+}
+
+func normalizeCustomEmbed(in files.CustomEmbedConfig) (files.CustomEmbedConfig, error) {
+	key, err := validateCustomEmbedKey(in.Key)
+	if err != nil {
+		return files.CustomEmbedConfig{}, fmt.Errorf("normalizeCustomEmbed: %w", err)
+	}
+	out, err := validateCustomEmbedFields(in)
+	if err != nil {
+		return files.CustomEmbedConfig{}, fmt.Errorf("normalizeCustomEmbed: %w", err)
+	}
+	out.Key = key
+
+	if len(in.Fields) > 0 {
+		out.Fields = make([]files.CustomEmbedFieldConfig, 0, len(in.Fields))
+		for i, f := range in.Fields {
+			nf, err := normalizeCustomEmbedField(f)
+			if err != nil {
+				return files.CustomEmbedConfig{}, fmt.Errorf("fields[%d]: %w", i, err)
+			}
+			out.Fields = append(out.Fields, nf)
+		}
+		if len(out.Fields) > CustomEmbedMaxFields {
+			return files.CustomEmbedConfig{}, invalidCustomEmbedInput("embed must have at most %d fields", CustomEmbedMaxFields)
+		}
+	} else {
+		out.Fields = nil
+	}
+
+	if len(in.Postings) > 0 {
+		out.Postings = make([]files.CustomEmbedPostingConfig, 0, len(in.Postings))
+		for _, p := range in.Postings {
+			if p.IsZero() {
+				continue
+			}
+			out.Postings = append(out.Postings, files.CustomEmbedPostingConfig{
+				ChannelID:    strings.TrimSpace(p.ChannelID),
+				MessageID:    strings.TrimSpace(p.MessageID),
+				WebhookID:    strings.TrimSpace(p.WebhookID),
+				WebhookToken: strings.TrimSpace(p.WebhookToken),
+			})
+		}
+	} else {
+		out.Postings = nil
+	}
+
+	return out, nil
+}
+
+func cloneCustomEmbed(in files.CustomEmbedConfig) files.CustomEmbedConfig {
+	out := files.CustomEmbedConfig{
+		Key:           in.Key,
+		Title:         in.Title,
+		Description:   in.Description,
+		Color:         in.Color,
+		AuthorName:    in.AuthorName,
+		AuthorIconURL: in.AuthorIconURL,
+		FooterText:    in.FooterText,
+		FooterIconURL: in.FooterIconURL,
+		ImageURL:      in.ImageURL,
+		ThumbnailURL:  in.ThumbnailURL,
+	}
+
+	if len(in.Fields) > 0 {
+		out.Fields = make([]files.CustomEmbedFieldConfig, len(in.Fields))
+		copy(out.Fields, in.Fields)
+	}
+
+	if len(in.Postings) > 0 {
+		out.Postings = make([]files.CustomEmbedPostingConfig, len(in.Postings))
+		copy(out.Postings, in.Postings)
+	}
+
+	return out
+}
+
+func findCustomEmbedIndex(embeds []files.CustomEmbedConfig, key string) int {
+	for i, e := range embeds {
+		if e.Key == key {
+			return i
+		}
+	}
+	return -1
+}
+
+// CustomEmbeds customs embeds.
+func (s *EmbedService) CustomEmbeds(guildID string) ([]files.CustomEmbedConfig, error) {
+	if guildID == "" {
+		return nil, invalidCustomEmbedInput("guild_id is required")
+	}
+
+	gcfg := s.configProvider.GuildConfig(guildID)
+	if false {
+		return nil, nil
+	}
+
+	if len(gcfg.CustomEmbeds) == 0 {
+		return nil, nil
+	}
+
+	out := make([]files.CustomEmbedConfig, 0, len(gcfg.CustomEmbeds))
+	for _, e := range gcfg.CustomEmbeds {
+		out = append(out, cloneCustomEmbed(e))
+	}
+	return out, nil
+}
+
+// CustomEmbed customs embed.
+func (s *EmbedService) CustomEmbed(guildID, key string) (files.CustomEmbedConfig, error) {
+	if guildID == "" {
+		return files.CustomEmbedConfig{}, invalidCustomEmbedInput("guild_id is required")
+	}
+	target, err := validateCustomEmbedKey(key)
+	if err != nil {
+		return files.CustomEmbedConfig{}, fmt.Errorf("ConfigManager.CustomEmbed: %w", err)
+	}
+
+	gcfg := s.configProvider.GuildConfig(guildID)
+	if false {
+		return files.CustomEmbedConfig{}, fmt.Errorf("%w: key=%s", ErrCustomEmbedNotFound, target)
+	}
+
+	idx := findCustomEmbedIndex(gcfg.CustomEmbeds, target)
+	if idx < 0 {
+		return files.CustomEmbedConfig{}, fmt.Errorf("%w: key=%s", ErrCustomEmbedNotFound, target)
+	}
+
+	return cloneCustomEmbed(gcfg.CustomEmbeds[idx]), nil
+}
+
+// SetCustomEmbedProperties sets custom embed properties.
+func (s *EmbedService) SetCustomEmbedProperties(guildID, key string, embed files.CustomEmbedConfig) error {
+	if guildID == "" {
+		return invalidCustomEmbedInput("guild_id is required")
+	}
+	targetKey, err := validateCustomEmbedKey(key)
+	if err != nil {
+		return fmt.Errorf("ConfigManager.SetCustomEmbedProperties: %w", err)
+	}
+	validated, err := validateCustomEmbedFields(embed)
+	if err != nil {
+		return fmt.Errorf("ConfigManager.SetCustomEmbedProperties: %w", err)
+	}
+
+	_, err = s.configProvider.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
+		gc, err := files.GuildConfigByID(cfg, guildID)
+		if err != nil {
+			return fmt.Errorf("ConfigManager.SetCustomEmbedProperties: %w", err)
+		}
+
+		idx := findCustomEmbedIndex(gc.CustomEmbeds, targetKey)
+		if idx >= 0 {
+			copyEmbed := gc.CustomEmbeds[idx]
+			copyEmbed.Title = validated.Title
+			copyEmbed.Description = validated.Description
+			copyEmbed.Color = validated.Color
+			copyEmbed.AuthorName = validated.AuthorName
+			copyEmbed.AuthorIconURL = validated.AuthorIconURL
+			copyEmbed.FooterText = validated.FooterText
+			copyEmbed.FooterIconURL = validated.FooterIconURL
+			copyEmbed.ImageURL = validated.ImageURL
+			copyEmbed.ThumbnailURL = validated.ThumbnailURL
+
+			if customEmbedTotalLen(copyEmbed) > CustomEmbedMaxTotalLen {
+				return invalidCustomEmbedInput("embed total character count must be at most %d", CustomEmbedMaxTotalLen)
+			}
+
+			gc.CustomEmbeds[idx] = copyEmbed
+		} else {
+			if len(gc.CustomEmbeds) >= 25 {
+				return invalidCustomEmbedInput("guild cannot have more than 25 custom embeds")
+			}
+			newEmbed := files.CustomEmbedConfig{
+				Key:           targetKey,
+				Title:         validated.Title,
+				Description:   validated.Description,
+				Color:         validated.Color,
+				AuthorName:    validated.AuthorName,
+				AuthorIconURL: validated.AuthorIconURL,
+				FooterText:    validated.FooterText,
+				FooterIconURL: validated.FooterIconURL,
+				ImageURL:      validated.ImageURL,
+				ThumbnailURL:  validated.ThumbnailURL,
+			}
+			gc.CustomEmbeds = append(gc.CustomEmbeds, newEmbed)
+		}
+		return nil
+	})
+
+	return err
+}
+
+// DeleteCustomEmbed deletes custom embed.
+func (s *EmbedService) DeleteCustomEmbed(guildID, key string) (files.CustomEmbedConfig, error) {
+	if guildID == "" {
+		return files.CustomEmbedConfig{}, invalidCustomEmbedInput("guild_id is required")
+	}
+	target, err := validateCustomEmbedKey(key)
+	if err != nil {
+		return files.CustomEmbedConfig{}, fmt.Errorf("ConfigManager.DeleteCustomEmbed: %w", err)
+	}
+
+	var deleted files.CustomEmbedConfig
+	_, err = s.configProvider.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
+		gc, err := files.GuildConfigByID(cfg, guildID)
+		if err != nil {
+			return fmt.Errorf("ConfigManager.DeleteCustomEmbed: %w", err)
+		}
+
+		idx := findCustomEmbedIndex(gc.CustomEmbeds, target)
+		if idx < 0 {
+			return fmt.Errorf("%w: key=%s", ErrCustomEmbedNotFound, target)
+		}
+
+		deleted = cloneCustomEmbed(gc.CustomEmbeds[idx])
+		gc.CustomEmbeds = append(gc.CustomEmbeds[:idx], gc.CustomEmbeds[idx+1:]...)
+		return nil
+	})
+
+	return deleted, err
+}
+
+// AddCustomEmbedPosting adds custom embed posting.
+func (s *EmbedService) AddCustomEmbedPosting(guildID, key string, posting files.CustomEmbedPostingConfig) error {
+	if guildID == "" {
+		return invalidCustomEmbedInput("guild_id is required")
+	}
+	if posting.IsZero() {
+		return invalidCustomEmbedInput("posting cannot be empty")
+	}
+	targetKey, err := validateCustomEmbedKey(key)
+	if err != nil {
+		return fmt.Errorf("ConfigManager.AddCustomEmbedPosting: %w", err)
+	}
+
+	_, err = s.configProvider.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
+		gc, err := files.GuildConfigByID(cfg, guildID)
+		if err != nil {
+			return fmt.Errorf("ConfigManager.AddCustomEmbedPosting: %w", err)
+		}
+
+		idx := findCustomEmbedIndex(gc.CustomEmbeds, targetKey)
+		if idx < 0 {
+			return fmt.Errorf("%w: key=%s", ErrCustomEmbedNotFound, targetKey)
+		}
+
+		embed := &gc.CustomEmbeds[idx]
+		for _, p := range embed.Postings {
+			if p.MessageID == posting.MessageID {
+				return nil
+			}
+		}
+
+		if len(embed.Postings) >= 50 {
+			embed.Postings = embed.Postings[1:]
+		}
+		embed.Postings = append(embed.Postings, files.CustomEmbedPostingConfig{
+			ChannelID:    strings.TrimSpace(posting.ChannelID),
+			MessageID:    strings.TrimSpace(posting.MessageID),
+			WebhookID:    strings.TrimSpace(posting.WebhookID),
+			WebhookToken: strings.TrimSpace(posting.WebhookToken),
+		})
+		return nil
+	})
+
+	return err
+}
+
+// RemoveCustomEmbedPosting removes custom embed posting.
+func (s *EmbedService) RemoveCustomEmbedPosting(guildID, key, messageID string) error {
+	if guildID == "" {
+		return invalidCustomEmbedInput("guild_id is required")
+	}
+	msgID := strings.TrimSpace(messageID)
+	if msgID == "" {
+		return invalidCustomEmbedInput("message_id is required")
+	}
+	targetKey, err := validateCustomEmbedKey(key)
+	if err != nil {
+		return fmt.Errorf("ConfigManager.RemoveCustomEmbedPosting: %w", err)
+	}
+
+	_, err = s.configProvider.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
+		gc, err := files.GuildConfigByID(cfg, guildID)
+		if err != nil {
+			return fmt.Errorf("ConfigManager.RemoveCustomEmbedPosting: %w", err)
+		}
+
+		idx := findCustomEmbedIndex(gc.CustomEmbeds, targetKey)
+		if idx < 0 {
+			return fmt.Errorf("%w: key=%s", ErrCustomEmbedNotFound, targetKey)
+		}
+
+		embed := &gc.CustomEmbeds[idx]
+		for i, p := range embed.Postings {
+			if p.MessageID == msgID {
+				embed.Postings = append(embed.Postings[:i], embed.Postings[i+1:]...)
+				return nil
+			}
+		}
+		return fmt.Errorf("%w: message_id=%s", ErrCustomEmbedPostingNotFound, msgID)
+	})
+
+	return err
+}
+
+// RemoveCustomEmbedPostings removes custom embed postings.
+func (s *EmbedService) RemoveCustomEmbedPostings(guildID, key string, messageIDs []string) error {
+	if len(messageIDs) == 0 {
+		return nil
+	}
+	if guildID == "" {
+		return invalidCustomEmbedInput("guild_id is required")
+	}
+	targetKey, err := validateCustomEmbedKey(key)
+	if err != nil {
+		return fmt.Errorf("ConfigManager.RemoveCustomEmbedPostings: %w", err)
+	}
+
+	idsToRemove := make(map[string]bool, len(messageIDs))
+	for _, id := range messageIDs {
+		trimmed := strings.TrimSpace(id)
+		if trimmed != "" {
+			idsToRemove[trimmed] = true
+		}
+	}
+	if len(idsToRemove) == 0 {
+		return nil
+	}
+
+	_, err = s.configProvider.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
+		gc, err := files.GuildConfigByID(cfg, guildID)
+		if err != nil {
+			return fmt.Errorf("ConfigManager.RemoveCustomEmbedPostings: %w", err)
+		}
+
+		idx := findCustomEmbedIndex(gc.CustomEmbeds, targetKey)
+		if idx < 0 {
+			return fmt.Errorf("%w: key=%s", ErrCustomEmbedNotFound, targetKey)
+		}
+
+		embed := &gc.CustomEmbeds[idx]
+		var kept []files.CustomEmbedPostingConfig
+		for _, p := range embed.Postings {
+			if !idsToRemove[p.MessageID] {
+				kept = append(kept, p)
+			}
+		}
+		embed.Postings = kept
+		return nil
+	})
+
+	return err
+}
+
+// SetCustomEmbedFields sets custom embed fields.
+func (s *EmbedService) SetCustomEmbedFields(guildID, key string, fields []files.CustomEmbedFieldConfig) error {
+	if guildID == "" {
+		return invalidCustomEmbedInput("guild_id is required")
+	}
+	targetKey, err := validateCustomEmbedKey(key)
+	if err != nil {
+		return fmt.Errorf("ConfigManager.SetCustomEmbedFields: %w", err)
+	}
+
+	if len(fields) > CustomEmbedMaxFields {
+		return invalidCustomEmbedInput("embed must have at most %d fields", CustomEmbedMaxFields)
+	}
+
+	normalized := make([]files.CustomEmbedFieldConfig, 0, len(fields))
+	for i, f := range fields {
+		nf, err := normalizeCustomEmbedField(f)
+		if err != nil {
+			return fmt.Errorf("fields[%d]: %w", i, err)
+		}
+		normalized = append(normalized, nf)
+	}
+
+	_, err = s.configProvider.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
+		gc, err := files.GuildConfigByID(cfg, guildID)
+		if err != nil {
+			return fmt.Errorf("ConfigManager.SetCustomEmbedFields: %w", err)
+		}
+
+		idx := findCustomEmbedIndex(gc.CustomEmbeds, targetKey)
+		if idx < 0 {
+			return fmt.Errorf("%w: key=%s", ErrCustomEmbedNotFound, targetKey)
+		}
+
+		copyEmbed := gc.CustomEmbeds[idx]
+		copyEmbed.Fields = normalized
+
+		if customEmbedTotalLen(copyEmbed) > CustomEmbedMaxTotalLen {
+			return invalidCustomEmbedInput("embed total character count must be at most %d", CustomEmbedMaxTotalLen)
+		}
+
+		gc.CustomEmbeds[idx] = copyEmbed
+		return nil
+	})
+
+	return err
+}
+
+// FindCustomEmbedPosting searches all custom embeds in a guild for a posting
+// matching the message ID. Returns the custom embed key plus the posting on
+// hit, or ErrCustomEmbedPostingNotFound when no custom embed tracks the
+// message.
+func (s *EmbedService) FindCustomEmbedPosting(guildID, messageID string) (string, files.CustomEmbedPostingConfig, error) {
+	scope := strings.TrimSpace(guildID)
+	if scope == "" {
+		return "", files.CustomEmbedPostingConfig{}, invalidCustomEmbedInput("guild_id is required")
+	}
+	mid := strings.TrimSpace(messageID)
+	if mid == "" {
+		return "", files.CustomEmbedPostingConfig{}, invalidCustomEmbedInput("message_id is required")
+	}
+
+	guildConfig := s.configProvider.GuildConfig(scope)
+	if guildConfig == nil {
+		return "", files.CustomEmbedPostingConfig{}, fmt.Errorf("%w: guild_id=%s", ErrGuildConfigNotFound, scope)
+	}
+	for _, ce := range guildConfig.CustomEmbeds {
+		pIdx := findCustomEmbedPostingIndex(ce.Postings, mid)
+		if pIdx >= 0 {
+			return ce.Key, ce.Postings[pIdx], nil
+		}
+	}
+	return "", files.CustomEmbedPostingConfig{}, fmt.Errorf("%w: message_id=%s", ErrCustomEmbedPostingNotFound, mid)
+}
+
+func findCustomEmbedPostingIndex(postings []files.CustomEmbedPostingConfig, messageID string) int {
+	for i, p := range postings {
+		if p.MessageID == messageID {
+			return i
+		}
+	}
+	return -1
+}
+
+// AddCustomEmbedField appends a field to the custom embed.
+func (s *EmbedService) AddCustomEmbedField(guildID, key string, field files.CustomEmbedFieldConfig) error {
+	scope := strings.TrimSpace(guildID)
+	if scope == "" {
+		return invalidCustomEmbedInput("guild_id is required")
+	}
+	target, err := validateCustomEmbedKey(key)
+	if err != nil {
+		return fmt.Errorf("ConfigManager.AddCustomEmbedField: %w", err)
+	}
+	nf, err := normalizeCustomEmbedField(field)
+	if err != nil {
+		return fmt.Errorf("ConfigManager.AddCustomEmbedField: %w", err)
+	}
+
+	_, err = s.configProvider.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
+		gc, err := files.GuildConfigByID(cfg, scope)
+		if err != nil {
+			return fmt.Errorf("ConfigManager.AddCustomEmbedField: %w", err)
+		}
+		idx := findCustomEmbedIndex(gc.CustomEmbeds, target)
+		if idx < 0 {
+			return fmt.Errorf("%w: key=%s", ErrCustomEmbedNotFound, target)
+		}
+		if len(gc.CustomEmbeds[idx].Fields) >= CustomEmbedMaxFields {
+			return invalidCustomEmbedInput("embed must have at most %d fields", CustomEmbedMaxFields)
+		}
+
+		copyEmbed := gc.CustomEmbeds[idx]
+		copyEmbed.Fields = append(copyEmbed.Fields, nf)
+
+		if customEmbedTotalLen(copyEmbed) > CustomEmbedMaxTotalLen {
+			return invalidCustomEmbedInput("embed total character count must be at most %d", CustomEmbedMaxTotalLen)
+		}
+
+		gc.CustomEmbeds[idx] = copyEmbed
+		return nil
+	})
+
+	return err
+}
+
+// RemoveCustomEmbedField removes a field from the custom embed by its index (0-based).
+func (s *EmbedService) RemoveCustomEmbedField(guildID, key string, fieldIndex int) error {
+	scope := strings.TrimSpace(guildID)
+	if scope == "" {
+		return invalidCustomEmbedInput("guild_id is required")
+	}
+	target, err := validateCustomEmbedKey(key)
+	if err != nil {
+		return fmt.Errorf("ConfigManager.RemoveCustomEmbedField: %w", err)
+	}
+
+	_, err = s.configProvider.UpdateConfig(context.Background(), func(cfg *files.BotConfig) error {
+		gc, err := files.GuildConfigByID(cfg, scope)
+		if err != nil {
+			return fmt.Errorf("ConfigManager.RemoveCustomEmbedField: %w", err)
+		}
+		idx := findCustomEmbedIndex(gc.CustomEmbeds, target)
+		if idx < 0 {
+			return fmt.Errorf("%w: key=%s", ErrCustomEmbedNotFound, target)
+		}
+		fields := gc.CustomEmbeds[idx].Fields
+		if fieldIndex < 0 || fieldIndex >= len(fields) {
+			return invalidCustomEmbedInput("invalid field index")
+		}
+		gc.CustomEmbeds[idx].Fields = append(fields[:fieldIndex], fields[fieldIndex+1:]...)
+		return nil
+	})
+
+	return err
+}
+
+func cloneCustomEmbeds(in []files.CustomEmbedConfig) []files.CustomEmbedConfig {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]files.CustomEmbedConfig, 0, len(in))
+	for _, ce := range in {
+		out = append(out, cloneCustomEmbed(ce))
+	}
+	return out
+}
+
+```
+
 // === FILE: pkg/discord/embeds/doc.go ===
 ```go
 /*
@@ -16372,6 +17068,348 @@ package embeds
 
 ```
 
+// === FILE: pkg/discord/embeds/embed_json_converter.go ===
+```go
+package embeds
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+	"unicode/utf8"
+
+	"github.com/small-frappuccino/discordcore/pkg/files"
+)
+
+// ErrEmbedJSONValidation defines err embed jsonvalidation.
+var (
+	ErrEmbedJSONValidation = errors.New("embed json validation failed")
+)
+
+// DiscohookJSON represents the standard structure of a Discord message JSON
+// commonly used by tools like Discohook.
+type DiscohookJSON struct {
+	Content string           `json:"content,omitempty"`
+	Embeds  []DiscohookEmbed `json:"embeds,omitempty"`
+}
+
+// DiscohookEmbed mirrors a single Discord embed in the Discohook JSON schema.
+// Color is the Discord decimal color value; pointer fields are absent when nil.
+type DiscohookEmbed struct {
+	Title       string           `json:"title,omitempty"`
+	Description string           `json:"description,omitempty"`
+	Color       int              `json:"color,omitempty"`
+	Author      *DiscohookAuthor `json:"author,omitempty"`
+	Footer      *DiscohookFooter `json:"footer,omitempty"`
+	Image       *DiscohookImage  `json:"image,omitempty"`
+	Thumbnail   *DiscohookImage  `json:"thumbnail,omitempty"`
+	Fields      []DiscohookField `json:"fields,omitempty"`
+}
+
+// DiscohookAuthor is the author block of a DiscohookEmbed.
+type DiscohookAuthor struct {
+	Name    string `json:"name,omitempty"`
+	IconURL string `json:"icon_url,omitempty"`
+}
+
+// DiscohookFooter is the footer block of a DiscohookEmbed.
+type DiscohookFooter struct {
+	Text    string `json:"text,omitempty"`
+	IconURL string `json:"icon_url,omitempty"`
+}
+
+// DiscohookImage is an image or thumbnail reference in a DiscohookEmbed.
+type DiscohookImage struct {
+	URL string `json:"url,omitempty"`
+}
+
+// DiscohookField is a single name/value field of a DiscohookEmbed; Inline lays
+// the field alongside adjacent inline fields.
+type DiscohookField struct {
+	Name   string `json:"name,omitempty"`
+	Value  string `json:"value,omitempty"`
+	Inline bool   `json:"inline,omitempty"`
+}
+
+// ParseAndValidateDiscohookJSON parses the raw JSON payload and strictly enforces
+// Discord's embed limits, returning the first embed found or an error.
+func ParseAndValidateDiscohookJSON(data []byte) (DiscohookEmbed, error) {
+	var payload DiscohookJSON
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return DiscohookEmbed{}, fmt.Errorf("%w: invalid JSON format: %w", ErrEmbedJSONValidation, err)
+	}
+
+	if len(payload.Embeds) == 0 {
+		return DiscohookEmbed{}, fmt.Errorf("%w: no embeds found in JSON payload", ErrEmbedJSONValidation)
+	}
+
+	embed := payload.Embeds[0]
+
+	if utf8.RuneCountInString(embed.Title) > CustomEmbedTitleMaxLen {
+		return DiscohookEmbed{}, fmt.Errorf("%w: title exceeds %d characters", ErrEmbedJSONValidation, CustomEmbedTitleMaxLen)
+	}
+	if utf8.RuneCountInString(embed.Description) > CustomEmbedDescriptionMaxLen {
+		return DiscohookEmbed{}, fmt.Errorf("%w: description exceeds %d characters", ErrEmbedJSONValidation, CustomEmbedDescriptionMaxLen)
+	}
+	if embed.Color < 0 || embed.Color > CustomEmbedColorMax {
+		return DiscohookEmbed{}, fmt.Errorf("%w: color %d is out of bounds [0, %d]", ErrEmbedJSONValidation, embed.Color, CustomEmbedColorMax)
+	}
+	if embed.Author != nil && utf8.RuneCountInString(embed.Author.Name) > CustomEmbedAuthorMaxLen {
+		return DiscohookEmbed{}, fmt.Errorf("%w: author name exceeds %d characters", ErrEmbedJSONValidation, CustomEmbedAuthorMaxLen)
+	}
+	if embed.Footer != nil && utf8.RuneCountInString(embed.Footer.Text) > CustomEmbedFooterMaxLen {
+		return DiscohookEmbed{}, fmt.Errorf("%w: footer text exceeds %d characters", ErrEmbedJSONValidation, CustomEmbedFooterMaxLen)
+	}
+
+	if len(embed.Fields) > CustomEmbedMaxFields {
+		return DiscohookEmbed{}, fmt.Errorf("%w: embed contains more than %d fields", ErrEmbedJSONValidation, CustomEmbedMaxFields)
+	}
+
+	for i, f := range embed.Fields {
+		if strings.TrimSpace(f.Name) == "" {
+			return DiscohookEmbed{}, fmt.Errorf("%w: field %d name is required", ErrEmbedJSONValidation, i+1)
+		}
+		if strings.TrimSpace(f.Value) == "" {
+			return DiscohookEmbed{}, fmt.Errorf("%w: field %d value is required", ErrEmbedJSONValidation, i+1)
+		}
+		if utf8.RuneCountInString(f.Name) > CustomEmbedFieldNameMaxLen {
+			return DiscohookEmbed{}, fmt.Errorf("%w: field %d name exceeds %d characters", ErrEmbedJSONValidation, i+1, CustomEmbedFieldNameMaxLen)
+		}
+		if utf8.RuneCountInString(f.Value) > CustomEmbedFieldValueMaxLen {
+			return DiscohookEmbed{}, fmt.Errorf("%w: field %d value exceeds %d characters", ErrEmbedJSONValidation, i+1, CustomEmbedFieldValueMaxLen)
+		}
+	}
+
+	totalLen := utf8.RuneCountInString(embed.Title) + utf8.RuneCountInString(embed.Description)
+	if embed.Author != nil {
+		totalLen += utf8.RuneCountInString(embed.Author.Name)
+	}
+	if embed.Footer != nil {
+		totalLen += utf8.RuneCountInString(embed.Footer.Text)
+	}
+	for _, f := range embed.Fields {
+		totalLen += utf8.RuneCountInString(f.Name) + utf8.RuneCountInString(f.Value)
+	}
+
+	if totalLen > CustomEmbedMaxTotalLen {
+		return DiscohookEmbed{}, fmt.Errorf("%w: embed total character count (%d) exceeds the maximum of %d", ErrEmbedJSONValidation, totalLen, CustomEmbedMaxTotalLen)
+	}
+
+	return embed, nil
+}
+
+// ToCustomEmbedConfig converts a DiscohookEmbed into our internal files.CustomEmbedConfig format.
+func ToCustomEmbedConfig(embed DiscohookEmbed, key string) files.CustomEmbedConfig {
+	out := files.CustomEmbedConfig{
+		Key:         key,
+		Title:       embed.Title,
+		Description: embed.Description,
+		Color:       embed.Color,
+	}
+
+	if embed.Author != nil {
+		out.AuthorName = embed.Author.Name
+		out.AuthorIconURL = embed.Author.IconURL
+	}
+	if embed.Footer != nil {
+		out.FooterText = embed.Footer.Text
+		out.FooterIconURL = embed.Footer.IconURL
+	}
+	if embed.Image != nil {
+		out.ImageURL = embed.Image.URL
+	}
+	if embed.Thumbnail != nil {
+		out.ThumbnailURL = embed.Thumbnail.URL
+	}
+
+	if len(embed.Fields) > 0 {
+		out.Fields = make([]files.CustomEmbedFieldConfig, 0, len(embed.Fields))
+		for _, f := range embed.Fields {
+			out.Fields = append(out.Fields, files.CustomEmbedFieldConfig{
+				Name:   f.Name,
+				Value:  f.Value,
+				Inline: f.Inline,
+			})
+		}
+	}
+
+	return out
+}
+
+// FromCustomEmbedConfig exports a files.CustomEmbedConfig into a DiscohookJSON object.
+func FromCustomEmbedConfig(ce files.CustomEmbedConfig) DiscohookJSON {
+	embed := buildDiscohookEmbedBase(discohookEmbedBase{
+		Title:       ce.Title,
+		Description: ce.Description,
+		Color:       ce.Color,
+		AuthorName:  ce.AuthorName,
+		AuthorIcon:  ce.AuthorIconURL,
+		FooterText:  ce.FooterText,
+		FooterIcon:  ce.FooterIconURL,
+		ImageURL:    ce.ImageURL,
+		ThumbURL:    ce.ThumbnailURL,
+	})
+
+	if len(ce.Fields) > 0 {
+		embed.Fields = make([]DiscohookField, 0, len(ce.Fields))
+		for _, f := range ce.Fields {
+			embed.Fields = append(embed.Fields, DiscohookField{
+				Name:   f.Name,
+				Value:  f.Value,
+				Inline: f.Inline,
+			})
+		}
+	}
+
+	return DiscohookJSON{
+		Embeds: []DiscohookEmbed{embed},
+	}
+}
+
+// ToRolePanelConfig converts a DiscohookEmbed into our internal files.RolePanelConfig format.
+func ToRolePanelConfig(embed DiscohookEmbed, key string) files.RolePanelConfig {
+	out := files.RolePanelConfig{
+		Key:         key,
+		Title:       embed.Title,
+		Description: embed.Description,
+		Color:       embed.Color,
+	}
+
+	if embed.Author != nil {
+		out.AuthorName = embed.Author.Name
+		out.AuthorIconURL = embed.Author.IconURL
+	}
+	if embed.Footer != nil {
+		out.FooterText = embed.Footer.Text
+		out.FooterIconURL = embed.Footer.IconURL
+	}
+	if embed.Image != nil {
+		out.ImageURL = embed.Image.URL
+	}
+	if embed.Thumbnail != nil {
+		out.ThumbnailURL = embed.Thumbnail.URL
+	}
+
+	if len(embed.Fields) > 0 {
+		out.Fields = make([]files.RolePanelEmbedFieldConfig, 0, len(embed.Fields))
+		for _, f := range embed.Fields {
+			out.Fields = append(out.Fields, files.RolePanelEmbedFieldConfig{
+				Name:   f.Name,
+				Value:  f.Value,
+				Inline: f.Inline,
+			})
+		}
+	}
+
+	return out
+}
+
+// FromRolePanelConfig exports a files.RolePanelConfig into a DiscohookJSON object.
+func FromRolePanelConfig(rp files.RolePanelConfig) DiscohookJSON {
+	embed := buildDiscohookEmbedBase(discohookEmbedBase{
+		Title:       rp.Title,
+		Description: rp.Description,
+		Color:       rp.Color,
+		AuthorName:  rp.AuthorName,
+		AuthorIcon:  rp.AuthorIconURL,
+		FooterText:  rp.FooterText,
+		FooterIcon:  rp.FooterIconURL,
+		ImageURL:    rp.ImageURL,
+		ThumbURL:    rp.ThumbnailURL,
+	})
+
+	if len(rp.Fields) > 0 {
+		embed.Fields = make([]DiscohookField, 0, len(rp.Fields))
+		for _, f := range rp.Fields {
+			embed.Fields = append(embed.Fields, DiscohookField{
+				Name:   f.Name,
+				Value:  f.Value,
+				Inline: f.Inline,
+			})
+		}
+	}
+
+	return DiscohookJSON{
+		Embeds: []DiscohookEmbed{embed},
+	}
+}
+
+// ToPartnerBoardTemplate populates a files.PartnerBoardTemplateConfig from a DiscohookEmbed.
+// It maps the embed title, description (Intro), color, and footer text.
+func ToPartnerBoardTemplate(embed DiscohookEmbed, current files.PartnerBoardTemplateConfig) files.PartnerBoardTemplateConfig {
+	out := current
+	out.Title = embed.Title
+	out.Intro = embed.Description
+	out.Color = embed.Color
+	if embed.Footer != nil {
+		out.FooterTemplate = embed.Footer.Text
+	} else {
+		out.FooterTemplate = ""
+	}
+	return out
+}
+
+// FromPartnerBoardTemplate exports a files.PartnerBoardTemplateConfig into a mock DiscohookJSON object.
+func FromPartnerBoardTemplate(tmpl files.PartnerBoardTemplateConfig) DiscohookJSON {
+	embed := buildDiscohookEmbedBase(discohookEmbedBase{
+		Title:       tmpl.Title,
+		Description: tmpl.Intro,
+		Color:       tmpl.Color,
+		FooterText:  tmpl.FooterTemplate,
+	})
+	return DiscohookJSON{
+		Embeds: []DiscohookEmbed{embed},
+	}
+}
+
+// discohookEmbedBase carries the flat embed fields shared by the
+// files.CustomEmbedConfig, files.RolePanelConfig, and files.PartnerBoardTemplateConfig
+// exporters. buildDiscohookEmbedBase promotes the non-empty author, footer,
+// image, and thumbnail values into their nested embed blocks.
+type discohookEmbedBase struct {
+	Title       string
+	Description string
+	Color       int
+	AuthorName  string
+	AuthorIcon  string
+	FooterText  string
+	FooterIcon  string
+	ImageURL    string
+	ThumbURL    string
+}
+
+func buildDiscohookEmbedBase(base discohookEmbedBase) DiscohookEmbed {
+	embed := DiscohookEmbed{
+		Title:       base.Title,
+		Description: base.Description,
+		Color:       base.Color,
+	}
+
+	if base.AuthorName != "" || base.AuthorIcon != "" {
+		embed.Author = &DiscohookAuthor{
+			Name:    base.AuthorName,
+			IconURL: base.AuthorIcon,
+		}
+	}
+	if base.FooterText != "" || base.FooterIcon != "" {
+		embed.Footer = &DiscohookFooter{
+			Text:    base.FooterText,
+			IconURL: base.FooterIcon,
+		}
+	}
+	if base.ImageURL != "" {
+		embed.Image = &DiscohookImage{URL: base.ImageURL}
+	}
+	if base.ThumbURL != "" {
+		embed.Thumbnail = &DiscohookImage{URL: base.ThumbURL}
+	}
+
+	return embed
+}
+
+```
+
 // === FILE: pkg/discord/embeds/service.go ===
 ```go
 package embeds
@@ -16385,6 +17423,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/httputil"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
@@ -16417,19 +17456,20 @@ func (r customEmbedSyncResult) HasIssues() bool {
 // It manages the conversion of configuration states into Discord-compatible
 // payloads and executes lifecycle mutations on the Discord platform.
 type EmbedService struct {
-	configManager *files.ConfigManager
-	editMessage   func(client *api.Client, channelID discord.ChannelID, messageID discord.MessageID, data api.EditMessageData) error
-	dropPostings  func(cm *files.ConfigManager, guildID, key string, messageIDs []string) error
+	configProvider config.Provider
+	editMessage    func(client *api.Client, channelID discord.ChannelID, messageID discord.MessageID, data api.EditMessageData) error
+	dropPostings   func(guildID, key string, messageIDs []string) error
 }
 
 // NewEmbedService instantiates the primary domain service for custom embed management.
 // It mandates the injection of the configuration manager to enforce state constraints.
-func NewEmbedService(configManager *files.ConfigManager) *EmbedService {
-	return &EmbedService{
-		configManager: configManager,
-		editMessage:   defaultCustomEmbedEditMessage,
-		dropPostings:  defaultCustomEmbedDropPostings,
+func NewEmbedService(configProvider config.Provider) *EmbedService {
+	s := &EmbedService{
+		configProvider: configProvider,
+		editMessage:    defaultCustomEmbedEditMessage,
 	}
+	s.dropPostings = s.RemoveCustomEmbedPostings
+	return s
 }
 
 // Post generates a Discord embed payload and dispatches it to the designated channel.
@@ -16504,7 +17544,7 @@ func (s *EmbedService) Sync(
 		}
 		// Operational annotation: We execute dropPostings synchronously rather than spawning
 		// a background goroutine to guarantee deterministic state resolution before returning.
-		if dropErr := s.dropPostings(s.configManager, guildID, key, ids); dropErr != nil {
+		if dropErr := s.dropPostings(guildID, key, ids); dropErr != nil {
 			slog.Warn("Service degradation intercepted and mitigated",
 				slog.String("reason", "Custom embed batch posting cleanup failed"),
 				slog.String("guildID", guildID),
@@ -16618,12 +17658,6 @@ func defaultCustomEmbedEditMessage(client *api.Client, channelID discord.Channel
 	return err
 }
 
-func defaultCustomEmbedDropPostings(cm *files.ConfigManager, guildID, key string, messageIDs []string) error {
-	if cm == nil {
-		return errors.New("config manager is nil")
-	}
-	return cm.RemoveCustomEmbedPostings(guildID, key, messageIDs)
-}
 
 ```
 
@@ -16637,6 +17671,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/httputil"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
@@ -16694,7 +17729,8 @@ func TestRenderCustomEmbed(t *testing.T) {
 func TestCustomEmbedPostingSyncer(t *testing.T) {
 	t.Parallel()
 
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
+	svc := NewEmbedService(cm)
 	guildID := "123456789012345678"
 	key := "embed-key"
 
@@ -16710,28 +17746,22 @@ func TestCustomEmbedPostingSyncer(t *testing.T) {
 			{ChannelID: "333333333333333333", MessageID: "444444444444444444"},
 		},
 	}
-	if err := cm.SetCustomEmbedProperties(guildID, key, ce); err != nil {
+	if err := svc.SetCustomEmbedProperties(guildID, key, ce); err != nil {
 		t.Fatalf("set custom embed: %v", err)
 	}
 	for _, p := range ce.Postings {
-		if err := cm.AddCustomEmbedPosting(guildID, key, p); err != nil {
+		if err := svc.AddCustomEmbedPosting(guildID, key, p); err != nil {
 			t.Fatalf("add posting: %v", err)
 		}
 	}
 
 	var editedPaths []discord.MessageID
-	svc := &EmbedService{
-		configManager: cm,
-		editMessage: func(client *api.Client, channelID discord.ChannelID, messageID discord.MessageID, data api.EditMessageData) error {
-			if messageID == discord.MessageID(444444444444444444) {
-				return &httputil.HTTPError{Code: discordErrUnknownMessage}
-			}
-			editedPaths = append(editedPaths, messageID)
-			return nil
-		},
-		dropPostings: func(c *files.ConfigManager, gid, k string, mid []string) error {
-			return c.RemoveCustomEmbedPostings(gid, k, mid)
-		},
+	svc.editMessage = func(client *api.Client, channelID discord.ChannelID, messageID discord.MessageID, data api.EditMessageData) error {
+		if messageID == discord.MessageID(444444444444444444) {
+			return &httputil.HTTPError{Code: discordErrUnknownMessage}
+		}
+		editedPaths = append(editedPaths, messageID)
+		return nil
 	}
 
 	client := &api.Client{}
@@ -16746,7 +17776,7 @@ func TestCustomEmbedPostingSyncer(t *testing.T) {
 	}
 
 	// Verify that msg2 was dropped from config Manager
-	updated, err := cm.CustomEmbed(guildID, key)
+	updated, err := svc.CustomEmbed(guildID, key)
 	if err != nil {
 		t.Fatalf("load custom embed: %v", err)
 	}
@@ -16763,6 +17793,7 @@ package logging
 
 import (
 	"fmt"
+
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/state"
 )
@@ -17314,10 +18345,11 @@ package members
 
 import (
 	"context"
+	"time"
+
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/state"
-	"time"
 )
 
 // ArikawaAdapter implements the domain members.DiscordAdapter interface
@@ -17576,6 +18608,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/diamondburned/arikawa/v3/utils/handler"
 	"github.com/diamondburned/arikawa/v3/utils/httputil/httpdriver"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/members"
 	"github.com/small-frappuccino/discordcore/pkg/service"
@@ -17686,7 +18719,7 @@ func TestGatewayListener_Lifecycle(t *testing.T) {
 			},
 		},
 	}
-	store := &files.MemoryConfigStore{}
+	store := &config.MemoryConfigStore{}
 	_ = store.Save(storeConfig)
 	configMgr := files.NewConfigManagerWithStore(store, logger)
 	_ = configMgr.LoadConfig()
@@ -18026,6 +19059,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/diamondburned/arikawa/v3/utils/handler"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/messages"
 	"github.com/small-frappuccino/discordcore/pkg/service"
@@ -18141,7 +19175,7 @@ func TestGatewayListener_Lifecycle(t *testing.T) {
 			},
 		},
 	}
-	store := &files.MemoryConfigStore{}
+	store := &config.MemoryConfigStore{}
 	_ = store.Save(storeConfig)
 	configMgr := files.NewConfigManagerWithStore(store, logger)
 	_ = configMgr.LoadConfig()
@@ -20653,12 +21687,13 @@ import (
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/utils/httputil"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 func TestRolePanelSyncEditsEachPosting(t *testing.T) {
 	t.Parallel()
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: "123"}); err != nil {
 		t.Fatalf("add guild config: %v", err)
 	}
@@ -20705,7 +21740,7 @@ func TestRolePanelSyncEditsEachPosting(t *testing.T) {
 
 func TestRolePanelSyncDropsMissingPostings(t *testing.T) {
 	t.Parallel()
-	cm := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cm := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 	if err := cm.AddGuildConfig(files.GuildConfig{GuildID: "123"}); err != nil {
 		t.Fatalf("add guild config: %v", err)
 	}

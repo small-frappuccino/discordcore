@@ -1,6 +1,6 @@
 //go:build windows
 
-package files
+package sys
 
 import (
 	"path/filepath"
@@ -8,22 +8,27 @@ import (
 )
 
 func TestPlatformPathsWindows(t *testing.T) {
-	t.Parallel()
 	setTestEnv(t, map[string]string{
 		"APPDATA": `C:\AppData\Roaming`,
 	})
 	expectedCfg := filepath.Join(`C:\AppData\Roaming`, "Alice-Bot")
-	if cfg := platformConfigDir("Alice:Bot "); cfg != expectedCfg {
+	if cfg := PlatformConfigDir("Alice:Bot "); cfg != expectedCfg {
 		t.Fatalf("unexpected config dir: %q", cfg)
 	}
 
 	expectedCache := filepath.Join(expectedCfg, "Cache")
-	if cache := platformCacheDir("Alice:Bot "); cache != expectedCache {
+	if cache := PlatformCacheDir("Alice:Bot "); cache != expectedCache {
 		t.Fatalf("unexpected cache dir: %q", cache)
 	}
 
 	expectedLog := filepath.Join(expectedCfg, "Logs")
-	if logDir := platformLogDir("Alice:Bot "); logDir != expectedLog {
+	if logDir := PlatformLogDir("Alice:Bot "); logDir != expectedLog {
 		t.Fatalf("unexpected log dir: %q", logDir)
+	}
+}
+
+func setTestEnv(t *testing.T, env map[string]string) {
+	for k, v := range env {
+		t.Setenv(k, v)
 	}
 }

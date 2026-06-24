@@ -8,6 +8,7 @@ import (
 
 	"strings"
 
+	"github.com/small-frappuccino/discordcore/pkg/sys"
 	"github.com/small-frappuccino/discordcore/pkg/theme"
 )
 
@@ -123,7 +124,7 @@ func EffectiveBotName() string {
 //   - Windows:     %APPDATA%/<AppName>
 func GetApplicationSupportPath(_ string) string {
 	app := EffectiveBotName()
-	if dir := strings.TrimSpace(platformConfigDir(app)); dir != "" {
+	if dir := strings.TrimSpace(sys.PlatformConfigDir(app)); dir != "" {
 		return dir
 	}
 	// Last-resort fallback if platform resolution fails unexpectedly.
@@ -136,7 +137,7 @@ func GetApplicationSupportPath(_ string) string {
 //   - Windows:     %APPDATA%/<AppName>/Cache
 func GetApplicationCachesPath() string {
 	app := EffectiveBotName()
-	if dir := strings.TrimSpace(platformCacheDir(app)); dir != "" {
+	if dir := strings.TrimSpace(sys.PlatformCacheDir(app)); dir != "" {
 		return dir
 	}
 	// Last-resort fallback if platform resolution fails unexpectedly.
@@ -165,7 +166,7 @@ func GetCustomRPCFilePath() string {
 //   - Windows:     %APPDATA%/<AppName>/Logs/discordcore.log
 func GetLogFilePath() string {
 	app := EffectiveBotName()
-	base := strings.TrimSpace(platformLogDir(app))
+	base := strings.TrimSpace(sys.PlatformLogDir(app))
 	if base == "" {
 		base = filepath.Join(".", "logs", app)
 	}

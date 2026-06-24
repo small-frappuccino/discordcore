@@ -5,11 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/small-frappuccino/discordcore/pkg/files"
 	"log/slog"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
 const (

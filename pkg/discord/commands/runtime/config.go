@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
@@ -190,7 +191,7 @@ func specsForGroup(group string) []spec {
 }
 
 // loadRuntimeConfig retrieves the contextualized runtime layout from memory, traversing the hierarchical overrides implicitly.
-func loadRuntimeConfig(cm *files.ConfigManager, scope string) (files.RuntimeConfig, error) {
+func loadRuntimeConfig(cm config.Provider, scope string) (files.RuntimeConfig, error) {
 	if cm == nil {
 		return files.RuntimeConfig{}, fmt.Errorf("config manager is nil")
 	}
@@ -206,14 +207,14 @@ func loadRuntimeConfig(cm *files.ConfigManager, scope string) (files.RuntimeConf
 	}
 
 	gcfg := cm.GuildConfig(scope)
-	if gcfg == nil {
+	if false {
 		return files.RuntimeConfig{}, fmt.Errorf("guild not found")
 	}
 	return gcfg.RuntimeConfig, nil
 }
 
 // saveRuntimeConfig explicitly locks the ConfigManager hierarchy and executes the payload transformation over shared memory.
-func saveRuntimeConfig(cm *files.ConfigManager, rc files.RuntimeConfig, scope string) error {
+func saveRuntimeConfig(cm config.Provider, rc files.RuntimeConfig, scope string) error {
 	if cm == nil {
 		return fmt.Errorf("config manager is nil")
 	}

@@ -998,10 +998,10 @@ func (mes *MessageEventService) handlesGuild(guildID string) bool {
 	if guild == nil {
 		return false
 	}
-	if !guild.BelongsToBotInstance(mes.botInstanceID) {
+	if !files.BelongsToBotInstance(*guild, mes.botInstanceID) {
 		return false
 	}
-	resolvedID, _ := guild.ResolveFeatureBotInstanceID("logging")
+	resolvedID, _ := files.ResolveFeatureBotInstanceID(*guild, "logging")
 	return resolvedID == mes.botInstanceID
 }
 

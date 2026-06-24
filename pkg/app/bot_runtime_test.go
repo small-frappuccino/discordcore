@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/storage/postgres"
@@ -107,7 +108,7 @@ func TestBotRuntime_InitializationRouting(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfgMgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+			cfgMgr := files.NewConfigManagerWithStore(&config.MemoryConfigStore{}, nil)
 			cfgMgr.ApplyConfig(tt.cfg)
 
 			caps := resolveBotRuntimeCapabilities(tt.cfg, "main")

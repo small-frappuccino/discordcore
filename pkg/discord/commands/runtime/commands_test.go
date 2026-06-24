@@ -6,6 +6,7 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
+	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"go.uber.org/mock/gomock"
 )
@@ -23,7 +24,7 @@ func TestHandler_HandleSlash_EphemeralValidation(t *testing.T) {
 
 	tmp := t.TempDir()
 	_ = tmp
-	store := &files.MemoryConfigStore{}
+	store := &config.MemoryConfigStore{}
 	cm := files.NewConfigManagerWithStore(store, nil)
 	_ = cm.LoadConfig()
 
