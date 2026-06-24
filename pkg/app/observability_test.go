@@ -39,8 +39,8 @@ func TestArikawaQOTDPublisher_PublishOfficialPost(t *testing.T) {
 		OfficialThreadID:         "author1",
 		OfficialStarterMessageID: "content",
 	})
-	if err == nil {
-		t.Fatal("expected early failure due to missing guild gateway binding")
+	if err != nil {
+		t.Fatalf("expected silent drop for missing guild gateway binding, got error: %v", err)
 	}
 }
 
@@ -54,8 +54,8 @@ func TestArikawaQOTDPublisher_DeleteOfficialPost(t *testing.T) {
 		ChannelID:               "channel1",
 		DiscordStarterMessageID: "message1",
 	})
-	if err == nil {
-		t.Fatal("expected early failure due to missing guild gateway binding")
+	if err != nil {
+		t.Fatalf("expected silent drop for missing guild gateway binding, got error: %v", err)
 	}
 }
 

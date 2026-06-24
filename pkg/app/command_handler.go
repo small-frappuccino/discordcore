@@ -383,6 +383,10 @@ func (ch *CommandHandler) handlesGuildRoute(guildID string, routeKey commands.In
 	return cfg.ResolveFeatures(strings.TrimSpace(guildID)).Services.Commands
 }
 
+// matchesGuildBotInstance enforces strict binary command authorization.
+// If ResolveFeatureBotInstanceID yields an unmapped or deactivated target,
+// it instantly returns false. It strictly rejects non-deterministic generic routing
+// and refuses to authorize a command simply because a generic bot happens to be online.
 func (ch *CommandHandler) matchesGuildBotInstance(guildID string, feature string) bool {
 	if ch == nil || ch.configManager == nil {
 		return false
@@ -398,13 +402,10 @@ func (ch *CommandHandler) matchesGuildBotInstance(guildID string, feature string
 		return false
 	}
 
-	// Consulta em O(1) diretamente no ponteiro, achatando o bloco visualmente
-	if feature == "commands" {
-		tokenEnc, ok := guild.BotInstanceTokens[ch.botInstanceID]
-		return ok && string(tokenEnc) != ""
-	}
-
 	resolvedID, _ := guild.ResolveFeatureBotInstanceID(feature)
+	if resolvedID == "" {
+		return false
+	}
 	tokenEnc, ok := guild.BotInstanceTokens[resolvedID]
 
 	slog.Debug("resolution of bot execution scope for specific guild",

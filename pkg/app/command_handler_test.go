@@ -21,6 +21,7 @@ func TestCommandHandlerRoutesFeaturesToCorrectBotInstance(t *testing.T) {
 				FeatureRouting: map[string]string{
 					"roles":      "generic",
 					"moderation": "generic",
+					"commands":   "generic",
 				},
 				Features: files.FeatureToggles{
 					Services: files.FeatureServiceToggles{

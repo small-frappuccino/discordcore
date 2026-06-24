@@ -404,6 +404,10 @@ func (r *botRuntimeResolver) aggregateUnifiedCaches() map[string]*cache.UnifiedC
 	return caches
 }
 
+// runtimeForGuild enforces a strict O(1) determinism for feature allocation.
+// The previous stochastic routing heuristic was eliminated in favor of a binary lookup
+// via ResolveFeatureBotInstanceID. If a feature is unmapped or explicitly deactivated,
+// it instantly yields ErrSessionUnavailable without falling back to other active tokens.
 func (r *botRuntimeResolver) runtimeForGuild(guildID string, feature string) (*botRuntime, string, error) {
 	if r == nil {
 		return nil, "", fmt.Errorf("%w: bot runtime resolver pointer is nil", ErrSessionUnavailable)
@@ -435,32 +439,22 @@ func (r *botRuntimeResolver) runtimeForGuild(guildID string, feature string) (*b
 		feature = "dashboard"
 	}
 
-	// 1. Prioridade Estrita: Resolução Específica de Feature
 	bestInstanceID, _ := guild.ResolveFeatureBotInstanceID(feature)
-	if bestInstanceID != "" {
-		if tokenEnc, ok := guild.BotInstanceTokens[bestInstanceID]; ok && string(tokenEnc) != "" {
-			if runtime, ok := runtimesMap[bestInstanceID]; ok && runtime != nil {
-				return runtime, bestInstanceID, nil
-			}
-		}
+	if bestInstanceID == "" {
+		return nil, "", fmt.Errorf("%w: explicit feature mapping is missing for guild %s", ErrSessionUnavailable, guildID)
 	}
 
-	// 2. Degradação Graciosa: Qualquer Instância Ativa na Guild
-	for id, tokenEnc := range guild.BotInstanceTokens {
-		if string(tokenEnc) == "" {
-			continue
-		}
-		if runtime, ok := runtimesMap[id]; ok && runtime != nil {
-			return runtime, id, nil
-		}
+	tokenEnc, ok := guild.BotInstanceTokens[bestInstanceID]
+	if !ok || string(tokenEnc) == "" {
+		return nil, "", fmt.Errorf("%w: explicit bot token is missing or disabled for mapped instance %q in guild %s", ErrSessionUnavailable, bestInstanceID, guildID)
 	}
 
-	// 3. Fallback de Último Recurso: Instância Global/Default
-	if runtime, ok := runtimesMap[""]; ok && runtime != nil {
-		return runtime, "", nil
+	runtime, ok := runtimesMap[bestInstanceID]
+	if !ok || runtime == nil {
+		return nil, "", fmt.Errorf("%w: mapped runtime %q is unavailable for guild %s", ErrSessionUnavailable, bestInstanceID, guildID)
 	}
 
-	return nil, "", fmt.Errorf("%w: orchestrator failed to couple guild %s to an active port", ErrSessionUnavailable, guildID)
+	return runtime, bestInstanceID, nil
 }
 
 func (r *botRuntimeResolver) arikawaStateForGuild(guildID string, feature string) (*state.State, error) {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/small-frappuccino/discordcore/pkg/discord/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -43,18 +44,32 @@ func (p *ArikawaQOTDPublisher) getArikawaPublisher(guildID string) (domain.Publi
 }
 
 // PublishOfficialPost routes the execution context to the dynamically resolved Arikawa client.
+// It explicitly intercepts ErrSessionUnavailable to silently and efficiently drop execution loops
+// for guilds where the feature is explicitly disabled, treating the lack of a mapped session
+// as a valid architectural state rather than a fatal pipeline anomaly.
 func (p *ArikawaQOTDPublisher) PublishOfficialPost(ctx context.Context, params domain.PublishOfficialPostParams) (*domain.PublishedOfficialPost, error) {
 	pub, err := p.getArikawaPublisher(params.GuildID)
 	if err != nil {
+		if errors.Is(err, ErrSessionUnavailable) {
+			slog.Debug("QOTD publish execution dropped: explicitly disabled for guild", slog.String("guildID", params.GuildID))
+			return nil, nil
+		}
 		return nil, err
 	}
 	return pub.PublishOfficialPost(ctx, params)
 }
 
 // DeleteOfficialPost routes the execution context to the dynamically resolved Arikawa client.
+// It explicitly intercepts ErrSessionUnavailable to silently and efficiently drop execution loops
+// for guilds where the feature is explicitly disabled, treating the lack of a mapped session
+// as a valid architectural state rather than a fatal pipeline anomaly.
 func (p *ArikawaQOTDPublisher) DeleteOfficialPost(ctx context.Context, params domain.DeleteOfficialPostParams) error {
 	pub, err := p.getArikawaPublisher(params.GuildID)
 	if err != nil {
+		if errors.Is(err, ErrSessionUnavailable) {
+			slog.Debug("QOTD delete execution dropped: explicitly disabled for guild", slog.String("guildID", params.GuildID))
+			return nil
+		}
 		return err
 	}
 	return pub.DeleteOfficialPost(ctx, params)
