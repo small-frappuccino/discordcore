@@ -81,7 +81,7 @@ func TestUncoveredLifecycleAndService(t *testing.T) {
 		},
 	})
 
-	svc := NewService(mgr, nil, nil)
+	svc := NewService(mgr)
 	if svc.GetPublisher() != nil {
 		t.Error("expected publisher to be nil initially")
 	}

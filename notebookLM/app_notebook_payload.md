@@ -4907,7 +4907,7 @@ func (a *App) ConstructServices(ctx context.Context) error {
 	a.startupTasks = NewStartupTaskOrchestrator(ctx, runtimeCount)
 
 	qotdMetrics := qotd.NopMetrics{}
-	qotdService := qotd.NewServiceWithMetrics(a.configManager, a.store, nil, qotdMetrics)
+	qotdService := qotd.NewService(a.configManager, qotd.WithRepository(a.store), qotd.WithMetrics(qotdMetrics))
 
 	appClock := clock.NewHTTPClock("https://discord.com")
 	qotdService.SetClock(appClock)

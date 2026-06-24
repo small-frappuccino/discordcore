@@ -42,8 +42,7 @@ func TestExecuteInGuildActor_Serialization(t *testing.T) {
 	t.Parallel()
 	svc := qotd.NewService(
 		&files.ConfigManager{},
-		nil,
-		&mockPublisher{},
+		qotd.WithPublisher(&mockPublisher{}),
 	)
 
 	const targetGuildID = "guild_01"
@@ -104,8 +103,7 @@ func TestExecuteInGuildActor_Parallelism(t *testing.T) {
 	t.Parallel()
 	svc := qotd.NewService(
 		&files.ConfigManager{},
-		nil,
-		&mockPublisher{},
+		qotd.WithPublisher(&mockPublisher{}),
 	)
 
 	const workerCount = 100
@@ -176,8 +174,7 @@ func TestPublishScheduledIfDue_ContextExpiration(t *testing.T) {
 	}
 	svc := qotd.NewService(
 		&files.ConfigManager{},
-		nil,
-		pub,
+		qotd.WithPublisher(pub),
 	)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
@@ -198,11 +195,10 @@ func TestReconcileGuild_SystemicFailureIsolation(t *testing.T) {
 		},
 	}
 	metrics := &mockMetrics{}
-	svc := qotd.NewServiceWithMetrics(
+	svc := qotd.NewService(
 		&files.ConfigManager{},
-		nil,
-		pub,
-		metrics,
+		qotd.WithPublisher(pub),
+		qotd.WithMetrics(metrics),
 	)
 
 	err := svc.ReconcileGuild(context.Background(), "guild_fail")

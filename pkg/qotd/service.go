@@ -41,26 +41,48 @@ type Service struct {
 	guildActors   map[string]*sync.Mutex
 }
 
-// NewService constructs the QOTD service.
-func NewService(configManager *files.ConfigManager, repo Repository, publisher Publisher) *Service {
-	return NewServiceWithMetrics(configManager, repo, publisher, nil)
+// ServiceOption configures a Service.
+type ServiceOption func(*Service)
+
+// WithRepository sets the repository for the service.
+func WithRepository(repo Repository) ServiceOption {
+	return func(s *Service) {
+		s.repo = repo
+	}
 }
 
-// NewServiceWithMetrics constructs the QOTD service with metrics.
-func NewServiceWithMetrics(configManager *files.ConfigManager, repo Repository, publisher Publisher, metrics Metrics) *Service {
-	if metrics == nil {
-		metrics = NopMetrics{}
+// WithPublisher sets the publisher for the service.
+func WithPublisher(publisher Publisher) ServiceOption {
+	return func(s *Service) {
+		s.publisher = publisher
 	}
-	return &Service{
+}
+
+// WithMetrics sets the metrics for the service.
+func WithMetrics(metrics Metrics) ServiceOption {
+	return func(s *Service) {
+		if metrics != nil {
+			s.metrics = metrics
+		}
+	}
+}
+
+// NewService constructs the QOTD service.
+func NewService(configManager *files.ConfigManager, opts ...ServiceOption) *Service {
+	s := &Service{
 		configManager: configManager,
-		repo:          repo,
-		publisher:     publisher,
-		metrics:       metrics,
+		metrics:       NopMetrics{},
 		now: func() time.Time {
 			return time.Now().UTC()
 		},
 		guildActors: make(map[string]*sync.Mutex),
 	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(s)
+		}
+	}
+	return s
 }
 
 func (s *Service) getGuildMutex(guildID string) *sync.Mutex {

@@ -369,7 +369,7 @@ func TestUncoveredLifecycleAndService(t *testing.T) {
 		},
 	})
 
-	svc := NewService(mgr, nil, nil)
+	svc := NewService(mgr)
 	if svc.GetPublisher() != nil {
 		t.Error("expected publisher to be nil initially")
 	}
@@ -820,26 +820,48 @@ type Service struct {
 	guildActors   map[string]*sync.Mutex
 }
 
-// NewService constructs the QOTD service.
-func NewService(configManager *files.ConfigManager, repo Repository, publisher Publisher) *Service {
-	return NewServiceWithMetrics(configManager, repo, publisher, nil)
+// ServiceOption configures a Service.
+type ServiceOption func(*Service)
+
+// WithRepository sets the repository for the service.
+func WithRepository(repo Repository) ServiceOption {
+	return func(s *Service) {
+		s.repo = repo
+	}
 }
 
-// NewServiceWithMetrics constructs the QOTD service with metrics.
-func NewServiceWithMetrics(configManager *files.ConfigManager, repo Repository, publisher Publisher, metrics Metrics) *Service {
-	if metrics == nil {
-		metrics = NopMetrics{}
+// WithPublisher sets the publisher for the service.
+func WithPublisher(publisher Publisher) ServiceOption {
+	return func(s *Service) {
+		s.publisher = publisher
 	}
-	return &Service{
+}
+
+// WithMetrics sets the metrics for the service.
+func WithMetrics(metrics Metrics) ServiceOption {
+	return func(s *Service) {
+		if metrics != nil {
+			s.metrics = metrics
+		}
+	}
+}
+
+// NewService constructs the QOTD service.
+func NewService(configManager *files.ConfigManager, opts ...ServiceOption) *Service {
+	s := &Service{
 		configManager: configManager,
-		repo:          repo,
-		publisher:     publisher,
-		metrics:       metrics,
+		metrics:       NopMetrics{},
 		now: func() time.Time {
 			return time.Now().UTC()
 		},
 		guildActors: make(map[string]*sync.Mutex),
 	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(s)
+		}
+	}
+	return s
 }
 
 func (s *Service) getGuildMutex(guildID string) *sync.Mutex {
@@ -977,8 +999,7 @@ func TestExecuteInGuildActor_Serialization(t *testing.T) {
 	t.Parallel()
 	svc := qotd.NewService(
 		&files.ConfigManager{},
-		nil,
-		&mockPublisher{},
+		qotd.WithPublisher(&mockPublisher{}),
 	)
 
 	const targetGuildID = "guild_01"
@@ -1039,8 +1060,7 @@ func TestExecuteInGuildActor_Parallelism(t *testing.T) {
 	t.Parallel()
 	svc := qotd.NewService(
 		&files.ConfigManager{},
-		nil,
-		&mockPublisher{},
+		qotd.WithPublisher(&mockPublisher{}),
 	)
 
 	const workerCount = 100
@@ -1111,8 +1131,7 @@ func TestPublishScheduledIfDue_ContextExpiration(t *testing.T) {
 	}
 	svc := qotd.NewService(
 		&files.ConfigManager{},
-		nil,
-		pub,
+		qotd.WithPublisher(pub),
 	)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
@@ -1133,11 +1152,10 @@ func TestReconcileGuild_SystemicFailureIsolation(t *testing.T) {
 		},
 	}
 	metrics := &mockMetrics{}
-	svc := qotd.NewServiceWithMetrics(
+	svc := qotd.NewService(
 		&files.ConfigManager{},
-		nil,
-		pub,
-		metrics,
+		qotd.WithPublisher(pub),
+		qotd.WithMetrics(metrics),
 	)
 
 	err := svc.ReconcileGuild(context.Background(), "guild_fail")
