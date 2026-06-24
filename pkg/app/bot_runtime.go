@@ -596,47 +596,30 @@ type botRuntimeOptions struct {
 	embedService             *embeds.EmbedService
 	rolePanelService         *roles.RolePanelService
 	partnerService           *partners.PartnerService
-	openBotArikawaState      func(ctx context.Context, s *state.State) error
-	fetchBotArikawaMe        func(s *state.State) (*discord.User, error)
-	discordSessionCloseHook  func(c interface{ Close() error }) error
-	newCommandHandlerForBot  func(deps CommandHandlerDeps) (*CommandHandler, error)
-	newCommandHandler        func(deps CommandHandlerDeps) (*CommandHandler, error)
-	setupCommandHandler      func(ch *CommandHandler) error
-	shutdownCommandHandler   func(ch *CommandHandler) error
 }
 
-type memberSinkWrapper struct {
-	logger *logging.Logger
+type MemberEventLoggerAdapter struct {
+	Logger *logging.Logger
 }
 
-func (w memberSinkWrapper) OnMemberJoin(ctx context.Context, e *gateway.GuildMemberAddEvent, accountAge time.Duration) {
-	if w.logger != nil {
-		w.logger.OnMemberJoin(ctx, e.GuildID.String(), e.Member)
-	}
+func (w MemberEventLoggerAdapter) OnMemberJoin(ctx context.Context, e *gateway.GuildMemberAddEvent, accountAge time.Duration) {
+	w.Logger.OnMemberJoin(ctx, e.GuildID.String(), e.Member)
 }
 
-func (w memberSinkWrapper) OnMemberLeave(ctx context.Context, e *gateway.GuildMemberRemoveEvent, serverTime time.Duration, botTime time.Duration) {
-	if w.logger != nil {
-		w.logger.OnMemberLeave(ctx, e.GuildID.String(), e.User)
-	}
+func (w MemberEventLoggerAdapter) OnMemberLeave(ctx context.Context, e *gateway.GuildMemberRemoveEvent, serverTime time.Duration, botTime time.Duration) {
+	w.Logger.OnMemberLeave(ctx, e.GuildID.String(), e.User)
 }
 
-func (w memberSinkWrapper) OnRoleUpdate(ctx context.Context, guildID string, user discord.User, addedRoles, removedRoles []discord.RoleID) {
-	if w.logger != nil {
-		w.logger.OnRoleUpdate(ctx, guildID, user, addedRoles, removedRoles)
-	}
+func (w MemberEventLoggerAdapter) OnRoleUpdate(ctx context.Context, guildID string, user discord.User, addedRoles, removedRoles []discord.RoleID) {
+	w.Logger.OnRoleUpdate(ctx, guildID, user, addedRoles, removedRoles)
 }
 
-func (w memberSinkWrapper) OnAvatarUpdate(ctx context.Context, guildID string, user discord.User, oldAvatarHash, newAvatarHash string) {
-	if w.logger != nil {
-		w.logger.OnAvatarUpdate(ctx, guildID, user, oldAvatarHash, newAvatarHash)
-	}
+func (w MemberEventLoggerAdapter) OnAvatarUpdate(ctx context.Context, guildID string, user discord.User, oldAvatarHash, newAvatarHash string) {
+	w.Logger.OnAvatarUpdate(ctx, guildID, user, oldAvatarHash, newAvatarHash)
 }
 
-func (w memberSinkWrapper) OnModerationAction(ctx context.Context, guildID string, actionType string, targetUser discord.User, reason string, moderator discord.User) {
-	if w.logger != nil {
-		w.logger.OnModerationAction(ctx, guildID, actionType, targetUser, reason, moderator)
-	}
+func (w MemberEventLoggerAdapter) OnModerationAction(ctx context.Context, guildID string, actionType string, targetUser discord.User, reason string, moderator discord.User) {
+	w.Logger.OnModerationAction(ctx, guildID, actionType, targetUser, reason, moderator)
 }
 
 // NewBotRuntime instantiates a fully isolated bot runtime.
@@ -663,11 +646,11 @@ func NewBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabili
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	if err := opts.openBotArikawaState(ctx, arikawaState); err != nil {
+	if err := arikawaState.Open(ctx); err != nil {
 		return nil, fmt.Errorf("open discord session for %s: %w", instance.ID, err)
 	}
 
-	me, err := opts.fetchBotArikawaMe(arikawaState)
+	me, err := arikawaState.Me()
 	if err != nil {
 		return nil, fmt.Errorf("discord session state not properly initialized for %s: %w", instance.ID, err)
 	}
@@ -707,12 +690,17 @@ func populateBotRuntimeServices(runtime *botRuntime, opts botRuntimeOptions) err
 		opts.runtimeApplier.AddRuntime(runtime.serviceManager, nil)
 	}
 
+	var eventLogger *logging.Logger
+	if runtime.arikawaState != nil && runtime.arikawaState.Session != nil {
+		eventLogger = logging.NewLogger(runtime.arikawaState.Session.Client, opts.configManager, runtime.arikawaState, gateway.Intents(runtime.capabilities.intents), slog.Default())
+	}
+
 	// Message Event Service
 	if runtime.capabilities.messageEventService {
 		mes := messages.NewMessageEventServiceForBot(messages.EventServiceDeps{
 			ArikawaState:  runtime.arikawaState,
 			ConfigManager: opts.configManager,
-			Sink:          resolveEventLogger(runtime, opts.configManager),
+			Sink:          eventLogger,
 			Store:         opts.store,
 			BotInstanceID: runtime.instanceID,
 			Logger:        slog.Default(),
@@ -728,7 +716,7 @@ func populateBotRuntimeServices(runtime *botRuntime, opts botRuntimeOptions) err
 		memSvc := members.NewMemberEventServiceForBot(members.EventServiceDeps{
 			ArikawaState:  runtime.arikawaState,
 			ConfigManager: opts.configManager,
-			Sink:          memberSinkWrapper{logger: resolveEventLogger(runtime, opts.configManager)},
+			Sink:          MemberEventLoggerAdapter{Logger: eventLogger},
 			MembersRepo:   opts.store,
 			SystemRepo:    opts.store,
 			BotInstanceID: runtime.instanceID,
@@ -741,10 +729,6 @@ func populateBotRuntimeServices(runtime *botRuntime, opts botRuntimeOptions) err
 
 	// Automod Service
 	if runtime.capabilities.automod {
-		var eventLogger *logging.Logger
-		if runtime.arikawaState != nil && runtime.arikawaState.Session != nil {
-			eventLogger = logging.NewLogger(runtime.arikawaState.Session.Client, opts.configManager, runtime.arikawaState, gateway.Intents(runtime.capabilities.intents), slog.Default())
-		}
 		automodService := discord_automod.NewArikawaAdapter(runtime.arikawaState, eventLogger, opts.logger)
 		if err := runtime.serviceManager.Register(automodService); err != nil {
 			return fmt.Errorf("service registration failure for %s: %w", runtime.instanceID, err)
@@ -806,7 +790,7 @@ func populateBotRuntimeServices(runtime *botRuntime, opts botRuntimeOptions) err
 			TicketService:       ticketService,
 		}
 
-		commandHandler, err := opts.newCommandHandlerForBot(deps)
+		commandHandler, err := NewCommandHandlerForBot(deps)
 		if err != nil {
 			slog.Error("Blocking structural failure: Failed to construct CommandHandler", slog.String("botInstanceID", runtime.instanceID), slog.Any("error", err))
 		} else {
@@ -872,11 +856,7 @@ func (r *botRuntime) Run(ctx context.Context, telemetryCh chan<- RuntimeTelemetr
 
 	teardownEg.Go(func() error {
 		if r.arikawaState != nil {
-			if opts.discordSessionCloseHook != nil {
-				_ = opts.discordSessionCloseHook(r.arikawaState)
-			} else {
-				_ = r.arikawaState.Close()
-			}
+			_ = r.arikawaState.Close()
 		}
 		return nil
 	})
@@ -885,8 +865,6 @@ func (r *botRuntime) Run(ctx context.Context, telemetryCh chan<- RuntimeTelemetr
 
 	return eg.Wait()
 }
-
-var intelligentWarmupFn = cache.IntelligentWarmupContext
 
 func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *postgres.Store, startupTasks *StartupTaskOrchestrator) {
 	if runtime == nil || runtime.legacySession == nil || !runtime.capabilities.warmup || runtime.unifiedCache == nil {
@@ -913,7 +891,7 @@ func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *post
 		slog.String("botInstanceID", runtime.instanceID),
 	)
 	startupTasks.Go("cache_warmup:"+runtime.instanceID, func(taskCtx context.Context) error {
-		if err := intelligentWarmupFn(taskCtx, runtime.legacySession, unifiedCache, store, memberWarmupConfig); err != nil {
+		if err := cache.IntelligentWarmupContext(taskCtx, runtime.legacySession, unifiedCache, store, memberWarmupConfig); err != nil {
 			if taskCtx.Err() != nil {
 				return nil
 			}
@@ -940,16 +918,4 @@ func runtimeWarmupPhases() (cache.WarmupConfig, cache.WarmupConfig) {
 
 // shutdownBotRuntime removed as teardown is now handled natively by Run via Context cancellation
 
-// resolveEventLogger centralizes log sink injection for audit services.
-func resolveEventLogger(runtime *botRuntime, configManager *files.ConfigManager) *logging.Logger {
-	if runtime.arikawaState == nil || runtime.arikawaState.Session == nil {
-		return nil
-	}
-	return logging.NewLogger(
-		runtime.arikawaState.Session.Client,
-		configManager,
-		runtime.arikawaState,
-		gateway.Intents(runtime.capabilities.intents),
-		slog.Default(),
-	)
-}
+// shutdownBotRuntime removed as teardown is now handled natively by Run via Context cancellation

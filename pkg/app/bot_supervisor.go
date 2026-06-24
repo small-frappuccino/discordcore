@@ -13,7 +13,6 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
-	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"golang.org/x/sync/errgroup"
 )
@@ -26,13 +25,23 @@ type managedInstance struct {
 	Capabilities  botRuntimeCapabilities
 }
 
+type GatewayUpdateIntent struct {
+	InstanceID string
+	Status     string
+}
+
+type SyncTaskIntent struct {
+	GuildID    string
+	InstanceID string
+}
+
 // TopologyDelta transmits state reconciliation vectors down into the hardware ring.
 type TopologyDelta struct {
 	ActiveTokens   map[string]string
 	ActiveStatus   map[string]string
 	Capabilities   map[string]botRuntimeCapabilities
-	GatewayUpdates []func(context.Context) error
-	SyncTasks      []func(context.Context) error
+	GatewayUpdates []GatewayUpdateIntent
+	SyncTasks      []SyncTaskIntent
 }
 
 // BotSupervisor manages the lifecycle, configuration synchronization, and background state of all active Discord bot instances via CSP loop.
@@ -57,24 +66,6 @@ type BotSupervisor struct {
 
 // NewBotSupervisor initializes a new BotSupervisor to manage bot runtimes.
 func NewBotSupervisor(configManager *files.ConfigManager, opts botRuntimeOptions) *BotSupervisor {
-	if opts.openBotArikawaState == nil {
-		opts.openBotArikawaState = func(ctx context.Context, s *state.State) error { return s.Open(ctx) }
-	}
-	if opts.fetchBotArikawaMe == nil {
-		opts.fetchBotArikawaMe = func(s *state.State) (*discord.User, error) { return s.Me() }
-	}
-	if opts.newCommandHandlerForBot == nil {
-		opts.newCommandHandlerForBot = NewCommandHandlerForBot
-	}
-	if opts.newCommandHandler == nil {
-		opts.newCommandHandler = NewCommandHandler
-	}
-	if opts.setupCommandHandler == nil {
-		opts.setupCommandHandler = func(ch *CommandHandler) error { return ch.SetupCommands() }
-	}
-	if opts.shutdownCommandHandler == nil {
-		opts.shutdownCommandHandler = func(ch *CommandHandler) error { return ch.Shutdown() }
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	group, groupCtx := errgroup.WithContext(ctx)
 
@@ -194,8 +185,11 @@ func (s *BotSupervisor) handleTopologyDelta(cmd TopologyDelta) {
 	desiredStatus := cmd.ActiveStatus
 	desiredCaps := cmd.Capabilities
 
-	for _, taskFn := range cmd.GatewayUpdates {
-		s.opts.startupTasks.Go("presence_update", taskFn)
+	for _, intent := range cmd.GatewayUpdates {
+		localIntent := intent
+		s.opts.startupTasks.Go("presence_update_"+localIntent.InstanceID, func(ctx context.Context) error {
+			return s.executeGatewayUpdate(ctx, localIntent)
+		})
 	}
 
 	// Phase 1: Purge removed or modified instances to maintain valid architectural state.
@@ -274,10 +268,10 @@ func (s *BotSupervisor) handleTopologyDelta(cmd TopologyDelta) {
 		s.opts.startupTasks.Go("catalog_sync", func(ctx context.Context) error {
 			eg, egCtx := errgroup.WithContext(ctx)
 			eg.SetLimit(10)
-			for _, taskFn := range cmd.SyncTasks {
-				tFn := taskFn
+			for _, intent := range cmd.SyncTasks {
+				localIntent := intent
 				eg.Go(func() error {
-					return tFn(egCtx)
+					return s.executeSyncTask(egCtx, localIntent)
 				})
 			}
 			return eg.Wait()
@@ -314,7 +308,7 @@ func (s *BotSupervisor) onConfigChanged(ctx context.Context, oldCfg, newCfg *fil
 		}
 	}
 
-	var gatewayUpdates []func(context.Context) error
+	var gatewayUpdates []GatewayUpdateIntent
 
 	if oldCfg != nil {
 		for id, token := range currentTokens {
@@ -344,31 +338,14 @@ func (s *BotSupervisor) onConfigChanged(ctx context.Context, oldCfg, newCfg *fil
 					}
 					if rt != nil && rt.arikawaState != nil {
 						st := currentStatuses[id]
-						gwState := rt.arikawaState
-						instanceID := id
-
-						gatewayUpdates = append(gatewayUpdates, func(ctx context.Context) error {
-							updateCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-							defer cancel()
-							err := gwState.Gateway().Send(updateCtx, &gateway.UpdatePresenceCommand{
-								Status: discord.Status(st),
-							})
-							if err != nil {
-								s.log().Warn("Failed to update discord status for instance",
-									slog.String("botInstanceID", instanceID),
-									slog.String("mitigation", "operation ignored to protect main flow"),
-									slog.Any("error", err),
-								)
-							}
-							return nil
-						})
+						gatewayUpdates = append(gatewayUpdates, GatewayUpdateIntent{InstanceID: id, Status: st})
 					}
 				}
 			}
 		}
 	}
 
-	var syncTasks []func(context.Context) error
+	var syncTasks []SyncTaskIntent
 	if oldCfg != nil {
 		s.log().Debug("Evaluating conditional feature routing routines")
 		for _, newGuild := range newCfg.Guilds {
@@ -398,53 +375,9 @@ func (s *BotSupervisor) onConfigChanged(ctx context.Context, oldCfg, newCfg *fil
 					}
 				}
 				if len(activeInstances) > 0 {
-					syncTasks = append(syncTasks, func(ctx context.Context) error {
-						select {
-						case <-ctx.Done():
-							return ctx.Err()
-						case <-time.After(time.Duration(rand.Float64()*500) * time.Millisecond):
-						}
-
-						for _, instanceID := range activeInstances {
-							if ctx.Err() != nil {
-								return ctx.Err()
-							}
-							var runtime *botRuntime
-							for id, rt := range s.resolver.getRuntimes() {
-								if id == instanceID {
-									runtime = rt
-									break
-								}
-							}
-							if runtime == nil || runtime.commandHandler == nil {
-								continue
-							}
-							if syncer := runtime.commandHandler.GetSyncer(); syncer != nil {
-								appIDInt, _ := strconv.ParseInt(newGuild.GuildID, 10, 64)
-								if syncErr := syncer.SyncBulkOverwrite(discord.GuildID(appIDInt), runtime.commandHandler.GetRouter().Registry()); syncErr != nil {
-									if strings.Contains(syncErr.Error(), "403") {
-										s.log().Warn("Dynamic command synchronization ignored due to authorization barrier",
-											slog.String("guildID", newGuild.GuildID),
-											slog.String("botInstanceID", instanceID),
-											slog.String("mitigation", "permission bypass"),
-											slog.Any("error", syncErr),
-										)
-									} else {
-										s.log().Error("Structural failure synchronizing guild commands",
-											slog.String("request_id", "sync_"+newGuild.GuildID+"_"+instanceID),
-											slog.String("guildID", newGuild.GuildID),
-											slog.String("botInstanceID", instanceID),
-											slog.Any("error", syncErr),
-										)
-										return fmt.Errorf("sync bulk overwrite for guild %s: %w", newGuild.GuildID, syncErr)
-									}
-								} else {
-									s.log().Info("Dynamic guild command synchronization completed", slog.String("guildID", newGuild.GuildID), slog.String("botInstanceID", instanceID))
-								}
-							}
-						}
-						return nil
-					})
+					for _, instanceID := range activeInstances {
+						syncTasks = append(syncTasks, SyncTaskIntent{GuildID: newGuild.GuildID, InstanceID: instanceID})
+					}
 				}
 			}
 		}
@@ -465,4 +398,78 @@ func checkTokenRevocationError(errStr string) bool {
 	return strings.Contains(lowerErr, "4004") ||
 		strings.Contains(lowerErr, "authentication failed") ||
 		(strings.Contains(lowerErr, "401") && !strings.Contains(lowerErr, "4014"))
+}
+
+func (s *BotSupervisor) executeGatewayUpdate(ctx context.Context, intent GatewayUpdateIntent) error {
+	var rt *botRuntime
+	for rtID, runtime := range s.resolver.getRuntimes() {
+		if rtID == intent.InstanceID {
+			rt = runtime
+			break
+		}
+	}
+	if rt == nil || rt.arikawaState == nil {
+		return nil
+	}
+
+	updateCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	err := rt.arikawaState.Gateway().Send(updateCtx, &gateway.UpdatePresenceCommand{
+		Status: discord.Status(intent.Status),
+	})
+	if err != nil {
+		s.log().Warn("Failed to update discord status for instance",
+			slog.String("botInstanceID", intent.InstanceID),
+			slog.String("mitigation", "operation ignored to protect main flow"),
+			slog.Any("error", err),
+		)
+	}
+	return nil
+}
+
+func (s *BotSupervisor) executeSyncTask(ctx context.Context, intent SyncTaskIntent) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(time.Duration(rand.Float64()*500) * time.Millisecond):
+	}
+
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	var runtime *botRuntime
+	for id, rt := range s.resolver.getRuntimes() {
+		if id == intent.InstanceID {
+			runtime = rt
+			break
+		}
+	}
+	if runtime == nil || runtime.commandHandler == nil {
+		return nil
+	}
+	if syncer := runtime.commandHandler.GetSyncer(); syncer != nil {
+		appIDInt, _ := strconv.ParseInt(intent.GuildID, 10, 64)
+		if syncErr := syncer.SyncBulkOverwrite(discord.GuildID(appIDInt), runtime.commandHandler.GetRouter().Registry()); syncErr != nil {
+			if strings.Contains(syncErr.Error(), "403") {
+				s.log().Warn("Dynamic command synchronization ignored due to authorization barrier",
+					slog.String("guildID", intent.GuildID),
+					slog.String("botInstanceID", intent.InstanceID),
+					slog.String("mitigation", "permission bypass"),
+					slog.Any("error", syncErr),
+				)
+			} else {
+				s.log().Error("Structural failure synchronizing guild commands",
+					slog.String("request_id", "sync_"+intent.GuildID+"_"+intent.InstanceID),
+					slog.String("guildID", intent.GuildID),
+					slog.String("botInstanceID", intent.InstanceID),
+					slog.Any("error", syncErr),
+				)
+				return fmt.Errorf("sync bulk overwrite for guild %s: %w", intent.GuildID, syncErr)
+			}
+		} else {
+			s.log().Info("Dynamic guild command synchronization completed", slog.String("guildID", intent.GuildID), slog.String("botInstanceID", intent.InstanceID))
+		}
+	}
+	return nil
 }

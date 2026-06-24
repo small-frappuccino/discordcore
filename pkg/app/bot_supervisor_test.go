@@ -8,8 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/diamondburned/arikawa/v3/discord"
-	"github.com/diamondburned/arikawa/v3/state"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"golang.org/x/sync/errgroup"
 )
@@ -34,21 +32,6 @@ func awaitCondition(timeout time.Duration, condition func() bool) error {
 
 func TestSupervisorFaultIsolation(t *testing.T) {
 	t.Parallel()
-	fetchBotArikawaMeHook := func(s *state.State) (*discord.User, error) {
-		return &discord.User{ID: 123, Username: "test"}, nil
-	}
-	openBotArikawaStateHook := func(ctx context.Context, s *state.State) error {
-		token := s.Token
-		if token == "Bot token2" {
-			return errors.New("simulated gateway panic in child runtime ID 2")
-		} else if token == "Bot token3" {
-			return errors.New("HTTP 401 Unauthorized")
-		}
-		return nil
-	}
-	setupCommandHandlerHook := func(ch *CommandHandler) error { return nil }
-	shutdownCommandHandlerHook := func(ch *CommandHandler) error { return nil }
-
 	cfgManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	cfg := files.BotConfig{
 		Features: files.FeatureToggles{
@@ -75,15 +58,8 @@ func TestSupervisorFaultIsolation(t *testing.T) {
 	})
 
 	supervisor := NewBotSupervisor(cfgManager, botRuntimeOptions{
-		configManager:          cfgManager,
-		startupTasks:           startupTasks,
-		fetchBotArikawaMe:      fetchBotArikawaMeHook,
-		openBotArikawaState:    openBotArikawaStateHook,
-		setupCommandHandler:    setupCommandHandlerHook,
-		shutdownCommandHandler: shutdownCommandHandlerHook,
-		newCommandHandlerForBot: func(deps CommandHandlerDeps) (*CommandHandler, error) {
-			return &CommandHandler{session: deps.Session, configManager: deps.ConfigManager}, nil
-		},
+		configManager: cfgManager,
+		startupTasks:  startupTasks,
 	})
 	t.Cleanup(func() {
 		_ = supervisor.Stop(context.Background())
@@ -188,12 +164,6 @@ func TestZeroStateIdling(t *testing.T) {
 
 func TestSupervisorSwarmTopology(t *testing.T) {
 	t.Parallel()
-	fetchBotArikawaMeHook := func(s *state.State) (*discord.User, error) {
-		return &discord.User{ID: 123, Username: "test"}, nil
-	}
-	openBotArikawaStateHook := func(ctx context.Context, s *state.State) error { return nil }
-	setupCommandHandlerHook := func(ch *CommandHandler) error { return nil }
-	shutdownCommandHandlerHook := func(ch *CommandHandler) error { return nil }
 
 	cfgManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 
@@ -223,15 +193,8 @@ func TestSupervisorSwarmTopology(t *testing.T) {
 	})
 
 	supervisor := NewBotSupervisor(cfgManager, botRuntimeOptions{
-		configManager:          cfgManager,
-		startupTasks:           startupTasks,
-		fetchBotArikawaMe:      fetchBotArikawaMeHook,
-		openBotArikawaState:    openBotArikawaStateHook,
-		setupCommandHandler:    setupCommandHandlerHook,
-		shutdownCommandHandler: shutdownCommandHandlerHook,
-		newCommandHandlerForBot: func(deps CommandHandlerDeps) (*CommandHandler, error) {
-			return &CommandHandler{session: deps.Session, configManager: deps.ConfigManager}, nil
-		},
+		configManager: cfgManager,
+		startupTasks:  startupTasks,
 	})
 
 	if err := supervisor.Start(); err != nil {
@@ -264,12 +227,6 @@ func TestSupervisorSwarmTopology(t *testing.T) {
 
 func TestSupervisorConfigChange(t *testing.T) {
 	t.Parallel()
-	fetchBotArikawaMeHook := func(s *state.State) (*discord.User, error) {
-		return &discord.User{ID: 123, Username: "test"}, nil
-	}
-	openBotArikawaStateHook := func(ctx context.Context, s *state.State) error { return nil }
-	setupCommandHandlerHook := func(ch *CommandHandler) error { return nil }
-	shutdownCommandHandlerHook := func(ch *CommandHandler) error { return nil }
 
 	cfgManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
 	cfg := files.BotConfig{
@@ -295,15 +252,8 @@ func TestSupervisorConfigChange(t *testing.T) {
 	})
 
 	supervisor := NewBotSupervisor(cfgManager, botRuntimeOptions{
-		configManager:          cfgManager,
-		startupTasks:           startupTasks,
-		fetchBotArikawaMe:      fetchBotArikawaMeHook,
-		openBotArikawaState:    openBotArikawaStateHook,
-		setupCommandHandler:    setupCommandHandlerHook,
-		shutdownCommandHandler: shutdownCommandHandlerHook,
-		newCommandHandlerForBot: func(deps CommandHandlerDeps) (*CommandHandler, error) {
-			return &CommandHandler{session: deps.Session, configManager: deps.ConfigManager}, nil
-		},
+		configManager: cfgManager,
+		startupTasks:  startupTasks,
 	})
 
 	if err := supervisor.Start(); err != nil {
@@ -399,17 +349,6 @@ func TestBotSupervisor_ConcurrentConfigThrashing(t *testing.T) {
 	opts := botRuntimeOptions{
 		configManager: cfgManager,
 		startupTasks:  startupTasks,
-		openBotArikawaState: func(ctx context.Context, s *state.State) error {
-			return nil // Bypass WebSocket dial
-		},
-		fetchBotArikawaMe: func(s *state.State) (*discord.User, error) {
-			return &discord.User{ID: 999, Username: "stress_test_bot"}, nil // Bypass HTTP GET
-		},
-		newCommandHandlerForBot: func(deps CommandHandlerDeps) (*CommandHandler, error) {
-			return &CommandHandler{session: deps.Session, configManager: deps.ConfigManager}, nil
-		},
-		setupCommandHandler:    func(ch *CommandHandler) error { return nil },
-		shutdownCommandHandler: func(ch *CommandHandler) error { return nil },
 	}
 
 	supervisor := NewBotSupervisor(cfgManager, opts)

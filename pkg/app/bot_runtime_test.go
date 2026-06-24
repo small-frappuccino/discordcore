@@ -6,9 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/diamondburned/arikawa/v3/discord"
-	"github.com/diamondburned/arikawa/v3/state"
-
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/storage/postgres"
@@ -19,14 +16,6 @@ import (
 func TestBotRuntime_InitializationRouting(t *testing.T) {
 	t.Parallel()
 
-	fetchBotArikawaMeHook := func(s *state.State) (*discord.User, error) {
-		return &discord.User{ID: 123, Username: "test"}, nil
-	}
-	openBotArikawaStateHook := func(ctx context.Context, s *state.State) error { return nil }
-	newCommandHandlerForBotHook := func(deps CommandHandlerDeps) (*CommandHandler, error) {
-		return &CommandHandler{botInstanceID: deps.BotInstanceID, session: deps.Session}, nil
-	}
-	setupCommandHandlerHook := func(ch *CommandHandler) error { return nil }
 	tests := []struct {
 		name                 string
 		cfg                  *files.BotConfig
@@ -123,15 +112,11 @@ func TestBotRuntime_InitializationRouting(t *testing.T) {
 			caps := resolveBotRuntimeCapabilities(tt.cfg, "main")
 
 			opts := botRuntimeOptions{
-				runtimeCount:            1,
-				configManager:           cfgMgr,
-				store:                   &postgres.Store{},
-				qotdCommandService:      &qotd.Service{},
-				fetchBotArikawaMe:       fetchBotArikawaMeHook,
-				openBotArikawaState:     openBotArikawaStateHook,
-				newCommandHandlerForBot: newCommandHandlerForBotHook,
-				setupCommandHandler:     setupCommandHandlerHook,
-				startupTasks:            NewStartupTaskOrchestrator(context.Background(), 1),
+				runtimeCount:       1,
+				configManager:      cfgMgr,
+				store:              &postgres.Store{},
+				qotdCommandService: &qotd.Service{},
+				startupTasks:       NewStartupTaskOrchestrator(context.Background(), 1),
 			}
 
 			rt, err := NewBotRuntime(resolvedBotInstance{ID: "main", Token: "Bot fake"}, caps, opts)

@@ -292,6 +292,34 @@ export interface RPCButtonConfig {
   url?: string;
 }
 
+export interface CustomEmbedFieldConfig {
+  name: string;
+  value: string;
+  inline?: boolean;
+}
+
+export interface CustomEmbedPostingConfig {
+  channel_id: string;
+  message_id: string;
+  webhook_id?: string;
+  webhook_token?: string;
+}
+
+export interface CustomEmbedConfig {
+  key: string;
+  title?: string;
+  description?: string;
+  color?: number;
+  author_name?: string;
+  author_icon_url?: string;
+  footer_text?: string;
+  footer_icon_url?: string;
+  image_url?: string;
+  thumbnail_url?: string;
+  fields?: CustomEmbedFieldConfig[];
+  postings?: CustomEmbedPostingConfig[];
+}
+
 export interface testConfigContainer {
   secret: string;
 }
@@ -393,42 +421,6 @@ export interface rawQOTDConfig {
   qotd_time_minute_utc?: number;
 }
 
-export interface DiscohookJSON {
-  content?: string;
-  embeds?: DiscohookEmbed[];
-}
-
-export interface DiscohookEmbed {
-  title?: string;
-  description?: string;
-  color?: number;
-  author?: DiscohookAuthor;
-  footer?: DiscohookFooter;
-  image?: DiscohookImage;
-  thumbnail?: DiscohookImage;
-  fields?: DiscohookField[];
-}
-
-export interface DiscohookAuthor {
-  name?: string;
-  icon_url?: string;
-}
-
-export interface DiscohookFooter {
-  text?: string;
-  icon_url?: string;
-}
-
-export interface DiscohookImage {
-  url?: string;
-}
-
-export interface DiscohookField {
-  name?: string;
-  value?: string;
-  inline?: boolean;
-}
-
 export interface payload {
   name: string;
   count: number;
@@ -471,31 +463,39 @@ export interface RolePanelConfig {
   postings?: RolePanelPostingConfig[];
 }
 
-export interface CustomEmbedFieldConfig {
-  name: string;
-  value: string;
-  inline?: boolean;
+export interface DiscohookJSON {
+  content?: string;
+  embeds?: DiscohookEmbed[];
 }
 
-export interface CustomEmbedPostingConfig {
-  channel_id: string;
-  message_id: string;
-  webhook_id?: string;
-  webhook_token?: string;
-}
-
-export interface CustomEmbedConfig {
-  key: string;
+export interface DiscohookEmbed {
   title?: string;
   description?: string;
   color?: number;
-  author_name?: string;
-  author_icon_url?: string;
-  footer_text?: string;
-  footer_icon_url?: string;
-  image_url?: string;
-  thumbnail_url?: string;
-  fields?: CustomEmbedFieldConfig[];
-  postings?: CustomEmbedPostingConfig[];
+  author?: DiscohookAuthor;
+  footer?: DiscohookFooter;
+  image?: DiscohookImage;
+  thumbnail?: DiscohookImage;
+  fields?: DiscohookField[];
+}
+
+export interface DiscohookAuthor {
+  name?: string;
+  icon_url?: string;
+}
+
+export interface DiscohookFooter {
+  text?: string;
+  icon_url?: string;
+}
+
+export interface DiscohookImage {
+  url?: string;
+}
+
+export interface DiscohookField {
+  name?: string;
+  value?: string;
+  inline?: boolean;
 }
 
