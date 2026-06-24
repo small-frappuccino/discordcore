@@ -4,22 +4,19 @@ from pathlib import Path
 def generate_topology(directory: Path, prefix: str = "") -> str:
     """
     Recursively builds a deterministic directory tree visualization.
-    Executes an O(N) traversal where N is the number of nested system entities.
+    Executes an O(N) traversal. Output is aggregated in RAM before return.
     """
-    tree_str = ""
+    tree_buffer = []
     # Enforce deterministic ordering: directories first, then files, alphabetically sorted
     paths = sorted(directory.iterdir(), key=lambda p: (not p.is_dir(), p.name))
     pointers = [('├── ', '│   ')] * (len(paths) - 1) + [('└── ', '    ')] if paths else []
     
     for pointer, path in zip(pointers, paths):
-        # Prevent recursive self-ingestion of the generated payload files
-        if path.name.endswith("_notebook_payload.md"):
-            continue
-            
-        tree_str += f"{prefix}{pointer[0]}{path.name}\n"
+        tree_buffer.append(f"{prefix}{pointer[0]}{path.name}\n")
         if path.is_dir():
-            tree_str += generate_topology(path, prefix + pointer[1])
-    return tree_str
+            tree_buffer.append(generate_topology(path, prefix + pointer[1]))
+            
+    return "".join(tree_buffer)
 
 def execute_payload_aggregation(base_dir: str = "./pkg"):
     pkg_path = Path(base_dir).resolve()
@@ -29,6 +26,11 @@ def execute_payload_aggregation(base_dir: str = "./pkg"):
         sys.exit(1)
 
     repo_root = pkg_path.parent
+    
+    # Provision the centralized persistent artifact sink
+    output_sink = repo_root / "notebookLM"
+    output_sink.mkdir(parents=True, exist_ok=True)
+    print(f"[-] Output sink established at: {output_sink}")
 
     # =================================================================
     # PHASE 1: Root Architectural Ingestion
@@ -38,63 +40,65 @@ def execute_payload_aggregation(base_dir: str = "./pkg"):
     found_root_files = [f for f in root_target_files if (repo_root / f).exists()]
 
     if found_root_files:
-        root_payload_path = repo_root / "ROOT_architecture_payload.md"
-        with open(root_payload_path, "w", encoding="utf-8") as root_md:
-            root_md.write("# Root System Architecture & Agent Schemas\n\n")
+        root_payload_path = output_sink / "ROOT_architecture_payload.md"
+        # Initialize memory block
+        root_buffer = ["# Root System Architecture & Agent Schemas\n\n"]
+        
+        for filename in found_root_files:
+            file_path = repo_root / filename
+            root_buffer.append(f"// === FILE: {filename} ===\n```markdown\n")
+            try:
+                root_buffer.append(file_path.read_text(encoding="utf-8"))
+            except Exception as e:
+                root_buffer.append(f"// [I/O FAULT]: Failed to map memory boundary - {e}\n")
+            root_buffer.append("\n```\n\n")
             
-            for filename in found_root_files:
-                file_path = repo_root / filename
-                root_md.write(f"// === FILE: {filename} ===\n")
-                root_md.write("```markdown\n")
-                try:
-                    root_md.write(file_path.read_text(encoding="utf-8"))
-                except Exception as e:
-                    root_md.write(f"// [I/O FAULT]: Failed to map memory boundary - {e}\n")
-                root_md.write("\n```\n\n")
-        print(f"[+] Root payload compiled at: {root_payload_path}")
+        # Atomic flush from RAM to persistent disk
+        root_payload_path.write_text("".join(root_buffer), encoding="utf-8")
+        print(f"[+] Root payload routed to sink: {root_payload_path.name}")
     else:
         print("[!] Target root documents not found. Skipping Phase 1.")
 
     # =================================================================
     # PHASE 2: Domain Boundary Ingestion (./pkg/*)
     # =================================================================
-    # Enforce structural strictness: ./pkg/* contains NO root Go files.
-    # We only map and iterate through directory objects (Domains).
     domains = [d for d in pkg_path.iterdir() if d.is_dir()]
 
     for domain in domains:
         print(f"[-] Compiling domain boundary: {domain.name}")
-        payload_path = domain / f"{domain.name}_notebook_payload.md"
+        payload_path = output_sink / f"{domain.name}_notebook_payload.md"
         
-        # Enforce UTF-8 to bypass native Windows character-mapping faults
-        with open(payload_path, "w", encoding="utf-8") as md_file:
-            # 1. Structural Header & Topology
-            md_file.write(f"# Domain Architecture: {domain.name}\n\n")
-            md_file.write("## Layout Topology\n```text\n")
-            md_file.write(f"{domain.name}/\n")
-            md_file.write(generate_topology(domain))
-            md_file.write("```\n\n")
-            md_file.write("## Source Stream Aggregation\n\n")
+        # Initialize contiguous memory buffer for this domain
+        domain_buffer = [
+            f"# Domain Architecture: {domain.name}\n\n",
+            "## Layout Topology\n```text\n",
+            f"{domain.name}/\n",
+            generate_topology(domain),
+            "```\n\n",
+            "## Source Stream Aggregation\n\n"
+        ]
+        
+        # Sequential file ingestion into RAM
+        go_files = sorted(domain.rglob("*.go"))
+        if not go_files:
+            domain_buffer.append("> [WARN] 0x00 source streams detected within this layout boundary.\n")
+            # Flush empty state to disk
+            payload_path.write_text("".join(domain_buffer), encoding="utf-8")
+            continue
+        
+        for go_file in go_files:
+            relative_path = go_file.relative_to(repo_root).as_posix()
             
-            # 2. Sequential Asynchronous File Ingestion Simulation
-            go_files = sorted(domain.rglob("*.go"))
-            if not go_files:
-                md_file.write("> [WARN] 0x00 source streams detected within this layout boundary.\n")
-                continue
+            domain_buffer.append(f"// === FILE: {relative_path} ===\n```go\n")
+            try:
+                domain_buffer.append(go_file.read_text(encoding="utf-8"))
+            except Exception as e:
+                domain_buffer.append(f"// [I/O FAULT]: Failed to map memory boundary - {e}\n")
+            domain_buffer.append("\n```\n\n")
             
-            for go_file in go_files:
-                # Force POSIX format (forward slashes) on Windows for LLM ingestion consistency
-                relative_path = go_file.relative_to(repo_root).as_posix()
-                
-                md_file.write(f"// === FILE: {relative_path} ===\n")
-                md_file.write("```go\n")
-                try:
-                    md_file.write(go_file.read_text(encoding="utf-8"))
-                except Exception as e:
-                    md_file.write(f"// [I/O FAULT]: Failed to map memory boundary - {e}\n")
-                md_file.write("\n```\n\n")
-                
-        print(f"[+] Domain execution complete. Payload anchored at: {payload_path}")
+        # Atomic flush from RAM to persistent disk
+        payload_path.write_text("".join(domain_buffer), encoding="utf-8")
+        print(f"[+] Domain execution complete. Payload routed to sink: {payload_path.name}")
 
 if __name__ == "__main__":
     execute_payload_aggregation()

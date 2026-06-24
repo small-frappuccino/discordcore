@@ -47,7 +47,7 @@ func (l *Logger) checkPolicy(eventType logging.LogEventType, guildID string) (lo
 		return decision, false
 	}
 
-	reason, mask, ok := logging.ValidateLogCapability(l.state, l.intents, decision, guildID, l.config)
+	reason, mask, ok := logging.ValidateLogCapability(&arikawaDiscordAdapter{st: l.state}, uint64(l.intents), decision, guildID, l.config)
 	if !ok {
 		if reason == logging.EmitReasonMissingIntent || reason == logging.EmitReasonChannelInvalid {
 			l.logger.Warn("Dropped logging event due to capability restrictions",

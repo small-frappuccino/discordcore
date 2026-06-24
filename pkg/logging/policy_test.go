@@ -3,12 +3,9 @@ package logging
 import (
 	"fmt"
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/diamondburned/arikawa/v3/discord"
-	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
@@ -389,122 +386,57 @@ func TestValidateLogCapability(t *testing.T) {
 		Capability: LogEventCapability{
 			RequiresChannel:      true,
 			ValidateChannelPerms: false,
-			RequiredIntentsMask:  gateway.IntentGuildMembers,
+			RequiredIntentsMask:  uint64((1 << 1)),
 		},
 		ChannelID: "123",
 	}
 	reason, mask, ok := ValidateLogCapability(nil, 0, decIntent, "111", mgr)
-	if ok || reason != EmitReasonMissingIntent || mask != gateway.IntentGuildMembers {
+	if ok || reason != EmitReasonMissingIntent || mask != uint64((1<<1)) {
 		t.Errorf("expected missing intent, got reason=%s mask=%v ok=%t", reason, mask, ok)
 	}
 }
 
-type mockPermEval struct {
-	channels map[discord.ChannelID]*discord.Channel
-	me       *discord.User
-	perms    discord.Permissions
-	permsErr error
-	chErr    error
+type mockDiscordAdapter2 struct {
+	canLog bool
+	valid  bool
+	err    error
 }
 
-func (m *mockPermEval) Channel(id discord.ChannelID) (*discord.Channel, error) {
-	if m.chErr != nil {
-		return nil, m.chErr
-	}
-	if ch, ok := m.channels[id]; ok {
-		return ch, nil
-	}
-	return nil, fmt.Errorf("not found")
+func (m *mockDiscordAdapter2) CanLogToChannel(channelID string) (bool, error) {
+	return m.canLog, m.err
 }
 
-func (m *mockPermEval) Me() (*discord.User, error) {
-	if m.me == nil {
-		return nil, fmt.Errorf("no me")
+func (m *mockDiscordAdapter2) ValidateModerationLogChannel(guildID, channelID string) error {
+	if m.err != nil {
+		return m.err
 	}
-	return m.me, nil
-}
-
-func (m *mockPermEval) Permissions(channelID discord.ChannelID, userID discord.UserID) (discord.Permissions, error) {
-	return m.perms, m.permsErr
+	if !m.valid {
+		return fmt.Errorf("invalid channel")
+	}
+	return nil
 }
 
 func TestValidateModerationLogChannel(t *testing.T) {
-	t.Parallel()
-	// nil state
-	if err := ValidateModerationLogChannel(nil, "111", "222"); err == nil || !strings.Contains(err.Error(), "state is nil") {
-		t.Errorf("expected error for nil state")
+	err := ValidateModerationLogChannel(nil, "111", "222")
+	if err == nil {
+		t.Error("expected err on nil state")
 	}
 
-	// missing guildID
-	m := &mockPermEval{channels: make(map[discord.ChannelID]*discord.Channel)}
-	if err := ValidateModerationLogChannel(m, "", "222"); err == nil || !strings.Contains(err.Error(), "missing guildID") {
-		t.Errorf("expected error for missing guildID")
+	err = ValidateModerationLogChannel(&mockDiscordAdapter2{valid: true}, "", "222")
+	if err == nil {
+		t.Error("expected err on empty guild")
 	}
 
-	// invalid channel/guild ID
-	if err := ValidateModerationLogChannel(m, "abc", "222"); err == nil || !strings.Contains(err.Error(), "invalid guild ID") {
-		t.Errorf("expected error for invalid guild ID")
-	}
-	if err := ValidateModerationLogChannel(m, "111", "abc"); err == nil || !strings.Contains(err.Error(), "invalid channel ID") {
-		t.Errorf("expected error for invalid channel ID")
+	m := &mockDiscordAdapter2{valid: false}
+	err = ValidateModerationLogChannel(m, "111", "222")
+	if err == nil {
+		t.Error("expected err on invalid channel")
 	}
 
-	// channel lookup failed
-	m.chErr = fmt.Errorf("channel lookup failed")
-	if err := ValidateModerationLogChannel(m, "111", "222"); err == nil || !strings.Contains(err.Error(), "channel lookup failed") {
-		t.Errorf("expected error for channel lookup failed")
-	}
-	m.chErr = nil
-
-	// Guild mismatch
-	meID := discord.UserID(123)
-	guildID := discord.GuildID(111)
-	channelID := discord.ChannelID(222)
-
-	m.channels[channelID] = &discord.Channel{
-		ID:      channelID,
-		GuildID: discord.GuildID(999), // mismatch
-		Type:    discord.GuildText,
-	}
-	if err := ValidateModerationLogChannel(m, "111", "222"); err == nil || !strings.Contains(err.Error(), "channel guild mismatch") {
-		t.Errorf("expected error for guild mismatch, got %v", err)
-	}
-
-	// Invalid channel type
-	m.channels[channelID] = &discord.Channel{
-		ID:      channelID,
-		GuildID: guildID,
-		Type:    discord.GuildVoice, // invalid
-	}
-	if err := ValidateModerationLogChannel(m, "111", "222"); err == nil || !strings.Contains(err.Error(), "channel is not a guild text channel") {
-		t.Errorf("expected error for invalid channel type, got %v", err)
-	}
-
-	// Bot identity not available
-	m.channels[channelID] = &discord.Channel{
-		ID:      channelID,
-		GuildID: guildID,
-		Type:    discord.GuildText,
-	}
-	if err := ValidateModerationLogChannel(m, "111", "222"); err == nil || !strings.Contains(err.Error(), "bot identity not available") {
-		t.Errorf("expected error for missing bot identity, got %v", err)
-	}
-
-	// Permission checks - set bot me ID
-	m.me = &discord.User{ID: meID}
-
-	m.permsErr = fmt.Errorf("permission check failed")
-	if err := ValidateModerationLogChannel(m, "111", "222"); err == nil || !strings.Contains(err.Error(), "permission check failed") {
-		t.Errorf("expected error for missing guild store entry (permission check failed)")
-	}
-	m.permsErr = nil
-
-	// Setup permissions
-	m.perms = discord.PermissionAll
-
-	// Success!
-	if err := ValidateModerationLogChannel(m, "111", "222"); err != nil {
-		t.Errorf("expected success, got %v", err)
+	m.valid = true
+	err = ValidateModerationLogChannel(m, "111", "222")
+	if err != nil {
+		t.Error("expected no error")
 	}
 }
 

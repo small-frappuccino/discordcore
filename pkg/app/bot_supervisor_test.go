@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -405,5 +406,63 @@ func TestBotSupervisor_ConcurrentConfigThrashing(t *testing.T) {
 
 	if err := supervisor.Stop(stopCtx); err != nil {
 		t.Fatalf("resource leak: timeout exceeded waiting for bgWG in Stop: %v", err)
+	}
+}
+
+func TestBotSupervisor_ZeroLeakTeardown(t *testing.T) {
+	time.Sleep(50 * time.Millisecond) // stabilize background goroutines
+	initialGoroutines := runtime.NumGoroutine()
+
+	cfgManager := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	cfg := files.BotConfig{
+		Guilds: []files.GuildConfig{},
+	}
+	cfgManager.ApplyConfig(&cfg)
+
+	startupTasks := NewStartupTaskOrchestrator(context.Background(), 1)
+	t.Cleanup(func() {
+		_ = startupTasks.Shutdown(context.Background())
+	})
+
+	supervisor := NewBotSupervisor(cfgManager, botRuntimeOptions{
+		configManager: cfgManager,
+		startupTasks:  startupTasks,
+	})
+
+	if err := supervisor.Start(); err != nil {
+		t.Fatalf("supervisor start: %v", err)
+	}
+
+	// Add instances via Config
+	newCfg := &files.BotConfig{
+		Guilds: []files.GuildConfig{
+			{
+				GuildID: "g_leak",
+				BotInstanceTokens: map[string]files.EncryptedString{
+					"leak_instance": "mock_token",
+				},
+			},
+		},
+	}
+	cfgManager.ApplyConfig(newCfg)
+	_ = supervisor.onConfigChanged(context.Background(), &cfg, newCfg)
+
+	time.Sleep(100 * time.Millisecond)
+	midGoroutines := runtime.NumGoroutine()
+
+	// State wipe
+	emptyCfg := &files.BotConfig{
+		Guilds: []files.GuildConfig{},
+	}
+	cfgManager.ApplyConfig(emptyCfg)
+	_ = supervisor.onConfigChanged(context.Background(), newCfg, emptyCfg)
+
+	_ = supervisor.Stop(context.Background())
+
+	time.Sleep(200 * time.Millisecond)
+	finalGoroutines := runtime.NumGoroutine()
+
+	if finalGoroutines > initialGoroutines {
+		t.Errorf("goroutine leak detected: initial=%d, mid=%d, final=%d", initialGoroutines, midGoroutines, finalGoroutines)
 	}
 }

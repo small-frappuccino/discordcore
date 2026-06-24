@@ -602,7 +602,7 @@ type botRuntimeOptions struct {
 }
 
 // NewBotRuntime instantiates a fully isolated bot runtime.
-func NewBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabilities, opts botRuntimeOptions) (*botRuntime, error) {
+func NewBotRuntime(ctx context.Context, instance resolvedBotInstance, capabilities botRuntimeCapabilities, opts botRuntimeOptions) (*botRuntime, error) {
 	if instance.Token == "" {
 		return nil, errors.New("hardware-aligned validation failure: bot token is missing prior to socket coupling")
 	}
@@ -621,13 +621,14 @@ func NewBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabili
 	botToken := string(instance.Token)
 	arikawaState := state.New("Bot " + botToken)
 	arikawaState.AddIntents(gateway.Intents(capabilities.intents))
+	arikawaState = arikawaState.WithContext(ctx)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	openCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
 	var meUsername, meDiscriminator string
 	if !strings.Contains(botToken, "mock_token") && !strings.Contains(botToken, "Bot fake") && !strings.Contains(botToken, "token") {
-		if err := arikawaState.Open(ctx); err != nil {
+		if err := arikawaState.Open(openCtx); err != nil {
 			return nil, fmt.Errorf("open discord session for %s: %w", instance.ID, err)
 		}
 		me, err := arikawaState.Me()

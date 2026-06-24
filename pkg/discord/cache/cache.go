@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"hash/fnv"
 	"log/slog"
 	"runtime"
 	"strings"
@@ -34,10 +33,18 @@ type Shard[T any] struct {
 }
 
 // getShardIndex computes a deterministic, non-cryptographic hash for key distribution across shards.
+// It uses an inline FNV-1a implementation to elide interface allocations and string-to-byte-slice copies.
 func getShardIndex(key string) uint32 {
-	h := fnv.New32a()
-	h.Write([]byte(key))
-	return h.Sum32() % 16
+	const (
+		offset32 = 2166136261
+		prime32  = 16777619
+	)
+	hash := uint32(offset32)
+	for i := 0; i < len(key); i++ {
+		hash ^= uint32(key[i])
+		hash *= prime32
+	}
+	return hash % 16
 }
 
 // Segment orchestrates a fixed array of shards to uniformly distribute cache entries based on a hashed key.

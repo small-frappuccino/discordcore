@@ -242,7 +242,6 @@ flowchart TD
     Files --> Log
     Files --> Persistence
     Files --> Theme
-    Logging --> Arikawa
     Logging --> Files
     Members --> AdapterPerf
     Members --> Files

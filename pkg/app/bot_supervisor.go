@@ -239,7 +239,7 @@ func (s *BotSupervisor) handleTopologyDelta(cmd TopologyDelta) {
 					slog.String("botInstanceID", localID),
 				)
 
-				runtime, err := NewBotRuntime(resolvedBotInstance{ID: localID, Token: localToken, DiscordStatus: desiredStatus[localID]}, localCaps, s.opts)
+				runtime, err := NewBotRuntime(instanceCtx, resolvedBotInstance{ID: localID, Token: localToken, DiscordStatus: desiredStatus[localID]}, localCaps, s.opts)
 				if err != nil {
 					s.log().Error("Structural execution failure during bot startup sequence", slog.Any("error", err))
 					return nil // Localize error to avoid collapsing the entire ring immediately if it's transient

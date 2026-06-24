@@ -10,7 +10,7 @@ import (
 
 func TestDynamicManager(t *testing.T) {
 	t.Parallel()
-	dm := NewManager()
+	dm := NewManager(context.Background())
 	if dm == nil {
 		t.Fatal("expected non-nil manager")
 	}
@@ -93,5 +93,49 @@ func TestManagedService(t *testing.T) {
 
 	if ms.Stats().ErrorCount != 1 {
 		t.Errorf("expected 1 error")
+	}
+}
+
+func TestDynamicManager_ZeroLeakToggling(t *testing.T) {
+	time.Sleep(50 * time.Millisecond) // stabilize background test goroutines
+	initialGoroutines := runtime.NumGoroutine()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	dm := NewManager(ctx)
+
+	for i := 0; i < 50; i++ {
+		name := "dyn_leak_" + string(rune(i))
+		wrapper := NewLegacyServiceWrapper(LegacyServiceWrapperSpec{
+			Name:     name,
+			Type:     TypeMonitoring,
+			Priority: PriorityNormal,
+			Start: func(ctx context.Context) error {
+				<-ctx.Done()
+				return nil
+			},
+			Stop: func(ctx context.Context) error {
+				return nil
+			},
+			Check: func() bool { return true },
+		})
+		if err := dm.RegisterAndStart(name, wrapper); err != nil {
+			t.Fatalf("register failed: %v", err)
+		}
+	}
+
+	time.Sleep(50 * time.Millisecond)
+	midGoroutines := runtime.NumGoroutine()
+	if midGoroutines <= initialGoroutines {
+		t.Errorf("expected goroutine count to increase, got mid=%d vs initial=%d", midGoroutines, initialGoroutines)
+	}
+
+	cancel()
+	_ = dm.Wait()
+
+	time.Sleep(50 * time.Millisecond)
+	finalGoroutines := runtime.NumGoroutine()
+
+	if finalGoroutines > initialGoroutines {
+		t.Errorf("goroutine leak detected: initial=%d, mid=%d, final=%d", initialGoroutines, midGoroutines, finalGoroutines)
 	}
 }

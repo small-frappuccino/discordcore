@@ -1,3 +1,216 @@
+# Domain Architecture: logging
+
+## Layout Topology
+```text
+logging/
+├── formatting.go
+├── policy.go
+└── policy_test.go
+```
+
+## Source Stream Aggregation
+
+// === FILE: pkg/logging/formatting.go ===
+```go
+package logging
+
+import (
+	"fmt"
+	"strings"
+	"time"
+)
+
+// FormatUserLabel returns a standardized markdown label for a user.
+func FormatUserLabel(username, userID string) string {
+	userID = strings.TrimSpace(userID)
+	username = strings.TrimSpace(username)
+	if userID == "" {
+		if username != "" {
+			return "**" + username + "**"
+		}
+		return "Unknown"
+	}
+	if username == "" {
+		return "<@" + userID + "> (`" + userID + "`)"
+	}
+	return fmt.Sprintf("**%s** (<@%s>, `%s`)", username, userID, userID)
+}
+
+// FormatUserRef returns a standardized mention reference for a user.
+func FormatUserRef(userID string) string {
+	return FormatUserLabel("", userID)
+}
+
+// FormatChannelLabel returns a standardized markdown mention for a channel.
+func FormatChannelLabel(channelID string) string {
+	channelID = strings.TrimSpace(channelID)
+	if channelID == "" {
+		return "Unknown"
+	}
+	return "<#" + channelID + ">, `" + channelID + "`"
+}
+
+// FormatRoleLabel returns a standardized markdown mention for a role.
+func FormatRoleLabel(roleID, roleName string) string {
+	roleID = strings.TrimSpace(roleID)
+	roleName = strings.TrimSpace(roleName)
+	if roleID != "" {
+		return "<@&" + roleID + "> (`" + roleID + "`)"
+	}
+	if roleName != "" {
+		return "`" + roleName + "`"
+	}
+	return "Unknown"
+}
+
+// FormatDurationFull shows the full duration, omitting leading zero-valued units.
+func FormatDurationFull(d time.Duration) string {
+	if d < 0 {
+		d = 0
+	}
+	totalSeconds := int64(d.Seconds())
+	days := totalSeconds / 86400
+	hours := (totalSeconds % 86400) / 3600
+	minutes := (totalSeconds % 3600) / 60
+	seconds := totalSeconds % 60
+
+	type comp struct {
+		label string
+		value int64
+	}
+	parts := []comp{
+		{"days", days},
+		{"hours", hours},
+		{"minutes", minutes},
+		{"seconds", seconds},
+	}
+
+	for len(parts) > 1 && parts[0].value == 0 {
+		parts = parts[1:]
+	}
+
+	out := ""
+	for i, p := range parts {
+		if i > 0 {
+			out += " "
+		}
+		out += fmt.Sprintf("%d %s", p.value, p.label)
+	}
+	return out
+}
+
+// FormatDurationSmart lists all non-zero units (no abbreviations).
+func FormatDurationSmart(d time.Duration) string {
+	if d < 0 {
+		d = 0
+	}
+	totalSeconds := int64(d.Seconds())
+	days := totalSeconds / 86400
+	hours := (totalSeconds % 86400) / 3600
+	minutes := (totalSeconds % 3600) / 60
+	seconds := totalSeconds % 60
+
+	parts := []string{}
+
+	if days > 0 {
+		if days == 1 {
+			parts = append(parts, "1 day")
+		} else {
+			parts = append(parts, fmt.Sprintf("%d days", days))
+		}
+	}
+	if hours > 0 {
+		if hours == 1 {
+			parts = append(parts, "1 hour")
+		} else {
+			parts = append(parts, fmt.Sprintf("%d hours", hours))
+		}
+	}
+	if minutes > 0 {
+		if minutes == 1 {
+			parts = append(parts, "1 minute")
+		} else {
+			parts = append(parts, fmt.Sprintf("%d minutes", minutes))
+		}
+	}
+	if seconds > 0 {
+		if seconds == 1 {
+			parts = append(parts, "1 second")
+		} else {
+			parts = append(parts, fmt.Sprintf("%d seconds", seconds))
+		}
+	}
+
+	return strings.Join(parts, " ")
+}
+
+// FormatDuration formats a time duration in a human-readable way.
+func FormatDuration(d time.Duration) string {
+	if d == 0 {
+		return "`            `"
+	}
+
+	days := int(d.Hours()) / 24
+	hours := int(d.Hours()) % 24
+	minutes := int(d.Minutes()) % 60
+
+	if days > 365 {
+		years := days / 365
+		remainingDays := days % 365
+		if years == 1 {
+			return fmt.Sprintf("1 year, %d days", remainingDays)
+		}
+		return fmt.Sprintf("%d years, %d days", years, remainingDays)
+	}
+
+	if days > 30 {
+		months := days / 30
+		remainingDays := days % 30
+		if months == 1 {
+			return fmt.Sprintf("1 month, %d days", remainingDays)
+		}
+		return fmt.Sprintf("%d months, %d days", months, remainingDays)
+	}
+
+	if days > 0 {
+		if days == 1 {
+			return fmt.Sprintf("1 day, %d hours", hours)
+		}
+		return fmt.Sprintf("%d days, %d hours", days, hours)
+	}
+
+	if hours > 0 {
+		if hours == 1 {
+			return fmt.Sprintf("1 hour, %d minutes", minutes)
+		}
+		return fmt.Sprintf("%d hours, %d minutes", hours, minutes)
+	}
+
+	if minutes > 0 {
+		if minutes == 1 {
+			return "1 minutes"
+		}
+		return fmt.Sprintf("%d minutes", minutes)
+	}
+
+	return "Less than 1 minute"
+}
+
+// TruncateString truncates a string to a maximum length.
+func TruncateString(s string, maxLen int) string {
+	if s == "" {
+		return "*empty message*"
+	}
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen-3] + "..."
+}
+
+```
+
+// === FILE: pkg/logging/policy.go ===
+```go
 package logging
 
 import (
@@ -474,3 +687,474 @@ func FormatAvatarURL(userID, avatarHash string) string {
 	}
 	return fmt.Sprintf("https://cdn.discordapp.com/avatars/%s/%s%s", userID, avatarHash, ext)
 }
+
+```
+
+// === FILE: pkg/logging/policy_test.go ===
+```go
+package logging
+
+import (
+	"fmt"
+	"net/http"
+	"testing"
+	"time"
+
+	"github.com/small-frappuccino/discordcore/pkg/files"
+)
+
+// Mock transport to avoid live API calls
+type mockTransport struct{}
+
+func (m *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       http.NoBody,
+		Header:     make(http.Header),
+	}, nil
+}
+
+func TestFormatUserLabel(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		username string
+		userID   string
+		expected string
+	}{
+		{"", "", "Unknown"},
+		{"alice", "", "**alice**"},
+		{"", "12345", "<@12345> (`12345`)"},
+		{"alice", "12345", "**alice** (<@12345>, `12345`)"},
+		{" alice ", " 12345 ", "**alice** (<@12345>, `12345`)"},
+	}
+
+	for _, tt := range tests {
+		got := FormatUserLabel(tt.username, tt.userID)
+		if got != tt.expected {
+			t.Errorf("FormatUserLabel(%q, %q) = %q; expected %q", tt.username, tt.userID, got, tt.expected)
+		}
+	}
+}
+
+func TestFormatUserRef(t *testing.T) {
+	t.Parallel()
+	got := FormatUserRef("123")
+	expected := "<@123> (`123`)"
+	if got != expected {
+		t.Errorf("expected %q, got %q", expected, got)
+	}
+}
+
+func TestFormatChannelLabel(t *testing.T) {
+	t.Parallel()
+	if FormatChannelLabel("") != "Unknown" {
+		t.Errorf("expected Unknown for empty channel ID")
+	}
+	got := FormatChannelLabel("123")
+	expected := "<#123>, `123`"
+	if got != expected {
+		t.Errorf("expected %q, got %q", expected, got)
+	}
+}
+
+func TestFormatRoleLabel(t *testing.T) {
+	t.Parallel()
+	if FormatRoleLabel("123", "") != "<@&123> (`123`)" {
+		t.Errorf("unexpected role reference output")
+	}
+	if FormatRoleLabel("", "admin") != "`admin`" {
+		t.Errorf("unexpected role name output")
+	}
+	if FormatRoleLabel("", "") != "Unknown" {
+		t.Errorf("expected Unknown for empty role")
+	}
+}
+
+func TestFormatDurationFull(t *testing.T) {
+	t.Parallel()
+	if FormatDurationFull(-1) != "0 seconds" {
+		t.Errorf("expected 0 seconds for negative duration")
+	}
+	d := 24*time.Hour + 3*time.Hour + 4*time.Minute + 5*time.Second
+	got := FormatDurationFull(d)
+	expected := "1 days 3 hours 4 minutes 5 seconds"
+	if got != expected {
+		t.Errorf("expected %q, got %q", expected, got)
+	}
+}
+
+func TestFormatDurationSmart(t *testing.T) {
+	t.Parallel()
+	if FormatDurationSmart(-1) != "" {
+		t.Errorf("expected empty string for negative duration")
+	}
+	d1 := 24*time.Hour + 1*time.Hour + 1*time.Minute + 1*time.Second
+	if FormatDurationSmart(d1) != "1 day 1 hour 1 minute 1 second" {
+		t.Errorf("unexpected output: %q", FormatDurationSmart(d1))
+	}
+	d2 := 48*time.Hour + 2*time.Hour + 2*time.Minute + 2*time.Second
+	if FormatDurationSmart(d2) != "2 days 2 hours 2 minutes 2 seconds" {
+		t.Errorf("unexpected output: %q", FormatDurationSmart(d2))
+	}
+}
+
+func TestFormatDuration(t *testing.T) {
+	t.Parallel()
+	if FormatDuration(0) != "`            `" {
+		t.Errorf("unexpected zero duration output")
+	}
+	// Years
+	if FormatDuration(400*24*time.Hour) != "1 year, 35 days" {
+		t.Errorf("unexpected year output: %q", FormatDuration(400*24*time.Hour))
+	}
+	if FormatDuration(800*24*time.Hour) != "2 years, 70 days" {
+		t.Errorf("unexpected years output")
+	}
+	// Months
+	if FormatDuration(45*24*time.Hour) != "1 month, 15 days" {
+		t.Errorf("unexpected month output")
+	}
+	if FormatDuration(75*24*time.Hour) != "2 months, 15 days" {
+		t.Errorf("unexpected months output")
+	}
+	// Days
+	if FormatDuration(1*24*time.Hour+3*time.Hour) != "1 day, 3 hours" {
+		t.Errorf("unexpected day output")
+	}
+	if FormatDuration(2*24*time.Hour+4*time.Hour) != "2 days, 4 hours" {
+		t.Errorf("unexpected days output")
+	}
+	// Hours
+	if FormatDuration(1*time.Hour+3*time.Minute) != "1 hour, 3 minutes" {
+		t.Errorf("unexpected hour output")
+	}
+	if FormatDuration(2*time.Hour+4*time.Minute) != "2 hours, 4 minutes" {
+		t.Errorf("unexpected hours output")
+	}
+	// Minutes
+	if FormatDuration(1*time.Minute) != "1 minutes" {
+		t.Errorf("unexpected minute output")
+	}
+	if FormatDuration(5*time.Minute) != "5 minutes" {
+		t.Errorf("unexpected minutes output")
+	}
+	// Less than 1 minute
+	if FormatDuration(30*time.Second) != "Less than 1 minute" {
+		t.Errorf("unexpected seconds output")
+	}
+}
+
+func TestTruncateString(t *testing.T) {
+	t.Parallel()
+	if TruncateString("", 10) != "*empty message*" {
+		t.Errorf("unexpected empty message output")
+	}
+	if TruncateString("hello", 10) != "hello" {
+		t.Errorf("unexpected no truncate output")
+	}
+	if TruncateString("hello world", 8) != "hello..." {
+		t.Errorf("unexpected truncate output: %q", TruncateString("hello world", 8))
+	}
+}
+
+func TestLogEventCapabilities(t *testing.T) {
+	t.Parallel()
+	caps := LogEventCapabilities()
+	if len(caps) != len(logEventCapabilities) {
+		t.Errorf("expected same length")
+	}
+}
+
+func TestResolveLogChannel(t *testing.T) {
+	t.Parallel()
+	// nil inputs
+	if ResolveLogChannel(LogEventAvatarChange, "111", nil) != "" {
+		t.Errorf("expected empty string for nil config manager")
+	}
+	if ResolveLogChannel(LogEventAvatarChange, "", &files.ConfigManager{}) != "" {
+		t.Errorf("expected empty string for empty guild ID")
+	}
+
+	store := &files.MemoryConfigStore{}
+	_ = store.Save(&files.BotConfig{
+		Guilds: []files.GuildConfig{
+			{
+				GuildID: "111",
+				Channels: files.ChannelsConfig{
+					AvatarLogging:  "avatar_ch",
+					RoleUpdate:     "role_ch",
+					MemberJoin:     "join_ch",
+					MemberLeave:    "leave_ch",
+					MessageEdit:    "edit_ch",
+					MessageDelete:  "delete_ch",
+					AutomodAction:  "automod_ch",
+					ModerationCase: "mod_ch",
+					CleanAction:    "clean_ch",
+				},
+			},
+		},
+	})
+	mgr := files.NewConfigManagerWithStore(store, nil)
+	_ = mgr.LoadConfig()
+
+	// Test resolutions for all events
+	eventsToChannels := map[LogEventType]string{
+		LogEventAvatarChange:    "avatar_ch",
+		LogEventRoleChange:      "role_ch",
+		LogEventMemberJoin:      "join_ch",
+		LogEventMemberLeave:     "leave_ch",
+		LogEventMessageEdit:     "edit_ch",
+		LogEventMessageDelete:   "delete_ch",
+		LogEventAutomodAction:   "automod_ch",
+		LogEventModerationCase:  "mod_ch",
+		LogEventCleanAction:     "clean_ch",
+		LogEventType("unknown"): "",
+	}
+
+	for evt, expected := range eventsToChannels {
+		got := ResolveLogChannel(evt, "111", mgr)
+		if got != expected {
+			t.Errorf("ResolveLogChannel(%s) = %q; expected %q", evt, got, expected)
+		}
+	}
+}
+
+func TestCheckFeatureEnabled_Errors(t *testing.T) {
+	t.Parallel()
+	// Unknown event
+	dec := CheckFeatureEnabled(nil, LogEventType("unknown"), "111")
+	if dec.Enabled || dec.Reason != EmitReasonUnknownEvent {
+		t.Errorf("expected EmitReasonUnknownEvent")
+	}
+
+	// nil config manager
+	dec = CheckFeatureEnabled(nil, LogEventAvatarChange, "111")
+	if dec.Enabled || dec.Reason != EmitReasonConfigManagerUnavailable {
+		t.Errorf("expected EmitReasonConfigManagerUnavailable")
+	}
+
+	// config unavailable (nil config store load)
+	mgr := files.NewConfigManagerWithStore(&files.MemoryConfigStore{}, nil)
+	dec = CheckFeatureEnabled(mgr, LogEventAvatarChange, "111")
+	if dec.Enabled || dec.Reason != EmitReasonConfigUnavailable {
+		t.Errorf("expected EmitReasonConfigUnavailable")
+	}
+
+	// guild config missing
+	_ = mgr.LoadConfig()
+	dec = CheckFeatureEnabled(mgr, LogEventAvatarChange, "111")
+	if dec.Enabled || dec.Reason != EmitReasonGuildConfigMissing {
+		t.Errorf("expected EmitReasonGuildConfigMissing")
+	}
+}
+
+func boolPtr(b bool) *bool {
+	return &b
+}
+
+func TestCheckFeatureEnabled_Toggles(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		eventType LogEventType
+		rc        files.RuntimeConfig
+		expected  EmitReason
+	}{
+		{LogEventAvatarChange, files.RuntimeConfig{DisableUserLogs: true}, EmitReasonRuntimeDisableUserLogs},
+		{LogEventRoleChange, files.RuntimeConfig{DisableUserLogs: true}, EmitReasonRuntimeDisableUserLogs},
+		{LogEventMemberJoin, files.RuntimeConfig{DisableEntryExitLogs: true}, EmitReasonRuntimeDisableEntryExitLogs},
+		{LogEventMemberLeave, files.RuntimeConfig{DisableEntryExitLogs: true}, EmitReasonRuntimeDisableEntryExitLogs},
+		{LogEventMessageProcess, files.RuntimeConfig{DisableMessageLogs: true}, EmitReasonRuntimeDisableMessageLogs},
+		{LogEventMessageEdit, files.RuntimeConfig{DisableMessageLogs: true}, EmitReasonRuntimeDisableMessageLogs},
+		{LogEventMessageDelete, files.RuntimeConfig{DisableMessageLogs: true}, EmitReasonRuntimeDisableMessageLogs},
+		{LogEventReactionMetric, files.RuntimeConfig{DisableReactionLogs: true}, EmitReasonRuntimeDisableReactionLogs},
+		{LogEventCleanAction, files.RuntimeConfig{DisableCleanLog: true}, EmitReasonRuntimeDisableCleanLog},
+		{LogEventModerationCase, files.RuntimeConfig{ModerationLogging: boolPtr(false)}, EmitReasonRuntimeModerationLoggingOff},
+	}
+
+	for _, tt := range tests {
+		store := &files.MemoryConfigStore{}
+		_ = store.Save(&files.BotConfig{
+			Guilds: []files.GuildConfig{
+				{
+					GuildID: "111",
+					Channels: files.ChannelsConfig{
+						AvatarLogging:  "ch",
+						RoleUpdate:     "ch",
+						MemberJoin:     "ch",
+						MemberLeave:    "ch",
+						MessageEdit:    "ch",
+						MessageDelete:  "ch",
+						AutomodAction:  "ch",
+						ModerationCase: "ch",
+						CleanAction:    "ch",
+					},
+					RuntimeConfig: tt.rc,
+				},
+			},
+		})
+		mgr := files.NewConfigManagerWithStore(store, nil)
+		_ = mgr.LoadConfig()
+
+		dec := CheckFeatureEnabled(mgr, tt.eventType, "111")
+		if dec.Enabled || dec.Reason != tt.expected {
+			t.Errorf("event %s: expected decision gated off by %s, got enabled=%t reason=%s", tt.eventType, tt.expected, dec.Enabled, dec.Reason)
+		}
+	}
+}
+
+func TestCheckFeatureEnabled_NoChannelConfigured(t *testing.T) {
+	t.Parallel()
+	store := &files.MemoryConfigStore{}
+	_ = store.Save(&files.BotConfig{
+		Guilds: []files.GuildConfig{
+			{
+				GuildID: "111", // all channels empty
+			},
+		},
+	})
+	mgr := files.NewConfigManagerWithStore(store, nil)
+	_ = mgr.LoadConfig()
+
+	dec := CheckFeatureEnabled(mgr, LogEventAvatarChange, "111")
+	if dec.Enabled || dec.Reason != EmitReasonNoChannelConfigured {
+		t.Errorf("expected EmitReasonNoChannelConfigured, got %v", dec.Reason)
+	}
+}
+
+func TestValidateLogCapability(t *testing.T) {
+	t.Parallel()
+	// Test not enabled decision
+	dec := EmitDecision{Enabled: false, Reason: EmitReasonUnknownEvent}
+	reason, _, ok := ValidateLogCapability(nil, 0, dec, "111", nil)
+	if ok || reason != EmitReasonUnknownEvent {
+		t.Errorf("expected false and reason unknown_event")
+	}
+
+	// Test validate resolved log channel: when ValidateChannelPerms is false
+	decEnabled := EmitDecision{
+		Enabled: true,
+		Capability: LogEventCapability{
+			RequiresChannel:      true,
+			ValidateChannelPerms: false,
+		},
+		ChannelID: "123",
+	}
+	reason, _, ok = ValidateLogCapability(nil, 0, decEnabled, "111", nil)
+	if !ok || reason != EmitReasonEnabled {
+		t.Errorf("expected validation success when ValidateChannelPerms is false")
+	}
+
+	// Test validate resolved log channel: exclusive moderation channel conflict
+	store := &files.MemoryConfigStore{}
+	_ = store.Save(&files.BotConfig{
+		Guilds: []files.GuildConfig{
+			{
+				GuildID: "111",
+				Channels: files.ChannelsConfig{
+					Commands:       "123", // conflicts with channelID 123
+					ModerationCase: "123",
+				},
+			},
+		},
+	})
+	mgr := files.NewConfigManagerWithStore(store, nil)
+	_ = mgr.LoadConfig()
+
+	decExcl := EmitDecision{
+		Enabled: true,
+		Capability: LogEventCapability{
+			RequiresChannel:            true,
+			ValidateChannelPerms:       true,
+			RequireExclusiveModeration: true,
+		},
+		ChannelID: "123",
+	}
+	reason, _, ok = ValidateLogCapability(nil, 0, decExcl, "111", mgr)
+	if ok || reason != EmitReasonChannelInvalid {
+		t.Errorf("expected EmitReasonChannelInvalid for shared moderation channel, got reason=%s ok=%t", reason, ok)
+	}
+
+	// Test validate resolved log channel: check intent requirement validation
+	decIntent := EmitDecision{
+		Enabled: true,
+		Capability: LogEventCapability{
+			RequiresChannel:      true,
+			ValidateChannelPerms: false,
+			RequiredIntentsMask:  uint64((1 << 1)),
+		},
+		ChannelID: "123",
+	}
+	reason, mask, ok := ValidateLogCapability(nil, 0, decIntent, "111", mgr)
+	if ok || reason != EmitReasonMissingIntent || mask != uint64((1<<1)) {
+		t.Errorf("expected missing intent, got reason=%s mask=%v ok=%t", reason, mask, ok)
+	}
+}
+
+type mockDiscordAdapter2 struct {
+	canLog bool
+	valid  bool
+	err    error
+}
+
+func (m *mockDiscordAdapter2) CanLogToChannel(channelID string) (bool, error) {
+	return m.canLog, m.err
+}
+
+func (m *mockDiscordAdapter2) ValidateModerationLogChannel(guildID, channelID string) error {
+	if m.err != nil {
+		return m.err
+	}
+	if !m.valid {
+		return fmt.Errorf("invalid channel")
+	}
+	return nil
+}
+
+func TestValidateModerationLogChannel(t *testing.T) {
+	err := ValidateModerationLogChannel(nil, "111", "222")
+	if err == nil {
+		t.Error("expected err on nil state")
+	}
+
+	err = ValidateModerationLogChannel(&mockDiscordAdapter2{valid: true}, "", "222")
+	if err == nil {
+		t.Error("expected err on empty guild")
+	}
+
+	m := &mockDiscordAdapter2{valid: false}
+	err = ValidateModerationLogChannel(m, "111", "222")
+	if err == nil {
+		t.Error("expected err on invalid channel")
+	}
+
+	m.valid = true
+	err = ValidateModerationLogChannel(m, "111", "222")
+	if err != nil {
+		t.Error("expected no error")
+	}
+}
+
+func TestIsSharedModerationChannel(t *testing.T) {
+	t.Parallel()
+	if IsSharedModerationChannel("123", nil) {
+		t.Errorf("expected false for nil guild config")
+	}
+	if IsSharedModerationChannel("", &files.GuildConfig{}) {
+		t.Errorf("expected false for empty channel ID")
+	}
+
+	gcfg := &files.GuildConfig{
+		Channels: files.ChannelsConfig{
+			Commands: "123",
+		},
+	}
+	if !IsSharedModerationChannel("123", gcfg) {
+		t.Errorf("expected true for commands channel match")
+	}
+	if IsSharedModerationChannel("456", gcfg) {
+		t.Errorf("expected false for no match")
+	}
+}
+
+```
+

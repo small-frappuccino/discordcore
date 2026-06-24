@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+
+	"golang.org/x/sync/errgroup"
 )
 
 type ServiceWrapper interface {
@@ -22,11 +24,16 @@ type serviceState struct {
 type Manager struct {
 	mu       sync.Mutex
 	services map[string]*serviceState
+	eg       *errgroup.Group
+	egCtx    context.Context
 }
 
-func NewManager() *Manager {
+func NewManager(ctx context.Context) *Manager {
+	eg, egCtx := errgroup.WithContext(ctx)
 	return &Manager{
 		services: make(map[string]*serviceState),
+		eg:       eg,
+		egCtx:    egCtx,
 	}
 }
 
@@ -38,7 +45,7 @@ func (m *Manager) RegisterAndStart(name string, svc ServiceWrapper) error {
 		return errors.New("service already registered: " + name)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(m.egCtx)
 	state := &serviceState{
 		wrapper:    svc,
 		cancelFunc: cancel,
@@ -46,12 +53,14 @@ func (m *Manager) RegisterAndStart(name string, svc ServiceWrapper) error {
 	}
 	m.services[name] = state
 
-	go func() {
+	m.eg.Go(func() error {
 		defer close(state.runDone)
 		if err := svc.Start(ctx); err != nil {
 			fmt.Printf("fatal: service %s stopped: %v\n", name, err)
+			return fmt.Errorf("service %s failed: %w", name, err)
 		}
-	}()
+		return nil
+	})
 
 	return nil
 }
@@ -107,4 +116,9 @@ func (m *Manager) StopAll(ctx context.Context) error {
 		return fmt.Errorf("failed to stop some services: %v", errs)
 	}
 	return nil
+}
+
+// Wait blocks until the underlying errgroup completes.
+func (m *Manager) Wait() error {
+	return m.eg.Wait()
 }

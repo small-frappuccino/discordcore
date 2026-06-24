@@ -120,7 +120,7 @@ func TestBotRuntime_InitializationRouting(t *testing.T) {
 				startupTasks:       NewStartupTaskOrchestrator(context.Background(), 1),
 			}
 
-			rt, err := NewBotRuntime(resolvedBotInstance{ID: "main", Token: "Bot fake"}, caps, opts)
+			rt, err := NewBotRuntime(context.Background(), resolvedBotInstance{ID: "main", Token: "Bot fake"}, caps, opts)
 			if err != nil {
 				if strings.Contains(err.Error(), "401: Unauthorized") {
 					t.Skip("Skipping test due to 401 Unauthorized with fake token")

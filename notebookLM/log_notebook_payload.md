@@ -1,0 +1,830 @@
+# Domain Architecture: log
+
+## Layout Topology
+```text
+log/
+├── helpers.go
+├── logger.go
+├── logger_test.go
+└── test_export.go
+```
+
+## Source Stream Aggregation
+
+// === FILE: pkg/log/helpers.go ===
+```go
+package log
+
+import (
+	"crypto/rand"
+	"encoding/hex"
+	"log/slog"
+	"runtime/debug"
+)
+
+// LazyStackTrace implements slog.LogValuer to defer debug.Stack() allocation
+// until the log is actually emitted, preventing O(N) allocations in hot paths.
+type LazyStackTrace struct{}
+
+func (LazyStackTrace) LogValue() slog.Value {
+	return slog.StringValue(string(debug.Stack()))
+}
+
+// GenerateRequestID produces a transient cryptographic identifier correlating logs and pages.
+func GenerateRequestID() string {
+	bytes := make([]byte, 16)
+	if _, err := rand.Read(bytes); err != nil {
+		return "00000000000000000000000000000000"
+	}
+	return hex.EncodeToString(bytes)
+}
+
+// EmitBlockingError injects structural metadata containing the stack trace and synthetic status 500.
+func EmitBlockingError(msg string, err error, requestID string) {
+	ErrorLoggerRaw().Error(msg,
+		slog.String("request_id", requestID),
+		slog.String("synthetic_code", "500"),
+		slog.Any("stack_trace", LazyStackTrace{}),
+		slog.Any("error", err),
+	)
+}
+
+```
+
+// === FILE: pkg/log/logger.go ===
+```go
+package log
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	stdlog "log"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"sync"
+	"time"
+
+	"log/slog"
+
+	"gopkg.in/natefinch/lumberjack.v2"
+)
+
+// --- Fluent Interface (kept for compatibility) ---
+
+// Level is the severity selector for the fluent logging interface. See the
+// InfoLevel and WarnLevel constants; Error-level messages use ErrorLogger
+// directly rather than a Level value.
+type Level int
+
+// WarnLevel defines warn level.
+// InfoLevel defines info level.
+const (
+	InfoLevel Level = iota
+	WarnLevel
+)
+
+// CategorizedLogger is an intermediate struct for building a log message
+// for the Info and Warn levels.
+type CategorizedLogger struct {
+	logger *Logger
+	level  Level
+}
+
+// ErrorLogger is an intermediate struct for building an Error level log message.
+type ErrorLogger struct {
+	logger *Logger
+}
+
+// --- Logger Struct & Setup ---
+
+// Logger wraps slog loggers for different categories to preserve the existing API
+// while enabling direct slog usage for new code.
+type Logger struct {
+	application *slog.Logger
+	discord     *slog.Logger
+	database    *slog.Logger
+	error       *slog.Logger
+
+	closers []io.Closer
+
+	// A shared runtime-adjustable log level for all handlers
+	levelVar slog.LevelVar
+}
+
+var (
+	globalLogger        *Logger
+	GlobalLogger        *Logger
+	testLoggerOverrides sync.Map
+	testRawErrorLogger  sync.Map
+	testNilOverrides    sync.Map
+)
+
+func getGlobalLogger() *Logger {
+	var pcs [16]uintptr
+	n := runtime.Callers(2, pcs[:])
+	frames := runtime.CallersFrames(pcs[:n])
+	for {
+		frame, more := frames.Next()
+		if strings.Contains(frame.Function, ".Test") {
+			idx := strings.LastIndex(frame.Function, ".")
+			if idx != -1 {
+				testName := frame.Function[idx+1:]
+				if idxSlash := strings.Index(testName, "/"); idxSlash != -1 {
+					testName = testName[:idxSlash]
+				}
+				if _, ok := testNilOverrides.Load(testName); ok {
+					return nil
+				}
+				if val, ok := testLoggerOverrides.Load(testName); ok {
+					return val.(*Logger)
+				}
+			}
+		}
+		if !more {
+			break
+		}
+	}
+	return globalLogger
+}
+
+// --- Public Fluent API (kept for compatibility) ---
+
+// -- Instance Methods --
+
+// Info infos.
+func (l *Logger) Info() *CategorizedLogger {
+	return &CategorizedLogger{logger: l, level: InfoLevel}
+}
+
+// Warn warns.
+func (l *Logger) Warn() *CategorizedLogger {
+	return &CategorizedLogger{logger: l, level: WarnLevel}
+}
+
+// Error errors.
+func (l *Logger) Error() *ErrorLogger {
+	return &ErrorLogger{logger: l}
+}
+
+// -- Package-Level Functions --
+
+// Info infos.
+func Info() *CategorizedLogger {
+	return &CategorizedLogger{logger: getGlobalLogger(), level: InfoLevel}
+}
+
+// Warn warns.
+func Warn() *CategorizedLogger {
+	return &CategorizedLogger{logger: getGlobalLogger(), level: WarnLevel}
+}
+
+// Error errors.
+func Error() *ErrorLogger {
+	return &ErrorLogger{logger: getGlobalLogger()}
+}
+
+// --- Expose raw slog loggers for direct usage in new code ---
+
+// ApplicationLogger returns the category-scoped slog.Logger for application logs.
+func ApplicationLogger() *slog.Logger {
+	gl := getGlobalLogger()
+	if gl == nil || gl.application == nil {
+		return slog.Default()
+	}
+	return gl.application
+}
+
+// DiscordLogger returns the category-scoped slog.Logger for Discord-related logs.
+func DiscordLogger() *slog.Logger {
+	gl := getGlobalLogger()
+	if gl == nil || gl.discord == nil {
+		return slog.Default()
+	}
+	return gl.discord
+}
+
+// DatabaseLogger returns the category-scoped slog.Logger for database logs.
+func DatabaseLogger() *slog.Logger {
+	gl := getGlobalLogger()
+	if gl == nil || gl.database == nil {
+		return slog.Default()
+	}
+	return gl.database
+}
+
+// ErrorLoggerRaw returns the category-scoped slog.Logger for error logs.
+func ErrorLoggerRaw() *slog.Logger { // name avoids collision with Error() fluent builder
+	var pcs [16]uintptr
+	n := runtime.Callers(2, pcs[:])
+	frames := runtime.CallersFrames(pcs[:n])
+	for {
+		frame, more := frames.Next()
+		if strings.Contains(frame.Function, ".Test") {
+			idx := strings.LastIndex(frame.Function, ".")
+			if idx != -1 {
+				testName := frame.Function[idx+1:]
+				if idxSlash := strings.Index(testName, "/"); idxSlash != -1 {
+					testName = testName[:idxSlash]
+				}
+				if val, ok := testRawErrorLogger.Load(testName); ok {
+					return val.(*slog.Logger)
+				}
+			}
+		}
+		if !more {
+			break
+		}
+	}
+
+	gl := getGlobalLogger()
+	if gl == nil || gl.error == nil {
+		return slog.Default()
+	}
+	return gl.error
+}
+
+// GlobalLevelVar exposes the shared level variable so callers can adjust level at runtime.
+func GlobalLevelVar() *slog.LevelVar {
+	gl := getGlobalLogger()
+	if gl == nil {
+		// Default to Info if not initialized yet
+		var lv slog.LevelVar
+		lv.Set(slog.LevelInfo)
+		return &lv
+	}
+	return &gl.levelVar
+}
+
+// --- Fluent API Finalizers (kept for compatibility) ---
+
+// Applicationf applicationfs.
+func (cl *CategorizedLogger) Applicationf(format string, v ...any) {
+	if cl == nil || cl.logger == nil || cl.logger.application == nil {
+		stdlog.Printf(format, v...)
+		return
+	}
+	msg := fmt.Sprintf(format, v...)
+	switch cl.level {
+	case InfoLevel:
+		cl.logger.application.Info(msg)
+	case WarnLevel:
+		cl.logger.application.Warn(msg)
+	default:
+		cl.logger.application.Info(msg)
+	}
+}
+
+// Discordf discordfs.
+func (cl *CategorizedLogger) Discordf(format string, v ...any) {
+	if cl == nil || cl.logger == nil || cl.logger.discord == nil {
+		stdlog.Printf(format, v...)
+		return
+	}
+	msg := fmt.Sprintf(format, v...)
+	switch cl.level {
+	case InfoLevel:
+		cl.logger.discord.Info(msg)
+	case WarnLevel:
+		cl.logger.discord.Warn(msg)
+	default:
+		cl.logger.discord.Info(msg)
+	}
+}
+
+// Databasef databasefs.
+func (cl *CategorizedLogger) Databasef(format string, v ...any) {
+	if cl == nil || cl.logger == nil || cl.logger.database == nil {
+		stdlog.Printf(format, v...)
+		return
+	}
+	msg := fmt.Sprintf(format, v...)
+	switch cl.level {
+	case InfoLevel:
+		cl.logger.database.Info(msg)
+	case WarnLevel:
+		cl.logger.database.Warn(msg)
+	default:
+		cl.logger.database.Info(msg)
+	}
+}
+
+// Errorf errorfs.
+func (el *ErrorLogger) Errorf(format string, v ...any) {
+	if el == nil || el.logger == nil || el.logger.error == nil {
+		stdlog.Printf("ERROR: "+format, v...)
+		return
+	}
+	msg := fmt.Sprintf(format, v...)
+	el.logger.error.Error(msg)
+}
+
+// Fatalf fatalfs.
+func (el *ErrorLogger) Fatalf(format string, v ...any) {
+	msg := fmt.Sprintf(format, v...)
+	if el == nil || el.logger == nil || el.logger.error == nil {
+		stdlog.Fatalf("FATAL: %s", msg)
+		return
+	}
+	// slog has no Fatal level; log as Error and exit.
+	el.logger.error.Error(msg, slog.String("fatal", "true"))
+	os.Exit(1)
+}
+
+// --- Initialization & Helpers ---
+
+// (Removed getDefaultLogDir)
+
+// rollingWriter creates a lumberjack-backed writer with sane defaults.
+func rollingWriter(path string) *lumberjack.Logger {
+	return &lumberjack.Logger{
+		Filename:   path,
+		MaxSize:    50,   // megabytes per file
+		MaxBackups: 3,    // number of old files to keep
+		MaxAge:     30,   // days
+		Compress:   true, // gzip old logs
+	}
+}
+
+// multiHandler fans out records to multiple handlers (e.g., JSON file + console).
+type multiHandler struct {
+	handlers []slog.Handler
+}
+
+// Enabled enableds.
+func (m *multiHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	for _, h := range m.handlers {
+		if h.Enabled(ctx, level) {
+			return true
+		}
+	}
+	return false
+}
+
+// Handle handles.
+func (m *multiHandler) Handle(ctx context.Context, r slog.Record) error {
+	var firstErr error
+	for _, h := range m.handlers {
+		if err := h.Handle(ctx, r); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+// WithAttrs withs attrs.
+func (m *multiHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	out := make([]slog.Handler, 0, len(m.handlers))
+	for _, h := range m.handlers {
+		out = append(out, h.WithAttrs(attrs))
+	}
+	return &multiHandler{handlers: out}
+}
+
+// WithGroup withs group.
+func (m *multiHandler) WithGroup(name string) slog.Handler {
+	out := make([]slog.Handler, 0, len(m.handlers))
+	for _, h := range m.handlers {
+		out = append(out, h.WithGroup(name))
+	}
+	return &multiHandler{handlers: out}
+}
+
+// buildCategoryLogger creates a slog.Logger that tees to file (JSON) and console (text)
+// and annotates every record with service and category attributes.
+func buildCategoryLogger(category string, fileWriter *lumberjack.Logger, consoleWriter *os.File, levelVar *slog.LevelVar, botName string) *slog.Logger {
+	jsonHandler := slog.NewJSONHandler(fileWriter, &slog.HandlerOptions{
+		Level:     levelVar,
+		AddSource: true,
+	})
+	textHandler := slog.NewTextHandler(consoleWriter, &slog.HandlerOptions{
+		Level:     levelVar,
+		AddSource: true,
+	})
+
+	handler := &multiHandler{handlers: []slog.Handler{jsonHandler, textHandler}}
+	base := slog.New(handler).With(
+		slog.String("service", botName),
+		slog.String("category", category),
+	)
+	return base
+}
+
+// SetupLogger configures category-separated slog loggers (application, discord, database, error)
+// writing to rotating files (via lumberjack) and to human-friendly console output.
+// It preserves the existing global variables and fluent API and also exposes raw slog loggers.
+func SetupLogger(botName, logFilePath string) error {
+	var logDir string
+	if logFilePath != "" {
+		logDir = filepath.Dir(logFilePath)
+	} else {
+		logDir = filepath.Join(".", "logs")
+	}
+
+	if err := os.MkdirAll(logDir, 0o755); err != nil {
+		return fmt.Errorf("SetupLogger: %w", err)
+	}
+
+	// Initialize global logger and default level
+	l := &Logger{}
+	l.levelVar.Set(slog.LevelInfo)
+
+	// Per-category rolling files
+	appFile := rollingWriter(filepath.Join(logDir, "application.log"))
+	discordFile := rollingWriter(filepath.Join(logDir, "discord_events.log"))
+	dbFile := rollingWriter(filepath.Join(logDir, "database.log"))
+	errFile := rollingWriter(filepath.Join(logDir, "error.log"))
+
+	l.closers = []io.Closer{appFile, discordFile, dbFile, errFile}
+
+	// Console routing: stdout for most, stderr for errors
+	l.application = buildCategoryLogger("application", appFile, os.Stdout, &l.levelVar, botName)
+	l.discord = buildCategoryLogger("discord", discordFile, os.Stdout, &l.levelVar, botName)
+	l.database = buildCategoryLogger("database", dbFile, os.Stdout, &l.levelVar, botName)
+	l.error = buildCategoryLogger("error", errFile, os.Stderr, &l.levelVar, botName)
+
+	var pcs [16]uintptr
+	n := runtime.Callers(2, pcs[:])
+	frames := runtime.CallersFrames(pcs[:n])
+	for {
+		frame, more := frames.Next()
+		if strings.Contains(frame.Function, ".Test") {
+			idx := strings.LastIndex(frame.Function, ".")
+			if idx != -1 {
+				testName := frame.Function[idx+1:]
+				if idxSlash := strings.Index(testName, "/"); idxSlash != -1 {
+					testName = testName[:idxSlash]
+				}
+				testLoggerOverrides.Store(testName, l)
+				break
+			}
+		}
+		if !more {
+			break
+		}
+	}
+
+	globalLogger = l
+	GlobalLogger = l
+
+	// Initial line confirming initialization (kept behavior)
+	l.application.Info("logger initialized", slog.String("time", time.Now().Format(time.RFC3339Nano)))
+
+	// Also set the process default logger so third-party packages using slog.Default() get our handler.
+	// Default will use the application category (most general).
+	slog.SetDefault(l.application)
+
+	return nil
+}
+
+// CloseGlobalLogger safely closes all underlying file handles for the global logger.
+func CloseGlobalLogger() error {
+	isTest := false
+	var pcs [16]uintptr
+	n := runtime.Callers(2, pcs[:])
+	frames := runtime.CallersFrames(pcs[:n])
+	for {
+		frame, more := frames.Next()
+		if strings.Contains(frame.Function, ".Test") {
+			idx := strings.LastIndex(frame.Function, ".")
+			if idx != -1 {
+				testName := frame.Function[idx+1:]
+				if idxSlash := strings.Index(testName, "/"); idxSlash != -1 {
+					testName = testName[:idxSlash]
+				}
+				if val, ok := testLoggerOverrides.Load(testName); ok {
+					err := val.(*Logger).Close()
+					testLoggerOverrides.Delete(testName)
+					isTest = true
+					return err
+				}
+			}
+		}
+		if !more {
+			break
+		}
+	}
+
+	if !isTest && globalLogger != nil {
+		err := globalLogger.Close()
+		globalLogger = nil
+		GlobalLogger = nil
+		return err
+	}
+	return nil
+}
+
+// Sync is a best-effort flush for outputs.
+// slog itself does not buffer; lumberjack writes synchronously.
+// We keep this method so callers can defer GlobalLogger.Sync() safely.
+func (l *Logger) Sync() {
+	// No-op for slog + lumberjack; present for API symmetry and future extensibility.
+}
+
+// Close closes all underlying file writers.
+func (l *Logger) Close() error {
+	var errs []error
+	for _, c := range l.closers {
+		if err := c.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	return nil
+}
+
+```
+
+// === FILE: pkg/log/logger_test.go ===
+```go
+package log
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestLoggerSetupAndClose(t *testing.T) {
+	t.Parallel()
+	// Create a temp directory for logs
+	tmpDir, err := os.MkdirTemp("", "discordcore-logs-test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	logFilePath := filepath.Join(tmpDir, "test.log")
+
+	// 1. Test setup
+	err = SetupLogger("test-bot", logFilePath)
+	if err != nil {
+		t.Fatalf("SetupLogger failed: %v", err)
+	}
+
+	// Verify globalLogger and GlobalLogger are set
+	if globalLogger == nil || GlobalLogger == nil {
+		t.Errorf("globalLogger was not initialized")
+	}
+
+	// 2. Test direct slog loggers are not nil
+	if ApplicationLogger() == nil {
+		t.Errorf("ApplicationLogger should not be nil")
+	}
+	if DiscordLogger() == nil {
+		t.Errorf("DiscordLogger should not be nil")
+	}
+	if DatabaseLogger() == nil {
+		t.Errorf("DatabaseLogger should not be nil")
+	}
+	if ErrorLoggerRaw() == nil {
+		t.Errorf("ErrorLoggerRaw should not be nil")
+	}
+	if GlobalLevelVar() == nil {
+		t.Errorf("GlobalLevelVar should not be nil")
+	}
+
+	// 3. Test logging functions
+	Info().Applicationf("app info message %d", 1)
+	Warn().Applicationf("app warn message %d", 2)
+	Info().Discordf("discord info message %d", 3)
+	Warn().Discordf("discord warn message %d", 4)
+	Info().Databasef("db info message %d", 5)
+	Warn().Databasef("db warn message %d", 6)
+	Error().Errorf("error message %d", 7)
+
+	// Exercise other levels in CategorizedLogger switch default
+	cl := &CategorizedLogger{logger: globalLogger, level: Level(-1)}
+	cl.Applicationf("app default message")
+	cl.Discordf("discord default message")
+	cl.Databasef("db default message")
+
+	// Exercise multiHandler with attributes and groups
+	appLogger := ApplicationLogger().With(slog.String("key", "val"))
+	appLogger.Info("message with attributes")
+	groupLogger := appLogger.WithGroup("test-group")
+	groupLogger.Info("message in group")
+
+	// Verify we can check Enabled
+	if !groupLogger.Enabled(context.Background(), slog.LevelInfo) {
+		t.Logf("Logger not enabled for Info, which is unexpected with defaults")
+	}
+
+	// 4. Test logger sync and close
+	GlobalLogger.Sync()
+	err = CloseGlobalLogger()
+	if err != nil {
+		t.Errorf("CloseGlobalLogger failed: %v", err)
+	}
+
+	// 5. Test close when already closed
+	err = CloseGlobalLogger()
+	if err != nil {
+		t.Errorf("CloseGlobalLogger on nil logger failed: %v", err)
+	}
+}
+
+func TestNilGlobalLoggerFallbacks(t *testing.T) {
+	t.Parallel()
+	testNilOverrides.Store("TestNilGlobalLoggerFallbacks", true)
+	defer testNilOverrides.Delete("TestNilGlobalLoggerFallbacks")
+
+	// Verify fallback return values
+	if ApplicationLogger() != slog.Default() {
+		t.Errorf("expected fallback to slog.Default()")
+	}
+	if DiscordLogger() != slog.Default() {
+		t.Errorf("expected fallback to slog.Default()")
+	}
+	if DatabaseLogger() != slog.Default() {
+		t.Errorf("expected fallback to slog.Default()")
+	}
+	if ErrorLoggerRaw() != slog.Default() {
+		t.Errorf("expected fallback to slog.Default()")
+	}
+
+	levelVar := GlobalLevelVar()
+	if levelVar == nil || levelVar.Level() != slog.LevelInfo {
+		t.Errorf("expected fallback levelVar to be Info")
+	}
+
+	// Verify fluent APIs handle nil loggers and print to stdlog
+	var cl *CategorizedLogger
+	cl.Applicationf("test nil cl app")
+	cl.Discordf("test nil cl discord")
+	cl.Databasef("test nil cl db")
+
+	cl2 := &CategorizedLogger{logger: nil, level: InfoLevel}
+	cl2.Applicationf("test cl2 app")
+	cl2.Discordf("test cl2 discord")
+	cl2.Databasef("test cl2 db")
+
+	var el *ErrorLogger
+	el.Errorf("test nil el error")
+
+	el2 := &ErrorLogger{logger: nil}
+	el2.Errorf("test el2 error")
+}
+
+func TestHelpers(t *testing.T) {
+	t.Parallel()
+	reqID := GenerateRequestID()
+	if len(reqID) != 32 {
+		t.Errorf("expected 32-char hex request ID, got: %s", reqID)
+	}
+
+	// Test SetErrorLoggerRawForTest
+	testLogger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	cleanup := SetErrorLoggerRawForTest(testLogger)
+	if ErrorLoggerRaw() != testLogger {
+		t.Errorf("failed to override error logger in test")
+	}
+	cleanup()
+}
+
+func TestEmitBlockingError(t *testing.T) {
+	t.Parallel()
+	// Set up a custom logger to capture output
+	var buf strings.Builder
+	h := slog.NewTextHandler(&buf, nil)
+	logger := slog.New(h)
+
+	cleanup := SetErrorLoggerRawForTest(logger)
+	defer cleanup()
+
+	EmitBlockingError("blocking database error", errors.New("conn reset"), "req-12345")
+
+	output := buf.String()
+	if !strings.Contains(output, "blocking database error") {
+		t.Errorf("expected output to contain message, got: %s", output)
+	}
+	if !strings.Contains(output, "req-12345") {
+		t.Errorf("expected output to contain request ID")
+	}
+	if !strings.Contains(output, "conn reset") {
+		t.Errorf("expected output to contain error detail")
+	}
+	if !strings.Contains(output, "stack_trace") {
+		t.Errorf("expected output to contain stack trace")
+	}
+}
+
+func TestFatalf(t *testing.T) {
+	t.Parallel()
+	if os.Getenv("BE_FATAL") == "1" {
+		// Set up logger and trigger Fatalf
+		tmpDir, err := os.MkdirTemp("", "discordcore-fatal-test")
+		if err != nil {
+			os.Exit(2)
+		}
+		defer os.RemoveAll(tmpDir)
+
+		err = SetupLogger("test-bot-fatal", filepath.Join(tmpDir, "fatal.log"))
+		if err != nil {
+			os.Exit(3)
+		}
+		Error().Fatalf("simulated fatal error: %s", "abort")
+		return
+	}
+
+	cmd := exec.Command(os.Args[0], "-test.run=TestFatalf")
+	cmd.Env = append(os.Environ(), "BE_FATAL=1")
+	err := cmd.Run()
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		if exitErr.ProcessState.ExitCode() != 1 {
+			t.Errorf("expected exit status 1, got %v", exitErr.ProcessState.ExitCode())
+		}
+	} else {
+		t.Errorf("expected exit error, got nil or other error: %v", err)
+	}
+}
+
+func TestFatalfNilLogger(t *testing.T) {
+	t.Parallel()
+	if os.Getenv("BE_FATAL_NIL") == "1" {
+		// Make sure global logger is nil
+		globalLogger = nil
+		var el *ErrorLogger
+		el.Fatalf("simulated nil fatal error")
+		return
+	}
+
+	cmd := exec.Command(os.Args[0], "-test.run=TestFatalfNilLogger")
+	cmd.Env = append(os.Environ(), "BE_FATAL_NIL=1")
+	err := cmd.Run()
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		if exitErr.ProcessState.ExitCode() != 1 {
+			t.Errorf("expected exit status 1, got %v", exitErr.ProcessState.ExitCode())
+		}
+	} else {
+		t.Errorf("expected exit error, got nil or other error: %v", err)
+	}
+}
+
+```
+
+// === FILE: pkg/log/test_export.go ===
+```go
+package log
+
+import (
+	"log/slog"
+	"runtime"
+	"strings"
+)
+
+// SetErrorLoggerRawForTest overrides the raw error logger and returns a cleanup function.
+// This is strictly for use in tests.
+func SetErrorLoggerRawForTest(logger *slog.Logger) func() {
+	var pcs [16]uintptr
+	n := runtime.Callers(2, pcs[:])
+	frames := runtime.CallersFrames(pcs[:n])
+	var testName string
+	for {
+		frame, more := frames.Next()
+		if strings.Contains(frame.Function, ".Test") {
+			idx := strings.LastIndex(frame.Function, ".")
+			if idx != -1 {
+				testName = frame.Function[idx+1:]
+				if idxSlash := strings.Index(testName, "/"); idxSlash != -1 {
+					testName = testName[:idxSlash]
+				}
+				break
+			}
+		}
+		if !more {
+			break
+		}
+	}
+
+	if testName != "" {
+		testRawErrorLogger.Store(testName, logger)
+		return func() {
+			testRawErrorLogger.Delete(testName)
+		}
+	}
+
+	if globalLogger == nil {
+		globalLogger = &Logger{}
+	}
+	old := globalLogger.error
+	globalLogger.error = logger
+	return func() {
+		globalLogger.error = old
+	}
+}
+
+```
+
