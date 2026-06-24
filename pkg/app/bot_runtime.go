@@ -61,17 +61,11 @@ func resolveBotRuntimeCapabilities(
 	cfg *files.BotConfig,
 	botInstanceID string,
 ) botRuntimeCapabilities {
+	if cfg == nil {
+		panic("hardware-aligned validation failure: configuration reference is nil")
+	}
 	capabilities := botRuntimeCapabilities{
 		intents: discordgo.IntentsGuilds,
-	}
-
-	// Fallback to basal intent mapping when target configuration pointer evaluates to nil.
-	if cfg == nil {
-		slog.Warn("Mitigated service degradation: Configuration reference resolves to nil; enforcing basal gateway intents",
-			slog.String("bot_instance_id", botInstanceID),
-			slog.Int("basal_intents", int(capabilities.intents)),
-		)
-		return capabilities
 	}
 
 	guilds := cfg.GuildsForBotInstance(botInstanceID)
@@ -79,119 +73,93 @@ func resolveBotRuntimeCapabilities(
 		features := cfg.ResolveFeatures(guild.GuildID)
 		runtimeConfig := cfg.ResolveRuntimeConfig(guild.GuildID)
 
+		isQOTDBot := false
+		isRolesBot := false
+		isStatsBot := false
+		isModBot := false
+		isLoggingBot := false
+
 		if !guild.QOTD.IsZero() {
-			resolvedID, _ := guild.ResolveFeatureBotInstanceID("qotd")
-			if resolvedID == botInstanceID {
-				capabilities.qotdRuntime = true
+			if id, _ := guild.ResolveFeatureBotInstanceID("qotd"); id == botInstanceID {
+				isQOTDBot = true
+			}
+		}
+		if features.Services.Commands {
+			if id, _ := guild.ResolveFeatureBotInstanceID("roles"); id == botInstanceID {
+				isRolesBot = true
+			}
+			if id, _ := guild.ResolveFeatureBotInstanceID("stats"); id == botInstanceID {
+				isStatsBot = true
+			}
+		}
+		if guild.Channels.AutomodAction != "" || guild.UserPrune.Enabled {
+			if id, _ := guild.ResolveFeatureBotInstanceID("moderation"); id == botInstanceID {
+				isModBot = true
+			}
+		}
+		if features.Services.Monitoring {
+			if id, _ := guild.ResolveFeatureBotInstanceID("logging"); id == botInstanceID {
+				isLoggingBot = true
 			}
 		}
 
+		if isQOTDBot {
+			capabilities.qotdRuntime = true
+		}
 		if features.Services.Commands {
 			capabilities.hasCommands = true
-
-			rolesResolvedID, _ := guild.ResolveFeatureBotInstanceID("roles")
-			if rolesResolvedID == botInstanceID {
-				capabilities.intents |= discordgo.IntentsGuildMembers
-				capabilities.warmup = true
-			}
-
-			statsResolvedID, _ := guild.ResolveFeatureBotInstanceID("stats")
-			if statsResolvedID == botInstanceID {
-				capabilities.stats = true
-			}
 		}
-
-		if guild.Channels.AutomodAction != "" {
-			resolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation")
-			if resolvedID == botInstanceID {
+		if isRolesBot {
+			capabilities.intents |= discordgo.IntentsGuildMembers
+			capabilities.warmup = true
+		}
+		if isStatsBot {
+			capabilities.stats = true
+		}
+		if isModBot {
+			if guild.Channels.AutomodAction != "" {
 				capabilities.automod = true
 				capabilities.intents |= discordgo.IntentAutoModerationExecution
 			}
-		}
-
-		if guild.UserPrune.Enabled {
-			resolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation")
-			if resolvedID == botInstanceID {
+			if guild.UserPrune.Enabled {
 				capabilities.userPrune = true
 				capabilities.intents |= discordgo.IntentsGuildMembers
 				capabilities.warmup = true
 			}
 		}
 
-		if !features.Services.Monitoring {
-			continue
-		}
-
-		rolesResolvedID, _ := guild.ResolveFeatureBotInstanceID("roles")
-		modResolvedID, _ := guild.ResolveFeatureBotInstanceID("moderation")
-		statsResolvedID, _ := guild.ResolveFeatureBotInstanceID("stats")
-		loggingResolvedID, _ := guild.ResolveFeatureBotInstanceID("logging")
-
-		isRolesBot := rolesResolvedID == botInstanceID
-		isModBot := modResolvedID == botInstanceID
-		isStatsBot := statsResolvedID == botInstanceID
-		isLoggingBot := loggingResolvedID == botInstanceID
-
-		if !isRolesBot && !isModBot && !isStatsBot && !isLoggingBot {
-			continue
-		}
-
-		if isLoggingBot {
-			capabilities.messageEventService = true
-		}
-
-		slog.Debug("Tracking complex conditional branch: Evaluating monitoring sub-capabilities for target runtime",
-			slog.String("guild_id", guild.GuildID),
-			slog.String("bot_instance_id", botInstanceID),
-			slog.Bool("is_roles_bot", isRolesBot),
-			slog.Bool("is_mod_bot", isModBot),
-			slog.Bool("is_stats_bot", isStatsBot),
-			slog.Bool("is_logging_bot", isLoggingBot),
-		)
-
-		if botRuntimeNeedsMonitoring(features, runtimeConfig, guild) {
-			capabilities.monitoring = true
-		}
-
-		if isRolesBot || isStatsBot || isLoggingBot {
-			if botRuntimeNeedsMemberData(features, runtimeConfig, guild) {
-				capabilities.intents |= discordgo.IntentsGuildMembers
-				capabilities.warmup = true
-				if isRolesBot || isLoggingBot {
-					capabilities.memberEventService = true
+		if features.Services.Monitoring {
+			if isRolesBot || isModBot || isStatsBot || isLoggingBot {
+				if isLoggingBot {
+					capabilities.messageEventService = true
+				}
+				if botRuntimeNeedsMonitoring(features, runtimeConfig, guild) {
+					capabilities.monitoring = true
+				}
+				if isRolesBot || isStatsBot || isLoggingBot {
+					if botRuntimeNeedsMemberData(features, runtimeConfig, guild) {
+						capabilities.intents |= discordgo.IntentsGuildMembers
+						capabilities.warmup = true
+						if isRolesBot || isLoggingBot {
+							capabilities.memberEventService = true
+						}
+					}
+				}
+				if isModBot || isLoggingBot {
+					if botRuntimeNeedsPresence(features, runtimeConfig, guild) {
+						capabilities.intents |= discordgo.IntentsGuildPresences
+						capabilities.warmup = true
+					}
+					if botRuntimeNeedsMessages(runtimeConfig, guild) {
+						capabilities.intents |= discordgo.IntentsGuildMessages | discordgo.IntentMessageContent
+					}
+					if botRuntimeNeedsReactions(runtimeConfig) {
+						capabilities.intents |= discordgo.IntentsGuildMessageReactions
+					}
 				}
 			}
 		}
-
-		if isModBot || isLoggingBot {
-			if botRuntimeNeedsPresence(features, runtimeConfig, guild) {
-				capabilities.intents |= discordgo.IntentsGuildPresences
-				capabilities.warmup = true
-			}
-			if botRuntimeNeedsMessages(runtimeConfig, guild) {
-				capabilities.intents |= discordgo.IntentsGuildMessages | discordgo.IntentMessageContent
-			}
-			if botRuntimeNeedsReactions(runtimeConfig) {
-				capabilities.intents |= discordgo.IntentsGuildMessageReactions
-			}
-		}
-
-		if isLoggingBot {
-			slog.Info("Logging bot runtime capability activated",
-				slog.String("guild_id", guild.GuildID),
-				slog.String("bot_instance_id", botInstanceID),
-				slog.Int("intents_mask", int(capabilities.intents)),
-			)
-		}
 	}
-
-	slog.Debug("Computed gateway intent bitmask and runtime capabilities",
-		slog.String("bot_instance_id", botInstanceID),
-		slog.Int("intents_bitmask", int(capabilities.intents)),
-		slog.Bool("has_commands", capabilities.hasCommands),
-		slog.Bool("monitoring_enabled", capabilities.monitoring),
-	)
-
 	return capabilities
 }
 
@@ -624,6 +592,9 @@ func (w memberSinkWrapper) OnModerationAction(ctx context.Context, guildID strin
 }
 
 func openBotRuntime(instance resolvedBotInstance, capabilities botRuntimeCapabilities, opts botRuntimeOptions) (*botRuntime, error) {
+	if instance.Token == "" {
+		panic("hardware-aligned validation failure: bot token is missing prior to socket coupling")
+	}
 	slog.Info("Architectural state transition: Initializing primary Discord API routine",
 		slog.String("botInstanceID", instance.ID),
 	)
@@ -669,11 +640,16 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 	slog.Debug("Iniciando rotina de alocação de runtime", slog.String("instance_id", runtime.instanceID))
 
 	if runtime == nil || runtime.legacySession == nil {
-		return fmt.Errorf("bot runtime is unavailable")
+		panic("hardware-aligned validation failure: runtime or legacy session is nil during initialization")
 	}
 
 	cfg := opts.configManager.Config()
+	if cfg == nil {
+		panic("hardware-aligned validation failure: config snapshot is nil")
+	}
+
 	routerConfig := newRuntimeTaskRouterConfig(cfg, runtime.instanceID, opts.runtimeCount)
+	_ = routerConfig // might be used by domain setups internally if passed, but currently they aren't taking it here
 
 	runtime.serviceManager = service.NewServiceManager(slog.Default())
 
@@ -687,146 +663,119 @@ func initializeBotRuntime(ctx context.Context, runtime *botRuntime, opts botRunt
 		opts.runtimeApplier.AddRuntime(runtime.serviceManager, nil)
 	}
 
-	// Orquestração Procedimental Estrita: Invocação linear e direta com falha rápida (fail-fast), sem closures no heap.
-	if svc, err := buildMessageEventServiceConfigurator(runtime, opts, routerConfig); err != nil {
-		return err
-	} else if svc != nil {
-		if err := runtime.serviceManager.Register(svc); err != nil {
+	// Message Event Service
+	if runtime.capabilities.messageEventService {
+		mes := messages.NewMessageEventServiceForBot(messages.EventServiceDeps{
+			ArikawaState:  runtime.arikawaState,
+			ConfigManager: opts.configManager,
+			Sink:          resolveEventLogger(runtime, opts.configManager),
+			Store:         opts.store,
+			BotInstanceID: runtime.instanceID,
+			Logger:        slog.Default(),
+		})
+		mes.SetTaskRouter(runtime.taskRouter)
+		if err := runtime.serviceManager.Register(mes); err != nil {
 			return fmt.Errorf("service registration failure for %s: %w", runtime.instanceID, err)
 		}
 	}
 
-	if svc, err := buildMemberEventServiceConfigurator(runtime, opts, routerConfig); err != nil {
-		return err
-	} else if svc != nil {
-		if err := runtime.serviceManager.Register(svc); err != nil {
+	// Member Event Service
+	if runtime.capabilities.memberEventService {
+		memSvc := members.NewMemberEventServiceForBot(members.EventServiceDeps{
+			ArikawaState:  runtime.arikawaState,
+			ConfigManager: opts.configManager,
+			Sink:          memberSinkWrapper{logger: resolveEventLogger(runtime, opts.configManager)},
+			MembersRepo:   opts.store,
+			SystemRepo:    opts.store,
+			BotInstanceID: runtime.instanceID,
+			Logger:        slog.Default(),
+		})
+		if err := runtime.serviceManager.Register(memSvc); err != nil {
 			return fmt.Errorf("service registration failure for %s: %w", runtime.instanceID, err)
 		}
 	}
 
-	if svc, err := buildAutomodServiceConfigurator(runtime, opts, routerConfig); err != nil {
-		return err
-	} else if svc != nil {
-		if err := runtime.serviceManager.Register(svc); err != nil {
+	// Automod Service
+	if runtime.capabilities.automod {
+		var eventLogger *logging.Logger
+		if runtime.arikawaState != nil && runtime.arikawaState.Session != nil {
+			eventLogger = logging.NewLogger(runtime.arikawaState.Session.Client, opts.configManager, runtime.arikawaState, gateway.Intents(runtime.capabilities.intents), slog.Default())
+		}
+		automodService := discord_automod.NewArikawaAdapter(runtime.arikawaState, eventLogger, opts.logger)
+		if err := runtime.serviceManager.Register(automodService); err != nil {
 			return fmt.Errorf("service registration failure for %s: %w", runtime.instanceID, err)
 		}
 	}
 
-	if svc, err := buildQOTDRuntimeServiceConfigurator(runtime, opts, routerConfig); err != nil {
-		return err
-	} else if svc != nil {
-		if err := runtime.serviceManager.Register(svc); err != nil {
-			return fmt.Errorf("service registration failure for %s: %w", runtime.instanceID, err)
-		}
-	}
-
-	if svc, err := buildStatsServiceConfigurator(runtime, opts, routerConfig); err != nil {
-		return err
-	} else if svc != nil {
-		if err := runtime.serviceManager.Register(svc); err != nil {
-			return fmt.Errorf("service registration failure for %s: %w", runtime.instanceID, err)
-		}
-	}
-
-	if svc, err := buildCommandHandlerServiceConfigurator(runtime, opts, routerConfig); err != nil {
-		return err
-	} else if svc != nil {
-		if err := runtime.serviceManager.Register(svc); err != nil {
-			return fmt.Errorf("service registration failure for %s: %w", runtime.instanceID, err)
-		}
-	}
-
-	return nil
-}
-
-func buildAutomodService(runtime *botRuntime, opts botRuntimeOptions, routerConfig task.RouterConfig, runtimeConfig files.RuntimeConfig) service.Service {
-	if !runtime.capabilities.automod {
-		slog.Info("Architectural state bypass: Automod service skipped due to explicit capability flags",
-			slog.String("botInstanceID", runtime.instanceID),
+	// QOTD Service
+	if runtime.capabilities.qotdRuntime && opts.qotdCommandService != nil {
+		qotdRuntimeService := discordqotd.NewRuntimeService(
+			discordqotd.Config{PublishInterval: 5 * time.Minute, ReconcileEvery: 1 * time.Hour},
+			opts.qotdCommandService,
 		)
-		return nil
+		slog.Info("Architectural state transition: QOTD runtime initialized", slog.String("botInstanceID", runtime.instanceID))
+		if err := runtime.serviceManager.Register(qotdRuntimeService); err != nil {
+			return fmt.Errorf("service registration failure for %s: %w", runtime.instanceID, err)
+		}
 	}
 
-	var eventLogger *logging.Logger
-	if runtime.arikawaState != nil && runtime.arikawaState.Session != nil {
-		eventLogger = logging.NewLogger(runtime.arikawaState.Session.Client, opts.configManager, runtime.arikawaState, gateway.Intents(runtime.capabilities.intents), slog.Default())
-	}
-
-	automodService := discord_automod.NewArikawaAdapter(runtime.arikawaState, eventLogger, opts.logger)
-
-	return automodService
-}
-
-func registerQOTDRuntimeService(runtime *botRuntime, opts botRuntimeOptions) error {
-	if !runtime.capabilities.qotdRuntime || opts.qotdCommandService == nil {
-		return nil
-	}
-	qotdRuntimeService := discordqotd.NewRuntimeService(
-		discordqotd.Config{PublishInterval: 5 * time.Minute, ReconcileEvery: 1 * time.Hour},
-		opts.qotdCommandService,
-	)
-	if err := runtime.serviceManager.Register(qotdRuntimeService); err != nil {
-		return fmt.Errorf("register qotd runtime service for %s: %w", runtime.instanceID, err)
-	}
-	slog.Info("Architectural state transition: QOTD runtime initialized",
-		slog.String("botInstanceID", runtime.instanceID),
-	)
-	return nil
-}
-
-func setupRuntimeCommandHandler(runtime *botRuntime, opts botRuntimeOptions, cfg *files.BotConfig, unifiedCache *cache.UnifiedCache, taskRouter *task.TaskRouter, statsService *stats.StatsService, ticketService *tickets.Service) service.Service {
-	if !runtime.capabilities.HasCommands() {
-		logRuntimeCommandsSkipped(runtime, opts, cfg)
-		return nil
-	}
-
-	var caps CommandCatalogCapabilities
+	// Stats Service
 	if runtime.capabilities.stats {
-		caps |= CapStats
+		statsGateway := discordstats.NewArikawaGateway(runtime.arikawaState, slog.Default())
+		statsService := stats.NewStatsService(statsGateway, opts.configManager, opts.store, slog.Default(), runtime.instanceID)
+		discordstats.RegisterDiscordGoEventHandlers(runtime.legacySession, statsService, slog.Default())
+		if err := runtime.serviceManager.Register(statsService); err != nil {
+			return fmt.Errorf("service registration failure for %s: %w", runtime.instanceID, err)
+		}
 	}
 
-	deps := CommandHandlerDeps{
-		Session:             runtime.legacySession,
-		ConfigManager:       opts.configManager,
-		BotInstanceID:       runtime.instanceID,
-		CatalogCapabilities: caps,
-		CatalogRegistrars:   opts.commandCatalogRegistrars,
-		QotdService:         opts.qotdCommandService,
-		StatsService:        statsService,
-		ModerationMetrics:   opts.moderationMetrics,
-		RuntimeApplier:      opts.runtimeApplier,
-		EmbedService:        opts.embedService,
-		RolePanelService:    opts.rolePanelService,
-		PartnerService:      opts.partnerService,
-		TicketService:       ticketService,
+	// Command Handler Service
+	if runtime.capabilities.HasCommands() {
+		var caps CommandCatalogCapabilities
+		if runtime.capabilities.stats {
+			caps |= CapStats
+		}
+
+		ticketService := tickets.NewService(runtime.arikawaState, slog.Default())
+
+		var statsService *stats.StatsService
+		for _, svc := range runtime.serviceManager.GetAllServices() {
+			if s, ok := svc.Service.(*stats.StatsService); ok {
+				statsService = s
+				break
+			}
+		}
+
+		deps := CommandHandlerDeps{
+			Session:             runtime.legacySession,
+			ConfigManager:       opts.configManager,
+			BotInstanceID:       runtime.instanceID,
+			CatalogCapabilities: caps,
+			CatalogRegistrars:   opts.commandCatalogRegistrars,
+			QotdService:         opts.qotdCommandService,
+			StatsService:        statsService,
+			ModerationMetrics:   opts.moderationMetrics,
+			RuntimeApplier:      opts.runtimeApplier,
+			EmbedService:        opts.embedService,
+			RolePanelService:    opts.rolePanelService,
+			PartnerService:      opts.partnerService,
+			TicketService:       ticketService,
+		}
+
+		commandHandler, err := opts.newCommandHandlerForBot(deps)
+		if err != nil {
+			slog.Error("Blocking structural failure: Failed to construct CommandHandler", slog.String("botInstanceID", runtime.instanceID), slog.Any("error", err))
+		} else {
+			runtime.commandHandler = commandHandler
+			depStrings := []string{}
+			commandHandler.SetDependencies(depStrings)
+			if err := runtime.serviceManager.Register(commandHandler); err != nil {
+				return fmt.Errorf("service registration failure for %s: %w", runtime.instanceID, err)
+			}
+		}
 	}
 
-	commandHandler, err := opts.newCommandHandlerForBot(deps)
-	if err != nil {
-		slog.Error("Blocking structural failure: Failed to construct CommandHandler",
-			slog.String("botInstanceID", runtime.instanceID),
-			slog.Any("error", err),
-		)
-		return nil
-	}
-
-	if router := commandHandler.GetRouter(); router != nil {
-		// Native router no longer requires dynamic dependency injection
-		// for stores and caches here. Domain handlers receive them via
-		// constructor injection during SetupCommands.
-	}
-	runtime.commandHandler = commandHandler
-
-	depStrings := []string{}
-	commandHandler.SetDependencies(depStrings)
-
-	return commandHandler
-}
-
-func logRuntimeCommandsSkipped(runtime *botRuntime, opts botRuntimeOptions, cfg *files.BotConfig) {
-	slog.Info("Architectural state bypass: Commands skipped due to empty guild bindings",
-		slog.String("botInstanceID", runtime.instanceID),
-	)
+	return nil
 }
 
 var intelligentWarmupFn = cache.IntelligentWarmupContext
@@ -837,9 +786,6 @@ func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *post
 	}
 
 	unifiedCache := runtime.unifiedCache
-	if unifiedCache == nil {
-		return
-	}
 
 	if unifiedCache.WasWarmedUpRecently(10 * time.Minute) {
 		slog.Info("Architectural state bypass: Suppressing cache warmup sequence due to valid temporal TTL",
@@ -863,6 +809,7 @@ func scheduleRuntimeWarmup(ctx context.Context, runtime *botRuntime, store *post
 		UnifiedCache: unifiedCache,
 		Store:        store,
 		WarmupConfig: memberWarmupConfig,
+		InstanceCtx:  ctx,
 	})
 }
 
@@ -871,9 +818,11 @@ type RuntimeWarmupTask struct {
 	UnifiedCache *cache.UnifiedCache
 	Store        *postgres.Store
 	WarmupConfig cache.WarmupConfig
+	InstanceCtx  context.Context
 }
 
-func (t *RuntimeWarmupTask) Execute(ctx context.Context) error {
+func (t *RuntimeWarmupTask) Execute(_ context.Context) error {
+	ctx := t.InstanceCtx
 	if err := intelligentWarmupFn(ctx, t.Runtime.legacySession, t.UnifiedCache, t.Store, t.WarmupConfig); err != nil {
 		if ctx.Err() != nil {
 			return nil
@@ -928,85 +877,4 @@ func resolveEventLogger(runtime *botRuntime, configManager *files.ConfigManager)
 		gateway.Intents(runtime.capabilities.intents),
 		slog.Default(),
 	)
-}
-
-func buildMessageEventServiceConfigurator(runtime *botRuntime, opts botRuntimeOptions, _ task.RouterConfig) (service.Service, error) {
-	if !runtime.capabilities.messageEventService {
-		return nil, nil
-	}
-
-	mes := messages.NewMessageEventServiceForBot(messages.EventServiceDeps{
-		ArikawaState:  runtime.arikawaState,
-		ConfigManager: opts.configManager,
-		Sink:          resolveEventLogger(runtime, opts.configManager),
-		Store:         opts.store,
-		BotInstanceID: runtime.instanceID,
-		Logger:        slog.Default(),
-	})
-	mes.SetTaskRouter(runtime.taskRouter)
-	return mes, nil
-}
-
-func buildMemberEventServiceConfigurator(runtime *botRuntime, opts botRuntimeOptions, _ task.RouterConfig) (service.Service, error) {
-	if !runtime.capabilities.memberEventService {
-		return nil, nil
-	}
-
-	memSvc := members.NewMemberEventServiceForBot(members.EventServiceDeps{
-		ArikawaState:  runtime.arikawaState,
-		ConfigManager: opts.configManager,
-		Sink:          memberSinkWrapper{logger: resolveEventLogger(runtime, opts.configManager)},
-		MembersRepo:   opts.store,
-		SystemRepo:    opts.store,
-		BotInstanceID: runtime.instanceID,
-		Logger:        slog.Default(),
-	})
-	return memSvc, nil
-}
-
-func buildAutomodServiceConfigurator(runtime *botRuntime, opts botRuntimeOptions, routerConfig task.RouterConfig) (service.Service, error) {
-	cfg := opts.configManager.Config()
-	runtimeConfig := files.RuntimeConfig{}
-	if cfg != nil {
-		runtimeConfig = cfg.RuntimeConfig
-	}
-	return buildAutomodService(runtime, opts, routerConfig, runtimeConfig), nil
-}
-
-func buildQOTDRuntimeServiceConfigurator(runtime *botRuntime, opts botRuntimeOptions, _ task.RouterConfig) (service.Service, error) {
-	if !runtime.capabilities.qotdRuntime || opts.qotdCommandService == nil {
-		return nil, nil
-	}
-	qotdRuntimeService := discordqotd.NewRuntimeService(
-		discordqotd.Config{PublishInterval: 5 * time.Minute, ReconcileEvery: 1 * time.Hour},
-		opts.qotdCommandService,
-	)
-	slog.Info("Architectural state transition: QOTD runtime initialized", slog.String("botInstanceID", runtime.instanceID))
-	return qotdRuntimeService, nil
-}
-
-func buildStatsServiceConfigurator(runtime *botRuntime, opts botRuntimeOptions, _ task.RouterConfig) (service.Service, error) {
-	if !runtime.capabilities.stats {
-		return nil, nil
-	}
-	statsGateway := discordstats.NewArikawaGateway(runtime.arikawaState, slog.Default())
-	statsService := stats.NewStatsService(statsGateway, opts.configManager, opts.store, slog.Default(), runtime.instanceID)
-	discordstats.RegisterDiscordGoEventHandlers(runtime.legacySession, statsService, slog.Default())
-	return statsService, nil
-}
-
-func buildCommandHandlerServiceConfigurator(runtime *botRuntime, opts botRuntimeOptions, _ task.RouterConfig) (service.Service, error) {
-	cfg := opts.configManager.Config()
-	// statsService isn't passed down because it's resolved internally in setupRuntimeCommandHandler based on registry
-	// This maintains the pure signature. You can adapt setupRuntimeCommandHandler to fetch statsService from serviceManager if needed,
-	// or pass nil since ticketService is already being instantiated inside setupRuntimeCommandHandler natively.
-	ticketService := tickets.NewService(runtime.arikawaState, slog.Default())
-
-	// Assuming setupRuntimeCommandHandler signature can handle nil for stats or extracts it natively.
-	// Se você precisar do statsService explicitamente aqui, o pipeline permite extraí-lo do runtime.serviceManager.GetAllServices().
-	cmdHandler := setupRuntimeCommandHandler(runtime, opts, cfg, runtime.unifiedCache, runtime.taskRouter, nil, ticketService)
-	if cmdHandler == nil {
-		return nil, nil
-	}
-	return cmdHandler, nil
 }

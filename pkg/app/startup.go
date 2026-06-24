@@ -172,6 +172,7 @@ type controlStartupTaskOptions struct {
 }
 
 func scheduleRuntimeConfiguredGuildLogging(
+	ctx context.Context,
 	runtime *botRuntime,
 	configManager *files.ConfigManager,
 	startupTasks *StartupTaskOrchestrator,
@@ -188,15 +189,21 @@ func scheduleRuntimeConfiguredGuildLogging(
 	startupTasks.GoLight("log_configured_guilds:"+runtime.instanceID, &RuntimeConfiguredGuildLoggingTask{
 		Runtime:       runtime,
 		ConfigManager: configManager,
+		InstanceCtx:   ctx,
 	})
 }
 
 type RuntimeConfiguredGuildLoggingTask struct {
 	Runtime       *botRuntime
 	ConfigManager *files.ConfigManager
+	InstanceCtx   context.Context
 }
 
-func (t *RuntimeConfiguredGuildLoggingTask) Execute(ctx context.Context) error {
+func (t *RuntimeConfiguredGuildLoggingTask) Execute(_ context.Context) error {
+	ctx := t.InstanceCtx
+	if ctx.Err() != nil {
+		return nil
+	}
 	err := files.LogConfiguredGuildsForBot(t.ConfigManager, t.Runtime.legacySession, t.Runtime.instanceID)
 	if err != nil {
 		slog.Warn("Mitigated degradation: Some configured guilds could not be accessed during runtime logging",

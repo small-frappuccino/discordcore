@@ -124,8 +124,8 @@ func (t InstanceStartTask) Execute(ctx context.Context) error {
 			if err := runtime.serviceManager.StartAll(); err != nil {
 				return fmt.Errorf("start services for %s: %w", runtime.instanceID, err)
 			}
-			scheduleRuntimeConfiguredGuildLogging(runtime, t.Opts.configManager, t.Opts.startupTasks)
-			scheduleRuntimeWarmup(startCtx, runtime, t.Opts.store, t.Opts.startupTasks)
+			scheduleRuntimeConfiguredGuildLogging(ctx, runtime, t.Opts.configManager, t.Opts.startupTasks)
+			scheduleRuntimeWarmup(ctx, runtime, t.Opts.store, t.Opts.startupTasks)
 			return nil
 		},
 		Stop: func(stopCtx context.Context) error {
