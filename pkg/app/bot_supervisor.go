@@ -2,13 +2,13 @@ package app
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/diamondburned/arikawa/v3/discord"
@@ -17,7 +17,6 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/service"
 	"golang.org/x/sync/errgroup"
-	"sync"
 )
 
 // InstanceStatus represents the lifecycle state of a managed bot instance.
@@ -196,23 +195,79 @@ func (t InstanceStopTask) Execute(ctx context.Context) error {
 	return nil
 }
 
-// CommandType define os discriminadores de instrução para o anel de execução.
-type CommandType int
+// GatewayPresenceUpdateTask implements Task for hardware-aligned memory bounds.
+type GatewayPresenceUpdateTask struct {
+	ArikawaState *state.State
+	Status       string
+	InstanceID   string
+	Logger       *slog.Logger
+}
 
-const (
-	ApplyTopology CommandType = iota
-	TerminateSupervisor
-)
+func (t *GatewayPresenceUpdateTask) Execute(ctx context.Context) error {
+	updateCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	err := t.ArikawaState.Gateway().Send(updateCtx, &gateway.UpdatePresenceCommand{
+		Status: discord.Status(t.Status),
+	})
+	if err != nil {
+		t.Logger.Warn("Failed to update discord status for instance",
+			slog.String("botInstanceID", t.InstanceID),
+			slog.String("mitigation", "operation ignored to protect main flow"),
+			slog.Any("error", err),
+		)
+	}
+	return nil
+}
 
-// TopologyCommand carrega o manifesto de configuração atualizado de forma atômica.
-type TopologyCommand struct {
-	Type           CommandType
-	ActiveTokens   map[string]string
-	ActiveStatus   map[string]string
-	Capabilities   map[string]botRuntimeCapabilities
-	GatewayUpdates []func(context.Context) error
-	SyncTasks      []func(context.Context) error
-	ExecutionError chan error
+// CommandCatalogSyncTask implements Task for zero-allocation closure syncs.
+type CommandCatalogSyncTask struct {
+	GuildID   string
+	Instances []string
+	Resolver  *botRuntimeResolver
+	Logger    *slog.Logger
+}
+
+func (t *CommandCatalogSyncTask) Execute(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(time.Duration(rand.Float64()*500) * time.Millisecond):
+	}
+
+	currentRuntimes := t.Resolver.getRuntimes()
+	for _, instanceID := range t.Instances {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		runtime, ok := currentRuntimes[instanceID]
+		if !ok || runtime == nil || runtime.commandHandler == nil {
+			continue
+		}
+		if syncer := runtime.commandHandler.GetSyncer(); syncer != nil {
+			appIDInt, _ := strconv.ParseInt(t.GuildID, 10, 64)
+			if syncErr := syncer.SyncBulkOverwrite(discord.GuildID(appIDInt), runtime.commandHandler.GetRouter().Registry()); syncErr != nil {
+				if strings.Contains(syncErr.Error(), "403") {
+					t.Logger.Warn("Dynamic command synchronization ignored due to authorization barrier",
+						slog.String("guildID", t.GuildID),
+						slog.String("botInstanceID", instanceID),
+						slog.String("mitigation", "permission bypass"),
+						slog.Any("error", syncErr),
+					)
+				} else {
+					t.Logger.Error("Structural failure synchronizing guild commands",
+						slog.String("request_id", "sync_"+t.GuildID+"_"+instanceID),
+						slog.String("guildID", t.GuildID),
+						slog.String("botInstanceID", instanceID),
+						slog.Any("error", syncErr),
+					)
+					return fmt.Errorf("sync bulk overwrite for guild %s: %w", t.GuildID, syncErr)
+				}
+			} else {
+				t.Logger.Info("Dynamic guild command synchronization completed", slog.String("guildID", t.GuildID), slog.String("botInstanceID", instanceID))
+			}
+		}
+	}
+	return nil
 }
 
 // managedInstance retém a fronteira de isolamento de ciclo de vida de uma goroutine ativa.
@@ -223,214 +278,29 @@ type managedInstance struct {
 	Capabilities  botRuntimeCapabilities
 }
 
-// SupervisorActor centraliza a mutação de estado em uma única linha de execução sequencial.
-type SupervisorActor struct {
-	mailbox          chan TopologyCommand
-	trackedInstances map[string]*managedInstance
-	logger           *slog.Logger
-	opts             botRuntimeOptions
-	resolver         *botRuntimeResolver
-	serviceManager   *service.Manager
-	routinesWg       sync.WaitGroup
-}
-
-// NewSupervisorActor garante a inicialização fail-fast do orquestrador de topologia.
-func NewSupervisorActor(bufferSize int, logger *slog.Logger, opts botRuntimeOptions, resolver *botRuntimeResolver, serviceManager *service.Manager) (*SupervisorActor, error) {
-	if logger == nil {
-		return nil, errors.New("initialization failure: logger dependency injection is strictly required")
-	}
-	if bufferSize <= 0 {
-		bufferSize = 10
-	}
-
-	return &SupervisorActor{
-		mailbox:          make(chan TopologyCommand, bufferSize),
-		trackedInstances: make(map[string]*managedInstance),
-		logger:           logger,
-		opts:             opts,
-		resolver:         resolver,
-		serviceManager:   serviceManager,
-	}, nil
-}
-
-// SubmitTopology encaminha uma nova instrução de roteamento para o loop do Ator com bloqueio guiado por contexto.
-func (s *SupervisorActor) SubmitTopology(ctx context.Context, cmd TopologyCommand) {
-	select {
-	case s.mailbox <- cmd:
-	case <-ctx.Done():
-		s.logger.Warn("Shedding load: topology command mailbox timed out or cancelled")
-		if cmd.ExecutionError != nil {
-			cmd.ExecutionError <- fmt.Errorf("supervisor mailbox saturation: %w", ctx.Err())
-		}
-	}
-}
-
-// RunLoop inicializa o anel de processamento linear do Ator. Deve ser invocado em uma goroutine dedicada.
-func (s *SupervisorActor) RunLoop(ctx context.Context) error {
-	s.logger.Info("Architectural state transition: SupervisorActor loop initialized on hardware execution ring")
-
-	for {
-		select {
-		case <-ctx.Done():
-			s.executeEmergencyTeardown()
-			return ctx.Err()
-
-		case cmd := <-s.mailbox:
-			switch cmd.Type {
-			case TerminateSupervisor:
-				s.executeEmergencyTeardown()
-				if cmd.ExecutionError != nil {
-					close(cmd.ExecutionError)
-				}
-				return nil
-
-			case ApplyTopology:
-				err := s.reconcileTopology(ctx, cmd)
-				if cmd.ExecutionError != nil {
-					cmd.ExecutionError <- err
-				}
-			}
-		}
-	}
-}
-
-// reconcileTopology resolve desvios de configuração comparando o estado desejado com o atual.
-func (s *SupervisorActor) reconcileTopology(parentCtx context.Context, cmd TopologyCommand) error {
-	desiredTokens := cmd.ActiveTokens
-	desiredStatus := cmd.ActiveStatus
-	desiredCaps := cmd.Capabilities
-
-	for _, fn := range cmd.GatewayUpdates {
-		s.opts.startupTasks.GoHeavy("presence_update", fn)
-	}
-
-	// Fase 1: Expurgar instâncias removidas ou alteradas (Cancelamento Determinístico Directo)
-	for id, current := range s.trackedInstances {
-		newToken, exists := desiredTokens[id]
-		newCaps := desiredCaps[id]
-		if !exists || newToken != current.Token || !reflect.DeepEqual(current.Capabilities, newCaps) {
-			s.logger.Info("Architectural state transition: Actively canceling compromised or obsolete configuration",
-				slog.String("botInstanceID", id),
-			)
-			current.CancelContext()
-			delete(s.trackedInstances, id)
-
-			s.resolver.removeRuntime(id)
-		}
-	}
-
-	// Fase 2: Inicializar novas vias de execução sem micro-race conditions
-	for id, token := range desiredTokens {
-		if _, active := s.trackedInstances[id]; !active {
-			instanceCtx, instanceCancel := context.WithCancel(parentCtx)
-
-			s.trackedInstances[id] = &managedInstance{
-				CancelContext: instanceCancel,
-				Token:         token,
-				Status:        desiredStatus[id],
-				Capabilities:  desiredCaps[id],
-			}
-
-			resultCh := make(chan startTaskResult, 1)
-			task := InstanceStartTask{
-				InstanceID:    id,
-				Token:         token,
-				DiscordStatus: desiredStatus[id],
-				Capabilities:  desiredCaps[id],
-				Opts:          s.opts,
-				Resolver:      s.resolver,
-				SvcMgr:        s.serviceManager,
-				ResultCh:      resultCh,
-			}
-
-			go s.launchInstanceRoutine(instanceCtx, task, resultCh)
-		}
-	}
-
-	// Fase 3: Sync Commands
-	if len(cmd.SyncTasks) > 0 {
-		s.opts.startupTasks.GoHeavy("catalog_sync", func(heavyCtx context.Context) error {
-			eg, egCtx := errgroup.WithContext(heavyCtx)
-			eg.SetLimit(10)
-			for _, taskFn := range cmd.SyncTasks {
-				tFn := taskFn
-				eg.Go(func() error {
-					return tFn(egCtx)
-				})
-			}
-			return eg.Wait()
-		})
-	}
-
-	return nil
-}
-
-// [CORREÇÃO] Acoplamento do WaitGroup na inicialização
-func (s *SupervisorActor) launchInstanceRoutine(ctx context.Context, task InstanceStartTask, resultCh <-chan startTaskResult) {
-	s.routinesWg.Add(1)
-	go func() {
-		defer s.routinesWg.Done()
-
-		s.logger.Debug("Tracking complex conditional branch: Starting isolated hardware pipeline for bot instance",
-			slog.String("botInstanceID", task.InstanceID),
-		)
-
-		go func() {
-			_ = task.Execute(ctx)
-		}()
-
-		select {
-		case <-ctx.Done():
-			return
-		case res := <-resultCh:
-			if res.err != nil {
-				s.logger.Error("Structural execution failure during bot startup sequence", slog.Any("error", res.err))
-				return
-			}
-			s.resolver.addRuntime(task.InstanceID, res.runtime)
-		}
-		for {
-			select {
-			case <-ctx.Done():
-				s.logger.Info("Deterministic lifecycle orchestration: Context cancellation verified; freeing stack resources")
-				cleanupTask := InstanceStopTask{
-					InstanceID: task.InstanceID,
-					SvcMgr:     s.serviceManager,
-					Logger:     s.logger,
-					Resolver:   s.resolver,
-				}
-				_ = cleanupTask.Execute(context.Background())
-				return
-			}
-		}
-	}()
-}
-
-// [CORREÇÃO] O teardown agora aguarda o esvaziamento determinístico do hardware execution ring.
-func (s *SupervisorActor) executeEmergencyTeardown() {
-	s.logger.Warn("Planned instance shutdown: Emergency teardown initiated across all managed contexts")
-	for id, instance := range s.trackedInstances {
-		instance.CancelContext()
-		delete(s.trackedInstances, id)
-	}
-	// Bloqueia a execução de saída até que I/O e I/O cleanup estejam resolvidos
-	s.logger.Info("Awaiting strict boundary teardown of all instance routines")
-	s.routinesWg.Wait()
-	s.logger.Info("All hardware execution rings flushed. Teardown complete.")
+type topologySpec struct {
+	ActiveTokens   map[string]string
+	ActiveStatus   map[string]string
+	Capabilities   map[string]botRuntimeCapabilities
+	GatewayUpdates []Task
+	SyncTasks      []Task
 }
 
 // BotSupervisor manages the lifecycle, configuration synchronization, and background state of all active Discord bot instances.
 type BotSupervisor struct {
+	mu               sync.RWMutex
+	trackedInstances map[string]*managedInstance
+
 	configManager  *files.ConfigManager
 	resolver       *botRuntimeResolver
 	serviceManager *service.Manager
 	opts           botRuntimeOptions
 
-	ctx    context.Context
-	cancel context.CancelFunc
-	logger *slog.Logger
-
-	actor *SupervisorActor
+	ctx      context.Context
+	cancel   context.CancelFunc
+	group    *errgroup.Group
+	groupCtx context.Context
+	logger   *slog.Logger
 
 	fatalCallback func(error)
 }
@@ -456,23 +326,25 @@ func NewBotSupervisor(configManager *files.ConfigManager, opts botRuntimeOptions
 		opts.shutdownCommandHandler = func(ch *CommandHandler) error { return ch.Shutdown() }
 	}
 	ctx, cancel := context.WithCancel(context.Background())
+	group, groupCtx := errgroup.WithContext(ctx)
+
 	resolver := newBotRuntimeResolver(configManager, make(map[string]*botRuntime))
 	svcMgr := service.NewManager()
 	if opts.logger == nil {
 		opts.logger = slog.Default()
 	}
 
-	actor, _ := NewSupervisorActor(50, opts.logger, opts, resolver, svcMgr)
-
 	supervisor := &BotSupervisor{
-		configManager:  configManager,
-		resolver:       resolver,
-		serviceManager: svcMgr,
-		opts:           opts,
-		logger:         opts.logger,
-		ctx:            ctx,
-		cancel:         cancel,
-		actor:          actor,
+		trackedInstances: make(map[string]*managedInstance),
+		configManager:    configManager,
+		resolver:         resolver,
+		serviceManager:   svcMgr,
+		opts:             opts,
+		ctx:              ctx,
+		cancel:           cancel,
+		group:            group,
+		groupCtx:         groupCtx,
+		logger:           opts.logger,
 	}
 
 	return supervisor
@@ -493,7 +365,6 @@ func (s *BotSupervisor) SetFatalCallback(cb func(error)) {
 // Start triggers the initial configuration resolution and boots up required bot instances.
 func (s *BotSupervisor) Start() error {
 	s.log().Info("Initializing primary routines of BotSupervisor", slog.String("component", "BotSupervisor"))
-	go s.actor.RunLoop(s.ctx)
 	s.onConfigChanged(context.Background(), nil, nil) // trigger initial resolution
 	return nil
 }
@@ -501,14 +372,12 @@ func (s *BotSupervisor) Start() error {
 // Stop initiates a graceful shutdown of all managed bot instances and waits for background processes to terminate.
 func (s *BotSupervisor) Stop(ctx context.Context) error {
 	s.log().Info("Triggering planned shutdown of main BotSupervisor instances")
+	s.cancel() // signal background goroutines to abort
 
 	errCh := make(chan error, 1)
-	s.actor.SubmitTopology(ctx, TopologyCommand{
-		Type:           TerminateSupervisor,
-		ExecutionError: errCh,
-	})
-
-	s.cancel() // signal background goroutines to abort
+	go func() {
+		errCh <- s.group.Wait()
+	}()
 
 	select {
 	case err := <-errCh:
@@ -528,6 +397,114 @@ func (s *BotSupervisor) Stop(ctx context.Context) error {
 // GetResolver returns the internal runtime resolver responsible for routing requests to active bot instances.
 func (s *BotSupervisor) GetResolver() *botRuntimeResolver {
 	return s.resolver
+}
+
+func (s *BotSupervisor) reconcileTopology(parentCtx context.Context, cmd topologySpec) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	desiredTokens := cmd.ActiveTokens
+	desiredStatus := cmd.ActiveStatus
+	desiredCaps := cmd.Capabilities
+
+	for _, task := range cmd.GatewayUpdates {
+		t := task
+		s.opts.startupTasks.GoHeavy("presence_update", func(heavyCtx context.Context) error {
+			return t.Execute(heavyCtx)
+		})
+	}
+
+	// Fase 1: Expurgar instâncias removidas ou alteradas
+	for id, current := range s.trackedInstances {
+		newToken, exists := desiredTokens[id]
+		newCaps := desiredCaps[id]
+		if !exists || newToken != current.Token || !reflect.DeepEqual(current.Capabilities, newCaps) {
+			s.log().Info("Architectural state transition: Actively canceling compromised or obsolete configuration",
+				slog.String("botInstanceID", id),
+			)
+			current.CancelContext()
+			delete(s.trackedInstances, id)
+			s.resolver.removeRuntime(id)
+		}
+	}
+
+	// Fase 2 & 3: Inicializar novas vias de execução via errgroup
+	for id, token := range desiredTokens {
+		if _, active := s.trackedInstances[id]; !active {
+			instanceCtx, instanceCancel := context.WithCancel(s.groupCtx)
+
+			s.trackedInstances[id] = &managedInstance{
+				CancelContext: instanceCancel,
+				Token:         token,
+				Status:        desiredStatus[id],
+				Capabilities:  desiredCaps[id],
+			}
+
+			resultCh := make(chan startTaskResult, 1)
+			task := InstanceStartTask{
+				InstanceID:    id,
+				Token:         token,
+				DiscordStatus: desiredStatus[id],
+				Capabilities:  desiredCaps[id],
+				Opts:          s.opts,
+				Resolver:      s.resolver,
+				SvcMgr:        s.serviceManager,
+				ResultCh:      resultCh,
+			}
+
+			s.group.Go(func() error {
+				s.log().Debug("Tracking complex conditional branch: Starting isolated hardware pipeline for bot instance",
+					slog.String("botInstanceID", task.InstanceID),
+				)
+
+				execErrCh := make(chan error, 1)
+				go func() {
+					execErrCh <- task.Execute(instanceCtx)
+				}()
+
+				select {
+				case <-instanceCtx.Done():
+				case res := <-resultCh:
+					if res.err != nil {
+						s.log().Error("Structural execution failure during bot startup sequence", slog.Any("error", res.err))
+					} else {
+						s.resolver.addRuntime(task.InstanceID, res.runtime)
+					}
+				}
+
+				<-instanceCtx.Done()
+
+				s.log().Info("Deterministic lifecycle orchestration: Context cancellation verified; freeing stack resources")
+				cleanupTask := InstanceStopTask{
+					InstanceID: task.InstanceID,
+					SvcMgr:     s.serviceManager,
+					Logger:     s.logger,
+					Resolver:   s.resolver,
+				}
+				_ = cleanupTask.Execute(context.Background())
+
+				<-execErrCh
+				return nil
+			})
+		}
+	}
+
+	// Fase 3: Sync Commands
+	if len(cmd.SyncTasks) > 0 {
+		s.opts.startupTasks.GoHeavy("catalog_sync", func(heavyCtx context.Context) error {
+			eg, egCtx := errgroup.WithContext(heavyCtx)
+			eg.SetLimit(10)
+			for _, taskFn := range cmd.SyncTasks {
+				tFn := taskFn
+				eg.Go(func() error {
+					return tFn.Execute(egCtx)
+				})
+			}
+			return eg.Wait()
+		})
+	}
+
+	return nil
 }
 
 func (s *BotSupervisor) onConfigChanged(ctx context.Context, oldCfg, newCfg *files.BotConfig) error {
@@ -559,7 +536,7 @@ func (s *BotSupervisor) onConfigChanged(ctx context.Context, oldCfg, newCfg *fil
 		}
 	}
 
-	var gatewayUpdates []func(context.Context) error
+	var gatewayUpdates []Task
 
 	if oldCfg != nil {
 		oldRuntimes := s.resolver.getRuntimes()
@@ -585,20 +562,12 @@ func (s *BotSupervisor) onConfigChanged(ctx context.Context, oldCfg, newCfg *fil
 						st := currentStatuses[id]
 						gwState := rt.arikawaState
 						instanceID := id
-						gatewayUpdates = append(gatewayUpdates, func(taskCtx context.Context) error {
-							updateCtx, cancel := context.WithTimeout(taskCtx, 5*time.Second)
-							defer cancel()
-							err := gwState.Gateway().Send(updateCtx, &gateway.UpdatePresenceCommand{
-								Status: discord.Status(st),
-							})
-							if err != nil {
-								s.log().Warn("Failed to update discord status for instance",
-									slog.String("botInstanceID", instanceID),
-									slog.String("mitigation", "operation ignored to protect main flow"),
-									slog.Any("error", err),
-								)
-							}
-							return nil
+
+						gatewayUpdates = append(gatewayUpdates, &GatewayPresenceUpdateTask{
+							ArikawaState: gwState,
+							Status:       st,
+							InstanceID:   instanceID,
+							Logger:       s.log(),
 						})
 					}
 				}
@@ -606,7 +575,7 @@ func (s *BotSupervisor) onConfigChanged(ctx context.Context, oldCfg, newCfg *fil
 		}
 	}
 
-	var syncTasks []func(context.Context) error
+	var syncTasks []Task
 	if oldCfg != nil {
 		s.log().Debug("Evaluating conditional feature routing routines")
 		for _, newGuild := range newCfg.Guilds {
@@ -636,71 +605,24 @@ func (s *BotSupervisor) onConfigChanged(ctx context.Context, oldCfg, newCfg *fil
 					}
 				}
 				if len(activeInstances) > 0 {
-					gID := newGuild.GuildID
-					instances := activeInstances
-					syncTasks = append(syncTasks, func(egCtx context.Context) error {
-						select {
-						case <-egCtx.Done():
-							return egCtx.Err()
-						case <-time.After(time.Duration(rand.Float64()*500) * time.Millisecond):
-						}
-
-						currentRuntimes := s.resolver.getRuntimes()
-						for _, instanceID := range instances {
-							if egCtx.Err() != nil {
-								return egCtx.Err()
-							}
-							runtime, ok := currentRuntimes[instanceID]
-							if !ok || runtime == nil || runtime.commandHandler == nil {
-								continue
-							}
-							if syncer := runtime.commandHandler.GetSyncer(); syncer != nil {
-								appIDInt, _ := strconv.ParseInt(gID, 10, 64)
-								if syncErr := syncer.SyncBulkOverwrite(discord.GuildID(appIDInt), runtime.commandHandler.GetRouter().Registry()); syncErr != nil {
-									if strings.Contains(syncErr.Error(), "403") {
-										s.log().Warn("Dynamic command synchronization ignored due to authorization barrier",
-											slog.String("guildID", gID),
-											slog.String("botInstanceID", instanceID),
-											slog.String("mitigation", "permission bypass"),
-											slog.Any("error", syncErr),
-										)
-									} else {
-										s.log().Error("Structural failure synchronizing guild commands",
-											slog.String("request_id", "sync_"+gID+"_"+instanceID),
-											slog.String("guildID", gID),
-											slog.String("botInstanceID", instanceID),
-											slog.Any("error", syncErr),
-										)
-										return fmt.Errorf("sync bulk overwrite for guild %s: %w", gID, syncErr)
-									}
-								} else {
-									s.log().Info("Dynamic guild command synchronization completed", slog.String("guildID", gID), slog.String("botInstanceID", instanceID))
-								}
-							}
-						}
-						return nil
+					syncTasks = append(syncTasks, &CommandCatalogSyncTask{
+						GuildID:   newGuild.GuildID,
+						Instances: activeInstances,
+						Resolver:  s.resolver,
+						Logger:    s.log(),
 					})
 				}
 			}
 		}
 	}
 
-	errCh := make(chan error, 1)
-	s.actor.SubmitTopology(ctx, TopologyCommand{
-		Type:           ApplyTopology,
+	return s.reconcileTopology(ctx, topologySpec{
 		ActiveTokens:   currentTokens,
 		ActiveStatus:   currentStatuses,
 		Capabilities:   currentCaps,
 		GatewayUpdates: gatewayUpdates,
 		SyncTasks:      syncTasks,
-		ExecutionError: errCh,
 	})
-
-	err := <-errCh
-	if err != nil {
-		s.log().Error("Topology reconciliation failed", slog.Any("error", err))
-	}
-	return err
 }
 
 // checkTokenRevocationError validates if an external string strictly matches auth failure invariants.

@@ -438,8 +438,8 @@ func TestBotSupervisor_GracefulShutdownOrchestration(t *testing.T) {
 		startupTasks: startupTasks,
 	})
 
-	// Acelera start
-	go supervisor.actor.RunLoop(context.Background())
+	// Start initializes background groups now
+	supervisor.Start()
 
 	_ = supervisor.serviceManager.RegisterAndStart("bot-runtime-zombie_instance", &mockBlockingServiceWrapper{done: make(chan struct{})})
 
