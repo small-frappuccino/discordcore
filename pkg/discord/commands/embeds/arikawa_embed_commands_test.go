@@ -20,7 +20,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	embedsvc "github.com/small-frappuccino/discordcore/pkg/discord/embeds"
 	"github.com/small-frappuccino/discordcore/pkg/files"
-	"github.com/small-frappuccino/discordcore/pkg/log"
+	"golang.org/x/sync/errgroup"
 )
 
 var (
@@ -147,13 +147,13 @@ func newTestContext(t *testing.T, event discord.InteractionEvent, cm *files.Conf
 
 // fakeIOStore introduces an artificial delay to simulate async I/O and expose race conditions.
 type fakeIOStore struct {
-	mu     sync.RWMutex
+	mu     sync.Mutex
 	memory *files.MemoryConfigStore
 }
 
 func (s *fakeIOStore) Load() (*files.BotConfig, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.memory.Load()
 }
 
@@ -191,30 +191,29 @@ func TestEmbedCommands_ConcurrentMutation(t *testing.T) {
 	ce := files.CustomEmbedConfig{Key: "concurrent-embed", Title: "Initial Title"}
 	cm.SetCustomEmbedProperties(guildID, ce.Key, ce)
 
-	var wg sync.WaitGroup
+	var eg errgroup.Group
 	workers := 50
 
 	for i := 0; i < workers; i++ {
-		wg.Add(1)
-		go func(idx int) {
-			defer wg.Done()
+		idx := i
+		eg.Go(func() error {
 			field := files.CustomEmbedFieldConfig{
 				Name:  fmt.Sprintf("Field %d", idx),
 				Value: "Val",
 			}
 			cm.AddCustomEmbedField(guildID, ce.Key, field)
-		}(i)
+			return nil
+		})
 	}
 
 	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		eg.Go(func() error {
 			cm.RemoveCustomEmbedField(guildID, ce.Key, 0)
-		}()
+			return nil
+		})
 	}
 
-	wg.Wait()
+	_ = eg.Wait()
 
 	embeds, err := cm.CustomEmbed(guildID, ce.Key)
 	if err != nil {
@@ -232,13 +231,10 @@ func TestEmbedCommands_ObservabilityStructuralFaults(t *testing.T) {
 	jsonHandler := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
 	logger := slog.New(jsonHandler)
 
-	restoreLogger := log.SetErrorLoggerRawForTest(logger)
-	defer restoreLogger()
-
 	store := &fakeIOStore{memory: &files.MemoryConfigStore{}}
-	cm := files.NewConfigManagerWithStore(store, nil)
+	cm := files.NewConfigManagerWithStore(store, logger)
 
-	router := commands.NewCommandRouter(api.NewClient("dummy_token"), cm)
+	router := commands.NewCommandRouter(api.NewClient("dummy_token"), cm).WithLogger(logger)
 	svc := embedsvc.NewEmbedService(cm)
 	embedCmds := NewEmbedCommands(cm, svc)
 	embedCmds.RegisterCommands(router)

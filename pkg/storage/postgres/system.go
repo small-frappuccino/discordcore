@@ -104,66 +104,36 @@ func (s *Store) NextTicketID(ctx context.Context, guildID string) (int64, error)
 	return nextID, nil
 }
 
-// UpsertCacheEntriesContext upserts cache entries utilizing UNNEST.
+// UpsertCacheEntriesContext upserts cache entries.
 func (s *Store) UpsertCacheEntriesContext(ctx context.Context, entries []system.CacheEntryRecord) error {
-	normalized := make([]system.CacheEntryRecord, 0, len(entries))
+	cachedAt := time.Now().UTC()
+
 	for _, entry := range entries {
 		if entry.Key == "" || entry.CacheType == "" || entry.Data == "" {
 			continue
 		}
-		normalized = append(normalized, entry)
-	}
-	if len(normalized) == 0 {
-		return nil
-	}
-
-	byGuild := make(map[string][]system.CacheEntryRecord)
-	for _, entry := range normalized {
-		byGuild[entry.GuildID] = append(byGuild[entry.GuildID], entry)
-	}
-
-	cachedAt := time.Now().UTC()
-
-	for guildID, batch := range byGuild {
-		keys := make([]string, len(batch))
-		cacheTypes := make([]string, len(batch))
-		datas := make([]string, len(batch))
-		expiresAts := make([]time.Time, len(batch))
-		cachedAts := make([]time.Time, len(batch))
-
-		for i, entry := range batch {
-			keys[i] = entry.Key
-			cacheTypes[i] = entry.CacheType
-			datas[i] = entry.Data
-			expiresAts[i] = entry.ExpiresAt
-			cachedAts[i] = cachedAt
-		}
 
 		var err error
-		if guildID != "" {
-			guildIDs := make([]string, len(batch))
-			for i := range batch {
-				guildIDs[i] = guildID
-			}
+		if entry.GuildID != "" {
 			_, err = s.db.Exec(ctx,
 				`INSERT INTO persistent_cache (cache_key, cache_type, guild_id, data, expires_at, cached_at)
-				 SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[], $5::timestamptz[], $6::timestamptz[])
+				 VALUES ($1, $2, $3, $4, $5, $6)
 				 ON CONFLICT(cache_key) DO UPDATE SET
 					guild_id=excluded.guild_id,
 					data=excluded.data,
 					expires_at=excluded.expires_at,
 					cached_at=excluded.cached_at`,
-				keys, cacheTypes, guildIDs, datas, expiresAts, cachedAts,
+				entry.Key, entry.CacheType, entry.GuildID, entry.Data, entry.ExpiresAt, cachedAt,
 			)
 		} else {
 			_, err = s.db.Exec(ctx,
 				`INSERT INTO persistent_cache (cache_key, cache_type, data, expires_at, cached_at)
-				 SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::timestamptz[], $5::timestamptz[])
+				 VALUES ($1, $2, $3, $4, $5)
 				 ON CONFLICT(cache_key) DO UPDATE SET
 					data=excluded.data,
 					expires_at=excluded.expires_at,
 					cached_at=excluded.cached_at`,
-				keys, cacheTypes, datas, expiresAts, cachedAts,
+				entry.Key, entry.CacheType, entry.Data, entry.ExpiresAt, cachedAt,
 			)
 		}
 

@@ -11,7 +11,7 @@ const defaultMemoryConfigStoreDescription = "memory://bot_config_state"
 // It is primarily intended for tests and lightweight local workflows that do
 // not need cross-process persistence.
 type MemoryConfigStore struct {
-	mu          sync.RWMutex
+	mu          sync.Mutex
 	config      *BotConfig
 	exists      bool
 	description string
@@ -24,8 +24,8 @@ func (s *MemoryConfigStore) Load() (*BotConfig, error) {
 		return cfg, nil
 	}
 
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	if s.config == nil {
 		return cfg, nil
@@ -70,8 +70,8 @@ func (s *MemoryConfigStore) Exists() (bool, error) {
 		return false, nil
 	}
 
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.exists, nil
 }
 

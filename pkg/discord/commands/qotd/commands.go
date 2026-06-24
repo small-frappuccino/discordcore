@@ -2,6 +2,7 @@ package qotd
 
 import (
 	"fmt"
+	"log/slog"
 
 	"github.com/diamondburned/arikawa/v3/api"
 	"github.com/diamondburned/arikawa/v3/discord"
@@ -20,6 +21,13 @@ type Service interface {
 type CommandHandler struct {
 	svc    Service
 	client *api.Client
+	logger *slog.Logger
+}
+
+// WithLogger injects a custom logger into the handler.
+func (h *CommandHandler) WithLogger(logger *slog.Logger) *CommandHandler {
+	h.logger = logger
+	return h
 }
 
 // NewCommandHandler creates a new handler.
@@ -35,7 +43,11 @@ func (h *CommandHandler) HandleInteraction(ev *gateway.InteractionCreateEvent) {
 	// Defend the gateway from any panics that occur during command handling.
 	defer func() {
 		if r := recover(); r != nil {
-			log.ApplicationLogger().Error("QOTD command handler panic", "panic", r, "stack", log.LazyStackTrace{})
+			logger := h.logger
+			if logger == nil {
+				logger = log.ApplicationLogger()
+			}
+			logger.Error("QOTD command handler panic", "panic", r, "stack", log.LazyStackTrace{})
 			// Respond with an ephemeral error if possible. We do this best-effort.
 			data := api.InteractionResponse{
 				Type: api.MessageInteractionWithSource,

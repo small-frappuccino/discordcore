@@ -194,11 +194,11 @@ func TestStore_System_UpsertCacheEntriesContext(t *testing.T) {
 		}
 
 		mock.ExpectExec(`INSERT INTO persistent_cache`).
-			WithArgs([]string{"k1"}, []string{"t1"}, []string{"g1"}, []string{"d1"}, []time.Time{now}, pgxmock.AnyArg()).
+			WithArgs("k1", "t1", "g1", "d1", now, pgxmock.AnyArg()).
 			WillReturnResult(pgxmock.NewResult("INSERT", 1))
 
 		mock.ExpectExec(`INSERT INTO persistent_cache`).
-			WithArgs([]string{"k2"}, []string{"t2"}, []string{"d2"}, []time.Time{now}, pgxmock.AnyArg()).
+			WithArgs("k2", "t2", "d2", now, pgxmock.AnyArg()).
 			WillReturnResult(pgxmock.NewResult("INSERT", 1))
 
 		err := store.UpsertCacheEntriesContext(context.Background(), entries)

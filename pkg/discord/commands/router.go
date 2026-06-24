@@ -25,6 +25,13 @@ type CommandRouter struct {
 	components map[string]ComponentHandler
 	client     *api.Client
 	config     *files.ConfigManager
+	logger     *slog.Logger
+}
+
+// WithLogger injects a custom logger into the router.
+func (r *CommandRouter) WithLogger(logger *slog.Logger) *CommandRouter {
+	r.logger = logger
+	return r
 }
 
 // NewCommandRouter instantiates a pure Arikawa command router.
@@ -129,7 +136,10 @@ func (r *CommandRouter) HandleEvent(event *discord.InteractionEvent) error {
 }
 
 func (r *CommandRouter) logHandlerError(kind, name string, event *discord.InteractionEvent, err error) {
-	logger := log.ErrorLoggerRaw()
+	logger := r.logger
+	if logger == nil {
+		logger = log.ErrorLoggerRaw()
+	}
 	if logger == nil {
 		logger = slog.Default()
 	}

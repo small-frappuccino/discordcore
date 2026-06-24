@@ -15,7 +15,7 @@ import (
 type JSONManager struct {
 	FilePath    string
 	ProjectRoot string // Optional: for safe saving
-	mu          sync.RWMutex
+	mu          sync.Mutex
 }
 
 // WithProjectRoot sets the project root for safe saving.
@@ -26,9 +26,9 @@ func (m *JSONManager) WithProjectRoot(projectRoot string) *JSONManager {
 
 // Load reads the JSON file and unmarshals it into the provided data structure.
 func (m *JSONManager) Load(data any) error {
-	m.mu.RLock()
+	m.mu.Lock()
 	filePath := m.FilePath
-	m.mu.RUnlock()
+	m.mu.Unlock()
 
 	fileData, err := os.ReadFile(filePath)
 	if err != nil {

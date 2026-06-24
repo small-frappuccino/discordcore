@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"sync"
 	"testing"
@@ -93,7 +94,7 @@ func TestCommandHandler_PanicRecovery(t *testing.T) {
 	client := api.NewClient("token")
 	client.Client.Client = httpdriver.WrapClient(http.Client{Transport: &mockTransport{}})
 
-	handler := NewCommandHandler(svc, client)
+	handler := NewCommandHandler(svc, client).WithLogger(slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	ev := &gateway.InteractionCreateEvent{
 		InteractionEvent: discord.InteractionEvent{

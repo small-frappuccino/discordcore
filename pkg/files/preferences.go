@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"runtime/debug"
 	"slices"
 	"strings"
 
@@ -31,7 +30,6 @@ func EmitBlockingError(logger *slog.Logger, msg string, err error, requestID str
 	logger.Error(msg,
 		slog.String("request_id", requestID),
 		slog.String("synthetic_code", "500"),
-		slog.String("stack_trace", string(debug.Stack())),
 		slog.Any("error", err),
 	)
 }
