@@ -689,7 +689,6 @@ func filterTrackedRoles(roles iter.Seq[string], trackedRoles map[string]struct{}
 	if len(trackedRoles) == 0 {
 		return nil
 	}
-	seen := make(map[string]struct{})
 	var filtered []string
 	for roleID := range roles {
 		roleID = strings.TrimSpace(roleID)
@@ -699,10 +698,16 @@ func filterTrackedRoles(roles iter.Seq[string], trackedRoles map[string]struct{}
 		if _, ok := trackedRoles[roleID]; !ok {
 			continue
 		}
-		if _, duplicate := seen[roleID]; duplicate {
+		duplicate := false
+		for _, f := range filtered {
+			if f == roleID {
+				duplicate = true
+				break
+			}
+		}
+		if duplicate {
 			continue
 		}
-		seen[roleID] = struct{}{}
 		filtered = append(filtered, roleID)
 	}
 	sort.Strings(filtered)

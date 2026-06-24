@@ -60,8 +60,13 @@ func (r *CommandRegistry) Len() int {
 func (r *CommandRegistry) All() iter.Seq2[string, ArikawaCommand] {
 	return func(yield func(string, ArikawaCommand) bool) {
 		r.mu.RLock()
-		defer r.mu.RUnlock()
+		cmds := make(map[string]ArikawaCommand, len(r.commands))
 		for name, cmd := range r.commands {
+			cmds[name] = cmd
+		}
+		r.mu.RUnlock()
+
+		for name, cmd := range cmds {
 			if !yield(name, cmd) {
 				return
 			}
