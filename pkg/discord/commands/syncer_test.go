@@ -187,17 +187,15 @@ func TestCommandSyncer_SyncBulkOverwrite_Routing(t *testing.T) {
 
 // 3. Testes de Resiliência de Erros e Telemetria Integrada
 func TestCommandSyncer_SyncBulkOverwrite_TelemetryAndErrors(t *testing.T) {
-	// Not using t.Parallel() here because it mutates the global slog.Default()
+	t.Parallel()
 
 	appID := discord.AppID(111)
 
 	t.Run("Cenário de Sucesso", func(t *testing.T) {
+		t.Parallel()
+
 		var buf bytes.Buffer
 		logger := slog.New(slog.NewJSONHandler(&buf, nil))
-
-		originalLogger := slog.Default()
-		slog.SetDefault(logger)
-		defer slog.SetDefault(originalLogger)
 
 		transport := &mockTransport{
 			roundTripFunc: func(req *http.Request) (*http.Response, error) {
@@ -211,6 +209,7 @@ func TestCommandSyncer_SyncBulkOverwrite_TelemetryAndErrors(t *testing.T) {
 
 		client := newMockArikawaClient(transport)
 		syncer := NewCommandSyncer(client, appID)
+		syncer.SetLogger(logger)
 		registry := NewCommandRegistry()
 		registry.Register(&mockCommand{name: "telemetry"})
 
@@ -223,12 +222,10 @@ func TestCommandSyncer_SyncBulkOverwrite_TelemetryAndErrors(t *testing.T) {
 	})
 
 	t.Run("Cenário de Falha", func(t *testing.T) {
+		t.Parallel()
+
 		var buf bytes.Buffer
 		logger := slog.New(slog.NewJSONHandler(&buf, nil))
-
-		originalLogger := slog.Default()
-		slog.SetDefault(logger)
-		defer slog.SetDefault(originalLogger)
 
 		transport := &mockTransport{
 			roundTripFunc: func(req *http.Request) (*http.Response, error) {
@@ -246,6 +243,7 @@ func TestCommandSyncer_SyncBulkOverwrite_TelemetryAndErrors(t *testing.T) {
 
 		client := newMockArikawaClient(transport)
 		syncer := NewCommandSyncer(client, appID)
+		syncer.SetLogger(logger)
 		registry := NewCommandRegistry()
 
 		err := syncer.SyncBulkOverwrite(discord.NullGuildID, registry)

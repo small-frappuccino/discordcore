@@ -14,6 +14,7 @@ import (
 type CommandSyncer struct {
 	client *api.Client
 	appID  discord.AppID
+	logger *slog.Logger
 }
 
 // NewCommandSyncer allocates a new native API syncer.
@@ -22,6 +23,18 @@ func NewCommandSyncer(client *api.Client, appID discord.AppID) *CommandSyncer {
 		client: client,
 		appID:  appID,
 	}
+}
+
+// SetLogger injects a logger into the syncer.
+func (s *CommandSyncer) SetLogger(logger *slog.Logger) {
+	s.logger = logger
+}
+
+func (s *CommandSyncer) log() *slog.Logger {
+	if s.logger != nil {
+		return s.logger
+	}
+	return slog.Default()
 }
 
 // BuildCreateData maps internal ArikawaCommand interfaces into the exact
@@ -64,14 +77,14 @@ func (s *CommandSyncer) SyncBulkOverwrite(guildID discord.GuildID, registry *Com
 	}
 
 	if err != nil {
-		slog.Error("Bulk command synchronization failed",
+		s.log().Error("Bulk command synchronization failed",
 			slog.String("guild_id", guildID.String()),
 			slog.Any("error", err),
 		)
 		return fmt.Errorf("bulk overwrite failed: %w", err)
 	}
 
-	slog.Info("Successfully synchronized commands via BulkOverwrite",
+	s.log().Info("Successfully synchronized commands via BulkOverwrite",
 		slog.String("guild_id", guildID.String()),
 		slog.Int("total_commands", len(data)),
 	)
