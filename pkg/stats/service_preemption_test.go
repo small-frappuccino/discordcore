@@ -8,6 +8,7 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/members"
+	"golang.org/x/sync/errgroup"
 )
 
 // blockingStore is a mock that blocks indefinitely until context is canceled.
@@ -99,17 +100,27 @@ func TestStatsService_DatabasePreemption(t *testing.T) {
 	// Preempt the execution via context cancellation
 	cancel()
 
-	// Service should stop gracefully without leaking or hanging indefinitely
+	eg, egCtx := errgroup.WithContext(context.Background())
 	done := make(chan struct{})
-	go func() {
+	eg.Go(func() error {
+		select {
+		case <-egCtx.Done():
+			return egCtx.Err()
+		default:
+		}
 		s.Stop(context.Background())
 		close(done)
-	}()
+		return nil
+	})
 
 	select {
 	case <-done:
 		// Success! The database mock cleanly yielded control to ctx.Done()
 	case <-time.After(2 * time.Second):
 		t.Fatal("Service failed to preempt database operation on context cancellation")
+	}
+
+	if err := eg.Wait(); err != nil {
+		t.Fatalf("unexpected errgroup wait error: %v", err)
 	}
 }

@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 	"runtime"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/qotd"
+	"golang.org/x/sync/errgroup"
 )
 
 type mockPublisher struct {
@@ -52,12 +52,13 @@ func TestExecuteInGuildActor_Serialization(t *testing.T) {
 	var executedCounter int32
 	var activeCount int32
 	var maxActiveCount int32
-	var wg sync.WaitGroup
+	eg, ctx := errgroup.WithContext(context.Background())
 
 	for i := 0; i < workerCount; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		eg.Go(func() error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			_, err := svc.ExecuteInGuildActorWithResult(targetGuildID, func() (any, error) {
 				atomic.AddInt32(&executedCounter, 1)
 
@@ -79,12 +80,15 @@ func TestExecuteInGuildActor_Serialization(t *testing.T) {
 				return nil, nil
 			})
 			if err != nil {
-				t.Errorf("Execução subjacente falhou inesperadamente: %v", err)
+				return fmt.Errorf("Execução subjacente falhou inesperadamente: %v", err)
 			}
-		}()
+			return nil
+		})
 	}
 
-	wg.Wait()
+	if err := eg.Wait(); err != nil {
+		t.Fatalf("concurrent execution failed: %v", err)
+	}
 
 	if atomic.LoadInt32(&executedCounter) != int32(workerCount) {
 		t.Fatalf("Esperado contador escalar em %d, aferido %d", workerCount, executedCounter)
@@ -106,17 +110,18 @@ func TestExecuteInGuildActor_Parallelism(t *testing.T) {
 
 	const workerCount = 100
 
-	var wg sync.WaitGroup
+	eg, ctx := errgroup.WithContext(context.Background())
 	var activeCount int32
 	var maxActiveCount int32
 	gate := make(chan struct{})
 
 	for i := 0; i < workerCount; i++ {
-		wg.Add(1)
 		guildID := fmt.Sprintf("guild_%d", i)
-		go func(id string) {
-			defer wg.Done()
-			svc.ExecuteInGuildActor(id, func() {
+		eg.Go(func() error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			svc.ExecuteInGuildActor(guildID, func() {
 				currentActive := atomic.AddInt32(&activeCount, 1)
 
 				for {
@@ -134,7 +139,8 @@ func TestExecuteInGuildActor_Parallelism(t *testing.T) {
 
 				atomic.AddInt32(&activeCount, -1)
 			})
-		}(guildID)
+			return nil
+		})
 	}
 
 	// Spin-wait until all workers are concurrently active in their own actors
@@ -142,14 +148,16 @@ func TestExecuteInGuildActor_Parallelism(t *testing.T) {
 	for atomic.LoadInt32(&activeCount) < workerCount {
 		if time.Since(start) > 2*time.Second {
 			close(gate)
-			wg.Wait()
+			_ = eg.Wait()
 			t.Fatalf("Timeout waiting for parallel actors to enter concurrently: entered %d/%d", atomic.LoadInt32(&activeCount), workerCount)
 		}
 		runtime.Gosched()
 	}
 
 	close(gate)
-	wg.Wait()
+	if err := eg.Wait(); err != nil {
+		t.Fatalf("parallel execution failed: %v", err)
+	}
 
 	if finalMax := atomic.LoadInt32(&maxActiveCount); finalMax != workerCount {
 		t.Fatalf("Actor parallelism failed: expected max concurrent execution of %d, got %d", workerCount, finalMax)

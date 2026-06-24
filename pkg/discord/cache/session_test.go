@@ -1,7 +1,9 @@
 package cache
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -9,6 +11,7 @@ import (
 
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
+	"golang.org/x/sync/errgroup"
 )
 
 // TestSession_SingleflightLoad verifies the singleflight primitive correctly coalesces massive concurrent cache misses.
@@ -18,7 +21,7 @@ func TestSession_SingleflightLoad(t *testing.T) {
 	cs := NewCachedSession(nil, uc)
 
 	var fetches int32
-	var wg sync.WaitGroup
+	eg, ctx := errgroup.WithContext(context.Background())
 	start := make(chan struct{})
 	entered := make(chan struct{})
 	var enteredOnce sync.Once
@@ -28,21 +31,25 @@ func TestSession_SingleflightLoad(t *testing.T) {
 	readyToFetch.Add(1000)
 
 	for i := 0; i < 1000; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			<-start // Wait for all goroutines to be spawned
+		eg.Go(func() error {
+			select {
+			case <-start:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 			readyToFetch.Done()
 			_, err, _ := cs.sf.Do("guild:123", func() (any, error) {
 				atomic.AddInt32(&fetches, 1)
 				enteredOnce.Do(func() { close(entered) })
-				<-fetchBlock // deterministically block to allow pile-up
+				select {
+				case <-fetchBlock:
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				}
 				return &discord.Guild{ID: discord.GuildID(123)}, nil
 			})
-			if err != nil {
-				t.Errorf("Unexpected error: %v", err)
-			}
-		}()
+			return err
+		})
 	}
 
 	close(start)        // Unleash all goroutines at once
@@ -50,7 +57,9 @@ func TestSession_SingleflightLoad(t *testing.T) {
 	readyToFetch.Wait() // Synchronously await all goroutines to reach execution barrier
 	close(fetchBlock)
 
-	wg.Wait()
+	if err := eg.Wait(); err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
 
 	if atomic.LoadInt32(&fetches) > 500 {
 		t.Fatalf("Expected coalescing, got %d fetches (should be < 500)", fetches)
@@ -64,7 +73,7 @@ func TestSession_SingleflightError(t *testing.T) {
 	cs := NewCachedSession(nil, uc)
 
 	expectedErr := errors.New("network error")
-	var wg sync.WaitGroup
+	eg, ctx := errgroup.WithContext(context.Background())
 	entered := make(chan struct{})
 	var enteredOnce sync.Once
 	fetchBlock := make(chan struct{})
@@ -73,26 +82,31 @@ func TestSession_SingleflightError(t *testing.T) {
 	readyToFetch.Add(10)
 
 	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		eg.Go(func() error {
 			readyToFetch.Done()
 			_, err, _ := cs.sf.Do("guild:456", func() (any, error) {
 				enteredOnce.Do(func() { close(entered) })
-				<-fetchBlock
+				select {
+				case <-fetchBlock:
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				}
 				return nil, expectedErr
 			})
 			if err != expectedErr {
-				t.Errorf("Expected network error, got %v", err)
+				return fmt.Errorf("expected network error, got %v", err)
 			}
-		}()
+			return nil
+		})
 	}
 
 	<-entered
 	readyToFetch.Wait()
 	close(fetchBlock)
 
-	wg.Wait()
+	if err := eg.Wait(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	if _, ok := uc.GetGuild("456"); ok {
 		t.Fatal("Expected guild to NOT be in cache after error")
@@ -133,22 +147,29 @@ func TestSession_RaceUpdate(t *testing.T) {
 	uc.SetMember("1", "1", member)
 
 	// Simulate concurrent Gateway Update overriding it
-	var wg sync.WaitGroup
-	wg.Add(2)
+	eg, ctx := errgroup.WithContext(context.Background())
 
-	go func() {
-		defer wg.Done()
+	eg.Go(func() error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		cs.HandleGuildMemberUpdate(&gateway.GuildMemberUpdateEvent{
 			GuildID: discord.GuildID(1),
 			User:    discord.User{ID: discord.UserID(1)},
 		})
-	}()
+		return nil
+	})
 
-	go func() {
-		defer wg.Done()
+	eg.Go(func() error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		// REST fetch returning stale
 		uc.SetMember("1", "1", &discord.Member{User: discord.User{ID: discord.UserID(1)}})
-	}()
+		return nil
+	})
 
-	wg.Wait()
+	if err := eg.Wait(); err != nil {
+		t.Fatalf("concurrency execution failed: %v", err)
+	}
 }

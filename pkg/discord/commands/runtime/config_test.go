@@ -1,10 +1,11 @@
 package runtime
 
 import (
-	"sync"
+	"context"
 	"testing"
 
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"golang.org/x/sync/errgroup"
 )
 
 // TestSaveRuntimeConfig_RaceDetection mathematically guarantees thread-safe mutation semantics.
@@ -20,13 +21,15 @@ func TestSaveRuntimeConfig_RaceDetection(t *testing.T) {
 	cm := files.NewConfigManagerWithStore(store, nil)
 	cm.LoadConfig() // Guarantee map initialization before bombardment.
 
-	var wg sync.WaitGroup
+	eg, ctx := errgroup.WithContext(context.Background())
 	workers := 50 // Represents an adversarial spike in form submissions hitting the dashboard simultaneously.
 
 	for i := 0; i < workers; i++ {
-		wg.Add(1)
-		go func(idx int) {
-			defer wg.Done()
+		idx := i
+		eg.Go(func() error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 
 			// Formulate unique configurations strictly within localized scopes to verify mutation bounds.
 			rc := files.RuntimeConfig{
@@ -36,10 +39,13 @@ func TestSaveRuntimeConfig_RaceDetection(t *testing.T) {
 
 			// Mutate shared memory through the standardized boundary helper continuously.
 			_ = saveRuntimeConfig(cm, rc, "global")
-		}(i)
+			return nil
+		})
 	}
 
-	wg.Wait()
+	if err := eg.Wait(); err != nil {
+		t.Fatalf("concurrent runtime config save failed: %v", err)
+	}
 
 	// Post-execution evaluation confirms that despite structural contention, the mutex map
 	// successfully synchronized all changes without data races (caught by -race during CI).

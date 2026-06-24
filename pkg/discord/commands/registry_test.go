@@ -1,11 +1,12 @@
 package commands_test
 
 import (
-	"sync"
+	"context"
 	"testing"
 
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
+	"golang.org/x/sync/errgroup"
 )
 
 // mockArikawaCommand is a simple structural mock satisfying the ArikawaCommand interface.
@@ -27,13 +28,14 @@ func TestCommandRegistry_ConcurrentSafety(t *testing.T) {
 	t.Parallel()
 
 	registry := commands.NewCommandRegistry()
-	var wg sync.WaitGroup
+	eg, ctx := errgroup.WithContext(context.Background())
 
 	// Stress-testing state mutation under high concurrency
 	for i := 0; i < 1000; i++ {
-		wg.Add(1)
-		go func(id int) {
-			defer wg.Done()
+		eg.Go(func() error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			cmd := &mockArikawaCommand{name: "test_cmd"}
 
 			// Operational Annotation: We execute writes simultaneously across
@@ -44,10 +46,13 @@ func TestCommandRegistry_ConcurrentSafety(t *testing.T) {
 			// Simultaneous reads to force race detection if read locks are missing
 			_ = registry.Len()
 			_, _ = registry.GetCommand("test_cmd")
-		}(i)
+			return nil
+		})
 	}
 
-	wg.Wait()
+	if err := eg.Wait(); err != nil {
+		t.Fatalf("concurrent safety stress execution failed: %v", err)
+	}
 
 	if registry.Len() == 0 {
 		t.Fatal("Registry failed to record commands concurrently")

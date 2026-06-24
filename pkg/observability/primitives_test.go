@@ -1,10 +1,13 @@
 package observability
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 )
 
 func TestSummaryBasic(t *testing.T) {
@@ -75,23 +78,28 @@ func TestSummaryBasic(t *testing.T) {
 func TestSummaryConcurrency(t *testing.T) {
 	t.Parallel()
 	var s Summary
-	var wg sync.WaitGroup
+	eg, ctx := errgroup.WithContext(context.Background())
 	workers := 20
 	iterations := 1000
 
 	for i := 0; i < workers; i++ {
-		wg.Add(1)
-		go func(workerID int) {
-			defer wg.Done()
+		workerID := i
+		eg.Go(func() error {
 			for j := 0; j < iterations; j++ {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
 				// Alternating durations to stress the CAS loop
 				dur := time.Duration(j+workerID) * time.Microsecond
 				s.Observe(dur)
 			}
-		}(i)
+			return nil
+		})
 	}
 
-	wg.Wait()
+	if err := eg.Wait(); err != nil {
+		t.Fatalf("concurrent Summary observation failed: %v", err)
+	}
 	snap := s.Snapshot()
 	expectedCount := int64(workers * iterations)
 	if snap.Count != expectedCount {

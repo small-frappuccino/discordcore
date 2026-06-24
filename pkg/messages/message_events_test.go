@@ -15,6 +15,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/service"
 	"github.com/small-frappuccino/discordcore/pkg/task"
+	"golang.org/x/sync/errgroup"
 )
 
 // Mock implementation of Repository
@@ -806,7 +807,7 @@ func TestMessageEventService_ActiveBotInstanceRouting(t *testing.T) {
 
 	// Configure mock audit log cache value directly to bypass Discord API call
 	svc.auditCache.set("111", auditCacheEntry{
-		fetchedAt: time.Now(),
+		fetchedAt: time.Now().Add(10 * time.Minute),
 		entries: map[string]auditCacheValue{
 			"123:222": {
 				userID:    "333",
@@ -890,11 +891,10 @@ func TestMessageEventService_TaskRouterAsynchronousHandling(t *testing.T) {
 		},
 	})
 
-	var wg sync.WaitGroup
-	wg.Add(2)
+	doneCh := make(chan struct{}, 2)
 	sink := &mockMessageSink{
-		onUpdate: func() { wg.Done() },
-		onDelete: func() { wg.Done() },
+		onUpdate: func() { doneCh <- struct{}{} },
+		onDelete: func() { doneCh <- struct{}{} },
 	}
 	deps := EventServiceDeps{
 		ConfigManager: cfgMgr,
@@ -931,16 +931,12 @@ func TestMessageEventService_TaskRouterAsynchronousHandling(t *testing.T) {
 	})
 
 	// Wait deterministically for Task Router workers to process
-	done := make(chan struct{})
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
-
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("Timeout waiting for task router to process messages")
+	for i := 0; i < 2; i++ {
+		select {
+		case <-doneCh:
+		case <-time.After(5 * time.Second):
+			t.Fatal("Timeout waiting for task router to process messages")
+		}
 	}
 
 	tr.Close()
@@ -978,9 +974,14 @@ func TestLookupCachedMessage_PollingAndCancellation(t *testing.T) {
 	}
 
 	// Poll loop returns message after it appears in mock store
-	ctx2 := context.Background()
-	go func() {
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+	eg, egCtx := errgroup.WithContext(ctx2)
+	eg.Go(func() error {
 		for i := 0; i < 10; i++ {
+			if err := egCtx.Err(); err != nil {
+				return err
+			}
 			runtime.Gosched()
 		}
 		store.SetGetMsg(&Record{
@@ -991,11 +992,16 @@ func TestLookupCachedMessage_PollingAndCancellation(t *testing.T) {
 			AuthorUsername: "alice",
 			Content:        "hello",
 		})
-	}()
+		return nil
+	})
 
-	cached = svc.lookupCachedMessage(ctx2, "111", "999", true)
+	cached = svc.lookupCachedMessage(egCtx, "111", "999", true)
 	if cached == nil || cached.Content != "hello" {
 		t.Errorf("expected message to be found eventually via polling, got %+v", cached)
+	}
+
+	if err := eg.Wait(); err != nil {
+		t.Errorf("expected background store populater to succeed, got %v", err)
 	}
 }
 

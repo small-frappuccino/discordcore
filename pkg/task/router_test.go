@@ -17,6 +17,7 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/clock"
 	"go.uber.org/goleak"
+	"golang.org/x/sync/errgroup"
 )
 
 func TestMain(m *testing.M) {
@@ -54,12 +55,13 @@ func TestRouter_GroupKeySerialization(t *testing.T) {
 	})
 
 	const numTasks = 10000
-	var wg sync.WaitGroup
-	wg.Add(numTasks)
+	eg, ctx := errgroup.WithContext(context.Background())
 
 	for i := 0; i < numTasks; i++ {
-		go func(id int) {
-			defer wg.Done()
+		eg.Go(func() error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			err := router.Dispatch(context.Background(), Task{
 				Type: "serialize_test",
 				Options: TaskOptions{
@@ -67,12 +69,15 @@ func TestRouter_GroupKeySerialization(t *testing.T) {
 				},
 			})
 			if err != nil {
-				t.Errorf("Dispatch failed: %v", err)
+				return fmt.Errorf("Dispatch failed: %v", err)
 			}
-		}(i)
+			return nil
+		})
 	}
 
-	wg.Wait()
+	if err := eg.Wait(); err != nil {
+		t.Fatalf("group key serialization stress dispatch failed: %v", err)
+	}
 
 	// Ensure all tasks complete functionally instead of sleeping
 	for {
@@ -294,16 +299,27 @@ func TestRouter_CronSchedule(t *testing.T) {
 		router.runCronOnce()
 	}
 
+	eg2, ctx2 := errgroup.WithContext(context.Background())
 	done := make(chan struct{})
-	go func() {
+	eg2.Go(func() error {
+		select {
+		case <-ctx2.Done():
+			return ctx2.Err()
+		default:
+		}
 		wg.Wait()
 		close(done)
-	}()
+		return nil
+	})
 
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
 		t.Fatalf("Expected cron to fire exactly 3 times in 72h, got %d", runs.Load())
+	}
+
+	if err := eg2.Wait(); err != nil {
+		t.Fatalf("unexpected error waiting for waitgroup: %v", err)
 	}
 }
 

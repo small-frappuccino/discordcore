@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"go.uber.org/goleak"
+	"golang.org/x/sync/errgroup"
 )
 
 func TestServer_GracefulDegradation(t *testing.T) {
@@ -37,12 +38,19 @@ func TestServer_GracefulDegradation(t *testing.T) {
 		t.Fatalf("Failed to create request: %v", err)
 	}
 
-	go func() {
+	eg, ctx := errgroup.WithContext(context.Background())
+	eg.Go(func() error {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
 		resp, err := http.DefaultClient.Do(req)
 		if err == nil {
 			resp.Body.Close()
 		}
-	}()
+		return nil
+	})
 
 	<-started // Wait deterministically for the request to reach the server
 
@@ -53,6 +61,8 @@ func TestServer_GracefulDegradation(t *testing.T) {
 
 	// Cancel client request to clean up connection and prevent deadlock in ts.Close()
 	cancelReq()
+
+	_ = eg.Wait()
 
 	if stopErr == nil {
 		t.Fatal("Expected deadline exceeded error from Shutdown")

@@ -2,6 +2,7 @@ package qotd
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"log/slog"
@@ -13,6 +14,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/utils/httputil/httpdriver"
+	"golang.org/x/sync/errgroup"
 )
 
 type MockService struct {
@@ -57,15 +59,17 @@ func TestCommandHandler_ThunderingHerds(t *testing.T) {
 	handler := NewCommandHandler(svc, client)
 
 	const numGoroutines = 1000
-	var wg sync.WaitGroup
-	wg.Add(numGoroutines)
+	eg, ctx := errgroup.WithContext(context.Background())
 
 	for i := 0; i < numGoroutines; i++ {
-		go func(i int) {
-			defer wg.Done()
+		idx := i
+		eg.Go(func() error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			ev := &gateway.InteractionCreateEvent{
 				InteractionEvent: discord.InteractionEvent{
-					ID:      discord.InteractionID(i + 1),
+					ID:      discord.InteractionID(idx + 1),
 					Token:   "token",
 					GuildID: 12345,
 					Data: &discord.CommandInteraction{
@@ -82,10 +86,13 @@ func TestCommandHandler_ThunderingHerds(t *testing.T) {
 			// or panic inside the handler concurrency map
 			// Mock client will fail deferring, but the recover block handles it
 			handler.HandleInteraction(ev)
-		}(i)
+			return nil
+		})
 	}
 
-	wg.Wait()
+	if err := eg.Wait(); err != nil {
+		t.Fatalf("thundering herds execution failed: %v", err)
+	}
 }
 
 func TestCommandHandler_PanicRecovery(t *testing.T) {

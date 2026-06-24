@@ -1089,24 +1089,11 @@ func (tr *TaskRouter) backgroundLoop() {
 		}
 	}()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	tr.wg.Add(1)
-	go func() {
-		defer tr.wg.Done()
-		select {
-		case <-tr.stopCh:
-			cancel()
-		case <-ctx.Done():
-		}
-	}()
-
 	ticker := tr.cfg.Clock.NewTicker(tr.cfg.CleanupInterval)
 	defer ticker.Stop()
 	for {
 		select {
-		case <-ctx.Done():
+		case <-tr.stopCh:
 			return
 		case <-ticker.C():
 			tr.cleanupOnce()

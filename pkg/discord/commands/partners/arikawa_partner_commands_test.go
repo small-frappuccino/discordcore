@@ -18,6 +18,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
 	partnersvc "github.com/small-frappuccino/discordcore/pkg/discord/partners"
 	"github.com/small-frappuccino/discordcore/pkg/files"
+	"golang.org/x/sync/errgroup"
 )
 
 var (
@@ -173,17 +174,20 @@ func TestPartnerCommands_ConcurrentStateMutation(t *testing.T) {
 	addCmd := newPartnerAddSubCommand(cm, svc)
 	removeCmd := newPartnerRemoveSubCommand(cm, svc)
 
-	var wg sync.WaitGroup
+	eg, ctx := errgroup.WithContext(context.Background())
 	start := make(chan struct{})
 
 	const numRoutines = 50
 
 	for i := 0; i < numRoutines; i++ {
-		wg.Add(2)
+		idx := i
 		// Goroutine for Add
-		go func(idx int) {
-			defer wg.Done()
-			<-start
+		eg.Go(func() error {
+			select {
+			case <-start:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 
 			options := []discord.CommandInteractionOption{
 				{Name: optionName, Type: discord.StringOptionType, Value: []byte(fmt.Sprintf(`"Partner%d"`, idx))},
@@ -211,12 +215,16 @@ func TestPartnerCommands_ConcurrentStateMutation(t *testing.T) {
 			}
 
 			_ = addCmd.Handle(actx)
-		}(i)
+			return nil
+		})
 
 		// Goroutine for Remove
-		go func(idx int) {
-			defer wg.Done()
-			<-start
+		eg.Go(func() error {
+			select {
+			case <-start:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 
 			options := []discord.CommandInteractionOption{
 				{Name: optionName, Type: discord.StringOptionType, Value: []byte(fmt.Sprintf(`"Partner%d"`, idx-1))},
@@ -242,11 +250,14 @@ func TestPartnerCommands_ConcurrentStateMutation(t *testing.T) {
 			}
 
 			_ = removeCmd.Handle(actx)
-		}(i)
+			return nil
+		})
 	}
 
 	close(start) // release the barrier
-	wg.Wait()
+	if err := eg.Wait(); err != nil {
+		t.Fatalf("concurrent state mutation execution failed: %v", err)
+	}
 
 	finalCfg := cm.GuildConfig("12345")
 	if finalCfg == nil {

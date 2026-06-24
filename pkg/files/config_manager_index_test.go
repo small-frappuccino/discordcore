@@ -1,10 +1,12 @@
 package files
 
 import (
+	"context"
 	"fmt"
 	"runtime"
-	"sync"
 	"testing"
+
+	"golang.org/x/sync/errgroup"
 )
 
 func newTestConfigManager(guilds []GuildConfig) *ConfigManager {
@@ -199,31 +201,39 @@ func TestGuildConfigIndexConcurrency(t *testing.T) {
 		t.Fatalf("rebuild index: %v", err)
 	}
 
-	var wg sync.WaitGroup
+	eg, ctx := errgroup.WithContext(context.Background())
 	readers := 10
 	writes := 20
 
 	for i := 0; i < readers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		eg.Go(func() error {
 			for j := 0; j < 200; j++ {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
 				mgr.GuildConfig("g1")
 				mgr.GuildConfig("missing")
 			}
-		}()
+			return nil
+		})
 	}
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	eg.Go(func() error {
 		for i := 0; i < writes; i++ {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			id := fmt.Sprintf("g%02d", i+2)
-			mgr.AddGuildConfig(GuildConfig{GuildID: id})
+			if err := mgr.AddGuildConfig(GuildConfig{GuildID: id}); err != nil {
+				return err
+			}
 		}
-	}()
+		return nil
+	})
 
-	wg.Wait()
+	if err := eg.Wait(); err != nil {
+		t.Fatalf("concurrency execution failed: %v", err)
+	}
 
 	if cfg := mgr.GuildConfig("g1"); cfg == nil {
 		t.Fatalf("expected g1 to remain accessible")

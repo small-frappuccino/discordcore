@@ -1,8 +1,10 @@
 package moderation
 
 import (
-	"sync"
+	"context"
 	"testing"
+
+	"golang.org/x/sync/errgroup"
 )
 
 // TestNextFallbackCaseNumber_Race stresses the case number generation
@@ -15,20 +17,24 @@ func TestNextFallbackCaseNumber_Race(t *testing.T) {
 		guildID     = "123456789012345"
 	)
 
-	var wg sync.WaitGroup
-	wg.Add(concurrency)
+	eg, ctx := errgroup.WithContext(context.Background())
 
 	results := make(chan int64, concurrency)
 
 	for i := 0; i < concurrency; i++ {
-		go func(g string) {
-			defer wg.Done()
+		eg.Go(func() error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			// Generate the fallback case number concurrently.
-			results <- NextFallbackCaseNumber(g, nil)
-		}(guildID)
+			results <- NextFallbackCaseNumber(guildID, nil)
+			return nil
+		})
 	}
 
-	wg.Wait()
+	if err := eg.Wait(); err != nil {
+		t.Fatalf("concurrent fallback case generation failed: %v", err)
+	}
 	close(results)
 
 	seen := make(map[int64]bool)

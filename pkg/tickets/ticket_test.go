@@ -13,6 +13,7 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/storage/postgres"
 	"github.com/small-frappuccino/discordcore/pkg/testdb"
+	"golang.org/x/sync/errgroup"
 )
 
 func TestNextID_ACID(t *testing.T) {
@@ -49,19 +50,19 @@ func TestNextID_ACID(t *testing.T) {
 	const workers = 20
 	const iterations = 50
 
-	var wg sync.WaitGroup
 	var mu sync.Mutex
 	results := make(map[int64]bool)
-
 	errCh := make(chan error, workers*iterations)
 
-	wg.Add(workers)
+	eg, ctx := errgroup.WithContext(context.Background())
 	for i := 0; i < workers; i++ {
-		go func() {
-			defer wg.Done()
+		eg.Go(func() error {
 			for j := 0; j < iterations; j++ {
-				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				id, err := mgr.NextID(ctx, guildID)
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+				ctxTimeout, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				id, err := mgr.NextID(ctxTimeout, guildID)
 				cancel()
 				if err != nil {
 					errCh <- err
@@ -74,10 +75,13 @@ func TestNextID_ACID(t *testing.T) {
 				results[id] = true
 				mu.Unlock()
 			}
-		}()
+			return nil
+		})
 	}
 
-	wg.Wait()
+	if err := eg.Wait(); err != nil {
+		t.Fatalf("concurrent workers failed: %v", err)
+	}
 	close(errCh)
 
 	for err := range errCh {

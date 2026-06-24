@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"strings"
-	"sync"
 	"testing"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 )
 
 // TestOrchestrator_Preemption checks if long-running I/O calls are preempted correctly.
@@ -47,13 +48,21 @@ func TestExecuteOrchestration_ContextCancellationPropagates(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 
+	eg, egCtx := errgroup.WithContext(context.Background())
 	errCh := make(chan error, 1)
-	go func() {
+
+	eg.Go(func() error {
+		select {
+		case <-egCtx.Done():
+			return egCtx.Err()
+		default:
+		}
 		errCh <- ExecuteOrchestration(ctx, func(c context.Context) error {
 			<-c.Done()
 			return c.Err()
 		})
-	}()
+		return nil
+	})
 
 	cancel() // Cancel the parent context
 
@@ -65,18 +74,23 @@ func TestExecuteOrchestration_ContextCancellationPropagates(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("ExecuteOrchestration did not return promptly after context cancellation")
 	}
+
+	if err := eg.Wait(); err != nil {
+		t.Fatalf("unexpected errgroup wait error: %v", err)
+	}
 }
 
 func TestExecuteOrchestration_FalseSharingMitigation(t *testing.T) {
 	t.Parallel()
-	// A test to ensure multiple executions don't share memory unsafely.
-	var wg sync.WaitGroup
+	eg, ctx := errgroup.WithContext(context.Background())
 	errs := make(chan error, 10)
 
 	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func(idx int) {
-			defer wg.Done()
+		idx := i
+		eg.Go(func() error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			err := ExecuteOrchestration(context.Background(), func(c context.Context) error {
 				if idx == 5 {
 					return errors.New("simulated error")
@@ -84,10 +98,13 @@ func TestExecuteOrchestration_FalseSharingMitigation(t *testing.T) {
 				return nil
 			})
 			errs <- err
-		}(i)
+			return nil
+		})
 	}
 
-	wg.Wait()
+	if err := eg.Wait(); err != nil {
+		t.Fatalf("concurrent orchestrations failed: %v", err)
+	}
 	close(errs)
 
 	errorCount := 0
