@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/signal"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -354,73 +353,48 @@ func (a *App) RunAndListen(ctx context.Context) error {
 	signalCtx, stopSignal := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stopSignal()
 
+	rootCtx, rootCancel := context.WithCancel(signalCtx)
+	defer rootCancel()
+
 	sigHupCh := make(chan os.Signal, 1)
 	signal.Notify(sigHupCh, syscall.SIGHUP)
+	defer signal.Stop(sigHupCh)
 
-	fatalErrCh := make(chan error, 1)
-	go func() {
-		fatalErrCh <- a.serviceManager.Wait()
-	}()
+	eg, egCtx := errgroup.WithContext(rootCtx)
 
-	var mutationWg sync.WaitGroup
-	defer func() {
-		waitCh := make(chan struct{})
-		go func() {
-			mutationWg.Wait()
-			close(waitCh)
-		}()
-		select {
-		case <-waitCh:
-		case <-time.After(2 * time.Second):
-			a.logger.Warn("Mitigated teardown latency: Asynchronous I/O mutations forcefully detached")
-		}
-	}()
+	// Phase 2: SIGHUP Valve & Serialized Mutation Pipeline
+	// Dedicated resident worker executing continuous state routing with O(1) thermodynamic footprint.
+	eg.Go(func() error {
+		for {
+			select {
+			case <-egCtx.Done():
+				return nil
+			case <-sigHupCh:
+				a.logger.Debug("Dynamic instruction intercepted: Emitting non-blocking intent trigger for configuration layer reload")
 
-	for {
-		select {
-		case err := <-fatalErrCh:
-			if err != nil {
-				log.EmitBlockingError("Critical pipeline failure: Daemon cluster collapsed", err, log.GenerateRequestID())
-				return err
-			}
-			return nil
-		case <-signalCtx.Done():
-			a.logger.Info("Architectural state transition: Process termination signal acknowledged. Initiating graceful teardown.")
-			return nil
-		case <-a.opts.TestShutdownCh:
-			a.logger.Info("Architectural state transition: Test simulated shutdown initiated")
-			return nil
-		case <-sigHupCh:
-			a.logger.Debug("Dynamic instruction intercepted: Emitting non-blocking intent trigger for configuration layer reload")
-
-			mutationWg.Add(1)
-			go func() {
-				defer mutationWg.Done()
-
-				mutCtx, mutCancel := context.WithTimeout(signalCtx, 30*time.Second)
-				defer mutCancel()
-
-				if mutCtx.Err() != nil {
-					return
-				}
+				// Mutação serializada governada por CSP e limitação de timeout (Phase 2)
+				mutCtx, mutCancel := context.WithTimeout(egCtx, 30*time.Second)
 
 				newCfg, needsSave, err := a.configManager.LoadConfigFromStore()
 				if err != nil {
 					slog.Warn("Mitigated service degradation: Live configuration mutation failed; enforcing active baseline",
 						slog.String("error", err.Error()),
 					)
-					return
+					mutCancel()
+					continue
 				}
 
 				if mutCtx.Err() != nil {
-					return
+					mutCancel()
+					continue
 				}
 
 				dupCount := a.configManager.ApplyConfig(newCfg)
 
 				if dupCount == 0 && !needsSave {
 					slog.Info("Architectural state transition: Configuration topology refreshed directly from disk")
-					return
+					mutCancel()
+					continue
 				}
 
 				if saveErr := a.configManager.SaveConfig(); saveErr != nil {
@@ -430,9 +404,46 @@ func (a *App) RunAndListen(ctx context.Context) error {
 						slog.Int("duplicates_purged", dupCount),
 					)
 				}
-			}()
+				mutCancel()
+			}
 		}
-	}
+	})
+
+	// Phase 1: Anchor asynchronous execution routes to the strict limits of an errgroup.Group
+	// to annihilate any incidence of naked goroutines in the execution matrix.
+	eg.Go(func() error {
+		err := a.serviceManager.Wait()
+		if err != nil {
+			log.EmitBlockingError("Critical pipeline failure: Daemon cluster collapsed", err, log.GenerateRequestID())
+			rootCancel() // Force cascade teardown across the context tree
+			return err
+		}
+		return nil
+	})
+
+	// Phase 3: Central router block for deterministic lifecycle observation
+	eg.Go(func() error {
+		select {
+		case <-signalCtx.Done():
+			a.logger.Info("Architectural state transition: Process termination signal acknowledged. Initiating graceful teardown.")
+			rootCancel()
+			// Unblock a.serviceManager.Wait() dynamically by initiating the graceful stop sequence
+			_ = a.serviceManager.StopAll(context.Background())
+			return nil
+		case <-a.opts.TestShutdownCh:
+			a.logger.Info("Architectural state transition: Test simulated shutdown initiated")
+			rootCancel()
+			// Unblock a.serviceManager.Wait() dynamically by initiating the graceful stop sequence
+			_ = a.serviceManager.StopAll(context.Background())
+			return nil
+		case <-egCtx.Done():
+			// Natural synchronized drainage due to sibling cancellation
+			return nil
+		}
+	})
+
+	// Asynchronous Teardown & Quiescent Memory Rest
+	return eg.Wait()
 }
 
 // Teardown safely shuts down orchestrators and the database subsystem.
