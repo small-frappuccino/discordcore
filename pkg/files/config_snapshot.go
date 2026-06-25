@@ -84,9 +84,6 @@ func (mgr *ConfigManager) SnapshotConfig() BotConfig {
 	return out
 }
 
-// ConfigSnapshot is an immutable, read-only representation of the system configuration.
-type ConfigSnapshot = BotConfig
-
 // UpdateConfig applies a full-config mutation transactionally and persists the
 // result. On error, in-memory state is restored to the previous snapshot.
 func (mgr *ConfigManager) UpdateConfig(ctx context.Context, fn func(*BotConfig) error) (BotConfig, error) {

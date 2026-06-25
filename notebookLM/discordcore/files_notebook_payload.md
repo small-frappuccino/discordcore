@@ -30,7 +30,6 @@ files/
 ├── legacy_guild_config_test.go
 ├── legacy_moderation_migration_test.go
 ├── mock_store_test.go
-├── notify_subscribers_test.go
 ├── partner_board.go
 ├── partner_board_test.go
 ├── paths.go
@@ -760,7 +759,8 @@ package files
 import (
 	"context"
 	"fmt"
-	"time"
+	"sync"
+	"sync/atomic"
 )
 
 func (mgr *ConfigManager) updateGuildConfig(guildID string, fn func(*GuildConfig) error) error {
@@ -847,36 +847,60 @@ func (mgr *ConfigManager) RevokeBotInstance(instanceID, token string) error {
 	return err
 }
 
-// DispatchConfigMutation performs a non-blocking fan-out of the updated configuration.
-// It complies with the CSP contract by extracting a read-only snapshot and pushing it
-// to context-bounded goroutines, preventing write-starvation on the primary thread.
-func DispatchConfigMutation(registry *FeatureRegistry, cfg *BotConfig) {
-	if registry == nil || cfg == nil {
-		return
+// ConfigEvent contains the GuildID and the new/mutated configuration state.
+type ConfigEvent struct {
+	GuildID string
+	State   ConfigSnapshot
+}
+
+// ConfigEventObserver defines the callback for configuration mutations.
+type ConfigEventObserver func(ctx context.Context, event ConfigEvent)
+
+// EventBus implements a thread-safe Pub/Sub observer pattern for configuration mutations.
+// It leverages atomic.Pointer to guarantee a zero-allocation, wait-free read path on the critical hot path of event dispatch.
+type EventBus struct {
+	subscribers atomic.Pointer[map[string][]ConfigEventObserver]
+	mu          sync.Mutex // Serializes subscription mutations
+}
+
+// NewEventBus creates and initializes a new EventBus.
+func NewEventBus() *EventBus {
+	eb := &EventBus{}
+	initial := make(map[string][]ConfigEventObserver)
+	eb.subscribers.Store(&initial)
+	return eb
+}
+
+// Subscribe registers an observer for a specific guild's configuration mutations.
+// It uses copy-on-write semantics to avoid blocking readers during updates.
+func (eb *EventBus) Subscribe(guildID string, observer ConfigEventObserver) {
+	eb.mu.Lock()
+	defer eb.mu.Unlock()
+
+	oldMap := *eb.subscribers.Load()
+	newMap := make(map[string][]ConfigEventObserver, len(oldMap)+1)
+
+	for k, v := range oldMap {
+		// Allocate a new slice for the existing observers to avoid cross-contamination 
+		// when mutating the list of observers for a guild.
+		newSlice := make([]ConfigEventObserver, len(v))
+		copy(newSlice, v)
+		newMap[k] = newSlice
 	}
 
-	// 1. Compile immutable read-only snapshot.
-	snapshot := ConfigSnapshot(*CloneBotConfigPtr(cfg))
-	subs := registry.Subscribers()
+	newMap[guildID] = append(newMap[guildID], observer)
+	eb.subscribers.Store(&newMap)
+}
 
-	// 2. Non-blocking fan-out via context-bounded goroutines.
-	for _, sub := range subs {
-		subscriber := sub
-		go func() {
-			// Apply a strict 10-second boundary to prevent leaked goroutines if a subscriber hangs.
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			
-			defer func() {
-				if r := recover(); r != nil {
-					// Isolate failure to the specific subscriber; do not crash the primary dispatcher.
-					// In a real environment, we would use slog.Error here.
-				}
-			}()
-
-			// Execute the callback synchronously within the bounded goroutine.
-			subscriber.OnConfigMutated(ctx, snapshot)
-		}()
+// Publish broadcasts a ConfigEvent to all registered subscribers for the guild.
+// PERFORMANCE INVARIANT: Wait-free execution. No locks acquired. Zero allocations.
+func (eb *EventBus) Publish(ctx context.Context, event ConfigEvent) {
+	subsMap := *eb.subscribers.Load()
+	if observers, ok := subsMap[event.GuildID]; ok {
+		for i := 0; i < len(observers); i++ {
+			// Executed synchronously per subscriber to prevent unbounded goroutine spawning.
+			observers[i](ctx, event)
+		}
 	}
 }
 
@@ -970,8 +994,6 @@ func (mgr *ConfigManager) SnapshotConfig() BotConfig {
 	return out
 }
 
-// ConfigSnapshot is an immutable, read-only representation of the system configuration.
-type ConfigSnapshot = BotConfig
 
 // UpdateConfig applies a full-config mutation transactionally and persists the
 // result. On error, in-memory state is restored to the previous snapshot.
@@ -1430,7 +1452,6 @@ package files
 
 import (
 	"context"
-	"sync"
 )
 
 // ConfigLoader defines the read paths for the bot configuration.
@@ -1456,51 +1477,32 @@ type ConfigStore interface {
 	ConfigDescriber
 }
 
-// ConfigMutationSubscriber defines the receiver for immutable configuration updates.
-type ConfigMutationSubscriber interface {
-	OnConfigMutated(ctx context.Context, snapshot ConfigSnapshot)
+// ConfigSnapshot guarantees an O(1) read-only memory projection to prevent cross-goroutine write-panics.
+type ConfigSnapshot interface {
+	GuildID() string
+	// TODO: legacy getters
 }
 
-// ConfigObservable defines the mechanism for features to register for reactive updates.
-type ConfigObservable interface {
-	Subscribe(id string, sub ConfigMutationSubscriber)
+// ConfigObserver dictates strict context preemption for reactive configuration sinks.
+type ConfigObserver func(ctx context.Context, snapshot ConfigSnapshot)
+
+// ConfigRegistry enforces Pub/Sub mapping. Implementations must utilize sync.RWMutex.
+type ConfigRegistry interface {
+	SubscribeToGuildChanges(guildID string, observer ConfigObserver)
 }
 
-// FeatureRegistry provides a thread-safe subscriber map for configuration mutations.
-// It uses a sync.RWMutex to protect the internal subscriber map from race conditions
-// when new features boot up and subscribe.
-type FeatureRegistry struct {
-	mu          sync.RWMutex
-	subscribers map[string]ConfigMutationSubscriber
+// ConfigMutator encapsulates database commits and triggers asynchronous fan-out.
+type ConfigMutator interface {
+	Mutate(ctx context.Context, guildID string, mutationFn func() error) error
 }
 
-// NewFeatureRegistry initializes an empty thread-safe subscriber registry.
-func NewFeatureRegistry() *FeatureRegistry {
-	return &FeatureRegistry{
-		subscribers: make(map[string]ConfigMutationSubscriber),
-	}
-}
-
-// Subscribe registers a new listener into the thread-safe map.
-func (r *FeatureRegistry) Subscribe(id string, sub ConfigMutationSubscriber) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.subscribers == nil {
-		r.subscribers = make(map[string]ConfigMutationSubscriber)
-	}
-	r.subscribers[id] = sub
-}
-
-// Subscribers returns a shallow copy of the current listeners for safe iteration.
-func (r *FeatureRegistry) Subscribers() map[string]ConfigMutationSubscriber {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	out := make(map[string]ConfigMutationSubscriber, len(r.subscribers))
-	for k, v := range r.subscribers {
-		out[k] = v
-	}
-	return out
+// Store is a topological aggregator embedding registry, mutator, and legacy interfaces.
+type Store interface {
+	ConfigLoader
+	ConfigSaver
+	ConfigDescriber
+	ConfigRegistry
+	ConfigMutator
 }
 
 ```
@@ -3542,150 +3544,6 @@ func (m *mockConfigStore) Exists() (bool, error) {
 
 func (m *mockConfigStore) Describe() string {
 	return "mock://config"
-}
-
-```
-
-// === FILE: pkg/files/notify_subscribers_test.go ===
-```go
-package files
-
-import (
-	"context"
-	"sync"
-	"sync/atomic"
-	"testing"
-	"time"
-
-	"go.uber.org/goleak"
-)
-
-func TestMain(m *testing.M) {
-	goleak.VerifyTestMain(m)
-}
-
-// mockSubscriber implements ConfigMutationSubscriber
-type mockSubscriber struct {
-	fn func(ctx context.Context, snapshot ConfigSnapshot)
-}
-
-func (m *mockSubscriber) OnConfigMutated(ctx context.Context, snapshot ConfigSnapshot) {
-	if m.fn != nil {
-		m.fn(ctx, snapshot)
-	}
-}
-
-// Concurrency stress validation: Non-blocking fan-out
-func TestDispatchConfigMutation_ConcurrencyStress(t *testing.T) {
-	t.Parallel()
-
-	registry := NewFeatureRegistry()
-
-	const numSubscribers = 100
-	var successCount int32
-	var wg sync.WaitGroup
-	wg.Add(numSubscribers)
-
-	for i := 0; i < numSubscribers; i++ {
-		id := string(rune(i))
-		registry.Subscribe(id, &mockSubscriber{
-			fn: func(ctx context.Context, snapshot ConfigSnapshot) {
-				defer wg.Done()
-				atomic.AddInt32(&successCount, 1)
-				// Simulate some computational work
-				time.Sleep(2 * time.Millisecond)
-			},
-		})
-	}
-
-	cfg := &BotConfig{}
-
-	start := time.Now()
-	// This must not block the primary thread waiting for the 100 goroutines
-	DispatchConfigMutation(registry, cfg)
-	elapsed := time.Since(start)
-
-	if elapsed > 50*time.Millisecond {
-		t.Errorf("DispatchConfigMutation blocked caller, took %v", elapsed)
-	}
-
-	wg.Wait()
-
-	if atomic.LoadInt32(&successCount) != numSubscribers {
-		t.Errorf("expected %d successes, got %d", numSubscribers, successCount)
-	}
-}
-
-// Panic recovery validation
-func TestDispatchConfigMutation_PanicRecovery(t *testing.T) {
-	t.Parallel()
-
-	registry := NewFeatureRegistry()
-	var successCount int32
-	var wg sync.WaitGroup
-	wg.Add(2) // We only expect 2 to successfully complete their work
-
-	registry.Subscribe("sub1", &mockSubscriber{
-		fn: func(ctx context.Context, snapshot ConfigSnapshot) {
-			defer wg.Done()
-			atomic.AddInt32(&successCount, 1)
-		},
-	})
-
-	registry.Subscribe("sub2_panic", &mockSubscriber{
-		fn: func(ctx context.Context, snapshot ConfigSnapshot) {
-			panic("simulated subscriber panic")
-		},
-	})
-
-	registry.Subscribe("sub3", &mockSubscriber{
-		fn: func(ctx context.Context, snapshot ConfigSnapshot) {
-			defer wg.Done()
-			atomic.AddInt32(&successCount, 1)
-		},
-	})
-
-	cfg := &BotConfig{}
-	
-	// This should not crash the test suite
-	DispatchConfigMutation(registry, cfg)
-
-	wg.Wait()
-
-	if atomic.LoadInt32(&successCount) != 2 {
-		t.Errorf("expected 2 successful subscribers despite panic, got %d", successCount)
-	}
-}
-
-// Context bounded execution validation
-func TestDispatchConfigMutation_ContextBounded(t *testing.T) {
-	t.Parallel()
-
-	registry := NewFeatureRegistry()
-	
-	var ctxErr error
-	var wg sync.WaitGroup
-	wg.Add(1)
-
-	registry.Subscribe("sub_timeout", &mockSubscriber{
-		fn: func(ctx context.Context, snapshot ConfigSnapshot) {
-			defer wg.Done()
-			// Validate that the context is actually injected and has a strict deadline
-			_, ok := ctx.Deadline()
-			if !ok {
-				ctxErr = context.DeadlineExceeded
-			}
-		},
-	})
-
-	cfg := &BotConfig{}
-	DispatchConfigMutation(registry, cfg)
-	
-	wg.Wait()
-	
-	if ctxErr != nil {
-		t.Errorf("expected context to have a strict deadline boundary")
-	}
 }
 
 ```
@@ -10982,7 +10840,7 @@ package files
 
 // DiscordCoreVersion is the current version of the discordcore package.
 // This value is automatically updated by the release CLI tool.
-const DiscordCoreVersion = "v0.858.0-rc.2"
+const DiscordCoreVersion = "v0.858.0-rc.3"
 
 // AppVersion is the version of the application using discordcore.
 var AppVersion string

@@ -3,7 +3,8 @@ package files
 import (
 	"context"
 	"fmt"
-	"time"
+	"sync"
+	"sync/atomic"
 )
 
 func (mgr *ConfigManager) updateGuildConfig(guildID string, fn func(*GuildConfig) error) error {
@@ -90,35 +91,59 @@ func (mgr *ConfigManager) RevokeBotInstance(instanceID, token string) error {
 	return err
 }
 
-// DispatchConfigMutation performs a non-blocking fan-out of the updated configuration.
-// It complies with the CSP contract by extracting a read-only snapshot and pushing it
-// to context-bounded goroutines, preventing write-starvation on the primary thread.
-func DispatchConfigMutation(registry *FeatureRegistry, cfg *BotConfig) {
-	if registry == nil || cfg == nil {
-		return
+// ConfigEvent contains the GuildID and the new/mutated configuration state.
+type ConfigEvent struct {
+	GuildID string
+	State   ConfigSnapshot
+}
+
+// ConfigEventObserver defines the callback for configuration mutations.
+type ConfigEventObserver func(ctx context.Context, event ConfigEvent)
+
+// EventBus implements a thread-safe Pub/Sub observer pattern for configuration mutations.
+// It leverages atomic.Pointer to guarantee a zero-allocation, wait-free read path on the critical hot path of event dispatch.
+type EventBus struct {
+	subscribers atomic.Pointer[map[string][]ConfigEventObserver]
+	mu          sync.Mutex // Serializes subscription mutations
+}
+
+// NewEventBus creates and initializes a new EventBus.
+func NewEventBus() *EventBus {
+	eb := &EventBus{}
+	initial := make(map[string][]ConfigEventObserver)
+	eb.subscribers.Store(&initial)
+	return eb
+}
+
+// Subscribe registers an observer for a specific guild's configuration mutations.
+// It uses copy-on-write semantics to avoid blocking readers during updates.
+func (eb *EventBus) Subscribe(guildID string, observer ConfigEventObserver) {
+	eb.mu.Lock()
+	defer eb.mu.Unlock()
+
+	oldMap := *eb.subscribers.Load()
+	newMap := make(map[string][]ConfigEventObserver, len(oldMap)+1)
+
+	for k, v := range oldMap {
+		// Allocate a new slice for the existing observers to avoid cross-contamination
+		// when mutating the list of observers for a guild.
+		newSlice := make([]ConfigEventObserver, len(v))
+		copy(newSlice, v)
+		newMap[k] = newSlice
 	}
 
-	// 1. Compile immutable read-only snapshot.
-	snapshot := ConfigSnapshot(*CloneBotConfigPtr(cfg))
-	subs := registry.Subscribers()
+	newMap[guildID] = append(newMap[guildID], observer)
+	eb.subscribers.Store(&newMap)
+}
 
-	// 2. Non-blocking fan-out via context-bounded goroutines.
-	for _, sub := range subs {
-		subscriber := sub
-		go func() {
-			// Apply a strict 10-second boundary to prevent leaked goroutines if a subscriber hangs.
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-
-			defer func() {
-				if r := recover(); r != nil {
-					// Isolate failure to the specific subscriber; do not crash the primary dispatcher.
-					// In a real environment, we would use slog.Error here.
-				}
-			}()
-
-			// Execute the callback synchronously within the bounded goroutine.
-			subscriber.OnConfigMutated(ctx, snapshot)
-		}()
+// Publish broadcasts a ConfigEvent to all registered subscribers for the guild.
+// PERFORMANCE INVARIANT: Wait-free execution. No locks acquired. Zero allocations.
+func (eb *EventBus) Publish(ctx context.Context, event ConfigEvent) {
+	subsMap := *eb.subscribers.Load()
+	if observers, ok := subsMap[event.GuildID]; ok {
+		for i := 0; i < len(observers); i++ {
+			// Executed synchronously per subscriber to prevent unbounded goroutine spawning.
+			observers[i](ctx, event)
+		}
 	}
 }

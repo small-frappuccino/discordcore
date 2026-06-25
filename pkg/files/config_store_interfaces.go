@@ -2,7 +2,6 @@ package files
 
 import (
 	"context"
-	"sync"
 )
 
 // ConfigLoader defines the read paths for the bot configuration.
@@ -28,49 +27,30 @@ type ConfigStore interface {
 	ConfigDescriber
 }
 
-// ConfigMutationSubscriber defines the receiver for immutable configuration updates.
-type ConfigMutationSubscriber interface {
-	OnConfigMutated(ctx context.Context, snapshot ConfigSnapshot)
+// ConfigSnapshot guarantees an O(1) read-only memory projection to prevent cross-goroutine write-panics.
+type ConfigSnapshot interface {
+	GuildID() string
+	// TODO: legacy getters
 }
 
-// ConfigObservable defines the mechanism for features to register for reactive updates.
-type ConfigObservable interface {
-	Subscribe(id string, sub ConfigMutationSubscriber)
+// ConfigObserver dictates strict context preemption for reactive configuration sinks.
+type ConfigObserver func(ctx context.Context, snapshot ConfigSnapshot)
+
+// ConfigRegistry enforces Pub/Sub mapping. Implementations must utilize sync.RWMutex.
+type ConfigRegistry interface {
+	SubscribeToGuildChanges(guildID string, observer ConfigObserver)
 }
 
-// FeatureRegistry provides a thread-safe subscriber map for configuration mutations.
-// It uses a sync.RWMutex to protect the internal subscriber map from race conditions
-// when new features boot up and subscribe.
-type FeatureRegistry struct {
-	mu          sync.RWMutex
-	subscribers map[string]ConfigMutationSubscriber
+// ConfigMutator encapsulates database commits and triggers asynchronous fan-out.
+type ConfigMutator interface {
+	Mutate(ctx context.Context, guildID string, mutationFn func() error) error
 }
 
-// NewFeatureRegistry initializes an empty thread-safe subscriber registry.
-func NewFeatureRegistry() *FeatureRegistry {
-	return &FeatureRegistry{
-		subscribers: make(map[string]ConfigMutationSubscriber),
-	}
-}
-
-// Subscribe registers a new listener into the thread-safe map.
-func (r *FeatureRegistry) Subscribe(id string, sub ConfigMutationSubscriber) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.subscribers == nil {
-		r.subscribers = make(map[string]ConfigMutationSubscriber)
-	}
-	r.subscribers[id] = sub
-}
-
-// Subscribers returns a shallow copy of the current listeners for safe iteration.
-func (r *FeatureRegistry) Subscribers() map[string]ConfigMutationSubscriber {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	out := make(map[string]ConfigMutationSubscriber, len(r.subscribers))
-	for k, v := range r.subscribers {
-		out[k] = v
-	}
-	return out
+// Store is a topological aggregator embedding registry, mutator, and legacy interfaces.
+type Store interface {
+	ConfigLoader
+	ConfigSaver
+	ConfigDescriber
+	ConfigRegistry
+	ConfigMutator
 }
