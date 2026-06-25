@@ -3,11 +3,8 @@ package app
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
-	"math/rand/v2"
 	"reflect"
-	"strconv"
 	"strings"
 	"time"
 
@@ -455,48 +452,6 @@ func (s *BotSupervisor) executeGatewayUpdate(ctx context.Context, intent Gateway
 }
 
 func (s *BotSupervisor) executeSyncTask(ctx context.Context, intent SyncTaskIntent) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-time.After(time.Duration(rand.Float64()*500) * time.Millisecond):
-	}
-
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-
-	var runtime *botRuntime
-	for id, rt := range s.resolver.getRuntimes() {
-		if id == intent.InstanceID {
-			runtime = rt
-			break
-		}
-	}
-	if runtime == nil || runtime.commandHandler == nil {
-		return nil
-	}
-	if syncer := runtime.commandHandler.GetSyncer(); syncer != nil {
-		appIDInt, _ := strconv.ParseInt(intent.GuildID, 10, 64)
-		if syncErr := syncer.SyncBulkOverwrite(discord.GuildID(appIDInt), runtime.commandHandler.GetRouter().Registry()); syncErr != nil {
-			if strings.Contains(syncErr.Error(), "403") {
-				s.log().Warn("Dynamic command synchronization ignored due to authorization barrier",
-					slog.String("guildID", intent.GuildID),
-					slog.String("botInstanceID", intent.InstanceID),
-					slog.String("mitigation", "permission bypass"),
-					slog.Any("error", syncErr),
-				)
-			} else {
-				s.log().Error("Structural failure synchronizing guild commands",
-					slog.String("request_id", "sync_"+intent.GuildID+"_"+intent.InstanceID),
-					slog.String("guildID", intent.GuildID),
-					slog.String("botInstanceID", intent.InstanceID),
-					slog.Any("error", syncErr),
-				)
-				return fmt.Errorf("sync bulk overwrite for guild %s: %w", intent.GuildID, syncErr)
-			}
-		} else {
-			s.log().Info("Dynamic guild command synchronization completed", slog.String("guildID", intent.GuildID), slog.String("botInstanceID", intent.InstanceID))
-		}
-	}
+	// Syncing is now handled strictly via O(1) hashing inside CommandRegistrar during SetupCommands.
 	return nil
 }

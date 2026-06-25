@@ -12,6 +12,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
 	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/cmd"
 	rolesvc "github.com/small-frappuccino/discordcore/pkg/discord/roles"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
@@ -23,24 +24,13 @@ type RolePanelCommands struct {
 	rolePanelService *rolesvc.RolePanelService
 }
 
-// NewRolePanelCommands constructs the primary slash-command controller for role panels.
+// NewCommandGroup constructs the primary slash-command controller for role panels.
 // It mandates the injection of the configuration manager and domain service.
-func NewRolePanelCommands(configManager config.Provider, svc *rolesvc.RolePanelService) *RolePanelCommands {
-	return &RolePanelCommands{
+func NewCommandGroup(configManager config.Provider, svc *rolesvc.RolePanelService) cmd.CommandGroup {
+	rc := &RolePanelCommands{
 		configManager:    configManager,
 		rolePanelService: svc,
 	}
-}
-
-// RegisterCommands binds the /roles slash group and the component toggle route to the application router.
-func (rc *RolePanelCommands) RegisterCommands(router commands.ArikawaRegisterer) {
-	if router == nil || rc == nil || rc.configManager == nil {
-		return
-	}
-
-	slog.Info("Architectural state transition: Primary routines initialization",
-		slog.String("component", "RolePanelCommands"),
-	)
 
 	rolesGroup := commands.NewArikawaGroupCommand(
 		rolePanelCommandName,
@@ -75,9 +65,15 @@ func (rc *RolePanelCommands) RegisterCommands(router commands.ArikawaRegisterer)
 	fieldGroup.AddSubCommand(newRolePanelFieldListSubCommand(rc.configManager))
 	rolesGroup.AddSubCommand(fieldGroup)
 
-	router.Register(rolesGroup)
+	return commands.NewLegacyAdapter(rolesGroup)
+}
 
-	router.RegisterComponent(rolesvc.RolePanelComponentRouteID, newRolePanelComponentHandler(rc.configManager))
+// NewRolePanelCommands is deprecated.
+func NewRolePanelCommands(configManager config.Provider, svc *rolesvc.RolePanelService) *RolePanelCommands {
+	return &RolePanelCommands{
+		configManager:    configManager,
+		rolePanelService: svc,
+	}
 }
 
 // --- Common Helpers ---

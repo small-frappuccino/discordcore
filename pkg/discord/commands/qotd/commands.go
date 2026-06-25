@@ -8,6 +8,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/diamondburned/arikawa/v3/gateway"
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/cmd"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 )
 
@@ -30,11 +31,39 @@ func (h *CommandHandler) WithLogger(logger *slog.Logger) *CommandHandler {
 	return h
 }
 
-// NewCommandHandler creates a new handler.
+// NewCommandGroup creates a new command group.
+func NewCommandGroup(svc Service, client *api.Client, logger *slog.Logger) cmd.CommandGroup {
+	return &CommandHandler{
+		svc:    svc,
+		client: client,
+		logger: logger,
+	}
+}
+
+// NewCommandHandler creates a new handler. (Deprecated)
 func NewCommandHandler(svc Service, client *api.Client) *CommandHandler {
 	return &CommandHandler{
 		svc:    svc,
 		client: client,
+	}
+}
+
+// Register fulfills cmd.CommandGroup.
+func (h *CommandHandler) Register(guildID string, botProfileID string) []api.CreateCommandData {
+	return CommandsList()
+}
+
+// Handle fulfills cmd.CommandGroup.
+func (h *CommandHandler) Handle(guildID string, botProfileID string) map[string]cmd.CommandHandler {
+	return map[string]cmd.CommandHandler{
+		"qotd": func(ctx *cmd.Context) error {
+			// Convert cmd.Context to Arikawa Event
+			if ctx.Event == nil {
+				return fmt.Errorf("no event data")
+			}
+			h.HandleInteraction(&gateway.InteractionCreateEvent{InteractionEvent: *ctx.Event})
+			return nil
+		},
 	}
 }
 

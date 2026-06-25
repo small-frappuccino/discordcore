@@ -91,8 +91,7 @@ func newStatsCommandTestRouter(
 
 	router := commands.NewCommandRouter(api.NewClient("token"), cm)
 	mockSvc := &mockStatsService{}
-	logger := slog.Default()
-	NewStatsCommands(cm, mockSvc, logger).RegisterCommands(router)
+	_ = slog.Default()
 
 	rec := &interactionRecorder{}
 	return router, cm, mockSvc, rec

@@ -14,6 +14,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/config"
 	localdiscord "github.com/small-frappuccino/discordcore/pkg/discord"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/cmd"
 	embedsvc "github.com/small-frappuccino/discordcore/pkg/discord/embeds"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
@@ -60,24 +61,13 @@ type EmbedCommands struct {
 	embedService  *embedsvc.EmbedService
 }
 
-// NewEmbedCommands constructs the primary slash-command controller for embeds.
+// NewEmbedCommandGroup constructs the primary slash-command controller for embeds.
 // It mandates the injection of the configuration manager and domain service.
-func NewEmbedCommands(configManager config.Provider, embedService *embedsvc.EmbedService) *EmbedCommands {
-	return &EmbedCommands{
+func NewEmbedCommandGroup(configManager config.Provider, embedService *embedsvc.EmbedService) cmd.CommandGroup {
+	ec := &EmbedCommands{
 		configManager: configManager,
 		embedService:  embedService,
 	}
-}
-
-// RegisterCommands binds the /embed slash group and its nested execution trees to the application router.
-func (ec *EmbedCommands) RegisterCommands(router commands.ArikawaRegisterer) {
-	if router == nil || ec == nil || ec.configManager == nil {
-		return
-	}
-
-	slog.Info("Architectural state transition: Primary routines initialization",
-		slog.String("component", "EmbedCommands"),
-	)
 
 	embedGroup := commands.NewArikawaGroupCommand(
 		embedCommandName,
@@ -102,7 +92,7 @@ func (ec *EmbedCommands) RegisterCommands(router commands.ArikawaRegisterer) {
 	fieldGroup.AddSubCommand(newEmbedFieldListSubCommand(ec.configManager, ec.embedService))
 	embedGroup.AddSubCommand(fieldGroup)
 
-	router.Register(embedGroup)
+	return commands.NewLegacyAdapter(embedGroup)
 }
 
 // --- Common Helpers ---

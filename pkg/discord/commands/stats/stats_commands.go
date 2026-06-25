@@ -12,6 +12,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
 	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/cmd"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
@@ -28,26 +29,22 @@ type StatsCommands struct {
 	logger        *slog.Logger
 }
 
-// NewStatsCommands returns the root stats command tree.
+// NewCommandGroup returns the root stats command tree.
+func NewCommandGroup(configManager config.Provider, statsService StatsService, logger *slog.Logger) cmd.CommandGroup {
+	return commands.NewLegacyAdapter(&statsRootCommand{
+		configManager: configManager,
+		statsService:  statsService,
+		logger:        logger,
+	})
+}
+
+// NewStatsCommands is deprecated.
 func NewStatsCommands(configManager config.Provider, statsService StatsService, logger *slog.Logger) *StatsCommands {
 	return &StatsCommands{
 		configManager: configManager,
 		statsService:  statsService,
 		logger:        logger,
 	}
-}
-
-// RegisterCommands registers the commands.
-func (c *StatsCommands) RegisterCommands(router commands.ArikawaRegisterer) {
-	if router == nil || c.configManager == nil {
-		return
-	}
-
-	router.Register(&statsRootCommand{
-		configManager: c.configManager,
-		statsService:  c.statsService,
-		logger:        c.logger,
-	})
 }
 
 type statsRootCommand struct {

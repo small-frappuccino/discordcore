@@ -14,6 +14,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/config"
 	localdiscord "github.com/small-frappuccino/discordcore/pkg/discord"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/cmd"
 	"github.com/small-frappuccino/discordcore/pkg/discord/embeds"
 	partnersvc "github.com/small-frappuccino/discordcore/pkg/discord/partners"
 	"github.com/small-frappuccino/discordcore/pkg/files"
@@ -43,24 +44,13 @@ type PartnerCommands struct {
 	partnerService *partnersvc.PartnerService
 }
 
-// NewPartnerCommands constructs the primary slash-command controller for partner boards.
+// NewCommandGroup constructs the primary slash-command controller for partner boards.
 // It mandates the injection of the configuration manager and domain service.
-func NewPartnerCommands(configManager config.Provider, svc *partnersvc.PartnerService) *PartnerCommands {
-	return &PartnerCommands{
+func NewCommandGroup(configManager config.Provider, svc *partnersvc.PartnerService) cmd.CommandGroup {
+	pc := &PartnerCommands{
 		configManager:  configManager,
 		partnerService: svc,
 	}
-}
-
-// RegisterCommands binds the /partner slash group to the application router.
-func (pc *PartnerCommands) RegisterCommands(router commands.ArikawaRegisterer) {
-	if router == nil || pc == nil || pc.configManager == nil {
-		return
-	}
-
-	slog.Info("Architectural state transition: Primary routines initialization",
-		slog.String("component", "PartnerCommands"),
-	)
 
 	group := commands.NewArikawaGroupCommand(
 		"partner",
@@ -78,7 +68,15 @@ func (pc *PartnerCommands) RegisterCommands(router commands.ArikawaRegisterer) {
 	group.AddSubCommand(newPartnerImportTemplateSubCommand(pc.configManager))
 	group.AddSubCommand(newPartnerExportTemplateSubCommand(pc.configManager))
 
-	router.Register(group)
+	return commands.NewLegacyAdapter(group)
+}
+
+// NewPartnerCommands is deprecated.
+func NewPartnerCommands(configManager config.Provider, svc *partnersvc.PartnerService) *PartnerCommands {
+	return &PartnerCommands{
+		configManager:  configManager,
+		partnerService: svc,
+	}
 }
 
 func parseWebhookURL(url string) (string, string, bool) {

@@ -6,7 +6,6 @@ import (
 	"io"
 	"log/slog"
 
-	"github.com/small-frappuccino/discordcore/pkg/app"
 	discordcoreapp "github.com/small-frappuccino/discordcore/pkg/app"
 )
 
@@ -62,6 +61,6 @@ func buildMainRunOptions() discordcoreapp.RunOptions {
 				AutoTrust: true,
 			},
 		},
-		CommandCatalogRegistrars: app.DefaultCommandCatalogRegistrars(),
+		CommandGroups: nil,
 	}
 }

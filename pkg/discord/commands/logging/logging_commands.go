@@ -9,6 +9,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
 	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/cmd"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 )
 
@@ -18,22 +19,13 @@ type LoggingCommands struct {
 }
 
 // NewLoggingCommands returns the root logging command tree.
-func NewLoggingCommands(configManager config.Provider) *LoggingCommands {
-	return &LoggingCommands{
+func NewLoggingCommands(configManager config.Provider) cmd.CommandGroup {
+	return commands.NewLegacyAdapter(&loggingRootCommand{
 		configManager: configManager,
-	}
-}
-
-// RegisterCommands registers the commands.
-func (c *LoggingCommands) RegisterCommands(router commands.ArikawaRegisterer) {
-	if router == nil || c.configManager == nil {
-		return
-	}
-
-	router.Register(&loggingRootCommand{
-		configManager: c.configManager,
 	})
 }
+
+// RegisterCommands is deprecated.
 
 type loggingRootCommand struct {
 	configManager config.Provider

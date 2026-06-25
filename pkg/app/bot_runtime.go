@@ -20,6 +20,7 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/control"
 	discord_automod "github.com/small-frappuccino/discordcore/pkg/discord/automod"
 	"github.com/small-frappuccino/discordcore/pkg/discord/cache"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/cmd"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	"github.com/small-frappuccino/discordcore/pkg/discord/embeds"
 	"github.com/small-frappuccino/discordcore/pkg/discord/logging"
@@ -582,23 +583,23 @@ func listBotGuildBindingsFromSessionState(botInstanceID string, session *session
 }
 
 type botRuntimeOptions struct {
-	runtimeCount             int
-	configManager            *files.ConfigManager
-	store                    *postgres.Store
-	commandCatalogRegistrars []CommandCatalogRegistrar
-	runtimeApplier           *runtimeapply.Manager
-	qotdCommandService       *applicationqotd.Service
-	moderationMetrics        moderation.Metrics
-	membersMetrics           members.Metrics
-	messagesMetrics          messages.Metrics
-	startupTasks             *StartupTaskOrchestrator
-	profile                  RunProfile
-	appClock                 clock.Clock
-	controlServerRegistry    *controlServerHolder
-	logger                   *slog.Logger
-	embedService             *embeds.EmbedService
-	rolePanelService         *roles.RolePanelService
-	partnerService           *partners.PartnerService
+	runtimeCount          int
+	configManager         *files.ConfigManager
+	store                 *postgres.Store
+	commandGroups         []cmd.CommandGroup
+	runtimeApplier        *runtimeapply.Manager
+	qotdCommandService    *applicationqotd.Service
+	moderationMetrics     moderation.Metrics
+	membersMetrics        members.Metrics
+	messagesMetrics       messages.Metrics
+	startupTasks          *StartupTaskOrchestrator
+	profile               RunProfile
+	appClock              clock.Clock
+	controlServerRegistry *controlServerHolder
+	logger                *slog.Logger
+	embedService          *embeds.EmbedService
+	rolePanelService      *roles.RolePanelService
+	partnerService        *partners.PartnerService
 }
 
 // NewBotRuntime instantiates a fully isolated bot runtime.
@@ -763,12 +764,13 @@ func populateBotRuntimeServices(runtime *botRuntime, opts botRuntimeOptions) err
 			}
 		}
 
+		cg := opts.commandGroups
 		deps := CommandHandlerDeps{
 			Session:             runtime.legacySession,
 			ConfigManager:       opts.configManager,
 			BotInstanceID:       runtime.instanceID,
 			CatalogCapabilities: caps,
-			CatalogRegistrars:   opts.commandCatalogRegistrars,
+			CommandGroups:       cg,
 			QotdService:         opts.qotdCommandService,
 			StatsService:        statsService,
 			ModerationMetrics:   opts.moderationMetrics,

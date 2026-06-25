@@ -13,6 +13,7 @@ import (
 
 	"github.com/small-frappuccino/discordcore/pkg/control"
 	"github.com/small-frappuccino/discordcore/pkg/control/localtls"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/cmd"
 	"github.com/small-frappuccino/discordcore/pkg/files"
 	"github.com/small-frappuccino/discordcore/pkg/log"
 
@@ -43,11 +44,11 @@ const (
 // drives, which bot instances and domains it hosts, and how its optional control
 // plane is exposed. The zero value is not runnable; Profile must be set.
 type RunOptions struct {
-	Profile                  RunProfile
-	Control                  ControlOptions
-	CommandCatalogRegistrars []CommandCatalogRegistrar
-	DisableControl           bool
-	Logger                   *slog.Logger
+	Profile        RunProfile
+	Control        ControlOptions
+	CommandGroups  []cmd.CommandGroup
+	DisableControl bool
+	Logger         *slog.Logger
 
 	// Testing Hooks (Replacing globals)
 	StoreCloseHook          func(c interface{ Close() error }) error

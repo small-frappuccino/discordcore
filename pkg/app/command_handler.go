@@ -14,6 +14,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/discord"
 	"github.com/small-frappuccino/discordcore/pkg/config"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/cmd"
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands/moderation"
 	qotdcmd "github.com/small-frappuccino/discordcore/pkg/discord/commands/qotd"
 	"github.com/small-frappuccino/discordcore/pkg/discord/embeds"
@@ -33,11 +34,11 @@ type CommandHandler struct {
 	configManager       *files.ConfigManager
 	botInstanceID       string
 	catalogCapabilities CommandCatalogCapabilities
-	catalogRegistrars   []CommandCatalogRegistrar
+	commandGroups       []cmd.CommandGroup
 
 	// Atomic pointers enforce memory safety without mutex contention
-	router atomic.Pointer[commands.CommandRouter]
-	syncer atomic.Pointer[commands.CommandSyncer]
+	routerMap atomic.Pointer[map[string]cmd.CommandHandler]
+	registrar *CommandRegistrar
 
 	interactionCancel func()
 	qotdService       qotdcmd.Service
@@ -61,7 +62,7 @@ type CommandHandlerDeps struct {
 	ConfigManager       *files.ConfigManager
 	BotInstanceID       string
 	CatalogCapabilities CommandCatalogCapabilities
-	CatalogRegistrars   []CommandCatalogRegistrar
+	CommandGroups       []cmd.CommandGroup
 	QotdService         qotdcmd.Service
 	StatsService        *stats.StatsService
 	ModerationMetrics   moderation.Metrics
@@ -88,17 +89,13 @@ func NewCommandHandlerForBot(deps CommandHandlerDeps) (*CommandHandler, error) {
 		return nil, errors.New("initialization failure: ConfigManager is strictly required")
 	}
 
-	registrars := deps.CatalogRegistrars
-	if len(registrars) == 0 {
-		registrars = DefaultCommandCatalogRegistrars()
-	}
-
 	return &CommandHandler{
 		session:             deps.Session,
 		configManager:       deps.ConfigManager,
 		botInstanceID:       deps.BotInstanceID,
 		catalogCapabilities: deps.CatalogCapabilities,
-		catalogRegistrars:   registrars,
+		commandGroups:       deps.CommandGroups,
+		registrar:           NewCommandRegistrar(),
 		qotdService:         deps.QotdService,
 		statsService:        deps.StatsService,
 		moderationMetrics:   deps.ModerationMetrics,
@@ -218,15 +215,12 @@ func (ch *CommandHandler) Stop(ctx context.Context) error {
 func (ch *CommandHandler) SetupCommands() error {
 	slog.Info("Starting command and route coupling", slog.String("botInstanceID", ch.botInstanceID))
 
-	if ch.router.Load() != nil {
+	if ch.routerMap.Load() != nil {
 		slog.Warn("overlapping handler registration; invoking cleanup of previous registrations", slog.String("botInstanceID", ch.botInstanceID))
 		if err := ch.Shutdown(); err != nil {
 			return fmt.Errorf("cleanup previous command handlers: %w", err)
 		}
 	}
-
-	apiClient := api.NewClient(ch.session.Token)
-	newRouter := commands.NewCommandRouter(apiClient, ch.configManager)
 
 	if ch.session == nil || ch.session.State == nil || ch.session.State.User == nil {
 		return errors.New("cannot setup commands: session user state is missing")
@@ -239,21 +233,13 @@ func (ch *CommandHandler) SetupCommands() error {
 	if err != nil {
 		return fmt.Errorf("invalid bot app ID: %w", err)
 	}
-	newSyncer := commands.NewCommandSyncer(apiClient, discord.AppID(appID))
 
-	if err := ch.registerCommandCatalog(newRouter); err != nil {
-		return fmt.Errorf("failed to register config commands: %w", err)
-	}
+	apiClient := api.NewClient(ch.session.Token)
 
-	ch.router.Store(newRouter)
-	ch.syncer.Store(newSyncer)
-
-	// Direct method injection strictly avoids inline closure allocation overhead.
-	ch.interactionCancel = ch.session.AddHandler(ch.handleInteractionCreate)
-
-	currentRouter := ch.router.Load()
-	currentSyncer := ch.syncer.Load()
-	if err := currentSyncer.SyncBulkOverwrite(0, currentRouter.Registry()); err != nil {
+	// Assume no explicit guildID or botProfileID is passed to CompileAndSync for global or default setup, or we use botInstanceID
+	// Compile the O(1) map and conditionally sync
+	routerMap, err := ch.registrar.CompileAndSync(apiClient, discord.AppID(appID), "", ch.botInstanceID, ch.commandGroups)
+	if err != nil {
 		if shutdownErr := ch.Shutdown(); shutdownErr != nil {
 			slog.Error("fatal failure during command manager registration rollback",
 				slog.String("botInstanceID", ch.botInstanceID),
@@ -263,6 +249,14 @@ func (ch *CommandHandler) SetupCommands() error {
 		}
 		return fmt.Errorf("failed to setup commands: %w", err)
 	}
+
+	ch.routerMap.Store(&routerMap)
+
+	// Direct method injection strictly avoids inline closure allocation overhead.
+	ch.interactionCancel = ch.session.AddHandler(ch.handleInteractionCreate)
+
+	// Explicitly drop linear array of command groups to free heap memory
+	ch.commandGroups = nil
 
 	slog.Info("Command architecture successfully established natively", slog.String("botInstanceID", ch.botInstanceID))
 	return nil
@@ -274,10 +268,11 @@ func (ch *CommandHandler) handleInteractionCreate(s *discordgo.Session, rawEvent
 		return
 	}
 
-	currentRouter := ch.router.Load()
-	if currentRouter == nil {
+	routerMapPtr := ch.routerMap.Load()
+	if routerMapPtr == nil {
 		return
 	}
+	routerMap := *routerMapPtr
 
 	var arikawaEvent discord.InteractionEvent
 	if err := arikawaEvent.UnmarshalJSON(rawEvent.RawData); err != nil {
@@ -292,9 +287,16 @@ func (ch *CommandHandler) handleInteractionCreate(s *discordgo.Session, rawEvent
 	case *discord.AutocompleteInteraction:
 		routePath = data.Name
 	case discord.ComponentInteraction:
+		// Component IDs might contain additional metadata separated by |
 		routePath = string(data.ID())
+		if idx := strings.Index(routePath, "|"); idx != -1 {
+			routePath = routePath[:idx+1]
+		}
 	case *discord.ModalInteraction:
 		routePath = string(data.CustomID)
+		if idx := strings.Index(routePath, "|"); idx != -1 {
+			routePath = routePath[:idx+1]
+		}
 	}
 
 	if routePath != "" && arikawaEvent.GuildID.IsValid() {
@@ -303,37 +305,28 @@ func (ch *CommandHandler) handleInteractionCreate(s *discordgo.Session, rawEvent
 		}
 	}
 
-	_ = currentRouter.HandleEvent(&arikawaEvent)
-}
-
-// GetRouter returns the command router (for tests or extensions).
-func (ch *CommandHandler) GetRouter() *commands.CommandRouter {
-	return ch.router.Load()
-}
-
-func (ch *CommandHandler) registerCommandCatalog(router *commands.CommandRouter) error {
-	for _, registrar := range ch.commandCatalogRegistrarsForSetup() {
-		if registrar.RegisterArikawa != nil {
-			registrar.RegisterArikawa(ch, router)
-		}
+	// O(1) Routing
+	handler, exists := routerMap[routePath]
+	if !exists {
+		slog.Debug("No handler found for route", slog.String("routePath", routePath))
+		return
 	}
 
-	slog.Info("Command catalog fragments coupled to the native Arikawa router")
-	return nil
-}
+	// Inject custom cmd.Context
+	apiClient := api.NewClient(ch.session.Token)
+	logger := slog.With("guildID", arikawaEvent.GuildID.String(), "routePath", routePath)
 
-func (ch *CommandHandler) commandCatalogRegistrarsForSetup() []CommandCatalogRegistrar {
-	filtered := make([]CommandCatalogRegistrar, 0, len(ch.catalogRegistrars))
-	for _, registrar := range ch.catalogRegistrars {
-		if ch.supportsCatalogCapabilities(registrar.RequiredCapabilities) {
-			filtered = append(filtered, registrar)
-		}
+	// Create context with DI
+	cmdCtx := cmd.NewContext(context.Background(), apiClient, &arikawaEvent, logger, ch, nil) // nil for Tx for now
+
+	// Wrap handler with Middleware
+	feature := commands.ResolveFeatureForCommandPath(routePath)
+	wrappedHandler := Chain(handler, RateLimitMiddleware(), PermissionsMiddleware(feature))
+
+	// Execute handler
+	if err := wrappedHandler(cmdCtx); err != nil {
+		slog.Error("Command handler failed", slog.Any("error", err), slog.String("routePath", routePath))
 	}
-	return filtered
-}
-
-func (ch *CommandHandler) supportsCatalogCapabilities(required CommandCatalogCapabilities) bool {
-	return ch.catalogCapabilities.Has(required)
 }
 
 // Shutdown performs cleanup for the command handler resources.
@@ -347,8 +340,7 @@ func (ch *CommandHandler) Shutdown() error {
 		ch.interactionCancel = nil
 	}
 
-	ch.router.Store(nil)
-	ch.syncer.Store(nil)
+	ch.routerMap.Store(nil)
 
 	return nil
 }
@@ -419,10 +411,6 @@ func (ch *CommandHandler) matchesGuildBotInstance(guildID string, feature string
 		return false
 	}
 	return resolvedID == ch.botInstanceID
-}
-
-func (ch *CommandHandler) GetSyncer() *commands.CommandSyncer {
-	return ch.syncer.Load()
 }
 
 // --- RegistrarContext Implementation ---

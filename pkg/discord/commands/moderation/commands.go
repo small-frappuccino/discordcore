@@ -11,6 +11,7 @@ import (
 	"github.com/diamondburned/arikawa/v3/utils/json/option"
 
 	"github.com/small-frappuccino/discordcore/pkg/discord/commands"
+	"github.com/small-frappuccino/discordcore/pkg/discord/commands/cmd"
 	discordmod "github.com/small-frappuccino/discordcore/pkg/discord/moderation"
 	coremod "github.com/small-frappuccino/discordcore/pkg/moderation"
 )
@@ -31,9 +32,22 @@ type InMemoryMetrics struct{}
 func (m *InMemoryMetrics) RecordCommandExec(name string)    {}
 func (m *InMemoryMetrics) Attach(ctx context.Context) error { return nil }
 
-// CommandRegistry allows external routers to wire these pure slash commands.
-// We expose individual command instantiators
-// which the Arikawa-capable router can consume.
+// NewCommandGroup aggregates the moderation commands.
+func NewCommandGroup(svc *discordmod.Service, metrics Metrics, logger *slog.Logger) cmd.CommandGroup {
+	if metrics == nil {
+		metrics = NopMetrics{}
+	}
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return commands.NewLegacyAdapter(
+		&BanCommand{service: svc, metrics: metrics, logger: logger},
+		&TimeoutCommand{service: svc, metrics: metrics, logger: logger},
+		&MassBanCommand{service: svc, metrics: metrics, logger: logger},
+	)
+}
+
+// NewBanCommand is deprecated.
 func NewBanCommand(svc *discordmod.Service, metrics Metrics, logger *slog.Logger) *BanCommand {
 	if metrics == nil {
 		metrics = NopMetrics{}
