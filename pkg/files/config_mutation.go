@@ -91,20 +91,25 @@ func (mgr *ConfigManager) RevokeBotInstance(instanceID, token string) error {
 	return err
 }
 
-// ConfigEvent contains the GuildID and the new/mutated configuration state.
+// ConfigEvent contains the Context, GuildID and the new/mutated configuration state.
 type ConfigEvent struct {
+	Ctx     context.Context
 	GuildID string
 	State   ConfigSnapshot
 }
 
-// ConfigEventObserver defines the callback for configuration mutations.
-type ConfigEventObserver func(ctx context.Context, event ConfigEvent)
+// ConfigEventObserver defines the channel for configuration mutations.
+type ConfigEventObserver chan<- ConfigEvent
 
 // EventBus implements a thread-safe Pub/Sub observer pattern for configuration mutations.
 // It leverages atomic.Pointer to guarantee a zero-allocation, wait-free read path on the critical hot path of event dispatch.
 type EventBus struct {
 	subscribers atomic.Pointer[map[string][]ConfigEventObserver]
 	mu          sync.Mutex // Serializes subscription mutations
+}
+
+var metrics struct {
+	DroppedConfigEvents atomic.Uint64
 }
 
 // NewEventBus creates and initializes a new EventBus.
@@ -138,12 +143,18 @@ func (eb *EventBus) Subscribe(guildID string, observer ConfigEventObserver) {
 
 // Publish broadcasts a ConfigEvent to all registered subscribers for the guild.
 // PERFORMANCE INVARIANT: Wait-free execution. No locks acquired. Zero allocations.
-func (eb *EventBus) Publish(ctx context.Context, event ConfigEvent) {
+func (eb *EventBus) Publish(event ConfigEvent) {
 	subsMap := *eb.subscribers.Load()
 	if observers, ok := subsMap[event.GuildID]; ok {
 		for i := 0; i < len(observers); i++ {
-			// Executed synchronously per subscriber to prevent unbounded goroutine spawning.
-			observers[i](ctx, event)
+			// Enforce tactical dropping to annihilate read-starvation. Use a non-blocking send.
+			select {
+			case observers[i] <- event:
+			default:
+				// DLQ handling
+				metrics.DroppedConfigEvents.Add(1)
+				// logging would occur here
+			}
 		}
 	}
 }
