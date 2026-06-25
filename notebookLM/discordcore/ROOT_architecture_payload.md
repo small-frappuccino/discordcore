@@ -37,6 +37,7 @@ flowchart TD
     AdapterClean["pkg/discord/clean"]
     Commands["pkg/discord/commands"]
     CommandsClean["pkg/discord/commands/clean"]
+    CommandsCmd["pkg/discord/commands/cmd"]
     CommandsCore["pkg/discord/commands/core"]
     CommandsEmbeds["pkg/discord/commands/embeds"]
     CommandsLogging["pkg/discord/commands/logging"]
@@ -139,12 +140,10 @@ flowchart TD
     AdapterWebhook --> Log
     App --> AdapterAutomod
     App --> AdapterCache
-    App --> AdapterClean
     App --> AdapterEmbeds
     App --> AdapterLogging
     App --> AdapterMembers
     App --> AdapterMessages
-    App --> AdapterModeration
     App --> AdapterPartners
     App --> AdapterQotd
     App --> AdapterRoles
@@ -155,16 +154,9 @@ flowchart TD
     App --> Arikawa
     App --> Clock
     App --> Commands
-    App --> CommandsClean
-    App --> CommandsCore
-    App --> CommandsEmbeds
-    App --> CommandsLogging
+    App --> CommandsCmd
     App --> CommandsModeration
-    App --> CommandsPartners
     App --> CommandsQotd
-    App --> CommandsRoles
-    App --> CommandsRuntime
-    App --> CommandsStats
     App --> Config
     App --> Control
     App --> ControlLocaltls
@@ -192,43 +184,51 @@ flowchart TD
     CmdDiscordcore --> App
     CmdDiscordcore --> AppRuntimecmd
     Commands --> Arikawa
+    Commands --> CommandsCmd
     Commands --> Config
     Commands --> Files
     Commands --> Log
     CommandsClean --> Arikawa
     CommandsClean --> Clean
-    CommandsClean --> Commands
-    CommandsClean --> Config
+    CommandsClean --> CommandsCmd
+    CommandsCmd --> Arikawa
+    CommandsCmd --> Config
     CommandsCore --> Arikawa
     CommandsEmbeds --> AdapterEmbeds
     CommandsEmbeds --> Arikawa
     CommandsEmbeds --> Commands
+    CommandsEmbeds --> CommandsCmd
     CommandsEmbeds --> Config
     CommandsEmbeds --> Discord
     CommandsEmbeds --> Files
     CommandsLogging --> Arikawa
     CommandsLogging --> Commands
+    CommandsLogging --> CommandsCmd
     CommandsLogging --> Config
     CommandsLogging --> Files
     CommandsModeration --> AdapterModeration
     CommandsModeration --> Arikawa
     CommandsModeration --> Commands
+    CommandsModeration --> CommandsCmd
     CommandsModeration --> Config
     CommandsModeration --> Moderation
     CommandsPartners --> AdapterEmbeds
     CommandsPartners --> AdapterPartners
     CommandsPartners --> Arikawa
     CommandsPartners --> Commands
+    CommandsPartners --> CommandsCmd
     CommandsPartners --> Config
     CommandsPartners --> Discord
     CommandsPartners --> Files
     CommandsPartners --> Log
     CommandsPartners --> Theme
     CommandsQotd --> Arikawa
+    CommandsQotd --> CommandsCmd
     CommandsQotd --> Log
     CommandsRoles --> AdapterRoles
     CommandsRoles --> Arikawa
     CommandsRoles --> Commands
+    CommandsRoles --> CommandsCmd
     CommandsRoles --> Config
     CommandsRoles --> Files
     CommandsRuntime --> Arikawa
@@ -236,6 +236,7 @@ flowchart TD
     CommandsRuntime --> Files
     CommandsStats --> Arikawa
     CommandsStats --> Commands
+    CommandsStats --> CommandsCmd
     CommandsStats --> Config
     CommandsStats --> Files
     CommandsTickets --> AdapterTickets
@@ -310,7 +311,7 @@ flowchart TD
     classDef ui fill:#A3BE8C,stroke:#8FBCBB,stroke-width:2px,color:#2E3440;
 
     class App,AppRuntimecmd,Files,Persistence,Runtimeapply,StoragePostgres,StoragePostgresStoragetest core;
-    class Discord,AdapterAutomod,AdapterCache,AdapterClean,Commands,CommandsClean,CommandsCore,CommandsEmbeds,CommandsLogging,CommandsModeration,CommandsPartners,CommandsQotd,CommandsRoles,CommandsRuntime,CommandsStats,CommandsTickets,AdapterEmbeds,AdapterLogging,AdapterMembers,AdapterMessages,AdapterModeration,AdapterPartners,AdapterPerf,AdapterQotd,AdapterRoles,AdapterSession,AdapterStats,AdapterTickets,AdapterWebhook adapter;
+    class Discord,AdapterAutomod,AdapterCache,AdapterClean,Commands,CommandsClean,CommandsCmd,CommandsCore,CommandsEmbeds,CommandsLogging,CommandsModeration,CommandsPartners,CommandsQotd,CommandsRoles,CommandsRuntime,CommandsStats,CommandsTickets,AdapterEmbeds,AdapterLogging,AdapterMembers,AdapterMessages,AdapterModeration,AdapterPartners,AdapterPerf,AdapterQotd,AdapterRoles,AdapterSession,AdapterStats,AdapterTickets,AdapterWebhook adapter;
     class Automod,Clean,Control,ControlLocaltls,Logging,Members,Messages,Moderation,Qotd,Stats,Task,Tickets feature;
     class AutomodAutomodmocks,Clock,Config,Idgen,Log,Observability,Service,Sys,System,Testdb,Theme infra;
     class DiscordGo,Arikawa,DiscordAPI,DiscordGateway external;
