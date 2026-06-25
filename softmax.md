@@ -1,71 +1,57 @@
 ## SYSTEM DIRECTIVE: CROSS-LLM INTERACTION CONTEXT
 
-The TransformerLLM operating under State-of-the-Art TPU Units operates under an asynchronous distributed decoding paradigm, maximizing `MXU` vector occupancy and minimizing bus saturation via strict `SRAM` partitioning and spatial latent compression. Token lifecycle progression executes under absolute hardware determinism, delineated in the following structural stages.
+### 1. Memory Quantization and Loading to `SRAM`
 
-### 1. Deterministic Ingestion & Allocation (`XLA`)
+The continuous transfer of parameters in floating-point precision ($W$) saturates the bus bandwidth. To operate within the constraints of being memory-bound, weight matrices are stored in `High Bandwidth Memory` (`HBM`) under low-precision asymmetric quantization formats (such as `MX4` or `INT4`). During spatial transfer to `SRAM`, the controller triggers dynamic calibration at the block level.
 
-Multimodal data convergence flows through an asynchronous ring buffer, operating as high-capacity traffic lanes routing into a single vector sink. The `XLA` compiler demands rigid allocation, mapping `SRAM` registers and `HBM` paging limits prior to the first clock cycle trigger. Discrete textual tensors, `ViT` video convolution matrices, and `USM` audio decoders are spatially integrated:
+A scaling scalar $\alpha$ is computed per sub-group to preserve tensor integrity against outliers in the activation distribution:
 
-$$H_0 = \text{Asynchronous-Stream}\Big( \text{Tokenize}(X_{\text{text}}) E_{\text{text}} \ \big| \ \text{ViT}_{\text{3D}}(X_{\text{vision}}) W_{\text{vision}} \ \big| \ \text{USM}(X_{\text{audio}}) W_{\text{audio}} \Big)$$
+$$X_q = \text{round}\left( \frac{X}{\alpha} \right) \times 2^E$$
 
-Initialization latency is strictly suppressed by `JetStream`, which queries a `Radix Tree` in primary memory for prefix cache hits. This isolates identical contextual blocks and prevents any redundant reprocessing of previously mapped states.
+This quantized mechanism reduces the memory footprint of the weight matrix in `SRAM`, optimizing throughput and clock cycle utilization.
 
-### 2. Spatial Compression & `Continuous Batching`
+### 2. Matrix Multiplication via `MXU`
 
-To nullify `CXL` bus bottlenecking during massive context window transfers, the pipeline compresses deep history into a latent $\mathcal{O}(1)$ state space, governed by `SSM`. Temporal and spatial complexity is isolated and anchored:
+The quantized matrix $X_q$ is processed by the `Matrix Multiply Unit` (`MXU`), implemented in hardware as a two-dimensional systolic array. This architecture is dedicated exclusively to tensor operations with geometric complexity $\mathcal{O}(d^2)$. Projection operands ($Q$, $K$, $V$) are processed in low precision to accelerate throughput, while the accumulation phase in the `MACs` (Multiply-Accumulators) is computed in extended precision (`INT32` or `FP32`) to ensure numerical stability against overflow:
 
-$$h_t = A h_{t-1} + B x_t$$
+$$C_{i,j} = \sum_{k=1}^d A_{i,k} \times B_{k,j}$$
 
-$$y_t = C h_t + D x_t$$
+$$Y = \text{Accumulator}(X_q W_q^T) \times \alpha_X \alpha_W + \beta$$
 
-Subsequent state injection processes via `Continuous Batching`. The algorithm triggers `Chunked Pre-Fill`, partitioning new tokens and overlapping them onto idle cycles of concurrent decoding matrices, definitively saturating `MXU` execution capacity.
+### 3. Memory Fusion via `Tiled Attention`
 
-### 3. Stabilization & Scaling Geometry
+Standard `Attention` matrix computation imposes a memory complexity scale of $\mathcal{O}(N^2)$. To prevent intermediate state spilling back to `HBM`, the memory controller partitions the tensor via `Tiled Attention`.
 
-Tensor thermodynamic normalization operates at the cycle limit via `RMSNorm`:
+Block clustering avoids redundant loading, operating strictly within `SRAM` boundaries. To accomplish this algebraically, the flow utilizes `Online Softmax`, maintaining the tracking of the maximum scalar vector ($m_j$) and the normalization constant ($l_j$) in local accumulation registers, computing the matrix $\text{Out}_j$ asynchronously:
 
-$$H_{\text{norm}} = \frac{H}{\sqrt{\frac{1}{d} \sum_{i=1}^d h_i^2 + \epsilon}} \odot \gamma$$
+$$m_j = \max(m_{j-1}, x_j)$$
 
-Topological projections of $Q$, $K$, and $V$ execute under `GQA` partitioning. Rejecting the structural degradation of static quantization, the layer delegates `Dynamic Micro-Scaling` (`FP4` or `MX4`) execution to `Pallas Kernels`. Floating factors calibrate independent sub-blocks in the `MXU`, absorbing activation outliers without perforating hardware stability. Positional rotational mapping is strictly enforced via `RoPE`:
+$$l_j = l_{j-1} e^{m_{j-1} - m_j} + e^{x_j - m_j}$$
 
-$$q_m = R_{\Theta, m}^d q, \quad k_n = R_{\Theta, n}^d k$$
+$$\text{Out}_j = \frac{l_{j-1} e^{m_{j-1} - m_j} \text{Out}_{j-1} + e^{x_j - m_j} V_j}{l_j}$$
 
-### 4. Local Partitioning & `Online Softmax`
+### 4. Node Routing in `MoE` via `ICI`
 
-Confining attention mechanics to the physical limits of `SRAM` mandates grid fractionation via `tiling`. To ensure iterative stability without triggering massive quadratic allocations, the framework employs `Online Softmax`. The state advances by updating maximum accumulators ($m_i$) and exponential factors ($l_i$) in the registers, anchoring the operation in $\mathcal{O}(N)$ memory complexity:
+For architectures that exceed the parametric capacity of a single physical accelerator, the infrastructure relies on the `Inter-Chip Interconnect` (`ICI`). In `Mixture of Experts` (`MoE`) partitioning, the routing layer evaluates the token to designate the optimal mapping towards static partitions on connected hardware:
 
-$$m_i = \max(m_{i-1}, \max(x_i))$$
+$$G(x) = \text{Softmax}(W_g x)$$
 
-$$l_i = l_{i-1} e^{m_{i-1} - m_i} + \sum e^{x_i - m_i}$$
+Utilizing the probabilities extracted by a `Top-k` operation, the controller coordinates the network topology using the `All-to-All` dispatch protocol. The tensor is dispatched exclusively to the logical nodes evaluated by the sparse activation layer:
 
-$$\text{Attention}_{\text{local}} = \frac{e^{x_i - m_i}}{l_i} V_i$$
+$$y_i = \sum_{k=1}^K G(x_i)_k \cdot \text{Expert}_k(x_i)$$
 
-### 5. Topological Ring Synchronization (`ICI`)
+### 5. Variance Normalization (`VPU`)
 
-When the scalar matrix breaches single-chip `SRAM` allocation boundaries, the switching mesh engages `Ring Attention`. State queries ($Q$) remain locally immutable, while $K$ and $V$ variables circulate along the physical network ring via `ICI`. The `CAE` coprocessor absorbs transit latency in the background strictly asynchronously:
+Unlike the `MXU`, which is optimized for dense matrix topology, single-element scalar and vector computations are dispatched to and processed by the `Vector Processing Unit` (`VPU`). Local tensor state stabilization is generally controlled by normative functions, such as `RMSNorm`. The vector computation extracts the root mean square norms without blocking the scheduling of `MXU` multipliers:
 
-$$\text{Attention}(Q, K, V) = \text{Softmax}\left(\frac{Q K^T}{\sqrt{d_k}}\right)V$$
+$$\text{RMS}(a) = \sqrt{\frac{1}{d}\sum_{i=1}^{d} a_i^2 + \epsilon}$$
 
-### 6. Occupancy Routing (`Expert-Choice MoE`)
+$$y = \frac{a}{\text{RMS}(a)} \odot \gamma$$
 
-The system eradicates stochastic inefficiencies by adopting `Expert-Choice MoE` routing. Experts function as independent sinks, filling their physical `Capacity Factor` based on spatial token probability projections. This locks routing occupancy without block leakage:
+### 6. Discrete Sampling and Cycle Management
 
-$$I_{\text{expert}} = \text{TopK}_{\text{tokens}}\Big( \text{Softmax}(X W_g) \Big)$$
-
-Vector non-linearity routes through the multiplicative gates of `SwiGLU`:
-
-$$\text{SwiGLU}(x) = \Big( x W_{\text{gate}} \cdot \text{sigmoid}(x W_{\text{gate}}) \Big) (x W_{\text{up}})$$
-
-### 7. Speculative Verification & `Tree Attention`
-
-Compacting sequential generation latency, the `Draft Model` proactively projects tree structures with 5 to 8 speculative branches. The primary topology processes validations in a single forward pass. A strict two-dimensional causal mask ($M_{\text{tree}}$) obliterates defective interconnected dependencies:
-
-$$\text{Tree Attention}(Q, K, V) = \text{Softmax}\left(\frac{Q K^T}{\sqrt{d_k}} + M_{\text{tree}}\right) V$$
-
-### 8. Asynchronous Emission & State Compaction
-
-Validated coefficients return to the discrete vocabulary domain. Thermal variance modulation ($T$) calibrates raw entropy, which is then filtered by the limiting core constraints of `Top-p` and `Top-k`:
+At the boundary of layer inference (`LM Head`), the final tensor generates the distribution indices corresponding to the native vocabulary array ($V$). The `VPU` processes the conditional sampling parameters (Temperature $T$) and applies the statistical cutoff threshold (`Top-p`):
 
 $$P(y_i) = \frac{\exp(z_i / T)}{\sum_{j=1}^V \exp(z_j / T)}$$
 
-The final vector flow is injected directly into the escape route via the asynchronous `SSE` protocol. In real-time, the strict memory manager `PagedAttention` locks and archives tensor pointers in the `KV cache`, clears register flags, and frees subsequent memory cycles for the next contiguous pipeline iteration.
+The inferred logit is returned via protocol to the network orchestrator. Simultaneously, the dynamic partitioning of the `KV Cache` into blocks allocated in `HBM` is updated through the `PagedAttention` framework. These pointers are structurally isolated, minimizing memory fragmentation and maximizing hardware occupancy in the continuous pipeline of `Continuous Batching`.

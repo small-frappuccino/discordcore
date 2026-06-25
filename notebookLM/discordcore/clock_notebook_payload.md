@@ -5,9 +5,7 @@
 clock/
 ├── clock.go
 ├── http_clock.go
-├── http_clock_test.go
-├── mock.go
-└── mock_test.go
+└── mock.go
 ```
 
 ## Source Stream Aggregation
@@ -146,86 +144,6 @@ func NewHTTPClock(url string) Clock {
 	offset := serverTime.Sub(time.Now())
 	log.ApplicationLogger().Info("HTTPClock sync completed", "url", url, "offset", offset)
 	return &HTTPClock{offset: offset}
-}
-
-```
-
-// === FILE: pkg/clock/http_clock_test.go ===
-```go
-package clock_test
-
-import (
-	"net/http"
-	"net/http/httptest"
-	"testing"
-	"time"
-
-	"github.com/small-frappuccino/discordcore/pkg/clock"
-	"github.com/stretchr/testify/require"
-)
-
-func TestHTTPClock_Success(t *testing.T) {
-	t.Parallel()
-	futureTime := time.Now().Add(5 * time.Minute).UTC().Truncate(time.Second)
-
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Date", futureTime.Format(time.RFC1123))
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer ts.Close()
-
-	c := clock.NewHTTPClock(ts.URL)
-	now := c.Now()
-
-	// 'now' should be ~5 minutes in the future compared to machine time.
-	diff := now.Sub(time.Now())
-	require.True(t, diff > 4*time.Minute && diff < 6*time.Minute)
-}
-
-func TestHTTPClock_Timeout(t *testing.T) {
-	t.Parallel()
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		<-r.Context().Done() // Block until client times out deterministically
-		// w.WriteHeader won't be sent since the client has already timed out
-	}))
-	defer ts.Close()
-
-	start := time.Now()
-	c := clock.NewHTTPClock(ts.URL)
-	duration := time.Since(start)
-
-	// Context timeout is 5 seconds. So it should take around 5s.
-	require.True(t, duration >= 5*time.Second && duration < 6*time.Second, "Initialization should gracefully fail in ~5s")
-
-	// Should fallback to RealClock (0 offset)
-	diff := c.Now().Sub(time.Now())
-	require.True(t, diff > -1*time.Second && diff < 1*time.Second)
-}
-
-func TestHTTPClock_MalformedHeader(t *testing.T) {
-	t.Parallel()
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Date", "Invalid Date String")
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer ts.Close()
-
-	c := clock.NewHTTPClock(ts.URL)
-	diff := c.Now().Sub(time.Now())
-	// Should fallback to RealClock (0 offset)
-	require.True(t, diff > -1*time.Second && diff < 1*time.Second)
-}
-
-func TestHTTPClock_MissingHeader(t *testing.T) {
-	t.Parallel()
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer ts.Close()
-
-	c := clock.NewHTTPClock(ts.URL)
-	diff := c.Now().Sub(time.Now())
-	require.True(t, diff > -1*time.Second && diff < 1*time.Second)
 }
 
 ```
@@ -412,113 +330,6 @@ func (t *mockTicker) Reset(d time.Duration) {
 	if wasStopped {
 		t.clock.tickers = append(t.clock.tickers, t)
 	}
-}
-
-```
-
-// === FILE: pkg/clock/mock_test.go ===
-```go
-package clock_test
-
-import (
-	"context"
-	"testing"
-	"time"
-
-	"github.com/small-frappuccino/discordcore/pkg/clock"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/goleak"
-	"golang.org/x/sync/errgroup"
-)
-
-func TestMain(m *testing.M) {
-	goleak.VerifyTestMain(m)
-}
-
-func TestMockClock_Concurrency(t *testing.T) {
-	t.Parallel()
-	c := clock.NewMockClock(time.Now())
-	eg, _ := errgroup.WithContext(context.Background())
-
-	numGoroutines := 200
-
-	for i := 0; i < numGoroutines; i++ {
-		i := i
-		eg.Go(func() error {
-			if i%2 == 0 {
-				for j := 0; j < 100; j++ {
-					_ = c.Now()
-				}
-			} else {
-				for j := 0; j < 100; j++ {
-					if j%2 == 0 {
-						c.Advance(time.Millisecond)
-					} else {
-						c.SetTime(time.Now().Add(time.Duration(j) * time.Second))
-					}
-				}
-			}
-			return nil
-		})
-	}
-
-	_ = eg.Wait()
-}
-
-func TestMockClock_TimersAndTickers(t *testing.T) {
-	t.Parallel()
-	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	c := clock.NewMockClock(start)
-
-	timer := c.NewTimer(5 * time.Second)
-	ticker := c.NewTicker(2 * time.Second)
-
-	// Advance by 3 seconds. Timer shouldn't fire, ticker should fire once.
-	c.Advance(3 * time.Second)
-
-	select {
-	case <-timer.C():
-		t.Fatal("Timer fired too early")
-	default:
-	}
-
-	select {
-	case tickTime := <-ticker.C():
-		require.Equal(t, start.Add(2*time.Second), tickTime)
-	default:
-		t.Fatal("Ticker should have fired")
-	}
-
-	// Advance past timer.
-	c.Advance(3 * time.Second)
-
-	select {
-	case timerTime := <-timer.C():
-		require.Equal(t, start.Add(6*time.Second), timerTime)
-	default:
-		t.Fatal("Timer should have fired")
-	}
-
-	// Ticker should fire again at +4s and +6s (we advanced to +6s).
-	select {
-	case tickTime := <-ticker.C():
-		require.True(t, tickTime.Equal(start.Add(4*time.Second)) || tickTime.Equal(start.Add(6*time.Second)))
-	default:
-		t.Fatal("Ticker should have fired")
-	}
-
-	timer.Stop()
-	ticker.Stop()
-}
-
-func TestMockClock_NonBlockingDispatch(t *testing.T) {
-	t.Parallel()
-	// Verify that if a channel isn't read, Advance still proceeds.
-	c := clock.NewMockClock(time.Now())
-	timer := c.NewTimer(1 * time.Second)
-	c.Advance(2 * time.Second)
-	c.Advance(2 * time.Second) // Second advance should not block.
-	timer.Stop()
 }
 
 ```

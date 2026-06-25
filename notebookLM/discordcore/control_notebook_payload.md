@@ -6,27 +6,18 @@ control/
 ├── localtls
 │   ├── doc.go
 │   ├── manager.go
-│   ├── manager_test.go
 │   ├── trust.go
 │   ├── trust_nonwindows.go
 │   └── trust_windows.go
 ├── dashboard.go
-├── dashboard_test.go
 ├── doc.go
 ├── features_settings.go
-├── features_settings_test.go
 ├── guilds.go
-├── guilds_test.go
 ├── health.go
-├── health_test.go
 ├── middleware.go
-├── middleware_test.go
 ├── oauth.go
-├── oauth_test.go
 ├── router.go
-├── router_test.go
-├── server.go
-└── server_test.go
+└── server.go
 ```
 
 ## Source Stream Aggregation
@@ -134,51 +125,6 @@ func (h *dashboardHandler) serveIndex(w http.ResponseWriter, r *http.Request) {
 
 ```
 
-// === FILE: pkg/control/dashboard_test.go ===
-```go
-package control
-
-import (
-	"net/http/httptest"
-	"testing"
-)
-
-func TestDashboard_CompressionNegotiation(t *testing.T) {
-	t.Parallel()
-	handler := newDashboardHandler()
-
-	// Negociação de Compressão no Fallback
-	tests := []struct {
-		name             string
-		acceptEncoding   string
-		expectedEncoding string
-	}{
-		{"Gzip supported", "gzip", "gzip"},
-		{"Brotli fallback to gzip", "br, gzip", "gzip"},
-		{"No compression", "", ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			req := httptest.NewRequest("GET", "/", nil)
-			if tt.acceptEncoding != "" {
-				req.Header.Set("Accept-Encoding", tt.acceptEncoding)
-			}
-			w := httptest.NewRecorder()
-
-			handler.ServeHTTP(w, req)
-
-			enc := w.Header().Get("Content-Encoding")
-			if enc != tt.expectedEncoding {
-				t.Errorf("Expected Content-Encoding %q, got %q", tt.expectedEncoding, enc)
-			}
-		})
-	}
-}
-
-```
-
 // === FILE: pkg/control/doc.go ===
 ```go
 /*
@@ -228,50 +174,6 @@ func (s *Server) handlePutRuntimeConfig(w http.ResponseWriter, r *http.Request) 
 
 ```
 
-// === FILE: pkg/control/features_settings_test.go ===
-```go
-package control
-
-import (
-	"context"
-	"net/http"
-	"net/http/httptest"
-	"testing"
-
-	"golang.org/x/sync/errgroup"
-)
-
-func TestFeaturesSettings_RaceConditions(t *testing.T) {
-	t.Parallel()
-	srv, _ := NewServer("127.0.0.1:0", nil, nil)
-	mux := http.NewServeMux()
-	srv.registerRoutes(mux)
-
-	eg, _ := errgroup.WithContext(context.Background())
-
-	// Condições de Corrida em Hot-Reload
-	// Start 50 concurrent GETs and PUTs
-	for i := 0; i < 50; i++ {
-		eg.Go(func() error {
-			req := httptest.NewRequest("GET", "/v1/settings", nil)
-			w := httptest.NewRecorder()
-			mux.ServeHTTP(w, req)
-			return nil
-		})
-		eg.Go(func() error {
-			req := httptest.NewRequest("PUT", "/v1/runtime-config", nil)
-			w := httptest.NewRecorder()
-			mux.ServeHTTP(w, req)
-			return nil
-		})
-	}
-
-	_ = eg.Wait()
-	// If run with -race, the compiler will flag any data races occurring here
-}
-
-```
-
 // === FILE: pkg/control/guilds.go ===
 ```go
 package control
@@ -290,34 +192,6 @@ func (s *Server) handleGetGuildChannels(w http.ResponseWriter, r *http.Request) 
 func (s *Server) handleGetGuildRoles(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"roles":[]}`))
-}
-
-```
-
-// === FILE: pkg/control/guilds_test.go ===
-```go
-package control
-
-import (
-	"net/http"
-	"net/http/httptest"
-	"testing"
-)
-
-func TestGuilds_SimpleGet(t *testing.T) {
-	t.Parallel()
-	srv, _ := NewServer("127.0.0.1:0", nil, nil)
-	mux := http.NewServeMux()
-	srv.registerRoutes(mux)
-
-	req := httptest.NewRequest("GET", "/v1/guilds/123/channels", nil)
-	w := httptest.NewRecorder()
-
-	mux.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("Expected 200 OK, got %d", w.Code)
-	}
 }
 
 ```
@@ -370,43 +244,6 @@ func (s *Server) cacheHealthResolver() interface{} {
 		return map[string]string{"status": "offline"}
 	}
 	return s.cacheObservability()
-}
-
-```
-
-// === FILE: pkg/control/health_test.go ===
-```go
-package control
-
-import (
-	"net/http"
-	"net/http/httptest"
-	"testing"
-)
-
-type mockQOTDHealth struct {
-	Active bool `json:"active"`
-}
-
-func TestHealth_GenericReflection(t *testing.T) {
-	t.Parallel()
-	// Consolidação de Tipos Genéricos
-	handler := serveHealthRoute(func() mockQOTDHealth {
-		return mockQOTDHealth{Active: true}
-	})
-
-	req := httptest.NewRequest("GET", "/v1/health/mock", nil)
-	w := httptest.NewRecorder()
-	handler(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("Expected 200 OK, got %d", w.Code)
-	}
-
-	body := w.Body.String()
-	if body != "{\"active\":true}\n" {
-		t.Fatalf("JSON marshal failed, got: %s", body)
-	}
 }
 
 ```
@@ -947,155 +784,6 @@ func isInvalidMaterialError(err error) bool {
 
 ```
 
-// === FILE: pkg/control/localtls/manager_test.go ===
-```go
-package localtls
-
-import (
-	"context"
-	"crypto/x509"
-	"net"
-	"os"
-	"path/filepath"
-	"testing"
-	"time"
-)
-
-type fakeTrustInstaller struct {
-	calls     int
-	result    TrustResult
-	lastCert  *x509.Certificate
-	returnErr error
-}
-
-func (f *fakeTrustInstaller) EnsureTrusted(_ context.Context, cert *x509.Certificate) (TrustResult, error) {
-	f.calls++
-	f.lastCert = cert
-	if f.returnErr != nil {
-		return TrustResult{}, f.returnErr
-	}
-	return f.result, nil
-}
-
-func TestEnsureReadyCreatesMaterialsAndTrusts(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	truster := &fakeTrustInstaller{result: TrustResult{Trusted: true, Installed: true, Store: "test"}}
-	now := time.Date(2026, time.March, 11, 12, 0, 0, 0, time.UTC)
-
-	result, err := EnsureReady(context.Background(), Config{
-		Directory:      dir,
-		CommonName:     "bot.localhost",
-		DNSNames:       []string{"localhost"},
-		IPAddresses:    []net.IP{net.ParseIP("127.0.0.1")},
-		AutoTrust:      true,
-		TrustInstaller: truster,
-		Now:            func() time.Time { return now },
-	})
-	if err != nil {
-		t.Fatalf("ensure ready: %v", err)
-	}
-	if result.CertFile == "" || result.KeyFile == "" || result.Fingerprint == "" {
-		t.Fatalf("unexpected ready result: %+v", result)
-	}
-	if truster.calls != 1 || truster.lastCert == nil {
-		t.Fatalf("expected trust installer to be called once, got %+v", truster)
-	}
-	if _, err := os.Stat(result.CertFile); err != nil {
-		t.Fatalf("stat cert file: %v", err)
-	}
-	if _, err := os.Stat(result.KeyFile); err != nil {
-		t.Fatalf("stat key file: %v", err)
-	}
-}
-
-func TestEnsureReadyReusesExistingMaterials(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	now := time.Date(2026, time.March, 11, 12, 0, 0, 0, time.UTC)
-
-	first, err := EnsureReady(context.Background(), Config{
-		Directory:   dir,
-		CommonName:  "bot.localhost",
-		DNSNames:    []string{"localhost"},
-		IPAddresses: []net.IP{net.ParseIP("127.0.0.1")},
-		Now:         func() time.Time { return now },
-	})
-	if err != nil {
-		t.Fatalf("first ensure ready: %v", err)
-	}
-	second, err := EnsureReady(context.Background(), Config{
-		Directory:   dir,
-		CommonName:  "bot.localhost",
-		DNSNames:    []string{"localhost"},
-		IPAddresses: []net.IP{net.ParseIP("127.0.0.1")},
-		Now:         func() time.Time { return now.Add(24 * time.Hour) },
-	})
-	if err != nil {
-		t.Fatalf("second ensure ready: %v", err)
-	}
-	if first.Fingerprint != second.Fingerprint {
-		t.Fatalf("expected certificate fingerprint to be reused, first=%q second=%q", first.Fingerprint, second.Fingerprint)
-	}
-}
-
-func TestEnsureReadyRotatesServerCertificateWhenSANSChange(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	now := time.Date(2026, time.March, 11, 12, 0, 0, 0, time.UTC)
-
-	first, err := EnsureReady(context.Background(), Config{
-		Directory:  dir,
-		CommonName: "bot.localhost",
-		DNSNames:   []string{"localhost"},
-		Now:        func() time.Time { return now },
-	})
-	if err != nil {
-		t.Fatalf("first ensure ready: %v", err)
-	}
-
-	second, err := EnsureReady(context.Background(), Config{
-		Directory:  dir,
-		CommonName: "bot.localhost",
-		DNSNames:   []string{"localhost", "api.bot.localhost"},
-		Now:        func() time.Time { return now.Add(24 * time.Hour) },
-	})
-	if err != nil {
-		t.Fatalf("second ensure ready: %v", err)
-	}
-	if first.Fingerprint == second.Fingerprint {
-		t.Fatalf("expected server certificate to rotate after SAN change, fingerprint=%q", first.Fingerprint)
-	}
-}
-
-func TestEnsureReadyErrorsOnCorruptKey(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	now := time.Date(2026, time.March, 11, 12, 0, 0, 0, time.UTC)
-	if _, err := EnsureReady(context.Background(), Config{
-		Directory:  dir,
-		CommonName: "bot.localhost",
-		DNSNames:   []string{"localhost"},
-		Now:        func() time.Time { return now },
-	}); err != nil {
-		t.Fatalf("initial ensure ready: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, defaultKeyRelativePath), []byte("not-a-key"), 0o600); err != nil {
-		t.Fatalf("corrupt key file: %v", err)
-	}
-
-	if _, err := EnsureReady(context.Background(), Config{
-		Directory:  dir,
-		CommonName: "bot.localhost",
-		DNSNames:   []string{"localhost"},
-		Now:        func() time.Time { return now.Add(24 * time.Hour) },
-	}); err != nil {
-		t.Fatalf("expected corrupt key to trigger rotation, got error: %v", err)
-	}
-}
-
-```
-
 // === FILE: pkg/control/localtls/trust.go ===
 ```go
 package localtls
@@ -1313,82 +1001,6 @@ func requireGuildAdmin(next http.HandlerFunc) http.HandlerFunc {
 
 ```
 
-// === FILE: pkg/control/middleware_test.go ===
-```go
-package control
-
-import (
-	"bytes"
-	"io"
-	"net/http"
-	"net/http/httptest"
-	"testing"
-	"time"
-)
-
-func TestMiddleware_OOMPrevention(t *testing.T) {
-	t.Parallel()
-	handler := maxBytesMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		_, err := io.ReadAll(r.Body)
-		if err != nil {
-			http.Error(w, "Payload Too Large", http.StatusRequestEntityTooLarge)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-	})
-
-	// Send >10MB
-	body := bytes.Repeat([]byte("A"), 11*1024*1024)
-	req := httptest.NewRequest("POST", "/test", bytes.NewReader(body))
-	w := httptest.NewRecorder()
-
-	handler(w, req)
-
-	if w.Code != http.StatusRequestEntityTooLarge {
-		t.Fatalf("Expected 413, got %d", w.Code)
-	}
-}
-
-func TestMiddleware_TimingAttack(t *testing.T) {
-	t.Parallel()
-	handler := authorizeRequest("secure_token_12345", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-
-	start := time.Now()
-	req := httptest.NewRequest("POST", "/test", nil)
-	req.Header.Set("Authorization", "Bearer invalid_token")
-	w := httptest.NewRecorder()
-	handler(w, req)
-
-	if w.Code != http.StatusUnauthorized {
-		t.Fatalf("Expected 401")
-	}
-
-	duration := time.Since(start)
-	if duration > 150*time.Millisecond { // basic sanity check that it returns instantly
-		t.Fatalf("Authorization took too long, potential timing leak: %v", duration)
-	}
-}
-
-func TestMiddleware_AdminAccess(t *testing.T) {
-	t.Parallel()
-	handler := requireGuildAdmin(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-
-	req := httptest.NewRequest("POST", "/test", nil)
-	// Missing flag
-	w := httptest.NewRecorder()
-	handler(w, req)
-
-	if w.Code != http.StatusForbidden {
-		t.Fatalf("Expected 403, got %d", w.Code)
-	}
-}
-
-```
-
 // === FILE: pkg/control/oauth.go ===
 ```go
 package control
@@ -1446,48 +1058,6 @@ func (s *Server) handleOAuthLogout(w http.ResponseWriter, r *http.Request) {
 
 ```
 
-// === FILE: pkg/control/oauth_test.go ===
-```go
-package control
-
-import (
-	"net/http"
-	"net/http/httptest"
-	"testing"
-)
-
-func TestOAuth_CSRFPurge(t *testing.T) {
-	t.Parallel()
-	srv, _ := NewServer("127.0.0.1:0", nil, nil)
-	mux := http.NewServeMux()
-	srv.registerRoutes(mux)
-
-	// Manutenção e Validação de Sessão CSRF
-	req := httptest.NewRequest("GET", "/auth/discord/callback?state=forged_state", nil)
-	w := httptest.NewRecorder()
-
-	mux.ServeHTTP(w, req)
-
-	if w.Code != http.StatusForbidden {
-		t.Fatalf("Expected 403 Forbidden on forged state, got %d", w.Code)
-	}
-
-	cookies := w.Header().Values("Set-Cookie")
-	foundPurge := false
-	for _, c := range cookies {
-		if c == "session=; Path=/; Max-Age=0" {
-			foundPurge = true
-			break
-		}
-	}
-
-	if !foundPurge {
-		t.Fatalf("Expected CSRF session purge cookie, got: %v", cookies)
-	}
-}
-
-```
-
 // === FILE: pkg/control/router.go ===
 ```go
 package control
@@ -1534,36 +1104,6 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 			http.NotFound(w, r)
 		}
 	})
-}
-
-```
-
-// === FILE: pkg/control/router_test.go ===
-```go
-package control
-
-import (
-	"net/http"
-	"net/http/httptest"
-	"testing"
-)
-
-func TestRouter_Go122MethodMultiplexing(t *testing.T) {
-	t.Parallel()
-	srv, _ := NewServer("127.0.0.1:0", nil, nil)
-	mux := http.NewServeMux()
-	srv.registerRoutes(mux)
-
-	// Test GET vs POST on /v1/features
-	req := httptest.NewRequest("PATCH", "/v1/features", nil)
-	w := httptest.NewRecorder()
-
-	mux.ServeHTTP(w, req)
-
-	// Since we registered GET and POST, PATCH should fail natively with 405
-	if w.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("Expected 405 Method Not Allowed natively from Go 1.22 mux, got %d", w.Code)
-	}
 }
 
 ```
@@ -1812,90 +1352,6 @@ func (s *Server) Stop(ctx context.Context) error {
 
 // BroadcastGuildEvent propagates a transient presence update across the control plane.
 func (s *Server) BroadcastGuildEvent(guildID string, botPresent bool) {}
-
-```
-
-// === FILE: pkg/control/server_test.go ===
-```go
-package control
-
-import (
-	"context"
-	"net/http"
-	"net/http/httptest"
-	"testing"
-	"time"
-
-	"go.uber.org/goleak"
-	"golang.org/x/sync/errgroup"
-)
-
-func TestServer_GracefulDegradation(t *testing.T) {
-	t.Parallel()
-	// Terminação de Conexão Degradada
-	srv, _ := NewServer("127.0.0.1:0", nil, nil)
-	mux := http.NewServeMux()
-	started := make(chan struct{})
-	mux.HandleFunc("/long", func(w http.ResponseWriter, r *http.Request) {
-		close(started)
-		<-r.Context().Done() // Block deterministically until shutdown deadline exceeds
-	})
-	srv.httpServer = &http.Server{Handler: mux}
-
-	// Start a mock server listener
-	ts := httptest.NewUnstartedServer(mux)
-	srv.httpServer = ts.Config
-	ts.Start()
-	defer ts.Close()
-
-	// Hit the long route
-	reqCtx, cancelReq := context.WithCancel(context.Background())
-	defer cancelReq()
-
-	req, err := http.NewRequestWithContext(reqCtx, "GET", ts.URL+"/long", nil)
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
-
-	eg, ctx := errgroup.WithContext(context.Background())
-	eg.Go(func() error {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-		resp, err := http.DefaultClient.Do(req)
-		if err == nil {
-			resp.Body.Close()
-		}
-		return nil
-	})
-
-	<-started // Wait deterministically for the request to reach the server
-
-	start := time.Now()
-	// Stop should enforce 5s deadline
-	stopErr := srv.Stop(context.Background())
-	duration := time.Since(start)
-
-	// Cancel client request to clean up connection and prevent deadlock in ts.Close()
-	cancelReq()
-
-	_ = eg.Wait()
-
-	if stopErr == nil {
-		t.Fatal("Expected deadline exceeded error from Shutdown")
-	}
-
-	if duration < 4*time.Second || duration > 6*time.Second {
-		t.Fatalf("Stop did not enforce the strict 5s limit: took %v", duration)
-	}
-}
-
-func TestMain(m *testing.M) {
-	// Goleak verification as explicitly requested
-	goleak.VerifyTestMain(m)
-}
 
 ```
 

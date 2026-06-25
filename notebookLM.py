@@ -4,14 +4,31 @@ import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-# Noise pattern matching directory components of (vendor, testdata, _gen, test, misc, .git)
-# or filenames ending with _gen.go or _test.go
-noise_rx = re.compile(r'(?:[\\/](?:vendor|testdata|_gen|test|misc|\.git)(?:[\\/]|$))|_(?:gen|test)\.go$', re.IGNORECASE)
+# Centralized logic for excluding files and folders
+EXCLUDED_DIR_PARTS = {
+    "vendor", "testdata", "_gen", "test", "misc", ".git",
+    "hack", "third_party", ".github"
+}
+
+EXCLUDED_FILE_ENDS = {
+    "_gen.go", "_test.go", ".tree.txt", ".yaml", ".golden"
+}
 
 def should_exclude(path: Path) -> bool:
-    """Returns True if the path matches the noise pattern."""
-    posix_path = path.as_posix()
-    return bool(noise_rx.search(posix_path))
+    """Returns True if the path matches the centralized exclusion pattern."""
+    name_lower = path.name.lower()
+    
+    # Exclude specific files by extension or ending
+    for end in EXCLUDED_FILE_ENDS:
+        if name_lower.endswith(end):
+            return True
+            
+    # Exclude paths containing any of the excluded directory parts
+    for part in path.parts:
+        if part.lower() in EXCLUDED_DIR_PARTS:
+            return True
+            
+    return False
 
 def generate_topology(directory: Path, prefix: str = "", exclude_fn=None) -> str:
     """
@@ -213,6 +230,42 @@ def split_domain(current_dir: Path, files: list[Path], base_domain: Path, is_roo
             
     return results
 
+K8S_STAGING_ALLOWED = [
+    "apiserver/pkg/server/genericapiserver.go",
+    "apiserver/pkg/endpoints/handlers/fieldmanager",
+    "apiserver/pkg/storage/etcd3/store.go",
+    "client-go/tools/cache/reflector.go",
+    "client-go/tools/cache/delta_fifo.go",
+    "client-go/util/workqueue/queue.go",
+]
+
+K8S_PKG_ALLOWED = [
+    "registry",
+    "scheduler/backend/queue/scheduling_queue.go",
+    "controller/garbagecollector/garbagecollector.go",
+    "kubelet/pleg/pleg.go",
+    "kubelet/cm/cpumanager/cpu_manager.go",
+]
+
+def is_k8s_allowed(file_path: Path, k8s_pkg_path: Path, k8s_staging_path: Path) -> bool:
+    try:
+        rel_pkg = file_path.relative_to(k8s_pkg_path).as_posix()
+        for allowed in K8S_PKG_ALLOWED:
+            if rel_pkg == allowed or rel_pkg.startswith(allowed + "/"):
+                return True
+    except ValueError:
+        pass
+        
+    try:
+        rel_staging = file_path.relative_to(k8s_staging_path).as_posix()
+        for allowed in K8S_STAGING_ALLOWED:
+            if rel_staging == allowed or rel_staging.startswith(allowed + "/"):
+                return True
+    except ValueError:
+        pass
+        
+    return False
+
 def execute_payload_aggregation(base_dir: str = "./pkg"):
     pkg_path = Path(base_dir).resolve()
     
@@ -226,8 +279,10 @@ def execute_payload_aggregation(base_dir: str = "./pkg"):
     output_sink = repo_root / "notebookLM"
     output_sink_discordcore = output_sink / "discordcore"
     output_sink_go = output_sink / "go"
+    output_sink_k8s = output_sink / "kubernetes"
     output_sink_discordcore.mkdir(parents=True, exist_ok=True)
     output_sink_go.mkdir(parents=True, exist_ok=True)
+    output_sink_k8s.mkdir(parents=True, exist_ok=True)
     print(f"[-] Output sink established at: {output_sink}")
 
     # =================================================================
@@ -265,14 +320,21 @@ def execute_payload_aggregation(base_dir: str = "./pkg"):
     if performance_path.exists() and performance_path.is_dir():
         domains.append(performance_path)
     
-    references_path = repo_root / "references" / "go" / "src"
-    if not references_path.exists():
-        references_path = repo_root.parent / "references" / "go" / "src"
+    ref_base = repo_root / "references"
+    if not ref_base.exists() and (repo_root / "references!").exists():
+        ref_base = repo_root / "references!"
+    elif not ref_base.exists():
+        ref_base = repo_root.parent / "references"
+        
+    go_src_path = ref_base / "go" / "src"
+    k8s_pkg_path = ref_base / "kubernetes" / "pkg"
+    k8s_staging_path = ref_base / "kubernetes" / "staging" / "src" / "k8s.io"
+    
     split_parents = {"cmd", "crypto", "runtime", "syscall"}
-    compile_internal_path = references_path / "cmd" / "compile" / "internal"
+    compile_internal_path = go_src_path / "cmd" / "compile" / "internal"
 
-    if references_path.exists() and references_path.is_dir():
-        for d in references_path.iterdir():
+    if go_src_path.exists() and go_src_path.is_dir():
+        for d in go_src_path.iterdir():
             if d.is_dir() and not should_exclude(d):
                 if d.name in split_parents:
                     # Treat immediate subfolders inside d as individual domains
@@ -290,26 +352,46 @@ def execute_payload_aggregation(base_dir: str = "./pkg"):
                                 domains.append(sub)
                 else:
                     domains.append(d)
+                    
+    k8s_pkg_domains = {"registry", "scheduler", "controller", "kubelet"}
+    if k8s_pkg_path.exists() and k8s_pkg_path.is_dir():
+        for d in k8s_pkg_path.iterdir():
+            if d.is_dir() and d.name in k8s_pkg_domains and not should_exclude(d):
+                domains.append(d)
+                
+    k8s_staging_domains = {"apiserver", "client-go"}
+    if k8s_staging_path.exists() and k8s_staging_path.is_dir():
+        for d in k8s_staging_path.iterdir():
+            if d.is_dir() and d.name in k8s_staging_domains and not should_exclude(d):
+                domains.append(d)
     
     domains.sort(key=lambda d: d.name)
 
     for domain in domains:
         is_golang_ref = False
+        is_k8s_ref = False
         try:
-            is_golang_ref = domain.is_relative_to(references_path)
+            is_golang_ref = domain.is_relative_to(go_src_path)
         except Exception:
-            is_golang_ref = "references" in domain.parts and "go" in domain.parts and "src" in domain.parts
+            is_golang_ref = "go" in domain.parts and "src" in domain.parts
+            
+        try:
+            is_k8s_ref = domain.is_relative_to(k8s_pkg_path) or domain.is_relative_to(k8s_staging_path)
+        except Exception:
+            is_k8s_ref = "kubernetes" in domain.parts
 
         # Sequential file ingestion into RAM
         if is_golang_ref:
-            if domain == (references_path / "cmd" / "compile"):
+            if domain == (go_src_path / "cmd" / "compile"):
                 files = sorted([f for f in domain.rglob("*") if f.is_file() and not should_exclude(f) and not any(p == "internal" for p in f.relative_to(domain).parts)])
             else:
                 files = sorted([f for f in domain.rglob("*") if f.is_file() and not should_exclude(f)])
+        elif is_k8s_ref:
+            files = sorted([f for f in domain.rglob("*") if f.is_file() and not should_exclude(f) and is_k8s_allowed(f, k8s_pkg_path, k8s_staging_path)])
         elif domain.name == "performance":
-            files = sorted([f for f in domain.rglob("*") if f.is_file()])
+            files = sorted([f for f in domain.rglob("*") if f.is_file() and not should_exclude(f)])
         else:
-            files = sorted([f for f in domain.rglob("*") if f.is_file() and f.suffix.lower() in [".go", ".md", ".txt", ".odt"]])
+            files = sorted([f for f in domain.rglob("*") if f.is_file() and not should_exclude(f) and f.suffix.lower() in [".go", ".md", ".txt", ".odt"]])
 
         if not files:
             continue
@@ -335,6 +417,19 @@ def execute_payload_aggregation(base_dir: str = "./pkg"):
                     else:
                         base_name = f"golang_{domain.name}"
                         arch_title = domain.name
+            elif is_k8s_ref:
+                is_staging = False
+                try:
+                    is_staging = domain.is_relative_to(k8s_staging_path)
+                except Exception:
+                    is_staging = "staging" in domain.parts
+                    
+                if is_staging:
+                    base_name = f"k8s_staging_{domain.name}"
+                    arch_title = f"staging/src/k8s.io/{domain.name}"
+                else:
+                    base_name = f"k8s_pkg_{domain.name}"
+                    arch_title = f"pkg/{domain.name}"
             else:
                 base_name = f"{domain.name}_notebook_payload"
                 arch_title = domain.name
@@ -348,17 +443,17 @@ def execute_payload_aggregation(base_dir: str = "./pkg"):
 
             if is_golang_ref:
                 payload_path = output_sink_go / payload_name
+            elif is_k8s_ref:
+                payload_path = output_sink_k8s / payload_name
             else:
                 payload_path = output_sink_discordcore / payload_name
 
             print(f"[-] Compiling domain boundary: {payload_name}")
 
-            if is_golang_ref and domain == (references_path / "cmd" / "compile"):
+            if is_golang_ref and domain == (go_src_path / "cmd" / "compile"):
                 base_exclude_fn = lambda p: should_exclude(p) or p.name == "internal"
-            elif is_golang_ref:
-                base_exclude_fn = should_exclude
             else:
-                base_exclude_fn = None
+                base_exclude_fn = should_exclude
             
             domain_buffer = [
                 f"# Domain Architecture: {chunk_arch_title}\n\n",
@@ -379,7 +474,7 @@ def execute_payload_aggregation(base_dir: str = "./pkg"):
                     relative_path = file_path.relative_to(repo_root).as_posix()
                 except ValueError:
                     try:
-                        relative_path = (Path("references") / file_path.relative_to(references_path.parent.parent)).as_posix()
+                        relative_path = (Path("references") / file_path.relative_to(ref_base)).as_posix()
                     except ValueError:
                         relative_path = file_path.as_posix()
                 
