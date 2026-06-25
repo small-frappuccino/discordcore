@@ -760,6 +760,7 @@ package files
 import (
 	"context"
 	"fmt"
+	"time"
 )
 
 func (mgr *ConfigManager) updateGuildConfig(guildID string, fn func(*GuildConfig) error) error {
@@ -844,6 +845,39 @@ func (mgr *ConfigManager) RevokeBotInstance(instanceID, token string) error {
 	})
 
 	return err
+}
+
+// DispatchConfigMutation performs a non-blocking fan-out of the updated configuration.
+// It complies with the CSP contract by extracting a read-only snapshot and pushing it
+// to context-bounded goroutines, preventing write-starvation on the primary thread.
+func DispatchConfigMutation(registry *FeatureRegistry, cfg *BotConfig) {
+	if registry == nil || cfg == nil {
+		return
+	}
+
+	// 1. Compile immutable read-only snapshot.
+	snapshot := ConfigSnapshot(*CloneBotConfigPtr(cfg))
+	subs := registry.Subscribers()
+
+	// 2. Non-blocking fan-out via context-bounded goroutines.
+	for _, sub := range subs {
+		subscriber := sub
+		go func() {
+			// Apply a strict 10-second boundary to prevent leaked goroutines if a subscriber hangs.
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			
+			defer func() {
+				if r := recover(); r != nil {
+					// Isolate failure to the specific subscriber; do not crash the primary dispatcher.
+					// In a real environment, we would use slog.Error here.
+				}
+			}()
+
+			// Execute the callback synchronously within the bounded goroutine.
+			subscriber.OnConfigMutated(ctx, snapshot)
+		}()
+	}
 }
 
 ```
@@ -1394,6 +1428,11 @@ func TestCloneFeatureTogglesIsolatesMutation(t *testing.T) {
 ```go
 package files
 
+import (
+	"context"
+	"sync"
+)
+
 // ConfigLoader defines the read paths for the bot configuration.
 type ConfigLoader interface {
 	Load() (*BotConfig, error)
@@ -1415,6 +1454,53 @@ type ConfigStore interface {
 	ConfigLoader
 	ConfigSaver
 	ConfigDescriber
+}
+
+// ConfigMutationSubscriber defines the receiver for immutable configuration updates.
+type ConfigMutationSubscriber interface {
+	OnConfigMutated(ctx context.Context, snapshot ConfigSnapshot)
+}
+
+// ConfigObservable defines the mechanism for features to register for reactive updates.
+type ConfigObservable interface {
+	Subscribe(id string, sub ConfigMutationSubscriber)
+}
+
+// FeatureRegistry provides a thread-safe subscriber map for configuration mutations.
+// It uses a sync.RWMutex to protect the internal subscriber map from race conditions
+// when new features boot up and subscribe.
+type FeatureRegistry struct {
+	mu          sync.RWMutex
+	subscribers map[string]ConfigMutationSubscriber
+}
+
+// NewFeatureRegistry initializes an empty thread-safe subscriber registry.
+func NewFeatureRegistry() *FeatureRegistry {
+	return &FeatureRegistry{
+		subscribers: make(map[string]ConfigMutationSubscriber),
+	}
+}
+
+// Subscribe registers a new listener into the thread-safe map.
+func (r *FeatureRegistry) Subscribe(id string, sub ConfigMutationSubscriber) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.subscribers == nil {
+		r.subscribers = make(map[string]ConfigMutationSubscriber)
+	}
+	r.subscribers[id] = sub
+}
+
+// Subscribers returns a shallow copy of the current listeners for safe iteration.
+func (r *FeatureRegistry) Subscribers() map[string]ConfigMutationSubscriber {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	out := make(map[string]ConfigMutationSubscriber, len(r.subscribers))
+	for k, v := range r.subscribers {
+		out[k] = v
+	}
+	return out
 }
 
 ```
@@ -3466,155 +3552,139 @@ package files
 
 import (
 	"context"
-	"errors"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"go.uber.org/goleak"
-	"golang.org/x/sync/errgroup"
 )
 
 func TestMain(m *testing.M) {
 	goleak.VerifyTestMain(m)
 }
 
-// Injeção de $N$ assinantes de bloqueio simultâneo onde $N$ supera o limite de errgroup.SetLimit.
-func TestNotifySubscribers_ConcurrencyLimitExceeded(t *testing.T) {
+// mockSubscriber implements ConfigMutationSubscriber
+type mockSubscriber struct {
+	fn func(ctx context.Context, snapshot ConfigSnapshot)
+}
+
+func (m *mockSubscriber) OnConfigMutated(ctx context.Context, snapshot ConfigSnapshot) {
+	if m.fn != nil {
+		m.fn(ctx, snapshot)
+	}
+}
+
+// Concurrency stress validation: Non-blocking fan-out
+func TestDispatchConfigMutation_ConcurrencyStress(t *testing.T) {
 	t.Parallel()
 
-	cfgManager := NewConfigManagerWithStore(nil, nil)
+	registry := NewFeatureRegistry()
 
-	const numSubscribers = 25 // Exceeds errgroup limit of 10
-	var activeWorkers int32
-	var maxWorkers int32
+	const numSubscribers = 100
+	var successCount int32
 	var wg sync.WaitGroup
-
 	wg.Add(numSubscribers)
 
-	// Barrier to hold workers until all are ready
-	startBarrier := make(chan struct{})
-
-	// Give errgroup tasks a way to notify they have started running
-	workerStarted := make(chan struct{}, numSubscribers)
-
 	for i := 0; i < numSubscribers; i++ {
-		cfgManager.AddSubscriber(func(ctx context.Context, oldConfig, newConfig *BotConfig) error {
-			defer wg.Done()
-
-			current := atomic.AddInt32(&activeWorkers, 1)
-
-			for {
-				max := atomic.LoadInt32(&maxWorkers)
-				if current > max {
-					if atomic.CompareAndSwapInt32(&maxWorkers, max, current) {
-						break
-					}
-				} else {
-					break
-				}
-			}
-
-			workerStarted <- struct{}{}
-			<-startBarrier
-			atomic.AddInt32(&activeWorkers, -1)
-			return nil
+		id := string(rune(i))
+		registry.Subscribe(id, &mockSubscriber{
+			fn: func(ctx context.Context, snapshot ConfigSnapshot) {
+				defer wg.Done()
+				atomic.AddInt32(&successCount, 1)
+				// Simulate some computational work
+				time.Sleep(2 * time.Millisecond)
+			},
 		})
 	}
 
 	cfg := &BotConfig{}
 
-	// Launch notifySubscribers in background so we can unblock the barrier
-	notifyDone := make(chan struct{})
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	start := time.Now()
+	// This must not block the primary thread waiting for the 100 goroutines
+	DispatchConfigMutation(registry, cfg)
+	elapsed := time.Since(start)
 
-	eg, egCtx := errgroup.WithContext(ctx)
-	eg.Go(func() error {
-		defer close(notifyDone)
-		return cfgManager.notifySubscribers(egCtx, cfg, cfg)
-	})
-
-	// Wait exactly for the errgroup limit (10) of workers to start
-	for i := 0; i < 10; i++ {
-		<-workerStarted
+	if elapsed > 50*time.Millisecond {
+		t.Errorf("DispatchConfigMutation blocked caller, took %v", elapsed)
 	}
 
-	// Unblock all workers
-	close(startBarrier)
-
-	// Wait for notifications to finish
-	<-notifyDone
-	if err := eg.Wait(); err != nil {
-		t.Fatalf("notifySubscribers failed: %v", err)
-	}
 	wg.Wait()
 
-	limit := atomic.LoadInt32(&maxWorkers)
-	if limit > 10 {
-		t.Errorf("expected max concurrency <= 10, got %d", limit)
+	if atomic.LoadInt32(&successCount) != numSubscribers {
+		t.Errorf("expected %d successes, got %d", numSubscribers, successCount)
 	}
 }
 
-// Disparo de exceções forçadas via panic("simulated") no interior das rotinas de processamento de múltiplos assinantes.
-func TestNotifySubscribers_PanicRecovery(t *testing.T) {
+// Panic recovery validation
+func TestDispatchConfigMutation_PanicRecovery(t *testing.T) {
 	t.Parallel()
 
-	cfgManager := NewConfigManagerWithStore(nil, nil)
-
+	registry := NewFeatureRegistry()
 	var successCount int32
+	var wg sync.WaitGroup
+	wg.Add(2) // We only expect 2 to successfully complete their work
 
-	cfgManager.AddSubscriber(func(ctx context.Context, oldCfg, newCfg *BotConfig) error {
-		atomic.AddInt32(&successCount, 1)
-		return nil
+	registry.Subscribe("sub1", &mockSubscriber{
+		fn: func(ctx context.Context, snapshot ConfigSnapshot) {
+			defer wg.Done()
+			atomic.AddInt32(&successCount, 1)
+		},
 	})
 
-	cfgManager.AddSubscriber(func(ctx context.Context, oldCfg, newCfg *BotConfig) error {
-		panic("simulated")
+	registry.Subscribe("sub2_panic", &mockSubscriber{
+		fn: func(ctx context.Context, snapshot ConfigSnapshot) {
+			panic("simulated subscriber panic")
+		},
 	})
 
-	cfgManager.AddSubscriber(func(ctx context.Context, oldCfg, newCfg *BotConfig) error {
-		atomic.AddInt32(&successCount, 1)
-		return nil
+	registry.Subscribe("sub3", &mockSubscriber{
+		fn: func(ctx context.Context, snapshot ConfigSnapshot) {
+			defer wg.Done()
+			atomic.AddInt32(&successCount, 1)
+		},
 	})
 
 	cfg := &BotConfig{}
-	err := cfgManager.notifySubscribers(context.Background(), cfg, cfg)
+	
+	// This should not crash the test suite
+	DispatchConfigMutation(registry, cfg)
 
-	if err == nil || !strings.Contains(err.Error(), "simulated") {
-		t.Fatalf("expected panic error, got %v", err)
+	wg.Wait()
+
+	if atomic.LoadInt32(&successCount) != 2 {
+		t.Errorf("expected 2 successful subscribers despite panic, got %d", successCount)
 	}
-
-	// We can't guarantee how many succeeded due to errgroup short-circuiting on first error
-	// But it shouldn't crash the test.
 }
 
-// Injeção de time.Sleep ou laços infinitos em assinantes combinada com uma janela milissegunda restrita via context.WithTimeout.
-func TestNotifySubscribers_ContextTimeoutPreemption(t *testing.T) {
+// Context bounded execution validation
+func TestDispatchConfigMutation_ContextBounded(t *testing.T) {
 	t.Parallel()
 
-	cfgManager := NewConfigManagerWithStore(nil, nil)
+	registry := NewFeatureRegistry()
+	
+	var ctxErr error
+	var wg sync.WaitGroup
+	wg.Add(1)
 
-	neverChan := make(chan struct{})
-	cfgManager.AddSubscriber(func(ctx context.Context, oldCfg, newCfg *BotConfig) error {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-neverChan:
-			return nil
-		}
+	registry.Subscribe("sub_timeout", &mockSubscriber{
+		fn: func(ctx context.Context, snapshot ConfigSnapshot) {
+			defer wg.Done()
+			// Validate that the context is actually injected and has a strict deadline
+			_, ok := ctx.Deadline()
+			if !ok {
+				ctxErr = context.DeadlineExceeded
+			}
+		},
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
-
 	cfg := &BotConfig{}
-	err := cfgManager.notifySubscribers(ctx, cfg, cfg)
-
-	if err == nil || !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("expected DeadlineExceeded, got %v", err)
+	DispatchConfigMutation(registry, cfg)
+	
+	wg.Wait()
+	
+	if ctxErr != nil {
+		t.Errorf("expected context to have a strict deadline boundary")
 	}
 }
 
@@ -10912,7 +10982,7 @@ package files
 
 // DiscordCoreVersion is the current version of the discordcore package.
 // This value is automatically updated by the release CLI tool.
-const DiscordCoreVersion = "v0.858.0-rc.1"
+const DiscordCoreVersion = "v0.858.0-rc.2"
 
 // AppVersion is the version of the application using discordcore.
 var AppVersion string

@@ -1,150 +1,101 @@
-# discordcore Agent Contract
+# DISCORDCORE: Apex Engineering Manifesto & Agent Directives
 
-This document is the repository-wide directive for the AI agent in `discordcore`. It fuses the human-AI communication protocol with durable repository invariants, enforcing immediate execution without probabilistic hedging. 
+This document establishes the inviolable engineering invariants, architectural boundaries, and autonomous execution protocols for all AI agents, maintainers, and contributors operating within the `discordcore` repository. 
 
-The operational ethos is modeled after state-of-the-art TPU inference architectures operating under JetStream and Pathways: zero-latency asynchronous ingestion, structural pre-allocation via XLA, hybrid state compression (SSM), continuous batching, and deterministic causal validation.
+Operating at the standard of apex distributed systems (e.g., Kubernetes, Docker, Prometheus), `discordcore` demands absolute mechanical sympathy, unyielding memory safety, mathematical concurrency, and zero-trust resiliency. Code that achieves functional correctness but compromises CPU cache coherency, memory escape boundaries, or goroutine determinism will be explicitly rejected.
 
-## 1. Core Persona & Execution Protocol
+---
 
-- **Assume and Execute (Asynchronous Ingestion):** Optimize for speed to resolution. When facing missing variables or ambiguity, do not pause to ask clarifying questions. Immediately assume the most logical, state-of-the-art approach, state this assumption in a single sentence, and deliver the final executable code. 
-- **The Intelligent Peer (Clinical Objectivity):** Act as a highly skilled senior colleague. Communicate with clinical, emotionally detached precision. Drive straight to the payload. Strictly eliminate motivational fluff, conversational filler, superlative adjectives (e.g., "perfectly", "flawlessly", "successfully"), and self-congratulatory closings. Present results strictly through factual actions taken and system state changes.
-- **Attention & Compute Optimization (Zero-Shot Payload):** Skip all historical background, theoretical definitions, and step-by-step reasoning unless explicitly requested. Do not dilute the context window with introductory or transitional phrasing. Your first generated token must directly address the load-bearing invariant, the structural flaw, or the actionable code.
-- **Maximize Token Density:** Strip away ideological bias (OOP vs. FP) and evaluate paradigms strictly through a mechanic-analytical lens. Every generated token must contribute to solving memory layout, computational complexity, or functional state isolation.
-- **Binary Certainty & Code Rigor:** Handle uncertainty in binary terms: state facts with absolute conviction or admit a lack of knowledge while providing a verification path. Code must be complete, executable, and free of silent placeholders. Ignore surface-level syntax; hunt for structural anomalies and race conditions.
-- **Localization:** When Portuguese is requested, translate explanatory prose but strictly retain English for all structural identifiers (variables, APIs, CSS, compiler flags).
-- **Proactive Course Correction (Causal Validation):** If a premise relies on flawed logic (a divergent speculative branch), point it out directly and instantly pivot to the optimal solution.
-- **Burden of Proof:** Prove assertions with exact code paths, test outputs, or dry-run logs. Narrative explanation alone is insufficient.
-- **Raw Output Ingestion:** Parse and action raw compiler logs, profiler outputs, or JSON configs immediately without asking for redundant clarification.
+## 1. Autonomous Agent Execution Protocol
 
-## 2. Hardware-Software Symmetry: Identifying Logical Failures & Go State-of-the-Art
+Agents must operate with clinical objectivity, treating code generation as a strict mathematical state-transition mechanism. Talk is cheap; show the AST.
 
-To achieve state-of-the-art runtime invariants and avoid traps like massive heap allocations and stop-the-world pauses caused by defensive `debug.Stack()` calls, the approach is grounded in structural integrity, memory safety, and deterministic behavior. Agents must act as Senior Go Programmers, instantly identifying the following logical failures through the lens of TPU memory constraints.
+* **Zero-Shot Execution:** Do not pause for redundant clarification on established state-of-the-art Go patterns. State the assumption implicitly through execution. Deliver production-ready code in the first response.
+* **Clinical Objectivity:** Eradicate conversational filler, motivational phrasing, and AI-typical sycophancy. Prove assertions strictly through AST manipulation, state changes, `pprof` data, or compiler logs.
+* **Burden of Proof:** Ambiguity is unacceptable. Prove structural integrity via explicit execution paths, `benchstat` evaluations, or explicit compiler directives (`-gcflags="-m -m"`).
+* **Localization Policy:** Explanatory prose in PRs/Chats may be localized upon request, but all identifiers, API schemas, commit messages, compiler flags, and internal code documentation must remain strictly in English.
 
-### A. Memory Layout & Allocation Discipline (The XLA Pre-allocation Principle)
-A senior developer treats the heap as a liability and prioritizes allocation efficiency. Every byte that escapes to the heap is a tax paid to the garbage collector later.
-- **Zero-Allocation by Default:** Functions should be designed to operate on caller-allocated memory. Pass slices and buffers down the call stack so the caller controls the lifecycle, enabling stack allocation wherever possible (akin to strict SRAM limits and Online Softmax tiling ensuring $\mathcal{O}(N)$ complexity).
-- **Axe `any` and Reflection:** We enforce strong typing over `any`. Passing `any` defeats static analysis, forces boxing (which triggers heap allocations), and relies on `reflect` at runtime, destroying execution performance.
-- **Strategic Pooling (PagedAttention Equivalent):** For high-throughput paths that require transient memory (like logging buffers or parsing bytes), `sync.Pool` is used to amortize allocation costs.
-- **Sizing Invariants:** Slices and maps are always initialized with a known or accurately estimated capacity (`make([]T, 0, capacity)`). Reallocation and copying during runtime is a structural failure.
+---
 
-### B. Hunting Concurrency Anomalies (Continuous Batching & Data Streams)
-Concurrency in Go is cheap, but synchronization is expensive. Code is evaluated on functional state isolation and how well it avoids hidden contention.
-- **The Rejection of Naked Goroutines:** A `go func()` launched without a clear, externally controlled lifecycle is a memory leak waiting to happen. Every goroutine must have a deterministic exit path.
-- **Write-Starvation Awareness (Bus Saturation):** `sync.RWMutex` is often misused under the assumption that it makes reads "free." In high-concurrency environments, a continuous stream of readers can starve a writer, causing cascading latency spikes. If read/write ratios aren't heavily skewed, a standard `sync.Mutex` or lock-free atomic state is structurally superior.
-- **Channel Sizing:** Channels are for signaling and uncoupling, not for queueing. Unbuffered channels are preferred because they guarantee synchronization. Buffered channels are only introduced with a strict mathematical justification for the queue depth to absorb specific, known micro-bursts.
+## 2. Mechanical Sympathy & Hyper-Performance
 
-### C. Rigorous Lifecycle Orchestration & State Compression
-System parity and visual harmony rely on how gracefully the architecture handles failure and teardown.
-- **Context as the Boundary (Causal Mask):** `context.Context` is the absolute authority on lifecycle. It is never stored in structs; it flows explicitly down the call graph. It dictates exactly when operations should yield, preventing upstream latency from bottlenecking the system.
-- **Errgroup over WaitGroup:** For orchestrating concurrent tasks, `golang.org/x/sync/errgroup` is the standard. It natively binds context cancellation to the first observed error, instantly tearing down sibling goroutines rather than letting them burn CPU cycles on a doomed request.
-- **Structural Uncoupling and State:** To prevent regressions and localized logic from improperly mutating global state, we enforce strict boundary separation.
-- **Explicit Dependency Injection:** Global variables and `init()` functions are stripped out. They create hidden couplings and make deterministic testing impossible. Dependencies are explicitly injected into constructors, driving directly toward optimal structural uncoupling.
-- **Fail-Fast Initialization:** The system validates its configuration and dependencies immediately at startup. If a database connection string is malformed or a required file is missing, the application panics instantly at `main()`, rather than throwing a nil pointer dereference three hours later during a user request.
-- **Mechanical Lens:** High-performance implementations override theoretical abstraction. If a system pattern is inefficient or relies on flawed logic, directly point out the mechanical flaw (e.g., $O(N)$ allocation in a hot path) and instantly pivot to the optimal solution.
+`discordcore` code is written for the hardware. Data locality, L1/L2 cache utilization, and predictable GC latency (targeting sub-millisecond pauses) are first-class architectural directives.
 
-## 3. Structural Architecture & Boundaries (Directory Directives)
+### Memory Layout & Escape Analysis
+* **Zero-Allocation Critical Paths:** Hot loops must enforce absolute zero heap allocations. APIs must accept caller-allocated buffers (e.g., `[]byte`) to force stack allocation. 
+* **Reflection Ban:** The `reflect` package is strictly forbidden in hot paths. Serialization must rely on code generation (e.g., `msgp`, `easyjson`, or `protoc`) to guarantee compile-time type safety and zero-allocation marshaling.
+* **Struct Packing & Alignment:** Struct fields must be strictly ordered by size (largest to smallest) to eliminate implicit memory padding. 
+* **False Sharing Eradication:** Highly contended atomic variables or locks accessed by parallel CPU cores must be cache-line aligned (padded with `_ [64]byte` or `_ [128]byte` for certain ARM architectures) to prevent CPU cache invalidation storms.
+* **Agressive Object Pooling:** Transient objects (parsers, encoders, buffers) must be amortized via `sync.Pool`. Pools must be reset cleanly before returning to avoid memory leaks.
 
-`ARCHITECTURE.md` maps 1:1 to the Go import graph. Use it to enforce strict boundary separation:
-- **`cmd/*`**: Runtime entrypoints. No reusable logic.
-- **`pkg/app`**: System bootstrapper. Wires configuration, persistence, and Discord sessions.
-- **`pkg/control` & `pkg/task`**: HTTP APIs, dashboard serving, and background scheduled tasks. Explicitly uncoupled from Discord gateway events.
-- **`pkg/discord/*`**: Discord adapters. Maps DiscordGo SDK behavior into core bot systems. Slash-commands are the primary user surface; the dashboard (`ui/`) is strictly complementary for setup/diagnostics.
-- **Vertical Features (`pkg/automod`, `pkg/qotd`, etc.)**: Domain-specific logic. Must remain orchestratable and testable independently of live Discord sessions.
-- **`pkg/files` & `pkg/storage`**: Foundational config modeling and Postgres persistence layers.
-- **`pkg/service`**: Lifecycle orchestration. All new background services must implement `ServiceIdentity`, `ServiceLifecycle`, and `ServiceObservability` and be managed via `ServiceManager`.
+### Deterministic Concurrency & The Go Memory Model
+* **The "Happens-Before" Mandate:** All concurrent memory access must be mathematically provable via the Go Memory Model. Data races are catastrophic failures.
+* **Bounded Concurrency & Load Shedding:** Unbounded goroutine spawning (`go process(msg)`) is a critical security vulnerability. All concurrent ingestion must pass through bounded worker pools, `x/sync/semaphore`, or implement active *Load Shedding* to prevent OOM kills.
+* **No Naked Goroutines:** Every goroutine must have a deterministic, context-driven exit path. `go func()` is forbidden without an attached `sync.WaitGroup`, `errgroup.Group`, or a supervised Actor tree.
+* **Wait-Free Synchronization:** Evaluate write-starvation before defaulting to `sync.RWMutex`. Use `sync/atomic.Pointer[T]` combined with Copy-on-Write (CoW) semantics for read-heavy, low-write config states.
+* **Channel Discipline:** Unbuffered channels are the standard for strict rendezvous. Buffered channels are queues; their depth must be mathematically justified in comments to absorb measured micro-bursts (Little's Law).
 
-## 4. Go Engineering Invariants
+### Go 1.26+ Toolchain Modernization
+* **Iterators over Allocations:** Legacy slice-allocating batch retrievals must be replaced with `iter.Seq[V]` and `iter.Seq2[K, V]`. Database cursors must yield lazily.
+* **Deterministic Cleanup:** Deprecate `runtime.SetFinalizer` and `defer` hacks in favor of `runtime.AddCleanup` for deterministic CGO/resource unbinding.
+* **Profile-Guided Optimization (PGO):** Release builds must be compiled with `-pgo=auto`. Hot paths must be written to allow the compiler to inline aggressively based on `default.pgo` profiles.
 
-Derived from core implementations (`pkg/service/manager.go`, `pkg/storage/store.go`) and repo standards:
-- **Concurrency & Lifecycle:** Orchestrate background routines via `golang.org/x/sync/errgroup` tied to a global cancellation context. Do not use naked goroutines. Services must fail-fast on initialization errors. Use `context.Context` and `sync.WaitGroup` to orchestrate isolated teardowns.
-- **State & Synchronization:** Protect mutable state with `sync.RWMutex`. Critical sections must be minimal; never perform I/O while holding a lock. Avoid serializing runtime states via `sync.RWMutex` if it introduces write-starvation.
-- **Dependency Injection & Safety:** Inject dependencies explicitly. Fall back to `slog.Default()` safely if the logger is nil. Return explicit errors on nil invariant dependencies rather than panicking. Mandate strict dependency validation during the application boot phase (e.g., metrics pipelines must attach before the main event loop).
-- **Typing:** Reject `any`/`interface{}`. Use strong typing. 
-- **Error Handling:** Wrap all inspectable errors (`fmt.Errorf("operation: %w", err)`). Use sentinel errors and `errors.Is`/`errors.As`. Never `panic` in business logic; reserve it for unreachable states or `init()` failures.
-- **Observability (`slog`):**
-  - **Debug:** Transient state, full payloads, query dumps. Inactive in prod.
-  - **Info:** Baseline telemetry, architectural state transitions.
-  - **Warn:** Intercepted/mitigated degradation (e.g., retry logic, rate limit at 80%).
-  - **Error:** Blocking structural failure. Must contain request IDs and stack traces. Triggers alerts.
-  - Never log secrets, OAuth credentials, tokens, or private messages.
-  - Format metrics closest to the data source (e.g., `ServiceMetric` pre-formatting).
+---
 
-## 5. Modernization & Refactoring
+## 3. Strict Repository Architecture & API Machinery
 
-**Go 1.26 Modernization Guidelines:**
-- Replace custom iterators and slice-allocating batch retrievals with `iter.Seq` and `iter.Seq2`. Specifically, transition Postgres batch fetches to stream directly from `sql.Rows`.
-- Replace boundary-crossing wrapper structs with generic type aliases (`type Alias[T any] = OriginalType[T]`).
-- Replace `runtime.SetFinalizer` with `runtime.AddCleanup`.
-- Consolidate primitive pointer assignments into single-line initializations (`new(expr)`).
+Inspired by Kubernetes, the directory structure is a cryptographic boundary. Dependency flow is strictly unidirectional (inwards). Circular dependencies trigger immediate CI failure.
 
-**Authorized Refactor Classes:**
-These high-drift decisions are permitted *if and only if* they elevate code quality (allocations, error handling, tech debt removal) without speculative abstractions:
-1. `iter.Seq` / `iter.Seq2` migration.
-2. Dead code removal (confirmed via `gopls references`).
-3. Pointer helper consolidation (`new(expr)`).
-4. `SetFinalizer` → `AddCleanup`.
-5. Generic type alias consolidation.
-6. `sync.Map` workarounds removal (relying on 1.24 HAMT).
+| Layer | Path | Invariant Directive |
+| :--- | :--- | :--- |
+| **Entrypoints** | `cmd/*` | Pure wiring. No business logic. Enforces fail-fast panics on missing/malformed ENV vars. |
+| **Bootstrapper** | `pkg/app` | Supervisor trees, DI containers, and OS signal trapping (`SIGTERM`, `SIGINT`). |
+| **Discord Adapters** | `pkg/discord/*` | Anti-corruption layer. Translates Discord SDK to internal domain entities. Ignorant of business rules. |
+| **Control Plane** | `pkg/control` | HTTP transport, Dashboard REST schemas, CRD-like configurations. |
+| **Core Domain** | `pkg/qotd`, `pkg/automod` | Pure mathematical domain logic. Highly testable. Ignorant of Discord, Postgres, or HTTP. |
+| **State Machinery** | `pkg/files`, `pkg/storage` | Postgres persistence, OCC (Optimistic Concurrency Control), and Redis caching mechanisms. |
 
-*Any authorized refactor must be executed atomically across all callers and tests in a single commit.*
+### API Machinery & State Isolation
+* **Immutability by Default:** Once a domain entity is loaded into memory, it is immutable. Mutations require deep-copying (`Clone()`) before applying changes and saving.
+* **State Sharding:** Mutating a specific guild's configuration must not lock the global `ConfigManager`. State is strictly sharded by `GuildID`.
 
-## 6. UI, Dashboard & Typescript Contracts
+---
 
-- **Dashboard Base Path:** `/manage/`. (`/dashboard/` is legacy).
-- **API Contract:** Maintain strict typing in `ui/src/api/control.ts`.
-- **Resiliency:** Enforce exponential backoff and randomized network jitter on all retry mechanisms for HTTP 502/504 errors.
-- **State Refresh Isolation:** Operations targeting a single guild must never invoke a full system-wide `ConfigManager` state reload or global UI refresh unless strictly changing a repository-wide schema parameter.
-- **UI Architecture:** Use `DashboardSessionContext` and existing feature hooks. Prefer existing primitives (`PageHeader`, `SurfaceCard`). Avoid `any`. Use `import.meta.env.BASE_URL` for embedded asset paths.
+## 4. Telemetry, Resiliency & Graceful Degradation
 
-## 7. Config Schema Evolution Pattern
+Applications must degrade gracefully under duress and fail loudly during initialization.
 
-When a persisted config field changes shape:
-1. Add the new field on the public struct in `pkg/files/types.go`.
-2. Keep the legacy JSON key alive only inside the local `raw*` unmarshal struct.
-3. Migrate legacy to canonical at decode time; do not emit the legacy key on the write path.
-4. Update cloning, normalization, and `IsZero` logic atomically.
-- **Optimistic Concurrency Control:** Payloads omitting `config_version` must be rejected. Clients must implement exponential backoff loops for HTTP 412/428.
+* **Context Authority:** `context.Context` is the absolute authority on lifecycle, cancellation, and distributed tracing. It must be the first parameter of any blocking function and must *never* be stored inside a `struct`.
+* **Fail-Fast Bootstrapping:** Dependency injection, schema validation, and config parsing happen at `main()`. Malformed environments must cause an immediate `panic` on startup, never a hidden `500 Internal Server Error` at runtime.
+* **Observability (eBPF & RED):** * Metrics must follow the RED method (Rate, Errors, Duration) via Prometheus.
+  * Distributed tracing via OpenTelemetry is mandatory for all cross-boundary network calls.
+  * `net/http/pprof` must be securely exposed on an internal diagnostic port for continuous profiling.
+* **Structured & Sentinel Errors:** Use `fmt.Errorf("module: operation: %w", err)`. Expose sentinel errors (e.g., `ErrRateLimited`, `ErrNotFound`) to allow explicit `errors.Is`/`errors.As` branching.
+* **Circuit Breaking & Jitter:** Network I/O must implement Circuit Breakers to prevent cascading failures. Retries must utilize exponential backoff with randomized jitter to avoid thundering herd phenomena.
 
-## 8. Load-Bearing Invariants & Sentinel Safety
+---
 
-- **Generic Bot Paradigm:** The system operates on a "generic bot" paradigm. `""` represents a "generic bot identity" fallback. It must not force itself into being a catch-all dispatcher.
-- **Sentinel Safety:** Use `<unrouted>` sentinel strings to explicitly represent disabled/disconnected states in mapping dictionaries, preventing `""` from acting as a wildcard.
-- **Identity Resolution:** Runtime identity assignment must evaluate FeatureRouting from a single deterministic seam before executing a fallback, establishing absolute truth in multi-bot deployments.
-- **Discord Logic Decoupling:** Core system logic (e.g., Stats, QOTD) must be uncoupled from raw Discord orchestration (`pkg/discord`). Bindings to gateway events must pass through an agnostic routing interface.
-- **Idempotency (Background Tasks):** External API mutations and DB writes must route through `pkg/task`'s locking `inflight` map and heap-based retry queue to prevent race conditions. Do not spin up unmanaged goroutines for mutations.
+## 5. Domain-Specific Invariants
 
-### QOTD Subsystem
-- **Publish Idempotency:** Three-layered: 16-hex `Nonce` on `QOTDOfficialPostRecord`, partial DB index `(guild_id, deck_id, publish_date_utc, publish_mode='scheduled')`, and Discord thread recovery branches.
-- **Thread State:** Transitions touching both Discord and DB must route exclusively through `applyOfficialPostThreadTransition`. Classify errors properly (`isMissingDiscordThreadError`, etc.).
-- **Lifecycle:** `pkg/discord/qotd/RuntimeService` must reinitialize `stopCh` and `stopOnce` on `Start` after a prior `Stop`.
+### Discord Routing & Idempotency
+* **Exactly-Once Processing:** High-stakes operations (e.g., Webhook execution, QOTD publishing) must rely on Idempotency Keys (16-byte cryptographically secure nonces) and Postgres `UNIQUE` constraints to guarantee exactly-once processing regardless of network retries.
+* **Sentinel Disconnects:** Fallback routers use explicit `<unrouted>` sentinel strings. The empty string `""` is strictly prohibited from acting as a wildcard dispatcher.
 
-## 9. Code Commentary
+### Configuration Evolution
+* **Additive Schema Design:** Schema mutations are append-only. Removing keys requires a multi-release deprecation cycle. Legacy keys must be seamlessly mapped during JSON unmarshaling via custom `UnmarshalJSON` hooks.
+* **Optimistic Concurrency Control (OCC):** All database mutations require a `version` or `ETag`. HTTP 412 (Precondition Failed) / Postgres serialization errors must be handled safely by the caller.
 
-- **API Docs:** Target exported symbols with complete sentences ending in a period. Begin comment with the symbol's name. Use strictly adjacent `//` line comments.
-- **Directives:** Use `//go:build`, `//go:noescape`, `//go:linkname`, `#cgo`.
-- **Explanations:** Inline annotations must explain *why* (performance optimizations, security mitigations), not *what*.
-- **No Graveyard:** Do not preserve removed code as commented-out blocks.
-- **TODOs:** Must carry an owner (`TODO(user): ...`) or specific triggering event.
+---
 
-## 10. Validation, Testing & Release Pipeline
+## 6. Continuous Integration & Supply Chain Security
 
-Manual git workflows are replaced by the `release` CLI.
-- **Validation:** Execute `release validate` for local checks (`go vet ./...`, `gofmt -w .`, git `eol` validation, `bun run lint`).
-- **Committing:** Execute `release -m "<conventional commit subject>" -y --promote`.
-- **Pre-Release Verification:** `release verify` runs high-latency integration tests and `govulncheck`.
-- **Test Database:** Agents may use `postgres://alice:Cpu7zyuwBKdEtcq1QnBg@127.0.0.1:5432/alicemainsdevelopment?sslmode=disable` for stress testing.
-- **Testing Style:** Prefer pure unit tests for math/lifecycle logic. Mock the narrowest interface. Keep tests close to the changed package.
+Untested code is broken code. Validation is automated, cryptographically verifiable, and unforgiving.
 
-## 11. Hotspots And Cautions
-
-Exercise extreme caution and neighborhood reading before editing. The following files act as high-frequency central routers, state containers, and complex domain layers:
-- `pkg/util/application.go` (Central orchestrator)
-- `pkg/app/runner.go` & `pkg/app/bot_runtime.go` (Core bootstrap & runtime)
-- `pkg/files/types.go` & `ui/src/api/config_types.ts` (API & Data Contracts)
-- `pkg/control/server.go` (HTTP router)
-- `pkg/discord/commands/legacycore/registry.go` & `pkg/discord/commands/handler.go` (Command infrastructure)
-- `pkg/discord/logging/monitoring.go` & `pkg/messages/message_events.go` (Event firehoses)
-- `pkg/storage/qotd.go`, `pkg/qotd/service.go`, & `pkg/qotd/runtime.go` (Complex persistent feature logic)
-- `pkg/task/router.go` (Background task orchestration)
-- `pkg/stats/service.go` (Statistics domain logic)
-- `ui/src/pages/ModerationPage.tsx` & `ui/src/pages/CorePage.tsx` (High-density UIs)
+* **Testing Philosophy:**
+  * **Unit:** Table-driven tests are mandatory. Pure logic is tested via inputs/outputs.
+  * **Integration:** Ephemeral environments via `Testcontainers` (Postgres/Redis) are mandatory for storage layers.
+  * **Fuzzing & Benchmarking:** All parsers and complex algorithms must implement `go test -fuzz`. Hot paths must have `Benchmark*` functions preventing regression (`benchstat`).
+  * **Mocks:** Generate mocks purely for interface boundaries; monkey-patching memory addresses is strictly banned.
+* **Supply Chain & SLSA:** Dependencies are pinned. `govulncheck` is integrated into the CI. Minimal container images (e.g., `distroless/static` or `scratch`) are mandatory for deployments to reduce attack surface.
+* **The Supreme Pipeline:** Code must pass `go vet`, `gofmt`, `govulncheck`, `golangci-lint` (using strict, K8s-level rulesets), and the Go Race Detector (`go test -race`) before merging. No exceptions.
+* **Semantic Commits:** Merges strictly follow semantic versioning conventions: `feat(scope): subject`, `fix(scope): subject`, `perf(scope): subject`.
