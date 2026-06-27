@@ -32,12 +32,19 @@ func NewHexagonalCommandHandler(queue core.TaskQueue, logger core.Logger, router
 func (ch *HexagonalCommandHandler) HandleInteraction(ctx context.Context, payload core.InteractionPayload) error {
 	service, exists := ch.router[payload.RoutePath]
 	if !exists {
-		ch.logger.Info("No handler found for route", "routePath", payload.RoutePath)
+		// Reject branch: RoutePath is attacker-controlled and amplifiable, so it
+		// stays alloc-free. Passing payload.RoutePath through the ...any logger
+		// would box it (string -> any) and heap-escape the args slice per bad
+		// payload; the static message keeps the rejection path on the stack.
+		ch.logger.Info("No handler found for route")
 		return nil
 	}
 
 	// Dispatch responsibility to an isolated async context via TaskQueue.
 	// This prevents the main Goroutine from blocking.
+	// Justified escape: the task closure is the unit of deferred work — it
+	// outlives this call (run later by the TaskQueue worker), so it is
+	// heap-resident by construction, not an avoidable per-call allocation.
 	return ch.queue.Enqueue(ctx, func(taskCtx context.Context) error {
 		// Domain logic parsing and execution.
 		return service.ExecuteCommand(taskCtx, payload)

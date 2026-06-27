@@ -15,9 +15,12 @@ flowchart TD
     Arikawa(("Arikawa SDK"))
 
     %% Nodes
-    Cmd["cmd"]
+    CmdDiscordcore["cmd/discordcore"]
     App["pkg/app"]
-    AdapterModeration["pkg/discord/moderation"]
+    Core["pkg/core"]
+    Discord["pkg/discord"]
+    Moderation["pkg/moderation"]
+    Storage["pkg/storage"]
 
     %% SDK & API Flow
     DiscordGateway -. WebSocket .-> DiscordGo
@@ -25,8 +28,15 @@ flowchart TD
     Arikawa -. REST Calls .-> DiscordAPI
 
     %% Auto-generated internal dependencies
-    App --> AdapterModeration
-    Cmd --> App
+    App --> Core
+    App --> Discord
+    App --> Moderation
+    App --> Storage
+    CmdDiscordcore --> App
+    Discord --> Core
+    Discord --> Moderation
+    Moderation --> Core
+    Storage --> Core
 
     %% Styling
     classDef core fill:#232B2B,stroke:#5E81AC,stroke-width:2px,color:#ECEFF4;
@@ -36,10 +46,12 @@ flowchart TD
     classDef external fill:#744210,stroke:#D69E2E,stroke-width:2px,color:#ECEFF4,shape:circle;
     classDef ui fill:#A3BE8C,stroke:#8FBCBB,stroke-width:2px,color:#2E3440;
 
-    class App core;
-    class AdapterModeration adapter;
+    class App,Storage core;
+    class Discord adapter;
+    class Moderation feature;
+    class Core infra;
     class DiscordGo,Arikawa,DiscordAPI,DiscordGateway external;
-    class Cmd ui;
+    class CmdDiscordcore ui;
 ```
 ## Layer Breakdown
 

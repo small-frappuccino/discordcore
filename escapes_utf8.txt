@@ -1,0 +1,911 @@
+﻿go : # github.com/small-frappuccino/discordcore/pkg/core
+At line:1 char:1
++ go build -gcflags="-m" ./... 2> escapes.txt
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (# github.com/sm...rdcore/pkg/core:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+pkg\core/contracts.go:12:6: can inline Token.LogValue
+pkg\core/contracts.go:39:6: can inline ParseFeature
+pkg\core/registry_cow.go:20:6: can inline (*GuildRoutes).countUniqueBots
+pkg\core/registry_cow.go:30:6: can inline (*GuildRoutes).hasBot
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:61:6: can inline atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).Store
+pkg\core/registry_cow.go:49:6: can inline NewInMemoryFeatureRegistry
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:58:6: can inline atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).Load
+pkg\core/registry_cow.go:57:6: can inline (*InMemoryFeatureRegistry).ResolveOwner
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:67:6: can inline atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).CompareAndSwap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:64:6: can inline atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).Swap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:67:6: can inline 
+atomic.(*Pointer[github.com/small-frappuccino/discordcore/pkg/core.NewRegistryState]).CompareAndSwap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:64:6: can inline 
+atomic.(*Pointer[github.com/small-frappuccino/discordcore/pkg/core.NewRegistryState]).Swap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:61:6: can inline 
+atomic.(*Pointer[github.com/small-frappuccino/discordcore/pkg/core.NewRegistryState]).Store
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:58:6: can inline 
+atomic.(*Pointer[github.com/small-frappuccino/discordcore/pkg/core.NewRegistryState]).Load
+pkg\core/registry_cow.go:10:36: inlining call to errors.New
+pkg\core/registry_cow.go:11:36: inlining call to errors.New
+pkg\core/registry_cow.go:12:37: inlining call to errors.New
+pkg\core/registry_cow.go:13:37: inlining call to errors.New
+pkg\core/contracts.go:12:61: inlining call to slog.StringValue
+pkg\core/contracts.go:60:33: inlining call to errors.New
+pkg\core/registry_cow.go:51:25: inlining call to atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).Store
+pkg\core/registry_cow.go:61:23: inlining call to atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).Load
+pkg\core/registry_cow.go:81:27: inlining call to atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).Load
+pkg\core/registry_cow.go:97:28: inlining call to (*GuildRoutes).hasBot
+pkg\core/registry_cow.go:98:37: inlining call to (*GuildRoutes).countUniqueBots
+pkg\core/registry_cow.go:117:28: inlining call to atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).CompareAndSwap
+pkg\core/registry_cow.go:128:27: inlining call to atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).Load
+pkg\core/registry_cow.go:149:28: inlining call to atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).CompareAndSwap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:67:6: inlining call to atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).CompareAndSwap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:64:6: inlining call to atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).Swap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:61:6: inlining call to atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).Store
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:58:6: inlining call to atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).Load
+<autogenerated>:1: inlining call to Token.LogValue
+<autogenerated>:1: inlining call to slog.StringValue
+pkg\core/contracts.go:39:19: name does not escape
+pkg\core/contracts.go:60:33: &errors.errorString{...} escapes to heap
+pkg\core/registry_cow.go:20:7: leaking param content: g
+pkg\core/registry_cow.go:21:14: make(map[Token]struct {}) does not escape
+pkg\core/registry_cow.go:30:7: g does not escape
+pkg\core/registry_cow.go:30:30: token does not escape
+pkg\core/registry_cow.go:50:6: moved to heap: NewRegistry
+pkg\core/registry_cow.go:51:26: &NewRegistryState{...} escapes to heap
+pkg\core/registry_cow.go:52:15: make(NewGuildRoutesMap) escapes to heap
+pkg\core/registry_cow.go:57:7: leaking param: r
+pkg\core/registry_cow.go:57:48: ctx does not escape
+pkg\core/registry_cow.go:57:69: guildID does not escape
+pkg\core/registry_cow.go:76:7: leaking param: r
+pkg\core/registry_cow.go:76:47: leaking param: guildID
+pkg\core/registry_cow.go:76:80: leaking param: bot
+pkg\core/registry_cow.go:98:37: make(map[Token]struct {}) does not escape
+pkg\core/registry_cow.go:104:20: make(NewGuildRoutesMap, len(oldRoutes) + 1) escapes to heap
+pkg\core/registry_cow.go:116:15: &NewRegistryState{...} escapes to heap
+pkg\core/registry_cow.go:123:7: leaking param: r
+pkg\core/registry_cow.go:123:47: leaking param: guildID
+pkg\core/registry_cow.go:137:20: make(NewGuildRoutesMap, len(oldState.routes)) escapes to heap
+pkg\core/registry_cow.go:148:15: &NewRegistryState{...} escapes to heap
+# github.com/small-frappuccino/discordcore/pkg/moderation
+pkg\moderation/fast_parser.go:11:6: can inline b2s
+pkg\moderation/fast_parser.go:35:6: can inline extractCommandNameFast
+pkg\moderation/fast_parser.go:43:39: can inline extractOptionString.func1
+pkg\moderation/fast_parser.go:57:39: can inline extractOptionInt.func1
+pkg\moderation/guild_actor.go:21:6: can inline newGuildActor
+pkg\moderation/moderation_router.go:18:6: can inline NewRouter
+pkg\moderation/moderation_router.go:27:6: can inline (*Router).HandleInteraction
+pkg\moderation/moderation_service.go:17:6: can inline NewService
+pkg\moderation/moderation_service.go:28:8: can inline (*Service).Start.func1
+pkg\moderation/moderation_service.go:43:12: can inline (*Service).Start.func1.1
+pkg\moderation/moderation_service.go:57:6: can inline (*Service).Wait
+pkg\moderation/discord_gateway_port.go:19:37: inlining call to errors.New
+pkg\moderation/guild_actor.go:11:37: inlining call to errors.New
+pkg\moderation/guild_actor.go:12:37: inlining call to errors.New
+pkg\moderation/moderation_router.go:11:35: inlining call to errors.New
+pkg\moderation/discord_gateway_port.go:29:57: inlining call to time.Duration.Seconds
+pkg\moderation/discord_gateway_port.go:29:25: inlining call to strconv.AppendInt
+pkg\moderation/fast_parser.go:21:36: inlining call to jsonparser.Get
+pkg\moderation/fast_parser.go:30:13: inlining call to b2s
+pkg\moderation/fast_parser.go:32:12: inlining call to b2s
+pkg\moderation/fast_parser.go:50:12: inlining call to b2s
+pkg\moderation/fast_parser.go:44:34: inlining call to jsonparser.Get
+pkg\moderation/fast_parser.go:45:17: inlining call to bytes.Equal
+pkg\moderation/fast_parser.go:46:36: inlining call to jsonparser.Get
+pkg\moderation/fast_parser.go:58:34: inlining call to jsonparser.Get
+pkg\moderation/fast_parser.go:59:17: inlining call to bytes.Equal
+pkg\moderation/guild_actor.go:52:17: inlining call to time.(*Timer).Stop
+pkg\moderation/guild_actor.go:57:16: inlining call to slog.Error
+pkg\moderation/guild_actor.go:57:16: inlining call to slog.Default
+pkg\moderation/guild_actor.go:57:16: inlining call to context.Background
+pkg\moderation/guild_actor.go:57:16: inlining call to atomic.(*Pointer[go.shape.struct { log/slog.handler 
+log/slog.Handler }]).Load
+pkg\moderation/moderation_service.go:71:20: inlining call to errors.New
+pkg\moderation/moderation_router.go:34:39: inlining call to extractCommandNameFast
+pkg\moderation/moderation_router.go:36:35: inlining call to core.ParseFeature
+pkg\moderation/moderation_router.go:36:35: inlining call to errors.New
+pkg\moderation/moderation_service.go:26:35: inlining call to errgroup.WithContext
+pkg\moderation/moderation_service.go:40:27: inlining call to newGuildActor
+pkg\moderation/discord_gateway_port.go:26:7: e does not escape
+pkg\moderation/discord_gateway_port.go:27:13: make([]byte, 0, 64) does not escape
+pkg\moderation/discord_gateway_port.go:28:14: append does not escape
+pkg\moderation/discord_gateway_port.go:30:14: append does not escape
+pkg\moderation/discord_gateway_port.go:31:16: string(buf) escapes to heap
+pkg\moderation/fast_parser.go:11:10: leaking param: b to result ~r0 level=0
+pkg\moderation/fast_parser.go:20:24: leaking param: payload
+pkg\moderation/fast_parser.go:20:40: keys does not escape
+pkg\moderation/fast_parser.go:35:29: leaking param: payload
+pkg\moderation/fast_parser.go:36:26: ... argument does not escape
+pkg\moderation/fast_parser.go:39:26: leaking param: payload
+pkg\moderation/fast_parser.go:39:42: targetOptionName does not escape
+pkg\moderation/fast_parser.go:43:44: leaking param: value
+pkg\moderation/fast_parser.go:43:101: err does not escape
+pkg\moderation/fast_parser.go:41:24: ([]byte)(targetOptionName) does not escape
+pkg\moderation/fast_parser.go:41:24: zero-copy string->[]byte conversion
+pkg\moderation/fast_parser.go:43:39: func literal does not escape
+pkg\moderation/fast_parser.go:44:34: ... argument does not escape
+pkg\moderation/fast_parser.go:45:17: string(bytes.a) does not escape
+pkg\moderation/fast_parser.go:45:17: string(bytes.b) does not escape
+pkg\moderation/fast_parser.go:46:36: ... argument does not escape
+pkg\moderation/fast_parser.go:43:29: ... argument does not escape
+pkg\moderation/fast_parser.go:53:23: leaking param: payload
+pkg\moderation/fast_parser.go:53:39: targetOptionName does not escape
+pkg\moderation/fast_parser.go:57:44: leaking param: value
+pkg\moderation/fast_parser.go:57:101: err does not escape
+pkg\moderation/fast_parser.go:55:24: ([]byte)(targetOptionName) does not escape
+pkg\moderation/fast_parser.go:55:24: zero-copy string->[]byte conversion
+pkg\moderation/fast_parser.go:57:39: func literal does not escape
+pkg\moderation/fast_parser.go:58:34: ... argument does not escape
+pkg\moderation/fast_parser.go:59:17: string(bytes.a) does not escape
+pkg\moderation/fast_parser.go:59:17: string(bytes.b) does not escape
+pkg\moderation/fast_parser.go:60:33: ... argument does not escape
+pkg\moderation/fast_parser.go:57:29: ... argument does not escape
+pkg\moderation/guild_actor.go:21:20: leaking param: guildID
+pkg\moderation/guild_actor.go:21:36: leaking param: discord
+pkg\moderation/guild_actor.go:22:9: &GuildActor{...} escapes to heap
+pkg\moderation/guild_actor.go:29:7: leaking param content: a
+pkg\moderation/guild_actor.go:29:26: leaking param: ctx
+pkg\moderation/guild_actor.go:52:17: "time: Stop called on uninitialized Timer" escapes to heap
+pkg\moderation/guild_actor.go:57:16: ... argument does not escape
+pkg\moderation/guild_actor.go:58:7: "action" escapes to heap
+pkg\moderation/guild_actor.go:58:20: job.Action escapes to heap
+pkg\moderation/guild_actor.go:59:7: "guild_id" escapes to heap
+pkg\moderation/guild_actor.go:59:20: a.guildID escapes to heap
+pkg\moderation/guild_actor.go:60:7: "error" escapes to heap
+pkg\moderation/guild_actor.go:57:16: context.backgroundCtx{} escapes to heap
+pkg\moderation/guild_actor.go:67:7: a does not escape
+pkg\moderation/guild_actor.go:67:30: leaking param: ctx
+pkg\moderation/guild_actor.go:67:51: leaking param: job
+pkg\moderation/moderation_router.go:18:16: leaking param: registry
+pkg\moderation/moderation_router.go:18:47: leaking param: service
+pkg\moderation/moderation_router.go:19:6: moved to heap: NewRouterInstance
+pkg\moderation/moderation_service.go:61:7: s does not escape
+pkg\moderation/moderation_service.go:61:31: leaking param: ctx
+pkg\moderation/moderation_service.go:61:52: leaking param: job
+pkg\moderation/moderation_service.go:71:20: &errors.errorString{...} escapes to heap
+pkg\moderation/moderation_router.go:31:7: leaking param content: r
+pkg\moderation/moderation_router.go:31:39: leaking param: ctx
+pkg\moderation/moderation_router.go:31:60: leaking param: payload
+pkg\moderation/moderation_router.go:32:30: ... argument does not escape
+pkg\moderation/moderation_router.go:33:28: ... argument does not escape
+pkg\moderation/moderation_router.go:34:39: ... argument does not escape
+pkg\moderation/moderation_router.go:36:35: &errors.errorString{...} does not escape
+pkg\moderation/moderation_router.go:27:7: leaking param content: r
+pkg\moderation/moderation_router.go:27:36: leaking param: ctx
+pkg\moderation/moderation_router.go:27:57: leaking param: payload
+pkg\moderation/moderation_service.go:17:17: leaking param: discord
+pkg\moderation/moderation_service.go:18:9: &Service{...} escapes to heap
+pkg\moderation/moderation_service.go:25:7: leaking param: s
+pkg\moderation/moderation_service.go:25:25: leaking param: ctx
+pkg\moderation/moderation_service.go:26:35: &errgroup.Group{...} escapes to heap
+pkg\moderation/moderation_service.go:28:8: func literal escapes to heap
+pkg\moderation/moderation_service.go:29:17: make(map[string]*GuildActor) does not escape
+pkg\moderation/moderation_service.go:40:27: &GuildActor{...} escapes to heap
+pkg\moderation/moderation_service.go:43:12: func literal escapes to heap
+pkg\moderation/moderation_service.go:57:7: s does not escape
+# github.com/small-frappuccino/discordcore/pkg/storage
+pkg\storage/postgres_hydrator.go:14:2: can inline HydrateRegistry-range1
+pkg\storage/postgres_repository.go:15:6: can inline NewPostgresFeatureRepo
+pkg\storage/postgres_repository.go:22:6: can inline (*PostgresFeatureRepo).FetchAllActive
+pkg\storage/postgres_repository.go:34:3: can inline (*PostgresFeatureRepo).FetchAllActive.func1.deferwrap1
+pkg\storage/storage_watcher.go:25:19: can inline StartConfigWatcher.func1
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:67:6: can inline atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).CompareAndSwap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:64:6: can inline atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).Swap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:61:6: can inline atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).Store
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:58:6: can inline atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).Load
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:67:6: can inline atomic.(*Pointer[go.shape.interface { Error() 
+string }]).CompareAndSwap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:64:6: can inline atomic.(*Pointer[go.shape.interface { Error() 
+string }]).Swap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:61:6: can inline atomic.(*Pointer[go.shape.interface { Error() 
+string }]).Store
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:58:6: can inline atomic.(*Pointer[go.shape.interface { Error() 
+string }]).Load
+..\..\scoop\apps\go\current\src\unique\handle.go:26:6: can inline unique.Handle[go.shape.struct { net/netip.isV6 bool; 
+net/netip.zoneV6 string }].Value
+..\..\scoop\apps\go\current\src\unique\handle.go:26:6: can inline unique.Handle[net/netip.addrDetail].Value
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:67:6: can inline atomic.(*Pointer[error]).CompareAndSwap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:64:6: can inline atomic.(*Pointer[error]).Swap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:61:6: can inline atomic.(*Pointer[error]).Store
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:58:6: can inline atomic.(*Pointer[error]).Load
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:67:6: can inline 
+atomic.(*Pointer[github.com/small-frappuccino/discordcore/pkg/core.NewRegistryState]).CompareAndSwap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:64:6: can inline 
+atomic.(*Pointer[github.com/small-frappuccino/discordcore/pkg/core.NewRegistryState]).Swap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:61:6: can inline 
+atomic.(*Pointer[github.com/small-frappuccino/discordcore/pkg/core.NewRegistryState]).Store
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:58:6: can inline 
+atomic.(*Pointer[github.com/small-frappuccino/discordcore/pkg/core.NewRegistryState]).Load
+pkg\storage/postgres_hydrator.go:11:11: inlining call to slog.Info
+pkg\storage/postgres_hydrator.go:31:11: inlining call to slog.Info
+pkg\storage/postgres_hydrator.go:11:11: inlining call to slog.Default
+pkg\storage/postgres_hydrator.go:11:11: inlining call to context.Background
+pkg\storage/postgres_hydrator.go:31:11: inlining call to slog.Default
+pkg\storage/postgres_hydrator.go:31:11: inlining call to context.Background
+pkg\storage/postgres_hydrator.go:11:11: inlining call to atomic.(*Pointer[go.shape.struct { log/slog.handler 
+log/slog.Handler }]).Load
+pkg\storage/postgres_hydrator.go:31:11: inlining call to atomic.(*Pointer[go.shape.struct { log/slog.handler 
+log/slog.Handler }]).Load
+pkg\storage/postgres_hydrator.go:25:39: inlining call to core.ParseFeature
+pkg\storage/postgres_hydrator.go:25:39: inlining call to errors.New
+pkg\storage/storage_watcher.go:27:14: inlining call to slog.Error
+pkg\storage/storage_watcher.go:27:14: inlining call to slog.Default
+pkg\storage/storage_watcher.go:27:14: inlining call to context.Background
+pkg\storage/storage_watcher.go:27:14: inlining call to atomic.(*Pointer[go.shape.struct { log/slog.handler 
+log/slog.Handler }]).Load
+pkg\storage/storage_watcher.go:66:12: inlining call to slog.Info
+pkg\storage/storage_watcher.go:73:39: inlining call to core.ParseFeature
+pkg\storage/storage_watcher.go:75:15: inlining call to slog.Error
+pkg\storage/storage_watcher.go:80:12: inlining call to slog.Info
+pkg\storage/storage_watcher.go:81:39: inlining call to core.ParseFeature
+pkg\storage/storage_watcher.go:66:12: inlining call to slog.Default
+pkg\storage/storage_watcher.go:66:12: inlining call to context.Background
+pkg\storage/storage_watcher.go:73:39: inlining call to errors.New
+pkg\storage/storage_watcher.go:75:15: inlining call to slog.Default
+pkg\storage/storage_watcher.go:75:15: inlining call to context.Background
+pkg\storage/storage_watcher.go:80:12: inlining call to slog.Default
+pkg\storage/storage_watcher.go:80:12: inlining call to context.Background
+pkg\storage/storage_watcher.go:81:39: inlining call to errors.New
+pkg\storage/storage_watcher.go:66:12: inlining call to atomic.(*Pointer[go.shape.struct { log/slog.handler 
+log/slog.Handler }]).Load
+pkg\storage/storage_watcher.go:75:15: inlining call to atomic.(*Pointer[go.shape.struct { log/slog.handler 
+log/slog.Handler }]).Load
+pkg\storage/storage_watcher.go:80:12: inlining call to atomic.(*Pointer[go.shape.struct { log/slog.handler 
+log/slog.Handler }]).Load
+pkg\storage/storage_watcher.go:31:28: inlining call to pq.NewListener
+pkg\storage/storage_watcher.go:34:13: inlining call to slog.Error
+pkg\storage/storage_watcher.go:38:11: inlining call to slog.Info
+pkg\storage/storage_watcher.go:43:13: inlining call to slog.Info
+pkg\storage/storage_watcher.go:54:15: inlining call to slog.Error
+pkg\storage/storage_watcher.go:34:13: inlining call to slog.Default
+pkg\storage/storage_watcher.go:34:13: inlining call to context.Background
+pkg\storage/storage_watcher.go:38:11: inlining call to slog.Default
+pkg\storage/storage_watcher.go:38:11: inlining call to context.Background
+pkg\storage/storage_watcher.go:43:13: inlining call to slog.Default
+pkg\storage/storage_watcher.go:43:13: inlining call to context.Background
+pkg\storage/storage_watcher.go:54:15: inlining call to slog.Default
+pkg\storage/storage_watcher.go:54:15: inlining call to context.Background
+pkg\storage/storage_watcher.go:34:13: inlining call to atomic.(*Pointer[go.shape.struct { log/slog.handler 
+log/slog.Handler }]).Load
+pkg\storage/storage_watcher.go:38:11: inlining call to atomic.(*Pointer[go.shape.struct { log/slog.handler 
+log/slog.Handler }]).Load
+pkg\storage/storage_watcher.go:43:13: inlining call to atomic.(*Pointer[go.shape.struct { log/slog.handler 
+log/slog.Handler }]).Load
+pkg\storage/storage_watcher.go:54:15: inlining call to atomic.(*Pointer[go.shape.struct { log/slog.handler 
+log/slog.Handler }]).Load
+..\..\scoop\apps\go\current\src\unique\handle.go:26:6: inlining call to unique.Handle[go.shape.struct { net/netip.isV6 
+bool; net/netip.zoneV6 string }].Value
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:67:6: inlining call to atomic.(*Pointer[go.shape.interface { 
+Error() string }]).CompareAndSwap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:64:6: inlining call to atomic.(*Pointer[go.shape.interface { 
+Error() string }]).Swap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:61:6: inlining call to atomic.(*Pointer[go.shape.interface { 
+Error() string }]).Store
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:58:6: inlining call to atomic.(*Pointer[go.shape.interface { 
+Error() string }]).Load
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:67:6: inlining call to atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).CompareAndSwap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:64:6: inlining call to atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).Swap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:61:6: inlining call to atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).Store
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:58:6: inlining call to atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).Load
+<autogenerated>:1: inlining call to reflect.flag.kind
+<autogenerated>:1: inlining call to reflect.flag.kind
+<autogenerated>:1: inlining call to reflect.flag.mustBe
+<autogenerated>:1: inlining call to reflect.flag.kind
+<autogenerated>:1: inlining call to reflect.flag.mustBe
+<autogenerated>:1: inlining call to reflect.flag.kind
+<autogenerated>:1: inlining call to reflect.flag.mustBeAssignable
+<autogenerated>:1: inlining call to reflect.flag.mustBeAssignable
+<autogenerated>:1: inlining call to reflect.flag.mustBeExported
+<autogenerated>:1: inlining call to reflect.flag.mustBeExported
+<autogenerated>:1: inlining call to reflect.flag.ro
+<autogenerated>:1: inlining call to reflect.flag.ro
+<autogenerated>:1: inlining call to unique.Handle[go.shape.struct { net/netip.isV6 bool; net/netip.zoneV6 string 
+}].Value
+pkg\storage/postgres_hydrator.go:10:22: leaking param: ctx
+pkg\storage/postgres_hydrator.go:10:43: leaking param: repo
+pkg\storage/postgres_hydrator.go:10:72: leaking param: registry
+pkg\storage/postgres_hydrator.go:14:6: leaking param: cfg
+pkg\storage/postgres_hydrator.go:14:11: leaking param: err
+pkg\storage/postgres_hydrator.go:10:112: moved to heap: #rv1
+pkg\storage/postgres_hydrator.go:13:2: moved to heap: count
+moved to heap: #next
+pkg\storage/postgres_hydrator.go:14:2: moved to heap: #state1
+pkg\storage/postgres_hydrator.go:11:11: context.backgroundCtx{} escapes to heap
+pkg\storage/postgres_hydrator.go:14:2: func literal escapes to heap
+pkg\storage/postgres_hydrator.go:25:39: &errors.errorString{...} does not escape
+pkg\storage/postgres_hydrator.go:31:11: ... argument does not escape
+pkg\storage/postgres_hydrator.go:31:39: "total_rotas_carregadas" escapes to heap
+pkg\storage/postgres_hydrator.go:31:65: count escapes to heap
+pkg\storage/postgres_hydrator.go:31:11: context.backgroundCtx{} escapes to heap
+pkg\storage/postgres_repository.go:15:29: leaking param: db
+pkg\storage/postgres_repository.go:16:9: &PostgresFeatureRepo{...} escapes to heap
+pkg\storage/postgres_repository.go:22:7: leaking param: r
+pkg\storage/postgres_repository.go:22:46: leaking param: ctx
+pkg\storage/postgres_repository.go:23:14: yield does not escape
+pkg\storage/postgres_repository.go:37:8: moved to heap: cfg
+pkg\storage/postgres_repository.go:23:9: func literal escapes to heap
+pkg\storage/postgres_repository.go:38:20: ... argument does not escape
+pkg\storage/storage_watcher.go:25:49: leaking param: err
+pkg\storage/storage_watcher.go:27:14: ... argument does not escape
+pkg\storage/storage_watcher.go:27:60: "erro" escapes to heap
+pkg\storage/storage_watcher.go:27:14: context.backgroundCtx{} escapes to heap
+pkg\storage/storage_watcher.go:64:20: leaking param: event
+pkg\storage/storage_watcher.go:64:45: leaking param: registry
+pkg\storage/storage_watcher.go:66:12: ... argument does not escape
+pkg\storage/storage_watcher.go:66:61: "guilda" escapes to heap
+pkg\storage/storage_watcher.go:66:76: event.GuildID escapes to heap
+pkg\storage/storage_watcher.go:66:86: "feature" escapes to heap
+pkg\storage/storage_watcher.go:66:102: event.FeatureName escapes to heap
+pkg\storage/storage_watcher.go:66:12: context.backgroundCtx{} escapes to heap
+pkg\storage/storage_watcher.go:73:39: &errors.errorString{...} does not escape
+pkg\storage/storage_watcher.go:75:15: ... argument does not escape
+pkg\storage/storage_watcher.go:75:43: "erro" escapes to heap
+pkg\storage/storage_watcher.go:75:15: context.backgroundCtx{} escapes to heap
+pkg\storage/storage_watcher.go:80:12: ... argument does not escape
+pkg\storage/storage_watcher.go:80:64: "guilda" escapes to heap
+pkg\storage/storage_watcher.go:80:79: event.GuildID escapes to heap
+pkg\storage/storage_watcher.go:80:89: "feature" escapes to heap
+pkg\storage/storage_watcher.go:80:105: event.FeatureName escapes to heap
+pkg\storage/storage_watcher.go:80:12: context.backgroundCtx{} escapes to heap
+pkg\storage/storage_watcher.go:81:39: &errors.errorString{...} does not escape
+pkg\storage/storage_watcher.go:24:25: leaking param: ctx
+pkg\storage/storage_watcher.go:24:46: leaking param: dsn
+pkg\storage/storage_watcher.go:24:58: leaking param: registry
+pkg\storage/storage_watcher.go:52:8: moved to heap: event
+pkg\storage/storage_watcher.go:25:19: func literal escapes to heap
+pkg\storage/storage_watcher.go:31:28: pq.defaultDialer{} escapes to heap
+pkg\storage/storage_watcher.go:34:13: ... argument does not escape
+pkg\storage/storage_watcher.go:34:61: "erro" escapes to heap
+pkg\storage/storage_watcher.go:34:13: context.backgroundCtx{} escapes to heap
+pkg\storage/storage_watcher.go:38:11: context.backgroundCtx{} escapes to heap
+pkg\storage/storage_watcher.go:43:13: context.backgroundCtx{} escapes to heap
+pkg\storage/storage_watcher.go:53:48: ([]byte)(notification.Extra) escapes to heap
+pkg\storage/storage_watcher.go:54:15: ... argument does not escape
+pkg\storage/storage_watcher.go:54:60: "erro" escapes to heap
+pkg\storage/storage_watcher.go:54:15: context.backgroundCtx{} escapes to heap
+<autogenerated>:1: &reflect.ValueError{...} escapes to heap
+<autogenerated>:1: &reflect.ValueError{...} escapes to heap
+# github.com/small-frappuccino/discordcore/pkg/discord
+pkg\discord/rest_gateway.go:29:8: can inline init.func1
+pkg\discord/rest_gateway.go:32:8: can inline init.func2
+pkg\discord/rest_gateway.go:92:2: can inline (*RESTGateway).ExecuteBan.deferwrap1
+pkg\discord/rest_gateway.go:114:8: can inline (*RESTGateway).ExecuteBan.func1
+pkg\discord/rest_gateway.go:143:2: can inline (*RESTGateway).ExecuteBan.deferwrap2
+pkg\discord/rest_gateway.go:165:2: can inline (*RESTGateway).ExecuteKick.deferwrap1
+pkg\discord/rest_gateway.go:194:2: can inline (*RESTGateway).ExecuteKick.deferwrap2
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:67:6: can inline atomic.(*Pointer[go.shape.struct { 
+sync.poolDequeue; sync.next sync/atomic.Pointer[sync.poolChainElt]; sync.prev sync/atomic.Pointer[sync.poolChainElt] 
+}]).CompareAndSwap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:64:6: can inline atomic.(*Pointer[go.shape.struct { 
+sync.poolDequeue; sync.next sync/atomic.Pointer[sync.poolChainElt]; sync.prev sync/atomic.Pointer[sync.poolChainElt] 
+}]).Swap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:61:6: can inline atomic.(*Pointer[go.shape.struct { 
+sync.poolDequeue; sync.next sync/atomic.Pointer[sync.poolChainElt]; sync.prev sync/atomic.Pointer[sync.poolChainElt] 
+}]).Store
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:58:6: can inline atomic.(*Pointer[go.shape.struct { 
+sync.poolDequeue; sync.next sync/atomic.Pointer[sync.poolChainElt]; sync.prev sync/atomic.Pointer[sync.poolChainElt] 
+}]).Load
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:67:6: can inline 
+atomic.(*Pointer[sync.poolChainElt]).CompareAndSwap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:64:6: can inline atomic.(*Pointer[sync.poolChainElt]).Swap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:61:6: can inline atomic.(*Pointer[sync.poolChainElt]).Store
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:58:6: can inline atomic.(*Pointer[sync.poolChainElt]).Load
+pkg\discord/rest_gateway.go:23:30: inlining call to errors.New
+pkg\discord/rest_gateway.go:24:30: inlining call to errors.New
+pkg\discord/rest_gateway.go:58:29: inlining call to semaphore.NewWeighted
+pkg\discord/rest_gateway.go:65:35: inlining call to http.Header.Get
+pkg\discord/rest_gateway.go:76:27: inlining call to http.Header.Get
+pkg\discord/rest_gateway.go:78:35: inlining call to http.Header.Get
+pkg\discord/rest_gateway.go:97:32: inlining call to strconv.AppendInt
+pkg\discord/rest_gateway.go:102:22: inlining call to strings.(*Builder).WriteString
+pkg\discord/rest_gateway.go:103:22: inlining call to strings.(*Builder).WriteString
+pkg\discord/rest_gateway.go:104:22: inlining call to strings.(*Builder).WriteString
+pkg\discord/rest_gateway.go:105:22: inlining call to strings.(*Builder).WriteString
+pkg\discord/rest_gateway.go:109:35: inlining call to strconv.AppendUint
+pkg\discord/rest_gateway.go:109:16: inlining call to strings.(*Builder).Write
+pkg\discord/rest_gateway.go:112:9: inlining call to bytes.(*Reader).Reset
+pkg\discord/rest_gateway.go:122:77: inlining call to strings.(*Builder).String
+pkg\discord/rest_gateway.go:130:25: inlining call to strings.(*Builder).WriteString
+pkg\discord/rest_gateway.go:131:25: inlining call to strings.(*Builder).WriteString
+pkg\discord/rest_gateway.go:132:52: inlining call to strings.(*Builder).String
+pkg\discord/rest_gateway.go:132:16: inlining call to http.Header.Set
+pkg\discord/rest_gateway.go:133:16: inlining call to http.Header.Set
+pkg\discord/rest_gateway.go:136:54: inlining call to url.PathEscape
+pkg\discord/rest_gateway.go:136:17: inlining call to http.Header.Set
+pkg\discord/rest_gateway.go:139:26: inlining call to http.(*Client).Do
+pkg\discord/rest_gateway.go:157:20: inlining call to errors.New
+pkg\discord/rest_gateway.go:102:22: inlining call to strings.(*Builder).copyCheck
+pkg\discord/rest_gateway.go:103:22: inlining call to strings.(*Builder).copyCheck
+pkg\discord/rest_gateway.go:104:22: inlining call to strings.(*Builder).copyCheck
+pkg\discord/rest_gateway.go:105:22: inlining call to strings.(*Builder).copyCheck
+pkg\discord/rest_gateway.go:109:16: inlining call to strings.(*Builder).copyCheck
+pkg\discord/rest_gateway.go:130:25: inlining call to strings.(*Builder).copyCheck
+pkg\discord/rest_gateway.go:131:25: inlining call to strings.(*Builder).copyCheck
+pkg\discord/rest_gateway.go:132:16: inlining call to textproto.MIMEHeader.Set
+pkg\discord/rest_gateway.go:133:16: inlining call to textproto.MIMEHeader.Set
+pkg\discord/rest_gateway.go:136:17: inlining call to textproto.MIMEHeader.Set
+pkg\discord/rest_gateway.go:102:22: inlining call to abi.NoEscape
+pkg\discord/rest_gateway.go:103:22: inlining call to abi.NoEscape
+pkg\discord/rest_gateway.go:104:22: inlining call to abi.NoEscape
+pkg\discord/rest_gateway.go:105:22: inlining call to abi.NoEscape
+pkg\discord/rest_gateway.go:109:16: inlining call to abi.NoEscape
+pkg\discord/rest_gateway.go:130:25: inlining call to abi.NoEscape
+pkg\discord/rest_gateway.go:131:25: inlining call to abi.NoEscape
+pkg\discord/rest_gateway.go:169:22: inlining call to strings.(*Builder).WriteString
+pkg\discord/rest_gateway.go:170:22: inlining call to strings.(*Builder).WriteString
+pkg\discord/rest_gateway.go:171:22: inlining call to strings.(*Builder).WriteString
+pkg\discord/rest_gateway.go:172:22: inlining call to strings.(*Builder).WriteString
+pkg\discord/rest_gateway.go:174:35: inlining call to strconv.AppendUint
+pkg\discord/rest_gateway.go:174:16: inlining call to strings.(*Builder).Write
+pkg\discord/rest_gateway.go:176:80: inlining call to strings.(*Builder).String
+pkg\discord/rest_gateway.go:183:25: inlining call to strings.(*Builder).WriteString
+pkg\discord/rest_gateway.go:184:25: inlining call to strings.(*Builder).WriteString
+pkg\discord/rest_gateway.go:185:52: inlining call to strings.(*Builder).String
+pkg\discord/rest_gateway.go:185:16: inlining call to http.Header.Set
+pkg\discord/rest_gateway.go:187:54: inlining call to url.PathEscape
+pkg\discord/rest_gateway.go:187:17: inlining call to http.Header.Set
+pkg\discord/rest_gateway.go:190:26: inlining call to http.(*Client).Do
+pkg\discord/rest_gateway.go:208:20: inlining call to errors.New
+pkg\discord/rest_gateway.go:169:22: inlining call to strings.(*Builder).copyCheck
+pkg\discord/rest_gateway.go:170:22: inlining call to strings.(*Builder).copyCheck
+pkg\discord/rest_gateway.go:171:22: inlining call to strings.(*Builder).copyCheck
+pkg\discord/rest_gateway.go:172:22: inlining call to strings.(*Builder).copyCheck
+pkg\discord/rest_gateway.go:174:16: inlining call to strings.(*Builder).copyCheck
+pkg\discord/rest_gateway.go:183:25: inlining call to strings.(*Builder).copyCheck
+pkg\discord/rest_gateway.go:184:25: inlining call to strings.(*Builder).copyCheck
+pkg\discord/rest_gateway.go:185:16: inlining call to textproto.MIMEHeader.Set
+pkg\discord/rest_gateway.go:187:17: inlining call to textproto.MIMEHeader.Set
+pkg\discord/rest_gateway.go:169:22: inlining call to abi.NoEscape
+pkg\discord/rest_gateway.go:170:22: inlining call to abi.NoEscape
+pkg\discord/rest_gateway.go:171:22: inlining call to abi.NoEscape
+pkg\discord/rest_gateway.go:172:22: inlining call to abi.NoEscape
+pkg\discord/rest_gateway.go:174:16: inlining call to abi.NoEscape
+pkg\discord/rest_gateway.go:183:25: inlining call to abi.NoEscape
+pkg\discord/rest_gateway.go:184:25: inlining call to abi.NoEscape
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:67:6: inlining call to atomic.(*Pointer[go.shape.struct { 
+sync.poolDequeue; sync.next sync/atomic.Pointer[sync.poolChainElt]; sync.prev sync/atomic.Pointer[sync.poolChainElt] 
+}]).CompareAndSwap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:64:6: inlining call to atomic.(*Pointer[go.shape.struct { 
+sync.poolDequeue; sync.next sync/atomic.Pointer[sync.poolChainElt]; sync.prev sync/atomic.Pointer[sync.poolChainElt] 
+}]).Swap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:61:6: inlining call to atomic.(*Pointer[go.shape.struct { 
+sync.poolDequeue; sync.next sync/atomic.Pointer[sync.poolChainElt]; sync.prev sync/atomic.Pointer[sync.poolChainElt] 
+}]).Store
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:58:6: inlining call to atomic.(*Pointer[go.shape.struct { 
+sync.poolDequeue; sync.next sync/atomic.Pointer[sync.poolChainElt]; sync.prev sync/atomic.Pointer[sync.poolChainElt] 
+}]).Load
+<autogenerated>:1: inlining call to sync.(*poolDequeue).pack
+<autogenerated>:1: inlining call to sync.(*poolDequeue).unpack
+pkg\discord/rest_gateway.go:29:31: new(bytes.Reader) escapes to heap
+pkg\discord/rest_gateway.go:33:4: moved to heap: b
+pkg\discord/rest_gateway.go:33:13: make([]byte, 0, 64) escapes to heap
+pkg\discord/rest_gateway.go:53:9: &RESTGateway{...} escapes to heap
+pkg\discord/rest_gateway.go:54:11: &http.Client{...} escapes to heap
+pkg\discord/rest_gateway.go:58:29: &semaphore.Weighted{...} escapes to heap
+pkg\discord/rest_gateway.go:63:28: resp does not escape
+pkg\discord/rest_gateway.go:68:12: &moderation.RateLimitError{...} escapes to heap
+pkg\discord/rest_gateway.go:72:10: &moderation.RateLimitError{...} escapes to heap
+pkg\discord/rest_gateway.go:81:12: &moderation.RateLimitError{...} escapes to heap
+pkg\discord/rest_gateway.go:88:7: leaking param content: g
+pkg\discord/rest_gateway.go:88:34: leaking param: ctx
+pkg\discord/rest_gateway.go:88:55: bot does not escape
+pkg\discord/rest_gateway.go:88:98: leaking param: reason
+pkg\discord/rest_gateway.go:96:21: append escapes to heap
+pkg\discord/rest_gateway.go:98:21: append escapes to heap
+pkg\discord/rest_gateway.go:102:22: "strings: illegal use of non-zero Builder copied by value" escapes to heap
+pkg\discord/rest_gateway.go:102:22: append escapes to heap
+pkg\discord/rest_gateway.go:103:22: "strings: illegal use of non-zero Builder copied by value" escapes to heap
+pkg\discord/rest_gateway.go:103:22: append escapes to heap
+pkg\discord/rest_gateway.go:104:22: "strings: illegal use of non-zero Builder copied by value" escapes to heap
+pkg\discord/rest_gateway.go:104:22: append escapes to heap
+pkg\discord/rest_gateway.go:105:22: "strings: illegal use of non-zero Builder copied by value" escapes to heap
+pkg\discord/rest_gateway.go:105:22: append escapes to heap
+pkg\discord/rest_gateway.go:109:16: "strings: illegal use of non-zero Builder copied by value" escapes to heap
+pkg\discord/rest_gateway.go:109:16: append escapes to heap
+pkg\discord/rest_gateway.go:114:8: func literal does not escape
+pkg\discord/rest_gateway.go:130:25: "strings: illegal use of non-zero Builder copied by value" escapes to heap
+pkg\discord/rest_gateway.go:130:25: append escapes to heap
+pkg\discord/rest_gateway.go:131:25: "strings: illegal use of non-zero Builder copied by value" escapes to heap
+pkg\discord/rest_gateway.go:131:25: append escapes to heap
+pkg\discord/rest_gateway.go:132:16: []string{...} escapes to heap
+pkg\discord/rest_gateway.go:133:16: []string{...} escapes to heap
+pkg\discord/rest_gateway.go:136:17: []string{...} escapes to heap
+pkg\discord/rest_gateway.go:157:20: &errors.errorString{...} escapes to heap
+pkg\discord/rest_gateway.go:161:7: leaking param content: g
+pkg\discord/rest_gateway.go:161:35: leaking param: ctx
+pkg\discord/rest_gateway.go:161:56: bot does not escape
+pkg\discord/rest_gateway.go:161:99: leaking param: reason
+pkg\discord/rest_gateway.go:169:22: "strings: illegal use of non-zero Builder copied by value" escapes to heap
+pkg\discord/rest_gateway.go:169:22: append escapes to heap
+pkg\discord/rest_gateway.go:170:22: "strings: illegal use of non-zero Builder copied by value" escapes to heap
+pkg\discord/rest_gateway.go:170:22: append escapes to heap
+pkg\discord/rest_gateway.go:171:22: "strings: illegal use of non-zero Builder copied by value" escapes to heap
+pkg\discord/rest_gateway.go:171:22: append escapes to heap
+pkg\discord/rest_gateway.go:172:22: "strings: illegal use of non-zero Builder copied by value" escapes to heap
+pkg\discord/rest_gateway.go:172:22: append escapes to heap
+pkg\discord/rest_gateway.go:174:16: "strings: illegal use of non-zero Builder copied by value" escapes to heap
+pkg\discord/rest_gateway.go:174:16: append escapes to heap
+pkg\discord/rest_gateway.go:183:25: "strings: illegal use of non-zero Builder copied by value" escapes to heap
+pkg\discord/rest_gateway.go:183:25: append escapes to heap
+pkg\discord/rest_gateway.go:184:25: "strings: illegal use of non-zero Builder copied by value" escapes to heap
+pkg\discord/rest_gateway.go:184:25: append escapes to heap
+pkg\discord/rest_gateway.go:185:16: []string{...} escapes to heap
+pkg\discord/rest_gateway.go:187:17: []string{...} escapes to heap
+pkg\discord/rest_gateway.go:208:20: &errors.errorString{...} escapes to heap
+# github.com/small-frappuccino/discordcore/pkg/app
+pkg\app/bot_runtime.go:21:6: can inline NewHexagonalRuntime
+pkg\app/command_handler.go:23:6: can inline NewHexagonalCommandHandler
+pkg\app/command_handler.go:51:6: can inline NewCommandTask.Run
+pkg\app/gateway_ingress.go:29:6: can inline NewBufferFactory
+pkg\app/gateway_ingress.go:33:6: can inline NewDiscordGatewayImpl
+pkg\app/gateway_ingress.go:46:6: can inline (*DiscordGatewayImpl).Connect
+pkg\app/gateway_ingress.go:50:6: can inline (*DiscordGatewayImpl).Disconnect
+pkg\app/gateway_ingress.go:54:6: can inline (*DiscordGatewayImpl).OnInteraction
+pkg\app/gateway_ingress.go:58:6: can inline (*DiscordGatewayImpl).UpdatePresence
+pkg\app/gateway_ingress.go:97:2: can inline NewReaderTask.Run.deferwrap1
+pkg\app/startup.go:51:8: can inline (*Application).Run.func1
+pkg\app/startup.go:56:8: can inline (*Application).Run.func2
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:67:6: can inline atomic.(*Pointer[go.shape.struct { 
+sync.poolDequeue; sync.next sync/atomic.Pointer[sync.poolChainElt]; sync.prev sync/atomic.Pointer[sync.poolChainElt] 
+}]).CompareAndSwap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:64:6: can inline atomic.(*Pointer[go.shape.struct { 
+sync.poolDequeue; sync.next sync/atomic.Pointer[sync.poolChainElt]; sync.prev sync/atomic.Pointer[sync.poolChainElt] 
+}]).Swap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:61:6: can inline atomic.(*Pointer[go.shape.struct { 
+sync.poolDequeue; sync.next sync/atomic.Pointer[sync.poolChainElt]; sync.prev sync/atomic.Pointer[sync.poolChainElt] 
+}]).Store
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:58:6: can inline atomic.(*Pointer[go.shape.struct { 
+sync.poolDequeue; sync.next sync/atomic.Pointer[sync.poolChainElt]; sync.prev sync/atomic.Pointer[sync.poolChainElt] 
+}]).Load
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:67:6: can inline atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).CompareAndSwap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:64:6: can inline atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).Swap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:61:6: can inline atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).Store
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:58:6: can inline atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).Load
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:67:6: can inline atomic.(*Pointer[go.shape.interface { Error() 
+string }]).CompareAndSwap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:64:6: can inline atomic.(*Pointer[go.shape.interface { Error() 
+string }]).Swap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:61:6: can inline atomic.(*Pointer[go.shape.interface { Error() 
+string }]).Store
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:58:6: can inline atomic.(*Pointer[go.shape.interface { Error() 
+string }]).Load
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:67:6: can inline atomic.(*Pointer[error]).CompareAndSwap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:64:6: can inline atomic.(*Pointer[error]).Swap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:61:6: can inline atomic.(*Pointer[error]).Store
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:58:6: can inline atomic.(*Pointer[error]).Load
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:67:6: can inline 
+atomic.(*Pointer[github.com/small-frappuccino/discordcore/pkg/core.NewRegistryState]).CompareAndSwap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:64:6: can inline 
+atomic.(*Pointer[github.com/small-frappuccino/discordcore/pkg/core.NewRegistryState]).Swap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:61:6: can inline 
+atomic.(*Pointer[github.com/small-frappuccino/discordcore/pkg/core.NewRegistryState]).Store
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:58:6: can inline 
+atomic.(*Pointer[github.com/small-frappuccino/discordcore/pkg/core.NewRegistryState]).Load
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:67:6: can inline 
+atomic.(*Pointer[sync.poolChainElt]).CompareAndSwap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:64:6: can inline atomic.(*Pointer[sync.poolChainElt]).Swap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:61:6: can inline atomic.(*Pointer[sync.poolChainElt]).Store
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:58:6: can inline atomic.(*Pointer[sync.poolChainElt]).Load
+pkg\app/startup.go:25:45: inlining call to core.NewInMemoryFeatureRegistry
+pkg\app/startup.go:27:37: inlining call to moderation.NewService
+pkg\app/startup.go:28:32: inlining call to moderation.NewRouter
+pkg\app/startup.go:31:47: inlining call to storage.NewPostgresFeatureRepo
+pkg\app/startup.go:25:45: inlining call to atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).Store
+pkg\app/startup.go:49:35: inlining call to errgroup.WithContext
+pkg\app/startup.go:63:11: inlining call to slog.Info
+pkg\app/startup.go:63:11: inlining call to slog.Default
+pkg\app/startup.go:63:11: inlining call to context.Background
+pkg\app/startup.go:63:11: inlining call to atomic.(*Pointer[go.shape.struct { log/slog.handler log/slog.Handler 
+}]).Load
+pkg\app/startup.go:52:12: inlining call to slog.Info
+pkg\app/startup.go:52:12: inlining call to slog.Default
+pkg\app/startup.go:52:12: inlining call to context.Background
+pkg\app/startup.go:52:12: inlining call to atomic.(*Pointer[go.shape.struct { log/slog.handler log/slog.Handler 
+}]).Load
+pkg\app/startup.go:57:12: inlining call to slog.Info
+pkg\app/startup.go:59:12: inlining call to slog.Info
+pkg\app/startup.go:57:12: inlining call to slog.Default
+pkg\app/startup.go:57:12: inlining call to context.Background
+pkg\app/startup.go:59:12: inlining call to slog.Default
+pkg\app/startup.go:59:12: inlining call to context.Background
+pkg\app/startup.go:57:12: inlining call to atomic.(*Pointer[go.shape.struct { log/slog.handler log/slog.Handler 
+}]).Load
+pkg\app/startup.go:59:12: inlining call to atomic.(*Pointer[go.shape.struct { log/slog.handler log/slog.Handler 
+}]).Load
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:67:6: inlining call to atomic.(*Pointer[go.shape.interface { 
+Error() string }]).CompareAndSwap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:64:6: inlining call to atomic.(*Pointer[go.shape.interface { 
+Error() string }]).Swap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:61:6: inlining call to atomic.(*Pointer[go.shape.interface { 
+Error() string }]).Store
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:58:6: inlining call to atomic.(*Pointer[go.shape.interface { 
+Error() string }]).Load
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:67:6: inlining call to atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).CompareAndSwap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:64:6: inlining call to atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).Swap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:61:6: inlining call to atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).Store
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:58:6: inlining call to atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).Load
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:67:6: inlining call to atomic.(*Pointer[go.shape.struct { 
+sync.poolDequeue; sync.next sync/atomic.Pointer[sync.poolChainElt]; sync.prev sync/atomic.Pointer[sync.poolChainElt] 
+}]).CompareAndSwap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:64:6: inlining call to atomic.(*Pointer[go.shape.struct { 
+sync.poolDequeue; sync.next sync/atomic.Pointer[sync.poolChainElt]; sync.prev sync/atomic.Pointer[sync.poolChainElt] 
+}]).Swap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:61:6: inlining call to atomic.(*Pointer[go.shape.struct { 
+sync.poolDequeue; sync.next sync/atomic.Pointer[sync.poolChainElt]; sync.prev sync/atomic.Pointer[sync.poolChainElt] 
+}]).Store
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:58:6: inlining call to atomic.(*Pointer[go.shape.struct { 
+sync.poolDequeue; sync.next sync/atomic.Pointer[sync.poolChainElt]; sync.prev sync/atomic.Pointer[sync.poolChainElt] 
+}]).Load
+<autogenerated>:1: inlining call to NewCommandTask.Run
+<autogenerated>:1: inlining call to reflect.flag.kind
+<autogenerated>:1: inlining call to reflect.flag.kind
+<autogenerated>:1: inlining call to reflect.flag.mustBe
+<autogenerated>:1: inlining call to reflect.flag.kind
+<autogenerated>:1: inlining call to reflect.flag.mustBe
+<autogenerated>:1: inlining call to reflect.flag.kind
+<autogenerated>:1: inlining call to reflect.flag.mustBeAssignable
+<autogenerated>:1: inlining call to reflect.flag.mustBeAssignable
+<autogenerated>:1: inlining call to reflect.flag.mustBeExported
+<autogenerated>:1: inlining call to reflect.flag.mustBeExported
+<autogenerated>:1: inlining call to reflect.flag.ro
+<autogenerated>:1: inlining call to reflect.flag.ro
+<autogenerated>:1: inlining call to sync.(*poolDequeue).pack
+<autogenerated>:1: inlining call to sync.(*poolDequeue).unpack
+<autogenerated>:1: inlining call to NewCommandTask.Run
+pkg\app/bot_runtime.go:22:2: leaking param: instanceID
+pkg\app/bot_runtime.go:23:2: leaking param: gateway
+pkg\app/bot_runtime.go:24:2: leaking param: store
+pkg\app/bot_runtime.go:25:2: leaking param: queue
+pkg\app/bot_runtime.go:26:2: leaking param: logger
+pkg\app/bot_runtime.go:27:2: leaking param: handler
+pkg\app/bot_runtime.go:29:9: &HexagonalRuntime{...} escapes to heap
+pkg\app/bot_runtime.go:40:7: leaking param content: h
+pkg\app/bot_runtime.go:40:32: leaking param: ctx
+pkg\app/command_handler.go:23:33: leaking param: queue
+pkg\app/command_handler.go:23:55: leaking param: logger
+pkg\app/command_handler.go:23:75: leaking param: router
+pkg\app/command_handler.go:24:6: moved to heap: NewHandler
+pkg\app/command_handler.go:51:7: leaking param: t
+pkg\app/command_handler.go:51:29: leaking param: taskCtx
+pkg\app/command_handler.go:34:7: leaking param content: ch
+pkg\app/command_handler.go:34:54: leaking param: ctx
+pkg\app/command_handler.go:34:75: leaking param: payload
+pkg\app/command_handler.go:43:81: NewCommandTask{...}.Run escapes to heap
+pkg\app/gateway_ingress.go:30:12: new(NewBuffer) escapes to heap
+pkg\app/gateway_ingress.go:33:28: leaking param: conn
+pkg\app/gateway_ingress.go:34:6: moved to heap: NewGateway
+pkg\app/gateway_ingress.go:46:7: g does not escape
+pkg\app/gateway_ingress.go:46:38: ctx does not escape
+pkg\app/gateway_ingress.go:50:7: g does not escape
+pkg\app/gateway_ingress.go:50:41: ctx does not escape
+pkg\app/gateway_ingress.go:54:7: g does not escape
+pkg\app/gateway_ingress.go:54:44: leaking param: handler
+pkg\app/gateway_ingress.go:58:7: g does not escape
+pkg\app/gateway_ingress.go:58:45: ctx does not escape
+pkg\app/gateway_ingress.go:58:66: status does not escape
+pkg\app/gateway_ingress.go:73:7: leaking param: w
+pkg\app/gateway_ingress.go:96:7: leaking param: r
+pkg\app/gateway_ingress.go:107:3: moved to heap: NewSlice
+pkg\app/gateway_ingress.go:131:7: leaking param: g
+pkg\app/gateway_ingress.go:131:41: leaking param: ctx
+pkg\app/gateway_ingress.go:132:6: moved to heap: NewGroup
+pkg\app/gateway_ingress.go:141:65: NewIngressWorker{...}.Run escapes to heap
+pkg\app/gateway_ingress.go:144:61: NewReaderTask{...}.Run escapes to heap
+pkg\app/startup.go:24:21: leaking param: ctx
+pkg\app/startup.go:24:42: leaking param: dbConn
+pkg\app/startup.go:25:45: moved to heap: core.NewRegistry
+pkg\app/startup.go:28:32: moved to heap: moderation.NewRouterInstance
+pkg\app/startup.go:25:45: &core.NewRegistryState{...} escapes to heap
+pkg\app/startup.go:25:45: make(core.NewGuildRoutesMap) escapes to heap
+pkg\app/startup.go:27:37: &moderation.Service{...} escapes to heap
+pkg\app/startup.go:31:47: &storage.PostgresFeatureRepo{...} escapes to heap
+pkg\app/startup.go:40:9: &Application{...} escapes to heap
+pkg\app/startup.go:48:7: leaking param: a
+pkg\app/startup.go:48:27: leaking param: ctx
+pkg\app/startup.go:49:35: &errgroup.Group{...} escapes to heap
+pkg\app/startup.go:51:8: func literal escapes to heap
+pkg\app/startup.go:52:12: context.backgroundCtx{} escapes to heap
+pkg\app/startup.go:56:8: func literal escapes to heap
+pkg\app/startup.go:57:12: context.backgroundCtx{} escapes to heap
+pkg\app/startup.go:59:12: context.backgroundCtx{} escapes to heap
+pkg\app/startup.go:63:11: context.backgroundCtx{} escapes to heap
+<autogenerated>:1: &reflect.ValueError{...} escapes to heap
+<autogenerated>:1: &reflect.ValueError{...} escapes to heap
+# github.com/small-frappuccino/discordcore/cmd/discordcore
+cmd\discordcore/main.go:37:2: can inline main.deferwrap1
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:67:6: can inline atomic.(*Pointer[go.shape.struct { os.mu 
+sync.Mutex; os.buf *[]uint8; os.bufp int; os.h syscall.Handle; os.vol uint32; os.class uint32; os.path string 
+}]).CompareAndSwap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:64:6: can inline atomic.(*Pointer[go.shape.struct { os.mu 
+sync.Mutex; os.buf *[]uint8; os.bufp int; os.h syscall.Handle; os.vol uint32; os.class uint32; os.path string }]).Swap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:61:6: can inline atomic.(*Pointer[go.shape.struct { os.mu 
+sync.Mutex; os.buf *[]uint8; os.bufp int; os.h syscall.Handle; os.vol uint32; os.class uint32; os.path string }]).Store
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:58:6: can inline atomic.(*Pointer[go.shape.struct { os.mu 
+sync.Mutex; os.buf *[]uint8; os.bufp int; os.h syscall.Handle; os.vol uint32; os.class uint32; os.path string }]).Load
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:67:6: can inline atomic.(*Pointer[go.shape.interface { Error() 
+string }]).CompareAndSwap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:64:6: can inline atomic.(*Pointer[go.shape.interface { Error() 
+string }]).Swap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:61:6: can inline atomic.(*Pointer[go.shape.interface { Error() 
+string }]).Store
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:58:6: can inline atomic.(*Pointer[go.shape.interface { Error() 
+string }]).Load
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:67:6: can inline atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).CompareAndSwap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:64:6: can inline atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).Swap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:61:6: can inline atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).Store
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:58:6: can inline atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).Load
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:67:6: can inline 
+atomic.(*Pointer[github.com/small-frappuccino/discordcore/pkg/core.NewRegistryState]).CompareAndSwap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:64:6: can inline 
+atomic.(*Pointer[github.com/small-frappuccino/discordcore/pkg/core.NewRegistryState]).Swap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:61:6: can inline 
+atomic.(*Pointer[github.com/small-frappuccino/discordcore/pkg/core.NewRegistryState]).Store
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:58:6: can inline 
+atomic.(*Pointer[github.com/small-frappuccino/discordcore/pkg/core.NewRegistryState]).Load
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:67:6: can inline atomic.(*Pointer[error]).CompareAndSwap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:64:6: can inline atomic.(*Pointer[error]).Swap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:61:6: can inline atomic.(*Pointer[error]).Store
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:58:6: can inline atomic.(*Pointer[error]).Load
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:67:6: can inline atomic.(*Pointer[os.dirInfo]).CompareAndSwap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:64:6: can inline atomic.(*Pointer[os.dirInfo]).Swap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:61:6: can inline atomic.(*Pointer[os.dirInfo]).Store
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:58:6: can inline atomic.(*Pointer[os.dirInfo]).Load
+cmd\discordcore/main.go:18:40: inlining call to slog.NewJSONHandler
+cmd\discordcore/main.go:18:20: inlining call to slog.New
+cmd\discordcore/main.go:22:56: inlining call to context.Background
+cmd\discordcore/main.go:25:11: inlining call to slog.Info
+cmd\discordcore/main.go:34:13: inlining call to slog.Error
+cmd\discordcore/main.go:42:13: inlining call to slog.Error
+cmd\discordcore/main.go:48:13: inlining call to slog.Error
+cmd\discordcore/main.go:51:11: inlining call to slog.Info
+cmd\discordcore/main.go:25:11: inlining call to slog.Default
+cmd\discordcore/main.go:25:11: inlining call to context.Background
+cmd\discordcore/main.go:34:13: inlining call to slog.Default
+cmd\discordcore/main.go:34:13: inlining call to context.Background
+cmd\discordcore/main.go:42:13: inlining call to slog.Default
+cmd\discordcore/main.go:42:13: inlining call to context.Background
+cmd\discordcore/main.go:48:13: inlining call to slog.Default
+cmd\discordcore/main.go:48:13: inlining call to context.Background
+cmd\discordcore/main.go:51:11: inlining call to slog.Default
+cmd\discordcore/main.go:51:11: inlining call to context.Background
+cmd\discordcore/main.go:25:11: inlining call to atomic.(*Pointer[go.shape.struct { log/slog.handler log/slog.Handler 
+}]).Load
+cmd\discordcore/main.go:34:13: inlining call to atomic.(*Pointer[go.shape.struct { log/slog.handler log/slog.Handler 
+}]).Load
+cmd\discordcore/main.go:42:13: inlining call to atomic.(*Pointer[go.shape.struct { log/slog.handler log/slog.Handler 
+}]).Load
+cmd\discordcore/main.go:48:13: inlining call to atomic.(*Pointer[go.shape.struct { log/slog.handler log/slog.Handler 
+}]).Load
+cmd\discordcore/main.go:51:11: inlining call to atomic.(*Pointer[go.shape.struct { log/slog.handler log/slog.Handler 
+}]).Load
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:67:6: inlining call to atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).CompareAndSwap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:64:6: inlining call to atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).Swap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:61:6: inlining call to atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).Store
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:58:6: inlining call to atomic.(*Pointer[go.shape.struct { 
+github.com/small-frappuccino/discordcore/pkg/core.routes 
+github.com/small-frappuccino/discordcore/pkg/core.NewGuildRoutesMap }]).Load
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:67:6: inlining call to atomic.(*Pointer[go.shape.interface { 
+Error() string }]).CompareAndSwap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:64:6: inlining call to atomic.(*Pointer[go.shape.interface { 
+Error() string }]).Swap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:61:6: inlining call to atomic.(*Pointer[go.shape.interface { 
+Error() string }]).Store
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:58:6: inlining call to atomic.(*Pointer[go.shape.interface { 
+Error() string }]).Load
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:67:6: inlining call to atomic.(*Pointer[go.shape.struct { os.mu 
+sync.Mutex; os.buf *[]uint8; os.bufp int; os.h syscall.Handle; os.vol uint32; os.class uint32; os.path string 
+}]).CompareAndSwap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:64:6: inlining call to atomic.(*Pointer[go.shape.struct { os.mu 
+sync.Mutex; os.buf *[]uint8; os.bufp int; os.h syscall.Handle; os.vol uint32; os.class uint32; os.path string }]).Swap
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:61:6: inlining call to atomic.(*Pointer[go.shape.struct { os.mu 
+sync.Mutex; os.buf *[]uint8; os.bufp int; os.h syscall.Handle; os.vol uint32; os.class uint32; os.path string }]).Store
+..\..\scoop\apps\go\current\src\sync\atomic\type.go:58:6: inlining call to atomic.(*Pointer[go.shape.struct { os.mu 
+sync.Mutex; os.buf *[]uint8; os.bufp int; os.h syscall.Handle; os.vol uint32; os.class uint32; os.path string }]).Load
+<autogenerated>:1: inlining call to reflect.flag.kind
+<autogenerated>:1: inlining call to reflect.flag.kind
+<autogenerated>:1: inlining call to reflect.flag.mustBe
+<autogenerated>:1: inlining call to reflect.flag.kind
+<autogenerated>:1: inlining call to reflect.flag.mustBe
+<autogenerated>:1: inlining call to reflect.flag.kind
+<autogenerated>:1: inlining call to reflect.flag.mustBeAssignable
+<autogenerated>:1: inlining call to reflect.flag.mustBeAssignable
+<autogenerated>:1: inlining call to reflect.flag.mustBeExported
+<autogenerated>:1: inlining call to reflect.flag.mustBeExported
+<autogenerated>:1: inlining call to reflect.flag.ro
+<autogenerated>:1: inlining call to reflect.flag.ro
+cmd\discordcore/main.go:18:40: &slog.HandlerOptions{} does not escape
+cmd\discordcore/main.go:18:40: &slog.JSONHandler{...} escapes to heap
+cmd\discordcore/main.go:18:40: &slog.commonHandler{...} escapes to heap
+cmd\discordcore/main.go:18:40: &sync.Mutex{} escapes to heap
+cmd\discordcore/main.go:18:20: "nil Handler" escapes to heap
+cmd\discordcore/main.go:18:20: &slog.Logger{...} escapes to heap
+cmd\discordcore/main.go:22:56: context.backgroundCtx{} escapes to heap
+cmd\discordcore/main.go:22:37: ... argument escapes to heap
+cmd\discordcore/main.go:22:81: syscall.Signal(15) escapes to heap
+cmd\discordcore/main.go:25:11: context.backgroundCtx{} escapes to heap
+cmd\discordcore/main.go:34:13: ... argument does not escape
+cmd\discordcore/main.go:34:59: "erro" escapes to heap
+cmd\discordcore/main.go:34:13: context.backgroundCtx{} escapes to heap
+cmd\discordcore/main.go:42:13: ... argument does not escape
+cmd\discordcore/main.go:42:58: "erro" escapes to heap
+cmd\discordcore/main.go:42:13: context.backgroundCtx{} escapes to heap
+cmd\discordcore/main.go:48:13: ... argument does not escape
+cmd\discordcore/main.go:48:52: "erro" escapes to heap
+cmd\discordcore/main.go:48:13: context.backgroundCtx{} escapes to heap
+cmd\discordcore/main.go:51:11: context.backgroundCtx{} escapes to heap
+<autogenerated>:1: &reflect.ValueError{...} escapes to heap
+<autogenerated>:1: &reflect.ValueError{...} escapes to heap

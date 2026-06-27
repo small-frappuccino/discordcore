@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/small-frappuccino/discordcore/pkg/core"
-	"github.com/small-frappuccino/discordcore/pkg/discord/moderation"
-	"github.com/small-frappuccino/discordcore/pkg/discord/storage"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/small-frappuccino/discordcore/pkg/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord"
+	"github.com/small-frappuccino/discordcore/pkg/moderation"
+	"github.com/small-frappuccino/discordcore/pkg/storage"
 )
 
 // Application é o contentor global de estado e dependências.
@@ -22,7 +24,7 @@ type Application struct {
 
 func NewApplication(dbConn *sql.DB) (*Application, error) {
 	registry := core.NewInMemoryFeatureRegistry()
-	restGateway := moderation.NewRESTGateway()
+	restGateway := discord.NewRESTGateway()
 	modService := moderation.NewService(restGateway, 5000)
 	router := moderation.NewRouter(registry, modService)
 
