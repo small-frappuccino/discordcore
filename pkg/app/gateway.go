@@ -3,31 +3,81 @@ package app
 import (
 	"context"
 	"time"
+
+	"github.com/small-frappuccino/discordcore/pkg/core"
+	"golang.org/x/sync/errgroup"
+	"golang.org/x/sync/semaphore"
 )
 
-// Suponha que esta função seja o loop contínuo de leitura do WebSocket do Discord
-// ou o Handler do servidor HTTP Webhook.
-func (g *DiscordGateway) ListenLoop(ctx context.Context) {
+type Connection interface {
+	ReadMessage() ([]byte, error)
+}
+
+type DiscordGatewayImpl struct {
+	connection Connection
+	handler    core.InteractionHandler
+	sem        *semaphore.Weighted
+}
+
+func NewDiscordGatewayImpl(conn Connection, maxConcurrent int64) *DiscordGatewayImpl {
+	return &DiscordGatewayImpl{
+		connection: conn,
+		sem:        semaphore.NewWeighted(maxConcurrent),
+	}
+}
+
+func (g *DiscordGatewayImpl) Connect(ctx context.Context) error {
+	return nil
+}
+
+func (g *DiscordGatewayImpl) Disconnect(ctx context.Context) error {
+	return nil
+}
+
+func (g *DiscordGatewayImpl) OnInteraction(handler core.InteractionHandler) {
+	g.handler = handler
+}
+
+func (g *DiscordGatewayImpl) UpdatePresence(ctx context.Context, status string) error {
+	return nil
+}
+
+func (g *DiscordGatewayImpl) ListenLoop(ctx context.Context) error {
+	eg, egCtx := errgroup.WithContext(ctx)
+
 	for {
-		// Lê os bytes puros da conexão (Zero-allocation até aqui)
+		select {
+		case <-egCtx.Done():
+			return eg.Wait()
+		default:
+		}
+
 		payload, err := g.connection.ReadMessage()
 		if err != nil {
 			break
 		}
 
-		// DISPARO MASSIVO: Criamos uma goroutine IMEDIATAMENTE para processar o payload.
-		// Go consegue levantar 100.000 goroutines em milissegundos.
-		// Isso libera o loop instantaneamente para ler o próximo evento da rede.
-		go func(p []byte) {
-			// Usamos um timeout no contexto para garantir que nenhuma goroutine viva para sempre
-			routeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		// Enforce bounded ingress via x/sync/semaphore
+		if err := g.sem.Acquire(egCtx, 1); err != nil {
+			break
+		}
+
+		// Erradicado goroutine nua - orquestrado via errgroup.
+		eg.Go(func() error {
+			defer g.sem.Release(1)
+
+			routeCtx, cancel := context.WithTimeout(egCtx, 5*time.Second)
 			defer cancel()
 
-			// Chama o roteador central
-			if err := g.router.HandleInteraction(routeCtx, p); err != nil {
-				// Ignoramos erros normais como ErrModerationQueueFull no log crítico,
-				// pois o Load Shedding é um comportamento esperado sob ataque.
+			interaction := core.InteractionPayload{
+				Data: payload,
 			}
-		}(payload)
+
+			if g.handler != nil {
+				_ = g.handler.HandleInteraction(routeCtx, interaction)
+			}
+			return nil
+		})
 	}
+	return eg.Wait()
 }

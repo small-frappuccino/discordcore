@@ -2,23 +2,25 @@ package app
 
 import (
 	"context"
+
+	"github.com/small-frappuccino/discordcore/pkg/core"
 )
 
 // DomainService abstracts the business logic execution for a given route.
 type DomainService interface {
-	ExecuteCommand(ctx context.Context, payload InteractionPayload) error
+	ExecuteCommand(ctx context.Context, payload core.InteractionPayload) error
 }
 
 // HexagonalCommandHandler acts as a pure dispatcher.
 // It receives generic payloads, routes them in O(1) time, and injects execution into a TaskQueue.
 type HexagonalCommandHandler struct {
-	queue  TaskQueue
+	queue  core.TaskQueue
 	router map[string]DomainService
-	logger Logger
+	logger core.Logger
 }
 
 // NewHexagonalCommandHandler initializes the dispatcher with its routing table and async queue.
-func NewHexagonalCommandHandler(queue TaskQueue, logger Logger, router map[string]DomainService) *HexagonalCommandHandler {
+func NewHexagonalCommandHandler(queue core.TaskQueue, logger core.Logger, router map[string]DomainService) *HexagonalCommandHandler {
 	return &HexagonalCommandHandler{
 		queue:  queue,
 		router: router,
@@ -27,7 +29,7 @@ func NewHexagonalCommandHandler(queue TaskQueue, logger Logger, router map[strin
 }
 
 // HandleInteraction implements the InteractionHandler port.
-func (ch *HexagonalCommandHandler) HandleInteraction(ctx context.Context, payload InteractionPayload) error {
+func (ch *HexagonalCommandHandler) HandleInteraction(ctx context.Context, payload core.InteractionPayload) error {
 	service, exists := ch.router[payload.RoutePath]
 	if !exists {
 		ch.logger.Info("No handler found for route", "routePath", payload.RoutePath)
