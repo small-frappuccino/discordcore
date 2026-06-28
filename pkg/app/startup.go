@@ -25,8 +25,8 @@ type Application struct {
 func NewApplication(dbConn *sql.DB) (*Application, error) {
 	registry := core.NewInMemoryFeatureRegistry()
 	restGateway := discord.NewRESTGateway()
-	modService := moderation.NewService(restGateway, 5000)
-	router := moderation.NewRouter(registry, modService)
+	router := moderation.NewRouter(registry)
+	modService := moderation.NewService(restGateway, 1000, router)
 
 	// INSTANCIAMOS A INFRAESTRUTURA
 	featureRepo := storage.NewPostgresFeatureRepo(dbConn)

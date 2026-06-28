@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/core"
-	"github.com/small-frappuccino/discordcore/pkg/moderation"
 )
 
 const discordAPIBase = "https://discord.com/api/v10"
@@ -21,6 +20,14 @@ var (
 	ErrForbidden    = errors.New("403 forbidden: bot sem permissão (falta de intent ou hierarquia de cargos insuficiente)")
 	ErrUnauthorized = errors.New("401 unauthorized: token inválido ou revogado")
 )
+
+type RateLimitError struct {
+	RetryAfter time.Duration
+}
+
+func (e *RateLimitError) Error() string {
+	return fmt.Sprintf("429 too many requests: retry after %v", e.RetryAfter)
+}
 
 type BucketState struct {
 	mu        sync.Mutex
@@ -120,7 +127,7 @@ func (g *RESTGateway) acquireBucket(key string) error {
 	}
 
 	if bs.Remaining <= 0 {
-		return &moderation.RateLimitError{RetryAfter: bs.ResetAt.Sub(now)}
+		return &RateLimitError{RetryAfter: bs.ResetAt.Sub(now)}
 	}
 	bs.Remaining--
 	return nil
@@ -182,7 +189,7 @@ func (g *RESTGateway) ExecuteBan(ctx context.Context, bot core.BotInstance, targ
 	g.updateBucket(bucketKey, resp)
 
 	if resp.StatusCode == http.StatusTooManyRequests {
-		return &moderation.RateLimitError{RetryAfter: 5 * time.Second}
+		return &RateLimitError{RetryAfter: 5 * time.Second}
 	}
 
 	switch resp.StatusCode {
@@ -228,7 +235,7 @@ func (g *RESTGateway) ExecuteKick(ctx context.Context, bot core.BotInstance, tar
 	g.updateBucket(bucketKey, resp)
 
 	if resp.StatusCode == http.StatusTooManyRequests {
-		return &moderation.RateLimitError{RetryAfter: 5 * time.Second}
+		return &RateLimitError{RetryAfter: 5 * time.Second}
 	}
 
 	switch resp.StatusCode {

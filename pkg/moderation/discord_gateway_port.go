@@ -3,8 +3,6 @@ package moderation
 import (
 	"context"
 	"errors"
-	"fmt"
-	"time"
 
 	"github.com/small-frappuccino/discordcore/pkg/core"
 )
@@ -18,11 +16,3 @@ type DiscordGateway interface {
 var (
 	ErrFeatureUnauthorized = errors.New("feature unauthorized: user lacks required permissions")
 )
-
-type RateLimitError struct {
-	RetryAfter time.Duration
-}
-
-func (e *RateLimitError) Error() string {
-	return fmt.Sprintf("429 too many requests: retry after %v", e.RetryAfter)
-}

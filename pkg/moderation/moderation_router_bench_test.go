@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/small-frappuccino/discordcore/pkg/core"
+	"github.com/small-frappuccino/discordcore/pkg/discord"
 )
 
 type dummyRegistry struct {
@@ -26,10 +27,6 @@ func (d *dummyGateway) ExecuteKick(ctx context.Context, bot core.BotInstance, ta
 }
 
 func BenchmarkRouter_HandleInteraction_ZeroAlloc(b *testing.B) {
-	gateway := &dummyGateway{}
-	svc := NewService(gateway, 100)
-	svc.Start(context.Background(), 1)
-
 	registry := &dummyRegistry{
 		bot: core.BotInstance{
 			ApplicationID: "123456789",
@@ -37,7 +34,7 @@ func BenchmarkRouter_HandleInteraction_ZeroAlloc(b *testing.B) {
 			Token:         "dummy",
 		},
 	}
-	router := NewRouter(registry, svc)
+	router := NewRouter(registry)
 
 	payload := []byte(`{
 		"guild_id": "987654321",
@@ -52,37 +49,57 @@ func BenchmarkRouter_HandleInteraction_ZeroAlloc(b *testing.B) {
 		}
 	}`)
 
-	interaction := core.InteractionPayload{
-		Data: payload,
-	}
-
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		_ = router.HandleInteraction(context.Background(), interaction)
+		seq, err := router.ParseInteraction(context.Background(), payload)
+		if err == nil {
+			seq.All(func(job ModerationJob) bool {
+				_ = job
+				return true
+			})
+		}
 	}
 }
 
 func BenchmarkService_ActorInbox(b *testing.B) {
 	gateway := &dummyGateway{}
-	svc := NewService(gateway, b.N)
+	registry := &dummyRegistry{
+		bot: core.BotInstance{
+			ApplicationID: "123456789",
+			GuildID:       "987654321",
+			Token:         "dummy",
+		},
+	}
+	router := NewRouter(registry)
+	svc := NewService(gateway, b.N, router)
 	svc.Start(context.Background(), 1)
 
-	job := ModerationJob{
-		Reason:       "spam",
-		Bot:          core.BotInstance{GuildID: "987654321"},
-		TargetUserID: 111222333,
-		DeleteDays:   7,
-		Action:       ActionBan,
-	}
+	actor := newGuildActor(svc.ctx, svc.eg, "987654321", gateway, b.N, router)
 
-	actor := newGuildActor(svc.ctx, svc.eg, "987654321", gateway, b.N)
+	payload := []byte(`{
+		"guild_id": "987654321",
+		"application_id": "123456789",
+		"data": {
+			"name": "ban",
+			"options": [
+				{"name": "target_id", "value": "111222333"},
+				{"name": "delete_days", "value": 7},
+				{"name": "reason", "value": "spam"}
+			]
+		}
+	}`)
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		_ = actor.enqueue(job)
+		evt := discord.AcquireEvent()
+		evt.Type = "INTERACTION_CREATE"
+		// To avoid retaining the payload in the pool for this bench, just point it.
+		// In reality, RX copies to a pooled buffer. For the bench of the ActorInbox, this is fine.
+		evt.Data = payload
+		_ = actor.EnqueueEvent(evt)
 	}
 }

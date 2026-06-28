@@ -1,4 +1,4 @@
-package main
+package discordcore
 
 import "iter"
 
@@ -29,10 +29,8 @@ func Hydrate[R Repo](repo R) int {
 	return sum
 }
 
-func testMain() int {
+func RunIter() int {
 	mockConfigs = []int{1, 2, 3}
 	repo := &mockRepo{}
-	// Force inlining? No compiler directive for forcing inline at call site in standard Go.
-	// But what if we just use a small enough function?
 	return Hydrate[*mockRepo](repo)
 }

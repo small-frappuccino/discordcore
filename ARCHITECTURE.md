@@ -35,8 +35,8 @@ flowchart TD
     App --> Storage
     CmdDiscordcore --> App
     Discord --> Core
-    Discord --> Moderation
     Moderation --> Core
+    Moderation --> Discord
     Storage --> Core
 
     %% Styling
