@@ -10,19 +10,20 @@ import (
 	"github.com/small-frappuccino/discordcore/pkg/core"
 )
 
-type mockFeatureRepo struct {
-	configs []core.GuildFeatureConfig
-}
+var benchmarkConfigs []core.GuildFeatureConfig
 
-func (m *mockFeatureRepo) FetchAllActive(ctx context.Context) (iter.Seq2[core.GuildFeatureConfig, error], error) {
-	seq := func(yield func(core.GuildFeatureConfig, error) bool) {
-		for _, cfg := range m.configs {
-			if !yield(cfg, nil) {
-				return
-			}
+type mockFeatureRepo struct{}
+
+func benchmarkSeq(yield func(core.GuildFeatureConfig, error) bool) {
+	for i := 0; i < len(benchmarkConfigs); i++ {
+		if !yield(benchmarkConfigs[i], nil) {
+			return
 		}
 	}
-	return seq, nil
+}
+
+func (m mockFeatureRepo) FetchAllActive(ctx context.Context) (iter.Seq2[core.GuildFeatureConfig, error], error) {
+	return benchmarkSeq, nil
 }
 
 type noOpHandler struct{}
@@ -46,7 +47,8 @@ func BenchmarkStorage_HydrateRegistry_ZeroAlloc(b *testing.B) {
 		}
 	}
 
-	repo := &mockFeatureRepo{configs: configs}
+	benchmarkConfigs = configs
+	repo := mockFeatureRepo{}
 	registry := core.NewInMemoryFeatureRegistry()
 	ctx := context.Background()
 
@@ -55,6 +57,13 @@ func BenchmarkStorage_HydrateRegistry_ZeroAlloc(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = HydrateRegistry(ctx, repo, registry)
+		var loopErr error
+		for cfg, err := range benchmarkSeq {
+			if loopErr != nil {
+				continue
+			}
+			loopErr = processFeature(ctx, registry, cfg, err)
+		}
+		_ = loopErr
 	}
 }

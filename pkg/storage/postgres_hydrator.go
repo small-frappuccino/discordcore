@@ -33,46 +33,50 @@ func stringToFeature(name string) (core.Feature, bool) {
 	return 0, false
 }
 
-// HydrateRegistry faz a ponte entre a persistência (PostgreSQL) e a RAM (Registry).
-func HydrateRegistry[R core.FeatureRepository](ctx context.Context, repo R, registry *core.InMemoryFeatureRegistry) error {
-	if slog.Default().Enabled(ctx, slog.LevelInfo) {
-		slog.Info("A iniciar a hidratação da tabela de roteamento Multi-Tenant...")
-	}
-
-	seq, err := repo.FetchAllActive(ctx)
+func processFeature(ctx context.Context, registry *core.InMemoryFeatureRegistry, cfg core.GuildFeatureConfig, err error) error {
 	if err != nil {
-		return fmt.Errorf("não foi possível extrair a configuração da base de dados: %w", err)
+		return fmt.Errorf("erro durante iteração de features: %w", err)
 	}
 
-	for cfg, err := range seq {
-		if err != nil {
-			return fmt.Errorf("erro durante iteração de features: %w", err)
+	featEnum, ok := stringToFeature(cfg.FeatureName)
+	if !ok {
+		if slog.Default().Enabled(ctx, slog.LevelWarn) {
+			slog.LogAttrs(ctx, slog.LevelWarn, "Feature desconhecida ignorada na hidratação", slog.String("feature", cfg.FeatureName))
 		}
-
-		featEnum, ok := stringToFeature(cfg.FeatureName)
-		if !ok {
-			if slog.Default().Enabled(ctx, slog.LevelWarn) {
-				slog.Warn("Feature desconhecida ignorada na hidratação", "feature", cfg.FeatureName)
-			}
-			continue
-		}
-
-		botInstance := core.BotInstance{
-			ApplicationID: cfg.ApplicationID,
-			GuildID:       cfg.GuildID,
-			Token:         core.Token(cfg.BotToken),
-		}
-
-		err := registry.UpdateRoute(cfg.GuildID, featEnum, botInstance)
-		if err != nil {
-			if slog.Default().Enabled(ctx, slog.LevelError) {
-				slog.Error("Rejeitada mutação durante hidratação", "guilda", cfg.GuildID, "feature", cfg.FeatureName, "erro", err)
-			}
-		}
+		return nil
 	}
 
-	if slog.Default().Enabled(ctx, slog.LevelInfo) {
-		slog.Info("Hidratação concluída")
+	botInstance := core.BotInstance{
+		ApplicationID: cfg.ApplicationID,
+		GuildID:       cfg.GuildID,
+		Token:         core.Token(cfg.BotToken),
+	}
+
+	routeErr := registry.UpdateRoute(cfg.GuildID, featEnum, botInstance)
+	if routeErr != nil {
+		if slog.Default().Enabled(ctx, slog.LevelError) {
+			slog.LogAttrs(ctx, slog.LevelError, "Rejeitada mutação durante hidratação",
+				slog.String("guilda", cfg.GuildID),
+				slog.String("feature", cfg.FeatureName),
+				slog.Any("erro", routeErr))
+		}
 	}
 	return nil
+}
+
+// HydrateRegistry faz a ponte entre a persistência (PostgreSQL) e a RAM (Registry).
+func HydrateRegistry[R core.FeatureRepository](ctx context.Context, repo R, registry *core.InMemoryFeatureRegistry) error {
+	seq, err := repo.FetchAllActive(ctx)
+	if err != nil {
+		return err
+	}
+
+	var loopErr error
+	for cfg, err := range seq {
+		if loopErr != nil {
+			continue
+		}
+		loopErr = processFeature(ctx, registry, cfg, err)
+	}
+	return loopErr
 }
