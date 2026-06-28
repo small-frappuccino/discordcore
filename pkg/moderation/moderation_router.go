@@ -33,13 +33,22 @@ func (r *Router) HandleInteraction(ctx context.Context, payload core.Interaction
 func (r *Router) HandleRawInteraction(ctx context.Context, payload []byte) error {
 	guildID := extractStringFast(payload, "guild_id")
 	appID := extractStringFast(payload, "application_id")
+	commandName := extractCommandNameFast(payload)
 
-	botInstance, err := r.registry.ResolveOwner(ctx, guildID, "moderation")
+	var feature core.Feature
+	switch commandName {
+	case "ban", "massban":
+		feature = core.FeatureBan
+	case "kick":
+		feature = core.FeatureKick
+	default:
+		return ErrUnknownCommand
+	}
+
+	botInstance, err := r.registry.ResolveOwner(ctx, guildID, feature)
 	if err != nil || botInstance.ApplicationID != appID {
 		return ErrFeatureUnauthorized
 	}
-
-	commandName := extractCommandNameFast(payload)
 
 	switch commandName {
 	case "ban":

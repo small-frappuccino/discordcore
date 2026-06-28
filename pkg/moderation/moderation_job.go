@@ -13,7 +13,7 @@ const (
 
 type ModerationJob struct {
 	Reason       string
-	Bot          *core.BotInstance
+	Bot          core.BotInstance
 	TargetUserID uint64
 	DeleteDays   int
 	Action       ActionType

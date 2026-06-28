@@ -28,10 +28,51 @@ type BucketState struct {
 	ResetAt   time.Time
 }
 
+type GlobalRateLimiter struct {
+	mu       sync.Mutex
+	lastTick time.Time
+	tokens   float64
+}
+
+func (l *GlobalRateLimiter) Wait(ctx context.Context) error {
+	l.mu.Lock()
+	now := time.Now()
+	if l.lastTick.IsZero() {
+		l.lastTick = now
+		l.tokens = 50
+	} else {
+		elapsed := now.Sub(l.lastTick)
+		l.tokens += elapsed.Seconds() * 50
+		if l.tokens > 50 {
+			l.tokens = 50
+		}
+		l.lastTick = now
+	}
+
+	if l.tokens >= 1 {
+		l.tokens -= 1
+		l.mu.Unlock()
+		return nil
+	}
+
+	waitDuration := time.Duration((1 - l.tokens) / 50 * float64(time.Second))
+	l.tokens = 0
+	l.lastTick = now.Add(waitDuration)
+	l.mu.Unlock()
+
+	select {
+	case <-time.After(waitDuration):
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 // RESTGateway implementa a interface DiscordGateway definida em discord_gateway_port.go.
 type RESTGateway struct {
-	client  *http.Client
-	buckets sync.Map // map[string]*BucketState
+	client         *http.Client
+	buckets        sync.Map // map[string]*BucketState
+	globalLimiters sync.Map // map[string]*GlobalRateLimiter (key: token)
 }
 
 // NewRESTGateway constrói um novo cliente HTTP isolado sem limitador global.
@@ -48,6 +89,15 @@ func NewRESTGateway() *RESTGateway {
 			Timeout:   10 * time.Second,
 		},
 	}
+}
+
+func (g *RESTGateway) getGlobalLimiter(token string) *GlobalRateLimiter {
+	v, ok := g.globalLimiters.Load(token)
+	if !ok {
+		limiter := &GlobalRateLimiter{}
+		v, _ = g.globalLimiters.LoadOrStore(token, limiter)
+	}
+	return v.(*GlobalRateLimiter)
 }
 
 func (g *RESTGateway) getBucketState(key string) *BucketState {
@@ -96,8 +146,13 @@ func (g *RESTGateway) updateBucket(key string, resp *http.Response) {
 	}
 }
 
-func (g *RESTGateway) ExecuteBan(ctx context.Context, bot *core.BotInstance, targetUserID uint64, reason string, deleteSeconds int) error {
-	bucketKey := bot.Token + ":guild:" + bot.GuildID + ":bans"
+func (g *RESTGateway) ExecuteBan(ctx context.Context, bot core.BotInstance, targetUserID uint64, reason string, deleteSeconds int) error {
+	tokenStr := string(bot.Token)
+	if err := g.getGlobalLimiter(tokenStr).Wait(ctx); err != nil {
+		return err
+	}
+
+	bucketKey := tokenStr + ":guild:" + bot.GuildID + ":bans"
 	if err := g.acquireBucket(bucketKey); err != nil {
 		return err
 	}
@@ -111,7 +166,7 @@ func (g *RESTGateway) ExecuteBan(ctx context.Context, bot *core.BotInstance, tar
 		return fmt.Errorf("falha ao criar requisição HTTP: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bot "+bot.Token)
+	req.Header.Set("Authorization", "Bot "+string(bot.Token))
 	req.Header.Set("Content-Type", "application/json")
 
 	if reason != "" {
@@ -142,8 +197,13 @@ func (g *RESTGateway) ExecuteBan(ctx context.Context, bot *core.BotInstance, tar
 	}
 }
 
-func (g *RESTGateway) ExecuteKick(ctx context.Context, bot *core.BotInstance, targetUserID uint64, reason string) error {
-	bucketKey := bot.Token + ":guild:" + bot.GuildID + ":kicks"
+func (g *RESTGateway) ExecuteKick(ctx context.Context, bot core.BotInstance, targetUserID uint64, reason string) error {
+	tokenStr := string(bot.Token)
+	if err := g.getGlobalLimiter(tokenStr).Wait(ctx); err != nil {
+		return err
+	}
+
+	bucketKey := tokenStr + ":guild:" + bot.GuildID + ":kicks"
 	if err := g.acquireBucket(bucketKey); err != nil {
 		return err
 	}
@@ -154,7 +214,7 @@ func (g *RESTGateway) ExecuteKick(ctx context.Context, bot *core.BotInstance, ta
 		return err
 	}
 
-	req.Header.Set("Authorization", "Bot "+bot.Token)
+	req.Header.Set("Authorization", "Bot "+string(bot.Token))
 	if reason != "" {
 		req.Header.Set("X-Audit-Log-Reason", url.PathEscape(reason))
 	}

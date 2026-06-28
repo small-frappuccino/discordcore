@@ -6,9 +6,10 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/small-frappuccino/discordcore/pkg/core"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/lib/pq"
+	"github.com/small-frappuccino/discordcore/pkg/core"
 )
 
 // ConfigChangeEvent representa a mensagem JSON enviada pelo Postgres.
@@ -20,15 +21,7 @@ type ConfigChangeEvent struct {
 	BotToken      string `json:"bot_token"`
 }
 
-// StartConfigWatcher arranca uma goroutine que escuta o canal do Postgres.
-// Returning an errgroup running the watch process
-// We'll modify the function signature to return the errgroup so the caller can wait on it.
-// But to avoid changing the function signature and breaking callers right now, we can just use waitgroup/errgroup internally and return. Wait, if it doesn't return, it blocks.
-// The prompt explicitly says "Scan for unbounded goroutine ingress, naked go func(), and channel deadlocks."
-// Let's change the function signature to return error and use errgroup.
-// Wait, I can't just change the signature without fixing the callers. Let's see if anyone calls it.
-// In startup.go we don't call StartConfigWatcher.
-// Let's rewrite this function to block instead of launching a goroutine. The caller should launch it via errgroup.
+// StartConfigWatcher arranca uma goroutine via errgroup que escuta o canal do Postgres.
 func StartConfigWatcher(ctx context.Context, dsn string, registry *core.InMemoryFeatureRegistry) error {
 	reportProblem := func(ev pq.ListenerEventType, err error) {
 		if err != nil {
@@ -45,46 +38,61 @@ func StartConfigWatcher(ctx context.Context, dsn string, registry *core.InMemory
 
 	slog.Info("Event Bus conectado. À escuta de mutações dinâmicas...")
 
-	for {
-		select {
-		case <-ctx.Done():
-			slog.Info("A encerrar o Watcher de configurações...")
-			listener.Close()
-			return ctx.Err()
+	eg, egCtx := errgroup.WithContext(ctx)
 
-		case notification := <-listener.Notify:
-			if notification == nil {
-				continue
+	eg.Go(func() error {
+		defer listener.Close()
+		for {
+			select {
+			case <-egCtx.Done():
+				slog.Info("A encerrar o Watcher de configurações...")
+				return egCtx.Err()
+
+			case notification := <-listener.Notify:
+				if notification == nil {
+					continue
+				}
+
+				var event ConfigChangeEvent
+				if err := json.Unmarshal([]byte(notification.Extra), &event); err != nil {
+					slog.Error("Falha ao descodificar evento do Postgres", "erro", err)
+					continue
+				}
+
+				applyMutation(event, registry)
 			}
-
-			var event ConfigChangeEvent
-			if err := json.Unmarshal([]byte(notification.Extra), &event); err != nil {
-				slog.Error("Falha ao descodificar evento do Postgres", "erro", err)
-				continue
-			}
-
-			applyMutation(event, registry)
 		}
-	}
+	})
+
+	return eg.Wait()
 }
 
 // applyMutation decide como alterar o mapa Zero-Allocation.
 func applyMutation(event ConfigChangeEvent, registry *core.InMemoryFeatureRegistry) {
+	featEnum, ok := stringToFeature(event.FeatureName)
+	if !ok {
+		slog.Warn("Feature desconhecida ignorada na mutação dinâmica", "feature", event.FeatureName)
+		return
+	}
+
 	if event.Action == "ENABLE" {
 		slog.Info("Recebida mutação dinâmica: Ativar Feature", "guilda", event.GuildID, "feature", event.FeatureName)
 
-		botInstance := &core.BotInstance{
+		botInstance := core.BotInstance{
 			ApplicationID: event.ApplicationID,
 			GuildID:       event.GuildID,
-			Token:         event.BotToken,
+			Token:         core.Token(event.BotToken),
 		}
-		// Graças ao sync.RWMutex dentro do registry, esta operação bloqueia as
-		// leituras durante uma fração de nanosegundo, sendo ultra-segura.
-		registry.UpdateRoute(event.GuildID, event.FeatureName, botInstance)
 
+		err := registry.UpdateRoute(event.GuildID, featEnum, botInstance)
+		if err != nil {
+			slog.Error("Rejeitada mutação de Ativação", "guilda", event.GuildID, "feature", event.FeatureName, "erro", err)
+		}
 	} else if event.Action == "DISABLE" {
 		slog.Info("Recebida mutação dinâmica: Desativar Feature", "guilda", event.GuildID, "feature", event.FeatureName)
-		// Aqui, adicionaríamos um método RemoveRoute no nosso Registry.
-		registry.RemoveRoute(event.GuildID, event.FeatureName)
+		err := registry.RemoveRoute(event.GuildID, featEnum)
+		if err != nil {
+			slog.Error("Rejeitada mutação de Desativação", "guilda", event.GuildID, "feature", event.FeatureName, "erro", err)
+		}
 	}
 }

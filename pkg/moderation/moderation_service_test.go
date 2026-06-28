@@ -14,12 +14,12 @@ type MockDiscordGateway struct {
 	kickCount int32
 }
 
-func (m *MockDiscordGateway) ExecuteBan(ctx context.Context, bot *core.BotInstance, targetUserID uint64, reason string, deleteSeconds int) error {
+func (m *MockDiscordGateway) ExecuteBan(ctx context.Context, bot core.BotInstance, targetUserID uint64, reason string, deleteSeconds int) error {
 	atomic.AddInt32(&m.banCount, 1)
 	return nil
 }
 
-func (m *MockDiscordGateway) ExecuteKick(ctx context.Context, bot *core.BotInstance, targetUserID uint64, reason string) error {
+func (m *MockDiscordGateway) ExecuteKick(ctx context.Context, bot core.BotInstance, targetUserID uint64, reason string) error {
 	atomic.AddInt32(&m.kickCount, 1)
 	return nil
 }
@@ -33,7 +33,7 @@ func TestServiceWorkersAndLoadShedding(t *testing.T) {
 	defer cancel()
 	svc.Start(ctx, 2)
 
-	bot := &core.BotInstance{ApplicationID: "bot", GuildID: "guild"}
+	bot := core.BotInstance{ApplicationID: "bot", GuildID: "guild"}
 
 	// Test Enqueue
 	err := svc.EnqueueTask(ModerationJob{
@@ -81,7 +81,7 @@ func TestServiceContextAwareCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	svc.Start(ctx, 2)
 
-	bot := &core.BotInstance{ApplicationID: "bot", GuildID: "guild"}
+	bot := core.BotInstance{ApplicationID: "bot", GuildID: "guild"}
 
 	// Cancel the worker pool context immediately
 	cancel()
@@ -107,7 +107,7 @@ func BenchmarkService_EnqueueTask(b *testing.B) {
 	mockGateway := &MockDiscordGateway{}
 	svc := NewService(mockGateway, b.N+1) // Ensure it never blocks
 	svc.Start(context.Background(), 1)
-	bot := &core.BotInstance{ApplicationID: "bot", GuildID: "guild"}
+	bot := core.BotInstance{ApplicationID: "bot", GuildID: "guild"}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

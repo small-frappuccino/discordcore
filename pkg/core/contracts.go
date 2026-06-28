@@ -1,21 +1,45 @@
 package core
 
-import "context"
+import (
+	"context"
+	"log/slog"
+)
+
+// Token representa uma credencial e implementa slog.LogValuer para se auto-ocultar.
+type Token string
+
+func (t Token) LogValue() slog.Value { return slog.StringValue("[REDACTED]") }
 
 // BotInstance representa o isolamento perfeito definido nas suas regras:
 // 1 Token -> 1 Bot -> 1 Guilda.
 type BotInstance struct {
 	ApplicationID string
 	GuildID       string
-	Token         string // Token único gerado via OAuth
+	Token         Token // Token único gerado via OAuth
 }
+
+// Feature é o enumerador das permissões. Mapeado para um offset O(1).
+type Feature uint8
+
+const (
+	FeatureBan Feature = iota
+	FeatureKick
+	FeatureTimeout
+	FeatureDeafen
+	FeatureMoveMember
+	FeatureMsgDelete
+	FeatureChannelPurge
+	FeatureRoleAdd
+	FeatureRoleRemove
+	NumFeatures // Sentinel for array size
+)
 
 // FeatureRegistry é o contrato que o nosso Event Bus ou Config Store vai implementar.
 // Ele responde a uma única pergunta: "Qual bot tem o direito de rodar essa feature nesta guilda?"
 type FeatureRegistry interface {
 	// ResolveOwner retorna a instância do bot autorizada a executar a feature.
 	// Retorna erro (ex: ErrFeatureNotAssigned) se nenhum bot ou um bot diferente for o dono.
-	ResolveOwner(ctx context.Context, guildID string, featureName string) (*BotInstance, error)
+	ResolveOwner(ctx context.Context, guildID string, feature Feature) (BotInstance, error)
 }
 
 // DiscordGateway abstrai a comunicação com o provedor (Arikawa/DiscordGo).

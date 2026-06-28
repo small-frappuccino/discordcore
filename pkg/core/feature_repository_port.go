@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"iter"
 )
 
 // GuildFeatureConfig é o modelo de dados puro que vem da Base de Dados.
@@ -18,5 +19,5 @@ type GuildFeatureConfig struct {
 // A camada de negócio só conhece este contrato, nunca a tecnologia de base de dados.
 type FeatureRepository interface {
 	// FetchAllActive resolve todas as configurações que estão ligadas.
-	FetchAllActive(ctx context.Context) ([]GuildFeatureConfig, error)
+	FetchAllActive(ctx context.Context) (iter.Seq2[GuildFeatureConfig, error], error)
 }

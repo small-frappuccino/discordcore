@@ -1,0 +1,6 @@
+goos: windows
+goarch: amd64
+pkg: github.com/small-frappuccino/discordcore/pkg/app
+cpu: 11th Gen Intel(R) Core(TM) i5-1135G7 @ 2.40GHz
+BenchmarkE2E_IngressPipeline_ZeroAlloc-8   	exit status 0xc000013a
+FAIL	github.com/small-frappuccino/discordcore/pkg/app	0.598s

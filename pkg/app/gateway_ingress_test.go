@@ -14,12 +14,15 @@ type MockConnection struct {
 	messages chan []byte
 }
 
-func (m *MockConnection) ReadMessage() ([]byte, error) {
+func (m *MockConnection) ReadMessage(buf []byte) ([]byte, error) {
 	msg, ok := <-m.messages
 	if !ok {
 		return nil, errors.New("connection closed")
 	}
-	return msg, nil
+
+	// Copy mock message into the provided buffer
+	n := copy(buf, msg)
+	return buf[:n], nil
 }
 
 type MockInteractionHandler struct {
@@ -43,7 +46,9 @@ func (m *MockInteractionHandler) HandleInteraction(ctx context.Context, payload 
 		}
 	}
 
-	time.Sleep(m.processingDelay)
+	if m.processingDelay > 0 {
+		time.Sleep(m.processingDelay)
+	}
 	atomic.AddInt32(&m.processedCount, 1)
 	return nil
 }
@@ -85,4 +90,29 @@ func TestGatewayBoundedIngress(t *testing.T) {
 	}
 
 	close(messages)
+}
+
+func BenchmarkGatewayListenLoop(b *testing.B) {
+	b.ReportAllocs()
+
+	messages := make(chan []byte, b.N)
+	conn := &MockConnection{messages: messages}
+
+	payload := []byte(`{"event":"test"}`)
+	for i := 0; i < b.N; i++ {
+		messages <- payload
+	}
+	close(messages)
+
+	handler := &MockInteractionHandler{}
+
+	g := NewDiscordGatewayImpl(conn, 3)
+	g.OnInteraction(handler)
+
+	ctx := context.Background()
+
+	b.ResetTimer()
+
+	// Run the loop synchronously (it will exit when messages is closed because ReadMessage will return error)
+	_ = g.ListenLoop(ctx)
 }
