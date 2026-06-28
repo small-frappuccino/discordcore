@@ -15,7 +15,6 @@ flowchart TD
     Arikawa(("Arikawa SDK"))
 
     %% Nodes
-    Github.comSmall-frappuccinoDiscordcore["github.com/small-frappuccino/discordcore"]
     CmdDiscordcore["cmd/discordcore"]
     App["pkg/app"]
     Core["pkg/core"]
@@ -50,7 +49,7 @@ flowchart TD
     class App,Storage core;
     class Discord adapter;
     class Moderation feature;
-    class Github.comSmall-frappuccinoDiscordcore,Core infra;
+    class Core infra;
     class DiscordGo,Arikawa,DiscordAPI,DiscordGateway external;
     class CmdDiscordcore ui;
 ```
