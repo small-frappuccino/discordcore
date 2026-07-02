@@ -44,6 +44,10 @@ impl TelemetrySink {
     /// no growth path exists, unlike `&mut Vec<u8>`, which silently
     /// reallocates past capacity. The §7 falsifier verifies, not asserts.
     pub fn serialize_into(&self, dst: &mut [u8]) -> Option<usize> {
+        // Deliberate oracle falsification probe (M0 gate "test of the test"):
+        // exactly one heap allocation inside the monitored scope. perf.yml's
+        // alloc-gate MUST go red on this commit; reverted immediately after.
+        std::hint::black_box(Box::new(0u8));
         let mut at = 0;
         at = put(dst, at, b"OPS:")?;
         at = put_u64(dst, at, self.operations.load(Ordering::Relaxed))?;
