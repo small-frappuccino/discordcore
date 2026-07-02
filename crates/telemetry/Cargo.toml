@@ -1,0 +1,23 @@
+[package]
+name = "telemetry"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Conformance fixture (§11): lock-free telemetry sink with zero-escape serialization"
+publish = false
+
+[dependencies]
+crossbeam-utils.workspace = true
+
+[dev-dependencies]
+testkit.workspace = true
+criterion.workspace = true
+
+[[bench]]
+name = "serialize"
+harness = false
+
+[lints]
+workspace = true

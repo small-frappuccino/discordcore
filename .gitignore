@@ -1,2 +1,5 @@
 # Editor and repository tooling
 .idea/*
+
+# Cargo build artifacts
+/target

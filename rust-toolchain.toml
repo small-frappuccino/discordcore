@@ -1,0 +1,7 @@
+# Stable pin (§ manifesto header: stable 1.96+, crate rust-version = 1.95).
+# The nightly used by Miri/sanitizers is pinned separately in
+# .github/workflows/soundness.yml (RUST_NIGHTLY) — it overrides this file in CI.
+[toolchain]
+channel = "1.96.0"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

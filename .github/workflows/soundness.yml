@@ -1,0 +1,50 @@
+name: soundness
+
+on:
+  push:
+    branches: [main, development]
+  pull_request:
+  schedule:
+    - cron: "0 5 * * 1" # weekly MSan (§6: high build cost — scheduled, not per-PR)
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  # Nightly pinned separately from the stable rust-toolchain.toml pin; the
+  # explicit `+toolchain` below overrides the file. Bump deliberately.
+  RUST_NIGHTLY: nightly-2026-06-28
+
+# §6: ASan and MSan are mutually incompatible in a single build — strictly
+# separate jobs, never comma-combined sanitizer flags.
+jobs:
+  miri:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install $RUST_NIGHTLY --profile minimal --component miri,rust-src
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo +$RUST_NIGHTLY miri test -p testkit -p telemetry
+
+  asan:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install $RUST_NIGHTLY --profile minimal
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo +$RUST_NIGHTLY test --tests -p testkit -p telemetry --target x86_64-unknown-linux-gnu
+        env:
+          RUSTFLAGS: -Zsanitizer=address
+
+  # MSan requires -Zbuild-std so std itself is instrumented; an
+  # uninstrumented std false-positives on every read of its memory (§6).
+  msan:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install $RUST_NIGHTLY --profile minimal --component rust-src
+      - run: cargo +$RUST_NIGHTLY test --tests -p testkit -p telemetry -Zbuild-std --target x86_64-unknown-linux-gnu
+        env:
+          RUSTFLAGS: -Zsanitizer=memory -Zsanitizer-memory-track-origins

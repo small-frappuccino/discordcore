@@ -1,0 +1,44 @@
+name: perf
+
+on:
+  push:
+    branches: [main, development]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # §7 gate: any counted allocation in a monitored hot-path scope fails the
+  # build (regression == red, mirroring the benchmark-threshold regime).
+  alloc-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo xtask alloc-check
+
+  bench:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo xtask bench-diff
+      - uses: actions/upload-artifact@v4
+        with:
+          name: criterion-report
+          path: target/criterion
+          if-no-files-found: error
+
+  llvm-lines:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo install cargo-llvm-lines --locked
+      - run: cargo xtask llvm-lines-report
+      - uses: actions/upload-artifact@v4
+        with:
+          name: llvm-lines-report
+          path: target/xtask/llvm-lines-telemetry.txt
+          if-no-files-found: error
