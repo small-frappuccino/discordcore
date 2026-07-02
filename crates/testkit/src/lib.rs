@@ -190,6 +190,10 @@ mod tests {
     }
 
     #[test]
+    // vec![] would collapse this into a single allocation; the explicit
+    // with_capacity + push sequence exists precisely to provoke the realloc
+    // event being counted.
+    #[allow(clippy::vec_init_then_push)]
     fn vec_growth_counts_reallocs() {
         let m = super::measure(|| {
             let mut v = Vec::with_capacity(1); // 1 alloc

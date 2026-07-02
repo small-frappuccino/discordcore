@@ -25,6 +25,9 @@ confidence-threshold = 0.8
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
+# Workspace-internal path deps (testkit) carry no version; only registry
+# wildcards are the hazard this ban targets.
+allow-wildcard-paths = true
 
 [sources]
 unknown-registry = "deny"
